@@ -148,12 +148,23 @@ The board and the comps use exactly three faces, and the split is semantic:
    is the identity's signature and the easiest thing to lose** — a monospace
    eyebrow read as "a small caption" and reset in the sans destroys it.
 
-**The three families are unidentified and must not be guessed.** The PDF embeds
-its text as outlined Type 3 glyphs, so `pdffonts` returns no names, and no
-metadata in this repository names them. Naming a face from its shape is exactly
-the fabrication §10 rule 7 forbids. **Resolving them is the first open question
-of `docs/design-system.md`** — ask the user for the three names, or for the
-Figma file, before any `next/font` call is written.
+**Two of the three are identified by measurement; the third is not settled.**
+The PDF outlines its text as Type 3 glyphs, so `pdffonts` names nothing — these
+were resolved by rendering candidates and matching glyph geometry against the
+references (§0), on 2026-08-20:
+
+| role | face | evidence |
+| --- | --- | --- |
+| display serif | **Crimson Text** | `Browse` scaled to the comp's 104 px cap height renders 463 × 106 against the comp's 456 × 105, and the `B` measures **81 px in both** |
+| sans | **DM Sans** | a full body line rendered from the PDF's vector text at 600 dpi matches at 3209 × 119 against 3197 × 120 — a red/green overlay diff of **0.116**, against **0.238** for Roboto Flex. The wordmark's `a` has no bottom-right spur, which matches DM Sans and rules Roboto out |
+| monospace | **unresolved — probably Roboto Mono** | the cells' advance width is uniform at ≈ 7.16 px, so the face is genuinely monospaced. Roboto Mono renders 135 px against the comp's 133; DM Mono is excluded because its `f` descends below the baseline and the comp's does not |
+
+**Roboto Flex is not used anywhere in the references** and must not be added on
+the strength of having been suggested. It lost the sans comparison on both
+metric and letterform.
+
+**The monospace stays a judgement, not a measurement, until the user confirms
+it** (§10 rule 4). Confirm before any `next/font` call is written.
 
 **`app/layout.tsx` currently loads Geist and Geist Mono, and neither is in the
 comps.** They are `create-next-app` leftovers and are placeholders, not choices.
