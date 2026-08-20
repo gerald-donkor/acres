@@ -44,7 +44,7 @@ the read will re-derive it by hand or silently break it.
 
 | file | covers | status |
 | --- | --- | --- |
-| `docs/design-system.md` | the tokens — palette, type scale and roles, spacing, radii, the container and its gutters, elevation, motion constants — each measured from the references in §0, plus the `@theme` block that expresses them | **next to be written; nothing else may be built before it** |
+| `docs/design-system.md` | the tokens — palette, type scale and roles, spacing, radii, the container and its gutters, elevation, motion constants — each measured from the references in §0, plus the `@theme` block that expresses them | **written.** Read it before any styling change; it corrects several lines below |
 | `docs/components.md` | the primitives built on those tokens — `Button` and its four variants, the nav, the footer, the section shell, the eyebrow, the comparison table | not yet written |
 | `docs/landing.md` | the `/` build record, section by section, against `Desktop.png` / `Tablet.png` / `Mobile.png` | not yet written |
 | `docs/motion.md` | GSAP on the site — registration, the shared `DUR` / `EASE` constants, every scroll trigger and reveal | not yet written |
@@ -117,8 +117,8 @@ Sampled from the board's swatch row, and confirmed in use on `Desktop.png`:
 | hex | role in the comps |
 | --- | --- |
 | `#000000` | headings, wordmark, UI text, the icon set |
-| `#929292` | the muted grey of the swatch row |
-| `#E9E9E9` | hairline rules, the inactive icon-button fill |
+| `#929292` | the `01`/`02`/`03` step markers, and the one major section rule |
+| `#E9E9E9` | hairline rules, the comparison-table card border |
 | `#FFFFFF` | the page canvas, and the nav and menu cards |
 | `#DFECC6` | the secondary button fill, the active icon-button fill |
 | `#8E9C78` | the sage band behind every device shot; the hover fill of both buttons |
@@ -129,10 +129,14 @@ Sampled from the board's swatch row, and confirmed in use on `Desktop.png`:
   page background.
 - **`#485C11` is the only chromatic accent.** Sage and pale green are surfaces,
   never text.
-- **Body copy is not `#929292`.** The paragraph grey measured on the comps is
-  `#6F6F6F`; `#929292` appears in the swatch row and its shipped use is
-  unresolved — `docs/design-system.md` must resolve it against the comps rather
-  than assign it a role from the swatch alone.
+- **Body copy is `#6F6F6F`**, at 5.02:1 on the canvas — it passes AA unchanged.
+  `#929292` is 3.11:1 and is **large text and rules only**, never body.
+- **The palette is seven values plus one.** The board's inactive icon-button fill
+  measures `#E4E4E4`, which is in no swatch. It is a real eighth value and it has
+  a token.
+- **White on sage `#8E9C78` is 2.93:1 and fails contrast.** That is the hover
+  state §1.5 states. `docs/design-system.md` §1.4 records it as an open finding
+  and step 2 must resolve it rather than ship it unexamined.
 
 ## 1.2 Type — three families, three jobs, and the third one is not decoration
 
@@ -140,7 +144,9 @@ The board and the comps use exactly three faces, and the split is semantic:
 
 1. **A serif, for display and for naming things.** The hero, every section
    heading, the pull-quote — and, importantly, the small feature-card headings
-   and the comparison table's column headers. It is not reserved for large sizes.
+   and the numbered-step headings, both at 18 px. It is not reserved for large
+   sizes. **The comparison table's column headers are not serif** — they measure
+   DM Sans 500 at 26 px, and only Regular (400) of the serif is used anywhere.
 2. **A geometric sans, for body copy and for UI.** Paragraphs, nav links, button
    labels, the wordmark.
 3. **A monospace, for labels and for data.** Every eyebrow (`Benefits`, `Specs`)
@@ -177,11 +183,11 @@ the strength of having once been suggested. It lost the sans comparison on both
 metric and letterform.
 
 **All three are on Google Fonts**, so all three come through `next/font/google`
-with no self-hosting. `app/layout.tsx`'s Geist and Geist Mono are replaced by
-them at build step 1.
-
-**`app/layout.tsx` currently loads Geist and Geist Mono, and neither is in the
-comps.** They are `create-next-app` leftovers and are placeholders, not choices.
+with no self-hosting, as `--font-crimson-text`, `--font-dm-sans` and
+`--font-roboto-mono`. Crimson Text is **not variable** — a `weight` array is
+required, and only `400` is used. `opsz` on DM Sans is deliberately not pinned;
+`font-optical-sizing: auto` drives it from `font-size`, which is what the comps
+measure.
 
 ## 1.3 Layout — one container, three gutters, one grid
 
@@ -189,30 +195,34 @@ Measured from the three comps at their native widths:
 
 | comp | width | gutter | container |
 | --- | --- | --- | --- |
-| `Mobile.png` | 375 | 20 | 335 |
+| `Mobile.png` | 375 | **16** | **343** |
 | `Tablet.png` | 800 | 40 | 720 |
 | `Desktop.png` | 1280 | 40 | 1200 |
+
+The container is **`min(100vw − 2 × gutter, 1200px)`**, not three fixed widths.
 
 - **The container is one component and every section sits in it**, including the
   full-bleed-looking photographs — they are inset to the container and carry a
   corner radius, not bled to the viewport edge.
 - **The feature grid is 4 → 2 → 1**, with a **20 px** column gap at desktop, and
   a hairline `#E9E9E9` rule above each cell rather than a card border.
-- **Section headings are left-aligned at every breakpoint except the two
-  centred sections** ("Why Choose Acres?" and "Connect with us"), which are
-  centred at every breakpoint. Centring is a per-section decision, not a
-  breakpoint behaviour.
-- **The wordmark does not scale.** Its ink height measures 21 px on all three
-  comps.
+- **Section headings are left-aligned at every breakpoint except the three
+  centred ones** — the **hero**, "Why Choose Acres?" and "Connect with us" —
+  which are centred at every breakpoint. Centring is a per-section decision, not
+  a breakpoint behaviour.
+- **The wordmark does not scale.** Its ink height measures 22 px on all three
+  comps. Neither do body copy (15 px), the pill (48 px), the media radius
+  (24 px), the icon (24 px) or the section gap (120 px). **Only the two serif
+  display roles scale.**
 
-## 1.4 Shape — two radii and nothing between them
+## 1.4 Shape — three radii and a pill
 
-- **Buttons are full pills.** Measured height 48 px at desktop; the radius is
-  half the height, never a fixed `rounded-xl`.
-- **Icon buttons are rounded squares**, roughly a 12 px radius on a 40 px box.
-- **Cards, photographs and device frames carry a large soft radius**; the nav
-  card on mobile rounds only its bottom corners, because it is anchored to the
-  top edge.
+- **Buttons are full pills.** Measured height 48 px at **every** breakpoint; the
+  radius is half the height, never a fixed `rounded-xl`.
+- **Icon buttons are rounded squares** at **8 px** on a 40 px box.
+- **Cards are 14 px; photographs, the sage band and device frames are 24 px.**
+  The nav card on mobile rounds only its bottom corners, because it is anchored
+  to the top edge.
 - **Nothing in the comps is square-cornered.** A `rounded-none` in this codebase
   is a bug unless a `docs/` file justifies it.
 
@@ -232,15 +242,18 @@ do not invent a darken-on-hover for either. **The `↗` belongs to the primary
 only** — it marks the page's main action, and putting it on a secondary flattens
 the hierarchy the board draws.
 
-## 1.6 Icons — the comps are not Lucide
+## 1.6 Icons — Material Symbols, filled, 24 px
 
-The board's icon row and the feature grid use what read as **Material
-Symbols** — a filled globe, `account_balance`, a palette, a person-with-waves.
-`components.json` sets `"iconLibrary": "lucide"` and `lucide-react` is installed.
-**These disagree**, and the disagreement is unresolved: `docs/design-system.md`
-must either source the real icons or record an explicit decision to substitute
-Lucide, with the user's approval. **Do not silently swap in the nearest Lucide
-glyph** — that is §10 rule 9.
+**Resolved.** The set is **Material Symbols**, delivered as individual SVGs
+through `@material-symbols/svg-400`; `lucide-react` stays installed for anything
+the board does not specify, and `components.json`'s `"iconLibrary": "lucide"`
+stays, because it governs what the shadcn CLI generates, not what we author. All
+eight board glyphs are filled, which is why substituting Lucide's stroked set was
+rejected. Step 2 installs it; the glyph list is in `docs/design-system.md` §6.
+
+**One glyph is still unidentified** — the two-slanted-bars mark on the "Amplify
+Insights" card. Identify it against the package's own set or raise it. **Do not
+swap in the nearest-looking substitute** — that is §10 rule 9.
 
 ## 1.7 The product is called Acres
 
@@ -498,17 +511,20 @@ ships.
 
 ## 8.1 What is already built
 
-**A `create-next-app` scaffold and nothing else.** `app/page.tsx` and
-`app/layout.tsx` are boilerplate; `app/globals.css` carries the stock shadcn
-neutral token set in OKLCH, which is **not** the Acres palette (§1.1). The full
-`components/ui/` primitive set is installed and untouched. `public/assets/ui/`
-holds the references (§0). There is no design system, no component of our own,
-no content, and no backend of any kind.
+**Resolve this from the repository and `git log`, never from here** (§10 rule 5).
+This paragraph is a snapshot and goes stale by design.
 
-**One live defect to fix in the first styling change:** `@theme inline` in
-`app/globals.css` maps `--font-sans` and `--font-heading` to `var(--font-sans)`,
-but `app/layout.tsx` defines `--font-geist-sans`. The variable is never set, so
-`font-sans` currently falls through to the browser default.
+At the time step 1 landed: `app/globals.css` carries the Acres `@theme` block and
+the rebound shadcn token names; `app/layout.tsx` loads the three faces of §1.2;
+`docs/design-system.md` holds the measured record. `app/page.tsx` is still
+`create-next-app` boilerplate and **will look wrong** — step 4 replaces it. The
+full `components/ui/` primitive set is installed and **untouched**; it repaints
+from the rebound tokens. `public/assets/ui/` holds the references (§0). There is
+no component of our own, no content, and no backend of any kind.
+
+**Two known lint errors** (`components/ui/carousel.tsx`, `hooks/use-mobile.ts`)
+pre-date step 1 and are in generated shadcn code. They are recorded in
+`docs/design-system.md` §11 and belong to step 2, which owns `components/ui/`.
 
 ## 8.2 The build sequence
 

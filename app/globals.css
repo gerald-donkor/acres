@@ -4,12 +4,139 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+   Acres design tokens.
+
+   Every value here is measured from the references in AGENTS.md §0 and recorded,
+   with the crop that produced it, in docs/design-system.md. This block and that
+   file are one change: a value in one and not the other is a defect.
+
+   Colours are hex because they were measured as sRGB pixels; putting a lossy
+   OKLCH conversion between the measurement and the token buys nothing and makes
+   the token uncheckable against the doc at a glance.
+   --------------------------------------------------------------------------- */
+
+@theme {
+  /* -- palette (docs/design-system.md §1) ------------------------------------ */
+  --color-canvas: #ffffff;
+  --color-ink: #000000;
+  --color-ink-muted: #6f6f6f; /* body copy — 5.02:1 on canvas, passes AA */
+  --color-ink-faint: #929292; /* 3.11:1 — LARGE TEXT AND RULES ONLY, never body */
+  --color-rule: #e9e9e9; /* hairlines, card borders */
+  --color-rule-strong: #929292; /* the one major section rule */
+  --color-control: #e4e4e4; /* inactive icon-button fill */
+  --color-brand: #485c11; /* the only chromatic accent */
+  --color-brand-soft: #dfecc6; /* secondary fill, active icon button */
+  --color-sage: #8e9c78; /* the device band */
+  --color-hover: #8e9c78; /* BOTH pill variants hover to this. See §1.4:
+                             white-on-sage is 2.93:1 and step 2 must resolve it. */
+
+  /* -- families (docs/design-system.md §2.1) ---------------------------------- */
+  --font-weight-body: 500;
+  --font-weight-ui: 600;
+
+  /* -- type scale (docs/design-system.md §2.3) --------------------------------
+     Mobile-first. The two serif display roles are the only ones that scale, so
+     they carry -md and -lg companions; everything else is one value at every
+     breakpoint, which is what the comps measure. */
+
+  --text-hero: 4.75rem; /* 76px @ 375 */
+  --text-hero--line-height: 0.85;
+  --text-hero--letter-spacing: -0.05em;
+  --text-hero--font-weight: 400;
+  --text-hero-md: 8.75rem; /* 140px @ 800 */
+  --text-hero-md--line-height: 0.8;
+  --text-hero-md--letter-spacing: -0.05em;
+  --text-hero-md--font-weight: 400;
+  --text-hero-lg: 10rem; /* 160px @ 1280 */
+  --text-hero-lg--line-height: 0.8;
+  --text-hero-lg--letter-spacing: -0.05em;
+  --text-hero-lg--font-weight: 400;
+
+  --text-h2: 3.125rem; /* 50px @ 375 */
+  --text-h2--line-height: 0.95;
+  --text-h2--letter-spacing: -0.029em;
+  --text-h2--font-weight: 400;
+  --text-h2-md: 3.25rem; /* 52px @ 800 */
+  --text-h2-md--line-height: 0.95;
+  --text-h2-md--letter-spacing: -0.029em;
+  --text-h2-md--font-weight: 400;
+  --text-h2-lg: 3.75rem; /* 60px @ 1280 */
+  --text-h2-lg--line-height: 0.95;
+  --text-h2-lg--letter-spacing: -0.029em;
+  --text-h2-lg--font-weight: 400;
+
+  --text-quote: 2.375rem; /* 38px — the pull-quote */
+  --text-quote--line-height: 1.105;
+  --text-quote--letter-spacing: -0.02em;
+  --text-quote--font-weight: 400;
+
+  --text-h3: 1.125rem; /* 18px — feature-card and numbered-step headings */
+  --text-h3--line-height: 1.2;
+  --text-h3--letter-spacing: -0.028em;
+  --text-h3--font-weight: 400;
+
+  --text-stat: 5rem; /* 80px — the 01/02/03 markers */
+  --text-stat--line-height: 1;
+  --text-stat--letter-spacing: -0.0375em;
+  --text-stat--font-weight: 400;
+
+  --text-brand: 1.875rem; /* 30px — the wordmark; does not scale */
+  --text-brand--line-height: 1;
+  --text-brand--letter-spacing: -0.05em;
+  --text-brand--font-weight: 500;
+
+  --text-title: 1.625rem; /* 26px — comparison-table column heads */
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.077em;
+  --text-title--font-weight: 500;
+
+  --text-ui: 0.875rem; /* 14px — nav links, button labels */
+  --text-ui--line-height: 1.2;
+  --text-ui--letter-spacing: -0.018em;
+  --text-ui--font-weight: 600;
+
+  --text-body: 0.9375rem; /* 15px — every paragraph, at every breakpoint */
+  --text-body--line-height: 1.4; /* 21px, measured from band pitch */
+  --text-body--letter-spacing: -0.017em;
+  --text-body--font-weight: 500;
+
+  --text-label: 0.6875rem; /* 11px — eyebrows at 375 and 800 */
+  --text-label--line-height: 1.2;
+  --text-label--letter-spacing: 0em; /* the monospace is the one style set at zero */
+  --text-label--font-weight: 400;
+  --text-label-lg: 0.75rem; /* 12px — every monospace run at 1280 */
+  --text-label-lg--line-height: 1.2;
+  --text-label-lg--letter-spacing: 0em;
+  --text-label-lg--font-weight: 400;
+
+  /* -- shape (docs/design-system.md §4) --------------------------------------
+     Named alongside the inherited sm→4xl ladder, which stays so components/ui/
+     keeps working. Pills use rounded-full, never a rung. */
+  --radius-control: 0.5rem; /* 8px  — icon buttons */
+  --radius-card: 0.875rem; /* 14px — the comparison card, bordered surfaces */
+  --radius-media: 1.5rem; /* 24px — photographs, the sage band, device frames */
+
+  /* -- elevation (docs/design-system.md §4.3) --------------------------------
+     One elevation. Nothing on the board or the comps carries a second. */
+  --shadow-card: 0 4px 16px rgb(0 0 0 / 0.05);
+
+  /* -- the container (docs/design-system.md §3.1) ---------------------------- */
+  --container-page: 75rem; /* 1200px cap; gutters are px-4 md:px-10 (16 / 40) */
+
+  /* -- motion (docs/design-system.md §5) -------------------------------------
+     JUDGEMENT, not measurement — the references are static images. One easing,
+     three durations, and no more. Step 5's GSAP DUR/EASE read these. */
+  --ease-acres: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-dm-sans);
+  --font-serif: var(--font-crimson-text);
+  --font-mono: var(--font-roboto-mono);
+  --font-heading: var(--font-crimson-text);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,31 +175,49 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* The shadcn token names are REBOUND to Acres values rather than overridden in
+   the components (AGENTS.md §9.1 rule 3). All 61 primitives in components/ui/
+   read these names; not one of their files is edited. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #485c11;
+  --primary-foreground: #ffffff;
+  --secondary: #dfecc6;
+  --secondary-foreground: #000000;
+  --muted: #e9e9e9;
+  --muted-foreground: #6f6f6f;
+  --accent: #dfecc6;
+  --accent-foreground: #000000;
+  --border: #e9e9e9;
+  --input: #e9e9e9;
+  --ring: #485c11;
+
+  /* 14px — the measured card radius. Rebinding the base lands the inherited
+     calc() ladder on the measured 8 / 14 / 24 (docs/design-system.md §7.1). */
+  --radius: 0.875rem;
+
+  /* Tailwind 4 has no --duration-* theme namespace, so these are plain custom
+     properties rather than @theme entries. Read them with
+     duration-[var(--duration-base)], or directly from GSAP at step 5. */
+  --duration-fast: 150ms;
+  --duration-base: 300ms;
+  --duration-slow: 600ms;
+
+  /* Not in the Acres palette and used by no comp. Left at its inherited value so
+     the primitives that reference it keep compiling. */
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+
+  /* Inherited scaffolding, unaudited. No comp specifies charts or a sidebar. */
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -83,6 +228,10 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* Acres has NO designed dark theme — neither the board nor any of the three
+   comps says anything about one (docs/design-system.md §7.4). This block is
+   inherited, unaudited scaffolding, kept only so components/ui/ does not break
+   if something toggles the class. Do not treat these as Acres colours. */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -122,7 +271,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans text-body;
   }
   html {
     @apply font-sans;
