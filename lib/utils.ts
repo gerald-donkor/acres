@@ -17,9 +17,8 @@ import { extendTailwindMerge } from "tailwind-merge"
  *    the measured 6 px of ink.
  *
  * Every list below is read off the `@theme` block; adding a token there means
- * adding it here. `brand` is deliberately absent from `text`: Tailwind resolves
- * `text-brand` to `--color-brand`, which makes `--text-brand` unreachable under
- * that name — a finding for step 3, recorded in docs/components.md §7.
+ * adding it here. `--text-wordmark` names the 30 px wordmark role (renamed from
+ * the unreachable `--text-brand` in step 3).
  */
 const twMerge = extendTailwindMerge({
   extend: {
@@ -47,6 +46,7 @@ const twMerge = extendTailwindMerge({
         "quote",
         "h3",
         "stat",
+        "wordmark",
         "title",
         "ui",
         "body",

@@ -249,7 +249,7 @@ rather than a guess.
 | **quote** (pull-quote) | Crimson Text 400 | **38** | n/m | n/m | −0.02em (−0.75 px) | **1.105** (42 px, measured from band pitch) | diff 0.337 |
 | **h3** (card / step heading) | Crimson Text 400 | **18** | 18 | **18** | −0.028em (−0.5 px) | n/m | 0.209 / 0.219 against 0.416 |
 | **stat** (`01` `02` `03`) | DM Sans 400 | **80** | n/m | n/m | −0.0375em (−3 px) | n/m | **diff 0.026** against 0.046 |
-| **brand** (wordmark) | DM Sans 500 | **30** | **30** | **30** | −0.05em (−1.5 px) | n/m | **diff 0.026** against 0.129 |
+| **wordmark** | DM Sans 500 | **30** | **30** | **30** | −0.05em (−1.5 px) | n/m | **diff 0.026** against 0.129 |
 | **title** (table column head) | DM Sans 500 | **26** (24–26) | n/m | n/m | −2 px | n/m | diff 0.119 against 0.193 |
 | **ui** (nav link, button label) | DM Sans 600 | **14** | **14** | n/m | −0.018em (−0.25 px) | n/m | 0.170 / 0.264 against 0.178 / 0.422 |
 | **body** | DM Sans 500 | **15** | **15** | **15** | −0.017em (−0.25 px) | **1.4** (21 px, measured from band pitch) | 0.244 / 0.257 / 0.228 against 0.718 / 0.596 / 0.602 |
@@ -643,16 +643,13 @@ and measured in the browser it beat every `focus-visible:outline-*` a component
 could set. `#485C11` at 50 % over white is about **2.2 : 1**, under the 3 : 1
 floor a focus indicator has to clear; at full opacity it is **7.46 : 1** (§1.4).
 
-### 7.6 `--text-brand` is unreachable — open
+### 7.6 `--text-wordmark` (renamed from `--text-brand`) — closed in step 3
 
 `--text-brand: 1.875rem` (the 30 px wordmark, §2.3) and `--color-brand: #485C11`
-(§1.1) collide on one class name. Tailwind resolves `text-brand` to the
-**colour** — confirmed in the compiled CSS, `.text-brand{color:var(--color-brand)}`
-— so the type role has no utility.
-
-**Step 3 builds the wordmark and will hit this.** The fix is a rename in this
-file and in `@theme` together. It was not taken in step 2, because renaming a
-design-system token is not that step's to decide.
+(§1.1) collided on the class name `text-brand`, which Tailwind resolved to the
+color token. In step 3, the type token was renamed to `--text-wordmark` in
+`app/globals.css`, `docs/design-system.md` and `lib/utils.ts` together, making
+`text-wordmark` unambiguous and fully reachable.
 
 ### 7.7 Dark mode
 

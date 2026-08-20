@@ -46,9 +46,10 @@ the read will re-derive it by hand or silently break it.
 | --- | --- | --- |
 | `docs/design-system.md` | the tokens — palette, type scale and roles, spacing, radii, the container and its gutters, elevation, motion constants — each measured from the references in §0, plus the `@theme` block that expresses them | **written.** Read it before any styling change; it corrects several lines below |
 | `docs/components.md` | the primitives in `components/acres/` — the pill and its four states, the icon button, `Icon`, the container, the section shell, the eyebrow, the two rules — plus the four glyph identifications and the `cn()` contract | **written.** Read it before touching a primitive or adding a token; it corrects `prompts/02-primitives.md` in two places. The nav, the footer and the comparison table are still step 3's and step 4's |
+| `docs/chrome.md` | the site chrome — horizontal nav, closed mobile card, open mobile menu, footer, logo mark vector extraction, and layout mounting | **written.** Read it before touching header, footer, or mobile disclosure |
 | `docs/landing.md` | the `/` build record, section by section, against `Desktop.png` / `Tablet.png` / `Mobile.png` | not yet written |
 | `docs/motion.md` | GSAP on the site — registration, the shared `DUR` / `EASE` constants, every scroll trigger and reveal | not yet written |
-| `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | not yet written; the recipes in §0 are its seed |
+| `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | **written.** Measurement and headless CDP verification recipes |
 | `docs/skills.md` | the skills installed in `.agents/skills/`, what each is for, what was deliberately excluded and why | not yet written |
 
 **A row here is a promise that the file exists.** Never cite one that does not —

@@ -83,10 +83,10 @@
   --text-stat--letter-spacing: -0.0375em;
   --text-stat--font-weight: 400;
 
-  --text-brand: 1.875rem; /* 30px — the wordmark; does not scale */
-  --text-brand--line-height: 1;
-  --text-brand--letter-spacing: -0.05em;
-  --text-brand--font-weight: 500;
+  --text-wordmark: 1.875rem; /* 30px — the wordmark; does not scale */
+  --text-wordmark--line-height: 1;
+  --text-wordmark--letter-spacing: -0.05em;
+  --text-wordmark--font-weight: 500;
 
   --text-title: 1.625rem; /* 26px — comparison-table column heads */
   --text-title--line-height: 1.1;

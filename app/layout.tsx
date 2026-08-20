@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { Crimson_Text, DM_Sans, Roboto_Mono } from "next/font/google";
+
+import { SiteFooter } from "@/components/acres/site-footer";
+import { SiteHeader } from "@/components/acres/site-header";
+
 import "./globals.css";
 
 // The three faces identified in AGENTS.md §1.2 and scaled in
@@ -36,7 +40,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${crimsonText.variable} ${dmSans.variable} ${robotoMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <SiteHeader />
+        <main className="flex-1 flex flex-col">{children}</main>
+        <SiteFooter />
+      </body>
     </html>
   );
 }
