@@ -228,6 +228,22 @@
   --duration-base: 300ms;
   --duration-slow: 600ms;
 
+  /* The two motion DISTANCES, added by step 5 (docs/motion.md §3). Both are
+     judgements — the references are static images and measure no travel at all.
+
+     They sit on :root rather than in @theme for the same reason the durations
+     do: they must NOT generate utilities. A `--spacing-*` entry would emit
+     `p-reveal` / `m-lift` classes that no component may ever use, and would
+     imply these are layout spacing rather than tween distances. The Tailwind 4
+     rule is that @theme is for tokens that should create a utility or variant
+     and :root is for plain custom properties that should not. Nothing in
+     lib/utils.ts changes, because no class is generated to merge.
+
+     Only lib/motion.ts reads these, once, and every tween takes the value from
+     there (AGENTS.md §9.1 rule 1, §9.3 rule 1). */
+  --motion-reveal-distance: 24px; /* the entrance/reveal travel, downward → rest */
+  --motion-lift-distance: 4px; /* the fine-pointer hover lift, upward from rest */
+
   /* Not in the Acres palette and used by no comp. Left at its inherited value so
      the primitives that reference it keep compiling. */
   --destructive: oklch(0.577 0.245 27.325);

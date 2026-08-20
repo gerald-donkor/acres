@@ -48,7 +48,7 @@ the read will re-derive it by hand or silently break it.
 | `docs/components.md` | the primitives in `components/acres/` — the pill and its four states, the icon button, `Icon`, the container, the section shell, the eyebrow, the two rules — plus the four glyph identifications and the `cn()` contract | **written.** Read it before touching a primitive or adding a token; it corrects `prompts/02-primitives.md` in two places. The nav, the footer and the comparison table are still step 3's and step 4's |
 | `docs/chrome.md` | the site chrome — horizontal nav, closed mobile card, open mobile menu, footer, logo mark vector extraction, and layout mounting | **written.** Read it before touching header, footer, or mobile disclosure |
 | `docs/landing.md` | the `/` build record, section by section, against `Desktop.png` / `Tablet.png` / `Mobile.png` | **written.** Read it before touching the landing page; it records the extracted assets, copy, table decision, breakpoint measurements and deltas |
-| `docs/motion.md` | GSAP on the site — registration, the shared `DUR` / `EASE` constants, every scroll trigger and reveal | not yet written |
+| `docs/motion.md` | GSAP on the site — the packages and verified imports, one-time registration, the client leaf and its `data-motion-*` hooks, the shared `DUR` / `EASE` reader, the two motion-distance tokens, every trigger, stagger, hover and press, reduced motion, cleanup, and the browser evidence | **written.** Read it before any animation change; it records why a CSS `cubic-bezier()` cannot be handed to GSAP, and one accessibility fix the reveal start state forced |
 | `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | **written.** Measurement and headless CDP verification recipes |
 | `docs/skills.md` | the skills installed in `.agents/skills/`, what each is for, what was deliberately excluded and why | not yet written |
 
@@ -566,18 +566,38 @@ Do not tick anything here; this file records the plan, not the progress.
 | 4 | **The landing page, section by section** — hero, device band, trusted-by strip, benefits grid, the two feature sections, the comparison table, the testimonial, the numbered steps, the closing CTA | 2, 3 |
 | 5 | **Motion** — GSAP installed and registered once, `DUR` / `EASE` shared, scroll reveals, the button and card hovers | 4 |
 | 6 | **Polish and the accessibility pass** — `web-design-guidelines` run over the whole page, reduced motion honoured, focus visible everywhere, real metadata | 5 |
+| 7 | **The `client/` split** — `git mv` the app into `client/`, npm workspaces at the root, and rewrite every path this file's §0 pins plus the pinned paths in each written `docs/` file. **`server/` is not created here** | 6 |
+| 8 | **The NestJS server** — `server/` scaffolded, `packages/shared` for the DTOs both sides read, then the data layer, auth and accounts, jobs and scheduling, and forms | 7 |
 
 **Step 1 is load-bearing and everything else waits on it.** A component built
 before the tokens exist encodes a hex value that then has to be found and
 removed from every file it reached.
 
+**Steps 7 and 8 are the backend, and the split is deliberate.** The user's
+sequencing, set on 2026-08-20: **build the UI first, hook it to the server
+after.** So the restructure runs at the seam — after step 6, not before — and it
+moves the client only. NestJS earns a second runtime because the backend's
+confirmed scope is a real data layer over regional data, auth with sessions,
+scheduled jobs, and forms; that is not a Next route handler's job. `server/`
+stays uncreated until step 8 so that no scaffold sits dead through the UI work,
+and the workspace wiring and the Nest setup stay two reviewable changes.
+
+**Four things step 7 must settle**, none of them decided yet: npm workspaces
+rather than Turborepo to start; the `public/assets/ui/` → `client/public/assets/ui/`
+rewrite, using `git mv` so history follows the files; whether `packages/shared`
+lands at step 7 or step 8; and where Nest deploys — Next on Vercel is settled,
+but jobs and scheduling may want a long-lived host, and that shapes how the Nest
+app is structured, so it is decided before step 8's jobs work, not during it.
+
 ### Do not overbuild
 
 No second design system. No component library that is not `components/ui/` plus
-our own primitives on top. No backend, no database, no auth, no CMS — the
-content is typed constants until a prompt says otherwise. **No feature that is
-not a step above** — if one seems necessary, say so and ask rather than adding
-it.
+our own primitives on top. **Through step 6 there is no backend, no database, no
+auth and no CMS** — the content is typed constants, and steps 7 and 8 are the
+"until a prompt says otherwise". Nothing in the backend is started early: a step
+7 or step 8 concern raised during steps 1–6 is recorded, not built. **No feature
+that is not a step above** — if one seems necessary, say so and ask rather than
+adding it.
 
 **The sequence is a dependency graph, not a schedule.** It says what must exist
 before what, and nothing about dates.

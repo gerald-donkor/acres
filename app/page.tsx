@@ -5,6 +5,7 @@ import { Button } from "@/components/acres/button"
 import { Container } from "@/components/acres/container"
 import { Eyebrow } from "@/components/acres/eyebrow"
 import { Icon, type IconName } from "@/components/acres/icon"
+import { LandingMotion } from "@/components/acres/landing-motion"
 import { Rule } from "@/components/acres/rule"
 import { Section } from "@/components/acres/section"
 import { cn } from "@/lib/utils"
@@ -107,13 +108,19 @@ const focusClass =
 
 export default function Home() {
   return (
-    <>
+    <LandingMotion>
       <section className="pt-16 md:pt-24 lg:pt-28">
         <Container className="text-center">
-          <h1 className="font-serif text-hero text-ink text-balance md:text-hero-md lg:text-hero-lg">
+          <h1
+            data-motion-hero-heading
+            className="font-serif text-hero text-ink text-balance md:text-hero-md lg:text-hero-lg"
+          >
             Browse everything.
           </h1>
-          <div className="mt-10 rounded-media bg-sage px-4 pt-10 md:mt-12 md:px-14 md:pt-12 lg:mt-14 lg:px-24 lg:pt-14">
+          <div
+            data-motion-hero-media
+            className="mt-10 rounded-media bg-sage px-4 pt-10 md:mt-12 md:px-14 md:pt-12 lg:mt-14 lg:px-24 lg:pt-14"
+          >
             <picture>
               <source
                 media="(max-width: 767px)"
@@ -135,16 +142,25 @@ export default function Home() {
 
       <section aria-labelledby="trusted-heading" className="pt-12 md:pt-14">
         <Container>
-          <div className="flex flex-col gap-10 md:gap-12 lg:flex-row lg:items-center lg:gap-16">
+          <div
+            data-motion-group="trusted"
+            data-motion-pace="tight"
+            className="flex flex-col gap-10 md:gap-12 lg:flex-row lg:items-center lg:gap-16"
+          >
             <h2
               id="trusted-heading"
+              data-motion-item
               className="text-body text-ink-muted scroll-mt-section"
             >
               Trusted by:
             </h2>
             <ul className="grid flex-1 grid-cols-2 items-center gap-x-12 gap-y-10 md:grid-cols-3 lg:grid-cols-6 lg:gap-x-12">
               {trustedMarks.map((mark, index) => (
-                <li key={mark.src} className="flex justify-center lg:justify-start">
+                <li
+                  key={mark.src}
+                  data-motion-item
+                  className="flex justify-center lg:justify-start"
+                >
                   <Image
                     src={mark.src}
                     alt=""
@@ -161,25 +177,41 @@ export default function Home() {
       </section>
 
       <Section id="benefits" aria-labelledby="benefits-heading">
-        <div className="scroll-mt-section">
-          <Eyebrow>Benefits</Eyebrow>
+        <div
+          data-motion-group="benefits-intro"
+          data-motion-pace="tight"
+          className="scroll-mt-section"
+        >
+          <Eyebrow data-motion-item>Benefits</Eyebrow>
           <div className="mt-5 max-w-[42rem]">
             <h2
               id="benefits-heading"
+              data-motion-item
               className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
             >
               We&apos;ve cracked the code.
             </h2>
-            <p className="mt-6 max-w-[26rem] text-body text-ink-muted">
+            <p
+              data-motion-item
+              className="mt-6 max-w-[26rem] text-body text-ink-muted"
+            >
               <span translate="no">Acres</span> provides real insights, without
               the data overload.
             </p>
           </div>
         </div>
 
-        <div className="mt-20 grid gap-x-5 gap-y-14 md:grid-cols-2 lg:grid-cols-4">
+        <div
+          data-motion-group="benefits"
+          className="mt-20 grid gap-x-5 gap-y-14 md:grid-cols-2 lg:grid-cols-4"
+        >
           {benefits.map((item) => (
-            <article key={item.title} className="border-t border-rule pt-7">
+            <article
+              key={item.title}
+              data-motion-item
+              data-motion-card
+              className="border-t border-rule pt-7"
+            >
               <Icon
                 name={item.icon}
                 className={cn("text-ink", item.iconClassName)}
@@ -200,22 +232,30 @@ export default function Home() {
 
       <Section aria-labelledby="big-picture-heading">
         <div className="grid gap-16 lg:grid-cols-[0.95fr_1.05fr] lg:items-end">
-          <div>
+          <div data-motion-group="big-picture" data-motion-pace="tight">
             <h2
               id="big-picture-heading"
+              data-motion-item
               className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
             >
               See the Big Picture
             </h2>
-            <p className="mt-7 max-w-[32rem] text-body text-ink-muted">
+            <p
+              data-motion-item
+              className="mt-7 max-w-[32rem] text-body text-ink-muted"
+            >
               <span translate="no">Acres</span> turns your data into clear,
               vibrant visuals that show you exactly what&apos;s happening in each
               region.
             </p>
-            <div className="mt-14 flex flex-col gap-6">
+            <div
+              data-motion-group="big-picture-rows"
+              className="mt-14 flex flex-col gap-6"
+            >
               {bigPictureRows.map((row) => (
                 <div
                   key={row.marker}
+                  data-motion-item
                   className="grid grid-cols-[2.5rem_1fr] gap-5 border-t border-rule pt-5"
                 >
                   <span className="font-mono text-label text-brand lg:text-label-lg">
@@ -229,12 +269,14 @@ export default function Home() {
               render={<Link href="#specifications" />}
               nativeButton={false}
               variant="secondary"
+              data-motion-item
               className="mt-12"
             >
               Discover More
             </Button>
           </div>
           <Image
+            data-motion-media
             src="/assets/ui/landing/cylinders.webp"
             alt="Neutral stone cylinders arranged as a quiet geometric landscape."
             width={3750}
@@ -249,16 +291,22 @@ export default function Home() {
         id="specifications"
         align="center"
         aria-labelledby="specs-heading"
+        data-motion-group="specs"
+        data-motion-pace="tight"
       >
         <Rule weight="strong" className="mb-section scroll-mt-section" />
-        <Eyebrow>Specs</Eyebrow>
+        <Eyebrow data-motion-item>Specs</Eyebrow>
         <h2
           id="specs-heading"
+          data-motion-item
           className="mt-5 font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
         >
           Why Choose <span translate="no">Acres</span>?
         </h2>
-        <p className="mx-auto mt-7 max-w-[46rem] text-body text-ink-muted">
+        <p
+          data-motion-item
+          className="mx-auto mt-7 max-w-[46rem] text-body text-ink-muted"
+        >
           You need a solution that keeps up. That&apos;s why we developed{" "}
           <span translate="no">Acres</span>. A developer-friendly approach to
           streamline your business.
@@ -267,6 +315,7 @@ export default function Home() {
           render={<Link href="#contact" />}
           nativeButton={false}
           variant="secondary"
+          data-motion-item
           className="mt-12"
         >
           Discover More
@@ -277,6 +326,7 @@ export default function Home() {
       <Section aria-labelledby="testimonial-heading">
         <div className="grid gap-14 lg:grid-cols-[0.88fr_1.12fr] lg:items-center">
           <Image
+            data-motion-media
             src="/assets/ui/landing/stones.webp"
             alt="Balancing stones beside water with a pale sky."
             width={4096}
@@ -284,17 +334,20 @@ export default function Home() {
             sizes="(max-width: 1023px) 100vw, 44vw"
             className="aspect-[1.22/1] w-full rounded-media object-cover lg:aspect-[0.95/1]"
           />
-          <figure>
+          <figure data-motion-group="testimonial" data-motion-pace="tight">
             <h2 id="testimonial-heading" className="sr-only">
               Customer Testimonial
             </h2>
-            <blockquote className="font-serif text-quote text-ink text-balance">
+            <blockquote
+              data-motion-item
+              className="font-serif text-quote text-ink text-balance"
+            >
               “I was skeptical, but <span translate="no">Acres</span> has
               completely transformed the way I manage my business. The data
               visualizations are so clear and intuitive, and the platform is so
               easy to use. I can&apos;t imagine running my company without it.”
             </blockquote>
-            <figcaption className="mt-10">
+            <figcaption data-motion-item className="mt-10">
               <p className="text-ui text-ink">John Smith</p>
               <p className="mt-2 font-mono text-label text-brand lg:text-label-lg">
                 Head of Data
@@ -306,9 +359,14 @@ export default function Home() {
 
       <Section id="how-to" aria-labelledby="how-to-heading">
         <div className="scroll-mt-section">
-          <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+          <div
+            data-motion-group="how-to"
+            data-motion-pace="tight"
+            className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between"
+          >
             <h2
               id="how-to-heading"
+              data-motion-item
               className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
             >
               Map Your Success
@@ -317,6 +375,7 @@ export default function Home() {
               render={<Link href="#contact" />}
               nativeButton={false}
               variant="secondary"
+              data-motion-item
               className="w-fit"
             >
               Discover More
@@ -331,9 +390,16 @@ export default function Home() {
             tabIndex={0}
             aria-label="Three-step Acres setup sequence"
           >
-            <ol className="grid min-w-[45rem] grid-cols-3 gap-5 md:min-w-0">
+            <ol
+              data-motion-group="steps"
+              className="grid min-w-[45rem] grid-cols-3 gap-5 md:min-w-0"
+            >
               {steps.map((step) => (
-                <li key={step.marker} className="border-t border-rule pt-7">
+                <li
+                  key={step.marker}
+                  data-motion-item
+                  className="border-t border-rule pt-7"
+                >
                   <span className="font-serif text-stat text-ink-faint">
                     {step.marker}
                   </span>
@@ -350,6 +416,7 @@ export default function Home() {
         </div>
 
         <Image
+          data-motion-media
           src="/assets/ui/landing/aerial.webp"
           alt="Green aerial landscape with a pale path crossing open terrain."
           width={4096}
@@ -360,14 +427,22 @@ export default function Home() {
       </Section>
 
       <Section id="contact" align="center" aria-labelledby="contact-heading">
-        <div className="mx-auto max-w-[44rem] scroll-mt-section">
+        <div
+          data-motion-group="contact"
+          data-motion-pace="tight"
+          className="mx-auto max-w-[44rem] scroll-mt-section"
+        >
           <h2
             id="contact-heading"
+            data-motion-item
             className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
           >
             Connect with us
           </h2>
-          <p className="mx-auto mt-7 max-w-[34rem] text-body text-ink-muted">
+          <p
+            data-motion-item
+            className="mx-auto mt-7 max-w-[34rem] text-body text-ink-muted"
+          >
             Schedule a quick call to learn how{" "}
             <span translate="no">Acres</span> can turn your regional data into a
             powerful advantage.
@@ -376,13 +451,14 @@ export default function Home() {
             render={<Link href="#how-to" />}
             nativeButton={false}
             variant="primary"
+            data-motion-item
             className="mt-12"
           >
             Learn More
           </Button>
         </div>
       </Section>
-    </>
+    </LandingMotion>
   )
 }
 
@@ -400,6 +476,7 @@ function MediaBand({
   return (
     <Section aria-label={alt}>
       <Image
+        data-motion-media
         src={src}
         alt={alt}
         width={width}
@@ -421,12 +498,15 @@ function ComparisonTable() {
       tabIndex={0}
       aria-label="Comparison of Acres, WebSurge, and HyperView"
     >
-      <table className="w-full min-w-[45rem] border-separate border-spacing-0 font-mono text-label text-ink lg:text-label-lg">
+      <table
+        data-motion-group="comparison"
+        className="w-full min-w-[45rem] border-separate border-spacing-0 font-mono text-label text-ink lg:text-label-lg"
+      >
         <caption className="sr-only">
           Product comparison across browsing, AI, integration, and UTF-8 support.
         </caption>
         <thead>
-          <tr>
+          <tr data-motion-item>
             {["Acres", "WebSurge", "HyperView"].map((column, index) => (
               <th
                 key={column}
@@ -444,7 +524,7 @@ function ComparisonTable() {
         </thead>
         <tbody>
           {comparisonRows.map((row, rowIndex) => (
-            <tr key={row.join("-")}>
+            <tr key={row.join("-")} data-motion-item>
               {row.map((cell, columnIndex) => {
                 const status = comparisonStatus[rowIndex][columnIndex]
                 return (
