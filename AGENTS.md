@@ -368,7 +368,19 @@ rule 8). An ALWAYS rule is removed only when the user asks for it to be removed.
 
 | date | the rule | why |
 | --- | --- | --- |
-| 2026-08-20 | Every commit message is written with the **`caveman-commit`** skill at `.agents/skills/caveman-commit` (§7). | Conventional Commits, ≤50-char subject, why-over-what, and no AI attribution trailer — one voice across the whole history. |
+| 2026-08-20 · reaffirmed 2026-08-20 | Every commit message is written with the **`caveman-commit`** skill at `.agents/skills/caveman-commit` (§7). | Conventional Commits, ≤50-char subject, why-over-what, and no AI attribution trailer — one voice across the whole history. |
+
+**On the skill's path.** `.agents/skills/caveman-commit/` and
+`.claude/skills/caveman-commit/` are two byte-identical copies (`diff -rq`
+reports no difference); the Skill tool resolves the `.claude/` one. Either
+satisfies this rule while they match. **If they ever diverge,
+`.agents/skills/caveman-commit` is the one this ledger names and the one that
+wins** — and the divergence is a defect to fix, not to work around.
+
+**The skill owns the message; §2 step 13 owns the act.** The skill's own
+Boundaries section says it "does not run `git commit`, does not stage files".
+That is not an exemption from committing — it means the skill writes the message
+and this file requires the commit.
 
 ---
 
