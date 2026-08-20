@@ -148,23 +148,37 @@ The board and the comps use exactly three faces, and the split is semantic:
    is the identity's signature and the easiest thing to lose** — a monospace
    eyebrow read as "a small caption" and reset in the sans destroys it.
 
-**Two of the three are identified by measurement; the third is not settled.**
-The PDF outlines its text as Type 3 glyphs, so `pdffonts` names nothing — these
-were resolved by rendering candidates and matching glyph geometry against the
-references (§0), on 2026-08-20:
+**All three are identified by measurement.** The PDF outlines its text as Type 3
+glyphs, so `pdffonts` names nothing — these were resolved on 2026-08-20 by
+rendering candidates and matching glyph geometry against the references (§0),
+not by recognising them:
 
 | role | face | evidence |
 | --- | --- | --- |
 | display serif | **Crimson Text** | `Browse` scaled to the comp's 104 px cap height renders 463 × 106 against the comp's 456 × 105, and the `B` measures **81 px in both** |
-| sans | **DM Sans** | a full body line rendered from the PDF's vector text at 600 dpi matches at 3209 × 119 against 3197 × 120 — a red/green overlay diff of **0.116**, against **0.238** for Roboto Flex. The wordmark's `a` has no bottom-right spur, which matches DM Sans and rules Roboto out |
-| monospace | **unresolved — probably Roboto Mono** | the cells' advance width is uniform at ≈ 7.16 px, so the face is genuinely monospaced. Roboto Mono renders 135 px against the comp's 133; DM Mono is excluded because its `f` descends below the baseline and the comp's does not |
+| sans | **DM Sans** | a body line rendered from the PDF's *vector* text at 600 dpi matches at 3209 × 119 against 3197 × 120 — overlay diff **0.116**, against **0.238** for Roboto Flex. The wordmark's `a` has no bottom-right spur, which matches DM Sans and rules Roboto out |
+| monospace | **Roboto Mono** | uniform advance of ≈ 7.16 px proves the face is genuinely monospaced. Against a 900 dpi vector specimen, Roboto Mono scores an overlay diff of **0.026** — **2.6× better than the next of seventeen candidates** (Martian Mono, 0.069). Its `l` carries both a top flag and a full base serif, which the reference has and IBM Plex Mono and JetBrains Mono do not |
+
+**Roboto Mono's identification is corroborated by its own documentation**, which
+states that "narrow glyphs like 'I', 'l' and 'i' have added serifs for more even
+texture" — the exact trait that separates it from every other candidate tested.
+Family facts, from `google/fonts` `ofl/robotomono/METADATA.pb`: designer
+Christian Robertson, **OFL**, variable `wght` **100–700**, italics included.
+It lives at **`ofl/robotomono`**, not `apache/robotomono`.
+
+**The one residual uncertainty is commercial**: GT America Mono and DIN Mono are
+named as Roboto Mono lookalikes and could not be tested, being licensed. A 0.026
+diff across nineteen glyphs makes another foundry's face very unlikely, but if
+the original Figma file names something else, **the file is the fact and this
+row is stale** (§10 rule 8).
 
 **Roboto Flex is not used anywhere in the references** and must not be added on
-the strength of having been suggested. It lost the sans comparison on both
+the strength of having once been suggested. It lost the sans comparison on both
 metric and letterform.
 
-**The monospace stays a judgement, not a measurement, until the user confirms
-it** (§10 rule 4). Confirm before any `next/font` call is written.
+**All three are on Google Fonts**, so all three come through `next/font/google`
+with no self-hosting. `app/layout.tsx`'s Geist and Geist Mono are replaced by
+them at build step 1.
 
 **`app/layout.tsx` currently loads Geist and Geist Mono, and neither is in the
 comps.** They are `create-next-app` leftovers and are placeholders, not choices.
