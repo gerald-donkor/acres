@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...and .env.example is the opt-in: it documents NEXT_PUBLIC_SITE_URL and
+# carries no secret (lib/site.ts, docs/polish.md).
+!.env.example
 
 # vercel
 .vercel

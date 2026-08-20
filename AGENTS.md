@@ -49,6 +49,7 @@ the read will re-derive it by hand or silently break it.
 | `docs/chrome.md` | the site chrome — horizontal nav, closed mobile card, open mobile menu, footer, logo mark vector extraction, and layout mounting | **written.** Read it before touching header, footer, or mobile disclosure |
 | `docs/landing.md` | the `/` build record, section by section, against `Desktop.png` / `Tablet.png` / `Mobile.png` | **written.** Read it before touching the landing page; it records the extracted assets, copy, table decision, breakpoint measurements and deltas |
 | `docs/motion.md` | GSAP on the site — the packages and verified imports, one-time registration, the client leaf and its `data-motion-*` hooks, the shared `DUR` / `EASE` reader, the two motion-distance tokens, every trigger, stagger, hover and press, reduced motion, cleanup, and the browser evidence | **written.** Read it before any animation change; it records why a CSS `cubic-bezier()` cannot be handed to GSAP, and one accessibility fix the reveal start state forced |
+| `docs/polish.md` | the `web-design-guidelines` pass, the skip link and focus order, the reduced-motion CSS, the touch and colour-scheme base rules, the 404 page, the whole metadata and icon surface, and the pixel diff that proves no comp geometry moved | **written.** Read it before any accessibility, metadata or icon change; it records the accepted hero-flash trade-off and corrects two stale lines elsewhere |
 | `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | **written.** Measurement and headless CDP verification recipes |
 | `docs/skills.md` | the skills installed in `.agents/skills/`, what each is for, what was deliberately excluded and why | not yet written |
 
@@ -313,23 +314,59 @@ For every implementation request:
 7. **Write a prompt file in `prompts/`** per the contract in §5. Plan and detail every step, measurement, dependency, and file change thoroughly so implementation and execution are straightforward and unambiguous.
 8. Ask exactly: `I prepared the implementation prompt at prompts/<file-name>.md. Is this good to execute?`
 9. **On approval, re-read the approved prompt file and implement it strictly.**
-   Implement only after approval. `y` or `Y` = `Approved. Execute.`
-10. Run the checks in §6 and **quote their real output**.
-11. **Record what was built in the `docs/` file that owns the area** — a new
+   Implement only after approval. `y` or `Y` = `Approved. Execute.` Have
+   `requesting-code-review` available before finishing implementation so the
+   workflow for preparing a clean review request is ready.
+10. Run the checks in §6 and **quote their real output** (self-verification:
+    format, lint, typecheck, build, and diff review). Fix any discovered
+    issues before requesting review.
+11. **Run the two-stage code review loop — always, before recording or committing (§2.1, §3):**
+    - **Stage 1 (`requesting-code-review`)**: Dispatch a reviewer subagent with
+      precisely crafted context (requirements, git SHAs, what was built, checks run)
+      to inspect the implementation and diff.
+    - **Stage 2 (`receiving-code-review`)**: Evaluate feedback with technical
+      rigor against codebase reality. Verify before implementing; push back with
+      technical reasoning if wrong; never performative agreement or blind
+      implementation. Fix valid issues and re-verify.
+    - **Re-review**: Request follow-up review with `requesting-code-review` if
+      feedback led to significant or architectural changes.
+12. **Record what was built in the `docs/` file that owns the area** — a new
     one, added to the index above, if it belongs to none. **Never in this file**,
     beyond the one index row §1.8 permits.
-12. Give the exact steps to see the result running.
-13. **Commit to `main`, unprompted, using the `caveman-commit` skill** (§7).
+13. Give the exact steps to see the result running.
+14. **Commit to `main`, unprompted, using the `caveman-commit` skill** (§7).
     Every executed prompt ends in a commit. Never leave implemented work
     uncommitted. Do not push unless asked.
 
 **Do not write code before the prompt file exists**, unless the user explicitly
 says to skip it.
 
-**Why step 13 matters.** Resolving what is already built — on any resume, in any
+**Why step 14 matters.** Resolving what is already built — on any resume, in any
 new session — reads the files on disk and `git log`, never the prompt files.
 Work left uncommitted makes that resolution wrong and invites a duplicate prompt
 for something that already exists.
+
+## 2.1 Code review workflow
+
+Every implementation undergoes a two-stage code review loop (`ref/ref-review.md`) using the Superpowers code-review skills vendored at `.agents/skills/` (and installable via `npx skills add https://github.com/obra/superpowers --skill requesting-code-review`):
+
+```
+Implement → Self-verify / run checks → Request review (requesting-code-review) → Receive/evaluate review (receiving-code-review) → Fix valid issues & re-test → Re-review if significant → Final completion & commit
+```
+
+1. **`requesting-code-review` (`.agents/skills/requesting-code-review`) — used first.**
+   - Generally have this skill available before finishing implementation so the agent is prepared with the workflow for a good review request.
+   - **Self-verify first**: Complete implementation, inspect all changed files, run checks in §6 (`npm run build`, `npm run lint`), and review the final diff. Do not request review for code known to be incomplete or failing.
+   - **Dispatch a reviewer subagent**: Provide structured context — what was requested, what was implemented, files changed, architectural/design decisions, constraints, checks performed, and git SHAs (`BASE_SHA` / `HEAD_SHA`).
+   - Reviewing via a subagent preserves the coordinator context window and ensures the reviewer evaluates actual code and diff against requirements.
+
+2. **`receiving-code-review` (`.agents/skills/receiving-code-review`) — used on feedback.**
+   - **Verify before implementing**: Check reviewer claims against the actual codebase and requirements. Check if suggestions break existing functionality or violate YAGNI (e.g. unused features).
+   - **Forbidden responses**: Never give performative agreement ("You're absolutely right!", "Great point!"), gratitude expressions ("Thanks for catching that!"), or blind implementation. State the technical requirement, ask clarifying questions, or push back with reasoned technical evidence.
+   - **Handling unclear feedback**: If any item is unclear, **stop and ask** before implementing anything.
+   - **Implementation order**: Fix blocking issues first, then simple fixes, then complex refactors. Test each fix individually and verify no regressions.
+
+3. **Re-review**: If changes affect architecture, public APIs, shared components, data flow, security, or complex UI/interaction behavior, invoke `requesting-code-review` for a follow-up review.
 
 ## Resuming in a new session
 
@@ -376,6 +413,7 @@ rule 8). An ALWAYS rule is removed only when the user asks for it to be removed.
 | --- | --- | --- |
 | 2026-08-20 · reaffirmed 2026-08-20 | Every commit message is written with the **`caveman-commit`** skill at `.agents/skills/caveman-commit` (§7). | Conventional Commits, ≤50-char subject, why-over-what, and no AI attribution trailer — one voice across the whole history. |
 | 2026-08-20 | Always plan and write prompts that are very detailed so implementation and execution is easier. | Thorough planning and granular specifications eliminate ambiguity, provide complete context and measurements upfront, and ensure execution is straightforward and reliable. |
+| 2026-08-20 | Always use **`requesting-code-review`** and **`receiving-code-review`** (`.agents/skills/requesting-code-review`, `.agents/skills/receiving-code-review`) to review every implementation: Implement → request review → receive/evaluate review → fix issues → re-review (§2, §2.1). | Enforces a two-stage code review loop: dispatching a reviewer subagent with clean context and evaluating feedback with technical rigor and codebase verification before making fixes or committing. |
 
 **On the skill's path.** `.agents/skills/caveman-commit/` and
 `.claude/skills/caveman-commit/` are two byte-identical copies (`diff -rq`
@@ -384,7 +422,7 @@ satisfies this rule while they match. **If they ever diverge,
 `.agents/skills/caveman-commit` is the one this ledger names and the one that
 wins** — and the divergence is a defect to fix, not to work around.
 
-**The skill owns the message; §2 step 13 owns the act.** The skill's own
+**The skill owns the message; §2 step 14 owns the act.** The skill's own
 Boundaries section says it "does not run `git commit`, does not stage files".
 That is not an exemption from committing — it means the skill writes the message
 and this file requires the commit.
@@ -407,6 +445,8 @@ the map. **Listing a skill is not loading it.**
 | `gsap-core`, `gsap-timeline`, `gsap-scrolltrigger`, `gsap-react`, `gsap-plugins`, `gsap-utils`, `gsap-performance` | any motion work; `gsap-react` is not optional in this codebase, because cleanup on unmount is where GSAP in React goes wrong |
 | `vercel-react-best-practices` | writing or refactoring any component — server/client boundaries and bundle cost |
 | `vercel-react-view-transitions` | route or state transitions, before reaching for a library |
+| `requesting-code-review` | completing tasks, implementing features, or preparing review requests to dispatch reviewer subagent (§2, §2.1) |
+| `receiving-code-review` | receiving code review feedback, to evaluate and act on suggestions with technical rigor before implementing changes (§2, §2.1) |
 | `caveman-commit` | **every commit, always** (§3, §7) |
 
 **GSAP is not installed yet.** Do not write a `gsap` import before a prompt has
@@ -498,7 +538,7 @@ What it enforces, in short — read the skill for the full contract:
 - **no** "this commit does X", no "I"/"we", no emoji
 - **no AI-attribution trailer** — the skill excludes it, and the skill wins
 
-Commit to `main` unprompted at the end of every executed prompt (§2 step 13).
+Commit to `main` unprompted at the end of every executed prompt (§2 step 14).
 Do not push unless asked.
 
 ---
@@ -543,9 +583,10 @@ full `components/ui/` primitive set is installed and **untouched**; it repaints
 from the rebound tokens. `public/assets/ui/` holds the references (§0). There is
 no component of our own, no content, and no backend of any kind.
 
-**Two known lint errors** (`components/ui/carousel.tsx`, `hooks/use-mobile.ts`)
-pre-date step 1 and are in generated shadcn code. They are recorded in
-`docs/design-system.md` §11 and belong to step 2, which owns `components/ui/`.
+**`npm run lint` and `npx tsc --noEmit` both run clean** — no output, exit 0, on
+the tree at `f29f674` and on the current tree. The two lint errors this
+paragraph used to name in `components/ui/carousel.tsx` and `hooks/use-mobile.ts`
+are gone; `docs/design-system.md` §11 is stale on that point.
 
 ## 8.2 The build sequence
 

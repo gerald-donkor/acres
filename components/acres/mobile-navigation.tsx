@@ -69,9 +69,17 @@ function MobileNavigation({ className }: { className?: string }) {
           </div>
         </div>
 
+        {/*
+          `overscroll-contain` keeps a scroll gesture that reaches the panel's
+          edge from chaining to the page behind it. It is NOT a modal: Base UI's
+          CollapsibleTrigger already emits `aria-expanded` (always) and
+          `aria-controls` (while open), so nothing is added there, and the card
+          is anchored to the top edge rather than covering the page — no focus
+          trap, no `aria-modal`, no body-scroll lock (docs/chrome.md).
+        */}
         <CollapsibleContent
           className={cn(
-            "w-full bg-canvas rounded-b-media shadow-card overflow-hidden",
+            "w-full bg-canvas rounded-b-media shadow-card overflow-hidden overscroll-contain",
             "outline-none"
           )}
         >

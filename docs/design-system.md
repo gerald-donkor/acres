@@ -776,6 +776,13 @@ this change's diff, which touches only `app/globals.css`, `app/layout.tsx`,
 a licence to patch the component." They are a finding for step 2, which is the
 step that owns `components/ui/`.
 
+> **2026-08-20, step 6.** The output above is what step 1 measured and it stays
+> as the record of that run. It no longer reproduces: `npm run lint` and
+> `npx tsc --noEmit` both exit 0 with no output, on the tree at `f29f674` and on
+> the tree step 6 shipped. Neither file was patched by any step, so the rule
+> stopped firing on its own — most likely a `react-hooks` version change.
+> The finding is closed. `docs/polish.md` §7 carries the current output.
+
 ### `npm run dev` — the font verification
 
 This is the check `npm run build` cannot do, and the one AGENTS.md §8.1's defect

@@ -317,5 +317,51 @@
   }
   html {
     @apply font-sans;
+
+    /* Acres has ONE canvas and no designed dark theme
+       (AGENTS.md §9.1 rule 4, docs/design-system.md §7.7). Declaring the scheme
+       stops a UA in dark mode from painting scrollbars and form controls dark
+       against a white page. This is the opposite of adding a dark theme. */
+    color-scheme: light;
+
+    /* Every CTA on the landing page is a fragment link, so anchor navigation is
+       the page's main movement. Smooth is a JUDGEMENT, not a measurement — the
+       references are static images — and it is cancelled below under
+       prefers-reduced-motion. */
+    scroll-behavior: smooth;
+  }
+
+  /* Touch behaviour, scoped to the things that are actually interactive rather
+     than blanketed over `*`. `manipulation` drops the 300 ms double-tap-zoom
+     delay without disabling pinch zoom; the tap highlight is set deliberately to
+     transparent because a focus-visible ring and a colour hover already answer
+     for the feedback. */
+  a,
+  button,
+  summary,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* GSAP honours prefers-reduced-motion through gsap.matchMedia()
+     (lib/motion.ts, docs/motion.md §6.1), but the CSS `transition-colors` on the
+     pills, the nav links, the footer links and the mobile card does not — and
+     neither does the smooth scrolling above. This is the CSS half of the same
+     promise (AGENTS.md §9.3 rule 4). Durations collapse to a frame rather than
+     to zero, so transitionend still fires and nothing waits forever. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    html {
+      scroll-behavior: auto;
+    }
   }
 }

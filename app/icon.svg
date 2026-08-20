@@ -1,0 +1,19 @@
+<!--
+  The Acres mark as a standalone icon.
+
+  The path is COPIED, byte for byte, from components/acres/logo-mark.tsx, which
+  extracted it from the design-system PDF vector (ds-1.png y=1528.875-1598.867,
+  x=20.051-51.797). It is not re-extracted and not redrawn.
+
+  Two deliberate differences from that component:
+    - the fill is an explicit #000000, because `currentColor` has no meaning in a
+      standalone favicon;
+    - the 31.75 x 70 mark is centred in an 88 x 88 square by a translate, so the
+      icon is square (a 0 0 31.75 70 viewBox renders as a sliver in a tab) with
+      9 px of breathing room above and below.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88" width="88" height="88">
+  <g transform="translate(28.125 9)" fill="#000000">
+    <path d="M22.3359 21.5859L31.7461 32.6719L27.9219 35.9062L22.3359 29.3086V44.9961H24.8359V69.9922H19.8359V44.9961H17.3359V14.9961H22.3359V21.5859ZM12.4219 44.9961L7.83594 69.9922H2.75L7.33594 44.9961H12.4219ZM4.67578 35.8828L0 34.1094L7.22266 14.9961H12.5742L4.67578 35.8828ZM17.3359 9.94922H12.3359V0H17.3359V9.94922Z" />
+  </g>
+</svg>

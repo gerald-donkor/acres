@@ -131,7 +131,7 @@ export default function Home() {
                 alt="Acres regional analytics report interface with an efficiency trend chart."
                 width={1741}
                 height={1216}
-                priority
+                fetchPriority="high"
                 sizes="(max-width: 767px) 78vw, min(92vw, 980px)"
                 className="mx-auto h-auto w-full max-w-[61.25rem] md:max-w-[55rem]"
               />
@@ -155,7 +155,7 @@ export default function Home() {
               Trusted by:
             </h2>
             <ul className="grid flex-1 grid-cols-2 items-center gap-x-12 gap-y-10 md:grid-cols-3 lg:grid-cols-6 lg:gap-x-12">
-              {trustedMarks.map((mark, index) => (
+              {trustedMarks.map((mark) => (
                 <li
                   key={mark.src}
                   data-motion-item
@@ -168,7 +168,6 @@ export default function Home() {
                     height={mark.height}
                     className="h-auto max-h-11 w-auto opacity-100"
                   />
-                  <span className="sr-only">Trusted partner mark {index + 1}</span>
                 </li>
               ))}
             </ul>
@@ -176,12 +175,12 @@ export default function Home() {
         </Container>
       </section>
 
-      <Section id="benefits" aria-labelledby="benefits-heading">
-        <div
-          data-motion-group="benefits-intro"
-          data-motion-pace="tight"
-          className="scroll-mt-section"
-        >
+      <Section
+        id="benefits"
+        aria-labelledby="benefits-heading"
+        className="scroll-mt-section"
+      >
+        <div data-motion-group="benefits-intro" data-motion-pace="tight">
           <Eyebrow data-motion-item>Benefits</Eyebrow>
           <div className="mt-5 max-w-[42rem]">
             <h2
@@ -189,7 +188,7 @@ export default function Home() {
               data-motion-item
               className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
             >
-              We&apos;ve cracked the code.
+              We’ve cracked the code.
             </h2>
             <p
               data-motion-item
@@ -245,7 +244,7 @@ export default function Home() {
               className="mt-7 max-w-[32rem] text-body text-ink-muted"
             >
               <span translate="no">Acres</span> turns your data into clear,
-              vibrant visuals that show you exactly what&apos;s happening in each
+              vibrant visuals that show you exactly what’s happening in each
               region.
             </p>
             <div
@@ -291,10 +290,11 @@ export default function Home() {
         id="specifications"
         align="center"
         aria-labelledby="specs-heading"
+        className="scroll-mt-section"
         data-motion-group="specs"
         data-motion-pace="tight"
       >
-        <Rule weight="strong" className="mb-section scroll-mt-section" />
+        <Rule weight="strong" className="mb-section" />
         <Eyebrow data-motion-item>Specs</Eyebrow>
         <h2
           id="specs-heading"
@@ -307,7 +307,7 @@ export default function Home() {
           data-motion-item
           className="mx-auto mt-7 max-w-[46rem] text-body text-ink-muted"
         >
-          You need a solution that keeps up. That&apos;s why we developed{" "}
+          You need a solution that keeps up. That’s why we developed{" "}
           <span translate="no">Acres</span>. A developer-friendly approach to
           streamline your business.
         </p>
@@ -345,7 +345,7 @@ export default function Home() {
               “I was skeptical, but <span translate="no">Acres</span> has
               completely transformed the way I manage my business. The data
               visualizations are so clear and intuitive, and the platform is so
-              easy to use. I can&apos;t imagine running my company without it.”
+              easy to use. I can’t imagine running my company without it.”
             </blockquote>
             <figcaption data-motion-item className="mt-10">
               <p className="text-ui text-ink">John Smith</p>
@@ -357,8 +357,12 @@ export default function Home() {
         </div>
       </Section>
 
-      <Section id="how-to" aria-labelledby="how-to-heading">
-        <div className="scroll-mt-section">
+      <Section
+        id="how-to"
+        aria-labelledby="how-to-heading"
+        className="scroll-mt-section"
+      >
+        <div>
           <div
             data-motion-group="how-to"
             data-motion-pace="tight"
@@ -387,6 +391,7 @@ export default function Home() {
               "mt-16 overflow-x-auto overscroll-x-contain pb-4",
               focusClass
             )}
+            role="region"
             tabIndex={0}
             aria-label="Three-step Acres setup sequence"
           >
@@ -426,11 +431,16 @@ export default function Home() {
         />
       </Section>
 
-      <Section id="contact" align="center" aria-labelledby="contact-heading">
+      <Section
+        id="contact"
+        align="center"
+        aria-labelledby="contact-heading"
+        className="scroll-mt-section"
+      >
         <div
           data-motion-group="contact"
           data-motion-pace="tight"
-          className="mx-auto max-w-[44rem] scroll-mt-section"
+          className="mx-auto max-w-[44rem]"
         >
           <h2
             id="contact-heading"
@@ -495,6 +505,7 @@ function ComparisonTable() {
         "mt-20 overflow-x-auto overscroll-x-contain pb-4 text-left",
         focusClass
       )}
+      role="region"
       tabIndex={0}
       aria-label="Comparison of Acres, WebSurge, and HyperView"
     >

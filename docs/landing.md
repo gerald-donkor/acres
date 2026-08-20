@@ -173,7 +173,13 @@ Findings checked against `app/page.tsx`:
   native `overflow-x-auto`.
 - Visible brand/product names introduced in `app/page.tsx` use `translate="no"`.
 - No console, hydration, Base UI, or image-alt warnings were observed in the
-  CDP output.
+  CDP output — **except** an image-preload warning at 800 and 375, raised by the
+  hero's `<picture>`/`<source>` wrapping a `priority` `next/image`
+  (`The resource http://localhost:3100/_next/image?url=%2Fassets%2Fui%2Flanding%2Freport-device-desktop.webp&w=750&q=75 was preloaded using link preload but not used within a few seconds…`;
+  the 375 instance reads `w=640`). It is fixed at `app/page.tsx:134` by replacing
+  `priority` with `fetchPriority="high"`, which is what Next 16.3.1 prescribes
+  for an art-directed image; the console is clean afterwards at 1280, 800 and
+  375, in both normal and reduced motion. Measured in `docs/polish.md` §4.
 
 ## Check Results
 
