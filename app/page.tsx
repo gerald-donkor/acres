@@ -131,6 +131,7 @@ export default function Home() {
                 alt="Acres regional analytics report interface with an efficiency trend chart."
                 width={1741}
                 height={1216}
+                quality={100}
                 fetchPriority="high"
                 sizes="(max-width: 767px) 78vw, min(92vw, 980px)"
                 className="mx-auto h-auto w-full max-w-[61.25rem] md:max-w-[55rem]"
@@ -166,6 +167,7 @@ export default function Home() {
                     alt=""
                     width={mark.width}
                     height={mark.height}
+                    unoptimized
                     className="h-auto max-h-11 w-auto opacity-100"
                   />
                 </li>
@@ -222,12 +224,7 @@ export default function Home() {
         </div>
       </Section>
 
-      <MediaBand
-        src="/assets/ui/landing/mountain.webp"
-        width={4096}
-        height={2304}
-        alt="Layered mountain ridges in shifting green, blue, and rose light."
-      />
+      <MediaBand alt="Layered mountain ridges in shifting green, blue, and rose light." />
 
       <Section aria-labelledby="big-picture-heading">
         <div className="grid gap-16 lg:grid-cols-[0.95fr_1.05fr] lg:items-end">
@@ -274,15 +271,28 @@ export default function Home() {
               Discover More
             </Button>
           </div>
-          <Image
+          <picture
             data-motion-media
-            src="/assets/ui/landing/cylinders.webp"
-            alt="Neutral stone cylinders arranged as a quiet geometric landscape."
-            width={3750}
-            height={3000}
-            sizes="(max-width: 1023px) 100vw, 48vw"
-            className="aspect-[1.08/1] w-full rounded-media object-cover"
-          />
+            className="block aspect-[311/385] w-full overflow-hidden rounded-media md:aspect-[720/744] lg:aspect-[590/711]"
+          >
+            <source
+              media="(min-width: 1024px)"
+              srcSet="/assets/ui/landing/cylinders-desktop.webp"
+            />
+            <source
+              media="(min-width: 768px)"
+              srcSet="/assets/ui/landing/cylinders-tablet.webp"
+            />
+            <Image
+              src="/assets/ui/landing/cylinders-mobile.webp"
+              alt="Neutral stone cylinders arranged as a quiet geometric landscape."
+              width={1770}
+              height={2133}
+              quality={100}
+              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 100vw, 600px"
+              className="h-full w-full object-cover"
+            />
+          </picture>
         </div>
       </Section>
 
@@ -325,15 +335,28 @@ export default function Home() {
 
       <Section aria-labelledby="testimonial-heading">
         <div className="grid gap-14 lg:grid-cols-[0.88fr_1.12fr] lg:items-center">
-          <Image
+          <picture
             data-motion-media
-            src="/assets/ui/landing/stones.webp"
-            alt="Balancing stones beside water with a pale sky."
-            width={4096}
-            height={2048}
-            sizes="(max-width: 1023px) 100vw, 44vw"
-            className="aspect-[1.22/1] w-full rounded-media object-cover lg:aspect-[0.95/1]"
-          />
+            className="block aspect-square w-full overflow-hidden rounded-media lg:aspect-[590/670]"
+          >
+            <source
+              media="(min-width: 1024px)"
+              srcSet="/assets/ui/landing/stones-desktop.webp"
+            />
+            <source
+              media="(min-width: 768px)"
+              srcSet="/assets/ui/landing/stones-tablet.webp"
+            />
+            <Image
+              src="/assets/ui/landing/stones-mobile.webp"
+              alt="Balancing stones beside water with a pale sky."
+              width={1770}
+              height={2009}
+              quality={100}
+              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 100vw, 600px"
+              className="h-full w-full object-cover"
+            />
+          </picture>
           <figure data-motion-group="testimonial" data-motion-pace="tight">
             <h2 id="testimonial-heading" className="sr-only">
               Customer Testimonial
@@ -420,15 +443,28 @@ export default function Home() {
           </div>
         </div>
 
-        <Image
+        <picture
           data-motion-media
-          src="/assets/ui/landing/aerial.webp"
-          alt="Green aerial landscape with a pale path crossing open terrain."
-          width={4096}
-          height={2731}
-          sizes="100vw"
-          className="mt-16 aspect-[1.72/1] w-full rounded-media object-cover md:mt-20"
-        />
+          className="mt-16 block aspect-[343/600] w-full overflow-hidden rounded-media md:mt-20 md:aspect-[720/664] lg:aspect-[1200/664]"
+        >
+          <source
+            media="(min-width: 1024px)"
+            srcSet="/assets/ui/landing/aerial-desktop.webp"
+          />
+          <source
+            media="(min-width: 768px)"
+            srcSet="/assets/ui/landing/aerial-tablet.webp"
+          />
+          <Image
+            src="/assets/ui/landing/aerial-mobile.webp"
+            alt="Green aerial landscape with a pale path crossing open terrain."
+            width={3600}
+            height={1993}
+            quality={100}
+            sizes="(max-width: 767px) 100vw, (max-width: 1023px) 100vw, 1200px"
+            className="h-full w-full object-cover"
+          />
+        </picture>
       </Section>
 
       <Section
@@ -473,27 +509,34 @@ export default function Home() {
 }
 
 function MediaBand({
-  src,
   alt,
-  width,
-  height,
 }: {
-  src: string
   alt: string
-  width: number
-  height: number
 }) {
   return (
     <Section aria-label={alt}>
-      <Image
+      <picture
         data-motion-media
-        src={src}
-        alt={alt}
-        width={width}
-        height={height}
-        sizes="100vw"
-        className="aspect-[1.9/1] w-full rounded-media object-cover md:aspect-[2.22/1]"
-      />
+        className="block aspect-[343/600] w-full overflow-hidden rounded-media md:aspect-[720/600] lg:aspect-[1200/620]"
+      >
+        <source
+          media="(min-width: 1024px)"
+          srcSet="/assets/ui/landing/mountain-desktop.webp"
+        />
+        <source
+          media="(min-width: 768px)"
+          srcSet="/assets/ui/landing/mountain-tablet.webp"
+        />
+        <Image
+          src="/assets/ui/landing/mountain-mobile.webp"
+          alt={alt}
+          width={3600}
+          height={1860}
+          quality={100}
+          sizes="(max-width: 767px) 100vw, (max-width: 1023px) 100vw, 1200px"
+          className="h-full w-full object-cover"
+        />
+      </picture>
     </Section>
   )
 }

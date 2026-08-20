@@ -82,6 +82,30 @@ PNG, and trimmed:
 | `trusted-mark-05.png` | `-crop 230x100+840+965 -fuzz 7% -transparent white -trim` | 114 × 20 |
 | `trusted-mark-06.png` | `-crop 200x100+1030+965 -fuzz 7% -transparent white -trim` | 106 × 38 |
 
+## Responsive High-Fidelity Image Assets
+
+Per `prompts/08-image-quality-fidelity.md`, all raster images are served at 100% quality with responsive breakpoint assets extracted for 3x Retina display density:
+
+| section | breakpoint | asset | source dimensions | CSS @3x target |
+| --- | --- | --- | --- | --- |
+| MediaBand (Mountain) | Desktop (≥1024px) | `mountain-desktop.webp` | 3600 × 1860 | 1200 × 620 |
+| MediaBand (Mountain) | Tablet (768–1023px) | `mountain-tablet.webp` | 2160 × 1800 | 720 × 600 |
+| MediaBand (Mountain) | Mobile (<768px) | `mountain-mobile.webp` | 1029 × 1800 | 343 × 600 |
+| Big Picture (Cylinders) | Desktop (≥1024px) | `cylinders-desktop.webp` | 1770 × 2133 | 590 × 711 |
+| Big Picture (Cylinders) | Tablet (768–1023px) | `cylinders-tablet.webp` | 2160 × 2232 | 720 × 744 |
+| Big Picture (Cylinders) | Mobile (<768px) | `cylinders-mobile.webp` | 933 × 1156 | 311 × 385 |
+| Testimonial (Stones) | Desktop (≥1024px) | `stones-desktop.webp` | 1770 × 2009 | 590 × 670 |
+| Testimonial (Stones) | Tablet (768–1023px) | `stones-tablet.webp` | 2160 × 2160 | 720 × 720 |
+| Testimonial (Stones) | Mobile (<768px) | `stones-mobile.webp` | 1029 × 1029 | 343 × 343 |
+| Map Your Success (Aerial) | Desktop (≥1024px) | `aerial-desktop.webp` | 3600 × 1993 | 1200 × 664 |
+| Map Your Success (Aerial) | Tablet (768–1023px) | `aerial-tablet.webp` | 2160 × 1993 | 720 × 664 |
+| Map Your Success (Aerial) | Mobile (<768px) | `aerial-mobile.webp` | 1029 × 1800 | 343 × 600 |
+| Hero Device | Desktop / Mobile | `report-device-*.webp` | 1741 × 1216 / 816 × 1704 | 100% quality raw extraction |
+
+Configuration:
+- `next.config.ts`: Added `images.qualities: [75, 100]` to allow Next.js 16 to output `q=100` images.
+- `app/page.tsx`: Art-directed `<picture>` tags with `<source media="...">` for Desktop, Tablet, and Mobile, rendering native aspect ratios without upscaling distortion or blur. Trusted marks set to `unoptimized`.
+
 ## Copy and Icon Mapping
 
 Every standalone product-name `Area` from the comps ships as `Acres`. The shipped
