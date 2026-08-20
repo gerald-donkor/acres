@@ -95,11 +95,12 @@ magick <comp>.png -crop WxH+X+Y +repage -format %c histogram:info: | sort -rn | 
 antialiased, and `p{x,y}` on one of them returns a blend that is not in the
 palette. Take the histogram and read the dominant non-background entry.
 
-**`ref/refAGENTS.md` is a formatting reference from another project
-(Aetherfield) and is not a source of scope, stack or design for Acres.** Its
-structure is worth copying; its provider choices, build steps, invariants and
-`docs/` index are that project's and are not ours. Never cite it as authority
-for anything in this repository.
+**`/ref` is gitignored and holds no design truth.** It carries
+`refAGENTS.md`, a formatting reference from another project (Aetherfield), kept
+locally and deliberately untracked — **a fresh clone will not have it, so never
+cite it and never make a task depend on it.** Its structure informed this file;
+its provider choices, build steps, invariants and `docs/` index are that
+project's and are not ours.
 
 ---
 
