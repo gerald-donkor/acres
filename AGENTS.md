@@ -45,7 +45,7 @@ the read will re-derive it by hand or silently break it.
 | file | covers | status |
 | --- | --- | --- |
 | `docs/design-system.md` | the tokens — palette, type scale and roles, spacing, radii, the container and its gutters, elevation, motion constants — each measured from the references in §0, plus the `@theme` block that expresses them | **written.** Read it before any styling change; it corrects several lines below |
-| `docs/components.md` | the primitives built on those tokens — `Button` and its four variants, the nav, the footer, the section shell, the eyebrow, the comparison table | not yet written |
+| `docs/components.md` | the primitives in `components/acres/` — the pill and its four states, the icon button, `Icon`, the container, the section shell, the eyebrow, the two rules — plus the four glyph identifications and the `cn()` contract | **written.** Read it before touching a primitive or adding a token; it corrects `prompts/02-primitives.md` in two places. The nav, the footer and the comparison table are still step 3's and step 4's |
 | `docs/landing.md` | the `/` build record, section by section, against `Desktop.png` / `Tablet.png` / `Mobile.png` | not yet written |
 | `docs/motion.md` | GSAP on the site — registration, the shared `DUR` / `EASE` constants, every scroll trigger and reveal | not yet written |
 | `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | not yet written; the recipes in §0 are its seed |
@@ -251,16 +251,21 @@ stays, because it governs what the shadcn CLI generates, not what we author. All
 eight board glyphs are filled, which is why substituting Lucide's stroked set was
 rejected. Step 2 installs it; the glyph list is in `docs/design-system.md` §6.
 
-**One glyph is still unidentified** — the two-slanted-bars mark on the "Amplify
-Insights" card. Identify it against the package's own set or raise it. **Do not
-swap in the nearest-looking substitute** — that is §10 rule 9.
+**Three glyph questions were opened and all three are answered in
+`docs/components.md` §3, two of them only provisionally.** The carousel arrows
+are **`arrow_right` / `arrow_left`**, decisive at a 57x and a 47x margin. The
+"Amplify Insights" mark is **`cable`, mirrored and rotated −45°**, and the pill's
+↗ is **`arrow_outward`** — both win the whole 7798-glyph field but at margins of
+7 % and 31 %, which do not clear the bar §1.2 set, so **both are raised with the
+user and neither is closed.** Nothing ships either one yet. **Do not swap in the
+nearest-looking substitute** — that is §10 rule 9.
 
 ## 1.7 The product is called Acres
 
-`package.json` still reads `"name": "area"`, and the body copy on the comps says
-"Area" in three places (the benefits sub-line, the "Why Choose Acres?" paragraph,
-the testimonial) while the nav, the section heading and the page title already
-say "Acres". **"Acres" is correct everywhere.** Every occurrence of "Area" in
+`package.json` reads `"name": "acres"` — the line that said otherwise was stale
+and is fixed here. What remains is the copy: the comps say "Area" in **five**
+places, listed in `docs/design-system.md` §8, while the nav, the section heading
+and the page title already say "Acres". **"Acres" is correct everywhere.** Every occurrence of "Area" in
 shipped copy is a rename the comps did not finish, and it is fixed on sight
 rather than transcribed.
 

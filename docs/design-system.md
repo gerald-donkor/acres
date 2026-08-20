@@ -177,6 +177,8 @@ pair that ships.
   user's call, not this step's. **Step 2 must not ship the hover as-is without a
   decision.** The cheapest fix that keeps the board's colour is a `#000000`
   label on sage hover (7.16 : 1); the alternative is a darker hover fill.
+  **Closed in step 2**, at the approval gate: the fill stays exactly `#8E9C78`
+  and the label goes black. `docs/components.md` §5, delta 1.
 - **`#929292` is only safe at large sizes.** Its two shipped uses are the 80 px
   step numerals (large text, 3.11 : 1, passes) and a 1 px rule (not text). It
   must not be used for body copy, and the token is named to discourage that.
@@ -612,7 +614,47 @@ names a real value, this is the line that changes.
 The container needs no breakpoint of its own: `min(100vw − 2 × gutter, 1200px)`
 caps itself.
 
-### 7.4 Dark mode
+### 7.4 Primitive geometry — added by step 2
+
+Six `--spacing-*` tokens were added when the primitives needed values that had no
+token. Each is measured; the measurement and the crop are in
+`docs/components.md` §2, and the rule that put them here rather than inline is
+AGENTS.md §9.1 rule 1.
+
+| token | value | what it is |
+| --- | --- | --- |
+| `--spacing-pill-x` | `1.375rem` (22 px) | pill side padding, both variants. The board measures **23** to the label's *ink*; DM Sans carries a 1 px left side bearing on `L`, so 22 of CSS padding lands the ink at 23 and the fill at the measured 117 / 126 |
+| `--spacing-pill-gap` | `0.1875rem` (3 px) | label → arrow gap on the primary |
+| `--spacing-arrow` | `0.375rem` (6 px) | the ↗, sized by its **ink**. `<Icon>` crops the glyph's viewBox to its ink box so the drawn mark and the laid-out box are the same 6 px |
+| `--spacing-icon` | `1.5rem` (24 px) | every Material Symbol, at every breakpoint (§6) |
+| `--spacing-target` | `2.75rem` (44 px) | the touch floor of AGENTS.md §9.4 rule 5 |
+| `--spacing-section` | `7.5rem` (120 px) | the section rhythm of §3.3, applied as top padding only |
+
+**Adding a token to `@theme` now means adding its name to `lib/utils.ts` too.**
+`cn()` is built with `extendTailwindMerge`, and a token `tailwind-merge` has not
+been told about fails **silently** — `docs/components.md` §4.4 records the two
+components that were measurably wrong before it was configured.
+
+### 7.5 The global focus ring
+
+`app/globals.css`'s `@layer base` rule changed from `outline-ring/50` to
+`outline-ring`. The 50 % mix is inherited `create-next-app`/shadcn scaffolding,
+and measured in the browser it beat every `focus-visible:outline-*` a component
+could set. `#485C11` at 50 % over white is about **2.2 : 1**, under the 3 : 1
+floor a focus indicator has to clear; at full opacity it is **7.46 : 1** (§1.4).
+
+### 7.6 `--text-brand` is unreachable — open
+
+`--text-brand: 1.875rem` (the 30 px wordmark, §2.3) and `--color-brand: #485C11`
+(§1.1) collide on one class name. Tailwind resolves `text-brand` to the
+**colour** — confirmed in the compiled CSS, `.text-brand{color:var(--color-brand)}`
+— so the type role has no utility.
+
+**Step 3 builds the wordmark and will hit this.** The fix is a rename in this
+file and in `@theme` together. It was not taken in step 2, because renaming a
+design-system token is not that step's to decide.
+
+### 7.7 Dark mode
 
 **Acres has no designed dark theme.** Neither the board nor any of the three
 comps says anything about one. The `.dark` block in `app/globals.css` is

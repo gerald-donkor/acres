@@ -28,8 +28,10 @@
   --color-brand: #485c11; /* the only chromatic accent */
   --color-brand-soft: #dfecc6; /* secondary fill, active icon button */
   --color-sage: #8e9c78; /* the device band */
-  --color-hover: #8e9c78; /* BOTH pill variants hover to this. See §1.4:
-                             white-on-sage is 2.93:1 and step 2 must resolve it. */
+  --color-hover: #8e9c78; /* BOTH pill variants hover to this. Step 2 resolved the
+                             contrast finding of docs/design-system.md §1.4 by
+                             keeping this fill and setting the hover LABEL black:
+                             white-on-sage is 2.93:1, black-on-sage is 7.16:1. */
 
   /* -- families (docs/design-system.md §2.1) ---------------------------------- */
   --font-weight-body: 500;
@@ -116,6 +118,24 @@
   --radius-control: 0.5rem; /* 8px  — icon buttons */
   --radius-card: 0.875rem; /* 14px — the comparison card, bordered surfaces */
   --radius-media: 1.5rem; /* 24px — photographs, the sage band, device frames */
+
+  /* -- primitive geometry (docs/components.md §2) ----------------------------
+     Measured on the board's Buttons block, `ds-1.png` rows 1830–2360. Named
+     here rather than inlined, because AGENTS.md §9.1 rule 1 makes an untokenised
+     value a missing token, not a licence to write `px-[23px]`. */
+  --spacing-pill-x: 1.375rem; /* 22px — pill side padding, both variants.
+                                 The board measures 23px from the fill edge to
+                                 the label's INK; DM Sans carries a 1px left side
+                                 bearing on `L`, so 22px of CSS padding lands the
+                                 ink at 23 and the fill at the measured 117/126.
+                                 docs/components.md §2.1. */
+  --spacing-pill-gap: 0.1875rem; /* 3px  — label→arrow gap on the primary */
+  --spacing-arrow: 0.375rem; /* 6px  — the ↗, measured ink. <Icon> crops the glyph
+                                to its ink box so the drawn mark and the laid-out
+                                box are the same 6px. */
+  --spacing-icon: 1.5rem; /* 24px — every Material Symbol, at every breakpoint */
+  --spacing-target: 2.75rem; /* 44px — the touch floor of AGENTS.md §9.4 rule 5 */
+  --spacing-section: 7.5rem; /* 120px — the section rhythm, docs/design-system.md §3.3 */
 
   /* -- elevation (docs/design-system.md §4.3) --------------------------------
      One elevation. Nothing on the board or the comps carries a second. */
@@ -229,7 +249,7 @@
 }
 
 /* Acres has NO designed dark theme — neither the board nor any of the three
-   comps says anything about one (docs/design-system.md §7.4). This block is
+   comps says anything about one (docs/design-system.md §7.7). This block is
    inherited, unaudited scaffolding, kept only so components/ui/ does not break
    if something toggles the class. Do not treat these as Acres colours. */
 .dark {
@@ -267,8 +287,14 @@
 }
 
 @layer base {
+  /* `outline-ring/50` is what create-next-app/shadcn ships. It is dropped to a
+     full-opacity ring here: measured in the browser, the 50 % mix beat every
+     `focus-visible:outline-*` a component could set, and #485C11 at 50 % over
+     white is about 2.2:1 — under the 3:1 floor a focus indicator has to clear.
+     At full opacity it is 7.46:1 (docs/design-system.md §1.4).
+     AGENTS.md §9.4 rule 1; docs/components.md §6. */
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
   body {
     @apply bg-background text-foreground font-sans text-body;
