@@ -310,7 +310,7 @@ For every implementation request:
 6. Ask a focused question only where the task has meaningful ambiguity — where
    two readings would produce materially different work. Otherwise make the call
    and state the assumption.
-7. **Write a prompt file in `prompts/`** per the contract in §5.
+7. **Write a prompt file in `prompts/`** per the contract in §5. Plan and detail every step, measurement, dependency, and file change thoroughly so implementation and execution are straightforward and unambiguous.
 8. Ask exactly: `I prepared the implementation prompt at prompts/<file-name>.md. Is this good to execute?`
 9. **On approval, re-read the approved prompt file and implement it strictly.**
    Implement only after approval. `y` or `Y` = `Approved. Execute.`
@@ -375,6 +375,7 @@ rule 8). An ALWAYS rule is removed only when the user asks for it to be removed.
 | date | the rule | why |
 | --- | --- | --- |
 | 2026-08-20 · reaffirmed 2026-08-20 | Every commit message is written with the **`caveman-commit`** skill at `.agents/skills/caveman-commit` (§7). | Conventional Commits, ≤50-char subject, why-over-what, and no AI attribution trailer — one voice across the whole history. |
+| 2026-08-20 | Always plan and write prompts that are very detailed so implementation and execution is easier. | Thorough planning and granular specifications eliminate ambiguity, provide complete context and measurements upfront, and ensure execution is straightforward and reliable. |
 
 **On the skill's path.** `.agents/skills/caveman-commit/` and
 `.claude/skills/caveman-commit/` are two byte-identical copies (`diff -rq`
@@ -417,6 +418,8 @@ added the dependency; the skills describe the API, not the repository.
 
 Every implementation request gets a file in `prompts/`, written before any code
 (§2 step 7) and re-read verbatim at execution time (§2 step 9).
+
+**Always plan thoroughly and write prompts with deep, granular detail so implementation and execution are easier, unambiguous, and straightforward.** Detail all target paths, references, exact measurements, component structures, API contracts, edge cases, and verification commands in advance.
 
 **Numbering.** `NN-<kebab-case-scope>.md`, where `NN` is the highest existing
 number in `prompts/` plus one. Never renumber, never overwrite, never reuse — the
