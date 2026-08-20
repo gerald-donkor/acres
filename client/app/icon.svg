@@ -1,7 +1,7 @@
 <!--
   The Acres mark as a standalone icon.
 
-  The path is COPIED, byte for byte, from components/acres/logo-mark.tsx, which
+  The path is COPIED, byte for byte, from client/components/acres/logo-mark.tsx, which
   extracted it from the design-system PDF vector (ds-1.png y=1528.875-1598.867,
   x=20.051-51.797). It is not re-extracted and not redrawn.
 

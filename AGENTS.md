@@ -16,11 +16,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 <!-- END:nextjs-agent-rules -->
 
 **The same rule binds the rest of the stack.** **Tailwind CSS 4** is config-less
-— tokens live in `@theme` in `app/globals.css` and there is no
+— tokens live in `@theme` in `client/app/globals.css` and there is no
 `tailwind.config.js`; anything you remember about `tailwind.config.js`,
 `theme.extend` or the v3 plugin API is wrong here. **shadcn in this repo is the
 `base-nova` style on `@base-ui/react`**, not the Radix-based shadcn/ui of your
-training data — read the component in `components/ui/` before assuming its
+training data — read the component in `client/components/ui/` before assuming its
 props. **React 19.2** and **Next 16.3** together move `middleware.ts`,
 `headers()`, `cookies()`, caching and `params`; verify each against
 `node_modules/` before writing it. If an API cannot be verified from
@@ -45,7 +45,7 @@ the read will re-derive it by hand or silently break it.
 | file | covers | status |
 | --- | --- | --- |
 | `docs/design-system.md` | the tokens — palette, type scale and roles, spacing, radii, the container and its gutters, elevation, motion constants — each measured from the references in §0, plus the `@theme` block that expresses them | **written.** Read it before any styling change; it corrects several lines below |
-| `docs/components.md` | the primitives in `components/acres/` — the pill and its four states, the icon button, `Icon`, the container, the section shell, the eyebrow, the two rules — plus the four glyph identifications and the `cn()` contract | **written.** Read it before touching a primitive or adding a token; it corrects `prompts/02-primitives.md` in two places. The nav, the footer and the comparison table are still step 3's and step 4's |
+| `docs/components.md` | the primitives in `client/components/acres/` — the pill and its four states, the icon button, `Icon`, the container, the section shell, the eyebrow, the two rules — plus the four glyph identifications and the `cn()` contract | **written.** Read it before touching a primitive or adding a token; it corrects `prompts/02-primitives.md` in two places. The nav, the footer and the comparison table are still step 3's and step 4's |
 | `docs/chrome.md` | the site chrome — horizontal nav, closed mobile card, open mobile menu, footer, logo mark vector extraction, and layout mounting | **written.** Read it before touching header, footer, or mobile disclosure |
 | `docs/landing.md` | the `/` build record, section by section, against `Desktop.png` / `Tablet.png` / `Mobile.png` | **written.** Read it before touching the landing page; it records the extracted assets, copy, table decision, breakpoint measurements and deltas |
 | `docs/motion.md` | GSAP on the site — the packages and verified imports, one-time registration, the client leaf and its `data-motion-*` hooks, the shared `DUR` / `EASE` reader, the two motion-distance tokens, every trigger, stagger, hover and press, reduced motion, cleanup, and the browser evidence | **written.** Read it before any animation change; it records why a CSS `cubic-bezier()` cannot be handed to GSAP, and one accessibility fix the reveal start state forced |
@@ -67,10 +67,10 @@ recalled, and nothing is invented to fill a gap.
 
 | path | what it is |
 | --- | --- |
-| `public/assets/ui/ref/acres-design-system.pdf` | the design-system board — text styles, the seven-colour palette, the icon set, the logo mark, every button state, the nav in closed and open form, and the photo/device treatments. One page, 1260 × 8082 pt |
-| `public/assets/ui/landing-pages/Desktop.png` | the landing page at **1280 px** wide, 7389 tall |
-| `public/assets/ui/landing-pages/Tablet.png` | the same page at **800 px**, 8825 tall |
-| `public/assets/ui/landing-pages/Mobile.png` | the same page at **375 px**, 8833 tall |
+| `client/public/assets/ui/ref/acres-design-system.pdf` | the design-system board — text styles, the seven-colour palette, the icon set, the logo mark, every button state, the nav in closed and open form, and the photo/device treatments. One page, 1260 × 8082 pt |
+| `client/public/assets/ui/landing-pages/Desktop.png` | the landing page at **1280 px** wide, 7389 tall |
+| `client/public/assets/ui/landing-pages/Tablet.png` | the same page at **800 px**, 8825 tall |
+| `client/public/assets/ui/landing-pages/Mobile.png` | the same page at **375 px**, 8833 tall |
 
 **The comps are 1:1 with CSS pixels at their stated widths**, so a measured pixel
 is a CSS pixel and no scaling factor is applied. The PDF is 72 dpi, so one PDF
@@ -81,7 +81,7 @@ when that file is created:
 
 ```bash
 # the board as one tall bitmap, 1:1
-pdftoppm -png -r 72 public/assets/ui/ref/acres-design-system.pdf ds   # → ds-1.png
+pdftoppm -png -r 72 client/public/assets/ui/ref/acres-design-system.pdf ds   # → ds-1.png
 
 # a legible slice of any comp: crop 1:1, then upscale for reading only
 magick <comp>.png -crop 1280x680+0+930 +repage -resize 1280x slice.png
@@ -248,7 +248,7 @@ the hierarchy the board draws.
 
 **Resolved.** The set is **Material Symbols**, delivered as individual SVGs
 through `@material-symbols/svg-400`; `lucide-react` stays installed for anything
-the board does not specify, and `components.json`'s `"iconLibrary": "lucide"`
+the board does not specify, and `client/components.json`'s `"iconLibrary": "lucide"`
 stays, because it governs what the shadcn CLI generates, not what we author. All
 eight board glyphs are filled, which is why substituting Lucide's stroked set was
 rejected. Step 2 installs it; the glyph list is in `docs/design-system.md` §6.
@@ -440,7 +440,7 @@ the map. **Listing a skill is not loading it.**
 | `frontend-design` | any new surface or visual direction — it owns the "don't ship the templated default" discipline this brief depends on |
 | `tailwind-design-system` | writing or changing tokens, `@theme`, or a component variant API |
 | `tailwind-4-docs` | any utility or variant you have not verified in v4 — v3 muscle memory is wrong here |
-| `shadcn` | adding, editing or debugging anything in `components/ui/` |
+| `shadcn` | adding, editing or debugging anything in `client/components/ui/` |
 | `web-design-guidelines` | before calling any UI finished — it is the accessibility and interaction floor |
 | `gsap-core`, `gsap-timeline`, `gsap-scrolltrigger`, `gsap-react`, `gsap-plugins`, `gsap-utils`, `gsap-performance` | any motion work; `gsap-react` is not optional in this codebase, because cleanup on unmount is where GSAP in React goes wrong |
 | `vercel-react-best-practices` | writing or refactoring any component — server/client boundaries and bundle cost |
@@ -575,18 +575,18 @@ ships.
 **Resolve this from the repository and `git log`, never from here** (§10 rule 5).
 This paragraph is a snapshot and goes stale by design.
 
-At the time step 1 landed: `app/globals.css` carries the Acres `@theme` block and
-the rebound shadcn token names; `app/layout.tsx` loads the three faces of §1.2;
-`docs/design-system.md` holds the measured record. `app/page.tsx` is still
-`create-next-app` boilerplate and **will look wrong** — step 4 replaces it. The
-full `components/ui/` primitive set is installed and **untouched**; it repaints
-from the rebound tokens. `public/assets/ui/` holds the references (§0). There is
-no component of our own, no content, and no backend of any kind.
+At the time step 7 split the client: the repository root is an npm-workspace
+coordinator, and the complete Next.js application lives in `client/`.
+`client/app/globals.css` carries the Acres `@theme` block, `client/app/layout.tsx`
+loads the three faces of §1.2 and mounts the chrome, `client/app/page.tsx`
+renders the completed landing page, and `client/public/assets/ui/` holds the
+reference files and extracted assets (§0). The full `client/components/ui/`
+primitive set remains installed; Acres-owned primitives and chrome live in
+`client/components/acres/`. There is still no backend of any kind.
 
-**`npm run lint` and `npx tsc --noEmit` both run clean** — no output, exit 0, on
-the tree at `f29f674` and on the current tree. The two lint errors this
-paragraph used to name in `components/ui/carousel.tsx` and `hooks/use-mobile.ts`
-are gone; `docs/design-system.md` §11 is stale on that point.
+**`npm run lint`, `npx tsc --noEmit`, and `npm run build` run from the root and
+are forwarded to `@acres/client`.** Resolve the current result from `git log`
+and the build records in `docs/`, not from this snapshot.
 
 ## 8.2 The build sequence
 
@@ -602,7 +602,7 @@ Do not tick anything here; this file records the plan, not the progress.
 | # | step | depends on |
 | --- | --- | --- |
 | 1 | **The design system** — `docs/design-system.md` and the `@theme` block that expresses it: palette, the three type families and their scale, spacing, radii, the container, motion constants. Resolves the three open questions in §1.2, §1.1 and §1.6 | — |
-| 2 | **Primitives** — `Button` and its four variants (§1.5), the container, the section shell, the eyebrow, the hairline rule. Built on step 1's tokens, on top of `components/ui/` where a primitive already fits | 1 |
+| 2 | **Primitives** — `Button` and its four variants (§1.5), the container, the section shell, the eyebrow, the hairline rule. Built on step 1's tokens, on top of `client/components/ui/` where a primitive already fits | 1 |
 | 3 | **Chrome** — the nav in all three of its forms (desktop bar, mobile card, mobile open menu) and the footer | 2 |
 | 4 | **The landing page, section by section** — hero, device band, trusted-by strip, benefits grid, the two feature sections, the comparison table, the testimonial, the numbered steps, the closing CTA | 2, 3 |
 | 5 | **Motion** — GSAP installed and registered once, `DUR` / `EASE` shared, scroll reveals, the button and card hovers | 4 |
@@ -623,16 +623,17 @@ scheduled jobs, and forms; that is not a Next route handler's job. `server/`
 stays uncreated until step 8 so that no scaffold sits dead through the UI work,
 and the workspace wiring and the Nest setup stay two reviewable changes.
 
-**Four things step 7 must settle**, none of them decided yet: npm workspaces
-rather than Turborepo to start; the `public/assets/ui/` → `client/public/assets/ui/`
-rewrite, using `git mv` so history follows the files; whether `packages/shared`
-lands at step 7 or step 8; and where Nest deploys — Next on Vercel is settled,
-but jobs and scheduling may want a long-lived host, and that shapes how the Nest
-app is structured, so it is decided before step 8's jobs work, not during it.
+**Step 7 settled the client split**: npm workspaces rather than Turborepo,
+`client/public/assets/ui/` as the moved design-reference root, Git-tracked
+renames for the client tree, and `packages/shared` deferred to step 8. Nest
+deployment remains a step-8 decision — Next on Vercel is settled, but jobs and
+scheduling may want a long-lived host, and that shapes how the Nest app is
+structured, so it is decided before step 8's jobs work, not during the client
+split.
 
 ### Do not overbuild
 
-No second design system. No component library that is not `components/ui/` plus
+No second design system. No component library that is not `client/components/ui/` plus
 our own primitives on top. **Through step 6 there is no backend, no database, no
 auth and no CMS** — the content is typed constants, and steps 7 and 8 are the
 "until a prompt says otherwise". Nothing in the backend is started early: a step
@@ -651,14 +652,14 @@ before what, and nothing about dates.
 
 1. **No raw hex, no raw pixel value, and no `rounded-[13px]` in a component.**
    Every colour, size, radius and duration comes from `@theme` in
-   `app/globals.css`. A value that has no token yet is a **missing token**, and
+   `client/app/globals.css`. A value that has no token yet is a **missing token**, and
    the fix is to add it to `docs/design-system.md` and `@theme` in the same
    change — never to inline it "for now".
 2. **Tailwind 4 is config-less.** Tokens are CSS custom properties inside
    `@theme`; there is no `tailwind.config.js` and creating one is a defect.
 3. **The token names come from the design system, not from shadcn's defaults.**
    The stock `--primary` / `--secondary` / `--accent` neutrals in
-   `app/globals.css` are placeholders and step 1 replaces them. Where a shadcn
+   `client/app/globals.css` are placeholders and step 1 replaces them. Where a shadcn
    primitive reads a token name, rebind that name rather than overriding the
    component.
 4. **One canvas.** `#FFFFFF` (§1.1). A section that needs separation earns it

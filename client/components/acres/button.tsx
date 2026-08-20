@@ -15,7 +15,7 @@ import { Icon } from "./icon"
  * widths — 126 − 117 = 9 = 3 + 6 — which is the arithmetic that proves the
  * variant is right.
  *
- * This does NOT wrap `components/ui/button.tsx`; it defines its own `cva` on the
+ * This does NOT wrap `client/components/ui/button.tsx`; it defines its own `cva` on the
  * same Base UI primitive. The installed component's largest size is 36 px and
  * its two hover rules produce neither of the board's, so wrapping it would mean
  * overriding height, radius, padding, type scale and both hovers through

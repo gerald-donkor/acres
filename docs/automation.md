@@ -7,14 +7,14 @@ recipes, and headless browser automation used across the Acres implementation.
 
 ## 1. Reference Comps and DPI Geometry
 
-The four reference files in `public/assets/ui/` are 1:1 with CSS pixels at their stated widths:
+The four reference files in `client/public/assets/ui/` are 1:1 with CSS pixels at their stated widths:
 
 | file | dimensions | notes |
 | --- | --- | --- |
-| `public/assets/ui/ref/acres-design-system.pdf` | 1260 × 8082.33 pt | One page, 72 dpi (`-r 72` → 1260 × 8083 px bitmap) |
-| `public/assets/ui/landing-pages/Desktop.png` | 1280 × 7389 px | Desktop comp at 1280 CSS px |
-| `public/assets/ui/landing-pages/Tablet.png` | 800 × 8825 px | Tablet comp at 800 CSS px |
-| `public/assets/ui/landing-pages/Mobile.png` | 375 × 8833 px | Mobile comp at 375 CSS px |
+| `client/public/assets/ui/ref/acres-design-system.pdf` | 1260 × 8082.33 pt | One page, 72 dpi (`-r 72` → 1260 × 8083 px bitmap) |
+| `client/public/assets/ui/landing-pages/Desktop.png` | 1280 × 7389 px | Desktop comp at 1280 CSS px |
+| `client/public/assets/ui/landing-pages/Tablet.png` | 800 × 8825 px | Tablet comp at 800 CSS px |
+| `client/public/assets/ui/landing-pages/Mobile.png` | 375 × 8833 px | Mobile comp at 375 CSS px |
 
 ---
 
@@ -24,10 +24,10 @@ The four reference files in `public/assets/ui/` are 1:1 with CSS pixels at their
 
 ```bash
 # Render the design-system board bitmap at 1:1 (72 dpi)
-pdftoppm -png -r 72 public/assets/ui/ref/acres-design-system.pdf /tmp/ds # produces /tmp/ds-1.png
+pdftoppm -png -r 72 client/public/assets/ui/ref/acres-design-system.pdf /tmp/ds # produces /tmp/ds-1.png
 
 # Convert PDF directly to SVG vector paths
-pdftocairo -svg public/assets/ui/ref/acres-design-system.pdf /tmp/ds.svg
+pdftocairo -svg client/public/assets/ui/ref/acres-design-system.pdf /tmp/ds.svg
 ```
 
 ### 2.2 Accurate Colour Reading (Histograms)
@@ -91,3 +91,189 @@ const metrics = await evaluate(`(() => {
   };
 })()`);
 ```
+
+---
+
+## 4. Step 7 Workspace Split
+
+Step 7 moved the completed Next.js application into `client/` and made the
+repository root an npm-workspace coordinator. No route, URL, image selection,
+metadata convention, Server Component boundary, or visual behavior was intended
+to change.
+
+### 4.1 Final Tree Contract
+
+The root owns coordination files only: `AGENTS.md`, `docs/`, `prompts/`,
+skills directories, `README.md`, `.gitignore`, `package.json`,
+`package-lock.json`, and `skills-lock.json`. The Next.js app root is
+`client/`, which owns `app/`, `components/`, `hooks/`, `lib/`, `public/`,
+`scripts/`, `.env.example`, `components.json`, `eslint.config.mjs`,
+`next.config.ts`, `postcss.config.mjs`, `package.json`, and `tsconfig.json`.
+
+The Git-tracked relocation map was:
+
+| from | to |
+| --- | --- |
+| `app/` | `client/app/` |
+| `components/` | `client/components/` |
+| `hooks/` | `client/hooks/` |
+| `lib/` | `client/lib/` |
+| `public/` | `client/public/` |
+| `scripts/` | `client/scripts/` |
+| `.env.example` | `client/.env.example` |
+| `components.json` | `client/components.json` |
+| `eslint.config.mjs` | `client/eslint.config.mjs` |
+| `next.config.ts` | `client/next.config.ts` |
+| `postcss.config.mjs` | `client/postcss.config.mjs` |
+| `tsconfig.json` | `client/tsconfig.json` |
+
+`packages/shared`, `server/`, deployment manifests, Docker files, CI files, and
+NestJS host selection were explicitly deferred to step 8.
+
+### 4.2 npm Workspace Commands
+
+The verified npm workspace script form is:
+
+```json
+{
+  "workspaces": ["client"],
+  "scripts": {
+    "dev": "npm run dev --workspace=@acres/client",
+    "build": "npm run build --workspace=@acres/client",
+    "start": "npm run start --workspace=@acres/client",
+    "lint": "npm run lint --workspace=@acres/client"
+  }
+}
+```
+
+`npm install` must be run from the repository root. It regenerates the single
+root `package-lock.json`; no `client/node_modules/` is created or committed.
+
+### 4.3 Path Rewrite Classes
+
+Filesystem references in `AGENTS.md`, `README.md`, source comments, and written
+build records were rewritten from root app paths to root-relative workspace
+paths:
+
+| old class | new class |
+| --- | --- |
+| `app/...` | `client/app/...` |
+| `components/...` | `client/components/...` |
+| `hooks/...` | `client/hooks/...` |
+| `lib/...` | `client/lib/...` |
+| `scripts/...` | `client/scripts/...` |
+| `public/assets/ui/...` | `client/public/assets/ui/...` |
+
+Browser URL paths did not change. Assets still resolve from `/assets/...`,
+metadata files still publish at `/favicon.ico`, `/icon.svg`,
+`/apple-icon.png`, `/opengraph-image.png`, `/twitter-image.png`,
+`/robots.txt`, and `/sitemap.xml`, because `client/public/` is the public
+folder for the Next.js project root.
+
+### 4.4 Step 7 Verification Record
+
+Commands run from the repository root:
+
+```text
+npm install
+
+added 1 package, and audited 673 packages in 7s
+
+240 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+npm warn install-scripts 1 package had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   unrs-resolver@1.12.2 (postinstall: node postinstall.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+```
+
+The install-script warning was not approved in this step; no dependency change
+or native rebuild policy change was required for the workspace split.
+
+```text
+npm run lint
+
+npm notice run acres@0.1.0 lint
+npm notice run npm run lint --workspace=@acres/client
+npm notice run @acres/client@0.1.0 lint
+npm notice run eslint
+```
+
+```text
+npx tsc --noEmit -p client/tsconfig.json
+
+npm notice run acres@0.1.0 npx
+npm notice run 'tsc' --noEmit -p client/tsconfig.json
+```
+
+```text
+npm run build
+
+npm notice run acres@0.1.0 build
+npm notice run npm run build --workspace=@acres/client
+npm notice run @acres/client@0.1.0 build
+npm notice run next build
+▲ Next.js 16.3.1 (Turbopack)
+✓ Running next.config.ts took 26ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 5.0s
+  Running TypeScript ...
+  Finished TypeScript in 3.6s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/10) ...
+  Generating static pages using 7 workers (2/10)
+  Generating static pages using 7 workers (4/10)
+  Generating static pages using 7 workers (7/10)
+✓ Generating static pages using 7 workers (10/10) in 210ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /apple-icon.png
+├ ○ /icon.svg
+├ ○ /opengraph-image.png
+├ ○ /robots.txt
+├ ○ /sitemap.xml
+└ ○ /twitter-image.png
+
+
+○  (Static)  prerendered as static content
+```
+
+```text
+npm run start
+
+npm notice run acres@0.1.0 start
+npm notice run npm run start --workspace=@acres/client
+npm notice run @acres/client@0.1.0 start
+npm notice run next start
+▲ Next.js 16.3.1
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.170:3000
+✓ Ready in 153ms
+✓ Running next.config.ts took 24ms
+```
+
+The localhost smoke test was run with Node `fetch` because `curl` was not
+installed in the shell. The sandbox blocked localhost fetches with `EPERM`
+until the same read-only smoke test was rerun with escalation:
+
+```text
+200 /
+404 /_not-found
+200 /favicon.ico
+200 /icon.svg
+200 /apple-icon.png
+200 /opengraph-image.png
+200 /twitter-image.png
+200 /robots.txt
+200 /sitemap.xml
+200 /assets/ui/landing/report-device-desktop.webp
+```
+
+`/_not-found` returning 404 is the expected HTTP status for the rendered
+not-found route.

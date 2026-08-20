@@ -1,6 +1,6 @@
 # Acres — primitives
 
-**What this file is.** The build record for `components/acres/` — the parts every
+**What this file is.** The build record for `client/components/acres/` — the parts every
 section of the site is made of. It is written against the references in
 AGENTS.md §0 and it carries the measurement behind every number, the four glyph
 identifications step 2 owed, and every judgement taken. It sits on top of
@@ -21,7 +21,7 @@ all. A 72 dpi bitmap of a 6 × 6 mark carries no shape information.
 
 ```bash
 # the board, 1:1 — 1260 x 8083
-pdftoppm -png -r 72 public/assets/ui/ref/acres-design-system.pdf ds
+pdftoppm -png -r 72 client/public/assets/ui/ref/acres-design-system.pdf ds
 
 # one glyph at 1200 dpi, cropped in PDF points x 16.667
 pdftoppm -png -r 1200 -x 790 -y 36050 -W 420 -H 420 <pdf> nx
@@ -45,21 +45,21 @@ is a win against everything the package holds, not against a shortlist.
 
 | file | export | server/client |
 | --- | --- | --- |
-| `components/acres/icon.tsx` | `Icon`, `IconName` | server |
-| `components/acres/icon-paths.ts` | `iconPaths`, `ICON_VIEW_BOX`, `IconName` | generated data |
-| `components/acres/button.tsx` | `Button`, `buttonVariants` | server |
-| `components/acres/icon-button.tsx` | `IconButton`, `iconButtonVariants` | server |
-| `components/acres/container.tsx` | `Container` | server |
-| `components/acres/section.tsx` | `Section` | server |
-| `components/acres/eyebrow.tsx` | `Eyebrow` | server |
-| `components/acres/rule.tsx` | `Rule` | server, wraps a client leaf |
-| `scripts/generate-icon-paths.mjs` | — | build-time generator |
+| `client/components/acres/icon.tsx` | `Icon`, `IconName` | server |
+| `client/components/acres/icon-paths.ts` | `iconPaths`, `ICON_VIEW_BOX`, `IconName` | generated data |
+| `client/components/acres/button.tsx` | `Button`, `buttonVariants` | server |
+| `client/components/acres/icon-button.tsx` | `IconButton`, `iconButtonVariants` | server |
+| `client/components/acres/container.tsx` | `Container` | server |
+| `client/components/acres/section.tsx` | `Section` | server |
+| `client/components/acres/eyebrow.tsx` | `Eyebrow` | server |
+| `client/components/acres/rule.tsx` | `Rule` | server, wraps a client leaf |
+| `client/scripts/generate-icon-paths.mjs` | — | build-time generator |
 
 **No file in this step contains `"use client"`.** `Rule` renders
-`components/ui/separator.tsx`, which Base UI marks `"use client"`; that is the
+`client/components/ui/separator.tsx`, which Base UI marks `"use client"`; that is the
 one client boundary the step introduces and §4 records why it was accepted.
 
-`components/ui/` is **not edited**. Neither is `app/page.tsx` — `/` still renders
+`client/components/ui/` is **not edited**. Neither is `client/app/page.tsx` — `/` still renders
 the `create-next-app` placeholder, which is correct: step 4 replaces it.
 
 ---
@@ -242,7 +242,7 @@ mark and laid-out box are then the same 6 px, and 117 + 3 + 6 = 126.
 
 ## 4. Decisions
 
-### 4.1 `Button` does not wrap `components/ui/button.tsx`
+### 4.1 `Button` does not wrap `client/components/ui/button.tsx`
 
 It defines its own `cva` on the same `ButtonPrimitive` from `@base-ui/react`.
 Read before deciding: the installed `cva` bakes in `rounded-lg`, `text-sm
@@ -252,7 +252,7 @@ font-medium`, a size ladder topping out at `h-9` (36 px, with no 48 px rung),
 radius, padding, type scale and both hover rules through `className` and trusting
 `tailwind-merge` to win every one of those conflicts. Defining `cva` on the same
 primitive is less code, has no merge-order dependency, and keeps
-`docs/design-system.md` §7's promise that nothing in `components/ui/` is edited.
+`docs/design-system.md` §7's promise that nothing in `client/components/ui/` is edited.
 
 Kept from the installed component, because it is the repo's convention and the
 `shadcn` skill's rule: `data-slot`, the `data-icon` convention, `cn()` for
@@ -276,8 +276,8 @@ anyway.
 
 ### 4.3 Icons are generated into the repo, and the package is a devDependency
 
-`Icon` renders path data from `components/acres/icon-paths.ts`, which
-`scripts/generate-icon-paths.mjs` writes by READING
+`Icon` renders path data from `client/components/acres/icon-paths.ts`, which
+`client/scripts/generate-icon-paths.mjs` writes by READING
 `@material-symbols/svg-400@0.46.0` (AGENTS.md §10 rule 6 — nothing is
 transcribed). That buys `currentColor`, a Server Component, no runtime `fs`, and
 no `node_modules` path resolved at request time.
@@ -295,7 +295,7 @@ counter the `-fill` and plain files are byte-identical, and for
 
 ### 4.4 `cn()` had to be taught the Acres scales
 
-`lib/utils.ts` now builds `twMerge` with `extendTailwindMerge`. This is not
+`client/lib/utils.ts` now builds `twMerge` with `extendTailwindMerge`. This is not
 tidying — **two components were measurably wrong without it, and both failed
 silently:**
 
@@ -311,7 +311,7 @@ Every custom `--color-*`, `--text-*`, `--spacing-*`, `--radius-*`,
 a token to `@theme` means adding it here too**, or the next component fails the
 same way.
 
-`lib/utils.ts` is shadcn-owned by `components.json`'s `utils` alias, so this edit
+`client/lib/utils.ts` is shadcn-owned by `client/components.json`'s `utils` alias, so this edit
 is exposed to `npx shadcn@latest init`. It is not exposed to `add`, which does
 not rewrite `utils.ts`.
 
@@ -329,7 +329,7 @@ a defect; a recorded one is a decision (AGENTS.md §5).
 | 3 | **`IconButton`'s hit area is 44 x 44 while its fill stays 40 x 40** | AGENTS.md §9.4 rule 5. A `::after` at `-inset-0.5` carries the target; the drawn box is the measurement and it ships unchanged. Verified: `44px x 44px`, `content: ""` |
 | 4 | **`IconButton` gains a hover state the board does not draw** | `inactive` hovers to `#DFECC6` — the board's own active fill, so no new value enters the palette. A control with two states and no hover feedback is worse than the board's silence deserves |
 | 5 | **The eyebrow steps at `lg` (1024), not `md` (768)** | a **correction to `prompts/02-primitives.md`**, which named `md` while its own breakpoint table asked for 11 px at 800. Both cannot hold. The ink measures 50 x 9 at 800 and 55 x 9 at 1280, so the step is somewhere in 801–1280 and `lg` is the default breakpoint inside that window — the same reasoning `docs/design-system.md` §7.3 used for the gutter, whose window is 376–800 and whose answer is therefore `md`. **No custom breakpoint is added.** The gutter still steps at `md` |
-| 6 | **The global focus-ring colour goes from 50 % to full opacity** | `app/globals.css`'s inherited `* { outline-ring/50 }` beat every `focus-visible:outline-*` a component set, measured in the browser. `#485C11` at 50 % over white is about **2.2 : 1**, under the 3 : 1 floor for a focus indicator; at full opacity it is 7.46 : 1 |
+| 6 | **The global focus-ring colour goes from 50 % to full opacity** | `client/app/globals.css`'s inherited `* { outline-ring/50 }` beat every `focus-visible:outline-*` a component set, measured in the browser. `#485C11` at 50 % over white is about **2.2 : 1**, under the 3 : 1 floor for a focus indicator; at full opacity it is 7.46 : 1 |
 | 7 | **`Area` never ships** | AGENTS.md §1.7. No string in this step says it |
 
 ---
@@ -337,16 +337,16 @@ a defect; a recorded one is a decision (AGENTS.md §5).
 ## 6. The two lint errors, closed
 
 ```
-components/ui/carousel.tsx  98:5  react-hooks/set-state-in-effect
-hooks/use-mobile.ts         14:5  react-hooks/set-state-in-effect
+client/components/ui/carousel.tsx  98:5  react-hooks/set-state-in-effect
+client/hooks/use-mobile.ts         14:5  react-hooks/set-state-in-effect
 ```
 
 Both are in **generated** shadcn scaffolding that `npx shadcn@latest add`
 overwrites. **The files are not patched** — a local fix is silently reverted the
 next time the CLI touches them, which turns a visible lint error into an
-invisible one. `eslint.config.mjs` gains an override scoped to exactly
-`components/ui/**` and `hooks/use-mobile.ts`, with the reason in a comment.
-Our own code in `components/acres/` is still held to the rule.
+invisible one. `client/eslint.config.mjs` gains an override scoped to exactly
+`client/components/ui/**` and `client/hooks/use-mobile.ts`, with the reason in a comment.
+Our own code in `client/components/acres/` is still held to the rule.
 
 `npm run lint` now exits 0 with no output.
 
@@ -354,7 +354,7 @@ Our own code in `components/acres/` is still held to the rule.
 
 ## 7. Findings for later steps
 
-1. **`--text-brand` is unreachable.** `app/globals.css` defines both
+1. **`--text-brand` is unreachable.** `client/app/globals.css` defines both
    `--text-brand: 1.875rem` (the 30 px wordmark) and `--color-brand: #485C11`.
    Tailwind resolves the class `text-brand` to the **colour** — confirmed in the
    compiled CSS: `.text-brand{color:var(--color-brand)}`. **Step 3 builds the
@@ -403,7 +403,7 @@ No output, exit 0. The two pre-existing errors are closed by §6.
 
 ### Browser verification
 
-Run on a scratch route at `app/scratch-primitives/`, which rendered every
+Run on a scratch route at `client/app/scratch-primitives/`, which rendered every
 primitive; **the route was deleted before the commit**, and the final `tsc`,
 `build` and `lint` above were re-run after deleting it. Container and breakpoint
 figures were read inside same-origin iframes sized to 375 / 800 / 1280 / 1600, so

@@ -1,6 +1,6 @@
 // GENERATED FILE — do not edit by hand.
 // Source: @material-symbols/svg-400@0.46.0, outlined/<name>-fill.svg (Apache-2.0).
-// Regenerate with: node scripts/generate-icon-paths.mjs
+// Regenerate with: node client/scripts/generate-icon-paths.mjs
 //
 // Every glyph shares one viewBox, so <Icon> can hardcode it.
 

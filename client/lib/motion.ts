@@ -9,13 +9,13 @@ import { ScrollTrigger } from "gsap/ScrollTrigger"
  * Registration happens here, at module scope, exactly once (AGENTS.md §9.3
  * rule 2). This module has no `"use client"` of its own — it is a plain module
  * that only a client leaf imports, which keeps the GSAP bundle on the one route
- * that animates and keeps `app/page.tsx` a Server Component.
+ * that animates and keeps `client/app/page.tsx` a Server Component.
  *
  * `useGSAP` is itself a plugin and has to be registered alongside the two real
  * ones, which is what the @gsap/react README and the gsap-react skill both say.
  *
  * Everything below reads its value from a CSS custom property in
- * `app/globals.css`. Not one duration, easing curve or distance is restated at
+ * `client/app/globals.css`. Not one duration, easing curve or distance is restated at
  * a call site (AGENTS.md §9.1 rule 1, §9.3 rule 1).
  */
 gsap.registerPlugin(useGSAP, ScrollTrigger, CustomEase)
@@ -81,7 +81,7 @@ function read(style: CSSStyleDeclaration, name: string) {
   const value = style.getPropertyValue(name).trim()
   if (!value) {
     throw new Error(
-      `Acres motion: ${name} is not defined on :root. Motion tokens live in app/globals.css and are recorded in docs/design-system.md §5.`
+      `Acres motion: ${name} is not defined on :root. Motion tokens live in client/app/globals.css and are recorded in docs/design-system.md §5.`
     )
   }
   return value

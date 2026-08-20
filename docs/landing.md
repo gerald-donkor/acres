@@ -1,18 +1,18 @@
 # Acres — Landing Page
 
 Built to `prompts/05-landing-page.md`. This file records the `/` implementation
-against `public/assets/ui/landing-pages/Desktop.png`,
-`public/assets/ui/landing-pages/Tablet.png`, `public/assets/ui/landing-pages/Mobile.png`,
-and `public/assets/ui/ref/acres-design-system.pdf`.
+against `client/public/assets/ui/landing-pages/Desktop.png`,
+`client/public/assets/ui/landing-pages/Tablet.png`, `client/public/assets/ui/landing-pages/Mobile.png`,
+and `client/public/assets/ui/ref/acres-design-system.pdf`.
 
 ## What Was Built
 
-`app/page.tsx` now renders the full static Acres landing page as a Server
-Component. It uses the existing chrome from `app/layout.tsx`, the Acres
-primitives from `components/acres/`, and typed module-level content arrays for
+`client/app/page.tsx` now renders the full static Acres landing page as a Server
+Component. It uses the existing chrome from `client/app/layout.tsx`, the Acres
+primitives from `client/components/acres/`, and typed module-level content arrays for
 benefits, Big Picture rows, comparison rows, and numbered steps.
 
-No new client boundary was added by the page. The installed `components/ui/table.tsx`
+No new client boundary was added by the page. The installed `client/components/ui/table.tsx`
 was inspected and not used: it is a `"use client"` wrapper with default `text-sm`,
 padding, row hover, and muted-state rules that would have to be overridden for
 nearly every measured table property. The shipped comparison matrix is still a
@@ -44,30 +44,30 @@ were interrupted. The local installed table source was used as the verified API.
 The PDF image inventory was re-run:
 
 ```bash
-pdfimages -list public/assets/ui/ref/acres-design-system.pdf
+pdfimages -list client/public/assets/ui/ref/acres-design-system.pdf
 ```
 
 The relevant source objects matched the prompt:
 
 | PDF image | output asset | intrinsic size |
 | --- | --- | ---: |
-| 6 + soft mask 7 | `public/assets/ui/landing/report-device-desktop.webp` | 1741 × 1216 |
-| 16 + soft mask 17 | `public/assets/ui/landing/report-device-mobile.webp` | 816 × 1704 |
-| 18 + soft mask 19 | `public/assets/ui/landing/mountain.webp` | 4096 × 2304 |
-| 20 + soft mask 21 | `public/assets/ui/landing/aerial.webp` | 4096 × 2731 |
-| 22 + soft mask 23 | `public/assets/ui/landing/stones.webp` | 4096 × 2048 |
-| 24 + soft mask 25 | `public/assets/ui/landing/cylinders.webp` | 3750 × 3000 |
+| 6 + soft mask 7 | `client/public/assets/ui/landing/report-device-desktop.webp` | 1741 × 1216 |
+| 16 + soft mask 17 | `client/public/assets/ui/landing/report-device-mobile.webp` | 816 × 1704 |
+| 18 + soft mask 19 | `client/public/assets/ui/landing/mountain.webp` | 4096 × 2304 |
+| 20 + soft mask 21 | `client/public/assets/ui/landing/aerial.webp` | 4096 × 2731 |
+| 22 + soft mask 23 | `client/public/assets/ui/landing/stones.webp` | 4096 × 2048 |
+| 24 + soft mask 25 | `client/public/assets/ui/landing/cylinders.webp` | 3750 × 3000 |
 
 Repeatable extraction:
 
 ```bash
-pdfimages -j public/assets/ui/ref/acres-design-system.pdf /tmp/acres-pdf-image
-magick /tmp/acres-pdf-image-006.jpg /tmp/acres-pdf-image-007.ppm -alpha off -compose CopyOpacity -composite -strip public/assets/ui/landing/report-device-desktop.webp
-magick /tmp/acres-pdf-image-016.jpg /tmp/acres-pdf-image-017.ppm -alpha off -compose CopyOpacity -composite -strip public/assets/ui/landing/report-device-mobile.webp
-magick /tmp/acres-pdf-image-018.jpg /tmp/acres-pdf-image-019.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 public/assets/ui/landing/mountain.webp
-magick /tmp/acres-pdf-image-020.jpg /tmp/acres-pdf-image-021.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 public/assets/ui/landing/aerial.webp
-magick /tmp/acres-pdf-image-022.jpg /tmp/acres-pdf-image-023.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 public/assets/ui/landing/stones.webp
-magick /tmp/acres-pdf-image-024.jpg /tmp/acres-pdf-image-025.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 public/assets/ui/landing/cylinders.webp
+pdfimages -j client/public/assets/ui/ref/acres-design-system.pdf /tmp/acres-pdf-image
+magick /tmp/acres-pdf-image-006.jpg /tmp/acres-pdf-image-007.ppm -alpha off -compose CopyOpacity -composite -strip client/public/assets/ui/landing/report-device-desktop.webp
+magick /tmp/acres-pdf-image-016.jpg /tmp/acres-pdf-image-017.ppm -alpha off -compose CopyOpacity -composite -strip client/public/assets/ui/landing/report-device-mobile.webp
+magick /tmp/acres-pdf-image-018.jpg /tmp/acres-pdf-image-019.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 client/public/assets/ui/landing/mountain.webp
+magick /tmp/acres-pdf-image-020.jpg /tmp/acres-pdf-image-021.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 client/public/assets/ui/landing/aerial.webp
+magick /tmp/acres-pdf-image-022.jpg /tmp/acres-pdf-image-023.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 client/public/assets/ui/landing/stones.webp
+magick /tmp/acres-pdf-image-024.jpg /tmp/acres-pdf-image-025.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 client/public/assets/ui/landing/cylinders.webp
 ```
 
 The six trusted marks were isolated from `Desktop.png`, converted to transparent
@@ -103,8 +103,8 @@ Per `prompts/08-image-quality-fidelity.md`, all raster images are served at 100%
 | Hero Device | Desktop / Mobile | `report-device-*.webp` | 1741 × 1216 / 816 × 1704 | 100% quality raw extraction |
 
 Configuration:
-- `next.config.ts`: Added `images.qualities: [75, 100]` to allow Next.js 16 to output `q=100` images.
-- `app/page.tsx`: Art-directed `<picture>` tags with `<source media="...">` for Desktop, Tablet, and Mobile, rendering native aspect ratios without upscaling distortion or blur. Trusted marks set to `unoptimized`.
+- `client/next.config.ts`: Added `images.qualities: [75, 100]` to allow Next.js 16 to output `q=100` images.
+- `client/app/page.tsx`: Art-directed `<picture>` tags with `<source media="...">` for Desktop, Tablet, and Mobile, rendering native aspect ratios without upscaling distortion or blur. Trusted marks set to `unoptimized`.
 
 ## Copy and Icon Mapping
 
@@ -160,13 +160,13 @@ The global ImageMagick overlay comparisons are intentionally recorded as coarse
 signals only, not pass/fail criteria:
 
 ```bash
-magick compare -metric AE -fuzz 4% public/assets/ui/landing-pages/Desktop.png /tmp/acres-landing-check/landing-1280.png null:
+magick compare -metric AE -fuzz 4% client/public/assets/ui/landing-pages/Desktop.png /tmp/acres-landing-check/landing-1280.png null:
 1.42928e+06 (0.15112)
 
-magick compare -metric AE -fuzz 4% public/assets/ui/landing-pages/Tablet.png /tmp/acres-landing-check/landing-800.png null:
+magick compare -metric AE -fuzz 4% client/public/assets/ui/landing-pages/Tablet.png /tmp/acres-landing-check/landing-800.png null:
 1.46396e+06 (0.20736)
 
-magick compare -metric AE -fuzz 4% public/assets/ui/landing-pages/Mobile.png /tmp/acres-landing-check/landing-375.png null:
+magick compare -metric AE -fuzz 4% client/public/assets/ui/landing-pages/Mobile.png /tmp/acres-landing-check/landing-375.png null:
 620546 (0.187342)
 ```
 
@@ -184,7 +184,7 @@ The main recorded visual deltas are:
 
 Source fetched: `https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md`.
 
-Findings checked against `app/page.tsx`:
+Findings checked against `client/app/page.tsx`:
 
 - One `h1`; heading hierarchy is coherent.
 - All navigation controls are `<a>`/`Link`; no clickable `<div>`/`span`.
@@ -195,12 +195,12 @@ Findings checked against `app/page.tsx`:
   scrollers.
 - Horizontal table and numbered-step regions are keyboard focusable and use
   native `overflow-x-auto`.
-- Visible brand/product names introduced in `app/page.tsx` use `translate="no"`.
+- Visible brand/product names introduced in `client/app/page.tsx` use `translate="no"`.
 - No console, hydration, Base UI, or image-alt warnings were observed in the
   CDP output — **except** an image-preload warning at 800 and 375, raised by the
   hero's `<picture>`/`<source>` wrapping a `priority` `next/image`
   (`The resource http://localhost:3100/_next/image?url=%2Fassets%2Fui%2Flanding%2Freport-device-desktop.webp&w=750&q=75 was preloaded using link preload but not used within a few seconds…`;
-  the 375 instance reads `w=640`). It is fixed at `app/page.tsx:134` by replacing
+  the 375 instance reads `w=640`). It is fixed at `client/app/page.tsx:134` by replacing
   `priority` with `fetchPriority="high"`, which is what Next 16.3.1 prescribes
   for an art-directed image; the console is clean afterwards at 1280, 800 and
   375, in both normal and reduced motion. Measured in `docs/polish.md` §4.

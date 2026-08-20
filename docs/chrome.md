@@ -10,12 +10,12 @@ menu at 375, and the footer at all three widths. Built to `prompts/03-chrome.md`
 
 | file | export | server/client | responsibility |
 | --- | --- | --- | --- |
-| `components/acres/logo-mark.tsx` | `LogoMark` | server | Extracted, verified board vector in `currentColor` |
-| `components/acres/site-header.tsx` | `SiteHeader` | server | Horizontal nav bar on `md+`, mobile client leaf on mobile |
-| `components/acres/mobile-navigation.tsx` | `MobileNavigation` | client | Base UI `Collapsible`, disclosure trigger, close-on-link, Escape handler |
-| `components/acres/site-footer.tsx` | `SiteFooter` | server | Footer rule, 3 links, standalone mark and legal copy |
+| `client/components/acres/logo-mark.tsx` | `LogoMark` | server | Extracted, verified board vector in `currentColor` |
+| `client/components/acres/site-header.tsx` | `SiteHeader` | server | Horizontal nav bar on `md+`, mobile client leaf on mobile |
+| `client/components/acres/mobile-navigation.tsx` | `MobileNavigation` | client | Base UI `Collapsible`, disclosure trigger, close-on-link, Escape handler |
+| `client/components/acres/site-footer.tsx` | `SiteFooter` | server | Footer rule, 3 links, standalone mark and legal copy |
 
-`app/layout.tsx` mounts `SiteHeader`, semantic `<main className="flex-1 flex flex-col">{children}</main>`, and `SiteFooter`.
+`client/app/layout.tsx` mounts `SiteHeader`, semantic `<main className="flex-1 flex flex-col">{children}</main>`, and `SiteFooter`.
 
 ---
 
@@ -86,8 +86,8 @@ The standalone logo mark vector was extracted from the vector stream in `acres-d
 
 ## 5. Token Updates
 
-- `--text-brand` was renamed to `--text-wordmark` in `app/globals.css`, `docs/design-system.md`, and `lib/utils.ts`.
-- `lib/utils.ts` `twMerge` config includes `"wordmark"` in `text:` scale.
+- `--text-brand` was renamed to `--text-wordmark` in `client/app/globals.css`, `docs/design-system.md`, and `client/lib/utils.ts`.
+- `client/lib/utils.ts` `twMerge` config includes `"wordmark"` in `text:` scale.
 
 ---
 

@@ -7,8 +7,8 @@ promise, the typographic glyph corrections, and the whole metadata surface —
 `metadata`, `viewport`, the icons, the social card, `sitemap.ts`, `robots.ts`
 and `not-found.tsx`.
 
-**Read this before touching `app/layout.tsx`, `app/globals.css`'s `@layer base`
-block, or anything under `app/` that Next treats as a metadata file
+**Read this before touching `client/app/layout.tsx`, `client/app/globals.css`'s `@layer base`
+block, or anything under `client/app/` that Next treats as a metadata file
 convention.** `docs/design-system.md` owns the tokens, `docs/landing.md` owns
 the page's sections and `docs/motion.md` owns the animation; this file owns the
 layer wrapped around all three. It also closes two findings that
@@ -25,11 +25,11 @@ no layout change.** §11's pixel diff is the proof.
 | --- | --- |
 | `web-design-guidelines` | loaded; rules fetched fresh this session and the audit re-run against that copy (§2) |
 | `frontend-design` | loaded — every fix kept subordinate to the measured design |
-| `vercel-react-best-practices` | loaded — `lib/site.ts`, `app/not-found.tsx`, `app/sitemap.ts` and `app/robots.ts` are all server-only |
+| `vercel-react-best-practices` | loaded — `client/lib/site.ts`, `client/app/not-found.tsx`, `client/app/sitemap.ts` and `client/app/robots.ts` are all server-only |
 | `gsap-react` | loaded, for the reduced-motion verification in §9 |
 | `tailwind-4-docs` | loaded, **snapshot still uninitialised** — see below |
 | `tailwind-design-system` | **not loaded, and not needed**: this step added no token |
-| `shadcn` | **not loaded, and not needed**: nothing in `components/ui/` was touched |
+| `shadcn` | **not loaded, and not needed**: nothing in `client/components/ui/` was touched |
 
 The guidelines were fetched from
 `https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md`,
@@ -37,7 +37,7 @@ the same source `docs/landing.md` records.
 
 **The Tailwind docs sync is still blocked**, as `docs/motion.md` §9.3 recorded
 and as `docs/landing.md` recorded before it.
-`python3 scripts/sync_tailwind_docs.py --accept-docs-license` was retried once
+`python3 .agents/skills/tailwind-4-docs/scripts/sync_tailwind_docs.py --accept-docs-license` was retried once
 this session: it **exited 0 with no output**, and left
 `references/docs-source.txt` reading `Status: Not initialized` with no
 `references/docs/` directory. The skill's documented fallbacks were used
@@ -76,6 +76,9 @@ app/page.tsx:134            deprecated `priority`; preload warning at 800 and 37
 app/page.tsx:192,248,310,348  &apos; renders a straight quote
 ```
 
+After the step 7 workspace split, the current source paths for those files live
+under `client/`. The literal output above remains the `f29f674` record.
+
 Confirmed clean by sweep (exit statuses in §8): no `transition-all`, no
 `markers: true`, no `ScrollSmoother`, no straight double quotes in shipped
 copy, no literal `...`, no `Area`.
@@ -100,15 +103,15 @@ satisfied and nothing was added for it.
 
 | # | file | change |
 | --- | --- | --- |
-| A1 | `app/layout.tsx` | skip link, first child of `<body>`, `href="#main-content"` |
-| A2 | `app/layout.tsx` | `<main id="main-content" tabIndex={-1}>` with a focus-visible ring |
-| A3 | `app/page.tsx` | `role="region"` on both horizontal scrollers |
-| A4 | `app/page.tsx` | deleted the `sr-only` ordinal beside the trusted marks |
-| A5 | `app/page.tsx` | `scroll-mt-section` moved onto the four id-bearing sections |
-| A6 | `components/acres/mobile-navigation.tsx` | `overscroll-contain` on the panel |
-| A7 | `app/globals.css` | `color-scheme: light` on `html` |
-| A8 | `app/globals.css` | `touch-action` and `-webkit-tap-highlight-color`, scoped |
-| A9 | `app/not-found.tsx` | new — a 404 inside Acres' chrome |
+| A1 | `client/app/layout.tsx` | skip link, first child of `<body>`, `href="#main-content"` |
+| A2 | `client/app/layout.tsx` | `<main id="main-content" tabIndex={-1}>` with a focus-visible ring |
+| A3 | `client/app/page.tsx` | `role="region"` on both horizontal scrollers |
+| A4 | `client/app/page.tsx` | deleted the `sr-only` ordinal beside the trusted marks |
+| A5 | `client/app/page.tsx` | `scroll-mt-section` moved onto the four id-bearing sections |
+| A6 | `client/components/acres/mobile-navigation.tsx` | `overscroll-contain` on the panel |
+| A7 | `client/app/globals.css` | `color-scheme: light` on `html` |
+| A8 | `client/app/globals.css` | `touch-action` and `-webkit-tap-highlight-color`, scoped |
+| A9 | `client/app/not-found.tsx` | new — a 404 inside Acres' chrome |
 
 **A1 — the skip link is parked, not hidden.** It is moved with `-top-20` →
 `focus-visible:top-4`, **not** with `sr-only`/`not-sr-only`. Both of those
@@ -157,7 +160,7 @@ in dark mode painting scrollbars and form controls dark against a white canvas.
 pinch zoom; the tap highlight is set to transparent deliberately, because a
 focus-visible ring and a colour hover already answer for the feedback.
 
-**A9 — `app/not-found.tsx`.** A Server Component: one `<h1>` ("Page not
+**A9 — `client/app/not-found.tsx`.** A Server Component: one `<h1>` ("Page not
 found."), one line of copy in the register of `AGENTS.md` §8, one primary
 `Button` back to `/`. Built from `Section` and existing type roles — no new
 token, no new variant, no new layout primitive. **No `metadata` export**: Next
@@ -183,12 +186,12 @@ whose JavaScript never arrives, which is precisely what `AGENTS.md` §9.3 rule 4
 forbids. A ~110 ms flash on a cold load is the cheaper defect.
 
 **This is a closed finding, not an open one.** A later session must not "improve"
-it while passing through `app/page.tsx` or `components/acres/landing-motion.tsx`.
+it while passing through `client/app/page.tsx` or `client/components/acres/landing-motion.tsx`.
 Reopening it requires the user, not a judgement call in the file.
 
 ### 4.2 B2 — `priority` → `fetchPriority="high"`
 
-`app/page.tsx:134`. Two lines from the installed Next 16.3.1 docs
+`client/app/page.tsx:134`. Two lines from the installed Next 16.3.1 docs
 (`01-app/03-api-reference/02-components/image.md`) are the whole justification:
 
 > Starting with Next.js 16, the `priority` property has been deprecated in favor
@@ -207,7 +210,7 @@ removes the console warning §8 tabulates.
 
 GSAP honours `prefers-reduced-motion` through `gsap.matchMedia()`
 (`docs/motion.md` §6.1), but the CSS `transition-colors` on the pills, the nav
-links, the footer links and the mobile card did not. `app/globals.css` gained a
+links, the footer links and the mobile card did not. `client/app/globals.css` gained a
 `@media (prefers-reduced-motion: reduce)` block in `@layer base` collapsing
 `animation-duration`, `animation-iteration-count`, `transition-duration` and
 `scroll-behavior` on `*, *::before, *::after`. **Durations go to `0.01ms`, not
@@ -222,7 +225,7 @@ being a fragment link. §9 measures that the two rules do not fight.
 
 ## 5. Group C — typography
 
-**C1.** Four `&apos;` in `app/page.tsx` (lines 191, 247, 310, 348 pre-change)
+**C1.** Four `&apos;` in `client/app/page.tsx` (lines 191, 247, 310, 348 pre-change)
 replaced with the literal `’`. **Wording is unchanged; this is a glyph fix, not
 an edit to the comps' copy.** The blockquote's double quotes were already curly,
 so the page was inconsistent with itself before this.
@@ -245,16 +248,16 @@ Server Component or a server route.
 
 | # | file | what it holds |
 | --- | --- | --- |
-| D1 | `lib/site.ts` (new) | `SITE_URL`, `SITE_NAME`, `SITE_TITLE`, `SITE_DESCRIPTION` |
-| D2 | `app/layout.tsx` | the `metadata` object and a separate `viewport` export |
-| D3 | `app/icon.svg` (new) | the Acres mark, 88 × 88 |
-| D4 | `app/apple-icon.png` (new) | 180 × 180, sRGB, white ground |
-| D5 | `app/favicon.ico` | the create-next-app default replaced; 16 / 32 / 48 |
-| D6 | `app/opengraph-image.png` + `.alt.txt` (new) | 1200 × 630, 289 KB |
-| D7 | `app/twitter-image.png` + `.alt.txt` (new) | the same image, as a separate file |
-| D8 | `app/sitemap.ts` (new) | one entry, built from `SITE_URL` |
-| D9 | `app/robots.ts` (new) | `allow: "/"` plus the sitemap URL |
-| D10 | `.env.example` (new) | `NEXT_PUBLIC_SITE_URL=http://localhost:3000` and a one-line comment |
+| D1 | `client/lib/site.ts` (new) | `SITE_URL`, `SITE_NAME`, `SITE_TITLE`, `SITE_DESCRIPTION` |
+| D2 | `client/app/layout.tsx` | the `metadata` object and a separate `viewport` export |
+| D3 | `client/app/icon.svg` (new) | the Acres mark, 88 × 88 |
+| D4 | `client/app/apple-icon.png` (new) | 180 × 180, sRGB, white ground |
+| D5 | `client/app/favicon.ico` | the create-next-app default replaced; 16 / 32 / 48 |
+| D6 | `client/app/opengraph-image.png` + `.alt.txt` (new) | 1200 × 630, 289 KB |
+| D7 | `client/app/twitter-image.png` + `.alt.txt` (new) | the same image, as a separate file |
+| D8 | `client/app/sitemap.ts` (new) | one entry, built from `SITE_URL` |
+| D9 | `client/app/robots.ts` (new) | `allow: "/"` plus the sitemap URL |
+| D10 | `client/.env.example` (new) | `NEXT_PUBLIC_SITE_URL=http://localhost:3000` and a one-line comment |
 
 **D1 — no domain is invented.** `SITE_URL` is
 `process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://localhost:3000"`, so unset,
@@ -271,7 +274,7 @@ is in the **`viewport`** export, not in `metadata`, because
 `03-api-reference/04-functions/generate-viewport.md` is explicit that it moved.
 
 **D3 — the mark is copied, not redrawn.** The path is taken byte for byte from
-`components/acres/logo-mark.tsx`, which extracted it from the design-system PDF
+`client/components/acres/logo-mark.tsx`, which extracted it from the design-system PDF
 vector. Two deliberate differences: the fill is an explicit `#000000`, because
 `currentColor` has no meaning in a standalone favicon; and the 31.75 × 70 mark is
 centred in an 88 × 88 square by `transform="translate(28.125 9)"`, because a
@@ -287,30 +290,30 @@ rather than relying on the OG image being reused. The built `<head>` confirms
 the answer: `twitter:image` points at `/twitter-image.png`, not at
 `/opengraph-image.png` (§7).
 
-**D10 — `.gitignore` needed a line.** `.env*` was ignoring `.env.example`, so
-the file would never have been committed. `!.env.example` was added directly
+**D10 — `.gitignore` needed a line.** `.env*` was ignoring `client/.env.example`, so
+the file would never have been committed. `!client/.env.example` was added directly
 under that rule, with a comment saying the file carries no secret.
 
 ### 6.1 The exact commands that produced the artwork
 
 ```bash
 # D4 — apple-icon
-magick -background white -density 1200 app/icon.svg -resize 180x180 \
+magick -background white -density 1200 client/app/icon.svg -resize 180x180 \
   -gravity center -background white -extent 180x180 \
-  -alpha remove -alpha off PNG32:app/apple-icon.png
+  -alpha remove -alpha off PNG32:client/app/apple-icon.png
 
 # D5 — favicon.ico, 16 / 32 / 48 from the same source
 for n in 48 32 16; do
-  magick -background none -density 1200 app/icon.svg -resize ${n}x${n} \
+  magick -background none -density 1200 client/app/icon.svg -resize ${n}x${n} \
     -gravity center -background none -extent ${n}x${n} -depth 8 fav-$n.png
 done
-magick fav-16.png fav-32.png fav-48.png app/favicon.ico
+magick fav-16.png fav-32.png fav-48.png client/app/favicon.ico
 
 # D6/D7 — the OG card, cropped from the real comp, never re-typeset
-magick public/assets/ui/landing-pages/Desktop.png -crop 1280x672+0+0 +repage \
+magick client/public/assets/ui/landing-pages/Desktop.png -crop 1280x672+0+0 +repage \
   -resize 1200x630 -background white -alpha remove -alpha off -strip \
-  -quality 92 app/opengraph-image.png
-cp app/opengraph-image.png app/twitter-image.png
+  -quality 92 client/app/opengraph-image.png
+cp client/app/opengraph-image.png client/app/twitter-image.png
 ```
 
 **The crop arithmetic.** `1280 × 672` is the crop because
@@ -405,14 +408,14 @@ Sweeps, after the change:
 
 | sweep | result |
 | --- | --- |
-| `&apos;` / `&quot;` / `&#39;` in `app components/acres` | exit 1, no matches |
+| `&apos;` / `&quot;` / `&#39;` in `client/app client/components/acres` | exit 1, no matches |
 | a literal `...` in copy | exit 1, no matches |
-| a straight `"` in JSX text in `app/page.tsx` | exit 1, no matches |
+| a straight `"` in JSX text in `client/app/page.tsx` | exit 1, no matches |
 | `Area` (`AGENTS.md` §1.7) | exit 1, no matches |
 | `markers: true` / `ScrollSmoother` | exit 1, no matches |
-| `priority` image prop in `app/page.tsx components/acres` | exit 1, no matches; `app/sitemap.ts` still has the valid sitemap `priority: 1` field |
+| `priority` image prop in `client/app/page.tsx client/components/acres` | exit 1, no matches; `client/app/sitemap.ts` still has the valid sitemap `priority: 1` field |
 | `transition-all` | exit 1, no matches |
-| `outline-none` in `app components/acres` | 10 hits, **every one** paired with a `focus-visible:outline-*` replacement |
+| `outline-none` in `client/app client/components/acres` | 10 hits, **every one** paired with a `focus-visible:outline-*` replacement |
 
 Served output:
 
@@ -573,9 +576,8 @@ of all three pages is unchanged.
 | A web-app manifest (`manifest.ts`) | **Recorded, not built.** A manifest implies an installable PWA that the references (`AGENTS.md` §0) do not specify |
 | `authors`, `creator`, a Twitter handle, a verification token | Omitted rather than invented (`AGENTS.md` §10 rule 6). They land when the user supplies real values |
 | The four glyph questions of `docs/components.md` §3 | Untouched here — two remain provisional and are the user's to close |
-| A real origin for `NEXT_PUBLIC_SITE_URL` | Left unset. The fallback is the dev server; the variable is documented in `.env.example` |
+| A real origin for `NEXT_PUBLIC_SITE_URL` | Left unset. The fallback is the dev server; the variable is documented in `client/.env.example` |
 
-**Left for later steps.** Step 7 (`client/` split) must rewrite every path this
-file pins — `app/`, `lib/site.ts`, `public/assets/ui/landing-pages/Desktop.png`
-in §6.1's OG command — when the tree moves under `client/`. Step 8's server work
-touches nothing recorded here.
+**Step 7 completed.** The `client/` split rewrote this file's current filesystem
+path pins. `docs/automation.md` §4 records the relocation classes and command
+contract. Step 8's server work touches nothing recorded here.

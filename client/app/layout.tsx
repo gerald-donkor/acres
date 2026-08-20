@@ -35,7 +35,7 @@ const robotoMono = Roboto_Mono({
 });
 
 // The metadata surface, recorded in docs/polish.md. Every string here is either
-// measured from the comps' own copy or read from lib/site.ts; nothing about the
+// measured from the comps' own copy or read from client/lib/site.ts; nothing about the
 // company — an author, a Twitter handle, a verification token — is invented
 // (AGENTS.md §10 rule 6), so those fields are omitted rather than filled.
 export const metadata: Metadata = {

@@ -1,10 +1,10 @@
-// Regenerates components/acres/icon-paths.ts from @material-symbols/svg-400.
+// Regenerates client/components/acres/icon-paths.ts from @material-symbols/svg-400.
 //
 // The glyph list is the one docs/design-system.md §6 and docs/components.md §3
 // identify from the references (AGENTS.md §0). Path data is READ from the
 // installed package, never transcribed by hand (AGENTS.md §10 rule 6).
 //
-//   node scripts/generate-icon-paths.mjs
+//   node client/scripts/generate-icon-paths.mjs
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
@@ -48,7 +48,7 @@ const entries = GLYPHS.map((name) => {
 const version = JSON.parse(readFileSync(pkg, "utf8")).version;
 const out = `// GENERATED FILE — do not edit by hand.
 // Source: @material-symbols/svg-400@${version}, outlined/<name>-fill.svg (Apache-2.0).
-// Regenerate with: node scripts/generate-icon-paths.mjs
+// Regenerate with: node client/scripts/generate-icon-paths.mjs
 //
 // Every glyph shares one viewBox, so <Icon> can hardcode it.
 

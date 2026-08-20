@@ -55,7 +55,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger"
 
 ## 2. Architecture — one module, one client leaf
 
-**`lib/motion.ts`** is the only place GSAP is configured. Registration is at
+**`client/lib/motion.ts`** is the only place GSAP is configured. Registration is at
 module scope and happens exactly once (AGENTS.md §9.3 rule 2):
 
 ```ts
@@ -67,14 +67,14 @@ file has **no `"use client"` of its own** — it is a plain module that only the
 client leaf imports, which is what keeps the GSAP bundle on `/` and off every
 other route.
 
-**`components/acres/landing-motion.tsx`** is the one `"use client"` module on
+**`client/components/acres/landing-motion.tsx`** is the one `"use client"` module on
 the landing page. It takes the whole server-rendered subtree as `children` and
 renders a wrapper with `className="contents"`, so it has **no box at all** and
-cannot move a measured pixel of `docs/landing.md`'s geometry. `app/page.tsx`,
+cannot move a measured pixel of `docs/landing.md`'s geometry. `client/app/page.tsx`,
 the copy arrays, the comparison table and every section stay Server Components
 (AGENTS.md §9.2 rules 1 and 2). Nothing was moved into the client module.
 
-`app/page.tsx` mounts it as the single root element of the page:
+`client/app/page.tsx` mounts it as the single root element of the page:
 
 ```tsx
 return (
@@ -117,7 +117,7 @@ buttons** inside the motion scope.
 
 `DUR` and `EASE` are read from `:root` at runtime and defined once. **No call
 site restates `0.15`, `0.3`, `0.6` or a second easing curve** (AGENTS.md §9.3
-rule 1). `readMotionTokens()` in `lib/motion.ts` reads `--duration-fast`,
+rule 1). `readMotionTokens()` in `client/lib/motion.ts` reads `--duration-fast`,
 `--duration-base`, `--duration-slow`, `--ease-acres` and the two distances
 below, converts CSS milliseconds to GSAP seconds in one place, and caches.
 
@@ -140,7 +140,7 @@ missing or malformed.
 
 ### 3.3 The two new distance tokens
 
-Added to `:root` in `app/globals.css`, **not** to `@theme`:
+Added to `:root` in `client/app/globals.css`, **not** to `@theme`:
 
 | token | value | role |
 | --- | --- | --- |
@@ -155,10 +155,10 @@ these are layout spacing rather than tween distances. They sit beside the three
 `--duration-*` properties, which are on `:root` for the same reason
 (`docs/design-system.md` §5).
 
-**Consequently `lib/utils.ts` is unchanged.** The rule recorded in
+**Consequently `client/lib/utils.ts` is unchanged.** The rule recorded in
 `docs/components.md` §4.4 — adding a token to `@theme` means teaching
 `tailwind-merge` about it — does not fire, because no class is generated and
-there is nothing to merge. Only `lib/motion.ts` reads these two, once, and every
+there is nothing to merge. Only `client/lib/motion.ts` reads these two, once, and every
 tween takes the value from there.
 
 ### 3.4 Scale, defined once
@@ -408,19 +408,19 @@ Reviewed against the checklist fetched this session from
 `https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md`.
 
 ```
-## components/acres/landing-motion.tsx
+## client/components/acres/landing-motion.tsx
 
 ✓ pass
 
-## lib/motion.ts
+## client/lib/motion.ts
 
 ✓ pass
 
-## app/globals.css
+## client/app/globals.css
 
 ✓ pass
 
-## app/page.tsx
+## client/app/page.tsx
 
 ✓ pass  (data-motion-* hooks only; no semantic, focus or content change)
 ```

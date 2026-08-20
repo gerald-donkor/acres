@@ -5,7 +5,7 @@ import { extendTailwindMerge } from "tailwind-merge"
  * `tailwind-merge` has to be told about the Acres scales.
  *
  * Out of the box it only knows Tailwind's default theme, so every NAMED token in
- * `app/globals.css` looks like an unknown class to it — and the failure is
+ * `client/app/globals.css` looks like an unknown class to it — and the failure is
  * silent and wrong, not loud. Two examples measured in the browser before this
  * was added:
  *

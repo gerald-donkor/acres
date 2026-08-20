@@ -8,7 +8,7 @@ could not separate two candidate values, the observed range is recorded as the
 measurement and the shipped value is labelled a **judgement** (AGENTS.md §10
 rule 4).
 
-The tokens this file describes live in the `@theme` block of `app/globals.css`.
+The tokens this file describes live in the `@theme` block of `client/app/globals.css`.
 **That block and this file are one change**: a value that appears in one and not
 the other is a defect.
 
@@ -207,7 +207,7 @@ session:
 **Only Regular (400) of Crimson Text is used anywhere on the comps.** Every serif
 run measured — hero, all five section headings, the pull-quote, the feature-card
 headings, the numbered-step headings — fits Crimson Text Regular and is beaten
-decisively by SemiBold and Bold. `app/layout.tsx` therefore loads `weight: ["400"]`
+decisively by SemiBold and Bold. `client/app/layout.tsx` therefore loads `weight: ["400"]`
 only. Adding 600 or 700 later is a change to this file first.
 
 **`opsz` is not pinned.** `font-optical-sizing` defaults to `auto`, so the browser
@@ -502,7 +502,7 @@ does not exist.
 **Decision, taken with the user before this step:** the icon set is **Material
 Symbols**, delivered as individual SVGs through `@material-symbols/svg-400`, and
 `lucide-react` stays installed for anything the board does not specify.
-`components.json`'s `"iconLibrary": "lucide"` stays as it is, because it governs
+`client/components.json`'s `"iconLibrary": "lucide"` stays as it is, because it governs
 what the shadcn CLI generates, not what we author. This closes the disagreement
 AGENTS.md §1.6 records as open.
 
@@ -539,7 +539,7 @@ same 24 px box.
 
 ## 7. The tokens
 
-Written into the `@theme` block of `app/globals.css`. Two rules govern the shape
+Written into the `@theme` block of `client/app/globals.css`. Two rules govern the shape
 of that block:
 
 **Colours are written as hex, not OKLCH.** Every value in §1 was *measured as an
@@ -550,15 +550,15 @@ is not. The stock shadcn OKLCH values that this step replaces were never
 measurements.
 
 **Names come from the design system, and shadcn's names are rebound rather than
-overridden** (AGENTS.md §9.1 rule 3). All 61 primitives in `components/ui/` read
+overridden** (AGENTS.md §9.1 rule 3). All 61 primitives in `client/components/ui/` read
 `--primary`, `--secondary`, `--muted`, `--border` and the `--radius-*` ladder.
-Every one of those names is given an Acres value. **No file in `components/ui/`
+Every one of those names is given an Acres value. **No file in `client/components/ui/`
 is edited.**
 
 ### 7.1 The radius ladder
 
-`components/ui/button.tsx` reads `--radius-md` and `--radius-lg` directly
-(`rounded-lg`, `rounded-[min(var(--radius-md),12px)]`), and `app/globals.css`
+`client/components/ui/button.tsx` reads `--radius-md` and `--radius-lg` directly
+(`rounded-lg`, `rounded-[min(var(--radius-md),12px)]`), and `client/app/globals.css`
 derives the whole `sm → 4xl` ladder from `--radius` by `calc()`. **The ladder is
 kept and `--radius` is rebound to `0.875rem` (14 px)** — the measured card
 radius. That choice is not arbitrary: it lands the derived ladder on the measured
@@ -630,14 +630,14 @@ AGENTS.md §9.1 rule 1.
 | `--spacing-target` | `2.75rem` (44 px) | the touch floor of AGENTS.md §9.4 rule 5 |
 | `--spacing-section` | `7.5rem` (120 px) | the section rhythm of §3.3, applied as top padding only |
 
-**Adding a token to `@theme` now means adding its name to `lib/utils.ts` too.**
+**Adding a token to `@theme` now means adding its name to `client/lib/utils.ts` too.**
 `cn()` is built with `extendTailwindMerge`, and a token `tailwind-merge` has not
 been told about fails **silently** — `docs/components.md` §4.4 records the two
 components that were measurably wrong before it was configured.
 
 ### 7.5 The global focus ring
 
-`app/globals.css`'s `@layer base` rule changed from `outline-ring/50` to
+`client/app/globals.css`'s `@layer base` rule changed from `outline-ring/50` to
 `outline-ring`. The 50 % mix is inherited `create-next-app`/shadcn scaffolding,
 and measured in the browser it beat every `focus-visible:outline-*` a component
 could set. `#485C11` at 50 % over white is about **2.2 : 1**, under the 3 : 1
@@ -648,15 +648,15 @@ floor a focus indicator has to clear; at full opacity it is **7.46 : 1** (§1.4)
 `--text-brand: 1.875rem` (the 30 px wordmark, §2.3) and `--color-brand: #485C11`
 (§1.1) collided on the class name `text-brand`, which Tailwind resolved to the
 color token. In step 3, the type token was renamed to `--text-wordmark` in
-`app/globals.css`, `docs/design-system.md` and `lib/utils.ts` together, making
+`client/app/globals.css`, `docs/design-system.md` and `client/lib/utils.ts` together, making
 `text-wordmark` unambiguous and fully reachable.
 
 ### 7.7 Dark mode
 
 **Acres has no designed dark theme.** Neither the board nor any of the three
-comps says anything about one. The `.dark` block in `app/globals.css` is
+comps says anything about one. The `.dark` block in `client/app/globals.css` is
 inherited `create-next-app` / shadcn scaffolding and is **unaudited**. It is left
-in place so that `components/ui/` does not break if something toggles the class,
+in place so that `client/components/ui/` does not break if something toggles the class,
 and it is **not** a supported surface. Do not extend it, and do not treat its
 values as Acres colours.
 
@@ -782,6 +782,9 @@ step that owns `components/ui/`.
 > the tree step 6 shipped. Neither file was patched by any step, so the rule
 > stopped firing on its own — most likely a `react-hooks` version change.
 > The finding is closed. `docs/polish.md` §7 carries the current output.
+>
+> **Step 7 path note.** After the workspace split, those files live at
+> `client/components/ui/carousel.tsx` and `client/hooks/use-mobile.ts`.
 
 ### `npm run dev` — the font verification
 

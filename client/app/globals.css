@@ -113,7 +113,7 @@
   --text-label-lg--font-weight: 400;
 
   /* -- shape (docs/design-system.md §4) --------------------------------------
-     Named alongside the inherited sm→4xl ladder, which stays so components/ui/
+     Named alongside the inherited sm→4xl ladder, which stays so client/components/ui/
      keeps working. Pills use rounded-full, never a rung. */
   --radius-control: 0.5rem; /* 8px  — icon buttons */
   --radius-card: 0.875rem; /* 14px — the comparison card, bordered surfaces */
@@ -196,7 +196,7 @@
 }
 
 /* The shadcn token names are REBOUND to Acres values rather than overridden in
-   the components (AGENTS.md §9.1 rule 3). All 61 primitives in components/ui/
+   the components (AGENTS.md §9.1 rule 3). All 61 primitives in client/components/ui/
    read these names; not one of their files is edited. */
 :root {
   --background: #ffffff;
@@ -237,9 +237,9 @@
      imply these are layout spacing rather than tween distances. The Tailwind 4
      rule is that @theme is for tokens that should create a utility or variant
      and :root is for plain custom properties that should not. Nothing in
-     lib/utils.ts changes, because no class is generated to merge.
+     client/lib/utils.ts changes, because no class is generated to merge.
 
-     Only lib/motion.ts reads these, once, and every tween takes the value from
+     Only client/lib/motion.ts reads these, once, and every tween takes the value from
      there (AGENTS.md §9.1 rule 1, §9.3 rule 1). */
   --motion-reveal-distance: 24px; /* the entrance/reveal travel, downward → rest */
   --motion-lift-distance: 4px; /* the fine-pointer hover lift, upward from rest */
@@ -266,7 +266,7 @@
 
 /* Acres has NO designed dark theme — neither the board nor any of the three
    comps says anything about one (docs/design-system.md §7.7). This block is
-   inherited, unaudited scaffolding, kept only so components/ui/ does not break
+   inherited, unaudited scaffolding, kept only so client/components/ui/ does not break
    if something toggles the class. Do not treat these as Acres colours. */
 .dark {
   --background: oklch(0.145 0 0);
@@ -345,7 +345,7 @@
   }
 
   /* GSAP honours prefers-reduced-motion through gsap.matchMedia()
-     (lib/motion.ts, docs/motion.md §6.1), but the CSS `transition-colors` on the
+     (client/lib/motion.ts, docs/motion.md §6.1), but the CSS `transition-colors` on the
      pills, the nav links, the footer links and the mobile card does not — and
      neither does the smooth scrolling above. This is the CSS half of the same
      promise (AGENTS.md §9.3 rule 4). Durations collapse to a frame rather than
