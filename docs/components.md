@@ -365,9 +365,11 @@ Our own code in `components/acres/` is still held to the rule.
    but not decisively** — §3.1 and §3.4. Both are raised with the user.
 3. **The ↗'s stroke is ~1.29x heavier on the board than at weight 400.** If that
    matters, it is a `@material-symbols/svg-500`/`-600` dependency change.
-4. **`Button` appends the ↗ as a second child.** Combined with Base UI's `render`
-   prop, which expects a single element, that is untested. Step 3 renders the
-   nav's pill as a link and is the first place it will come up.
+4. **`Button` with `render` (closed in prompt 04):** When `Button` renders a
+   non-`<button>` element (e.g. Next.js `<Link />`), Base UI requires
+   `nativeButton={false}` on the call site. The trailing `arrow_outward` icon
+   renders cleanly inside the custom element, retaining exact pill geometry
+   (126.03 × 48 px) without console warnings.
 
 ---
 

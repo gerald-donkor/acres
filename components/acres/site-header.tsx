@@ -43,7 +43,11 @@ function SiteHeader({ className }: { className?: string }) {
               ))}
             </nav>
 
-            <Button render={<Link href="#how-to" />} variant="primary">
+            <Button
+              render={<Link href="#how-to" />}
+              nativeButton={false}
+              variant="primary"
+            >
               Learn More
             </Button>
           </div>

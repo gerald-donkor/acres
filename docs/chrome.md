@@ -26,7 +26,7 @@ menu at 375, and the footer at all three widths. Built to `prompts/03-chrome.md`
 - **Container:** `Container` content is 720 px (40 px gutters) at 800, and 1200 px (40 px gutters) at 1280.
 - **Wordmark:** `Acres` in DM Sans 500, 30 px, tracking −0.05em (`--text-wordmark`). Ink measures 70 × 22 px at x = 40.
 - **Nav Links:** `Benefits`, `Specifications`, `How-to`, `Contact Us`. Set in DM Sans 600, 14 px, tracking −0.018em (`--text-ui`).
-- **Primary CTA:** `Learn More` with `arrow_outward`, rendered via Base UI's verified `render={<Link href="#how-to" />}` prop. Height is 48 px, fill width is 126.03 px spanning x = 1113.97–1240.00 at 1280, and x = 633.97–760.00 at 800.
+- **Primary CTA:** `Learn More` with `arrow_outward`, rendered via Base UI's verified `render={<Link href="#how-to" />}` prop with `nativeButton={false}`. Height is 48 px, fill width is 126.03 px spanning x = 1113.97–1240.00 at 1280, and x = 633.97–760.00 at 800.
 - **Visual alignment:** Wordmark, nav links, and CTA share visual vertical centre at y ≈ 44.
 
 ### 2.2 Closed Mobile Nav — 375
@@ -133,13 +133,18 @@ Measured on live production server:
 | 1280 | Wordmark | Font / Size / Weight | "DM Sans" 500 30px (−1.5px tracking) | Pass |
 | 1280 | CTA Button | Dimensions / Tag | 126.03 × 48 px, `<a href="#how-to">` | Pass |
 | 1280 | CTA Arrow | Presence | `arrow_outward` inside anchor | Pass |
+| 1280 | Console | Base UI Warnings | 0 mismatch warnings (`nativeButton={false}`) | Pass |
 | 1280 | Footer Rule | Width | 1200 px (`#E9E9E9`) | Pass |
 | 1280 | Footer Mark | Dimensions | 31.75 × 70 px | Pass |
 | 1280 | Footer Legal | Family / Colour | "Roboto Mono" 400, `#485C11` | Pass |
 | 800 | Container | Width | 720 px (40 px gutters) | Pass |
 | 800 | CTA Button | End X | x = 760 (aligns with container edge) | Pass |
+| 800 | Console | Base UI Warnings | 0 mismatch warnings | Pass |
 | 375 | Closed Card | Height / Radius | 78 px, `0px 0px 24px 24px` | Pass |
 | 375 | Closed Card | Shadow | `0 4px 16px rgba(0,0,0,0.05)` | Pass |
 | 375 | Trigger | Target / ARIA | 44 × 44 px, `aria-expanded="false"` | Pass |
 | 375 | Open Menu | Rows Height | 4 rows × 80 px (`h-20`) | Pass |
+| 375 | Open Menu CTA | Tag / Dimensions | `<a href="#how-to">`, 126.03 × 48 px | Pass |
+| 375 | Open Menu CTA | Action | Closes disclosure (`aria-expanded="false"`) | Pass |
+| 375 | Open Menu | Console Warnings | 0 mismatch warnings | Pass |
 | 375 | Open Menu | ARIA / Escape | `aria-expanded="true"` → `false` on Escape | Pass |
