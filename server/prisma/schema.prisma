@@ -1,0 +1,120 @@
+// Acres data layer. PostgreSQL in every environment; see docs/backend.md.
+//
+// No seed data lives here. The regional figures in the design comps are
+// illustration, and inventing them as fixtures would make them look real.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// A first-party email/password account.
+model Account {
+  id           String    @id @default(uuid(7))
+  email        String    @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+}
+
+/// An opaque, server-revocable browser session. Only the hash is stored.
+model Session {
+  id        String    @id @default(uuid(7))
+  accountId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, expiresAt])
+}
+
+/// A geography Acres reports on.
+model Region {
+  id          String           @id @default(uuid(7))
+  slug        String           @unique
+  name        String
+  countryCode String?
+  summary     String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  metrics     RegionalMetric[]
+  reports     InsightReport[]
+}
+
+/// One measured figure for one region over one period.
+model RegionalMetric {
+  id          String    @id @default(uuid(7))
+  regionId    String
+  key         String
+  label       String
+  value       Float
+  unit        String?
+  periodStart DateTime?
+  periodEnd   DateTime?
+  source      String?
+  createdAt   DateTime  @default(now())
+  region      Region    @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@index([regionId, key])
+}
+
+/// A written insight over one region, or over the whole dataset.
+model InsightReport {
+  id        String              @id @default(uuid(7))
+  regionId  String?
+  title     String
+  summary   String
+  status    InsightReportStatus @default(draft)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  region    Region?             @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  @@index([regionId, status])
+}
+
+enum InsightReportStatus {
+  draft
+  published
+  archived
+}
+
+/// A lead captured from a public form.
+model ContactSubmission {
+  id           String   @id @default(uuid(7))
+  name         String
+  email        String
+  organization String?
+  message      String
+  source       String
+  createdAt    DateTime @default(now())
+
+  @@index([email])
+}
+
+/// Bookkeeping for scheduled work.
+model JobRun {
+  id         String       @id @default(uuid(7))
+  jobName    String
+  status     JobRunStatus
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+  message    String?
+
+  @@index([jobName, status, startedAt])
+}
+
+enum JobRunStatus {
+  running
+  succeeded
+  failed
+}

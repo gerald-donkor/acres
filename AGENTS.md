@@ -50,6 +50,7 @@ the read will re-derive it by hand or silently break it.
 | `docs/landing.md` | the `/` build record, section by section, against `Desktop.png` / `Tablet.png` / `Mobile.png` | **written.** Read it before touching the landing page; it records the extracted assets, copy, table decision, breakpoint measurements and deltas |
 | `docs/motion.md` | GSAP on the site — the packages and verified imports, one-time registration, the client leaf and its `data-motion-*` hooks, the shared `DUR` / `EASE` reader, the two motion-distance tokens, every trigger, stagger, hover and press, reduced motion, cleanup, and the browser evidence | **written.** Read it before any animation change; it records why a CSS `cubic-bezier()` cannot be handed to GSAP, and one accessibility fix the reveal start state forced |
 | `docs/polish.md` | the `web-design-guidelines` pass, the skip link and focus order, the reduced-motion CSS, the touch and colour-scheme base rules, the 404 page, the whole metadata and icon surface, and the pixel diff that proves no comp geometry moved | **written.** Read it before any accessibility, metadata or icon change; it records the accepted hero-flash trade-off and corrects two stale lines elsewhere |
+| `docs/backend.md` | the NestJS API — the resolved package versions and why each one, the three-workspace scripts, the module and route map, the envelopes, auth/session/hashing and the CSRF defence with what it does not cover, the environment contract, the scheduler's single-instance constraint, the Prisma 7 specifics, the tests, and the deployment requirements | **written.** Read it before touching `server/`, `packages/shared/` or the root scripts; it records why the first migration is deferred and corrects two stale lines in §8.1 |
 | `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | **written.** Measurement and headless CDP verification recipes |
 | `docs/skills.md` | the skills installed in `.agents/skills/`, what each is for, what was deliberately excluded and why | not yet written |
 
@@ -444,13 +445,16 @@ the map. **Listing a skill is not loading it.**
 | `web-design-guidelines` | before calling any UI finished — it is the accessibility and interaction floor |
 | `gsap-core`, `gsap-timeline`, `gsap-scrolltrigger`, `gsap-react`, `gsap-plugins`, `gsap-utils`, `gsap-performance` | any motion work; `gsap-react` is not optional in this codebase, because cleanup on unmount is where GSAP in React goes wrong |
 | `vercel-react-best-practices` | writing or refactoring any component — server/client boundaries and bundle cost |
+| `nestjs-best-practices` | any work in `server/` — modules, providers, guards, filters, interceptors, Prisma access. It appeared after step 8 began; the line in `prompts/10-nestjs-server.md` saying no NestJS skill is installed is stale |
 | `vercel-react-view-transitions` | route or state transitions, before reaching for a library |
 | `requesting-code-review` | completing tasks, implementing features, or preparing review requests to dispatch reviewer subagent (§2, §2.1) |
 | `receiving-code-review` | receiving code review feedback, to evaluate and act on suggestions with technical rigor before implementing changes (§2, §2.1) |
 | `caveman-commit` | **every commit, always** (§3, §7) |
 
-**GSAP is not installed yet.** Do not write a `gsap` import before a prompt has
-added the dependency; the skills describe the API, not the repository.
+**GSAP is installed** — `gsap` and `@gsap/react` are dependencies of
+`@acres/client`, added by step 5 (`f29f674`). The line that said otherwise was
+stale. The skills still describe the API, not this repository: read
+`docs/motion.md` for what is actually wired.
 
 ---
 
@@ -575,18 +579,28 @@ ships.
 **Resolve this from the repository and `git log`, never from here** (§10 rule 5).
 This paragraph is a snapshot and goes stale by design.
 
-At the time step 7 split the client: the repository root is an npm-workspace
-coordinator, and the complete Next.js application lives in `client/`.
-`client/app/globals.css` carries the Acres `@theme` block, `client/app/layout.tsx`
-loads the three faces of §1.2 and mounts the chrome, `client/app/page.tsx`
-renders the completed landing page, and `client/public/assets/ui/` holds the
-reference files and extracted assets (§0). The full `client/components/ui/`
-primitive set remains installed; Acres-owned primitives and chrome live in
-`client/components/acres/`. There is still no backend of any kind.
+At the time step 8 scaffolded the server: the repository root is an npm-workspace
+coordinator over three workspaces. The complete Next.js application lives in
+`client/` — `client/app/globals.css` carries the Acres `@theme` block,
+`client/app/layout.tsx` loads the three faces of §1.2 and mounts the chrome,
+`client/app/page.tsx` renders the completed landing page, and
+`client/public/assets/ui/` holds the reference files and extracted assets (§0).
+The full `client/components/ui/` primitive set remains installed; Acres-owned
+primitives and chrome live in `client/components/acres/`.
 
-**`npm run lint`, `npx tsc --noEmit`, and `npm run build` run from the root and
-are forwarded to `@acres/client`.** Resolve the current result from `git log`
-and the build records in `docs/`, not from this snapshot.
+**There is now a backend.** `server/` is a NestJS API on Express with health,
+accounts, cookie-backed sessions, regions, a contact endpoint and one scheduled
+job; `packages/shared/` holds the contracts both sides read; `server/prisma/`
+holds the schema. **No database is provisioned, no migration has been
+generated, and no client code calls the API yet** — read `docs/backend.md`
+before assuming otherwise.
+
+**`npm run lint`, `npm run typecheck` and `npm run build` run from the root and
+cover all three workspaces**; `npm run test:server` runs the API's e2e suite.
+A bare `npx tsc --noEmit` at the root checks **nothing** — there is no root
+`tsconfig.json`, so it prints its banner and exits 0. Use `npm run typecheck`.
+Resolve the current result from `git log` and the build records in `docs/`, not
+from this snapshot.
 
 ## 8.2 The build sequence
 

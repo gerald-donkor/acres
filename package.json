@@ -3,12 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "client"
+    "client",
+    "server",
+    "packages/shared"
   ],
   "scripts": {
+    "prepare": "npm run build --workspace=@acres/shared",
     "dev": "npm run dev --workspace=@acres/client",
-    "build": "npm run build --workspace=@acres/client",
+    "dev:client": "npm run dev --workspace=@acres/client",
+    "dev:server": "npm run start:dev --workspace=@acres/server",
+    "build": "npm run build --workspace=@acres/shared && npm run build --workspace=@acres/client && npm run build --workspace=@acres/server",
+    "build:shared": "npm run build --workspace=@acres/shared",
+    "build:client": "npm run build --workspace=@acres/client",
+    "build:server": "npm run build --workspace=@acres/server",
     "start": "npm run start --workspace=@acres/client",
-    "lint": "npm run lint --workspace=@acres/client"
+    "start:server": "npm run start --workspace=@acres/server",
+    "lint": "npm run lint --workspace=@acres/client && npm run lint --workspace=@acres/shared && npm run lint --workspace=@acres/server",
+    "typecheck": "npm run build --workspace=@acres/shared && npm run typecheck --workspace=@acres/shared && npm run typecheck --workspace=@acres/client && npm run typecheck --workspace=@acres/server",
+    "test:server": "npm run test:e2e --workspace=@acres/server"
   }
 }
