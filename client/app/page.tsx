@@ -109,7 +109,7 @@ const focusClass =
 export default function Home() {
   return (
     <LandingMotion>
-      <section className="pt-16 md:pt-24 lg:pt-28">
+      <section className="pt-10 md:pt-15 lg:pt-16">
         <Container className="text-center">
           <h1
             data-motion-hero-heading
@@ -117,26 +117,41 @@ export default function Home() {
           >
             Browse everything.
           </h1>
+          {/* The comp draws a constant-height sage band with the device
+              overhanging its top edge and clipped at its bottom, so this wrapper
+              IS the device box: overhang + band tall. The band is a layer behind
+              it, never a padded parent — padding would grow the band with the
+              image and would swallow the overhang. */}
           <div
             data-motion-hero-media
-            className="mt-10 rounded-media bg-sage px-4 pt-10 md:mt-12 md:px-14 md:pt-12 lg:mt-14 lg:px-24 lg:pt-14"
+            className="relative mt-hero-gap-sm md:mt-hero-gap-md lg:mt-hero-gap-lg"
           >
-            <picture>
-              <source
-                media="(max-width: 767px)"
-                srcSet="/assets/ui/landing/report-device-mobile.webp"
-              />
-              <Image
-                src="/assets/ui/landing/report-device-desktop.webp"
-                alt="Acres regional analytics report interface with an efficiency trend chart."
-                width={1741}
-                height={1216}
-                quality={100}
-                fetchPriority="high"
-                sizes="(max-width: 767px) 78vw, min(92vw, 980px)"
-                className="mx-auto h-auto w-full max-w-[61.25rem] md:max-w-[55rem]"
-              />
-            </picture>
+            <div
+              aria-hidden
+              className="absolute inset-x-0 bottom-0 h-hero-band rounded-media bg-sage"
+            />
+            {/* `sizes` below describes `container − 2·wing`, which tracks the
+                viewport rather than the breakpoint anchor: 106 = the 2×16
+                gutter plus the 2×37 wing, 124 = 2×40 plus 2×22, and 374 =
+                2×40 plus 2×147 against the 1200 cap. */}
+            <div className="relative px-hero-wing-sm md:px-hero-wing-md lg:px-hero-wing-lg">
+              <picture className="block h-hero-device-sm overflow-hidden md:h-hero-device-md lg:h-hero-device-lg">
+                <source
+                  media="(max-width: 767px)"
+                  srcSet="/assets/ui/landing/report-device-mobile.webp"
+                />
+                <Image
+                  src="/assets/ui/landing/report-device-desktop.webp"
+                  alt="Acres regional analytics report interface with an efficiency trend chart."
+                  width={1741}
+                  height={1216}
+                  quality={100}
+                  fetchPriority="high"
+                  sizes="(max-width: 767px) calc(100vw - 106px), (max-width: 1023px) calc(100vw - 124px), min(calc(100vw - 374px), 906px)"
+                  className="h-full w-full object-cover object-top"
+                />
+              </picture>
+            </div>
           </div>
         </Container>
       </section>
@@ -271,28 +286,29 @@ export default function Home() {
               Discover More
             </Button>
           </div>
-          <picture
-            data-motion-media
-            className="block aspect-[311/385] w-full overflow-hidden rounded-media md:aspect-[720/744] lg:aspect-[590/711]"
-          >
-            <source
-              media="(min-width: 1024px)"
-              srcSet="/assets/ui/landing/cylinders-desktop.webp"
-            />
-            <source
-              media="(min-width: 768px)"
-              srcSet="/assets/ui/landing/cylinders-tablet.webp"
-            />
-            <Image
-              src="/assets/ui/landing/cylinders-mobile.webp"
-              alt="Neutral stone cylinders arranged as a quiet geometric landscape."
-              width={1770}
-              height={2133}
-              quality={100}
-              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 100vw, 600px"
-              className="h-full w-full object-cover"
-            />
-          </picture>
+          {/* Mobile.png insets this photograph inside the container rather than
+              bleeding it to the gutters; tablet and desktop are full column. */}
+          <div data-motion-media className="px-media-inset-sm md:px-0">
+            <picture className="block aspect-[311/385] w-full overflow-hidden rounded-media md:aspect-[720/744] lg:aspect-[590/711]">
+              <source
+                media="(min-width: 1024px)"
+                srcSet="/assets/ui/landing/cylinders-desktop.webp"
+              />
+              <source
+                media="(min-width: 768px)"
+                srcSet="/assets/ui/landing/cylinders-tablet.webp"
+              />
+              <Image
+                src="/assets/ui/landing/cylinders-mobile.webp"
+                alt="Neutral stone cylinders arranged as a quiet geometric landscape."
+                width={1770}
+                height={2133}
+                quality={100}
+                sizes="(max-width: 767px) calc(100vw - 62px), (max-width: 1023px) calc(100vw - 80px), 600px"
+                className="h-full w-full object-cover"
+              />
+            </picture>
+          </div>
         </div>
       </Section>
 
@@ -334,7 +350,7 @@ export default function Home() {
       </Section>
 
       <Section aria-labelledby="testimonial-heading">
-        <div className="grid gap-14 lg:grid-cols-[0.88fr_1.12fr] lg:items-center">
+        <div className="grid gap-14 lg:grid-cols-[592fr_538fr] lg:items-center lg:gap-x-quote-gap">
           <picture
             data-motion-media
             className="block aspect-square w-full overflow-hidden rounded-media lg:aspect-[590/670]"
@@ -411,7 +427,7 @@ export default function Home() {
 
           <div
             className={cn(
-              "mt-16 overflow-x-auto overscroll-x-contain pb-4",
+              "mt-22 overflow-x-auto overscroll-x-contain pb-4 md:mt-20 lg:mt-19",
               focusClass
             )}
             role="region"
@@ -426,12 +442,12 @@ export default function Home() {
                 <li
                   key={step.marker}
                   data-motion-item
-                  className="border-t border-rule pt-7"
+                  className="border-t border-rule pt-15"
                 >
-                  <span className="font-serif text-stat text-ink-faint">
+                  <span className="text-stat text-ink-faint md:text-stat-md">
                     {step.marker}
                   </span>
-                  <h3 className="mt-7 font-serif text-h3 text-ink">
+                  <h3 className="mt-15 font-serif text-h3 text-ink">
                     {step.title}
                   </h3>
                   <p className="mt-5 max-w-[18rem] text-body text-ink-muted">
@@ -445,7 +461,7 @@ export default function Home() {
 
         <picture
           data-motion-media
-          className="mt-16 block aspect-[343/600] w-full overflow-hidden rounded-media md:mt-20 md:aspect-[720/664] lg:aspect-[1200/664]"
+          className="mt-26 block aspect-[343/600] w-full overflow-hidden rounded-media md:mt-30 md:aspect-[720/664] lg:aspect-[1200/664]"
         >
           <source
             media="(min-width: 1024px)"

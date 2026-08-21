@@ -78,10 +78,25 @@
   --text-h3--letter-spacing: -0.028em;
   --text-h3--font-weight: 400;
 
-  --text-stat: 5rem; /* 80px — the 01/02/03 markers */
+  /* The 01/02/03 markers. This is the ONE non-serif display role, and it is the
+     one type role besides the two serif display roles that scales — measured on
+     the comps as the ink box of `01`, against the same string rendered live:
+
+       comp Mobile.png    51 × 46     live @ 64px  ≈ 53 × 46
+       comp Tablet.png    64 × 57     live @ 80px    66 × 58
+       comp Desktop.png   64 × 57     live @ 80px    66 × 58
+
+     Live runs ~2px wide of the comp at every size, consistently, so the mobile
+     reading resolves to 64px and not to a smaller value that would match the
+     width alone. prompts/11-responsive-comp-fidelity.md §E. */
+  --text-stat: 4rem; /* 64px @ 375 */
   --text-stat--line-height: 1;
   --text-stat--letter-spacing: -0.0375em;
   --text-stat--font-weight: 400;
+  --text-stat-md: 5rem; /* 80px @ 800 and 1280 */
+  --text-stat-md--line-height: 1;
+  --text-stat-md--letter-spacing: -0.0375em;
+  --text-stat-md--font-weight: 400;
 
   --text-wordmark: 1.875rem; /* 30px — the wordmark; does not scale */
   --text-wordmark--line-height: 1;
@@ -136,6 +151,58 @@
   --spacing-icon: 1.5rem; /* 24px — every Material Symbol, at every breakpoint */
   --spacing-target: 2.75rem; /* 44px — the touch floor of AGENTS.md §9.4 rule 5 */
   --spacing-section: 7.5rem; /* 120px — the section rhythm, docs/design-system.md §3.3 */
+
+  /* -- hero band geometry (prompts/11-responsive-comp-fidelity.md §A) ---------
+     Measured on the three comps as the `#8E9C78` extent and the device ink
+     extent inside it. The band is a CONSTANT height at every width; only the
+     wing (the container-to-device inset) and the overhang (how far the device
+     paints above the band's top edge) change.
+
+       comp          band h   wing   overhang   device w = container − 2·wing
+       Mobile 375      347      37       70       343 − 74  = 269
+       Tablet 800      349      22       81       720 − 44  = 676
+       Desktop 1280    349     147      165      1200 − 294 = 906
+
+     348 is the unified band height; the ±1 across the three readings is
+     rounding, and a per-breakpoint override would be noise, not fidelity. */
+  --spacing-hero-band: 21.75rem; /* 348px */
+  --spacing-hero-wing-sm: 2.3125rem; /* 37px  @ 375 */
+  --spacing-hero-wing-md: 1.375rem; /* 22px  @ 800 */
+  --spacing-hero-wing-lg: 9.1875rem; /* 147px @ 1280 */
+  --spacing-hero-overhang-sm: 4.375rem; /* 70px  @ 375 */
+  --spacing-hero-overhang-md: 5.0625rem; /* 81px  @ 800 */
+  --spacing-hero-overhang-lg: 10.3125rem; /* 165px @ 1280 */
+  /* The device's own box: it starts at the wrapper's top edge and is clipped at
+     the band's bottom, so its height is exactly overhang + band. Derived rather
+     than restated so the two measurements above stay the single source. */
+  --spacing-hero-device-sm: calc(
+    var(--spacing-hero-overhang-sm) + var(--spacing-hero-band)
+  ); /* 418px — comp 417 */
+  --spacing-hero-device-md: calc(
+    var(--spacing-hero-overhang-md) + var(--spacing-hero-band)
+  ); /* 429px — comp 429 */
+  --spacing-hero-device-lg: calc(
+    var(--spacing-hero-overhang-lg) + var(--spacing-hero-band)
+  ); /* 513px — comp 514 */
+
+  /* The heading-to-device gap. The comp measures 59 / 57 / 74 from the h1's ink
+     bottom, which is not the h1's box bottom — the three --text-hero* line
+     heights (0.85 / 0.8 / 0.8) each overshoot the ink by a different amount, so
+     these are the box-bottom values that land the device on the comp's
+     315 / 445 / 373. */
+  --spacing-hero-gap-sm: 4.25rem; /* 68px  @ 375 */
+  --spacing-hero-gap-md: 4.5625rem; /* 73px  @ 800 */
+  --spacing-hero-gap-lg: 5.8125rem; /* 93px  @ 1280 */
+
+  /* -- landing section geometry (prompts/11-responsive-comp-fidelity.md §C, §D) */
+  --spacing-quote-gap: 4.375rem; /* 70px — Desktop.png testimonial: the image
+                                    column ends at x 630 and the quote starts at
+                                    x 700. The 592/70/538 split of the 1200
+                                    container. */
+  --spacing-media-inset-sm: 0.9375rem; /* 15px — Mobile.png draws the "See the
+                                          Big Picture" photograph inset inside
+                                          the 343 container, x 31–343 → 313 wide,
+                                          not full-bleed. */
 
   /* -- elevation (docs/design-system.md §4.3) --------------------------------
      One elevation. Nothing on the board or the comps carries a second. */

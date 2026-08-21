@@ -248,7 +248,7 @@ rather than a guess.
 | **h2** (section heading) | Crimson Text 400 | **60** | **52** | **50** | **−0.029em** (−1.75 px at 60) | **0.95** | joint fit over five desktop headings: mean 0.136 against 0.227 for the next |
 | **quote** (pull-quote) | Crimson Text 400 | **38** | n/m | n/m | −0.02em (−0.75 px) | **1.105** (42 px, measured from band pitch) | diff 0.337 |
 | **h3** (card / step heading) | Crimson Text 400 | **18** | 18 | **18** | −0.028em (−0.5 px) | n/m | 0.209 / 0.219 against 0.416 |
-| **stat** (`01` `02` `03`) | DM Sans 400 | **80** | n/m | n/m | −0.0375em (−3 px) | n/m | **diff 0.026** against 0.046 |
+| **stat** (`01` `02` `03`) | DM Sans 400 | **80** | **80** | **64** | −0.0375em (−3 px) | 1 | **diff 0.026** against 0.046; the 800 and 375 cells were `n/m` and were closed in `docs/landing.md` §5 from the ink of `01` — 64 × 57 at 1280 and 800, **51 × 46** at 375 |
 | **wordmark** | DM Sans 500 | **30** | **30** | **30** | −0.05em (−1.5 px) | n/m | **diff 0.026** against 0.129 |
 | **title** (table column head) | DM Sans 500 | **26** (24–26) | n/m | n/m | −2 px | n/m | diff 0.119 against 0.193 |
 | **ui** (nav link, button label) | DM Sans 600 | **14** | **14** | n/m | −0.018em (−0.25 px) | n/m | 0.170 / 0.264 against 0.178 / 0.422 |
@@ -634,6 +634,67 @@ AGENTS.md §9.1 rule 1.
 `cn()` is built with `extendTailwindMerge`, and a token `tailwind-merge` has not
 been told about fails **silently** — `docs/components.md` §4.4 records the two
 components that were measurably wrong before it was configured.
+
+### 7.4b Landing geometry — added by the responsive fidelity pass
+
+Fifteen `--spacing-*` tokens and one `--text-*` role, added by
+`prompts/11-responsive-comp-fidelity.md`. Each is measured on the comps; the
+measurement, the crop and the live result are in `docs/landing.md`
+§"Responsive Comp Fidelity Pass". They are tokens rather than inline values for
+the reason AGENTS.md §9.1 rule 1 gives — and, as §7.4 above warns, each one is
+also registered in `client/lib/utils.ts`, because a token `tailwind-merge` has
+not been told about fails silently.
+
+**The hero band.** The comps draw one constant band height at every width, with
+the device overhanging its top edge and clipped at its bottom. Only the wing —
+the container-to-device inset — and the overhang change.
+
+| token | value | what it is |
+| --- | --- | --- |
+| `--spacing-hero-band` | `21.75rem` (348 px) | the sage band's height, **all three widths**. The comps measure 347 / 349 / 349; the ±1 is rounding |
+| `--spacing-hero-wing-sm` | `2.3125rem` (37 px) | container → device inset at 375. `343 − 2·37 = 269`, the measured device width |
+| `--spacing-hero-wing-md` | `1.375rem` (22 px) | at 800. `720 − 44 = 676` |
+| `--spacing-hero-wing-lg` | `9.1875rem` (147 px) | at 1280. `1200 − 294 = 906`, against a measured 907 |
+| `--spacing-hero-overhang-sm` | `4.375rem` (70 px) | how far the device paints above the band's top edge at 375 |
+| `--spacing-hero-overhang-md` | `5.0625rem` (81 px) | at 800 |
+| `--spacing-hero-overhang-lg` | `10.3125rem` (165 px) | at 1280 |
+| `--spacing-hero-device-sm/-md/-lg` | `calc(overhang + band)` | the device's own box — 418 / 429 / 513, against a measured 417 / 429 / 514. **Derived, not restated**, so the two measurements above stay the single source |
+| `--spacing-hero-gap-sm` | `4.25rem` (68 px) | `h1` box bottom → device top at 375 |
+| `--spacing-hero-gap-md` | `4.5625rem` (73 px) | at 800 |
+| `--spacing-hero-gap-lg` | `5.8125rem` (93 px) | at 1280 |
+
+**Why the gap is a token and not a step on the scale.** The comp measures the
+gap from the `h1`'s *ink* bottom — 59 / 57 / 74 — but CSS lays out from the box
+bottom, and the three `--text-hero*` line heights (0.85 / 0.8 / 0.8) each
+overshoot the ink by a different amount. The three values above are the
+box-bottom equivalents, and they land the device on the comp's 315 / 445 / 373
+exactly.
+
+**Two landing-section measurements.**
+
+| token | value | what it is |
+| --- | --- | --- |
+| `--spacing-quote-gap` | `4.375rem` (70 px) | the desktop testimonial's column gap. `Desktop.png` splits the 1200 container **592 / 70 / 538** — the image ends at x 630, the quote starts at x 700 |
+| `--spacing-media-inset-sm` | `0.9375rem` (15 px) | `Mobile.png` insets the "See the Big Picture" photograph inside the 343 container, x 31–343 → **313 wide**, rather than bleeding it to the gutters |
+
+**The stat role gains a breakpoint.** §2.3's stat row read `n/m` at 800 and 375.
+Measured, the ink of `01` is 64 × 57 at both 1280 and 800 but **51 × 46** at 375,
+so:
+
+| token | value | what it is |
+| --- | --- | --- |
+| `--text-stat` | `4rem` (64 px) | the `01`/`02`/`03` markers at **375** |
+| `--text-stat-md` | `5rem` (80 px) | the same markers from **800** up |
+
+The bare name is the mobile value, matching the `--text-hero` / `-md` / `-lg`
+convention. `--text-stat` previously held 80 px unconditionally; that was the
+desktop measurement applied at every width, and the page also rendered it
+`font-serif` against this file's own DM Sans identification. Both are fixed —
+`docs/landing.md` §5.
+
+**This makes the stat the one non-serif role that scales**, against AGENTS.md
+§1.3's "only the two serif display roles scale". The measurement is the fact and
+§1.3 is stale on that clause (AGENTS.md §10 rule 8).
 
 ### 7.5 The global focus ring
 

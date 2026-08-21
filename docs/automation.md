@@ -92,6 +92,93 @@ const metrics = await evaluate(`(() => {
 })()`);
 ```
 
+### 3.3 Full-page capture of this site — four traps
+
+Added by `prompts/11-responsive-comp-fidelity.md`. Each of these cost a run in
+the session that measured the landing page, and none of them announces itself.
+
+**1. The page is blank below the fold unless reduced motion is emulated.** GSAP's
+reveal start states leave the content at `opacity: 0`, and ScrollTrigger reverses
+them when the capture scrolls back to the top. The first attempt produced a
+375-wide capture with a 3458-pixel empty gap through the middle. Emulate it
+**before** navigating:
+
+```js
+await S("Emulation.setEmulatedMedia", {
+  features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+});
+```
+
+That also makes the capture the *rest* state, which is what a comp diff wants.
+
+**2. `Page.captureScreenshot` stalls silently on a full 8000+ px viewport.**
+Capture in **2000 px strips** with an explicit `clip` and `captureBeyondViewport`,
+then `-append` them:
+
+```js
+for (let y = 0; y < H; y += 2000) {
+  const h = Math.min(2000, H - y);
+  const shot = await S("Page.captureScreenshot", {
+    format: "png", captureBeyondViewport: true,
+    clip: { x: 0, y, width: w, height: h, scale: 1 },
+  });
+}
+// magick strip-*.png -append live-<w>.png
+```
+
+**3. Re-using one page target across widths hangs after the second navigation.**
+Open a **fresh target per width** (`Target.createTarget` →
+`Target.attachToTarget` with `flatten: true`) and `Target.closeTarget` it after.
+Below-fold images are lazy, so force them in and walk the page before capturing:
+
+```js
+document.querySelectorAll("img").forEach((i) => { i.loading = "eager"; i.decoding = "sync" });
+for (let y = 0; y < document.documentElement.scrollHeight; y += 600) { window.scrollTo(0, y); await tick() }
+window.scrollTo(0, 0);
+```
+
+**4. `pkill -f "next start -p 3112"` kills your own shell** — the pattern matches
+the shell's own command line, and the tool call returns **exit 144** with the
+work half-done. Resolve the pid instead:
+
+```bash
+PID=$(ss -ltnp | grep ':3112' | sed -n 's/.*pid=\([0-9]*\).*/\1/p'); [ -n "$PID" ] && kill "$PID"
+```
+
+Check the port before binding, too — stale `next start` processes from earlier
+sessions were still holding 3100 and 3111, and each serves the build that was on
+disk when it started, not the one you just made.
+
+### 3.4 Two measurement recipes that disagree, and which to trust
+
+**Colour extent: sample pixels directly, never `-fuzz` + `-opaque`.** Locating
+the hero's sage band by isolating `#8E9C78` with a fuzz-based `-opaque` pass
+produced a false top edge at desktop `y = 384`; a direct
+`%[pixel:p{X,Y}]` grid matching within ±14 per channel gave the true 538. The
+fuzz pass bleeds into the antialiased boundary between the band and the device
+above it.
+
+**Band profile for images, ink boxes for text.** Collapsing each row to its mean
+finds content bands cheaply:
+
+```bash
+magick <img> -colorspace gray -resize 1x! -depth 8 txt:-
+# runs of rows whose mean is under ~250 are the content bands
+```
+
+It is reliable for image blocks and full-width rules and **unreliable for text**
+— a short run averaged across 1280 px does not move the row mean. It also
+produces false positives on layout: the benefits intro was flagged as a 148 px
+defect by the band profile and cleared by a side-by-side crop. Re-check every
+text-level claim with a thresholded ink bounding box:
+
+```bash
+magick <img> -crop WxH+X+Y +repage -colorspace gray -negate -threshold 35% -format "%@\n" info:
+```
+
+and read the crops. The profile proves image geometry; only the crops prove the
+text-level layout.
+
 ---
 
 ## 4. Step 7 Workspace Split

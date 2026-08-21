@@ -215,8 +215,11 @@ The container is **`min(100vw − 2 × gutter, 1200px)`**, not three fixed width
   a breakpoint behaviour.
 - **The wordmark does not scale.** Its ink height measures 22 px on all three
   comps. Neither do body copy (15 px), the pill (48 px), the media radius
-  (24 px), the icon (24 px) or the section gap (120 px). **Only the two serif
-  display roles scale.**
+  (24 px), the icon (24 px) or the section gap (120 px). **The two serif display
+  roles scale — and so does the `stat` marker**, which measures 64 px at 375 and
+  80 px from 800 up; the ink of `01` is 51 × 46 on `Mobile.png` against 64 × 57
+  on the other two. The clause that said only the serif roles scale was measured
+  wrong and is corrected here (`docs/design-system.md` §7.4b).
 
 ## 1.4 Shape — three radii and a pill
 
