@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      POSTGRES_DB: postgres
+      ACRES_MIGRATOR_PASSWORD: ${ACRES_MIGRATOR_PASSWORD:?set ACRES_MIGRATOR_PASSWORD in .env}
+      ACRES_APP_PASSWORD: ${ACRES_APP_PASSWORD:?set ACRES_APP_PASSWORD in .env}
+      ACRES_TEST_PASSWORD: ${ACRES_TEST_PASSWORD:?set ACRES_TEST_PASSWORD in .env}
+    ports:
+      - '5432:5432'
+    volumes:
+      - acres_pgdata:/var/lib/postgresql/data
+      - ./scripts/db/bootstrap-roles.sh:/docker-entrypoint-initdb.d/001-bootstrap-roles.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  # Disposable local-development volume, intentionally unencrypted at rest —
+  # docs/backend.md records the target production encryption/key-recovery
+  # contract this volume does not need to satisfy.
+  acres_pgdata:

@@ -13,6 +13,20 @@ jobs:
   checks:
     name: Lint, typecheck, build, test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:18-3.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: acres_superuser_dev_password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -23,7 +37,36 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
-      - run: npm run test:server
+      - name: Bootstrap database roles
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGPASSWORD: acres_superuser_dev_password
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          ACRES_MIGRATOR_PASSWORD: acres_migrator_dev_password
+          ACRES_APP_PASSWORD: acres_app_dev_password
+          ACRES_TEST_PASSWORD: acres_test_dev_password
+        run: bash scripts/db/bootstrap-roles.sh
+      - name: Apply migrations to the app database
+        env:
+          DATABASE_MIGRATION_URL: postgresql://acres_migrator:acres_migrator_dev_password@localhost:5432/acres?schema=public
+        run: npm run prisma:migrate:deploy --workspace=@acres/server
+      - name: Apply migrations to the test database
+        env:
+          DATABASE_MIGRATION_URL: postgresql://acres_migrator:acres_migrator_dev_password@localhost:5432/acres_test?schema=public
+        run: npm run prisma:migrate:deploy --workspace=@acres/server
+      - name: Harden runtime database privileges
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGPASSWORD: acres_migrator_dev_password
+          POSTGRES_MIGRATOR_USER: acres_migrator
+        run: bash scripts/db/harden-runtime-privileges.sh
+      - name: Run server test suite
+        env:
+          DATABASE_URL: postgresql://acres_test:acres_test_dev_password@localhost:5432/acres_test?schema=public
+        run: npm run test:server
 
   docker:
     name: Build and smoke-test the API image

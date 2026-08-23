@@ -15,6 +15,7 @@ const STATUS_CODES: Partial<Record<number, ApiErrorCode>> = {
   [HttpStatus.FORBIDDEN]: 'FORBIDDEN',
   [HttpStatus.NOT_FOUND]: 'NOT_FOUND',
   [HttpStatus.TOO_MANY_REQUESTS]: 'RATE_LIMITED',
+  [HttpStatus.SERVICE_UNAVAILABLE]: 'NOT_READY',
 };
 
 /**

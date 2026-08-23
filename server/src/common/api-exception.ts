@@ -47,4 +47,12 @@ export class ApiException extends HttpException {
   static notFound(message: string): ApiException {
     return new ApiException('NOT_FOUND', message, HttpStatus.NOT_FOUND);
   }
+
+  static notReady(): ApiException {
+    return new ApiException(
+      'NOT_READY',
+      'The database is not reachable.',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
 }

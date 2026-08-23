@@ -44,6 +44,10 @@ yarn-error.log*
 # CLIENT_ORIGIN, DATABASE_URL and the session/CSRF variables with
 # placeholders only, and carries no secret (docs/backend.md).
 !server/.env.example
+# ...and /.env.example is the third opt-in: it documents the disposable
+# local-dev passwords docker-compose.yml reads, and carries no real secret
+# (docs/backend.md).
+!/.env.example
 
 # build output
 server/dist/

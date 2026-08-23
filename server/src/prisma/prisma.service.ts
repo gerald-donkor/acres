@@ -24,7 +24,12 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor(config: AcresConfigService) {
-    super({ adapter: new PrismaPg(config.databaseUrl) });
+    super({
+      adapter: new PrismaPg({
+        connectionString: config.databaseUrl,
+        connectionTimeoutMillis: 5000,
+      }),
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

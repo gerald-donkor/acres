@@ -342,7 +342,8 @@ through a package script, so a container whose entrypoint is
 
 | variable | required | default | notes |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | **yes** | — | placeholder in `.env.example`; no database is provisioned |
+| `DATABASE_URL` | **yes** | — | the running API's non-owner `acres_app` connection (§8.1); read by `AcresConfigService`/`PrismaService` |
+| `DATABASE_MIGRATION_URL` | no | falls back to `DATABASE_URL` | owner `acres_migrator` connection. CLI-only — read directly by `server/prisma.config.ts`, never by `AcresConfigService`, so `prisma migrate`/`validate`/`status` never share a connection with the running app |
 | `CLIENT_ORIGIN` | **yes** | — | CORS origin, credentials enabled |
 | `SESSION_SECRET` | **yes** | — | CSRF HMAC secret. Boot **fails** in production if it is still the `change-me…` placeholder; warns below 32 characters |
 | `PORT` | no | `3001` | never 3000, so it cannot collide with the client |
@@ -356,7 +357,17 @@ through a package script, so a container whose entrypoint is
 | `NODE_ENV` | no | `development` | `development` \| `test` \| `production` |
 
 `server/.env.example` documents all of them. Copy it to `server/.env`; that
-file is gitignored.
+file is gitignored. Root `.env.example` (gitignored the same way) documents the
+three role passwords `docker-compose.yml` and `scripts/db/bootstrap-roles.sh`
+consume — see §8.1.
+
+`PrismaService`'s `PrismaPg` adapter now sets `connectionTimeoutMillis: 5000`,
+so a query against an unreachable database fails within 5s instead of hanging
+(`node_modules/@types/pg/index.d.ts:31` and
+`node_modules/@prisma/adapter-pg/dist/index.d.ts:42` confirm both fields are
+real, verified this session). `GET /health` still takes no database dependency
+(§10); `GET /health/ready` (§8.1) does, on purpose, for orchestrators that need
+to know the database is actually reachable.
 
 ---
 
@@ -436,19 +447,106 @@ URLs and API responses.
 `.gitignore` and a set of skills directories. The schema and config are
 hand-written to match what it generates.
 
-### Migrations: deferred, deliberately
+### 8.1 Roles, databases, and the first migration
 
-**`schema.prisma` is committed and `prisma/migrations/` is not.** No database
-was available to generate a first migration against, and hand-writing migration
-SQL would be fabricating a file Prisma is supposed to derive. The first
-migration is generated with `npm run prisma:migrate --workspace=@acres/server`
-against a real Postgres, by whoever provisions one.
+Landed by `prompts/18-database-infrastructure.md` (2026-08-23). Three
+PostgreSQL roles, matching `docs/build-plan.md` phase 2's "separate
+migration/owner, non-owner runtime, and test roles" exactly:
 
-`prisma validate` and `prisma generate` both run today and both pass; neither
-needs a server.
+| role | privilege | used by |
+| --- | --- | --- |
+| `acres_migrator` | `LOGIN`, `CREATEDB` (for `prisma migrate dev`'s shadow database), owns both databases | `prisma migrate` / `validate` / `status` only — never the running API |
+| `acres_app` | `LOGIN` only; `CONNECT` on `acres`, DML (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) via default privileges, **no DDL, no `TRUNCATE`, no `_prisma_migrations`, no `acres_test` or `postgres` connect** | the running Nest API (`DATABASE_URL`) |
+| `acres_test` | same DML, **plus `TRUNCATE`** (the integration suite's `truncateAll` helper needs it — DML alone is not sufficient in PostgreSQL, discovered this session), scoped to the separate `acres_test` database, with **no `_prisma_migrations` and no `acres` or `postgres` connect** | the real-database integration suite |
+
+Two databases, `acres` and `acres_test`, both owned by `acres_migrator` with
+PostGIS enabled. `bootstrap-roles.sh` revokes PostgreSQL's default
+`CONNECT`/`TEMPORARY` database privileges from `PUBLIC` on `postgres`, `acres`
+and `acres_test`, then grants each runtime role only its own application
+database. `ALTER DEFAULT PRIVILEGES FOR ROLE acres_migrator ...` grants each
+role's DML (and, for `acres_test`, `TRUNCATE`) on every *future* table a
+migration creates, so a later migration needs no manual table re-grant.
+
+`scripts/db/bootstrap-roles.sh` (idempotent — every `CREATE ROLE`/`CREATE
+DATABASE` guards on `pg_roles`/`pg_database`) is the one script both
+`docker-entrypoint-initdb.d` (via `docker-compose.yml`) and a native host call
+directly. `docker-compose.yml` runs a single `postgis/postgis:18-3.6` service
+(no Valkey/Garage — phase 2 excludes both); `db:up` / `db:down` / `db:reset`
+wrap it at the root. All three role passwords are fixed, disposable local-dev
+values (`acres_migrator_dev_password` etc.), the same pattern
+`server/.env.example`'s `SESSION_SECRET` placeholder already uses — a real
+deployment overrides all three (phase 12).
+
+`scripts/db/harden-runtime-privileges.sh` runs **after** migrations. Prisma
+creates `_prisma_migrations` before applying the first migration, so the broad
+future-table default privileges would otherwise let runtime roles mutate
+migration bookkeeping. The hardening script reasserts the database-level
+`PUBLIC`/cross-role revokes and revokes all privileges on
+`public."_prisma_migrations"` from both runtime roles, idempotently, on both
+databases. CI runs it immediately after `prisma migrate deploy`; locally run it
+after every migration deploy/dev run.
+
+**The first migration is generated, reviewed, and committed:**
+`server/prisma/migrations/20260823204922_init/migration.sql`, produced by
+`prisma migrate dev --name init` against `acres_migrator@localhost:5432/acres`
+on a natively-installed PostgreSQL 18.6/PostGIS 3.6.2 (this sandbox has no
+Docker; §8.2 records why and how). Read in full and confirmed against
+`schema.prisma`: 7 `CREATE TABLE` statements, both enums, every documented
+index (`Session(accountId, expiresAt)`, `RegionalMetric(regionId, key)`,
+`InsightReport(regionId, status)`, `ContactSubmission.email`,
+`JobRun(jobName, status, startedAt)`, plus the three `@unique` btrees), and
+both foreign keys with their documented `onDelete` (`Session.account`
+Cascade, `RegionalMetric.region` Cascade, `InsightReport.region` SetNull). No
+down-migration is authored — Prisma does not generate one, and for an initial
+"create everything from empty" migration a hand-written down migration would
+only ever mean "drop everything," not a meaningful partial rollback; later
+migrations still follow the forward-fix-preferred rule.
+
+`prisma validate` and `prisma generate` still run with no server, as before;
+`prisma migrate status` now also runs against both `acres` and `acres_test`
+and reports no drift (§8.3, verification record).
 
 **No seed data.** Fixtures that looked like regional intelligence would be read
 as real.
+
+**Production volume encryption and key recovery — a target-state contract,
+not an implementation.** No production Postgres host exists to inspect (that
+inspection is phase 12's), but the contract phase 2 asks for is: the
+production data volume is encrypted at rest with provider- or
+LUKS-equivalent-managed keys, key rotation does not require a database
+outage, and a documented, periodically-drilled key-recovery procedure exists
+before any production tenant data is written. `docker-compose.yml`'s
+`acres_pgdata` volume is explicitly the opposite of this — disposable,
+unencrypted, local-development-only — and is labelled as such in the file
+itself.
+
+### 8.2 The environment constraint this sandbox was built under
+
+No Docker (`which docker` → nothing) and no passwordless `sudo`
+(`sudo -n true` → "sudo: interactive authentication is required"), both
+reconfirmed 2026-08-23, matching §10.1's and §11's prior findings. Since a
+Prisma migration must be generated by Prisma against a real Postgres, never
+hand-written, the user chose to install PostgreSQL 18 and
+`postgresql-18-postgis-3` natively via `apt` in this sandbox, running every
+`sudo` step themselves (this session cannot supply a password). `pg_hba.conf`
+already shipped Ubuntu's default `host all all 127.0.0.1/32 scram-sha-256`
+(and the `::1/128` equivalent), so no reload was needed.
+`docker-compose.yml` is still the documented one-command path for every other
+host and for CI; this sandbox is the one place that does not use it.
+
+### 8.3 A Jest/Prisma 7 interaction found while writing the real-database suite
+
+Prisma 7's generated client (`runtime: "nodejs"`) lazily loads its WASM query
+compiler via `await import(...)`
+(`server/src/generated/prisma/internal/class.ts`), on the *first real query* —
+not at import time, which is why the existing double-based suite (which never
+issues a real query) never hit this. Jest's default `vm`-sandboxed test
+environment rejects a dynamic `import()` with "A dynamic import callback was
+invoked without `--experimental-vm-modules`" unless that flag is set.
+`server/package.json`'s `test:e2e` script now sets
+`NODE_OPTIONS=--experimental-vm-modules` for the `jest` invocation (after
+`prisma generate`); the flag has no effect on the existing double-based suite,
+confirmed by the full suite passing together (§11, Prompt 18 verification).
 
 ---
 
@@ -501,6 +599,51 @@ parses and rejects the three rate-limit variables.
 `npm test --workspace=@acres/server` (unit, `rootDir: src`) runs with
 `--passWithNoTests`: **there are no unit specs yet**, and the script says so
 rather than appearing to pass a suite that does not exist.
+
+### `server/test/database.e2e-spec.ts` — the real-database suite
+
+Landed by `prompts/18-database-infrastructure.md` (2026-08-23). **8 tests, all
+passing**, run against a real, migrated `acres_test` database through
+`server/test/helpers/real-db-test-app.ts`'s `createRealDbTestApp()` — the
+opposite of `test-app.ts`: `PrismaService` is **not** overridden. `beforeAll`
+asserts `SELECT 1` resolves before running anything, so a missing database
+fails once with a clear message instead of every test timing out separately;
+`beforeEach` calls `truncateAll()` (one `TRUNCATE ... RESTART IDENTITY
+CASCADE` as `acres_test`, which needs the `TRUNCATE` grant §8.1 records).
+
+Covered, each against a real code path, not a double: **CRUD** —
+`POST /auth/register` through supertest, then `prisma.account.findUnique`
+confirms the row and that `passwordHash` matches `/^\$2[aby]\$/`, never the
+plaintext password. **Unique** — two concurrent registrations of the same
+email (`Promise.all`, matching the race `AccountsService.create`'s own doc
+comment describes) resolve to exactly one `201` and one `401`
+`INVALID_CREDENTIALS`, and exactly one `Account` row exists — proving the real
+`P2002` catch, not the sequential existence-check path a single repeated call
+would exercise instead. **FK + session-cascade** — deleting the account
+directly via Prisma empties `Session` for that `accountId`, proving
+`onDelete: Cascade` at the database level. **Current route integration** —
+seeding a `Region` + `RegionalMetric` directly, then `GET /regions` and
+`GET /regions/:slug` through supertest assert the real query shape, and
+`GET /regions/nowhere` still 404s. **Test runtime role cannot DDL** — the
+suite's app connection (`acres_test`) attempting
+`CREATE TABLE "__acres_privilege_probe" (id text)`
+rejects with a real Postgres schema-privilege error. The suite also proves
+`"_prisma_migrations"` exists through the migrator but is unreadable to
+`acres_test` and `acres_app`, and that neither runtime role can connect outside
+its own database, including the maintenance `postgres` database.
+**Readiness** — `GET /health/ready` returns 200
+`{"status":"ok","database":"ok"}` while the database is reachable; the
+negative path (503 `NOT_READY`) and the production runtime role's
+`acres_app` DDL denial on `acres` are manual smoke tests, not part of this
+suite (§11).
+
+`npm run test:server` now runs 3 suites / 37 tests total (29 double-based +
+8 real-database) and **requires a real, migrated `acres_test` database to be
+reachable** — a permanent shift from the "no database is provisioned" era
+this section used to describe. A developer who has not run `db:up` and
+migrated `acres_test` sees the new suite fail with one clear connection
+error, bounded by `PrismaService`'s `connectionTimeoutMillis` (§6), not a
+hang.
 
 ---
 
@@ -605,7 +748,9 @@ proves the image builds and its container answers `/health`, and stops there.
 Choosing a registry and a host is deferred (§12).
 
 **The CI workflow** (`.github/workflows/ci.yml`) runs two jobs on push/PR to
-`main`: `checks` (`npm ci`, lint, typecheck, build, `test:server`) and
+`main`: `checks` (`npm ci`, lint, typecheck, build, bootstrap roles, apply
+migrations to both `acres` and `acres_test`, harden runtime privileges,
+`test:server`) and
 `docker` (needs `checks`; builds the image, runs it with a throwaway
 `SESSION_SECRET` and a `DATABASE_URL` nothing connects to — `GET /health` takes
 no database dependency by design (§3), so the smoke test does not need a real
@@ -942,13 +1087,195 @@ real repository layout after the build above. `packages/shared/package.json`,
 generated Prisma client along with everything else, with no separate asset to
 drop. **This is a manual trace, not an execution; the build has not been run.**
 
+### Prompt 18 database-infrastructure verification
+
+Run on 2026-08-23 for `prompts/18-database-infrastructure.md`, natively in
+this sandbox (no Docker; PostgreSQL 18.6/PostGIS 3.6.2 installed via `apt`
+with the user running every `sudo` step — §8.2).
+
+```text
+$ psql --version
+psql (PostgreSQL) 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1)
+
+$ pg_lsclusters
+Ver Cluster Port Status Owner    Data directory              Log file
+18  main    5432 online postgres /var/lib/postgresql/18/main ...
+```
+
+```text
+$ sudo -u postgres env ACRES_MIGRATOR_PASSWORD=... ACRES_APP_PASSWORD=... \
+    ACRES_TEST_PASSWORD=... POSTGRES_USER=postgres POSTGRES_DB=postgres \
+    bash scripts/db/bootstrap-roles.sh
+DO
+CREATE DATABASE
+CREATE DATABASE
+GRANT
+GRANT
+CREATE EXTENSION
+GRANT
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+CREATE EXTENSION
+GRANT
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+```
+
+After post-review hardening, this agent still could not execute the native
+`sudo -u postgres ... bootstrap-roles.sh` rerun non-interactively:
+
+```text
+$ sudo -n -u postgres env ... bash scripts/db/bootstrap-roles.sh
+sudo: interactive authentication is required
+```
+
+Before the maintenance `postgres` database revoke was added to the script, the
+guarded/idempotent path was rerun over TCP as `acres_migrator` after the
+roles/databases already existed. That verified the revised psql password
+quoting parsed and that the repeatable application-database grants/revokes
+remained safe:
+
+```text
+$ PGHOST=localhost PGPORT=5432 PGPASSWORD=... POSTGRES_USER=acres_migrator \
+    POSTGRES_DB=postgres ACRES_MIGRATOR_PASSWORD=... ACRES_APP_PASSWORD=... \
+    ACRES_TEST_PASSWORD=... bash scripts/db/bootstrap-roles.sh
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+CREATE EXTENSION
+NOTICE:  extension "postgis" already exists, skipping
+GRANT
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+NOTICE:  extension "postgis" already exists, skipping
+CREATE EXTENSION
+GRANT
+ALTER DEFAULT PRIVILEGES
+ALTER DEFAULT PRIVILEGES
+```
+
+```text
+$ DATABASE_MIGRATION_URL=postgresql://acres_migrator:...@localhost:5432/acres?schema=public \
+    npm run prisma:migrate --workspace=@acres/server -- --name init
+
+Applying migration `20260823204922_init`
+The following migration(s) have been created and applied from new schema changes:
+prisma/migrations/
+  └─ 20260823204922_init/
+    └─ migration.sql
+Your database is now in sync with your schema.
+```
+
+Migration reviewed in full (§8.1) before being deployed to `acres_test` and
+committed.
+
+```text
+$ npm run prisma:migrate:deploy --workspace=@acres/server   # against acres_test
+All migrations have been successfully applied.
+
+$ npm run prisma:migrate:status --workspace=@acres/server   # against acres and acres_test
+Database schema is up to date!    # both, no drift
+```
+
+Post-review hardening was applied after migrations:
+
+```text
+$ PGHOST=localhost PGPORT=5432 PGPASSWORD=... POSTGRES_MIGRATOR_USER=acres_migrator \
+    bash scripts/db/harden-runtime-privileges.sh
+REVOKE
+REVOKE
+GRANT
+DO
+REVOKE
+REVOKE
+GRANT
+DO
+```
+
+The maintenance `postgres` database also had its default runtime-role access
+closed manually as the Postgres superuser:
+
+```text
+$ sudo -u postgres psql -d postgres -c "REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC; REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM acres_app; REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM acres_test;"
+REVOKE
+REVOKE
+REVOKE
+
+$ PGPASSWORD=... psql -h localhost -U acres_app -d postgres -c 'select 1'
+FATAL:  permission denied for database "postgres"
+
+$ PGPASSWORD=... psql -h localhost -U acres_test -d postgres -c 'select 1'
+FATAL:  permission denied for database "postgres"
+```
+
+**Reset-from-chain proof**: `DROP DATABASE acres_test` / `CREATE DATABASE
+acres_test OWNER acres_migrator` as `acres_migrator`, confirmed empty
+(`prisma migrate status` reported the migration as unapplied), then
+`prisma migrate deploy` succeeded against the genuinely empty database.
+
+**Runtime-role DDL denial**: `acres_app` connecting to `acres` over TCP failed
+to create a table, proving the production runtime role has no schema DDL
+privilege:
+
+```text
+$ PGCONNECT_TIMEOUT=5 PGPASSWORD=... psql -h 127.0.0.1 -U acres_app -d acres \
+    -v ON_ERROR_STOP=1 -c 'CREATE TABLE "__acres_privilege_probe" (id text);'
+ERROR:  permission denied for schema public
+LINE 1: CREATE TABLE "__acres_privilege_probe" (id text);
+                     ^
+```
+
+```text
+$ npm run lint      # clean, all three workspaces
+$ npm run typecheck # clean, all three workspaces
+$ npm run build     # clean, all three workspaces
+```
+
+```text
+$ npm run test:server
+Test Suites: 3 passed, 3 total
+Tests:       37 passed, 37 total
+Snapshots:   0 total
+Time:        4.649 s
+```
+
+**Manual readiness smoke** — positive path, server started against
+`acres_app`:
+
+```text
+$ curl -isS http://localhost:3001/health/ready
+HTTP/1.1 200 OK
+{"ok":true,"data":{"status":"ok","database":"ok"}}
+```
+
+Negative path: pointing `DATABASE_URL` at an unreachable port returned 503
+promptly, bounded by `connectionTimeoutMillis`:
+
+```text
+$ curl -isS http://localhost:3001/health/ready
+HTTP/1.1 503 Service Unavailable
+{"ok":false,"error":{"code":"NOT_READY","message":"The database is not reachable."}}
+```
+
+```text
+$ git diff --check && git diff --cached --check
+$ python3 -c "import yaml, sys; yaml.safe_load(open('.github/workflows/ci.yml')); print('ok')"
+ok
+```
+
+**CI parity is proved by the commit's own CI run on `main`**, exactly as
+§10.1 states for the Dockerfile — this sandbox cannot exercise the `checks`
+job's Postgres service container locally.
+
 ---
 
 ## 12. Deferred, and why
 
 | deferred | why |
 | --- | --- |
-| the first Prisma migration | no database was available; §8 |
 | any seed data | it would read as real regional intelligence |
 | a regional-data ingestion provider | none chosen; §7 |
 | `@acres/shared` in `client/` | nothing consumes it yet |
@@ -958,6 +1285,10 @@ drop. **This is a manual trace, not an execution; the build has not been run.**
 | email delivery | which is why registration returns a generic failure; §4 |
 | Terraform / IaC, an actual registry + push, choosing a host to run the container | §10.1 built the Dockerfile and CI; no hosting provider has been chosen |
 | OAuth / social login, analytics, billing, CMS, admin | out of scope for step 8 |
+| Node 22 → 24 LTS move (Dockerfile base image, CI `setup-node` version, a local Node 24 full-check-suite run) | `docs/build-plan.md` phase 2 gates it on "after all packages and Prisma generation pass under it" — an independent, separately-verifiable task that does not block `prompts/18-database-infrastructure.md`'s migration work; follow-up prompt, same phase |
+| production PostgreSQL host, volume encryption implementation, key-recovery tooling | §8.1 records the target-state *contract* only; no production host exists to inspect or drill against — phase 12 |
+| organizations, memberships, RLS | phase 3, depends on phase 2 (landed) but is not part of it |
+| readiness-endpoint container smoke test in the CI `docker` job | that job has no Postgres service attached; adding one grows CI runtime for a check phase 2 does not require there — the `checks` job's integration suite already covers it |
 
 ---
 
@@ -972,7 +1303,7 @@ For decisions and sequencing, read `docs/system-architecture.md`,
 | --- | --- | --- |
 | NestJS 11.2/Express API with unversioned routes | Keep Nest 11; `/health` remains unversioned, application REST moves to `/api/v1`, and authenticated read-heavy queries gain complementary `/graphql` | 4 |
 | `accounts`, `auth`, and `sessions`; opaque hashed database sessions and global CSRF | Identity boundary plus organizations, memberships, invitations/recovery, centralized `owner/admin/analyst/viewer` permissions, active organization context and negative isolation tests | 3, then client in 5 |
-| Prisma 7.9.1 schema with seven models; no database or migration | Real PostgreSQL/PostGIS, reviewed first Prisma 7 migration, separate migration/runtime/test roles; Prisma 8 stays deferred until GA and a dedicated migration | 2 |
+| Prisma 7.9.1 schema with seven models; real PostgreSQL 18/PostGIS 3.6, first migration (`20260823204922_init`) generated/reviewed/committed, three-role separation landed (§8.1) | Same, in production: a provisioned host, and the volume-encryption/key-recovery contract §8.1 records implemented and drilled; Prisma 8 stays deferred until GA and a dedicated migration | 2, then 12 for the production host |
 | No tenant-owned product records or RLS | Organization-scoped repository ports plus `ENABLE/FORCE ROW LEVEL SECURITY`, transaction-local tenant context, non-owner API/worker roles, default deny | 3 |
 | Flat public `Region` records | Globally shared arbitrary-depth administrative hierarchy, stable external codes/aliases/provenance and reviewed PostGIS geometry SQL | 7 |
 | DB-backed `JobRun` reads and one in-process hourly session purge | PostgreSQL outbox/job authority, Valkey/BullMQ transport, separately runnable Nest worker, idempotent stages, retries/dead letters and audited schedules | 6 |
