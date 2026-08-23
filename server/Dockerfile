@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- deps: install only what @acres/server and @acres/shared need to build ----
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY client/package.json client/package.json
@@ -24,7 +24,7 @@ RUN npm run build --workspace=@acres/shared && \
     npm run build --workspace=@acres/server
 
 # ---- prod-deps: a clean, production-only install of the same two workspaces ----
-FROM node:22-alpine AS prod-deps
+FROM node:24-alpine AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY client/package.json client/package.json
@@ -33,7 +33,7 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN npm ci --omit=dev --workspace=@acres/server --workspace=@acres/shared --include-workspace-root --ignore-scripts
 
 # ---- runtime: the shipped image ----
-FROM node:22-alpine AS runtime
+FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001

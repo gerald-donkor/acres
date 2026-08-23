@@ -666,7 +666,7 @@ npm run start:server   # node dist/main
 
 Any host must provide:
 
-- a **long-lived Node process** (Node 22+; developed on v26.7.0);
+- a **long-lived Node 24 LTS process**;
 - **persistent outbound network access** to Postgres;
 - **environment variable injection** for §6's variables;
 - a **health-checkable HTTP port** — `GET /health`, which deliberately does not
@@ -692,7 +692,9 @@ Next.js on Vercel is unchanged and unaffected.
 Added by `prompts/14-server-deployment-infra.md` (2026-08-23):
 `server/Dockerfile`, root `.dockerignore`, and `.github/workflows/ci.yml`.
 
-**Four build stages**, all `node:22-alpine`:
+**Four build stages**. The three explicit Node image stages now use
+`node:24-alpine` (`deps`, `prod-deps`, and `runtime`); `build` inherits from
+`deps`, so every Node-based server image stage runs on the Node 24 Alpine line.
 
 1. **`deps`** — installs only `@acres/server` and `@acres/shared`'s
    dependencies via `npm ci --workspace=@acres/server --workspace=@acres/shared
@@ -748,9 +750,9 @@ proves the image builds and its container answers `/health`, and stops there.
 Choosing a registry and a host is deferred (§12).
 
 **The CI workflow** (`.github/workflows/ci.yml`) runs two jobs on push/PR to
-`main`: `checks` (`npm ci`, lint, typecheck, build, bootstrap roles, apply
-migrations to both `acres` and `acres_test`, harden runtime privileges,
-`test:server`) and
+`main`: `checks` (uses `actions/setup-node@v7` with Node 24, then `npm ci`,
+lint, typecheck, build, bootstrap roles, apply migrations to both `acres` and
+`acres_test`, harden runtime privileges, `test:server`) and
 `docker` (needs `checks`; builds the image, runs it with a throwaway
 `SESSION_SECRET` and a `DATABASE_URL` nothing connects to — `GET /health` takes
 no database dependency by design (§3), so the smoke test does not need a real
@@ -1017,8 +1019,8 @@ $ git diff --check
 
 Run on 2026-08-23 for `prompts/14-server-deployment-infra.md`, on this
 sandbox's toolchain (`node v24.19.0`, `npm 11.17.0` — both satisfy §10's
-"Node 22+"; the Dockerfile pins its own `node:22-alpine` independent of the
-host running these checks).
+"Node 22+" baseline at the time; prompt 19 later moved the Dockerfile itself
+to `node:24-alpine`).
 
 ```text
 $ node -v && npm -v
@@ -1272,6 +1274,185 @@ job's Postgres service container locally.
 
 ---
 
+### Prompt 19 Node 24 LTS verification
+
+Run on 2026-08-23 for `prompts/19-node-24-lts.md`, under the local Node 24
+runtime. Application behavior, schema, package versions, and the lockfile did
+not change.
+
+```text
+$ node --version
+v24.19.0
+
+$ npm --version
+11.17.0
+
+$ git log -1 --oneline
+4f34481 feat(db): add Postgres infrastructure
+```
+
+The package engine check was read from installed manifests after a clean
+lockfile install:
+
+```text
+$ node -e "..."
+next 16.3.1 engines={"node":">=20.9.0"}
+@nestjs/core 11.2.1 engines={"node":">= 20"}
+prisma 7.9.1 engines={"node":"^20.19 || ^22.12 || >=24.0"}
+@prisma/client 7.9.1 engines={"node":"^20.19 || ^22.12 || >=24.0"}
+```
+
+`npm ci` first failed in the sandbox on a transient registry DNS lookup, then
+the same command passed when rerun with network access:
+
+```text
+$ npm ci
+npm error code EAI_AGAIN
+npm error request to https://registry.npmjs.org/zod-validation-error/-/zod-validation-error-4.0.2.tgz failed, reason: getaddrinfo EAI_AGAIN registry.npmjs.org
+
+$ npm ci
+> acres@0.1.0 prepare
+> npm run build --workspace=@acres/shared
+
+> @acres/shared@0.1.0 build
+> tsc -p tsconfig.json
+
+added 1291 packages, and audited 1295 packages in 2m
+3 high severity vulnerabilities
+npm warn allow-scripts 3 packages have install scripts not yet covered by allowScripts:
+npm warn allow-scripts   @prisma/engines@7.9.1 (postinstall: node scripts/postinstall.js)
+npm warn allow-scripts   prisma@7.9.1 (preinstall: node scripts/preinstall-entry.js)
+npm warn allow-scripts   unrs-resolver@1.12.2 (postinstall: node postinstall.js)
+```
+
+The advisory and blocked-install-script warning are the same accepted Prisma
+CLI/dev-tooling findings recorded in §1. No package version or lockfile update
+was made.
+
+```text
+$ npm run prisma:validate --workspace=@acres/server
+The schema at prisma/schema.prisma is valid 🚀
+
+$ npm run prisma:generate --workspace=@acres/server
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 57ms
+
+$ npm run lint
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+
+$ npm run typecheck
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 52ms
+
+$ npm run build
+▲ Next.js 16.3.1 (Turbopack)
+✓ Compiled successfully in 1278ms
+✓ Generating static pages using 7 workers (10/10) in 200ms
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 48ms
+```
+
+The Node runtime declarations were inspected directly:
+
+```text
+$ rg -n '^FROM node:|node-version:' server/Dockerfile .github/workflows/ci.yml
+.github/workflows/ci.yml:34:          node-version: '24'
+server/Dockerfile:4:FROM node:24-alpine AS deps
+server/Dockerfile:27:FROM node:24-alpine AS prod-deps
+server/Dockerfile:36:FROM node:24-alpine AS runtime
+
+$ rg -n 'node:22|node-version: .22.' server/Dockerfile .github/workflows/ci.yml && exit 1 || true
+```
+
+No output.
+
+The real server suite was run by the user in the same checkout after starting
+the native PostgreSQL 18 cluster:
+
+```text
+$ sudo pg_ctlcluster 18 main start
+
+$ npm run test:server
+PASS  test/env-validation.e2e-spec.ts
+PASS  test/database.e2e-spec.ts
+PASS  test/api.e2e-spec.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       37 passed, 37 total
+Snapshots:   0 total
+Time:        4.808 s, estimated 5 s
+Ran all test suites.
+```
+
+The same shell then confirmed readiness and migration status for both
+databases:
+
+```text
+$ pg_isready -h localhost -p 5432
+localhost:5432 - accepting connections
+
+$ DATABASE_MIGRATION_URL="$APP_MIGRATION_URL" \
+    npm run prisma:migrate:status --workspace=@acres/server
+Datasource "db": PostgreSQL database "acres", schema "public" at "localhost:5432"
+
+1 migration found in prisma/migrations
+
+Database schema is up to date!
+
+$ DATABASE_MIGRATION_URL="$TEST_MIGRATION_URL" \
+    npm run prisma:migrate:status --workspace=@acres/server
+Datasource "db": PostgreSQL database "acres_test", schema "public" at "localhost:5432"
+
+1 migration found in prisma/migrations
+
+Database schema is up to date!
+```
+
+After that user-run database evidence, this agent's sandbox still reported the
+native cluster as down:
+
+```text
+$ pg_lsclusters
+Ver Cluster Port Status Owner  Data directory              Log file
+18  main    5432 down   nobody /var/lib/postgresql/18/main /var/log/postgresql/postgresql-18-main.log
+
+$ pg_isready -h localhost -p 5432
+localhost:5432 - no response
+```
+
+That is recorded as an evidence boundary, not a replacement for the user-run
+database transcript above.
+
+Docker-compatible local tooling remains absent:
+
+```text
+$ for c in docker podman nerdctl; do command -v "$c" || echo "$c: not found"; done
+docker: not found
+podman: not found
+nerdctl: not found
+```
+
+The local image build and container smoke still cannot run in this sandbox.
+The first executable image proof is the committed workflow's `docker` job after
+a separately authorized push.
+
+```text
+$ python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml')); print('ok')"
+ok
+
+$ git diff --check
+```
+
+No output.
+
+---
+
 ## 12. Deferred, and why
 
 | deferred | why |
@@ -1285,7 +1466,6 @@ job's Postgres service container locally.
 | email delivery | which is why registration returns a generic failure; §4 |
 | Terraform / IaC, an actual registry + push, choosing a host to run the container | §10.1 built the Dockerfile and CI; no hosting provider has been chosen |
 | OAuth / social login, analytics, billing, CMS, admin | out of scope for step 8 |
-| Node 22 → 24 LTS move (Dockerfile base image, CI `setup-node` version, a local Node 24 full-check-suite run) | `docs/build-plan.md` phase 2 gates it on "after all packages and Prisma generation pass under it" — an independent, separately-verifiable task that does not block `prompts/18-database-infrastructure.md`'s migration work; follow-up prompt, same phase |
 | production PostgreSQL host, volume encryption implementation, key-recovery tooling | §8.1 records the target-state *contract* only; no production host exists to inspect or drill against — phase 12 |
 | organizations, memberships, RLS | phase 3, depends on phase 2 (landed) but is not part of it |
 | readiness-endpoint container smoke test in the CI `docker` job | that job has no Postgres service attached; adding one grows CI runtime for a check phase 2 does not require there — the `checks` job's integration suite already covers it |
@@ -1310,7 +1490,7 @@ For decisions and sequencing, read `docs/system-architecture.md`,
 | No object storage, upload, parser, or antivirus boundary | Garage quarantine/artifacts, short-lived presigned uploads, ClamAV scan-before-parse, bounded CSV/XLSX/GeoJSON stages and immutable dataset versions | 6–7 |
 | Metric/report placeholder tables without product ingestion | Typed metric definitions/observations/quality/aggregates, dashboards/saved views, immutable report revisions/evidence and secure exports | 8–10 |
 | No client API consumer or authenticated application UI | Same-origin Caddy routing, verified Next 16.3 server/browser clients, accessible authenticated shell and real-browser journeys | 5 |
-| Portable Node 22 API image and GitHub Actions build/smoke test; no full topology | Verify and move to Node 24 LTS, Compose+Caddy single-host reference, private stateful services, OTel/Prometheus/optional Grafana, backups/restores and hardened promotion | 2 and 12 |
+| Portable Node 24 API image and GitHub Actions build/smoke test; no full topology | Compose+Caddy single-host reference, private stateful services, OTel/Prometheus/optional Grafana, backups/restores and hardened promotion | 12 |
 | No AI | Optional disabled-by-default local llama.cpp/vLLM adapter receives minimal authorized evidence and proposes schema-validated drafts; deterministic product remains complete | 11 |
 
 The existing route, security, environment, test, and deployment descriptions in

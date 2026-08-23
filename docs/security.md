@@ -130,7 +130,7 @@ Classification details are owned by [`product.md`](product.md#5-data-classificat
 | Optional AI | Not present | Disabled by default; tenant-bound minimal evidence; schema validation; no tools/mutation/publication; evaluation and human decision |
 | Logs/metrics | Nest logs exist; generic client 500s; no canonical telemetry stack | Structured redaction; low-cardinality metrics; access-controlled telemetry; raw data/prompts excluded by default |
 | CI/dependencies/images | Lockfile, `npm ci`, least `contents: read`, build/test and non-root server image | Pin/review actions, dependency/container/SAST/secret scans, provenance, protected promotion, rotated deploy credentials |
-| Migrations/database | Prisma schema but no real DB or first migration | Reviewed SQL; separate owner/migration/runtime/test roles; pending-migration readiness; RLS/PostGIS integration tests |
+| Migrations/database | Local/CI PostgreSQL + PostGIS, separate migrator/runtime/test roles, committed first Prisma migration, pending-migration readiness, and real-database integration tests | Production host/encryption/backups; RLS/PostGIS tenant-isolation tests |
 
 Current evidence anchors include `server/src/app.setup.ts`,
 `server/src/security/csrf.service.ts`, `server/src/sessions/sessions.service.ts`,

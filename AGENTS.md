@@ -50,7 +50,7 @@ the read will re-derive it by hand or silently break it.
 | `docs/landing.md` | the `/` build record, section by section, against `Desktop.png` / `Tablet.png` / `Mobile.png` | **written.** Read it before touching the landing page; it records the extracted assets, copy, table decision, breakpoint measurements and deltas |
 | `docs/motion.md` | GSAP on the site — the packages and verified imports, one-time registration, the client leaf and its `data-motion-*` hooks, the shared `DUR` / `EASE` reader, the two motion-distance tokens, every trigger, stagger, hover and press, reduced motion, cleanup, and the browser evidence | **written.** Read it before any animation change; it records why a CSS `cubic-bezier()` cannot be handed to GSAP, and one accessibility fix the reveal start state forced |
 | `docs/polish.md` | the `web-design-guidelines` pass, the skip link and focus order, the reduced-motion CSS, the touch and colour-scheme base rules, the 404 page, the whole metadata and icon surface, and the pixel diff that proves no comp geometry moved | **written.** Read it before any accessibility, metadata or icon change; it records the accepted hero-flash trade-off and corrects two stale lines elsewhere |
-| `docs/backend.md` | the NestJS API — the resolved package versions and why each one, the three-workspace scripts, the module and route map, the envelopes, auth/session/hashing and the CSRF defence with what it does not cover, the environment contract, the scheduler's single-instance constraint, the Prisma 7 specifics, the tests, and the deployment requirements | **written.** Read it before touching `server/`, `packages/shared/` or the root scripts; it records why the first migration is deferred and corrects two stale lines in §8.1 |
+| `docs/backend.md` | the NestJS API — the resolved package versions and why each one, the three-workspace scripts, the module and route map, the envelopes, auth/session/hashing and the CSRF defence with what it does not cover, the environment contract, the scheduler's single-instance constraint, the Prisma 7 specifics, the real PostgreSQL/PostGIS migration/test state, and the deployment requirements | **written.** Read it before touching `server/`, `packages/shared/` or the root scripts |
 | `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | **written.** Measurement and headless CDP verification recipes |
 | `docs/product.md` | the target B2B regional-analytics product — personas, fixed roles, journeys, V1 boundary, data classes, behavioral success criteria, open decisions and glossary | **written.** Read before changing product scope, roles, data meaning, or user journeys; target decisions are not proof of implementation |
 | `docs/system-architecture.md` | the current/target/deferred system design — modular boundaries, six system views, runtime/FOSS choices, target data model, RLS, REST/GraphQL, ingestion, optional AI and operations | **written.** Read before changing runtime topology, modules, persistence, APIs, queues/storage, tenancy, AI, or deployment |
@@ -722,9 +722,10 @@ primitives and chrome live in `client/components/acres/`.
 **There is now a backend.** `server/` is a NestJS API on Express with health,
 accounts, cookie-backed sessions, regions, a contact endpoint and one scheduled
 job; `packages/shared/` holds the contracts both sides read; `server/prisma/`
-holds the schema. **No database is provisioned, no migration has been
-generated, and no client code calls the API yet** — read `docs/backend.md`
-before assuming otherwise.
+holds the schema and first committed migration. Local/CI PostgreSQL/PostGIS,
+separated migrator/runtime/test roles, and the real-database server suite are
+implemented; no client code calls the API yet. Read `docs/backend.md` before
+assuming current backend state.
 
 **`npm run lint`, `npm run typecheck` and `npm run build` run from the root and
 cover all three workspaces**; `npm run test:server` runs the API's e2e suite.

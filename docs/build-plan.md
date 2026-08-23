@@ -2,7 +2,9 @@
 
 Status: ordered target implementation plan approved 2026-08-23. Phase 1 is
 implemented by the commit that first adds this document; git history remains
-the proof. Phases 2–12 are not implemented merely because they appear here.
+the proof. Phase 2 is implemented through `prompts/18-database-infrastructure.md`
+and `prompts/19-node-24-lts.md`. Phases 3–12 are not implemented merely
+because they appear here.
 
 ## 1. How every phase runs
 
@@ -93,7 +95,8 @@ input; implementation must not invent them.
   failure and pool saturation signals without credentials.
 - **Rollback/compatibility:** current routes/schema preserved; schema rollback is
   a reviewed down migration only when truly reversible, otherwise forward fix;
-  Node 22 stays until Node 24 verification passes.
+  Node 24 is current after prompt 19 verification; runtime rollback reverts the
+  Dockerfile base declarations and CI setup-node version together.
 - **Documentation owner:** `backend.md`, `system-architecture.md`, local/deploy
   runbook section, schema/migration README.
 - **Skills:** required — `architecture-patterns`, `postgres-best-practices`,
