@@ -365,6 +365,67 @@ until the same read-only smoke test was rerun with escalation:
 `/_not-found` returning 404 is the expected HTTP status for the rendered
 not-found route.
 
+### 4.5 Turbopack missing transitive module during development
+
+Added by `prompts/21-repair-picocolors-resolution.md`.
+
+A Next.js development overlay can report a missing transitive module from a CSS
+import trace even when the installed dependency graph is healthy. The observed
+case was:
+
+```text
+./client/app/globals.css
+Error: Cannot find module 'picocolors'
+at node_modules/next/node_modules/postcss/lib/css-syntax-error.js
+```
+
+The repair path is evidence-based:
+
+1. Confirm the installed dependency graph and Node resolution are healthy:
+
+   ```bash
+   npm ls picocolors postcss next --all
+   node -p "require.resolve('picocolors')"
+   node -p "require.resolve('picocolors', {paths: [require.resolve('next/node_modules/postcss/lib/css-syntax-error.js')]})"
+   ```
+
+2. Inspect the exact listener on the development port before stopping
+   anything:
+
+   ```bash
+   ss -ltnp sport = :3000
+   ps -p <pid> -o pid=,ppid=,cwd=,args=
+   ```
+
+   Stop only the confirmed Acres `next dev` parent process. Do not use
+   wildcards or broad process kills; a stale dev process can continue serving
+   the Turbopack graph it started with.
+
+3. Restart from the repository root with:
+
+   ```bash
+   npm run dev:client
+   ```
+
+4. Verify `/` and any fragment URL in a browser. The fragment is browser-local,
+   so the server route remains `/`; browser automation is what proves
+   `/#benefits` renders instead of the error overlay.
+
+In the 2026-08-23 repair, `npm ls` and both `require.resolve` checks found
+`picocolors@1.1.1`, including resolution from Next's nested PostCSS module. A
+fresh `npm run dev:client` then served `/` with HTTP 200 and Playwright loaded
+`http://localhost:3000/#benefits` with the page title
+`Acres — Browse everything.` The successful repair was therefore a restart of
+the stale dev process only. No `npm install`, `npm ci`, manifest change,
+lockfile change, CSS edit, or direct `picocolors` dependency was required.
+
+If a fresh process still reproduces the same missing-module error after these
+checks, repair the install from the root lockfile in order: run root
+`npm install`, inspect any lockfile diff, re-run the graph and resolution
+checks, and only then use root `npm ci` as a deterministic clean-install
+fallback. Do not declare a transitive dependency directly without dependency
+graph evidence that the owning package no longer declares it.
+
 ---
 
 ## 5. A tooling gap, and a page-region-plus-alpha-mask extraction recipe
