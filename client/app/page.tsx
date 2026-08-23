@@ -143,8 +143,8 @@ export default function Home() {
                 <Image
                   src="/assets/ui/landing/report-device-desktop.webp"
                   alt="Acres regional analytics report interface with an efficiency trend chart."
-                  width={1741}
-                  height={1216}
+                  width={1810}
+                  height={1288}
                   quality={100}
                   fetchPriority="high"
                   sizes="(max-width: 767px) calc(100vw - 106px), (max-width: 1023px) calc(100vw - 124px), min(calc(100vw - 374px), 906px)"

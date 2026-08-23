@@ -364,3 +364,106 @@ until the same read-only smoke test was rerun with escalation:
 
 `/_not-found` returning 404 is the expected HTTP status for the rendered
 not-found route.
+
+---
+
+## 5. A tooling gap, and a page-region-plus-alpha-mask extraction recipe
+
+Added by `prompts/12-hero-device-bezel.md`, which closed `docs/landing.md` §8's
+"device asset has no bezel" item.
+
+### 5.1 `magick`/`convert`/`identify` are not installed in this environment
+
+Every recipe in §2 above is correct against ImageMagick, but the binary itself
+is not guaranteed present — this is the first prompt to hit that.
+`apt-get install --dry-run imagemagick` resolves cleanly (Ubuntu 26.04, ESM
+apps pocket), so it can be installed with the user's confirmation if a task
+ever needs ImageMagick specifically. This prompt did not: poppler
+(`pdftoppm`/`pdftocairo`/`pdfimages`) and `python3` + Pillow (12.1.1, via the
+system `python3`, no venv) cover every recipe below. Pillow is not a repository
+dependency; it was used as a one-off extraction tool the same way §2's `magick`
+commands are, not installed into any workspace.
+
+### 5.2 Why a plain PDF crop is not enough for page-content art
+
+`pdftoppm` flattens the page — whatever sits behind an element (here, the
+design-system board's own sage band, then its mint page background) fills the
+crop below, right of, and around any rounded corners, with no alpha. §2.1's
+recipe gets clean alpha from an **embedded image's own soft mask**
+(`pdfimages` extracts the image and its `smask` object separately). The hero
+device's *frame* has no such mask, because the frame is page content (a vector
+rounded rect drawn by the PDF), not an embedded raster — `pdfimages -list`
+does not list it at all. The replacement technique renders the page region
+as a flat bitmap and builds the alpha mask by hand from the frame's own
+measured geometry.
+
+### 5.3 The recipe, per device
+
+1. **Locate the region.** Render a generous recon crop at a moderate DPI
+   (150 was used here) with `pdftoppm -png -r <dpi> -x <x0> -y <y0> -W <w>
+   -H <h> <pdf> <out>` — `-x/-y/-W/-H` are **output pixels at that DPI**, i.e.
+   `px = pt × dpi / 72`. Read the PNG to confirm which device group landed in
+   frame; the design-system board's "Photo Links" section holds three device
+   treatments on their own sage bands; page-row gaps (a row-wise dark-pixel
+   count that drops to 0) separate them.
+2. **Find the frame's dark-pixel bounding box** at that same render, by a
+   direct RGB scan (`r,g,b < 40` on every channel), not a fuzz/threshold pass —
+   antialiasing on the frame's own edge is a few px wide and a strict scan
+   finds the true ink extent reliably. Convert the box back to PDF pt
+   (`pt = px × 72 / dpi`) for a reproducible region.
+3. **Choose the production DPI from the embedded photo's native resolution**,
+   not an arbitrary target. `pdfimages -list` reports each embedded image's
+   `x-ppi`/`y-ppi` — the desktop screen photo (object 6/7) is 144 ppi, the
+   mobile screen photo (object 16/17) is 235 ppi. Rendering the *page* at that
+   same DPI puts the embedded raster at 1:1 with its own source pixels: no
+   upsampling softness, no discarded resolution. (144 was chosen over a higher
+   DPI for the desktop frame specifically because rendering higher does not
+   add real information — the photo is the resolution ceiling, per
+   `prompts/12-…`'s "no dependency is added" / no-fabrication constraint on
+   inventing sharpness that is not in the source.)
+4. **Re-render the exact frame region at the production DPI**, with a small
+   pixel margin (a few px) so the crop does not clip the frame's own
+   antialiasing, and re-run the bounding-box scan (step 2) at that resolution
+   for the final, tight crop coordinates — reusing the pt numbers from step 1
+   at a new DPI accumulates rounding error, so re-measure rather than convert.
+5. **Measure the corner radius** by tracing the top-left corner: for each row
+   from the box's top edge, find the offset of the first dark pixel from the
+   box's left edge, and read the row where that offset first reaches 0 — that
+   row index is the radius (a rounded-rect's quarter-circle corner has this
+   exact property: at row `y` the inset is `R − √(R² − (R−y)²)`, which equals
+   `R` at `y=0` and `0` at `y=R`). Desktop: **40 px at r144** (≈ 20 pt/px at
+   page scale). Mobile: **98 px at r235** (≈ 30 pt/px at page scale) — a
+   phone's corner is proportionally rounder than a tablet's, which is what
+   this technique should find if it is measuring correctly, not an error to
+   average away.
+6. **Build the alpha mask** at the crop's own resolution with
+   `PIL.ImageDraw.rounded_rectangle([frame_bbox], radius=R, fill=255)` on an
+   `L`-mode canvas the same size as the crop, then `Image.putalpha(mask)`.
+   Draw the **full** frame — both top and bottom corners — never pre-clipped
+   to a target box; clipping to the hero's box shape is CSS's job
+   (`overflow-hidden` on the existing wrapper), not the asset's.
+7. **Export lossless WebP** (`Image.save(path, "WEBP", lossless=True)`),
+   matching the encoding `file` reports on every other asset in
+   `client/public/assets/ui/landing/` (`RIFF … Web/P image, lossless, with
+   alpha`).
+8. **Verify by 1:1 crop against the comp**, not by pixel-diff — the comp's
+   device is a JPEG-compressed embed at 1280/375 page width, and the new
+   asset is sourced at a different (usually higher) resolution, so they will
+   never diff to zero. Confirm silhouette, corner radius and composition by
+   eye, then confirm the *built* page (not just the static asset) against the
+   comp with a full §3.3 CDP capture at 375/800/1280.
+
+### 5.4 Result
+
+| device | production DPI | crop (px) | corner radius | final asset |
+| --- | --- | --- | --- | --- |
+| desktop | 144 (matches embedded photo's 144 ppi) | 1810 × 1288 | 40 px | `report-device-desktop.webp` |
+| mobile | 235 (matches embedded photo's 235 ppi) | 878 × 1765 | 98 px | `report-device-mobile.webp` |
+
+Both replace the previous screen-only extractions in place (same paths). No
+hero token (`--spacing-hero-band` / `-wing-*` / `-overhang-*` / `-device-*`)
+needed to change — the frame's outer edge already sat within a few px of the
+box the screen-only asset was tuned against — confirmed by the CDP capture in
+step 8 above, not assumed. `docs/landing.md` §8 records the visual result and
+the recomputed `object-cover` cropping arithmetic for the new asset aspect
+ratios.

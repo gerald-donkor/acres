@@ -51,8 +51,8 @@ The relevant source objects matched the prompt:
 
 | PDF image | output asset | intrinsic size |
 | --- | --- | ---: |
-| 6 + soft mask 7 | `client/public/assets/ui/landing/report-device-desktop.webp` | 1741 × 1216 |
-| 16 + soft mask 17 | `client/public/assets/ui/landing/report-device-mobile.webp` | 816 × 1704 |
+| 6 + soft mask 7 | `client/public/assets/ui/landing/report-device-desktop.webp` | 1741 × 1216 (superseded — see below) |
+| 16 + soft mask 17 | `client/public/assets/ui/landing/report-device-mobile.webp` | 816 × 1704 (superseded — see below) |
 | 18 + soft mask 19 | `client/public/assets/ui/landing/mountain.webp` | 4096 × 2304 |
 | 20 + soft mask 21 | `client/public/assets/ui/landing/aerial.webp` | 4096 × 2731 |
 | 22 + soft mask 23 | `client/public/assets/ui/landing/stones.webp` | 4096 × 2048 |
@@ -64,6 +64,20 @@ Repeatable extraction:
 pdfimages -j client/public/assets/ui/ref/acres-design-system.pdf /tmp/acres-pdf-image
 magick /tmp/acres-pdf-image-006.jpg /tmp/acres-pdf-image-007.ppm -alpha off -compose CopyOpacity -composite -strip client/public/assets/ui/landing/report-device-desktop.webp
 magick /tmp/acres-pdf-image-016.jpg /tmp/acres-pdf-image-017.ppm -alpha off -compose CopyOpacity -composite -strip client/public/assets/ui/landing/report-device-mobile.webp
+```
+
+**Superseded by `prompts/12-hero-device-bezel.md`.** The two commands above
+extracted the device *screen* only, from the embedded JPEG's own soft mask —
+they produced 1741 × 1216 and 816 × 1704 assets with no frame. The comps draw
+the hero device inside a real black bezel, which is page content in the PDF
+(a vector rounded rect), not an embedded raster with its own mask, so it needed
+a different technique — a page-region render plus a hand-built alpha mask.
+`docs/automation.md` §5 records that recipe and the exact regions used; the
+current `report-device-desktop.webp` (1810 × 1288) and
+`report-device-mobile.webp` (878 × 1765) come from it, not from the commands
+above.
+
+```bash
 magick /tmp/acres-pdf-image-018.jpg /tmp/acres-pdf-image-019.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 client/public/assets/ui/landing/mountain.webp
 magick /tmp/acres-pdf-image-020.jpg /tmp/acres-pdf-image-021.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 client/public/assets/ui/landing/aerial.webp
 magick /tmp/acres-pdf-image-022.jpg /tmp/acres-pdf-image-023.ppm -alpha off -compose CopyOpacity -composite -strip -quality 88 client/public/assets/ui/landing/stones.webp
@@ -100,7 +114,7 @@ Per `prompts/08-image-quality-fidelity.md`, all raster images are served at 100%
 | Map Your Success (Aerial) | Desktop (≥1024px) | `aerial-desktop.webp` | 3600 × 1993 | 1200 × 664 |
 | Map Your Success (Aerial) | Tablet (768–1023px) | `aerial-tablet.webp` | 2160 × 1993 | 720 × 664 |
 | Map Your Success (Aerial) | Mobile (<768px) | `aerial-mobile.webp` | 1029 × 1800 | 343 × 600 |
-| Hero Device | Desktop / Mobile | `report-device-*.webp` | 1741 × 1216 / 816 × 1704 | 100% quality raw extraction |
+| Hero Device | Desktop / Mobile | `report-device-*.webp` | 1810 × 1288 / 878 × 1765 (framed — `prompts/12-…`) | 100% quality raw extraction |
 
 Configuration:
 - `client/next.config.ts`: Added `images.qualities: [75, 100]` to allow Next.js 16 to output `q=100` images.
@@ -252,9 +266,12 @@ Below 768 the `<source>` serves `report-device-mobile.webp` directly at its
 native 816, so `sizes` does not apply and the box never exceeds it.
 
 `object-cover` at an explicit height reproduces the comp's crop without
-re-cutting an asset: at 1280 the 1741 × 1216 asset covers 906 × 513 at scale
-0.5204, rendering 906 × 633 and dropping 120 px off the bottom, which is what
-the comp shows. `sizes` was retuned to the real widths
+re-cutting an asset: at 1280 the framed 1810 × 1288 asset (`prompts/12-…`,
+superseding the screen-only 1741 × 1216 figure this paragraph originally
+recorded) covers 906 × 513 at scale 0.5006, rendering 906 × 645 and dropping
+132 px off the bottom, which is what the comp shows (a flush cut below the
+frame's rounded bottom corner, not — as with the old screen-only asset — a
+crop with no frame to begin with). `sizes` was retuned to the real widths
 (`(max-width: 767px) 269px, (max-width: 1023px) 676px, 907px`). The art
 direction, `quality={100}` and `fetchPriority="high"` are unchanged — see
 `docs/polish.md` §4 for why it is not `priority`.
@@ -406,33 +423,44 @@ landmarks, the same way §§1–6 above were closed. That is not in this pass.
 
 - **The band height is unified at 348** where the three comps measure
   347 / 349 / 349. A per-breakpoint override would be noise.
-- **The device asset has no bezel.** The comps draw the hero device inside a
-  black frame — measured at **20 px on each side at 1280** (the bezel spans
-  x 187–206, so the comp's *screen* is 867 wide inside a 907 device). The
-  extracted `report-device-desktop.webp` and `report-device-mobile.webp` are the
-  **screen only**, so the live screen renders at the full 906 / 269 and reads
-  slightly larger and frameless. This predates the pass — the old padded band had
-  the same asset — and closing it needs a fresh extraction of the framed device,
-  which `prompts/11-…` puts out of scope. **Open.**
+- **The device asset has no bezel. Closed by `prompts/12-hero-device-bezel.md`.**
+  The comps draw the hero device inside a black frame; the previous
+  `report-device-desktop.webp` / `report-device-mobile.webp` were screen-only
+  crops (the embedded JPEG's own soft mask, per §"Extracted assets" below). Both
+  are now re-extracted from the design-system board's "Photo Links" section —
+  page content, not an embedded raster, so the frame's own vector rounded-rect
+  supplies the alpha mask instead of a soft mask. Recipe and measurements in
+  `docs/automation.md` §5. New dimensions: desktop **1810 × 1288** (was
+  1741 × 1216, screen-only), mobile **878 × 1765** (was 816 × 1704,
+  screen-only). Verified against `Desktop.png`/`Mobile.png` by 1:1 crop
+  comparison and by a full CDP capture at 375/800/1280 — the frame renders,
+  sits on the band correctly, clips flush at desktop/tablet and shows whole at
+  mobile, with **no drift** in the hero tokens (`--spacing-hero-band` /
+  `-wing-*` / `-overhang-*` / `-device-*` are unchanged).
 - **The device's framing degrades between the three comp widths.** The band is
   348 tall at 375, 800 *and* 1280 — three readings, constant — so the band height
   is the strong invariant and the device's height is pinned per breakpoint to
   match it. The device's *width* still tracks the viewport, so how much of the
-  mockup shows changes across each range:
+  mockup shows changes across each range. **Recomputed for the framed assets**
+  (was measured against the screen-only 1741 × 1216 / 816 × 1704 assets; the
+  framed assets' aspect ratio differs, so the crossover and crop figures below
+  are new numbers, not the old ones carried forward):
 
-  | viewport | 375 | 600 | 767 | 1024 | 1109 | 1280 |
+  | viewport | 375 | 600 | 767 | 1024 | ~1095 | 1280 |
   | --- | --- | --- | --- | --- | --- | --- |
-  | device box | 269 × 418 | 494 × 418 | 661 × 418 | 650 × 513 | 735 × 513 | 906 × 513 |
-  | of the asset shown | 74 % of its height | 45 % | **30 %** | 81 %, **cropped 42 px each side** | 81 %, edges just reached | 81 %, full width |
+  | device box | 269 × 418 | 494 × 418 | 661 × 418 | 650 × 513 | 721 × 513 | 906 × 513 |
+  | of the asset shown | 77 % of its height | 42 % | **31 %** | 90 %, **cropped 35.5 px each side** | 100 %, edges just reached | 80 %, **cropped 132 px off the bottom** |
 
-  At 767 the portrait phone mockup is reduced to its status bar and header, and
-  between 1024 and ~1109 the desktop asset is cropped left and right — the
-  crossover from vertical to horizontal cropping is at a device width of
-  `1741 × (513 / 1216) = 734.6`, i.e. a viewport of ~1109. **This is accepted,
-  not solved.** The alternative — an `aspect-ratio` device with the band sized to
-  `deviceHeight − overhang` — interpolates smoothly but gives up the constant
-  348 the comps measure three times, and that is a design decision, not a
-  measurement. **Open.**
+  At 767 the portrait phone mockup is reduced to its status bar and header. In
+  the lg range (1024–1280) the desktop asset is width-cropped below the
+  crossover and height-cropped above it — the crossover, where the box width
+  equals the asset scaled to cover the 513 px band height
+  (`1810 × (513 / 1288) = 720.9`), is a container of 1014.9 and a **viewport of
+  ~1095** (device box width + 294 px of wing + 80 px of gutter). **This is
+  accepted, not solved** — same as before the bezel closed. The alternative —
+  an `aspect-ratio` device with the band sized to `deviceHeight − overhang` —
+  interpolates smoothly but gives up the constant 348 the comps measure three
+  times, and that is a design decision, not a measurement. **Open.**
 - **The desktop "See the Big Picture" media** renders 719 tall against a comp of
   711, and the mobile hero device 418 against 417. Both are within the rounding
   the aspect-ratio tokens carry, and neither was changed.
