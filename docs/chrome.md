@@ -59,6 +59,52 @@ Measured directly from the 1:1 render of `acres-design-system.pdf` (crop `900x80
   - `© Acres. 2025`
   - `All Rights Reserved` aligned to the container right edge.
 
+### 2.5 Scroll-Condensed Nav — 800 and 1280, and Sticky Mobile Card
+
+Built to `prompts/15-scroll-condensed-navigation.md`, from
+`client/public/assets/ui/rec-flows/{desktop,tablet,mobile}.webm` — the one
+authorized motion/interaction reference outside the four static comps
+(AGENTS.md §0). No new `@theme` token; every value below is either an existing
+token or a standard Tailwind utility (prompt's §"Tokens: none added, and why").
+
+- **New file:** `client/components/acres/condensed-nav.tsx`, `CondensedNav`, a
+  self-contained `"use client"` leaf (own `NAV_LINKS`, own markup — the
+  `mobile-navigation.tsx` precedent, not the `landing-motion.tsx`
+  wrapper-only one). Rendered as a sibling of the existing `hidden md:block
+  py-5` nav div inside `SiteHeader`, so it only ever mounts at ≥ 768 px.
+- **Shape:** a horizontally centred, pill-shaped surface holding only the four
+  nav links (no wordmark, no CTA) — `rounded-full bg-canvas/70
+  backdrop-blur-md shadow-card px-8 py-4`, `fixed top-5 left-1/2
+  -translate-x-1/2`. Reuses `--shadow-card` rather than a second elevation
+  value (AGENTS.md §9.1 rule 4's "one canvas" spirit extended to "one
+  elevation" — `client/app/globals.css`). **These class values are the
+  prompt's own starting judgements, not measurements** — the webm's lossy
+  compression cannot separate an exact alpha/blur/offset the way a PNG crop's
+  histogram can (AGENTS.md §0, §10 rule 4) — verified by eye against the
+  recordings during implementation and left unchanged; a future session
+  should still read them as a judgement, not treat "shipped" as "measured."
+- **Behaviour:** invisible (`invisible opacity-0`, static rest state) until
+  the full header (marked `data-motion-header` in `site-header.tsx`) scrolls
+  out of view, then fixed at `top-5` for the rest of the scroll, reversing out
+  exactly when the header scrolls back into view. See `docs/motion.md` §4.5
+  ("The condensed-nav trigger, and three bugs found in browser verification")
+  for the GSAP mechanics and every bug found and fixed, including one raised
+  in code review rather than the original browser pass.
+- **Mobile (375):** the existing closed card (§2.2) gains `sticky` behaviour —
+  it now persists at the top of the viewport through scroll instead of
+  scrolling away with the page, matching the recording. The `sticky top-0`
+  class lives on `<header>` in `site-header.tsx`, **not** on
+  `MobileNavigation`'s own wrapper div — see `docs/motion.md` §4.5 for why the
+  literal instruction (sticky on the inner div) failed verification.
+  `has-[[data-open]]:static` on the same `<header>` keeps this scoped to the
+  **closed** card only — without it, opening the disclosure grows the sticky
+  box to the full ≈494 px open panel and pins that across most of a phone
+  screen while scrolling, contradicting §4's delta #4 below. See
+  `docs/motion.md` §4.5's "Bug 3."
+- **Non-goals, from the prompt:** no sliding hover indicator inside the pill
+  (glimpsed once in the recording, not reproducible); no change to the open
+  mobile-menu geometry (§2.3, never evidenced open in any recording).
+
 ---
 
 ## 3. Vector Extraction of `LogoMark`

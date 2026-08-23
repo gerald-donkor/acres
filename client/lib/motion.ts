@@ -174,7 +174,11 @@ export function staggerOver(total: number) {
  *
  * Applying it permanently to every reveal target is the documented way to make
  * a page slower rather than faster, so it goes on at `onStart` and is removed
- * at `onComplete`.
+ * at `onComplete`. `onReverseComplete` gets the same cleanup: GSAP fires
+ * `onComplete` only on a forward finish, never on a `.reverse()` finish
+ * (`CondensedNav`'s `toggleActions: "play reverse play reverse"` is the one
+ * consumer that actually reverses) — without this, `will-change` would stick
+ * indefinitely on an element that toggles hidden/shown by scrolling back up.
  */
 export function withWillChange<T extends gsap.TweenVars>(vars: T): T {
   return {
@@ -183,6 +187,9 @@ export function withWillChange<T extends gsap.TweenVars>(vars: T): T {
       gsap.set(this.targets(), { willChange: "transform, opacity" })
     },
     onComplete(this: gsap.core.Tween) {
+      gsap.set(this.targets(), { clearProps: "willChange" })
+    },
+    onReverseComplete(this: gsap.core.Tween) {
       gsap.set(this.targets(), { clearProps: "willChange" })
     },
   }

@@ -305,6 +305,145 @@ at 375, every one of those steps returns `matrix(1, 0, 0, 1, 0, 0)`: the
 `finePointer` branch never installs a listener. CSS hover colours continue to
 follow Tailwind 4's own input-capability gating.
 
+### 4.5 The condensed-nav trigger, and three bugs found in browser verification
+
+Built to `prompts/15-scroll-condensed-navigation.md`,
+`client/components/acres/condensed-nav.tsx`. A second GSAP entry point besides
+`landing-motion.tsx` — its own `useGSAP` scoped to its own `nav` ref, because
+the pill is chrome (mounted from `SiteHeader`, present on every route), not a
+landing-page-only reveal. Gated on the full `MOTION_CONDITIONS` object with
+`wide` checked alongside `motionOK` (every condition named, AGENTS.md §9.3
+rule 3, matching `landing-motion.tsx`'s pattern) — both the trigger
+(`data-motion-header`) and the pill are `hidden` below `md`, so without `wide`
+a mobile pageview would still pay for a live ScrollTrigger that can never act
+on anything.
+
+**`autoAlpha`, deliberately, and the opposite call from §4.3.** §4.3 moved
+*away* from `autoAlpha` because a **one-time, `once: true`** reveal that starts
+hidden made real page content untabbable on first pass. The pill's trigger is
+**not** `once` — it is a persistent toggle between hidden and shown, firing
+every time the header crosses the viewport edge in either direction, and its
+four links duplicate the main nav's four links. When hidden it must be
+genuinely unreachable by `Tab`, or a keyboard user gets four invisible extra
+stops repeated throughout the page. `visibility: hidden` (`autoAlpha`'s
+mechanism) is exactly the property that removes an element from the tab
+order — the defect *for* a one-time reveal and the fix *for* a duplicate
+persistent toggle. Measured over CDP at 800 and 1280: with the pill hidden
+(`scrollY: 0`), its four links are unfocusable; scrolled past the header, all
+four take focus; scrolled back to the top, the pill reverses and its links
+are unfocusable again.
+
+**`withWillChange()` (`client/lib/motion.ts`) gained an `onReverseComplete`
+handler for this consumer.** Every existing caller is a one-shot reveal or a
+forward-only hover/press tween, so `onComplete`'s `clearProps: "willChange"`
+was always enough. GSAP fires `onComplete` only on a *forward* finish — a
+`.reverse()` finish fires `onReverseComplete` instead — and the pill is the
+first consumer whose own `toggleActions` reverses it. Without the second
+handler, scrolling back to the top would leave `will-change: transform,
+opacity` set on the hidden pill indefinitely.
+
+**Bug 1 — `end: "max"` silently corrupts to `""` here, not a timing
+artifact.** The prompt's original scroll trigger read:
+
+```ts
+scrollTrigger: {
+  trigger: header,
+  start: "bottom top",
+  toggleActions: "play reverse play reverse",
+}
+```
+
+With no `end`, GSAP's own default is `end: "bottom top"` — **identical to the
+explicit `start`** — giving a zero-width active window. A single scroll event
+crosses both at once, so `onEnter` and `onLeave` fire back-to-back and the
+pill is left hidden regardless of scroll position. The documented fix for
+exactly this case, `end: "max"`, was tried next — and traced to its exact
+source-level cause rather than left as an observed-only symptom (gsap 3.15.0,
+`node_modules/gsap/ScrollTrigger.js`):
+
+- `refresh()` (line ~1401) runs every `end` value through `_parseClamp()`
+  before parsing it, to detect a `"clamp(...)"` wrapper.
+- `_parseClamp()` (line ~53): `var clamp = _isString(value) && (value.substr(0, 6) === "clamp(" || value.indexOf("max") > -1);` — the second half of that condition is meant to catch `"clamp(max)"`-style values, but `"max".indexOf("max") > -1` is **also true for the literal special value `"max"` itself**.
+- Once `clamp` is true, the function returns `value.substr(6, value.length - 7)` — for `value = "max"` (length 3) that is `"max".substr(6, -4)`. `String.prototype.substr` clamps a negative length to zero, so the return value is `""`.
+- Back in `refresh()`, the now-empty `parsedEnd` is falsy, so `parsedEnd || (parsedEndTrigger ? "100% 0" : max)` falls through to `"100% 0"` of the trigger — i.e. `end` collapses to ≈ the trigger's own bottom, ≈ `start`.
+
+Confirmed two ways, not just observed once: instrumenting `onRefresh` on the
+`end: "max"` trigger logged `start: 87.99, end: 88` against a 7149 px
+document (900 px viewport) — and, in the **same tick**, `end: "bottom
+bottom"` on a second trigger against the same page logged `end: 6249`
+(`ScrollTrigger.maxScroll(window)`, called directly, also returned `6249`).
+Same page, same refresh cycle, same `_maxScroll()` call underneath both —
+ruling out page-load timing as the cause and confirming the corruption is in
+`_parseClamp()`'s string match, not a stale measurement.
+
+**The working fix** — `endTrigger: document.body` with `end: "bottom bottom"`,
+GSAP's page-height-driven idiom for "the rest of the scroll", and a value
+that never contains the substring `"max"` so `_parseClamp()` leaves it alone:
+
+```ts
+scrollTrigger: {
+  trigger: header,
+  start: "bottom top",
+  endTrigger: document.body,
+  end: "bottom bottom",
+  toggleActions: "play reverse play reverse",
+}
+```
+
+No magic pixel number, and it re-derives correctly if the page's content
+height changes.
+
+**Bug 2 — `sticky top-0` on `MobileNavigation`'s own wrapper div did nothing.**
+The prompt's literal instruction was a one-line class change inside
+`mobile-navigation.tsx` (`relative` → `sticky top-0`). Built and measured over
+CDP at 375: after scrolling 3000 px, the card's `getBoundingClientRect().top`
+was `-3000` — it had scrolled away with the page, `position: sticky` computed
+but inert. **Cause:** a sticky element is bounded by its own containing
+block — normally its parent — and that div's parent, `<header>` in
+`site-header.tsx`, is only as tall as the collapsed card itself (≈ 78–88 px).
+With zero extra height in the containing block, there is no room for the
+sticky travel range: the card leaves its container's bounds the instant the
+page scrolls past that ≈ 88 px, and from then on it behaves exactly like
+`position: relative`. Verified empirically before writing the real fix, by
+patching `<header>` to `position: sticky; top: 0` live in the browser and
+re-measuring: `top: 0` held through a 3000 px scroll.
+
+**The working fix** moves `sticky top-0` to `<header>` itself
+(`site-header.tsx`), scoped to mobile only —
+`"w-full sticky top-0 z-50 has-[[data-open]]:static md:static md:z-auto"`
+(the `has-[[data-open]]` clause is Bug 3, below) — because `<header>`'s own
+containing block is `<body>` (`min-h-full flex flex-col`), which spans the
+full page. `md:static` resets this at 768 px+, where the full header scrolling
+out of view unchanged is exactly what `data-motion-header` (§4.5's own
+trigger) depends on. `mobile-navigation.tsx`'s own wrapper reverts to its
+original `relative z-50`.
+
+**Bug 3 — the Bug 2 fix pinned the *open* mobile menu too, found in code
+review rather than the original browser pass.** `<header>` wraps both the
+closed card and, when expanded, `MobileNavigation`'s `CollapsibleContent`
+panel — both render in normal document flow inside the same `<header>`. With
+`<header>` unconditionally `sticky`, opening the menu grows that sticky box
+from ≈ 78 px to ≈ 494 px (measured at 375×667), and it stays pinned across
+scroll: `getBoundingClientRect().top` held at `0` through a 500 px scroll with
+the menu open, instead of scrolling away. That covers most of a phone screen
+and contradicts the pre-existing design decision in §4 delta #4 ("preserves
+document layout of the underlying page") — a real, reproducible regression
+that the original browser pass never exercised (it only ever scrolled with
+the menu closed).
+
+**The working fix** — `has-[[data-open]]:static` on `<header>`. Base UI's
+`CollapsiblePanel` (`CollapsibleContent` in `mobile-navigation.tsx`) stamps
+`data-open` on itself while expanded (confirmed in
+`node_modules/@base-ui/react/collapsible/panel/CollapsiblePanelDataAttributes.mjs`),
+so `:has([data-open])` is true exactly while the disclosure is open. `:has()`
+gives the class a strictly higher selector specificity than the bare `sticky`
+utility, so it wins regardless of Tailwind's utility-generation order.
+Measured over CDP at 375×667: `sticky` before opening; `static` the instant
+the panel opens (`hasOpenPanel: true`); the header scrolls away normally with
+the menu open (`top: -500` after `scrollTo(0, 500)`); `sticky` again on close,
+with the closed-card regression check (`top: 0` after a 3000 px scroll) still
+holding.
+
 ---
 
 ## 5. Responsive and reduced motion
@@ -528,6 +667,33 @@ Artifacts, all under `/tmp` and none in the repository —
    work: `--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2`
    for a fine pointer, `…=2,…=2,primaryHoverType=1,availableHoverTypes=1` for
    coarse.
+
+### Browser verification — `CondensedNav` and the sticky mobile card
+
+Added for `prompts/15-scroll-condensed-navigation.md`. Production build served
+on `-p 3100`, driven the same way (headless CDP, a fresh target per check).
+This is the run that found and confirmed the fixes in §4.5, re-run after the
+code-review fixes (Bug 3, the `wide` gate, `withWillChange`'s
+`onReverseComplete`) to confirm no regression.
+
+| check | 375 | 800 | 1280 |
+| --- | --- | --- | --- |
+| `CondensedNav` at `scrollY: 0` | not rendered visible (`hidden md:flex`) | `visibility: hidden`, `opacity: 0` | `visibility: hidden`, `opacity: 0` |
+| after scrolling past the header | n/a (no `CondensedNav` at this width) | `visibility: visible`, `opacity: 1` | `visibility: visible`, `opacity: 1` |
+| links focusable while hidden | n/a | `false` | `false` (correct — `autoAlpha`, §4.5) |
+| links focusable while visible | n/a | `true` | `true` |
+| scrolled back to `scrollY: 0` | n/a | reverses to `visibility: hidden` | reverses to `visibility: hidden`, `opacity: 0` |
+| mobile card `position` after a 3000 px scroll, menu closed | `sticky`, `top: 0` (held) | n/a | n/a |
+| `<header>` `position` while the disclosure is open | `static` (`hasOpenPanel: true`) | n/a | n/a |
+| scrolled 500 px with the disclosure open | header scrolls away normally, `top: -500` (no pin) | n/a | n/a |
+| `<header>` `position` after closing the disclosure again | `sticky` (regression check: `top: 0` held through a further 3000 px scroll) | n/a | n/a |
+| `prefers-reduced-motion: reduce`, scrolled | pill never renders visible | pill never renders visible | pill never renders visible |
+
+Confirms the judgement calls the prompt raised as open: `toggleActions: "play
+reverse play reverse"` does reverse the pill out on scrolling back to the top
+(no recording showed this directly — §"Judgement calls" in the prompt), and
+reduced motion runs no branch at all, exactly as §5 states for the rest of the
+page — the pill simply never appears.
 
 ---
 

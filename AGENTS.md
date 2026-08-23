@@ -62,7 +62,8 @@ change (§10 rule 1).
 
 # 0. The reference material
 
-**These four files are the only source of design truth in this repository.**
+**These four files are the only source of *static* design truth in this
+repository** — palette, type, layout, radii, the end states of every surface.
 Everything in `docs/design-system.md` is measured from them; nothing is
 recalled, and nothing is invented to fill a gap.
 
@@ -72,6 +73,33 @@ recalled, and nothing is invented to fill a gap.
 | `client/public/assets/ui/landing-pages/Desktop.png` | the landing page at **1280 px** wide, 7389 tall |
 | `client/public/assets/ui/landing-pages/Tablet.png` | the same page at **800 px**, 8825 tall |
 | `client/public/assets/ui/landing-pages/Mobile.png` | the same page at **375 px**, 8833 tall |
+
+**A fifth kind of reference is authorized for *motion and interaction* truth
+only, and only for site chrome: `client/public/assets/ui/rec-flows/{desktop,
+tablet,mobile}.webm`.** Screen recordings of the Figma source prototype's
+scroll flow at 1280 / 800 / 375, added to the repo and pointed at directly by
+the user on 2026-08-23 to specify navigation behaviour the four static files
+cannot show (they contain zero scroll, hover-sequence or transition evidence —
+`docs/motion.md` §3.6 already says this about the PNGs). This is a deliberate,
+user-authorized exception to the "four files" rule above, recorded here per
+AGENTS.md §10 rule 8 rather than left silent — **and it does not extend to any
+other `.webm` capture found on disk.** `prompts/12-hero-device-bezel.md`
+correctly discarded a different, undocumented set of screen recordings
+(`client/public/assets/ui/ref/screensizes/`) for exactly this reason: unverified
+provenance is not something to build on. `rec-flows/` is different only because
+this session's direct instruction makes its provenance and scope explicit.
+
+**Treat rec-flows for what it is, not for what the four PNGs are.** It is a
+webm capture of a Figma prototype player (visible in the raw mobile frames:
+"Modern Product Launch (Community)", a `W/H/%` viewport bar) recorded through
+screen-capture software (a "Spectacle is Recording" overlay is visible in the
+opening seconds of each file) — lossy compression and the capture tool's own
+frame blending during fast transitions are both present. **Structural and
+behavioural evidence is reliable** (what interaction exists, its rough shape,
+which breakpoints share it); **exact pixel values are not** (colour alpha,
+blur radius, offsets). AGENTS.md §10 rule 4 governs: a number pulled from these
+files is a judgement, stated as one, never written up as a measurement the way
+a PNG crop's histogram is.
 
 **The comps are 1:1 with CSS pixels at their stated widths**, so a measured pixel
 is a CSS pixel and no scaling factor is applied. The PDF is 72 dpi, so one PDF
