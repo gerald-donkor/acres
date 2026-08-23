@@ -73,16 +73,14 @@ token or a standard Tailwind utility (prompt's §"Tokens: none added, and why").
   wrapper-only one). Rendered as a sibling of the existing `hidden md:block
   py-5` nav div inside `SiteHeader`, so it only ever mounts at ≥ 768 px.
 - **Shape:** a horizontally centred, pill-shaped surface holding only the four
-  nav links (no wordmark, no CTA) — `rounded-full bg-canvas/70
+  nav links (no wordmark, no CTA) — `rounded-full bg-canvas/25
   backdrop-blur-md shadow-card px-8 py-4`, `fixed top-5 left-1/2
   -translate-x-1/2`. Reuses `--shadow-card` rather than a second elevation
   value (AGENTS.md §9.1 rule 4's "one canvas" spirit extended to "one
-  elevation" — `client/app/globals.css`). **These class values are the
-  prompt's own starting judgements, not measurements** — the webm's lossy
-  compression cannot separate an exact alpha/blur/offset the way a PNG crop's
-  histogram can (AGENTS.md §0, §10 rule 4) — verified by eye against the
-  recordings during implementation and left unchanged; a future session
-  should still read them as a judgement, not treat "shipped" as "measured."
+  elevation" — `client/app/globals.css`). The initial `bg-canvas/70` starting
+  judgement was calibrated to `bg-canvas/25` (prompts/20-condensed-nav-transparency.md)
+  to achieve the true frosted, high-transparency glass look evidenced in
+  `rec-flows/desktop.webm` and requested in visual feedback.
 - **Behaviour:** invisible (`invisible opacity-0`, static rest state) until
   the full header (marked `data-motion-header` in `site-header.tsx`) scrolls
   out of view, then fixed at `top-5` for the rest of the scroll, reversing out

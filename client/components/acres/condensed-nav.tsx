@@ -89,7 +89,7 @@ function CondensedNav() {
     <nav
       ref={navRef}
       aria-label="Condensed Navigation"
-      className="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden md:flex items-center gap-8 rounded-full bg-canvas/70 backdrop-blur-md shadow-card px-8 py-4 invisible opacity-0"
+      className="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden md:flex items-center gap-8 rounded-full bg-canvas/25 backdrop-blur-md shadow-card px-8 py-4 invisible opacity-0"
     >
       {NAV_LINKS.map((link) => (
         <Link
