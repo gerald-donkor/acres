@@ -354,9 +354,11 @@ For every implementation request:
 7. **Write a prompt file in `prompts/`** per the contract in §5. Plan and detail every step, measurement, dependency, and file change thoroughly so implementation and execution are straightforward and unambiguous.
 8. Ask exactly: `I prepared the implementation prompt at prompts/<file-name>.md. Is this good to execute?`
 9. **On approval, re-read the approved prompt file and implement it strictly.**
-   Implement only after approval. `y` or `Y` = `Approved. Execute.` Have
-   `requesting-code-review` available before finishing implementation so the
-   workflow for preparing a clean review request is ready.
+   A standalone `y` or `Y` executes only the prompt identified by the immediately
+   preceding approval request, as defined by the phase-control protocol below.
+   If no current prompt can be identified safely, stop and ask which prompt is
+   being approved. Have `requesting-code-review` available before finishing
+   implementation so the workflow for preparing a clean review request is ready.
 10. Run the checks in §6 and **quote their real output** (self-verification:
     format, lint, typecheck, build, and diff review). Fix any discovered
     issues before requesting review.
@@ -376,7 +378,8 @@ For every implementation request:
 13. Give the exact steps to see the result running.
 14. **Commit to `main`, unprompted, using the `caveman-commit` skill** (§7).
     Every executed prompt ends in a commit. Never leave implemented work
-    uncommitted. Do not push unless asked.
+    uncommitted. This local commit never includes a push; only a later standalone
+    uppercase `P` authorizes the guarded normal push defined below.
 
 **Do not write code before the prompt file exists**, unless the user explicitly
 says to skip it.
@@ -408,28 +411,69 @@ Implement → Self-verify / run checks → Request review (requesting-code-revie
 
 3. **Re-review**: If changes affect architecture, public APIs, shared components, data flow, security, or complex UI/interaction behavior, invoke `requesting-code-review` for a follow-up review.
 
-## Resuming in a new session
+## Phase-control commands
 
-Entering `I` or `i` = `Work out what comes next and write its prompt file.` It
-runs steps 1–8 and stops at the approval question. It never implements
-anything — `i` writes the prompt, `y` executes it.
+These shorthands apply only when the whole user message is the named letter. A
+message that also contains a substantive request follows that request through
+the normal §2 workflow instead of being silently reduced to a shorthand.
+Lowercase `p` is deliberately undefined.
 
-Resolving what "next" means with no prior context:
+| input | valid starting state | action | stopping state |
+| --- | --- | --- | --- |
+| `i` or `I` | no current prompt is awaiting approval or approved execution | resolve the next unbuilt target phase or dependency-safe step within one, write exactly one new numbered prompt, and ask the exact §2 step 8 approval question | the prompt is uncommitted, no implementation changed, and control returns to the user |
+| `y` or `Y` | the intended prompt is identifiable from the immediately preceding approval request | re-read and execute only that prompt through implementation, verification, review, documentation, and its required local commit to `main` | all approved-task changes are committed locally, any pre-existing unrelated changes remain untouched, and nothing was pushed |
+| `P` | the intended work is committed, the worktree is clean, the current branch is `main`, and it has a configured upstream | run the §7 read-only preflight, then make one normal non-force push | the upstream contains the local commits, nothing needed pushing, or Git failed safely without changing the repository |
 
-1. **The number** is the highest existing number in `prompts/` plus one. Never
-   renumber, never overwrite, never reuse (§5).
-2. **The scope** is the next unbuilt step in **§5.2's build sequence**, which is
-   already ordered by what unblocks the most downstream work. For a request the
-   user brings, the scope is their request plus the `docs/` file that owns the
-   area.
-3. **Establish what is already built from the repository** — the files on disk
-   and `git log` — never from `prompts/`. A committed prompt file is evidence
-   that a prompt was *written*, never that it was *executed*. Writing a prompt
-   for work that already exists is the main failure mode here.
-4. **Name the chosen scope and say why it is next in the first line of the
-   reply**, before writing the file, so a wrong call is visible immediately.
-5. If two candidates are genuinely equally unblocking, write neither — name
-   both, state the trade-off, and ask.
+```text
+Committed phase N
+  └─ i / I
+      └─ Next prompt prepared; awaiting approval
+          └─ y / Y
+              └─ Prompt executed, reviewed, and committed locally
+                  ├─ i / I → prepare the next unbuilt phase unit
+                  └─ P     → push committed main to its configured upstream
+```
+
+`P` is outside prompt execution: `y`/`Y` never chains into a push, and `P`
+never creates, approves, executes, reviews, documents, or commits a prompt.
+
+### Resolving the next build unit for `i` / `I`
+
+1. Establish what is committed from the repository and `git log`, never from
+   prompt files. A committed prompt proves that it was written, not executed.
+2. Read the ordered target phases in `docs/build-plan.md` and their concise
+   index in §8.2. Select the earliest unbuilt phase whose dependencies are
+   committed; when a phase is too large for one safe implementation, select its
+   earliest dependency-safe prompt-sized step and identify its parent phase.
+3. Honour a direct user-requested scope when it is dependency-safe. If it skips
+   an unmet dependency or materially conflicts with the build plan, stop and
+   explain the conflict instead of silently reordering the plan.
+4. Set the prompt number to the highest existing number in `prompts/` plus one.
+   Phase, phase-step, and prompt numbers are separate sequences: never infer one
+   from another, renumber, overwrite, or reuse a prompt number (§5).
+5. Name the chosen scope and why it is next in the reply before writing. If two
+   candidates are genuinely equally unblocking, write neither; name both,
+   explain the trade-off, and ask.
+6. Write exactly one prompt satisfying §5, including its complete skill
+   manifest and verification plan, then ask exactly: `I prepared the
+   implementation prompt at prompts/<file-name>.md. Is this good to execute?`
+7. Stop. Load the skills needed to prepare the prompt as §2 requires, but do not
+   begin the implementation-stage skill-loading pass. Preparing a prompt does
+   not authorize implementation, dependency installation, migrations, staging,
+   committing, or pushing.
+
+### Executing the prepared prompt for `y` / `Y`
+
+Identify the current prompt from the immediately preceding approval request;
+never substitute the highest-numbered file merely because it is newest. Re-read
+that prompt, this file, its owning documentation, verified framework references,
+and every named skill. Then follow all of §2: preserve unrelated changes,
+implement only the approved scope, run and quote the real checks, complete the
+requesting/receiving review loop, update the owning documentation, stage only
+approved files, inspect the staged diff, and commit locally to `main` with
+`caveman-commit`. Return the result and exact inspection or run instructions,
+but do not push. If the current prompt cannot be identified safely, ask which
+prompt is being approved and execute nothing.
 
 ---
 
@@ -540,10 +584,12 @@ for. Include skills already loaded while writing the prompt as well as ones only
 the implementation will need. Write `None` if the work genuinely needs no skill,
 rather than omitting the section.
 
-**Why it is required.** The prompt file is the whole brief on execution — after
-a `/clear`, an approving `y` is answered by re-reading the file and nothing
-else. A skill loaded while *writing* the prompt is not loaded when the prompt
-*runs*, so an unlisted skill is one the implementation will silently work
+**Why it is required.** The prompt file is the self-contained implementation
+brief. After context is cleared, `y` executes nothing until the user identifies
+or re-presents the intended prompt for approval; execution then re-reads this
+file, the prompt, its owning documentation and references, and every named skill
+as §2 requires. A skill loaded while *writing* the prompt is not loaded when the
+prompt *runs*, so an unlisted skill is one the implementation will silently work
 without. Naming them is what makes the run reproducible.
 
 **And listing is not loading.** Step 9 re-reads the file and **invokes every
@@ -598,7 +644,37 @@ What it enforces, in short — read the skill for the full contract:
 - **no AI-attribution trailer** — the skill excludes it, and the skill wins
 
 Commit to `main` unprompted at the end of every executed prompt (§2 step 14).
-Do not push unless asked.
+Do not push unless asked. A standalone uppercase `P` is the explicit request to
+push the already committed local `main` branch to its configured upstream;
+lowercase `p` remains undefined.
+
+Before acting on `P`, run this read-only preflight and report its actual state:
+
+```bash
+git status --short
+git branch --show-current
+git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'
+git for-each-ref --format='%(upstream:remotename) %(upstream:remoteref)' refs/heads/main
+git log -1 --oneline
+```
+
+- If the worktree is dirty, report the paths and stop. Do not stage, commit,
+  stash, discard, or push.
+- If the current branch is not `main`, report it and stop. Do not switch or push
+  another branch.
+- If no upstream is configured, report that and ask for direction. Do not invent
+  a remote, set an upstream, or alter Git configuration.
+- With a clean `main` and configured upstream, make one normal non-force push
+  with an explicit refspec from local `refs/heads/main` to the configured
+  upstream ref. Explicitly disable followed tags and submodule recursion so Git
+  configuration cannot broaden the command beyond that one branch. If there is
+  nothing to push, report that the branch is already synchronized.
+- If authentication, network, rejection, or non-fast-forward failure occurs,
+  quote Git's actual error and stop. Do not pull, merge, rebase, force-push,
+  change credentials, rewrite history, or retry without a new instruction.
+
+`P` authorizes only that one normal push attempt. It does not authorize pushing
+tags, other branches, submodules, packages, releases, or deployment artifacts.
 
 ---
 
