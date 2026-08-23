@@ -27,6 +27,7 @@ implementing session (2026-08-21), never recalled. Toolchain: **Node v26.7.0**,
 | `helmet` | `^8.3.0` | response security headers |
 | `cookie-parser` | `^1.4.7` | the session and CSRF cookies are read by middleware, so they must be parsed first |
 | `csrf-csrf` | `^4.0.3` | double-submit CSRF (§5) |
+| `@nestjs/throttler` | `6.5.0` | per-IP request throttling. The strict tier closes the login/contact availability gap named in §5 and formerly deferred in §12 |
 | `bcryptjs` | `^3.0.3` | password hashing. Pure JavaScript and **ships no install script**, which matters here: this machine's npm blocks unapproved install scripts, so a native hashing binding would not have built |
 | `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7` | from the verified Nest scaffold |
 
@@ -291,14 +292,39 @@ POST /forms/contact (no token)  →  403
 correct only because no `GET` route mutates anything — a future one must not.
 CORS is restricted to `CLIENT_ORIGIN` with credentials enabled, so a browser
 will not hand a cross-origin script the response, but CORS is not a CSRF
-defence and is not counted as one here. **There is no rate limiting**, and the gap is an **availability** problem before
-it is a brute-force one: every unauthenticated `POST /auth/login` runs a cost-12
-bcrypt comparison *even when the account does not exist* (that is the timing
-defence in §4), and `bcryptjs` is pure JavaScript, so it competes with the event
-loop. Enough concurrent login attempts saturate the process and take `/health`
-and every other route down with it. `RATE_LIMITED` exists in the error union for
-when `@nestjs/throttler` lands on `/auth/*` and `/forms/contact`; nothing
-enforces it today.
+defence and is not counted as one here.
+
+**Rate limiting now bounds the availability risk.** Every route is behind the
+`default` throttler: `RATE_LIMIT_DEFAULT_LIMIT` requests per
+`RATE_LIMIT_TTL_MS`, per IP. `POST /auth/register`, `POST /auth/login` and
+`POST /forms/contact` additionally opt into the `strict` throttler:
+`RATE_LIMIT_STRICT_LIMIT` requests per the same window, per IP. That strict
+tier matters most for `POST /auth/login`, because every unauthenticated attempt
+runs a cost-12 bcrypt comparison *even when the account does not exist* (the
+timing defence in §4), and `bcryptjs` is pure JavaScript, so it competes with
+the event loop. A client that exceeds a tier receives HTTP 429 in the normal
+error envelope with `RATE_LIMITED`.
+
+`GET /auth/csrf`, `POST /auth/logout` and `GET /auth/session` stay on the
+default tier rather than the strict tier. CSRF issuance is a cheap read that the
+double-submit flow needs before every mutation, logout already requires a
+session, and session reads carry no bcrypt cost. `GET /health` is marked with
+`@SkipThrottle()` so host liveness probes cannot be made to fail by the
+limiter.
+
+One `@nestjs/throttler` v6 API detail is local and deliberate: registering both
+`default` and `strict` named throttlers makes both active on every route unless
+metadata skips one. `StrictThrottle()` applies the public
+`@Throttle({ strict: {} })` decorator plus Acres-owned metadata, and
+`AcresThrottlerGuard` subclasses `ThrottlerGuard` so the `strict` named
+throttler is opt-in. The ordinary `default` tier remains global.
+
+The default tracker is Express's `req.ip`, and the effective storage key also
+includes the controller, handler and throttler name. That makes the budget
+per-route, per-IP, per-tier, not one shared API-wide bucket. Behind a reverse
+proxy, a host must either configure the Express trust boundary before exposing
+the API publicly or provide equivalent edge/shared throttling; otherwise
+`req.ip` may be the proxy's address rather than the client's.
 
 ---
 
@@ -324,6 +350,9 @@ through a package script, so a container whose entrypoint is
 | `SESSION_TTL_DAYS` | no | `30` | positive integer |
 | `CSRF_COOKIE_NAME` | no | `acres_csrf` | |
 | `SCHEDULER_ENABLED` | no | `true` | see §7 |
+| `RATE_LIMIT_TTL_MS` | no | `60000` | throttling window in milliseconds |
+| `RATE_LIMIT_DEFAULT_LIMIT` | no | `120` | requests per window per IP for ordinary routes |
+| `RATE_LIMIT_STRICT_LIMIT` | no | `10` | requests per window per IP for auth/contact mutations |
 | `NODE_ENV` | no | `development` | `development` \| `test` \| `production` |
 
 `server/.env.example` documents all of them. Copy it to `server/.env`; that
@@ -425,7 +454,8 @@ as real.
 
 ## 9. Tests
 
-`server/test/api.e2e-spec.ts`, run with `npm run test:server`. **18 tests, all
+`server/test/api.e2e-spec.ts` and `server/test/env-validation.e2e-spec.ts`, run
+with `npm run test:server`. **29 tests, all
 passing.** They boot the real `AppModule` through `configureApp`, so they
 exercise helmet, CORS, the cookie parser, CSRF, the validation pipe, both
 envelopes and the session guard.
@@ -454,6 +484,19 @@ to `/jobs/runs`; logout writes `revokedAt` and clears the cookie; and
 Environment for the suite is set in `test/setup-env.ts` via `setupFiles`, not in
 a `beforeEach` — `ConfigModule.forRoot()` validates while `app.module.ts` is
 being imported, which happens first.
+
+The suite-wide throttling environment is deliberately loose:
+`RATE_LIMIT_DEFAULT_LIMIT=1000` and `RATE_LIMIT_STRICT_LIMIT=1000`, so the
+existing flow tests do not depend on incidental request counts. The
+`describe('rate limiting', …)` block uses `createTestApp(prisma, envOverrides)`
+to override `AcresConfigService` for one app at a time and lower only the tier
+under test. It proves `POST /forms/contact` and `POST /auth/login` return
+429/`RATE_LIMITED` after the strict budget, `POST /auth/register` does the
+same while following the real post-registration CSRF refresh flow,
+`GET /auth/csrf` stays off the strict tier but is still limited by the default
+tier, and `GET /health` stays unthrottled even when the default limit is low.
+`env-validation.e2e-spec.ts` proves the real `validateEnv` path defaults,
+parses and rejects the three rate-limit variables.
 
 `npm test --workspace=@acres/server` (unit, `rootDir: src`) runs with
 `--passWithNoTests`: **there are no unit specs yet**, and the script says so
@@ -487,10 +530,15 @@ Any host must provide:
 - **exactly one instance with `SCHEDULER_ENABLED=true`**, or a provider
   scheduler that replaces in-process cron (§7).
 
-**One condition on all of that: `/auth/*` must not be exposed publicly in this
-state.** There is no rate limiting, and §5 explains why that is an availability
-risk and not only a brute-force one. Put the rate limiter in front of it —
-`@nestjs/throttler` or the host's own — before the API takes public traffic.
+**One condition on all of that:** the in-memory throttler is per Node process.
+This matches the current single-process scheduler constraint, but a scaled API
+needs shared rate-limit storage or provider-level throttling before it can treat
+the per-IP budgets as global across replicas.
+
+There is one more trust-boundary condition: `@nestjs/throttler` reads Express
+`req.ip`. If the API sits behind a reverse proxy or load balancer, production
+must configure that proxy trust boundary explicitly or enforce equivalent
+client-IP-aware rate limiting at the edge.
 
 Next.js on Vercel is unchanged and unaffected.
 
@@ -637,6 +685,108 @@ $ npm run prisma:validate --workspace=@acres/server
 The schema at prisma/schema.prisma is valid 🚀
 ```
 
+### Prompt 13 rate-limit verification
+
+Run on 2026-08-23 for `prompts/13-rate-limiting.md`.
+
+```text
+$ npm install @nestjs/throttler@^6.5.0 --workspace=@acres/server
+
+added 1 package, and audited 1295 packages in 26s
+
+319 packages are looking for funding
+  run `npm fund` for details
+
+3 high severity vulnerabilities
+```
+
+```text
+$ npm ls @nestjs/throttler --workspace=@acres/server
+acres@0.1.0 /home/dgk/Documents/next/acres
+└─┬ @acres/server@0.1.0 -> ./server
+  └── @nestjs/throttler@6.5.0
+```
+
+```text
+$ npm run lint
+
+> acres@0.1.0 lint
+> npm run lint --workspace=@acres/client && npm run lint --workspace=@acres/shared && npm run lint --workspace=@acres/server
+
+> @acres/client@0.1.0 lint
+> eslint
+
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+```
+
+```text
+$ npm run typecheck
+
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 197ms
+```
+
+```text
+$ npm run build
+FATAL: An unexpected Turbopack error occurred.
+Failed to write app endpoint /page
+Caused by:
+- [project]/client/app/globals.css [app-client] (css)
+- creating new process
+- binding to a port
+- Operation not permitted (os error 1)
+```
+
+The root build failed before the server workspace ran, in the unchanged Next.js
+client build. Re-running with escalated command permissions produced the same
+Turbopack port-binding panic, so this record treats it as an environment
+limitation rather than a backend regression. The changed workspace build passes:
+
+```text
+$ npm run build:server
+
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 213ms
+```
+
+```text
+$ npm run test:server
+
+Test Suites: 2 passed, 2 total
+Tests:       29 passed, 29 total
+Snapshots:   0 total
+Time:        11.775 s
+```
+
+Manual smoke, with no database provisioned and `RATE_LIMIT_STRICT_LIMIT=2`,
+used `/forms/contact` because the guard counts before the handler attempts the
+database write:
+
+```text
+$ curl -fsS http://localhost:3001/health
+{"ok":true,"data":{"status":"ok","service":"acres-api","version":"0.1.0","uptimeSeconds":2}}
+
+$ for i in $(seq 1 4); do curl ... -X POST /forms/contact; done
+500
+500
+429
+429
+```
+
+```text
+$ git diff --check
+```
+
+(no output)
+
 ---
 
 ## 12. Deferred, and why
@@ -649,7 +799,6 @@ The schema at prisma/schema.prisma is valid 🚀
 | `@acres/shared` in `client/` | nothing consumes it yet |
 | any landing-page form UI | the endpoint exists; the form is a later prompt |
 | login / register screens | same |
-| rate limiting on `/auth/*` and `/forms/contact` | named as a real gap in §5 — **availability**, not only brute force. The next backend prompt should open with `@nestjs/throttler` |
 | role-based authorization | `/jobs/runs` is session-gated only; §3 |
 | email delivery | which is why registration returns a generic failure; §4 |
 | Dockerfile, CI, Terraform, provider manifests | §10; `AGENTS.md` §8.2 defers them |

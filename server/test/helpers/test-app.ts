@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
+import { AcresConfigService } from '../../src/config/acres-config.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
 /**
@@ -52,19 +53,98 @@ export function createPrismaDouble(): PrismaDouble {
   };
 }
 
-export async function createTestApp(prisma: PrismaDouble): Promise<{
+function envValue(
+  envOverrides: Partial<Record<string, string>>,
+  key: string,
+): string {
+  return envOverrides[key] ?? process.env[key] ?? '';
+}
+
+function positiveInt(
+  envOverrides: Partial<Record<string, string>>,
+  key: string,
+): number {
+  return Number(envValue(envOverrides, key));
+}
+
+function configDouble(
+  envOverrides: Partial<Record<string, string>>,
+): AcresConfigService {
+  return {
+    get nodeEnv() {
+      return envValue(envOverrides, 'NODE_ENV') as
+        'development' | 'test' | 'production';
+    },
+    get isProduction() {
+      return envValue(envOverrides, 'NODE_ENV') === 'production';
+    },
+    get port() {
+      return positiveInt(envOverrides, 'PORT');
+    },
+    get clientOrigin() {
+      return envValue(envOverrides, 'CLIENT_ORIGIN');
+    },
+    get databaseUrl() {
+      return envValue(envOverrides, 'DATABASE_URL');
+    },
+    get sessionCookieName() {
+      return envValue(envOverrides, 'SESSION_COOKIE_NAME');
+    },
+    get sessionTtlDays() {
+      return positiveInt(envOverrides, 'SESSION_TTL_DAYS');
+    },
+    get sessionSecret() {
+      return envValue(envOverrides, 'SESSION_SECRET');
+    },
+    get csrfCookieName() {
+      return envValue(envOverrides, 'CSRF_COOKIE_NAME');
+    },
+    get schedulerEnabled() {
+      return envValue(envOverrides, 'SCHEDULER_ENABLED') === 'true';
+    },
+    get rateLimitTtlMs() {
+      return positiveInt(envOverrides, 'RATE_LIMIT_TTL_MS');
+    },
+    get rateLimitDefaultLimit() {
+      return positiveInt(envOverrides, 'RATE_LIMIT_DEFAULT_LIMIT');
+    },
+    get rateLimitStrictLimit() {
+      return positiveInt(envOverrides, 'RATE_LIMIT_STRICT_LIMIT');
+    },
+  } as AcresConfigService;
+}
+
+export async function createTestApp(
+  prisma: PrismaDouble,
+  envOverrides: Partial<Record<string, string>> = {},
+): Promise<{
   app: INestApplication;
 }> {
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
-  })
-    .overrideProvider(PrismaService)
-    .useValue(prisma)
-    .compile();
+  let app: INestApplication | undefined;
+  let initialized = false;
+  try {
+    const builder = Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(PrismaService)
+      .useValue(prisma);
 
-  const app = moduleRef.createNestApplication();
-  configureApp(app);
-  await app.init();
+    if (Object.keys(envOverrides).length > 0) {
+      builder
+        .overrideProvider(AcresConfigService)
+        .useValue(configDouble(envOverrides));
+    }
 
-  return { app };
+    const moduleRef = await builder.compile();
+
+    app = moduleRef.createNestApplication();
+    configureApp(app);
+    await app.init();
+    initialized = true;
+    return { app };
+  } finally {
+    if (!initialized) {
+      await app?.close();
+    }
+  }
 }

@@ -53,4 +53,16 @@ export class AcresConfigService {
   get schedulerEnabled(): boolean {
     return this.get('schedulerEnabled');
   }
+
+  get rateLimitTtlMs(): number {
+    return this.get('rateLimitTtlMs');
+  }
+
+  get rateLimitDefaultLimit(): number {
+    return this.get('rateLimitDefaultLimit');
+  }
+
+  get rateLimitStrictLimit(): number {
+    return this.get('rateLimitStrictLimit');
+  }
 }

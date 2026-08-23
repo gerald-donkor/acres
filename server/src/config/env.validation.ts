@@ -16,6 +16,9 @@ export interface AcresEnv {
   sessionSecret: string;
   csrfCookieName: string;
   schedulerEnabled: boolean;
+  rateLimitTtlMs: number;
+  rateLimitDefaultLimit: number;
+  rateLimitStrictLimit: number;
 }
 
 const REQUIRED = ['DATABASE_URL', 'CLIENT_ORIGIN', 'SESSION_SECRET'] as const;
@@ -26,6 +29,9 @@ const DEFAULTS = {
   SESSION_TTL_DAYS: '30',
   CSRF_COOKIE_NAME: 'acres_csrf',
   SCHEDULER_ENABLED: 'true',
+  RATE_LIMIT_TTL_MS: '60000',
+  RATE_LIMIT_DEFAULT_LIMIT: '120',
+  RATE_LIMIT_STRICT_LIMIT: '10',
 } as const;
 
 function positiveInt(name: string, raw: string): number {
@@ -93,6 +99,18 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
     schedulerEnabled: boolean(
       'SCHEDULER_ENABLED',
       env.SCHEDULER_ENABLED ?? DEFAULTS.SCHEDULER_ENABLED,
+    ),
+    rateLimitTtlMs: positiveInt(
+      'RATE_LIMIT_TTL_MS',
+      env.RATE_LIMIT_TTL_MS ?? DEFAULTS.RATE_LIMIT_TTL_MS,
+    ),
+    rateLimitDefaultLimit: positiveInt(
+      'RATE_LIMIT_DEFAULT_LIMIT',
+      env.RATE_LIMIT_DEFAULT_LIMIT ?? DEFAULTS.RATE_LIMIT_DEFAULT_LIMIT,
+    ),
+    rateLimitStrictLimit: positiveInt(
+      'RATE_LIMIT_STRICT_LIMIT',
+      env.RATE_LIMIT_STRICT_LIMIT ?? DEFAULTS.RATE_LIMIT_STRICT_LIMIT,
     ),
   };
 }

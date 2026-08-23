@@ -13,3 +13,6 @@ process.env.SESSION_TTL_DAYS = '30';
 process.env.SESSION_SECRET = 'test-secret-that-is-at-least-32-characters';
 process.env.CSRF_COOKIE_NAME = 'acres_csrf';
 process.env.SCHEDULER_ENABLED = 'false';
+process.env.RATE_LIMIT_TTL_MS = '60000';
+process.env.RATE_LIMIT_DEFAULT_LIMIT = '1000';
+process.env.RATE_LIMIT_STRICT_LIMIT = '1000';

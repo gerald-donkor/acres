@@ -12,6 +12,7 @@ import {
 import type { Request, Response } from 'express';
 import type { SessionProfile } from '@acres/shared';
 import { CsrfService } from '../security/csrf.service';
+import { StrictThrottle } from '../security/strict-throttle.decorator';
 import { OptionalSessionGuard, SessionGuard } from '../sessions/session.guard';
 import { SessionsService } from '../sessions/sessions.service';
 import type {
@@ -47,6 +48,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @StrictThrottle()
   @HttpCode(HttpStatus.CREATED)
   async register(
     @Body() body: RegisterAccountDto,
@@ -58,6 +60,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @StrictThrottle()
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() body: LoginDto,

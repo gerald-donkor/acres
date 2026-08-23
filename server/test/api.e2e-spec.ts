@@ -20,7 +20,7 @@ describe('Acres API', () => {
   });
 
   afterEach(async () => {
-    await app.close();
+    await app?.close();
   });
 
   /** Fetches a CSRF token on an agent that keeps the paired cookie. */
@@ -42,6 +42,15 @@ describe('Acres API', () => {
   async function csrfTokenFor(agent: Agent): Promise<string> {
     const response = await agent.get('/auth/csrf').expect(200);
     return (response.body as { data: { csrfToken: string } }).data.csrfToken;
+  }
+
+  async function recreateApp(
+    envOverrides: Partial<Record<string, string>>,
+  ): Promise<void> {
+    await app.close();
+    prisma = createPrismaDouble();
+    ({ app } = await createTestApp(prisma, envOverrides));
+    server = app.getHttpServer() as App;
   }
 
   function sessionCookieValue(response: request.Response): string {
@@ -376,6 +385,159 @@ describe('Acres API', () => {
         ok: false,
         error: { code: 'NOT_FOUND' },
       });
+    });
+  });
+
+  describe('rate limiting', () => {
+    it('limits POST /forms/contact with the strict tier', async () => {
+      await recreateApp({
+        RATE_LIMIT_TTL_MS: '60000',
+        RATE_LIMIT_STRICT_LIMIT: '2',
+      });
+      prisma.contactSubmission.create.mockResolvedValue({
+        id: 'submission-1',
+        createdAt: new Date('2026-08-23T10:00:00.000Z'),
+      });
+      const { agent, token } = await csrfAgent();
+      const body = {
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        message: 'We would like a walkthrough of the regional dataset.',
+      };
+
+      await agent
+        .post('/forms/contact')
+        .set('x-csrf-token', token)
+        .send(body)
+        .expect(201);
+      await agent
+        .post('/forms/contact')
+        .set('x-csrf-token', token)
+        .send(body)
+        .expect(201);
+      const response = await agent
+        .post('/forms/contact')
+        .set('x-csrf-token', token)
+        .send(body)
+        .expect(429);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'RATE_LIMITED', message: expect.any(String) as string },
+      });
+    });
+
+    it('limits POST /auth/login with the strict tier', async () => {
+      await recreateApp({
+        RATE_LIMIT_TTL_MS: '60000',
+        RATE_LIMIT_STRICT_LIMIT: '2',
+      });
+      prisma.account.findUnique.mockResolvedValue(null);
+      const { agent, token } = await csrfAgent();
+      const body = {
+        email: 'nobody@example.com',
+        password: 'wrong-password-here',
+      };
+
+      await agent
+        .post('/auth/login')
+        .set('x-csrf-token', token)
+        .send(body)
+        .expect(401);
+      await agent
+        .post('/auth/login')
+        .set('x-csrf-token', token)
+        .send(body)
+        .expect(401);
+      const response = await agent
+        .post('/auth/login')
+        .set('x-csrf-token', token)
+        .send(body)
+        .expect(429);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'RATE_LIMITED', message: expect.any(String) as string },
+      });
+    });
+
+    it('limits POST /auth/register with the strict tier', async () => {
+      await recreateApp({
+        RATE_LIMIT_TTL_MS: '60000',
+        RATE_LIMIT_STRICT_LIMIT: '2',
+      });
+      prisma.account.findUnique.mockResolvedValue(null);
+      prisma.account.create.mockResolvedValue(ACCOUNT_ROW);
+      prisma.session.create.mockResolvedValue({ id: 'session-1' });
+      const { agent, token } = await csrfAgent();
+      const body = {
+        email: 'new-account@example.com',
+        password: 'a-long-enough-password',
+        displayName: 'Ada Lovelace',
+      };
+
+      await agent
+        .post('/auth/register')
+        .set('x-csrf-token', token)
+        .send(body)
+        .expect(201);
+      const secondToken = await csrfTokenFor(agent);
+      await agent
+        .post('/auth/register')
+        .set('x-csrf-token', secondToken)
+        .send(body)
+        .expect(201);
+      const blockedToken = await csrfTokenFor(agent);
+      const response = await agent
+        .post('/auth/register')
+        .set('x-csrf-token', blockedToken)
+        .send(body)
+        .expect(429);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'RATE_LIMITED', message: expect.any(String) as string },
+      });
+    });
+
+    it('keeps GET /auth/csrf on the default tier', async () => {
+      await recreateApp({
+        RATE_LIMIT_TTL_MS: '60000',
+        RATE_LIMIT_STRICT_LIMIT: '2',
+      });
+      const agent = request.agent(server);
+
+      for (let attempt = 0; attempt < 7; attempt += 1) {
+        await agent.get('/auth/csrf').expect(200);
+      }
+    });
+
+    it('limits GET /auth/csrf with the default tier', async () => {
+      await recreateApp({
+        RATE_LIMIT_TTL_MS: '60000',
+        RATE_LIMIT_DEFAULT_LIMIT: '2',
+      });
+      const agent = request.agent(server);
+
+      await agent.get('/auth/csrf').expect(200);
+      await agent.get('/auth/csrf').expect(200);
+      const response = await agent.get('/auth/csrf').expect(429);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'RATE_LIMITED', message: expect.any(String) as string },
+      });
+    });
+
+    it('skips throttling for GET /health', async () => {
+      await recreateApp({
+        RATE_LIMIT_TTL_MS: '60000',
+        RATE_LIMIT_DEFAULT_LIMIT: '2',
+      });
+
+      for (let attempt = 0; attempt < 7; attempt += 1) {
+        await request(server).get('/health').expect(200);
+      }
     });
   });
 });

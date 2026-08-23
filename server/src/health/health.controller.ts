@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { HealthService, type HealthStatus } from './health.service';
 
 /**
@@ -6,6 +7,7 @@ import { HealthService, type HealthStatus } from './health.service';
  * database, so a load balancer cannot be told the service is down when it is
  * the database that is unreachable.
  */
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthService) {}
