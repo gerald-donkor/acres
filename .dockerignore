@@ -1,0 +1,31 @@
+# git and CI metadata
+.git
+.github
+
+# dependency and build artefacts — reinstalled/rebuilt inside the image
+node_modules
+**/node_modules
+server/dist
+server/coverage
+server/src/generated
+packages/shared/dist
+**/*.tsbuildinfo
+
+# the client ships to Vercel, not this image (docs/backend.md §10); only its
+# package.json is needed, to satisfy npm workspace resolution (see the
+# Dockerfile's "deps" stage comment). "client/**" (not the bare "client") is
+# required here: a bare directory pattern prunes the whole subtree before the
+# negation below is ever evaluated against anything inside it, which silently
+# drops client/package.json too (verified empirically against git's identical
+# gitignore-style matcher during prompt 14's code review, 2026-08-23).
+client/**
+!client/package.json
+
+# secrets — never baked into the image, injected at `docker run` / by the host
+.env*
+!client/.env.example
+!server/.env.example
+
+# misc
+.DS_Store
+*.log

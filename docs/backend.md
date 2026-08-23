@@ -510,9 +510,11 @@ rather than appearing to pass a suite that does not exist.
 serverless function.** It holds server-side sessions and runs in-process
 scheduled jobs; neither survives a function that is frozen between requests.
 
-**No provider manifest is created in this step** — no Dockerfile, no CI
-workflow, no Terraform. `AGENTS.md` §8.2 defers host selection, and the
-production start contract is host-portable:
+**A Dockerfile and a CI workflow exist as of `prompts/14-server-deployment-infra.md`**
+(§10.1 below) — `AGENTS.md` §8.2 still defers host selection, Terraform and an
+actual registry, but the "no provider manifest is created" line above is now
+stale for two of its three items. The production start contract remains
+host-portable independent of the container:
 
 ```bash
 npm run build          # or: npm run build:shared && npm run build:server
@@ -541,6 +543,85 @@ must configure that proxy trust boundary explicitly or enforce equivalent
 client-IP-aware rate limiting at the edge.
 
 Next.js on Vercel is unchanged and unaffected.
+
+### 10.1 The Dockerfile and CI workflow
+
+Added by `prompts/14-server-deployment-infra.md` (2026-08-23):
+`server/Dockerfile`, root `.dockerignore`, and `.github/workflows/ci.yml`.
+
+**Four build stages**, all `node:22-alpine`:
+
+1. **`deps`** — installs only `@acres/server` and `@acres/shared`'s
+   dependencies via `npm ci --workspace=@acres/server --workspace=@acres/shared
+   --include-workspace-root --ignore-scripts`. `client/package.json` (but none
+   of `client/`'s source) still has to be copied in, because `npm ci` validates
+   every workspace declared in root `package.json`'s `"workspaces"` array
+   against `package-lock.json` even when `--workspace` scopes what actually
+   gets linked — verified this session in an isolated scratch directory.
+   `--ignore-scripts` skips the root `prepare` hook (which builds
+   `@acres/shared`) and any package postinstall; both run explicitly in stage 2.
+2. **`build`** (`FROM deps`) — copies `packages/shared` and `server` source,
+   then runs `npm run build --workspace=@acres/shared && npm run build
+   --workspace=@acres/server` (`prisma generate && nest build`). The generated
+   Prisma client (`server/src/generated/prisma`, 15 `.ts` files, no non-`.ts`
+   runtime asset) compiles into `server/dist/generated/prisma` along with
+   everything else `tsc` touches — confirmed by inspecting the build output
+   this session — so there is nothing `nest build` could silently fail to
+   carry into `dist`.
+3. **`prod-deps`** — a second, independent `npm ci --omit=dev` of the same two
+   workspaces, so the runtime image's `node_modules` never carries a devDependency.
+4. **`runtime`** — assembles the shipped image from `prod-deps`'s
+   `node_modules` and `build`'s two `dist` outputs. Runs as `USER node`, not
+   root.
+
+**The `@acres/shared` symlink resolution rule**: `prod-deps`'s `npm ci` links
+`@acres/shared` into `node_modules/@acres/shared` as a relative symlink to
+`../../packages/shared` — verified with `readlink` against a real
+npm-workspaces fixture during this prompt's code review (2026-08-23), not
+recalled; the symlink itself sits one directory deeper than an unscoped
+package's would, inside the `@acres/` directory npm creates for scoped names.
+Copying `node_modules` alone would carry a symlink that resolves to nothing,
+so the runtime stage also copies `@acres/shared`'s real `package.json` and
+`dist` to `packages/shared/...` — the same relative position it occupies in
+the source tree — which makes the copied symlink resolve correctly with no
+`node_modules` rewriting.
+
+**`CMD ["node", "server/dist/main.js"]`, not `npm run start:server`**: read in
+full this session, the `nestjs-best-practices` skill's
+`devops-graceful-shutdown` rule requires `SIGTERM` delivered straight to the
+Node process so `app.setup.ts`'s `enableShutdownHooks()` can drain in-flight
+requests before exit — running npm as PID 1 does not reliably forward the
+signal. The already-documented consequence (§6) still applies: outside an
+npm-run entrypoint, `process.env.npm_package_version` is unset, so `GET
+/health` reports `"version": null` from this image. This is not a new
+trade-off, just the one place it is now unavoidable.
+
+**`HEALTHCHECK`** polls `GET /health` on `$PORT` every 30s (5s timeout, 10s
+start period, 3 retries) via `wget`, alpine's built-in HTTP client.
+
+**No registry push is configured.** The CI workflow's `docker` job builds the
+image with `docker/build-push-action@v7` and `push: false`, `load: true` — it
+proves the image builds and its container answers `/health`, and stops there.
+Choosing a registry and a host is deferred (§12).
+
+**The CI workflow** (`.github/workflows/ci.yml`) runs two jobs on push/PR to
+`main`: `checks` (`npm ci`, lint, typecheck, build, `test:server`) and
+`docker` (needs `checks`; builds the image, runs it with a throwaway
+`SESSION_SECRET` and a `DATABASE_URL` nothing connects to — `GET /health` takes
+no database dependency by design (§3), so the smoke test does not need a real
+Postgres — waits up to 30s for `/health` to answer, then always prints
+container logs and removes the container). Action versions were checked
+against their live tag lists this session (2026-08-23), not recalled:
+`actions/checkout@v7`, `actions/setup-node@v7`, `docker/setup-buildx-action@v4`,
+`docker/build-push-action@v7`.
+
+**Neither `docker build` nor the CI workflow's `docker` job has been executed
+anywhere in this session.** Docker is not installed in this sandbox
+(`which docker` → nothing); the only local verification was a manual trace of
+every `COPY --from=<stage> <src> <dst>` against the real repository build
+output, confirming every source path exists and no stage references a file no
+earlier stage produced, plus a YAML syntax parse of the workflow. The first
+real proof either works is the commit's own CI run on `main`.
 
 ---
 
@@ -787,6 +868,80 @@ $ git diff --check
 
 (no output)
 
+### Prompt 14 deployment-infra verification
+
+Run on 2026-08-23 for `prompts/14-server-deployment-infra.md`, on this
+sandbox's toolchain (`node v24.19.0`, `npm 11.17.0` — both satisfy §10's
+"Node 22+"; the Dockerfile pins its own `node:22-alpine` independent of the
+host running these checks).
+
+```text
+$ node -v && npm -v
+v24.19.0
+11.17.0
+```
+
+```text
+$ python3 -c "import yaml, sys; yaml.safe_load(open('.github/workflows/ci.yml')); print('ok')"
+ok
+```
+
+```text
+$ git diff --check -- server/Dockerfile .dockerignore .github/workflows/ci.yml
+```
+
+(no output)
+
+```text
+$ npm run lint
+> acres@0.1.0 lint
+> npm run lint --workspace=@acres/client && npm run lint --workspace=@acres/shared && npm run lint --workspace=@acres/server
+```
+
+(no errors)
+
+```text
+$ npm run typecheck
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 55ms
+```
+
+(no errors from any of the three workspaces)
+
+```text
+$ npm run build
+...
+✓ Compiled successfully in 1684ms
+...
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 67ms
+```
+
+(all three workspaces built clean — the Turbopack port-binding panic recorded
+under prompt 13's verification did not recur in this sandbox)
+
+```text
+$ npm run test:server
+Test Suites: 2 passed, 2 total
+Tests:       29 passed, 29 total
+Snapshots:   0 total
+Time:        4.659 s
+```
+
+**Manual Dockerfile trace** (Docker itself is not installed in this sandbox —
+`which docker` returned nothing, so no `docker build` ran anywhere in this
+session): every `COPY` source in `server/Dockerfile` was checked against the
+real repository layout after the build above. `packages/shared/package.json`,
+`packages/shared/dist` (populated, `outDir: "./dist"` in
+`packages/shared/tsconfig.json`), `server/package.json`, `server/dist`
+(populated, `nest-cli.json` uses the default `dist` output path), and
+`server/dist/main.js` all exist exactly where the Dockerfile's `COPY
+--from=<stage>` instructions expect them, including
+`server/dist/generated/prisma` — proof that `nest build`'s `tsc` compiles the
+generated Prisma client along with everything else, with no separate asset to
+drop. **This is a manual trace, not an execution; the build has not been run.**
+
 ---
 
 ## 12. Deferred, and why
@@ -801,5 +956,5 @@ $ git diff --check
 | login / register screens | same |
 | role-based authorization | `/jobs/runs` is session-gated only; §3 |
 | email delivery | which is why registration returns a generic failure; §4 |
-| Dockerfile, CI, Terraform, provider manifests | §10; `AGENTS.md` §8.2 defers them |
+| Terraform / IaC, an actual registry + push, choosing a host to run the container | §10.1 built the Dockerfile and CI; no hosting provider has been chosen |
 | OAuth / social login, analytics, billing, CMS, admin | out of scope for step 8 |

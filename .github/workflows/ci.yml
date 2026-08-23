@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lint, typecheck, build, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test:server
+
+  docker:
+    name: Build and smoke-test the API image
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: server/Dockerfile
+          push: false
+          load: true
+          tags: acres-server:ci
+      - name: Run the image
+        run: |
+          docker run -d --name acres-server-ci -p 3001:3001 \
+            -e NODE_ENV=production \
+            -e PORT=3001 \
+            -e CLIENT_ORIGIN=http://localhost:3000 \
+            -e DATABASE_URL="postgresql://acres:acres@localhost:5432/acres?schema=public" \
+            -e SESSION_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd \
+            -e SCHEDULER_ENABLED=false \
+            acres-server:ci
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost:3001/health; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "the container never answered /health"
+          exit 1
+      - name: Container logs
+        if: always()
+        run: docker logs acres-server-ci
+      - name: Stop container
+        if: always()
+        run: docker rm -f acres-server-ci
