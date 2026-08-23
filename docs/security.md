@@ -1,0 +1,264 @@
+# Acres security and threat model
+
+Status: repository-grounded threat model, reviewed for the **current** code and
+the **target** architecture approved 2026-08-23. It is not a penetration test,
+certification, compliance claim, or assertion that target controls are shipped.
+
+## 1. Executive summary
+
+Acres' highest-risk property is organization isolation: one authenticated
+customer must never obtain another customer's uploads, observations, reports,
+exports, jobs, or AI context. The next largest attack surface is the proposed
+untrusted-file pipeline, where malicious files can target object keys,
+scanners, parsers, spreadsheets, workers, and availability. GraphQL, queues,
+presigned storage, CI/migrations, and optional AI add powerful boundaries that
+must be introduced only with the negative tests assigned below.
+
+The current small API has meaningful controls—opaque hashed sessions, secure
+cookie attributes in production, global double-submit CSRF, strict DTO
+validation, exact-origin credentialed CORS, Helmet, password hashing, generic
+errors, throttling, and server-side revocation—but it has no organizations,
+RLS, uploads, GraphQL, worker, object storage, or production topology. Those
+controls are targets, not present-day defenses.
+
+## 2. Scope and assumptions
+
+In scope:
+
+- the current Next client, Nest API, Prisma/PostgreSQL boundary, shared
+  contracts, Docker image, and GitHub Actions workflow;
+- target organization tenancy, REST, GraphQL, SSE, uploads, Garage,
+  Valkey/BullMQ, worker, ClamAV, SMTP, telemetry, optional local AI, Compose,
+  Caddy, backups, CI, and migration identities;
+- application, operator, dependency, and supply-chain failure paths.
+
+Out of scope until separately selected: a cloud/provider edge, Kubernetes,
+mobile apps, public anonymous sharing, customer plugins, paid billing, SSO/SCIM,
+and unnamed public-data connectors. Physical host security and organizational
+personnel controls are operator responsibilities but remain relevant inputs.
+
+Assumptions requiring later validation:
+
+- production is same-origin HTTPS behind a correctly configured Caddy instance;
+- stateful dependencies are private and authenticated;
+- the operator can maintain off-host encrypted backups and separate runtime
+  from migration credentials;
+- uploaded business data is confidential unless an organization deliberately
+  publishes a future surface;
+- exact retention, SLO, RPO/RTO, upload limits, and alert thresholds are not yet
+  chosen;
+- no compliance regime or geography-specific legal obligation is claimed.
+
+## 3. System model and trust boundaries
+
+```mermaid
+flowchart LR
+  U[Untrusted browser / internet] -->|HTTPS, cookies, REST, GraphQL, SSE| Edge[Caddy boundary]
+  Edge --> Web[Next client]
+  Edge --> API[Nest API / authz boundary]
+  Edge -->|presigned object path| Store[Garage quarantine/artifacts]
+  API --> DB[(PostgreSQL RLS boundary)]
+  API --> Queue[(Valkey/BullMQ boundary)]
+  Queue --> Worker[Nest worker / parser boundary]
+  Worker --> Store
+  Worker --> AV[ClamAV boundary]
+  Worker --> Mail[SMTP boundary]
+  Worker -. minimal evidence .-> AI[Optional AI boundary]
+  API --> Obs[Telemetry boundary]
+  Worker --> Obs
+  CI[GitHub Actions / supply chain] -->|build image, migration artifacts| Deploy[Operator/deploy boundary]
+  Deploy --> Edge
+  Deploy --> DB
+```
+
+Trust is not transitive. A valid session does not imply membership, membership
+does not imply every permission, a signed upload URL does not make bytes safe,
+a queue message does not make work authorized, and a local AI process does not
+make output factual.
+
+## 4. Assets and data classes
+
+| asset | security property |
+| --- | --- |
+| Tenant business data, uploads, observations, dashboards, reports, exports | Confidentiality between organizations; integrity, provenance, and availability within the owner organization |
+| Accounts, contact PII, memberships, invitations | Confidentiality, correct identity binding, revocation, minimized disclosure |
+| Password hashes, raw session/CSRF tokens, service credentials, signing material | Non-disclosure, rotation, least privilege; raw tokens never persisted/logged |
+| Geography and metric definitions | Provenance, license, integrity, stable identity; public geography does not weaken tenant data isolation |
+| Dataset versions and evidence links | Immutability, reproducibility, source/version integrity |
+| Audit events and security logs | Append-oriented integrity, restricted access, useful correlation without secrets |
+| Queue/outbox/job state | Authenticity, idempotency, replay resistance, recoverability |
+| Migrations, images, dependencies, CI workflows | Supply-chain integrity and controlled promotion |
+| Optional AI prompts, evidence, drafts, model/license records | Tenant confidentiality, evidence grounding, human authority |
+| Backups | Confidentiality, completeness, restorability, controlled deletion |
+
+Classification details are owned by [`product.md`](product.md#5-data-classification).
+
+## 5. Actors and attacker model
+
+- An unauthenticated internet attacker can send arbitrary HTTP requests, forge
+  headers, submit public forms/auth attempts, and manipulate client-visible
+  parameters. They do not initially possess host or database credentials.
+- A legitimate viewer/analyst/admin can inspect client traffic and guess UUIDs,
+  manipulate GraphQL/REST inputs, replay commands, upload hostile files, and
+  intentionally cross tenant boundaries. Their valid account is not trusted.
+- A malicious or compromised dependency/service can return crafted mail,
+  scanner, storage, queue, telemetry, or AI data. Private networking reduces
+  reachability but does not validate payloads.
+- A compromised browser/XSS or stolen session can act with the victim's current
+  permissions. HttpOnly cookies reduce token theft but not same-origin actions.
+- A CI contributor or compromised package/action can attempt secret theft or
+  artifact tampering. Branch protections and external platform settings are not
+  visible here and must be verified.
+- An operator/migration identity is highly privileged. The model limits and
+  audits it but cannot protect against a fully malicious root administrator.
+- Attackers are not assumed to break modern cryptography, a correctly
+  implemented password hash, or TLS. Availability attacks are bounded by
+  capacity, not made impossible.
+
+## 6. Entry points and boundary controls
+
+| entry point | current evidence | target gate |
+| --- | --- | --- |
+| REST/auth/session | Unversioned Nest routes; DTO allowlist; opaque SHA-256 session token hashes; Argon2id passwords; revocation | `/api/v1`, centralized org permission, idempotency, request IDs, stable errors, tenant repository + RLS |
+| Cookies/CSRF/CORS | `HttpOnly`, `SameSite=Lax`, production `Secure`; session-bound double-submit token; exact configured origin; credentialed allowed headers/methods | Same-origin Caddy; canonical origin; CSRF rotation regression; proxy trust review; no state-changing GET |
+| GraphQL | Not present | Authenticated read-only boundary; tenant context, request-scoped DataLoader, depth/complexity/byte/time/result limits, sanitized errors |
+| SSE | Not present | Authorized status only, reconnect cursor where needed, bounded connections, durable PG state independent of stream |
+| Upload/presigned storage | Not present | Short expiry/method/key; quarantine; checksum/type/size/shape checks; scan before parse; attachment downloads |
+| Parsers/worker | Not present | Isolated staged jobs; memory/CPU/time/expansion/geometry bounds; identifier-only payloads; idempotency and cancellation |
+| Queue/outbox | Not present | Private authenticated `noeviction` Valkey; deterministic job IDs; PG outbox; replay/poison/dead-letter handling |
+| SMTP | Not present | Provider-neutral adapter, recipient/content validation, throttling, no credentials/content in logs |
+| Optional AI | Not present | Disabled by default; tenant-bound minimal evidence; schema validation; no tools/mutation/publication; evaluation and human decision |
+| Logs/metrics | Nest logs exist; generic client 500s; no canonical telemetry stack | Structured redaction; low-cardinality metrics; access-controlled telemetry; raw data/prompts excluded by default |
+| CI/dependencies/images | Lockfile, `npm ci`, least `contents: read`, build/test and non-root server image | Pin/review actions, dependency/container/SAST/secret scans, provenance, protected promotion, rotated deploy credentials |
+| Migrations/database | Prisma schema but no real DB or first migration | Reviewed SQL; separate owner/migration/runtime/test roles; pending-migration readiness; RLS/PostGIS integration tests |
+
+Current evidence anchors include `server/src/app.setup.ts`,
+`server/src/security/csrf.service.ts`, `server/src/sessions/sessions.service.ts`,
+`server/src/security/rate-limit.guard.ts`, `server/src/config/env.validation.ts`,
+`server/src/common/api-exception.filter.ts`, `.github/workflows/ci.yml`, and
+`server/Dockerfile`.
+
+## 7. Prioritized abuse paths
+
+1. **Cross-tenant direct-object access.** A member guesses another tenant's
+   UUID through REST, GraphQL node lookup, export, object URL, relation, or job.
+   Impact is critical confidentiality/integrity loss. Phase 3 must establish
+   two-layer isolation; every later surface adds negative tests.
+2. **Role or organization-context escalation.** A member changes role,
+   organization ID, invitation, active-org header, or stale membership to run a
+   forbidden command. Central policy, transaction tenant context, last-owner
+   rules, revocation, and audit are the target.
+3. **Session-assisted state change.** A stolen session or cross-site request
+   performs a mutation. Current HttpOnly/SameSite/CSRF controls reduce risk;
+   XSS, stale tokens, origin/proxy mistakes, recovery and org permissions still
+   need phase-specific tests.
+4. **Malicious upload to parser execution/exhaustion.** Crafted archives,
+   spreadsheets, GeoJSON, or type confusion consume CPU/memory/disk or exploit
+   a parser. Quarantine, scan-before-parse, content checks, strict budgets,
+   process isolation, dependency scanning, and fail-closed stages are required.
+5. **Storage key/signature manipulation.** A member alters a key, method,
+   checksum, or presigned URL to overwrite/read a foreign object. The API must
+   derive opaque keys, bind DB ownership, constrain signatures, and reconcile
+   storage with metadata.
+6. **GraphQL amplification and inference.** Aliases/fragments/deep pagination
+   amplify DB work or global IDs reveal foreign existence. Per-request tenant
+   authorization, complexity/depth/result/time limits, batching, opaque cursors,
+   and indistinguishable not-found behavior bound it.
+7. **Queue poisoning or replay.** Forged, duplicated, stale, or enormous jobs
+   cause unauthorized or duplicate persistence. Private/authenticated Valkey,
+   identifier-only versioned payloads, deterministic job IDs, state re-checks,
+   outbox identity, idempotent stages, and dead-letter inspection are required.
+8. **Spreadsheet formula injection.** A malicious cell is emitted into CSV/XLSX
+   and executes when opened. Export policy must neutralize formula-leading text,
+   use safe content disposition, and include fixture tests.
+9. **SSRF through a connector, webhook, import, or AI tool.** No arbitrary URL
+   fetch exists in the target core. Any later adapter must restrict protocols,
+   allowlist destinations, block private/metadata networks after DNS resolution,
+   cap redirects/body/time, and never forward cookies/secrets.
+10. **AI prompt injection or data leakage.** Dataset text manipulates a model or
+    evidence from another tenant enters context/logs. AI has no tools/authority,
+    receives only authorized evidence, validates output, runs leakage/grounding
+    evaluation, and falls back to no-AI behavior.
+11. **Secret or audit compromise.** CI/log/config/image mistakes expose tokens,
+    or a privileged actor edits evidence. Secret scanning/injection/rotation,
+    separated credentials, redaction, append-oriented audit, protected backups,
+    and alerts reduce impact.
+12. **Targeted availability attack.** Auth, GraphQL, uploads, parsers, export,
+    email, or AI consumes finite resources. Layered rate/size/concurrency/time
+    limits, backpressure, queues, circuit breakers, disk signals, and graceful
+    degradation protect core reads.
+
+## 8. Threat register
+
+| ID | threat / affected assets | likelihood / impact | existing control | target mitigation and validation | owner |
+| --- | --- | --- | --- | --- | --- |
+| TM-01 | Cross-tenant read/write through ID, relation, export, or job | High / Critical | No tenant product data exists | Scoped repositories + `ENABLE/FORCE RLS`; two-org negative matrix through DB/REST/GraphQL/job/export | Phase 3, extended 4/6–10 |
+| TM-02 | Role escalation, invitation replay, last-owner removal | Medium / High | Account-only auth | Central permission map, expiring one-use hashed invites, concurrency constraint, audit; full role/invite tests | Phase 3 |
+| TM-03 | Session theft/fixation/replay or weak recovery | Medium / High | CSPRNG opaque token, DB hash, HttpOnly/Lax/Secure, expiry/revocation; login creates a new token | Recovery/verification token records, session rotation/revoke-all policy, no URL tokens after consume; browser/API regression | Phase 3/5 |
+| TM-04 | CSRF or origin/proxy bypass | Medium / High | Global session-bound double-submit CSRF, exact CORS, SameSite | Same-origin routing, canonical host/origin, proxy trust and mutation inventory tests, token refresh on login | Phase 5/12 |
+| TM-05 | Password/account enumeration or credential stuffing | High / Medium | Generic register/login failure, Argon2id, strict per-IP throttle | Distributed/user+IP throttle, recovery abuse controls, alerts; enumeration/timing and rate tests | Phase 3/12 |
+| TM-06 | Malicious upload/type confusion/malware | High / High | Uploads absent | Quarantine, signature/type/extension/checksum checks, ClamAV fail closed, no inline active content; hostile fixtures | Phase 6 |
+| TM-07 | Archive/parser/geometry resource exhaustion | High / High | Uploads absent | Streamed limits, expansion/nesting/row/column/geometry/time/memory budgets, worker isolation; bomb/timeout tests | Phase 6/7 |
+| TM-08 | Object-key traversal, foreign overwrite/read, signature replay | Medium / Critical | Object storage absent | Server-derived org/upload keys, method/expiry/checksum binding, metadata auth, attachment response; tamper/cross-org tests | Phase 6 |
+| TM-09 | Spreadsheet formula injection or stored UI XSS | Medium / High | React escapes current fixed content; no product export | Formula neutralization, structured rendering, no raw HTML/SVG, CSP; export/open and browser sink tests | Phase 5/10 |
+| TM-10 | GraphQL complexity, N+1, data inference, verbose errors | High / High | GraphQL absent | Auth before resolution, tenant loaders, depth/complexity/byte/result/time caps, sanitized errors; adversarial queries/query-count tests | Phase 4 |
+| TM-11 | Queue poisoning/replay or stale authorization | Medium / High | Queue absent | Private authenticated queue, identifier-only schema, deterministic IDs, re-authorize against PG, idempotency/dead letter; replay/poison tests | Phase 6 |
+| TM-12 | Outbox loss/duplicate delivery or split-brain state | Medium / High | Current jobs are DB reads/in-process schedule | Transactional outbox, claim locks, unique event/handler identity, reconciliation; crash-after-commit/duplicate tests | Phase 6 |
+| TM-13 | SSRF through future URLs/webhooks/connectors | Low now / High | No such fetch path evidenced | Default no arbitrary fetch; protocol/host/IP allowlists, DNS recheck, redirect/body/time limits; private-network fixtures | Owning future phase |
+| TM-14 | AI injection, unsupported claim, cross-tenant leakage | Medium if enabled / High | AI absent | Disabled/no tools, minimal tenant evidence, schema + claim validation, prompt/version/eval record, human publish; injection/leak/no-AI tests | Phase 11 |
+| TM-15 | Secrets in client, git, image, CI output, queue, or logs | Medium / Critical | Env validation; client currently has no API secrets; CI read-only contents | Secret manager/injection, scoped identities, scanning, redaction, rotation drill; artifact/image/log inspection | Phase 2/6/12 |
+| TM-16 | Audit alteration or sensitive audit leakage | Medium / High | No product audit model | Append-oriented events, restricted reads, actor/request/evidence identity, no secret payload, backup/alert; permission/tamper tests | Phase 3/12 |
+| TM-17 | SQL injection or RLS bypass via raw PostGIS SQL | Medium / Critical | Prisma parameterization for current queries | Reviewed parameterized raw SQL helpers, non-owner roles, FORCE RLS, SAST and real DB tests | Phase 2/3/7 |
+| TM-18 | Dependency/action/container supply-chain compromise | Medium / Critical | npm lockfile/`npm ci`, CI `contents: read`, non-root image | Pin/review actions/images, dependency/container/SAST/secret scans, artifact provenance and controlled promotion | Phase 12 |
+| TM-19 | Backup theft, incomplete restore, or destructive migration | Medium / Critical | No production DB/backups/migration | Separate migration role, reviewed SQL, encrypted off-host backup, scheduled restore/reconcile, forward-fix plan | Phase 2/12 |
+| TM-20 | Targeted DoS across auth/query/upload/worker/storage | High / High | In-process per-IP throttling and body validation; proxy not defined | Caddy limits, distributed throttles, complexity/size/time/concurrency/backpressure, capacity alerts and degraded modes | Phase 4/6/12 |
+| TM-21 | Offline disclosure of live database/object volumes or keys | Medium / Critical | No production stateful volumes exist | Production host/block-volume encryption for PostgreSQL and Garage; operator-owned keys separate from data/backups; mount/key-recovery inspection | Phase 2/6/12 |
+
+## 9. Security acceptance suite
+
+Before launch, automated evidence must include:
+
+- two-organization negative CRUD and relation tests at repository, REST,
+  GraphQL, export, object, pooled-connection, and worker boundaries;
+- a complete role-permission matrix, invitation expiry/replay, concurrent
+  ownership changes, revocation, session expiry, CSRF rotation, and account
+  enumeration tests;
+- object-key/signature/checksum/size/type tampering, malware, scan timeout,
+  archive expansion, parser resource, malformed XLSX/CSV/GeoJSON, and orphan
+  reconciliation fixtures;
+- queue duplicate/replay/poison/stale-auth, crash-after-commit, outbox recovery,
+  dead-letter, cancellation, and graceful-drain tests;
+- GraphQL depth/complexity/alias/oversize/timeout/cursor/global-ID/error-leak
+  cases plus measured query-count assertions;
+- formula injection, untrusted text/URL rendering, CSP/security-header runtime,
+  cached prior-organization data, and accessible error/status browser tests;
+- SQL injection/static analysis, dependency/secret/container scans, CI
+  permission review, image content/non-root checks, and credential-rotation drill;
+- backup restore from the migration chain followed by DB/object reconciliation;
+- production volume-encryption configuration and separation of unlock material,
+  plus a documented key-recovery exercise that does not expose the key in CI;
+- if AI is enabled: cross-tenant canaries, prompt injection, unsupported claims,
+  output schema/size, timeout/circuit breaker, raw-prompt log scan, human publish,
+  and complete no-AI regression.
+
+Tests must run against real PostgreSQL for constraints/RLS and real browsers for
+client security behavior. Mocks can isolate units but cannot prove a boundary.
+
+## 10. Critical review paths
+
+Every phase review should trace at least these end to end:
+
+- principal → active organization → permission → repository → transaction-local
+  RLS context → response;
+- upload authorization → signed key → quarantine → scan → bounded parse →
+  immutable publish → evidence;
+- PostgreSQL commit → outbox claim → queue delivery → idempotent worker → job
+  status/reconciliation;
+- metric definition → observation/version → dashboard/report evidence → export;
+- CI source/dependency → build artifact → migration identity → runtime identity;
+- optional evidence selection → AI adapter → schema/grounding evaluation → human
+  publication, with the adapter removed to prove fallback.
+
+Open values from §2 must be resolved by the phase that first needs them. If a
+new boundary or attacker capability is introduced, update this threat model in
+the same change.

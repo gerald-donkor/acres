@@ -958,3 +958,31 @@ drop. **This is a manual trace, not an execution; the build has not been run.**
 | email delivery | which is why registration returns a generic failure; §4 |
 | Terraform / IaC, an actual registry + push, choosing a host to run the container | §10.1 built the Dockerfile and CI; no hosting provider has been chosen |
 | OAuth / social login, analytics, billing, CMS, admin | out of scope for step 8 |
+
+---
+
+## 13. Current backend to target architecture bridge
+
+Prompt 16 established the target product architecture after this build record
+was written. This section is a bridge, not a claim that the target has shipped.
+For decisions and sequencing, read `docs/system-architecture.md`,
+`docs/security.md`, `docs/product.md`, and `docs/build-plan.md`.
+
+| current implementation evidenced above | approved target | owning phase |
+| --- | --- | --- |
+| NestJS 11.2/Express API with unversioned routes | Keep Nest 11; `/health` remains unversioned, application REST moves to `/api/v1`, and authenticated read-heavy queries gain complementary `/graphql` | 4 |
+| `accounts`, `auth`, and `sessions`; opaque hashed database sessions and global CSRF | Identity boundary plus organizations, memberships, invitations/recovery, centralized `owner/admin/analyst/viewer` permissions, active organization context and negative isolation tests | 3, then client in 5 |
+| Prisma 7.9.1 schema with seven models; no database or migration | Real PostgreSQL/PostGIS, reviewed first Prisma 7 migration, separate migration/runtime/test roles; Prisma 8 stays deferred until GA and a dedicated migration | 2 |
+| No tenant-owned product records or RLS | Organization-scoped repository ports plus `ENABLE/FORCE ROW LEVEL SECURITY`, transaction-local tenant context, non-owner API/worker roles, default deny | 3 |
+| Flat public `Region` records | Globally shared arbitrary-depth administrative hierarchy, stable external codes/aliases/provenance and reviewed PostGIS geometry SQL | 7 |
+| DB-backed `JobRun` reads and one in-process hourly session purge | PostgreSQL outbox/job authority, Valkey/BullMQ transport, separately runnable Nest worker, idempotent stages, retries/dead letters and audited schedules | 6 |
+| No object storage, upload, parser, or antivirus boundary | Garage quarantine/artifacts, short-lived presigned uploads, ClamAV scan-before-parse, bounded CSV/XLSX/GeoJSON stages and immutable dataset versions | 6–7 |
+| Metric/report placeholder tables without product ingestion | Typed metric definitions/observations/quality/aggregates, dashboards/saved views, immutable report revisions/evidence and secure exports | 8–10 |
+| No client API consumer or authenticated application UI | Same-origin Caddy routing, verified Next 16.3 server/browser clients, accessible authenticated shell and real-browser journeys | 5 |
+| Portable Node 22 API image and GitHub Actions build/smoke test; no full topology | Verify and move to Node 24 LTS, Compose+Caddy single-host reference, private stateful services, OTel/Prometheus/optional Grafana, backups/restores and hardened promotion | 2 and 12 |
+| No AI | Optional disabled-by-default local llama.cpp/vLLM adapter receives minimal authorized evidence and proposes schema-validated drafts; deterministic product remains complete | 11 |
+
+The existing route, security, environment, test, and deployment descriptions in
+§§2–11 remain the facts until their owning phase is implemented and committed.
+When a phase lands, update the relevant section in place and retain only the
+migration rationale that a future maintainer still needs.

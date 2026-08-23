@@ -52,11 +52,19 @@ the read will re-derive it by hand or silently break it.
 | `docs/polish.md` | the `web-design-guidelines` pass, the skip link and focus order, the reduced-motion CSS, the touch and colour-scheme base rules, the 404 page, the whole metadata and icon surface, and the pixel diff that proves no comp geometry moved | **written.** Read it before any accessibility, metadata or icon change; it records the accepted hero-flash trade-off and corrects two stale lines elsewhere |
 | `docs/backend.md` | the NestJS API — the resolved package versions and why each one, the three-workspace scripts, the module and route map, the envelopes, auth/session/hashing and the CSRF defence with what it does not cover, the environment contract, the scheduler's single-instance constraint, the Prisma 7 specifics, the tests, and the deployment requirements | **written.** Read it before touching `server/`, `packages/shared/` or the root scripts; it records why the first migration is deferred and corrects two stale lines in §8.1 |
 | `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | **written.** Measurement and headless CDP verification recipes |
-| `docs/skills.md` | the skills installed in `.agents/skills/`, what each is for, what was deliberately excluded and why | not yet written |
+| `docs/product.md` | the target B2B regional-analytics product — personas, fixed roles, journeys, V1 boundary, data classes, behavioral success criteria, open decisions and glossary | **written.** Read before changing product scope, roles, data meaning, or user journeys; target decisions are not proof of implementation |
+| `docs/system-architecture.md` | the current/target/deferred system design — modular boundaries, six system views, runtime/FOSS choices, target data model, RLS, REST/GraphQL, ingestion, optional AI and operations | **written.** Read before changing runtime topology, modules, persistence, APIs, queues/storage, tenancy, AI, or deployment |
+| `docs/security.md` | the repository-grounded current and target threat model — assets, boundaries, actors, abuse paths, threat register and acceptance suite | **written.** Read before adding or changing a trust boundary, tenant data, auth, uploads, GraphQL, workers, CI/secrets or AI |
+| `docs/build-plan.md` | the ordered 12-phase application build with dependencies, non-goals, security/tests, rollback, exit gates and exact phase skill manifests | **written.** It replaces §8.2 as the detailed post-backend implementation sequence |
+| `docs/skills.md` | every locked project skill with source/path/hash/trigger, the installation convention, selected architecture skills and deliberate exclusions | **written.** Read before installing, updating, removing, or choosing skills |
 
 **A row here is a promise that the file exists.** Never cite one that does not —
 create it in the same change that first needs it, and add its row in that same
 change (§10 rule 1).
+
+For backend work, `docs/backend.md` is the implemented-state record and
+`docs/system-architecture.md` is the target-state authority. Neither substitutes
+for checking code and git history to determine what is actually built.
 
 ---
 
@@ -478,6 +486,19 @@ the map. **Listing a skill is not loading it.**
 | `vercel-react-best-practices` | writing or refactoring any component — server/client boundaries and bundle cost |
 | `nestjs-best-practices` | any work in `server/` — modules, providers, guards, filters, interceptors, Prisma access. It appeared after step 8 began; the line in `prompts/10-nestjs-server.md` saying no NestJS skill is installed is stale |
 | `vercel-react-view-transitions` | route or state transitions, before reaching for a library |
+| `architecture-patterns`, `architecture-decision-records` | module/service boundaries or a durable architecture choice; keep the modular-monolith and replacement process explicit |
+| `api-design-principles`, `openapi-spec-generation` | REST/GraphQL contracts, versioning, pagination, errors, OpenAPI generation or contract drift |
+| `postgres-best-practices`, `sql-optimization-patterns` | schema, SQL, migrations, constraints, RLS, indexes or measured query plans |
+| `auth-implementation-patterns` | sessions, organizations/memberships, roles/permissions, invitations, verification or recovery |
+| `security-best-practices`, `security-threat-model` | explicit secure-by-default work/security review, or any new/changed trust boundary and threat model |
+| `javascript-testing-patterns`, `e2e-testing-patterns`, `playwright` | TypeScript tests, cross-system journeys, or real-browser acceptance/debugging respectively |
+| `error-handling-patterns` | transport errors, retry classification, partial failure or graceful degradation |
+| `kpi-dashboard-design`, `data-storytelling` | metric semantics/dashboard hierarchy and evidence-led reports respectively |
+| `prompt-engineering-patterns`, `llm-evaluation` | the optional AI phase's versioned prompts and groundedness/safety/no-AI regression evaluation |
+| `deployment-pipeline-design`, `github-actions-templates` | deployment/promotion/rollback and GitHub Actions implementation respectively |
+| `prometheus-configuration`, `grafana-dashboards` | operational metrics/alerts and operator dashboards; Grafana is not the customer analytics UI |
+| `secrets-management`, `sast-configuration` | runtime/CI credentials and static security scanning respectively |
+| `accessibility-compliance` | authenticated application WCAG 2.2 semantics, keyboard, screen-reader, contrast and error-feedback behavior |
 | `requesting-code-review` | completing tasks, implementing features, or preparing review requests to dispatch reviewer subagent (§2, §2.1) |
 | `receiving-code-review` | receiving code review feedback, to evaluate and act on suggestions with technical rigor before implementing changes (§2, §2.1) |
 | `caveman-commit` | **every commit, always** (§3, §7) |
@@ -544,15 +565,18 @@ never acted on is the same failure as one that was omitted.
 
 Scripts that currently exist in `package.json`:
 
-- `npm run dev` — the Next.js dev server
-- `npm run build` — production build
-- `npm run start` — serve the production build, after `npm run build`
-- `npm run lint` — ESLint
+- `npm run dev` / `npm run dev:client` — the Next.js development server
+- `npm run dev:server` — the Nest development server
+- `npm run build` — shared, client and server production builds, in dependency order
+- `npm run build:shared`, `npm run build:client`, `npm run build:server` — one-workspace builds
+- `npm run start` / `npm run start:server` — serve the built client or server
+- `npm run lint` — ESLint across all three workspaces
+- `npm run typecheck` — build shared, then typecheck shared, client and server
+- `npm run test:server` — the server e2e suite
 
-**There is no `typecheck` script and no test runner.** Type errors surface
-through `npm run build`, or `npx tsc --noEmit` run directly. **Never reference a
-script name before it exists** — add it in the prompt that needs it, and say
-so.
+A bare `npx tsc --noEmit` at the root checks nothing because there is no root
+`tsconfig.json`; use the root `typecheck` script. **Never reference a script
+name before it exists** — add it in the prompt that needs it, and say so.
 
 **Report the exact command output. Never claim a check passed without running
 it** (§10 rule 3).
@@ -635,16 +659,21 @@ from this snapshot.
 
 ## 8.2 The build sequence
 
-**This is the order, and the dependency column is why.** One step is one prompt
-file unless it says otherwise. A step is done when its work is **committed** —
-resolved from the repository and `git log`, never from this list (§10 rule 5).
-Do not tick anything here; this file records the plan, not the progress.
+**The detailed target application sequence is now
+`docs/build-plan.md`.** It owns dependencies, behaviors, non-goals, security
+cases, tests, rollback, documentation, exit evidence, and the exact skill
+manifest for every phase. This section remains only the concise index.
+
+A phase is done only when its implementation is committed, resolved from the
+repository and `git log`, never from this list or a prompt (§10 rule 5). A phase
+may be split into several numbered prompts, but cannot bypass its dependency or
+exit gate.
 
 > **Citation convention.** `§N` always means a section of this file; "step N"
 > always means a row of this table; `prompts/NN-…` is a third sequence again and
 > does not correspond to either. Never write a bare number for any of them.
 
-| # | step | depends on |
+| legacy step / target phase | completed foundation / target phase | depends on |
 | --- | --- | --- |
 | 1 | **The design system** — `docs/design-system.md` and the `@theme` block that expresses it: palette, the three type families and their scale, spacing, radii, the container, motion constants. Resolves the three open questions in §1.2, §1.1 and §1.6 | — |
 | 2 | **Primitives** — `Button` and its four variants (§1.5), the container, the section shell, the eyebrow, the hairline rule. Built on step 1's tokens, on top of `client/components/ui/` where a primitive already fits | 1 |
@@ -654,37 +683,36 @@ Do not tick anything here; this file records the plan, not the progress.
 | 6 | **Polish and the accessibility pass** — `web-design-guidelines` run over the whole page, reduced motion honoured, focus visible everywhere, real metadata | 5 |
 | 7 | **The `client/` split** — `git mv` the app into `client/`, npm workspaces at the root, and rewrite every path this file's §0 pins plus the pinned paths in each written `docs/` file. **`server/` is not created here** | 6 |
 | 8 | **The NestJS server** — `server/` scaffolded, `packages/shared` for the DTOs both sides read, then the data layer, auth and accounts, jobs and scheduling, and forms | 7 |
+| phase 1 | **Architecture foundation** — canonical product/system/security/build/skills docs and implementation skills | step 8 |
+| phase 2 | **Infrastructure + first migration** | phase 1 |
+| phase 3 | **Organizations + RLS** | phase 2 |
+| phase 4 | **Versioned REST + complementary GraphQL** | phase 3 |
+| phase 5 | **Client/backend connection** | phases 3–4 |
+| phase 6 | **Storage + queues + secure uploads** | phases 3–4 |
+| phase 7 | **Geography + ingestion** | phase 6 |
+| phase 8 | **Metrics + deterministic analytics** | phase 7 |
+| phase 9 | **Dashboards + optimized GraphQL** | phases 5, 8 |
+| phase 10 | **Reports + exports** | phases 6, 8–9 |
+| phase 11 | **Optional local AI** | phase 10 and separate enablement decision |
+| phase 12 | **Operations + launch hardening** | all launch-scope phases |
 
-**Step 1 is load-bearing and everything else waits on it.** A component built
-before the tokens exist encodes a hex value that then has to be found and
-removed from every file it reached.
-
-**Steps 7 and 8 are the backend, and the split is deliberate.** The user's
-sequencing, set on 2026-08-20: **build the UI first, hook it to the server
-after.** So the restructure runs at the seam — after step 6, not before — and it
-moves the client only. NestJS earns a second runtime because the backend's
-confirmed scope is a real data layer over regional data, auth with sessions,
-scheduled jobs, and forms; that is not a Next route handler's job. `server/`
-stays uncreated until step 8 so that no scaffold sits dead through the UI work,
-and the workspace wiring and the Nest setup stay two reviewable changes.
-
-**Step 7 settled the client split**: npm workspaces rather than Turborepo,
-`client/public/assets/ui/` as the moved design-reference root, Git-tracked
-renames for the client tree, and `packages/shared` deferred to step 8. Nest
-deployment remains a step-8 decision — Next on Vercel is settled, but jobs and
-scheduling may want a long-lived host, and that shapes how the Nest app is
-structured, so it is decided before step 8's jobs work, not during the client
-split.
+The target invariants are: B2B organization tenancy; CSV/XLSX/GeoJSON uploads
+first; global arbitrary-depth administrative geography; modular monolith with
+separate API/worker processes; PostgreSQL/PostGIS authority; Valkey/BullMQ and
+Garage behind ports; application repository scoping plus forced PostgreSQL RLS;
+versioned REST for commands/files/auth and read-heavy GraphQL; deterministic
+analytics and reports with a complete no-AI path. “Free” means the core software
+stack is FOSS and self-hostable, not that infrastructure or operations cost
+nothing. Read `docs/product.md` and `docs/system-architecture.md` for the
+decision details and change gates.
 
 ### Do not overbuild
 
-No second design system. No component library that is not `client/components/ui/` plus
-our own primitives on top. **Through step 6 there is no backend, no database, no
-auth and no CMS** — the content is typed constants, and steps 7 and 8 are the
-"until a prompt says otherwise". Nothing in the backend is started early: a step
-7 or step 8 concern raised during steps 1–6 is recorded, not built. **No feature
-that is not a step above** — if one seems necessary, say so and ask rather than
-adding it.
+No second design system. No component library that is not
+`client/components/ui/` plus Acres primitives. No runtime, provider, schema,
+route, connector, billing, AI, or deployment surface is pulled forward from its
+phase. If one seems necessary, update the architecture/build-plan decision and
+obtain approval rather than adding it incidentally.
 
 **The sequence is a dependency graph, not a schedule.** It says what must exist
 before what, and nothing about dates.
