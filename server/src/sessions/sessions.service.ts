@@ -1,13 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { createHash, randomBytes } from 'node:crypto';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcresConfigService } from '../config/acres-config.service';
 import { toAccountProfile } from '../accounts/account-profile';
 import type { SessionContext } from './authenticated-request';
-
-/** 32 bytes of CSPRNG output, base64url-encoded. */
-const TOKEN_BYTES = 32;
+import { hashToken, issueRawToken } from '../common/tokens';
 
 @Injectable()
 export class SessionsService {
@@ -21,7 +18,7 @@ export class SessionsService {
    * the cookie, and nowhere else — only its SHA-256 digest is stored.
    */
   async issue(accountId: string): Promise<{ token: string; expiresAt: Date }> {
-    const token = randomBytes(TOKEN_BYTES).toString('base64url');
+    const token = issueRawToken();
     const expiresAt = new Date(
       Date.now() + this.config.sessionTtlDays * 24 * 60 * 60 * 1000,
     );
@@ -105,8 +102,4 @@ export class SessionsService {
       path: '/',
     });
   }
-}
-
-export function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
 }

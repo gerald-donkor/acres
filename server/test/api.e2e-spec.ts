@@ -373,6 +373,118 @@ describe('Acres API', () => {
     });
   });
 
+  describe('organizations', () => {
+    it('fails closed when tenancy is disabled', async () => {
+      await recreateApp({ TENANCY_ENABLED: 'false' });
+      const { agent } = await signedInAgent();
+
+      const response = await agent.get('/organizations').expect(503);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_READY' },
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('fails closed on organization-scoped routes before tenant lookup', async () => {
+      await recreateApp({ TENANCY_ENABLED: 'false' });
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get('/organizations/018f0000-0000-7000-8000-000000000001')
+        .expect(503);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_READY' },
+      });
+      expect(prisma.membership.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('creates an explicit first organization for the signed-in account', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      const createdAt = new Date('2026-08-24T10:00:00.000Z');
+      const updatedAt = new Date('2026-08-24T10:01:00.000Z');
+      prisma.organization.create.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000001',
+        name: 'Acme Analytics',
+        createdAt,
+        updatedAt,
+      });
+      prisma.membership.create.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId: '018f0000-0000-7000-8000-000000000001',
+        accountId: 'account-1',
+        role: 'owner',
+        createdAt,
+        updatedAt,
+        revokedAt: null,
+      });
+      prisma.auditEvent.create.mockResolvedValue({ id: 'audit-1' });
+
+      const response = await agent
+        .post('/organizations')
+        .set('x-csrf-token', csrf)
+        .send({ name: ' Acme Analytics ' })
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        ok: true,
+        data: {
+          name: 'Acme Analytics',
+          membership: { role: 'owner' },
+        },
+      });
+      const expectedMembershipData: unknown = expect.objectContaining({
+        accountId: 'account-1',
+        role: 'owner',
+      });
+      expect(prisma.membership.create).toHaveBeenCalledWith({
+        data: expectedMembershipData,
+      });
+    });
+
+    it('returns NOT_FOUND for malformed organization context before querying', async () => {
+      const { agent } = await signedInAgent();
+
+      const response = await agent.get('/organizations/not-a-uuid').expect(404);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+      expect(prisma.membership.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('validates ownership-transfer membership ids from the body', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.membership.findFirst.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId: '018f0000-0000-7000-8000-000000000001',
+        accountId: 'account-1',
+        role: 'owner',
+        revokedAt: null,
+      });
+
+      const response = await agent
+        .post(
+          '/organizations/018f0000-0000-7000-8000-000000000001/ownership-transfers',
+        )
+        .set('x-csrf-token', csrf)
+        .send({ membershipId: 'not-a-uuid' })
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'VALIDATION_FAILED' },
+      });
+      expect(prisma.membership.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('GET /regions/:slug', () => {
     it('answers 404 NOT_FOUND for an unknown slug', async () => {
       prisma.region.findUnique.mockResolvedValue(null);

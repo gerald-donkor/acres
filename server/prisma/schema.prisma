@@ -16,13 +16,18 @@ datasource db {
 
 /// A first-party email/password account.
 model Account {
-  id           String    @id @default(uuid(7))
-  email        String    @unique
-  passwordHash String
-  displayName  String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  sessions     Session[]
+  id                    String        @id @default(uuid(7))
+  email                 String        @unique
+  passwordHash          String
+  displayName           String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  sessions              Session[]
+  memberships           Membership[]
+  invitationsIssued     Invitation[]  @relation("InvitationIssuer")
+  invitationsAccepted   Invitation[]  @relation("InvitationAcceptor")
+  accountTokens         AccountToken[]
+  auditEventsAuthored   AuditEvent[]  @relation("AuditActor")
 }
 
 /// An opaque, server-revocable browser session. Only the hash is stored.
@@ -117,4 +122,109 @@ enum JobRunStatus {
   running
   succeeded
   failed
+}
+
+/// The tenant and primary authorization boundary.
+model Organization {
+  id          String       @id @default(uuid(7))
+  name        String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  invitations Invitation[]
+  auditEvents AuditEvent[]
+}
+
+/// An account's organization-local role. Revoked rows remain as provenance.
+model Membership {
+  id             String           @id @default(uuid(7))
+  organizationId String
+  accountId      String
+  role           OrganizationRole
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  revokedAt      DateTime?
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  account        Account          @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, accountId])
+  @@index([accountId, revokedAt, organizationId])
+  @@index([organizationId, revokedAt, role])
+}
+
+/// A single-use invitation. Only the token hash is stored.
+model Invitation {
+  id                 String           @id @default(uuid(7))
+  organizationId     String
+  email              String
+  role               OrganizationRole
+  tokenHash          String           @unique
+  invitedByAccountId String
+  expiresAt          DateTime
+  createdAt          DateTime         @default(now())
+  acceptedAt         DateTime?
+  acceptedByAccountId String?
+  revokedAt          DateTime?
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invitedBy          Account          @relation("InvitationIssuer", fields: [invitedByAccountId], references: [id], onDelete: Restrict)
+  acceptedBy         Account?         @relation("InvitationAcceptor", fields: [acceptedByAccountId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, revokedAt, acceptedAt, createdAt])
+  @@index([expiresAt])
+}
+
+/// Identity-owned single-use token storage for recovery and verification.
+model AccountToken {
+  id         String              @id @default(uuid(7))
+  accountId  String
+  purpose    AccountTokenPurpose
+  tokenHash  String              @unique
+  expiresAt  DateTime
+  createdAt  DateTime            @default(now())
+  consumedAt DateTime?
+  revokedAt  DateTime?
+  account    Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, purpose, revokedAt, consumedAt, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Append-oriented organization security and governance history.
+model AuditEvent {
+  id              String       @id @default(uuid(7))
+  organizationId  String
+  actorAccountId  String?
+  action          AuditAction
+  targetType      String
+  targetId        String?
+  details         Json?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actor           Account?     @relation("AuditActor", fields: [actorAccountId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, action, createdAt])
+  @@index([actorAccountId, createdAt])
+}
+
+enum OrganizationRole {
+  owner
+  admin
+  analyst
+  viewer
+}
+
+enum AccountTokenPurpose {
+  password_recovery
+  email_verification
+}
+
+enum AuditAction {
+  organization_created
+  organization_updated
+  invitation_issued
+  invitation_revoked
+  invitation_accepted
+  membership_role_changed
+  membership_revoked
+  ownership_transferred
 }

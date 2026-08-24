@@ -19,6 +19,9 @@ export interface AcresEnv {
   rateLimitTtlMs: number;
   rateLimitDefaultLimit: number;
   rateLimitStrictLimit: number;
+  tenancyEnabled: boolean;
+  invitationTtlHours: number;
+  accountTokenTtlMinutes: number;
 }
 
 const REQUIRED = ['DATABASE_URL', 'CLIENT_ORIGIN', 'SESSION_SECRET'] as const;
@@ -32,6 +35,7 @@ const DEFAULTS = {
   RATE_LIMIT_TTL_MS: '60000',
   RATE_LIMIT_DEFAULT_LIMIT: '120',
   RATE_LIMIT_STRICT_LIMIT: '10',
+  TENANCY_ENABLED: 'false',
 } as const;
 
 function positiveInt(name: string, raw: string): number {
@@ -111,6 +115,18 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
     rateLimitStrictLimit: positiveInt(
       'RATE_LIMIT_STRICT_LIMIT',
       env.RATE_LIMIT_STRICT_LIMIT ?? DEFAULTS.RATE_LIMIT_STRICT_LIMIT,
+    ),
+    tenancyEnabled: boolean(
+      'TENANCY_ENABLED',
+      env.TENANCY_ENABLED ?? DEFAULTS.TENANCY_ENABLED,
+    ),
+    invitationTtlHours: positiveInt(
+      'INVITATION_TTL_HOURS',
+      env.INVITATION_TTL_HOURS ?? '',
+    ),
+    accountTokenTtlMinutes: positiveInt(
+      'ACCOUNT_TOKEN_TTL_MINUTES',
+      env.ACCOUNT_TOKEN_TTL_MINUTES ?? '',
     ),
   };
 }

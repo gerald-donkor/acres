@@ -34,11 +34,20 @@ organization-local role. The fixed role ladder is:
 | `analyst` | Import, validate, model, explore, and author | Upload and map data, resolve validation issues, create dashboards, draft reports, request exports |
 | `viewer` | Consume approved work | Browse published dashboards and reports and export only where permission permits |
 
-These names are not an authorization implementation. Permissions are the
-contract: a centralized policy maps a role to allowed actions, and controllers,
-resolvers, workers, and UI affordances call that policy. String comparisons
-scattered through transports are prohibited. The server remains authoritative;
-hiding an action in the client is only a usability measure.
+These names are now implemented for the organization administration surface in
+`server/src/organizations/permissions.ts`. Permissions are the contract: a
+centralized policy maps a role to allowed actions, and controllers, resolvers,
+workers, and UI affordances call that policy. String comparisons scattered
+through transports are prohibited. The server remains authoritative; hiding an
+action in the client is only a usability measure.
+
+Current phase-3 permissions are `organization.read`, `organization.update`,
+`members.read`, `members.invite`, `members.change_role`, `members.revoke`,
+`ownership.transfer`, `invitations.read`, `invitations.revoke` and
+`audit.read`. `owner` has all of them; `admin` can read/update organizations
+and manage non-owner memberships/invitations; `analyst` and `viewer` can read
+the organization only. Generic role updates and invitations cannot assign
+`owner`.
 
 Organization ownership has these invariants:
 

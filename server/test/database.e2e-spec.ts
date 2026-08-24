@@ -53,6 +53,24 @@ describe('Acres API — real database', () => {
     return { agent, token: body.data.csrfToken };
   }
 
+  async function signedInAgent(email = 'tenant@example.com') {
+    const { agent, token } = await csrfAgent();
+    await agent
+      .post('/auth/register')
+      .set('x-csrf-token', token)
+      .send({
+        email,
+        password: 'a-long-enough-password',
+        displayName: 'Tenant User',
+      })
+      .expect(201);
+    const csrf = await agent.get('/auth/csrf').expect(200);
+    return {
+      agent,
+      token: (csrf.body as { data: { csrfToken: string } }).data.csrfToken,
+    };
+  }
+
   async function expectConnectionDenied(connectionString: string) {
     const probe = new PrismaClient({
       adapter: new PrismaPg({
@@ -294,6 +312,216 @@ describe('Acres API — real database', () => {
       );
       await expectConnectionDenied(
         'postgresql://acres_app:acres_app_dev_password@localhost:5432/postgres?schema=public',
+      );
+    });
+  });
+
+  describe('organization RLS', () => {
+    it('enables and forces RLS on every tenant table', async () => {
+      const rows = await prisma.$queryRaw<
+        {
+          relname: string;
+          relrowsecurity: boolean;
+          relforcerowsecurity: boolean;
+        }[]
+      >`
+        SELECT relname, relrowsecurity, relforcerowsecurity
+        FROM pg_class
+        WHERE relname IN ('Organization','Membership','Invitation','AuditEvent')
+        ORDER BY relname
+      `;
+
+      expect(rows).toEqual([
+        {
+          relname: 'AuditEvent',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'Invitation',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'Membership',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'Organization',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+      ]);
+    });
+
+    it('creates an organization through scoped REST and default-denies unscoped reads', async () => {
+      const { agent, token } = await signedInAgent('owner@example.com');
+
+      const response = await agent
+        .post('/organizations')
+        .set('x-csrf-token', token)
+        .send({ name: 'Owner Org' })
+        .expect(201);
+
+      const organizationId = (response.body as { data: { id: string } }).data
+        .id;
+      expect(organizationId).toBeTruthy();
+
+      await expect(prisma.organization.findMany()).resolves.toEqual([]);
+      await expect(prisma.membership.findMany()).resolves.toEqual([]);
+      await expect(prisma.auditEvent.findMany()).resolves.toEqual([]);
+    });
+
+    it('returns the same not-found envelope for foreign and absent organization ids', async () => {
+      const owner = await signedInAgent('owner@example.com');
+      const other = await signedInAgent('other@example.com');
+
+      const created = await owner.agent
+        .post('/organizations')
+        .set('x-csrf-token', owner.token)
+        .send({ name: 'Owner Org' })
+        .expect(201);
+      const foreignId = (created.body as { data: { id: string } }).data.id;
+      const absentId = '018f0000-0000-7000-8000-000000000099';
+
+      const foreign = await other.agent
+        .get(`/organizations/${foreignId}`)
+        .expect(404);
+      const absent = await other.agent
+        .get(`/organizations/${absentId}`)
+        .expect(404);
+
+      expect(foreign.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+      expect(absent.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+    });
+
+    it('accepts a valid invitation under RLS and rejects replay', async () => {
+      const owner = await signedInAgent('owner@example.com');
+      const invited = await signedInAgent('invited@example.com');
+
+      const created = await owner.agent
+        .post('/organizations')
+        .set('x-csrf-token', owner.token)
+        .send({ name: 'Owner Org' })
+        .expect(201);
+      const organizationId = (created.body as { data: { id: string } }).data.id;
+
+      const issued = await owner.agent
+        .post(`/organizations/${organizationId}/invitations`)
+        .set('x-csrf-token', owner.token)
+        .send({ email: 'invited@example.com', role: 'viewer' })
+        .expect(201);
+      const token = (issued.body as { data: { token: string } }).data.token;
+
+      const accepted = await invited.agent
+        .post('/invitations/accept')
+        .set('x-csrf-token', invited.token)
+        .send({ token })
+        .expect(200);
+
+      expect(accepted.body).toMatchObject({
+        ok: true,
+        data: { organizationId, membershipId: expect.any(String) as string },
+      });
+
+      const replay = await invited.agent
+        .post('/invitations/accept')
+        .set('x-csrf-token', invited.token)
+        .send({ token })
+        .expect(404);
+
+      expect(replay.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+      await expect(prisma.membership.findMany()).resolves.toEqual([]);
+      await expect(prisma.invitation.findMany()).resolves.toEqual([]);
+    });
+
+    it('allows a replacement invitation after the previous one expires', async () => {
+      const owner = await signedInAgent('owner@example.com');
+
+      const created = await owner.agent
+        .post('/organizations')
+        .set('x-csrf-token', owner.token)
+        .send({ name: 'Owner Org' })
+        .expect(201);
+      const organizationId = (created.body as { data: { id: string } }).data.id;
+
+      const first = await owner.agent
+        .post(`/organizations/${organizationId}/invitations`)
+        .set('x-csrf-token', owner.token)
+        .send({ email: 'expired@example.com', role: 'viewer' })
+        .expect(201);
+      const invitationId = (first.body as { data: { id: string } }).data.id;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', '', true),
+            set_config('acres.organization_id', ${organizationId}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        await tx.invitation.update({
+          where: { id: invitationId },
+          data: { expiresAt: new Date(Date.now() - 60_000) },
+        });
+      });
+
+      const replacement = await owner.agent
+        .post(`/organizations/${organizationId}/invitations`)
+        .set('x-csrf-token', owner.token)
+        .send({ email: 'expired@example.com', role: 'viewer' })
+        .expect(201);
+
+      expect(replacement.body).toMatchObject({
+        ok: true,
+        data: {
+          email: 'expired@example.com',
+          token: expect.any(String) as string,
+        },
+      });
+    });
+
+    it('default-denies tenant reads when context settings are malformed', async () => {
+      const { agent, token } = await signedInAgent('owner@example.com');
+
+      await agent
+        .post('/organizations')
+        .set('x-csrf-token', token)
+        .send({ name: 'Owner Org' })
+        .expect(201);
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', 'not-a-uuid', true),
+            set_config('acres.organization_id', 'not-a-uuid', true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        await expect(tx.organization.findMany()).resolves.toEqual([]);
+        await expect(tx.membership.findMany()).resolves.toEqual([]);
+        await expect(tx.auditEvent.findMany()).resolves.toEqual([]);
+      });
+    });
+
+    it('keeps the last-owner trigger in place', async () => {
+      const triggers = await prisma.$queryRaw<{ tgname: string }[]>`
+        SELECT tgname
+        FROM pg_trigger t
+        JOIN pg_class c ON c.oid = t.tgrelid
+        WHERE c.relname = 'Membership' AND NOT t.tgisinternal
+      `;
+
+      expect(triggers.map((row) => row.tgname)).toContain(
+        'Membership_last_owner_guard',
       );
     });
   });

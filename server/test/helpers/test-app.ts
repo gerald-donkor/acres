@@ -34,11 +34,43 @@ export interface PrismaDouble {
     update: jest.Mock;
     findMany: jest.Mock;
   };
+  organization: {
+    create: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
+  membership: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
+  invitation: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    findUnique: jest.Mock;
+    findFirst: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+  };
+  auditEvent: {
+    create: jest.Mock;
+  };
+  accountToken: {
+    create: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+  };
+  $executeRaw: jest.Mock;
+  $queryRaw: jest.Mock;
+  $transaction: jest.Mock;
   $disconnect: jest.Mock;
 }
 
 export function createPrismaDouble(): PrismaDouble {
-  return {
+  const prisma = {
     account: { findUnique: jest.fn(), create: jest.fn() },
     session: {
       create: jest.fn(),
@@ -49,8 +81,42 @@ export function createPrismaDouble(): PrismaDouble {
     region: { findMany: jest.fn(), findUnique: jest.fn() },
     contactSubmission: { create: jest.fn() },
     jobRun: { create: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+    organization: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    membership: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    invitation: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    auditEvent: { create: jest.fn() },
+    accountToken: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    $executeRaw: jest.fn().mockResolvedValue(0),
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn(),
     $disconnect: jest.fn().mockResolvedValue(undefined),
   };
+  prisma.$transaction.mockImplementation(
+    (callback: (tx: PrismaDouble) => unknown) => callback(prisma),
+  );
+  return prisma;
 }
 
 function envValue(
@@ -110,6 +176,15 @@ function configDouble(
     },
     get rateLimitStrictLimit() {
       return positiveInt(envOverrides, 'RATE_LIMIT_STRICT_LIMIT');
+    },
+    get tenancyEnabled() {
+      return envValue(envOverrides, 'TENANCY_ENABLED') === 'true';
+    },
+    get invitationTtlHours() {
+      return positiveInt(envOverrides, 'INVITATION_TTL_HOURS');
+    },
+    get accountTokenTtlMinutes() {
+      return positiveInt(envOverrides, 'ACCOUNT_TOKEN_TTL_MINUTES');
     },
   } as AcresConfigService;
 }

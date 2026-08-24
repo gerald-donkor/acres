@@ -44,6 +44,16 @@ export class ApiException extends HttpException {
     );
   }
 
+  static forbidden(
+    message = 'You do not have permission to do that.',
+  ): ApiException {
+    return new ApiException('FORBIDDEN', message, HttpStatus.FORBIDDEN);
+  }
+
+  static conflict(message: string): ApiException {
+    return new ApiException('CONFLICT', message, HttpStatus.CONFLICT);
+  }
+
   static notFound(message: string): ApiException {
     return new ApiException('NOT_FOUND', message, HttpStatus.NOT_FOUND);
   }

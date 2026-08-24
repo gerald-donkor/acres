@@ -113,6 +113,8 @@ input; implementation must not invent them.
 
 ## 4. Phase 3 — organizations, permissions, and RLS
 
+Status: implemented by `prompts/22-organizations-permissions-rls.md`.
+
 - **Depends on:** phase 2 real database, roles, and migration harness.
 - **Outcome/behavior:** organizations, memberships, invitations, recovery
   tokens, fixed role-to-permission policy, active organization context,

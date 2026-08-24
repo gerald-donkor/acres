@@ -14,12 +14,15 @@ scanners, parsers, spreadsheets, workers, and availability. GraphQL, queues,
 presigned storage, CI/migrations, and optional AI add powerful boundaries that
 must be introduced only with the negative tests assigned below.
 
-The current small API has meaningful controls—opaque hashed sessions, secure
+The current API has meaningful controls—opaque hashed sessions, secure
 cookie attributes in production, global double-submit CSRF, strict DTO
 validation, exact-origin credentialed CORS, Helmet, password hashing, generic
-errors, throttling, and server-side revocation—but it has no organizations,
-RLS, uploads, GraphQL, worker, object storage, or production topology. Those
-controls are targets, not present-day defenses.
+errors, throttling, server-side revocation, organization memberships,
+centralized organization permissions, hash-only invitations/account tokens,
+append-oriented organization audit events, transaction-local tenant context and
+forced RLS on the phase-3 organization tables. It still has no uploads,
+GraphQL, worker, object storage, mail delivery, or production topology. Those
+remaining controls are targets, not present-day defenses.
 
 ## 2. Scope and assumptions
 
@@ -119,7 +122,7 @@ Classification details are owned by [`product.md`](product.md#5-data-classificat
 
 | entry point | current evidence | target gate |
 | --- | --- | --- |
-| REST/auth/session | Unversioned Nest routes; DTO allowlist; opaque SHA-256 session token hashes; Argon2id passwords; revocation | `/api/v1`, centralized org permission, idempotency, request IDs, stable errors, tenant repository + RLS |
+| REST/auth/session | Unversioned Nest routes; DTO allowlist; opaque SHA-256 session token hashes; cost-12 bcrypt passwords; revocation | `/api/v1`, centralized org permission, idempotency, request IDs, stable errors, tenant repository + RLS |
 | Cookies/CSRF/CORS | `HttpOnly`, `SameSite=Lax`, production `Secure`; session-bound double-submit token; exact configured origin; credentialed allowed headers/methods | Same-origin Caddy; canonical origin; CSRF rotation regression; proxy trust review; no state-changing GET |
 | GraphQL | Not present | Authenticated read-only boundary; tenant context, request-scoped DataLoader, depth/complexity/byte/time/result limits, sanitized errors |
 | SSE | Not present | Authorized status only, reconnect cursor where needed, bounded connections, durable PG state independent of stream |
@@ -192,11 +195,11 @@ Current evidence anchors include `server/src/app.setup.ts`,
 
 | ID | threat / affected assets | likelihood / impact | existing control | target mitigation and validation | owner |
 | --- | --- | --- | --- | --- | --- |
-| TM-01 | Cross-tenant read/write through ID, relation, export, or job | High / Critical | No tenant product data exists | Scoped repositories + `ENABLE/FORCE RLS`; two-org negative matrix through DB/REST/GraphQL/job/export | Phase 3, extended 4/6–10 |
-| TM-02 | Role escalation, invitation replay, last-owner removal | Medium / High | Account-only auth | Central permission map, expiring one-use hashed invites, concurrency constraint, audit; full role/invite tests | Phase 3 |
-| TM-03 | Session theft/fixation/replay or weak recovery | Medium / High | CSPRNG opaque token, DB hash, HttpOnly/Lax/Secure, expiry/revocation; login creates a new token | Recovery/verification token records, session rotation/revoke-all policy, no URL tokens after consume; browser/API regression | Phase 3/5 |
+| TM-01 | Cross-tenant read/write through ID, relation, export, or job | High / Critical | Phase-3 organization tables have scoped services, transaction-local settings and `ENABLE/FORCE RLS`; real DB tests cover default-deny and foreign/absent not-found for organizations | Extend the same negative matrix through GraphQL/job/export/object surfaces as they ship | Phase 4/6–10 |
+| TM-02 | Role escalation, invitation replay, last-owner removal | Medium / High | Central permission map, non-owner generic role assignment, expiring hash-only invites, last-owner trigger and audit are implemented for organization admin | Broaden lifecycle/concurrency fixtures as membership workflows grow | Phase 3 follow-up/5 |
+| TM-03 | Session theft/fixation/replay or weak recovery | Medium / High | CSPRNG opaque session tokens, DB hashes, HttpOnly/Lax/Secure, expiry/revocation; login creates a new token; recovery/verification token records exist without a delivery route | Public recovery route, delivery adapter and revoke-all-on-password-change remain later work | Phase 5/mail |
 | TM-04 | CSRF or origin/proxy bypass | Medium / High | Global session-bound double-submit CSRF, exact CORS, SameSite | Same-origin routing, canonical host/origin, proxy trust and mutation inventory tests, token refresh on login | Phase 5/12 |
-| TM-05 | Password/account enumeration or credential stuffing | High / Medium | Generic register/login failure, Argon2id, strict per-IP throttle | Distributed/user+IP throttle, recovery abuse controls, alerts; enumeration/timing and rate tests | Phase 3/12 |
+| TM-05 | Password/account enumeration or credential stuffing | High / Medium | Generic register/login failure, cost-12 bcrypt, strict per-IP throttle | Distributed/user+IP throttle, recovery abuse controls, alerts; enumeration/timing and rate tests | Phase 3/12 |
 | TM-06 | Malicious upload/type confusion/malware | High / High | Uploads absent | Quarantine, signature/type/extension/checksum checks, ClamAV fail closed, no inline active content; hostile fixtures | Phase 6 |
 | TM-07 | Archive/parser/geometry resource exhaustion | High / High | Uploads absent | Streamed limits, expansion/nesting/row/column/geometry/time/memory budgets, worker isolation; bomb/timeout tests | Phase 6/7 |
 | TM-08 | Object-key traversal, foreign overwrite/read, signature replay | Medium / Critical | Object storage absent | Server-derived org/upload keys, method/expiry/checksum binding, metadata auth, attachment response; tamper/cross-org tests | Phase 6 |
@@ -207,8 +210,8 @@ Current evidence anchors include `server/src/app.setup.ts`,
 | TM-13 | SSRF through future URLs/webhooks/connectors | Low now / High | No such fetch path evidenced | Default no arbitrary fetch; protocol/host/IP allowlists, DNS recheck, redirect/body/time limits; private-network fixtures | Owning future phase |
 | TM-14 | AI injection, unsupported claim, cross-tenant leakage | Medium if enabled / High | AI absent | Disabled/no tools, minimal tenant evidence, schema + claim validation, prompt/version/eval record, human publish; injection/leak/no-AI tests | Phase 11 |
 | TM-15 | Secrets in client, git, image, CI output, queue, or logs | Medium / Critical | Env validation; client currently has no API secrets; CI read-only contents | Secret manager/injection, scoped identities, scanning, redaction, rotation drill; artifact/image/log inspection | Phase 2/6/12 |
-| TM-16 | Audit alteration or sensitive audit leakage | Medium / High | No product audit model | Append-oriented events, restricted reads, actor/request/evidence identity, no secret payload, backup/alert; permission/tamper tests | Phase 3/12 |
-| TM-17 | SQL injection or RLS bypass via raw PostGIS SQL | Medium / Critical | Prisma parameterization for current queries | Reviewed parameterized raw SQL helpers, non-owner roles, FORCE RLS, SAST and real DB tests | Phase 2/3/7 |
+| TM-16 | Audit alteration or sensitive audit leakage | Medium / High | Organization `AuditEvent` is append-oriented for runtime roles; update/delete are not granted, and tests/catalog checks cover forced RLS and privileges | Retention, alerting, backup integrity and later product audit surfaces remain phase 12/later work | Phase 12 |
+| TM-17 | SQL injection or RLS bypass via raw PostGIS SQL | Medium / Critical | Tenant context uses tagged Prisma raw SQL; runtime/test roles are non-owner/no `BYPASSRLS`; forced RLS is catalog-tested | PostGIS-specific raw SQL and SAST remain for geography/analytics phases | Phase 7/12 |
 | TM-18 | Dependency/action/container supply-chain compromise | Medium / Critical | npm lockfile/`npm ci`, CI `contents: read`, non-root image | Pin/review actions/images, dependency/container/SAST/secret scans, artifact provenance and controlled promotion | Phase 12 |
 | TM-19 | Backup theft, incomplete restore, or destructive migration | Medium / Critical | No production DB/backups/migration | Separate migration role, reviewed SQL, encrypted off-host backup, scheduled restore/reconcile, forward-fix plan | Phase 2/12 |
 | TM-20 | Targeted DoS across auth/query/upload/worker/storage | High / High | In-process per-IP throttling and body validation; proxy not defined | Caddy limits, distributed throttles, complexity/size/time/concurrency/backpressure, capacity alerts and degraded modes | Phase 4/6/12 |

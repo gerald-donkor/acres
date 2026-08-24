@@ -16,3 +16,6 @@ process.env.SCHEDULER_ENABLED = 'false';
 process.env.RATE_LIMIT_TTL_MS = '60000';
 process.env.RATE_LIMIT_DEFAULT_LIMIT = '1000';
 process.env.RATE_LIMIT_STRICT_LIMIT = '1000';
+process.env.TENANCY_ENABLED = 'true';
+process.env.INVITATION_TTL_HOURS = '24';
+process.env.ACCOUNT_TOKEN_TTL_MINUTES = '30';

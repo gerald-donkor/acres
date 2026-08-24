@@ -10,6 +10,9 @@ const BASE_ENV = {
   SESSION_SECRET: 'test-secret-that-is-at-least-32-characters',
   CSRF_COOKIE_NAME: 'acres_csrf',
   SCHEDULER_ENABLED: 'false',
+  TENANCY_ENABLED: 'true',
+  INVITATION_TTL_HOURS: '24',
+  ACCOUNT_TOKEN_TTL_MINUTES: '30',
 };
 
 describe('validateEnv rate limiting', () => {
@@ -47,5 +50,47 @@ describe('validateEnv rate limiting', () => {
         [name]: '0',
       }),
     ).toThrow(`${name} must be a positive integer`);
+  });
+});
+
+describe('validateEnv tenancy', () => {
+  it('parses the feature gate and token lifetimes', () => {
+    expect(validateEnv(BASE_ENV)).toMatchObject({
+      tenancyEnabled: true,
+      invitationTtlHours: 24,
+      accountTokenTtlMinutes: 30,
+    });
+  });
+
+  it('defaults TENANCY_ENABLED to false but still requires lifetimes', () => {
+    const withoutGate: Partial<typeof BASE_ENV> = { ...BASE_ENV };
+    delete withoutGate.TENANCY_ENABLED;
+
+    expect(validateEnv(withoutGate)).toMatchObject({
+      tenancyEnabled: false,
+      invitationTtlHours: 24,
+      accountTokenTtlMinutes: 30,
+    });
+  });
+
+  it.each([
+    ['TENANCY_ENABLED', 'yes', 'TENANCY_ENABLED must be "true" or "false"'],
+    [
+      'INVITATION_TTL_HOURS',
+      '0',
+      'INVITATION_TTL_HOURS must be a positive integer',
+    ],
+    [
+      'ACCOUNT_TOKEN_TTL_MINUTES',
+      '0',
+      'ACCOUNT_TOKEN_TTL_MINUTES must be a positive integer',
+    ],
+  ])('rejects invalid %s', (name, value, message) => {
+    expect(() =>
+      validateEnv({
+        ...BASE_ENV,
+        [name]: value,
+      }),
+    ).toThrow(message);
   });
 });

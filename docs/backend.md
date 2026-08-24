@@ -1462,12 +1462,12 @@ No output.
 | `@acres/shared` in `client/` | nothing consumes it yet |
 | any landing-page form UI | the endpoint exists; the form is a later prompt |
 | login / register screens | same |
-| role-based authorization | `/jobs/runs` is session-gated only; §3 |
+| product authorization beyond organizations | `/jobs/runs` is still session-gated only; tenant routes use the organization policy in §14 |
 | email delivery | which is why registration returns a generic failure; §4 |
 | Terraform / IaC, an actual registry + push, choosing a host to run the container | §10.1 built the Dockerfile and CI; no hosting provider has been chosen |
 | OAuth / social login, analytics, billing, CMS, admin | out of scope for step 8 |
 | production PostgreSQL host, volume encryption implementation, key-recovery tooling | §8.1 records the target-state *contract* only; no production host exists to inspect or drill against — phase 12 |
-| organizations, memberships, RLS | phase 3, depends on phase 2 (landed) but is not part of it |
+| organization deletion, mail delivery, product data tenancy beyond the phase-3 tables | deletion/retention/SMTP/later tenant tables remain unapproved or later-phase work |
 | readiness-endpoint container smoke test in the CI `docker` job | that job has no Postgres service attached; adding one grows CI runtime for a check phase 2 does not require there — the `checks` job's integration suite already covers it |
 
 ---
@@ -1482,9 +1482,9 @@ For decisions and sequencing, read `docs/system-architecture.md`,
 | current implementation evidenced above | approved target | owning phase |
 | --- | --- | --- |
 | NestJS 11.2/Express API with unversioned routes | Keep Nest 11; `/health` remains unversioned, application REST moves to `/api/v1`, and authenticated read-heavy queries gain complementary `/graphql` | 4 |
-| `accounts`, `auth`, and `sessions`; opaque hashed database sessions and global CSRF | Identity boundary plus organizations, memberships, invitations/recovery, centralized `owner/admin/analyst/viewer` permissions, active organization context and negative isolation tests | 3, then client in 5 |
+| `accounts`, `auth`, and `sessions`; opaque hashed database sessions and global CSRF. Identity now also owns account-token persistence with no public delivery route | Recovery UI/mail delivery and client auth shell | 5, mail in a later approved phase |
 | Prisma 7.9.1 schema with seven models; real PostgreSQL 18/PostGIS 3.6, first migration (`20260823204922_init`) generated/reviewed/committed, three-role separation landed (§8.1) | Same, in production: a provisioned host, and the volume-encryption/key-recovery contract §8.1 records implemented and drilled; Prisma 8 stays deferred until GA and a dedicated migration | 2, then 12 for the production host |
-| No tenant-owned product records or RLS | Organization-scoped repository ports plus `ENABLE/FORCE ROW LEVEL SECURITY`, transaction-local tenant context, non-owner API/worker roles, default deny | 3 |
+| Organizations, memberships, invitations and audit events are tenant-scoped with transaction-local context and forced RLS | Later tenant-owned datasets/dashboards/reports/exports inherit this boundary in their phases | 6-10 |
 | Flat public `Region` records | Globally shared arbitrary-depth administrative hierarchy, stable external codes/aliases/provenance and reviewed PostGIS geometry SQL | 7 |
 | DB-backed `JobRun` reads and one in-process hourly session purge | PostgreSQL outbox/job authority, Valkey/BullMQ transport, separately runnable Nest worker, idempotent stages, retries/dead letters and audited schedules | 6 |
 | No object storage, upload, parser, or antivirus boundary | Garage quarantine/artifacts, short-lived presigned uploads, ClamAV scan-before-parse, bounded CSV/XLSX/GeoJSON stages and immutable dataset versions | 6–7 |
@@ -1497,3 +1497,116 @@ The existing route, security, environment, test, and deployment descriptions in
 §§2–11 remain the facts until their owning phase is implemented and committed.
 When a phase lands, update the relevant section in place and retain only the
 migration rationale that a future maintainer still needs.
+
+---
+
+## 14. Organizations, permissions and RLS
+
+Implemented by `prompts/22-organizations-permissions-rls.md`.
+
+### Route map
+
+All routes keep the existing success/error envelopes. All mutations remain
+under the global CSRF middleware and all routes require an authenticated
+session.
+
+| method | path | behavior |
+| --- | --- | --- |
+| `GET` | `/organizations` | list active organizations for the account |
+| `POST` | `/organizations` | explicit bootstrap: create organization, owner membership and audit event |
+| `GET` | `/organizations/:organizationId` | read the selected organization and caller membership |
+| `PATCH` | `/organizations/:organizationId` | update organization name |
+| `GET` | `/organizations/:organizationId/members` | list active/revoked membership state |
+| `PATCH` | `/organizations/:organizationId/members/:membershipId` | change a non-owner target role |
+| `DELETE` | `/organizations/:organizationId/members/:membershipId` | soft-revoke a non-owner membership |
+| `POST` | `/organizations/:organizationId/ownership-transfers` | promote a target member to owner and demote the actor to admin |
+| `GET` | `/organizations/:organizationId/invitations` | list invitations without token hashes |
+| `POST` | `/organizations/:organizationId/invitations` | issue one raw invitation token in the response only |
+| `DELETE` | `/organizations/:organizationId/invitations/:invitationId` | revoke an unaccepted invitation |
+| `POST` | `/invitations/accept` | accept a live token for the signed-in account email |
+
+`TENANCY_ENABLED=false` makes the new surface fail closed with `NOT_READY`.
+Existing accounts are not backfilled into organizations.
+
+### Permission contract
+
+`server/src/organizations/permissions.ts` is the centralized policy. Owners
+have every phase-3 permission. Admins can read/update organizations, read
+members/invitations/audit, and manage non-owner members/invitations. Analysts
+and viewers have organization read only. Generic role assignment cannot assign
+`owner`; owner handoff goes through the transfer command.
+
+### Persistence and RLS
+
+The schema now has `Organization`, `Membership`, `Invitation`, `AccountToken`
+and `AuditEvent`, plus `OrganizationRole`, `AccountTokenPurpose` and
+`AuditAction`. Migrations:
+
+- `20260824000000_organizations_rls`: tenant tables, indexes, last-owner
+  trigger, RLS helpers/policies and runtime grants.
+- `20260824103000_fix_organization_bootstrap_policy`: splits first-organization
+  insert from scoped organization update after real RLS tests exposed the
+  bootstrap `RETURNING` path.
+- `20260824104000_relax_rls_setting_helpers`: keeps transaction settings
+  null/empty-safe for text IDs instead of casting/regexing them.
+- `20260824110000_harden_invitation_rls`: restores strict UUID-shaped context
+  parsing and splits invitation organization access from token acceptance
+  select access with expiry and invitee-email predicates.
+
+`TenantTransactionService` sets `acres.account_id`,
+`acres.organization_id` and `acres.invitation_token_hash` with tagged raw SQL
+inside interactive transactions. `Organization`, `Membership`, `Invitation`
+and `AuditEvent` have `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL
+SECURITY`. `AccountToken` is identity-scoped and has no organization RLS.
+
+### Environment
+
+New required server variables:
+
+```text
+TENANCY_ENABLED=false
+INVITATION_TTL_HOURS=24
+ACCOUNT_TOKEN_TTL_MINUTES=30
+```
+
+The TTL values in `.env.example` are local development examples, not launch
+retention policy. Production must set them deliberately before enabling
+tenancy.
+
+### Verification evidence
+
+Executed locally on 2026-08-24:
+
+```text
+npm run prisma:migrate:deploy --workspace=@acres/server
+All migrations have been successfully applied.
+
+npm run prisma:migrate:status --workspace=@acres/server
+Database schema is up to date!
+
+PGHOST=localhost PGPASSWORD=... scripts/db/harden-runtime-privileges.sh
+REVOKE
+REVOKE
+GRANT
+DO
+REVOKE
+REVOKE
+GRANT
+DO
+
+npm run test --workspace=@acres/server -- --runInBand
+Test Suites: 2 passed, 2 total
+Tests: 5 passed, 5 total
+
+npm run test:server
+Test Suites: 3 passed, 3 total
+Tests: 54 passed, 54 total
+```
+
+Catalog inspection on `acres_test` showed `acres_app`, `acres_migrator` and
+`acres_test` are not superusers and do not bypass RLS; tenant tables are owned
+by `acres_migrator`; `Organization`, `Membership`, `Invitation` and
+`AuditEvent` have RLS enabled and forced; `Membership_last_owner_guard` exists;
+the live invitation/account-token partial indexes exist; `acres_test` has
+`INSERT`, `SELECT` and test-only `TRUNCATE` on `AuditEvent`, with no update or
+delete privilege.

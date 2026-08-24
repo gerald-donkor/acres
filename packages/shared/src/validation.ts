@@ -9,6 +9,7 @@ export const VALIDATION = {
   email: { maxLength: 254 },
   password: { minLength: 12, maxLength: 128 },
   displayName: { maxLength: 80 },
+  organization: { name: { minLength: 1, maxLength: 160 } },
   contact: {
     name: { minLength: 1, maxLength: 120 },
     organization: { maxLength: 160 },

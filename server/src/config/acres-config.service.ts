@@ -65,4 +65,16 @@ export class AcresConfigService {
   get rateLimitStrictLimit(): number {
     return this.get('rateLimitStrictLimit');
   }
+
+  get tenancyEnabled(): boolean {
+    return this.get('tenancyEnabled');
+  }
+
+  get invitationTtlHours(): number {
+    return this.get('invitationTtlHours');
+  }
+
+  get accountTokenTtlMinutes(): number {
+    return this.get('accountTokenTtlMinutes');
+  }
 }
