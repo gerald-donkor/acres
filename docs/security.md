@@ -140,7 +140,8 @@ Current evidence anchors include `server/src/app.setup.ts`,
 `server/src/security/csrf.service.ts`, `server/src/sessions/sessions.service.ts`,
 `server/src/security/rate-limit.guard.ts`, `server/src/config/env.validation.ts`,
 `server/src/common/api-exception.filter.ts`, `.github/workflows/ci.yml`, and
-`server/Dockerfile`.
+`server/Dockerfile`. Phase 8 adds forced-RLS analytics tables and centralized
+`analytics.read` REST access; see [`analytics.md`](analytics.md).
 
 ## 7. Prioritized abuse paths
 

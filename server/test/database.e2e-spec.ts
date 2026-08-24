@@ -343,6 +343,11 @@ describe('Acres API — real database', () => {
           'IngestionRun',
           'ValidationIssue',
           'StagedSourceSummary',
+          'MetricDefinition',
+          'MetricObservation',
+          'ObservationQuality',
+          'MetricAggregate',
+          'MetricAggregateLineage',
           'OutboxEvent',
           'DurableJob',
           'JobProgressEvent',
@@ -438,6 +443,31 @@ describe('Acres API — real database', () => {
         },
         {
           relname: 'ValidationIssue',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'MetricAggregate',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'MetricAggregateLineage',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'MetricDefinition',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'MetricObservation',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'ObservationQuality',
           relrowsecurity: true,
           relforcerowsecurity: true,
         },

@@ -47,12 +47,12 @@ Current implemented permissions are `organization.read`,
 `members.change_role`, `members.revoke`, `ownership.transfer`,
 `invitations.read`, `invitations.revoke`, `audit.read`, `uploads.read`,
 `uploads.create`, `datasets.read`, `datasets.create`, `datasets.update`,
-`ingestion.read`, `ingestion.run`, and `ingestion.cancel`. `owner` has all of
-them; `admin` can manage organization administration, uploads, datasets, and
-ingestion; `analyst` can upload, create/update datasets, run/cancel ingestion,
-and read results; `viewer` can read organizations, uploads, datasets, and
-ingestion status only. Generic role updates and invitations cannot assign
-`owner`.
+`ingestion.read`, `ingestion.run`, `ingestion.cancel`, and `analytics.read`.
+`owner` has all of them; `admin` can manage organization administration,
+uploads, datasets, ingestion, and analytics reads; `analyst` can upload,
+create/update datasets, run/cancel ingestion, and read analytics; `viewer` can
+read organizations, uploads, datasets, ingestion status, and published
+analytics. Generic role updates and invitations cannot assign `owner`.
 
 Organization ownership has these invariants:
 

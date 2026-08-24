@@ -105,11 +105,21 @@
           "mapping": {
             "additionalProperties": true,
             "example": {
-              "periodColumn": "period",
-              "regionColumn": "region",
-              "valueColumns": [
-                "value"
-              ]
+              "metrics": [
+                {
+                  "aggregation": "sum",
+                  "column": "population",
+                  "dimensionColumns": [
+                    "segment"
+                  ],
+                  "key": "population",
+                  "label": "Population",
+                  "periodColumn": "year",
+                  "unit": "people",
+                  "valueType": "numeric"
+                }
+              ],
+              "regionColumn": "region"
             },
             "type": "object"
           },
@@ -756,6 +766,2918 @@
         "summary": "Get current account",
         "tags": [
           "account"
+        ]
+      }
+    },
+    "/api/v1/analytics/aggregates": {
+      "get": {
+        "operationId": "AnalyticsController_listAggregates_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "aggregateType": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "datasetVersionId": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "datasetVersionIds": {
+                            "items": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "dimensionHash": {
+                            "type": "string"
+                          },
+                          "dimensions": {
+                            "additionalProperties": true,
+                            "type": "object"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "metric": {
+                            "properties": {
+                              "allowedAggregation": {
+                                "type": "string"
+                              },
+                              "calculationVersion": {
+                                "type": "string"
+                              },
+                              "canonicalUnit": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "description": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "valueType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "key",
+                              "label",
+                              "description",
+                              "valueType",
+                              "canonicalUnit",
+                              "allowedAggregation",
+                              "calculationVersion",
+                              "status",
+                              "createdAt",
+                              "updatedAt"
+                            ],
+                            "type": "object"
+                          },
+                          "observationCount": {
+                            "type": "number"
+                          },
+                          "periodEnd": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "periodStart": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "qualitySummary": {
+                            "additionalProperties": true,
+                            "type": "object"
+                          },
+                          "regionId": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "properties": {
+                              "type": {
+                                "type": "string"
+                              },
+                              "value": {}
+                            },
+                            "required": [
+                              "type",
+                              "value"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "datasetVersionId",
+                          "regionId",
+                          "metric",
+                          "aggregateType",
+                          "periodStart",
+                          "periodEnd",
+                          "value",
+                          "unit",
+                          "dimensionHash",
+                          "dimensions",
+                          "observationCount",
+                          "qualitySummary",
+                          "datasetVersionIds",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Lists deterministic aggregate read models."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "List metric aggregates",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/aggregates/{aggregateId}/evidence": {
+      "get": {
+        "operationId": "AnalyticsController_getAggregateEvidence_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "aggregate": {
+                          "properties": {
+                            "aggregateType": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "format": "date-time",
+                              "type": "string"
+                            },
+                            "datasetVersionId": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "datasetVersionIds": {
+                              "items": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "dimensionHash": {
+                              "type": "string"
+                            },
+                            "dimensions": {
+                              "additionalProperties": true,
+                              "type": "object"
+                            },
+                            "id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "metric": {
+                              "properties": {
+                                "allowedAggregation": {
+                                  "type": "string"
+                                },
+                                "calculationVersion": {
+                                  "type": "string"
+                                },
+                                "canonicalUnit": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "oneOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "id": {
+                                  "format": "uuid",
+                                  "type": "string"
+                                },
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "valueType": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "key",
+                                "label",
+                                "description",
+                                "valueType",
+                                "canonicalUnit",
+                                "allowedAggregation",
+                                "calculationVersion",
+                                "status",
+                                "createdAt",
+                                "updatedAt"
+                              ],
+                              "type": "object"
+                            },
+                            "observationCount": {
+                              "type": "number"
+                            },
+                            "periodEnd": {
+                              "format": "date-time",
+                              "type": "string"
+                            },
+                            "periodStart": {
+                              "format": "date-time",
+                              "type": "string"
+                            },
+                            "qualitySummary": {
+                              "additionalProperties": true,
+                              "type": "object"
+                            },
+                            "regionId": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "unit": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "properties": {
+                                "type": {
+                                  "type": "string"
+                                },
+                                "value": {}
+                              },
+                              "required": [
+                                "type",
+                                "value"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "datasetVersionId",
+                            "regionId",
+                            "metric",
+                            "aggregateType",
+                            "periodStart",
+                            "periodEnd",
+                            "value",
+                            "unit",
+                            "dimensionHash",
+                            "dimensions",
+                            "observationCount",
+                            "qualitySummary",
+                            "datasetVersionIds",
+                            "createdAt"
+                          ],
+                          "type": "object"
+                        },
+                        "evidence": {
+                          "items": {
+                            "properties": {
+                              "datasetVersion": {
+                                "properties": {
+                                  "id": {
+                                    "format": "uuid",
+                                    "type": "string"
+                                  },
+                                  "publishedAt": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "versionNumber": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "versionNumber",
+                                  "publishedAt"
+                                ],
+                                "type": "object"
+                              },
+                              "datasetVersionId": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "observation": {
+                                "properties": {
+                                  "createdAt": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "datasetVersionId": {
+                                    "format": "uuid",
+                                    "type": "string"
+                                  },
+                                  "dimensionHash": {
+                                    "type": "string"
+                                  },
+                                  "dimensions": {
+                                    "additionalProperties": true,
+                                    "type": "object"
+                                  },
+                                  "id": {
+                                    "format": "uuid",
+                                    "type": "string"
+                                  },
+                                  "metric": {
+                                    "properties": {
+                                      "allowedAggregation": {
+                                        "type": "string"
+                                      },
+                                      "calculationVersion": {
+                                        "type": "string"
+                                      },
+                                      "canonicalUnit": {
+                                        "type": "string"
+                                      },
+                                      "createdAt": {
+                                        "format": "date-time",
+                                        "type": "string"
+                                      },
+                                      "description": {
+                                        "oneOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "id": {
+                                        "format": "uuid",
+                                        "type": "string"
+                                      },
+                                      "key": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "updatedAt": {
+                                        "format": "date-time",
+                                        "type": "string"
+                                      },
+                                      "valueType": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "key",
+                                      "label",
+                                      "description",
+                                      "valueType",
+                                      "canonicalUnit",
+                                      "allowedAggregation",
+                                      "calculationVersion",
+                                      "status",
+                                      "createdAt",
+                                      "updatedAt"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "periodEnd": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "periodLabel": {
+                                    "oneOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "periodStart": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "quality": {
+                                    "items": {
+                                      "properties": {
+                                        "code": {
+                                          "type": "string"
+                                        },
+                                        "message": {
+                                          "type": "string"
+                                        },
+                                        "severity": {
+                                          "type": "string"
+                                        },
+                                        "state": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "severity",
+                                        "state",
+                                        "code",
+                                        "message"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    "type": "array"
+                                  },
+                                  "regionId": {
+                                    "format": "uuid",
+                                    "type": "string"
+                                  },
+                                  "sourceRowNumber": {
+                                    "oneOf": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  },
+                                  "value": {
+                                    "properties": {
+                                      "type": {
+                                        "type": "string"
+                                      },
+                                      "value": {}
+                                    },
+                                    "required": [
+                                      "type",
+                                      "value"
+                                    ],
+                                    "type": "object"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "datasetVersionId",
+                                  "regionId",
+                                  "metric",
+                                  "periodStart",
+                                  "periodEnd",
+                                  "periodLabel",
+                                  "value",
+                                  "unit",
+                                  "dimensionHash",
+                                  "dimensions",
+                                  "sourceRowNumber",
+                                  "quality",
+                                  "createdAt"
+                                ],
+                                "type": "object"
+                              },
+                              "observationId": {
+                                "format": "uuid",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "observationId",
+                              "datasetVersionId",
+                              "datasetVersion",
+                              "observation"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "aggregate",
+                        "evidence"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Reads aggregate lineage back to observations and versions."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "Get aggregate evidence",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/metrics": {
+      "get": {
+        "operationId": "AnalyticsController_listMetrics_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "allowedAggregation": {
+                            "type": "string"
+                          },
+                          "calculationVersion": {
+                            "type": "string"
+                          },
+                          "canonicalUnit": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "description": {
+                            "oneOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "valueType": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "key",
+                          "label",
+                          "description",
+                          "valueType",
+                          "canonicalUnit",
+                          "allowedAggregation",
+                          "calculationVersion",
+                          "status",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Lists active organization metric definitions."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "List metric definitions",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/metrics/{metricId}": {
+      "get": {
+        "operationId": "AnalyticsController_getMetric_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "allowedAggregation": {
+                          "type": "string"
+                        },
+                        "calculationVersion": {
+                          "type": "string"
+                        },
+                        "canonicalUnit": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "description": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "valueType": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "key",
+                        "label",
+                        "description",
+                        "valueType",
+                        "canonicalUnit",
+                        "allowedAggregation",
+                        "calculationVersion",
+                        "status",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Reads one organization metric definition."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "Get metric definition",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/observations": {
+      "get": {
+        "operationId": "AnalyticsController_listObservations_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "createdAt": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "datasetVersionId": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "dimensionHash": {
+                            "type": "string"
+                          },
+                          "dimensions": {
+                            "additionalProperties": true,
+                            "type": "object"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "metric": {
+                            "properties": {
+                              "allowedAggregation": {
+                                "type": "string"
+                              },
+                              "calculationVersion": {
+                                "type": "string"
+                              },
+                              "canonicalUnit": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "description": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "valueType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "key",
+                              "label",
+                              "description",
+                              "valueType",
+                              "canonicalUnit",
+                              "allowedAggregation",
+                              "calculationVersion",
+                              "status",
+                              "createdAt",
+                              "updatedAt"
+                            ],
+                            "type": "object"
+                          },
+                          "periodEnd": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "periodLabel": {
+                            "oneOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "periodStart": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "quality": {
+                            "items": {
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "message": {
+                                  "type": "string"
+                                },
+                                "severity": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "severity",
+                                "state",
+                                "code",
+                                "message"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "regionId": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "sourceRowNumber": {
+                            "oneOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "properties": {
+                              "type": {
+                                "type": "string"
+                              },
+                              "value": {}
+                            },
+                            "required": [
+                              "type",
+                              "value"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "datasetVersionId",
+                          "regionId",
+                          "metric",
+                          "periodStart",
+                          "periodEnd",
+                          "periodLabel",
+                          "value",
+                          "unit",
+                          "dimensionHash",
+                          "dimensions",
+                          "sourceRowNumber",
+                          "quality",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Lists bounded organization metric observations."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "List metric observations",
+        "tags": [
+          "analytics"
         ]
       }
     },

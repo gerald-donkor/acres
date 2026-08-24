@@ -53,6 +53,6 @@ export async function createRealDbTestApp(): Promise<{
 
 export async function truncateAll(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "ValidationIssue","StagedSourceSummary","IngestionRun","DatasetVersion","ColumnMapping","Dataset","RegionGeometry","RegionAlias","RegionCode","RegionSource","AuditEvent","Invitation","Membership","Organization","IdempotencyRecord","AccountToken","Session","Account","RegionalMetric","InsightReport","Region","ContactSubmission","JobRun","StoredObject","Upload","OutboxEvent","DurableJob","JobProgressEvent","JobDeadLetter" RESTART IDENTITY CASCADE;',
+    'TRUNCATE TABLE "MetricAggregateLineage","MetricAggregate","ObservationQuality","MetricObservation","MetricDefinition","ValidationIssue","StagedSourceSummary","IngestionRun","DatasetVersion","ColumnMapping","Dataset","RegionGeometry","RegionAlias","RegionCode","RegionSource","AuditEvent","Invitation","Membership","Organization","IdempotencyRecord","AccountToken","Session","Account","RegionalMetric","InsightReport","Region","ContactSubmission","JobRun","StoredObject","Upload","OutboxEvent","DurableJob","JobProgressEvent","JobDeadLetter" RESTART IDENTITY CASCADE;',
   );
 }

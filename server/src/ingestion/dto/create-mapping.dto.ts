@@ -11,8 +11,18 @@ export class CreateMappingDto {
     additionalProperties: true,
     example: {
       regionColumn: 'region',
-      periodColumn: 'period',
-      valueColumns: ['value'],
+      metrics: [
+        {
+          column: 'population',
+          key: 'population',
+          label: 'Population',
+          valueType: 'numeric',
+          unit: 'people',
+          aggregation: 'sum',
+          periodColumn: 'year',
+          dimensionColumns: ['segment'],
+        },
+      ],
     },
   })
   @IsObject()

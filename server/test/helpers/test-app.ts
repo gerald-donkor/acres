@@ -109,6 +109,29 @@ export interface PrismaDouble {
     create: jest.Mock;
     deleteMany: jest.Mock;
   };
+  metricDefinition: {
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    upsert: jest.Mock;
+  };
+  metricObservation: {
+    findMany: jest.Mock;
+    upsert: jest.Mock;
+  };
+  observationQuality: {
+    deleteMany: jest.Mock;
+    createMany: jest.Mock;
+  };
+  metricAggregate: {
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    upsert: jest.Mock;
+  };
+  metricAggregateLineage: {
+    findMany: jest.Mock;
+    deleteMany: jest.Mock;
+    createMany: jest.Mock;
+  };
   regionCode: {
     findMany: jest.Mock;
   };
@@ -225,6 +248,29 @@ export function createPrismaDouble(): PrismaDouble {
     stagedSourceSummary: {
       create: jest.fn(),
       deleteMany: jest.fn(),
+    },
+    metricDefinition: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      upsert: jest.fn(),
+    },
+    metricObservation: {
+      findMany: jest.fn(),
+      upsert: jest.fn(),
+    },
+    observationQuality: {
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
+    },
+    metricAggregate: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      upsert: jest.fn(),
+    },
+    metricAggregateLineage: {
+      findMany: jest.fn(),
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
     },
     regionCode: {
       findMany: jest.fn(),

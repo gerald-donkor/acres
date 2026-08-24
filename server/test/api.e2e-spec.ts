@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { createHash } from 'node:crypto';
+import { Prisma } from '../src/generated/prisma/client';
 import {
   createPrismaDouble,
   createTestApp,
@@ -520,6 +521,186 @@ describe('Acres API', () => {
         error: { code: 'NOT_FOUND' },
       });
       expect(prisma.columnMapping.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('analytics', () => {
+    const now = new Date('2026-01-01T00:00:00.000Z');
+    const metricRow = {
+      id: '018f7611-89ab-7abc-9234-777777777777',
+      organizationId: ORG_CONTEXT.organizationId,
+      datasetId: null,
+      key: 'population',
+      label: 'Population',
+      description: null,
+      valueType: 'numeric',
+      canonicalUnit: 'people',
+      allowedAggregation: 'sum',
+      calculationVersion: 'analytics-v1',
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    };
+    const observationRow = {
+      id: '018f7611-89ab-7abc-9234-888888888888',
+      organizationId: ORG_CONTEXT.organizationId,
+      datasetVersionId: '018f7611-89ab-7abc-9234-999999999999',
+      regionId: '018f7611-89ab-7abc-9234-aaaaaaaaaaaa',
+      metricDefinitionId: metricRow.id,
+      periodStart: now,
+      periodEnd: now,
+      periodLabel: '2026',
+      numericValue: new Prisma.Decimal('9007199254740993'),
+      textValue: null,
+      booleanValue: null,
+      unit: 'people',
+      dimensionHash:
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      dimensions: {},
+      sourceRowNumber: 1,
+      sourceReference: {},
+      createdAt: now,
+      metricDefinition: metricRow,
+      qualities: [],
+    };
+    const aggregateRow = {
+      ...observationRow,
+      id: '018f7611-89ab-7abc-9234-bbbbbbbbbbbb',
+      aggregateType: 'sum',
+      observationCount: 1,
+      qualitySummary: { error: 0, warning: 0, info: 0 },
+      datasetVersionIds: [observationRow.datasetVersionId],
+      metricDefinition: metricRow,
+    };
+
+    beforeEach(() => {
+      prisma.membership.findFirst.mockResolvedValue(ORG_CONTEXT);
+      prisma.metricDefinition.findMany.mockResolvedValue([metricRow]);
+      prisma.metricDefinition.findFirst.mockResolvedValue(metricRow);
+      prisma.metricObservation.findMany.mockResolvedValue([observationRow]);
+      prisma.metricAggregate.findMany.mockResolvedValue([aggregateRow]);
+      prisma.metricAggregate.findFirst.mockResolvedValue(aggregateRow);
+      prisma.metricAggregateLineage.findMany.mockResolvedValue([
+        {
+          id: '018f7611-89ab-7abc-9234-cccccccccccc',
+          organizationId: ORG_CONTEXT.organizationId,
+          aggregateId: aggregateRow.id,
+          observationId: observationRow.id,
+          datasetVersionId: observationRow.datasetVersionId,
+          createdAt: now,
+          observation: observationRow,
+          datasetVersion: {
+            id: observationRow.datasetVersionId,
+            organizationId: ORG_CONTEXT.organizationId,
+            datasetId: '018f7611-89ab-7abc-9234-dddddddddddd',
+            versionNumber: 1,
+            sourceUploadId: '018f7611-89ab-7abc-9234-eeeeeeeeeeee',
+            storedObjectId: '018f7611-89ab-7abc-9234-ffffffffffff',
+            mappingId: '018f7611-89ab-7abc-9234-111111111112',
+            publicationStatus: 'published',
+            checksumHex: null,
+            sourceSummary: {},
+            publishedAt: now,
+            createdAt: now,
+          },
+        },
+      ]);
+    });
+
+    it('lists metric definitions and observations in the selected organization', async () => {
+      const { agent } = await signedInAgent();
+
+      const metrics = await agent
+        .get('/api/v1/analytics/metrics')
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200);
+      expect(metrics.body).toMatchObject({
+        ok: true,
+        data: [{ id: metricRow.id, key: 'population' }],
+      });
+
+      const observations = await agent
+        .get(
+          `/api/v1/analytics/observations?metricId=${metricRow.id}&periodStart=2026-01-01T00:00:00.000Z&periodEnd=2026-12-31T00:00:00.000Z`,
+        )
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200);
+      expect(observations.body).toMatchObject({
+        ok: true,
+        data: [
+          {
+            id: observationRow.id,
+            value: { type: 'numeric', value: '9007199254740993' },
+          },
+        ],
+      });
+      const observationFindMany = prisma.metricObservation
+        .findMany as jest.Mock<
+        unknown,
+        [
+          {
+            where: {
+              metricDefinitionId?: string;
+              periodStart?: { gte: Date };
+              periodEnd?: { lte: Date };
+            };
+          },
+        ]
+      >;
+      expect(observationFindMany.mock.calls.at(-1)?.[0]).toMatchObject({
+        where: {
+          metricDefinitionId: metricRow.id,
+          periodStart: { gte: new Date('2026-01-01T00:00:00.000Z') },
+          periodEnd: { lte: new Date('2026-12-31T00:00:00.000Z') },
+        },
+      });
+    });
+
+    it('returns not-found for a missing scoped metric', async () => {
+      prisma.metricDefinition.findFirst.mockResolvedValue(null);
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get(`/api/v1/analytics/metrics/${metricRow.id}`)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(404);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+    });
+
+    it('returns aggregate evidence using the documented response shape', async () => {
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get(`/api/v1/analytics/aggregates/${aggregateRow.id}/evidence`)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        ok: true,
+        data: {
+          aggregate: {
+            id: aggregateRow.id,
+            datasetVersionId: observationRow.datasetVersionId,
+            observationCount: 1,
+            qualitySummary: { error: 0, warning: 0, info: 0 },
+          },
+          evidence: [
+            {
+              observationId: observationRow.id,
+              observation: {
+                id: observationRow.id,
+                datasetVersionId: observationRow.datasetVersionId,
+                dimensionHash: observationRow.dimensionHash,
+                createdAt: now.toISOString(),
+              },
+            },
+          ],
+        },
+      });
     });
   });
 

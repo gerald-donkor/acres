@@ -22,6 +22,7 @@ export const ORGANIZATION_PERMISSIONS = [
   'ingestion.read',
   'ingestion.run',
   'ingestion.cancel',
+  'analytics.read',
 ] as const;
 
 export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
@@ -46,6 +47,7 @@ const rolePermissions = {
     'ingestion.read',
     'ingestion.run',
     'ingestion.cancel',
+    'analytics.read',
   ]),
   analyst: new Set<OrganizationPermission>([
     'organization.read',
@@ -57,12 +59,14 @@ const rolePermissions = {
     'ingestion.read',
     'ingestion.run',
     'ingestion.cancel',
+    'analytics.read',
   ]),
   viewer: new Set<OrganizationPermission>([
     'organization.read',
     'uploads.read',
     'datasets.read',
     'ingestion.read',
+    'analytics.read',
   ]),
 } satisfies Record<OrganizationRole, ReadonlySet<OrganizationPermission>>;
 

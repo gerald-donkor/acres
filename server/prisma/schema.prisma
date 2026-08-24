@@ -68,6 +68,8 @@ model Region {
   codes       RegionCode[]
   aliases     RegionAlias[]
   geometries  RegionGeometry[]
+  observations MetricObservation[]
+  metricAggregates MetricAggregate[]
 
   @@index([parentId, level])
   @@index([countryCode, level])
@@ -163,6 +165,11 @@ model Organization {
   ingestionRuns IngestionRun[]
   validationIssues ValidationIssue[]
   stagedSourceSummaries StagedSourceSummary[]
+  metricDefinitions MetricDefinition[]
+  observations MetricObservation[]
+  observationQualities ObservationQuality[]
+  metricAggregates MetricAggregate[]
+  aggregateLineage MetricAggregateLineage[]
 }
 
 /// An account's organization-local role. Revoked rows remain as provenance.
@@ -551,6 +558,7 @@ model Dataset {
   versions       DatasetVersion[]
   mappings       ColumnMapping[]
   ingestionRuns  IngestionRun[]
+  metricDefinitions MetricDefinition[]
 
   @@unique([organizationId, id])
   @@index([organizationId, state, updatedAt])
@@ -575,6 +583,9 @@ model DatasetVersion {
   storedObject     StoredObject             @relation(fields: [organizationId, storedObjectId], references: [organizationId, id], onDelete: Restrict)
   mapping          ColumnMapping            @relation(fields: [organizationId, mappingId], references: [organizationId, id], onDelete: Restrict)
   ingestionRuns    IngestionRun[]
+  observations     MetricObservation[]
+  metricAggregates MetricAggregate[]
+  aggregateLineage MetricAggregateLineage[]
 
   @@unique([organizationId, id])
   @@unique([datasetId, versionNumber])
@@ -716,4 +727,163 @@ enum ValidationIssueSeverity {
   info
   warning
   error
+}
+
+model MetricDefinition {
+  id                 String                 @id @default(uuid(7))
+  organizationId     String
+  datasetId          String?
+  key                String
+  label              String
+  description        String?
+  valueType          MetricValueType
+  canonicalUnit      String
+  allowedAggregation MetricAggregationType
+  calculationVersion String
+  status             MetricDefinitionStatus @default(active)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  dataset            Dataset?               @relation(fields: [organizationId, datasetId], references: [organizationId, id], onDelete: Restrict)
+  observations       MetricObservation[]
+  aggregates         MetricAggregate[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, key])
+  @@index([organizationId, status, key])
+  @@index([organizationId, datasetId])
+}
+
+model MetricObservation {
+  id                 String                   @id @default(uuid(7))
+  organizationId     String
+  datasetVersionId   String
+  regionId           String
+  metricDefinitionId String
+  periodStart        DateTime
+  periodEnd          DateTime
+  periodLabel        String?
+  numericValue       Decimal?                 @db.Decimal(26, 6)
+  textValue          String?
+  booleanValue       Boolean?
+  unit               String
+  dimensionHash      String
+  dimensions         Json
+  sourceRowNumber    Int?
+  sourceReference    Json?
+  createdAt          DateTime                 @default(now())
+  organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  datasetVersion     DatasetVersion           @relation(fields: [organizationId, datasetVersionId], references: [organizationId, id], onDelete: Restrict)
+  region             Region                   @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  metricDefinition   MetricDefinition         @relation(fields: [organizationId, metricDefinitionId], references: [organizationId, id], onDelete: Restrict)
+  qualities          ObservationQuality[]
+  aggregateLineage   MetricAggregateLineage[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, datasetVersionId, metricDefinitionId, regionId, periodStart, periodEnd, dimensionHash, sourceRowNumber])
+  @@index([organizationId, metricDefinitionId, regionId, periodStart, periodEnd])
+  @@index([organizationId, datasetVersionId])
+  @@index([organizationId, dimensionHash])
+}
+
+model ObservationQuality {
+  id             String                     @id @default(uuid(7))
+  organizationId String
+  observationId  String
+  severity       ObservationQualitySeverity
+  state          ObservationQualityState
+  code           String
+  message        String
+  details        Json?
+  createdAt      DateTime                   @default(now())
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  observation    MetricObservation          @relation(fields: [organizationId, observationId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, observationId, severity, createdAt])
+  @@index([organizationId, code, createdAt])
+}
+
+model MetricAggregate {
+  id                 String                   @id @default(uuid(7))
+  organizationId     String
+  datasetVersionId   String
+  metricDefinitionId String
+  regionId           String
+  periodStart        DateTime
+  periodEnd          DateTime
+  dimensionHash      String
+  dimensions         Json
+  aggregateType      MetricAggregationType
+  numericValue       Decimal?                 @db.Decimal(26, 6)
+  textValue          String?
+  booleanValue       Boolean?
+  unit               String
+  calculationVersion String
+  observationCount   Int
+  qualitySummary     Json
+  datasetVersionIds  Json
+  createdAt          DateTime                 @default(now())
+  organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  datasetVersion     DatasetVersion           @relation(fields: [organizationId, datasetVersionId], references: [organizationId, id], onDelete: Restrict)
+  metricDefinition   MetricDefinition         @relation(fields: [organizationId, metricDefinitionId], references: [organizationId, id], onDelete: Restrict)
+  region             Region                   @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  lineage            MetricAggregateLineage[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, datasetVersionId, metricDefinitionId, regionId, periodStart, periodEnd, dimensionHash, aggregateType, calculationVersion])
+  @@index([organizationId, datasetVersionId])
+  @@index([organizationId, metricDefinitionId, regionId, periodStart, periodEnd])
+  @@index([organizationId, dimensionHash])
+}
+
+model MetricAggregateLineage {
+  id               String            @id @default(uuid(7))
+  organizationId   String
+  aggregateId      String
+  observationId    String
+  datasetVersionId String
+  createdAt        DateTime          @default(now())
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  aggregate        MetricAggregate   @relation(fields: [organizationId, aggregateId], references: [organizationId, id], onDelete: Cascade)
+  observation      MetricObservation @relation(fields: [organizationId, observationId], references: [organizationId, id], onDelete: Cascade)
+  datasetVersion   DatasetVersion    @relation(fields: [organizationId, datasetVersionId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, aggregateId, observationId])
+  @@index([organizationId, observationId])
+  @@index([organizationId, datasetVersionId])
+}
+
+enum MetricValueType {
+  numeric
+  text
+  boolean
+}
+
+enum MetricAggregationType {
+  sum
+  avg
+  min
+  max
+  count
+  latest
+}
+
+enum MetricDefinitionStatus {
+  active
+  archived
+}
+
+enum ObservationQualitySeverity {
+  info
+  warning
+  error
+}
+
+enum ObservationQualityState {
+  valid
+  coerced
+  missing
+  invalid
+  duplicate
+  low_confidence
 }

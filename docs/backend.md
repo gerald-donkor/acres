@@ -1975,7 +1975,7 @@ New schema/migration state:
 - Composite tenant foreign keys on `(organizationId, id)` prevent cross-org
   dataset/upload/mapping/run/version references, including worker-scoped writes.
 - `DatasetVersion` publication is immutable for a dataset/upload/mapping tuple;
-  Phase 8 observations and metric definitions are still not built.
+  Phase 8 now owns observations, metric definitions, aggregates, and lineage.
 
 New REST routes are generated in [`api/contracts.md`](api/contracts.md):
 dataset create/list/read/update, version list, mapping create, ingestion run
@@ -2032,3 +2032,77 @@ migrations. Post-review tenant-key hardening was recorded as
 passed after that. Migration apply-from-zero outside this incrementally upgraded
 local database, PostGIS geometry validity proof, and real Garage/Valkey/ClamAV
 worker run remain required on a dependency-capable host.
+
+---
+
+## 19. Analytics foundation
+
+Implemented by `prompts/29-metrics-deterministic-analytics.md`; full details
+live in [`analytics.md`](analytics.md).
+
+New schema/migration state:
+
+- `MetricDefinition`, `MetricObservation`, `ObservationQuality`,
+  `MetricAggregate`, and `MetricAggregateLineage` are organization-scoped,
+  forced through RLS, and protected by composite tenant foreign keys.
+- Observation and aggregate rows enforce exactly one typed numeric/text/boolean
+  value in PostgreSQL.
+- Aggregate snapshots are keyed by dataset version as well as metric, region,
+  period, dimension hash, aggregate type, and calculation version; invalid
+  observations remain visible but are excluded from aggregate math and lineage.
+- Read-path indexes cover metric/region/period, dataset-version, dimension-hash,
+  aggregate lookup, evidence reverse lookup, and tenant-negative paths.
+
+Ingestion now accepts explicit mapped `metrics` in `ColumnMapping.mapping`.
+Successful publication writes observations, visible quality rows, deterministic
+aggregates, and lineage inside the same tenant-scoped publication transaction.
+Retrying the same dataset/upload/mapping publication upserts by deterministic
+keys instead of duplicating analytics rows.
+Metric publication parses numeric strings directly into `Prisma.Decimal`,
+rejects values outside the stored `numeric(26, 6)` shape, accepts only
+deterministic year/date/UTC datetime periods, and reports malformed optional
+period or dimension mapping fields as validation issues.
+Analytics REST responses serialize numeric values as decimal strings so values
+larger than JavaScript's safe integer range are not rounded on read.
+
+New REST routes are generated in [`api/contracts.md`](api/contracts.md):
+metric definition list/read, observation list, aggregate list, and aggregate
+evidence. All are `/api/v1`, session scoped, selected-org scoped, and use the
+centralized `analytics.read` permission.
+
+Verification in this session:
+
+```text
+npm run prisma:validate --workspace=@acres/server
+The schema at prisma/schema.prisma is valid 🚀
+
+DATABASE_URL=postgresql://acres_test:...@localhost:5432/acres_test?schema=public \
+DATABASE_MIGRATION_URL=postgresql://acres_migrator:...@localhost:5432/acres_test?schema=public \
+npm run prisma:migrate:deploy --workspace=@acres/server
+Applying migration `20260824205500_widen_analytics_numeric_values`
+All migrations have been successfully applied.
+
+npm run test --workspace=@acres/server
+Test Suites: 5 passed, 5 total
+Tests: 23 passed, 23 total
+
+npm run test:e2e --workspace=@acres/server -- api.e2e-spec.ts database.e2e-spec.ts env-validation.e2e-spec.ts
+Test Suites: 3 passed, 3 total
+Tests: 77 passed, 77 total
+
+npm run contracts:check
+✔ Generated Prisma Client (7.9.1)
+
+npm run lint
+@acres/server@0.1.0 lint
+
+npm run typecheck
+✔ Generated Prisma Client (7.9.1)
+
+npm run build
+✔ Generated Prisma Client (7.9.1)
+
+npm run test:server
+Test Suites: 3 passed, 3 total
+Tests: 77 passed, 77 total
+```

@@ -610,12 +610,13 @@ The implementation record is [`ingestion.md`](ingestion.md).
   existing session, selected-organization, CSRF, idempotency, and centralized
   permission controls.
 - The worker process can execute ingestion-run jobs and publish one immutable
-  dataset version after validation. Phase 8 still owns observations, metric
-  definitions, deterministic aggregates, and analytics read models.
+  dataset version after validation. Phase 8 now creates metric definitions,
+  observations, quality rows, deterministic aggregates, and analytics REST read
+  models for explicit metric mappings.
 - The queue adapter opens Valkey lazily. API boot and contract generation do
   not require queue connectivity; enqueue/readiness still do.
 
 Still target/deferred: provider geography imports, real PostGIS insertion
-helpers and query plans, full-row normalized observations, dashboard/report
-analytics, browser mapping UI, and dependency-capable proof for migration
-apply-from-zero, Garage, Valkey, and ClamAV.
+helpers and query plans, dashboard/report analytics, browser mapping UI, and
+dependency-capable proof for migration apply-from-zero, Garage, Valkey, and
+ClamAV.

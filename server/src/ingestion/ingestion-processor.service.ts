@@ -1,4 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { AnalyticsPublicationService } from '../analytics/analytics-publication.service';
+import {
+  malformedMetricMappingIssues,
+  parseAnalyticsMapping,
+} from '../analytics/mapping';
 import type { Prisma } from '../generated/prisma/client';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import {
@@ -8,11 +13,6 @@ import {
 import type { ParserIssue, ParsedSourceSummary } from './parsers/parser.types';
 import { SourceParserService } from './parsers/source-parser.service';
 
-interface MappingPayload {
-  readonly regionColumn?: string;
-  readonly regionCodeColumn?: string;
-}
-
 @Injectable()
 export class IngestionProcessorService {
   private readonly logger = new Logger(IngestionProcessorService.name);
@@ -20,6 +20,7 @@ export class IngestionProcessorService {
   constructor(
     private readonly tenants: TenantTransactionService,
     private readonly parsers: SourceParserService,
+    private readonly analytics: AnalyticsPublicationService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
 
@@ -37,149 +38,186 @@ export class IngestionProcessorService {
     if (reserved.state === 'published' || reserved.state === 'cancelled')
       return;
 
-    await this.tenants.organizationScoped(
-      reserved.actorAccountId,
-      reserved.organizationId,
-      async (tx) => {
-        await tx.ingestionRun.update({
-          where: { id: runId },
-          data: {
-            state: 'running',
-            stage: 'inspect',
-            progressPercent: 10,
-            attempts: { increment: 1 },
-            startedAt: reserved.startedAt ?? new Date(),
-            failureCode: null,
-            failureMessage: null,
-          },
-        });
-      },
-    );
-
-    const bytes = await this.storage.getBuffer(
-      reserved.upload.storedObject.objectKey,
-    );
-    if (bytes === null) {
-      await this.fail(
-        reserved,
-        'object_missing',
-        'Accepted upload object is missing.',
+    try {
+      await this.tenants.organizationScoped(
+        reserved.actorAccountId,
+        reserved.organizationId,
+        async (tx) => {
+          await tx.ingestionRun.update({
+            where: { id: runId },
+            data: {
+              state: 'running',
+              stage: 'inspect',
+              progressPercent: 10,
+              attempts: { increment: 1 },
+              startedAt: reserved.startedAt ?? new Date(),
+              failureCode: null,
+              failureMessage: null,
+            },
+          });
+        },
       );
-      return;
-    }
 
-    const summary = await this.parsers.inspect(
-      bytes,
-      reserved.upload.declaredMediaType,
-    );
-    const mapping = mappingPayload(reserved.mapping.mapping);
-    const validationIssues = await this.validateMapping(
-      reserved.organizationId,
-      summary,
-      mapping,
-    );
-    const issues = [...summary.issues, ...validationIssues];
-    const hasErrors = issues.some((issue) => issue.severity === 'error');
+      const bytes = await this.storage.getBuffer(
+        reserved.upload.storedObject.objectKey,
+      );
+      if (bytes === null) {
+        await this.fail(
+          reserved,
+          'object_missing',
+          'Accepted upload object is missing.',
+        );
+        return;
+      }
 
-    await this.tenants.organizationScoped(
-      reserved.actorAccountId,
-      reserved.organizationId,
-      async (tx) => {
-        const fresh = await tx.ingestionRun.findFirst({
-          where: { id: runId, organizationId: reserved.organizationId },
-        });
-        if (fresh === null || fresh.state === 'cancelled') return;
-        await tx.validationIssue.deleteMany({
-          where: {
-            ingestionRunId: runId,
-            organizationId: reserved.organizationId,
-          },
-        });
-        await tx.stagedSourceSummary.deleteMany({
-          where: {
-            ingestionRunId: runId,
-            organizationId: reserved.organizationId,
-          },
-        });
-        await tx.stagedSourceSummary.create({
-          data: {
-            organizationId: reserved.organizationId,
-            ingestionRunId: runId,
-            rowCount: summary.rowCount,
-            columnCount: summary.columnCount,
-            sampleRows: summary.sampleRows,
-            columnKeys: summary.columnKeys,
-            sourceKind: summary.sourceKind,
-            checksumHex: reserved.upload.checksumHex,
-          },
-        });
-        if (issues.length > 0) {
-          await tx.validationIssue.createMany({
-            data: issues.map((issue) => ({
+      const summary = await this.parsers.inspect(
+        bytes,
+        reserved.upload.declaredMediaType,
+      );
+      const malformedMetricIssues: ParserIssue[] = malformedMetricMappingIssues(
+        reserved.mapping.mapping,
+      );
+      const mapping = parseAnalyticsMapping(reserved.mapping.mapping);
+      const validationIssues = await this.validateMapping(
+        reserved.organizationId,
+        summary,
+        mapping,
+      );
+      const analyticsIssues: ParserIssue[] = this.analytics.validateMapping({
+        summaryColumns: summary.columnKeys,
+        mapping,
+      });
+      const issues: ParserIssue[] = [
+        ...summary.issues,
+        ...validationIssues,
+        ...malformedMetricIssues,
+        ...analyticsIssues,
+      ];
+      const hasErrors = issues.some((issue) => issue.severity === 'error');
+
+      await this.tenants.organizationScoped(
+        reserved.actorAccountId,
+        reserved.organizationId,
+        async (tx) => {
+          const fresh = await tx.ingestionRun.findFirst({
+            where: { id: runId, organizationId: reserved.organizationId },
+          });
+          if (fresh === null || fresh.state === 'cancelled') return;
+          await tx.validationIssue.deleteMany({
+            where: {
+              ingestionRunId: runId,
+              organizationId: reserved.organizationId,
+            },
+          });
+          await tx.stagedSourceSummary.deleteMany({
+            where: {
+              ingestionRunId: runId,
+              organizationId: reserved.organizationId,
+            },
+          });
+          await tx.stagedSourceSummary.create({
+            data: {
               organizationId: reserved.organizationId,
               ingestionRunId: runId,
-              severity: issue.severity,
-              code: issue.code,
-              message: issue.message,
-              rowNumber: issue.rowNumber,
-              columnKey: issue.columnKey,
-              regionRef:
-                typeof issue.details?.regionRef === 'string'
-                  ? issue.details.regionRef
-                  : undefined,
-              details:
-                issue.details === undefined
-                  ? undefined
-                  : (issue.details as Prisma.InputJsonValue),
-            })),
+              rowCount: summary.rowCount,
+              columnCount: summary.columnCount,
+              sampleRows: summary.sampleRows,
+              columnKeys: summary.columnKeys,
+              sourceKind: summary.sourceKind,
+              checksumHex: reserved.upload.checksumHex,
+            },
           });
-        }
-        if (hasErrors) {
+          if (issues.length > 0) {
+            await tx.validationIssue.createMany({
+              data: issues.map((issue) => ({
+                organizationId: reserved.organizationId,
+                ingestionRunId: runId,
+                severity: issue.severity,
+                code: issue.code,
+                message: issue.message,
+                rowNumber: issue.rowNumber,
+                columnKey: issue.columnKey,
+                regionRef:
+                  typeof issue.details?.regionRef === 'string'
+                    ? issue.details.regionRef
+                    : undefined,
+                details:
+                  issue.details === undefined
+                    ? undefined
+                    : (issue.details as Prisma.InputJsonValue),
+              })),
+            });
+          }
+          if (hasErrors) {
+            await tx.columnMapping.update({
+              where: { id: reserved.mappingId },
+              data: { validationStatus: 'invalid' },
+            });
+            await tx.ingestionRun.update({
+              where: { id: runId },
+              data: {
+                state: 'validation_failed',
+                stage: 'validate',
+                progressPercent: 100,
+                failureCode: 'validation_failed',
+                failureMessage:
+                  'Ingestion validation produced blocking issues.',
+                finishedAt: new Date(),
+              },
+            });
+            return;
+          }
+
+          const datasetVersion = await this.publishVersion(
+            tx,
+            reserved,
+            summary,
+          );
+          await this.analytics.publish(tx, {
+            organizationId: reserved.organizationId,
+            datasetId: reserved.datasetId,
+            datasetVersionId: datasetVersion.id,
+            summary,
+            mapping,
+          });
           await tx.columnMapping.update({
             where: { id: reserved.mappingId },
-            data: { validationStatus: 'invalid' },
+            data: { validationStatus: 'valid' },
+          });
+          await tx.dataset.update({
+            where: { id: reserved.datasetId },
+            data: { state: 'active' },
           });
           await tx.ingestionRun.update({
             where: { id: runId },
             data: {
-              state: 'validation_failed',
-              stage: 'validate',
+              datasetVersionId: datasetVersion.id,
+              state: 'published',
+              stage: 'complete',
               progressPercent: 100,
-              failureCode: 'validation_failed',
-              failureMessage: 'Ingestion validation produced blocking issues.',
               finishedAt: new Date(),
             },
           });
-          return;
-        }
-
-        const datasetVersion = await this.publishVersion(tx, reserved, summary);
-        await tx.columnMapping.update({
-          where: { id: reserved.mappingId },
-          data: { validationStatus: 'valid' },
-        });
-        await tx.dataset.update({
-          where: { id: reserved.datasetId },
-          data: { state: 'active' },
-        });
-        await tx.ingestionRun.update({
-          where: { id: runId },
-          data: {
-            datasetVersionId: datasetVersion.id,
-            state: 'published',
-            stage: 'complete',
-            progressPercent: 100,
-            finishedAt: new Date(),
-          },
-        });
-      },
-    );
+        },
+      );
+    } catch (error) {
+      await this.fail(
+        reserved,
+        'analytics_publication_failed',
+        error instanceof Error
+          ? error.message
+          : 'Analytics publication failed.',
+      );
+    }
   }
 
   private async validateMapping(
     organizationId: string,
     summary: ParsedSourceSummary,
-    mapping: MappingPayload,
+    mapping: {
+      readonly regionColumn?: string;
+      readonly regionCodeColumn?: string;
+    },
   ): Promise<ParserIssue[]> {
     const issues: ParserIssue[] = [];
     const regionColumn = mapping.regionCodeColumn ?? mapping.regionColumn;
@@ -329,17 +367,4 @@ export class IngestionProcessorService {
       },
     );
   }
-}
-
-function mappingPayload(value: unknown): MappingPayload {
-  if (!value || typeof value !== 'object') return {};
-  const raw = value as Record<string, unknown>;
-  return {
-    regionColumn:
-      typeof raw.regionColumn === 'string' ? raw.regionColumn : undefined,
-    regionCodeColumn:
-      typeof raw.regionCodeColumn === 'string'
-        ? raw.regionCodeColumn
-        : undefined,
-  };
 }
