@@ -19,6 +19,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { DashboardsModule } from './dashboards/dashboards.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     UploadsModule,
     IngestionModule,
     AnalyticsModule,
+    DashboardsModule,
     AcresGraphqlModule,
   ],
 })

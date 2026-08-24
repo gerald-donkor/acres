@@ -704,6 +704,122 @@ describe('Acres API', () => {
     });
   });
 
+  describe('dashboard views', () => {
+    const now = new Date('2026-01-01T00:00:00.000Z');
+    const viewRow = {
+      id: '018f7611-89ab-7abc-9234-121212121212',
+      organizationId: ORG_CONTEXT.organizationId,
+      ownerAccountId: ACCOUNT_ROW.id,
+      name: 'Population comparison',
+      description: null,
+      filters: {
+        metricId: '018f7611-89ab-7abc-9234-777777777777',
+      },
+      presentation: { chart: 'bar', compareBy: 'period' },
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    beforeEach(() => {
+      prisma.membership.findFirst.mockResolvedValue(ORG_CONTEXT);
+      prisma.dashboardView.findMany.mockResolvedValue([viewRow]);
+      prisma.dashboardView.findFirst.mockResolvedValue(viewRow);
+      prisma.dashboardView.create.mockResolvedValue(viewRow);
+      prisma.dashboardView.update.mockResolvedValue({
+        ...viewRow,
+        status: 'archived',
+      });
+    });
+
+    it('saves and reopens a dashboard view in the selected organization', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      const created = await agent
+        .post('/api/v1/dashboard-views')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'dashboard-view-key-0001')
+        .send({
+          name: ' Population comparison ',
+          filters: viewRow.filters,
+          presentation: viewRow.presentation,
+        })
+        .expect(201);
+
+      expect(created.body).toMatchObject({
+        ok: true,
+        data: { id: viewRow.id, name: 'Population comparison' },
+      });
+      expect(prisma.dashboardView.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            organizationId: ORG_CONTEXT.organizationId,
+            ownerAccountId: ACCOUNT_ROW.id,
+          }) as unknown,
+        }),
+      );
+
+      const reopened = await agent
+        .get(`/api/v1/dashboard-views/${viewRow.id}`)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200);
+
+      expect(reopened.body).toMatchObject({
+        ok: true,
+        data: { id: viewRow.id, filters: viewRow.filters },
+      });
+    });
+
+    it('lets viewers read but not save dashboard views', async () => {
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'viewer',
+      });
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      await agent
+        .get('/api/v1/dashboard-views')
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200);
+
+      const forbidden = await agent
+        .post('/api/v1/dashboard-views')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'dashboard-view-key-0002')
+        .send({ name: 'Viewer view', filters: {} })
+        .expect(403);
+
+      expect(forbidden.body).toMatchObject({
+        ok: false,
+        error: { code: 'FORBIDDEN' },
+      });
+      expect(prisma.dashboardView.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects blank dashboard view names after trimming', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      const response = await agent
+        .post('/api/v1/dashboard-views')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'dashboard-view-key-0003')
+        .send({ name: '   ', filters: {} })
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'VALIDATION_FAILED' },
+      });
+      expect(prisma.dashboardView.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('GET /auth/session', () => {
     it('answers with the anonymous profile when no cookie is sent', async () => {
       const response = await request(server)
@@ -1172,6 +1288,42 @@ describe('Acres API', () => {
           viewer: {
             account: { id: 'account-1', email: 'ada@example.com' },
             membership: { role: 'owner' },
+          },
+        },
+      });
+    });
+
+    it('answers a dashboard summary for an authenticated analytics reader', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.membership.findFirst.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId,
+        accountId: 'account-1',
+        role: 'viewer',
+        revokedAt: null,
+      });
+      prisma.metricDefinition.findMany.mockResolvedValue([]);
+      prisma.metricAggregate.findMany.mockResolvedValue([]);
+      prisma.dashboardView.findMany.mockResolvedValue([]);
+
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', csrf)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'DashboardSummary',
+          query:
+            'query DashboardSummary { dashboardSummary { metrics { id } aggregates { id } savedViews { id } } }',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        data: {
+          dashboardSummary: {
+            metrics: [],
+            aggregates: [],
+            savedViews: [],
           },
         },
       });

@@ -3,6 +3,7 @@ import { UseFilters } from '@nestjs/common';
 import type { RegionSummary } from '@acres/shared';
 import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
+import { DashboardsService } from '../dashboards/dashboards.service';
 import { OrganizationPolicy } from '../organizations/permissions';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { RegionsService } from '../regions/regions.service';
@@ -12,6 +13,7 @@ import type { AcresGraphqlContext } from './graphql.context';
 import { connectionFromWindow, connectionWindow } from './pagination';
 import {
   OrganizationAuditEventConnection,
+  DashboardSummaryGql,
   OrganizationGql,
   OrganizationInvitationConnection,
   OrganizationMemberConnection,
@@ -31,6 +33,7 @@ export class AcresResolver {
   constructor(
     private readonly organizations: OrganizationsService,
     private readonly regionsService: RegionsService,
+    private readonly dashboards: DashboardsService,
     private readonly cursors: CursorCodec,
     private readonly config: AcresConfigService,
   ) {}
@@ -252,9 +255,36 @@ export class AcresResolver {
     return this.withTimeout(required.loaders.regionBySlug.load(slug));
   }
 
+  @Query(() => DashboardSummaryGql, {
+    description:
+      'Dashboard-ready metrics, aggregates, and saved views for the selected organization.',
+  })
+  async dashboardSummary(
+    @Context() context: AcresGraphqlContext,
+    @Args('metricId', { nullable: true }) metricId?: string,
+    @Args('regionId', { nullable: true }) regionId?: string,
+    @Args('datasetVersionId', { nullable: true }) datasetVersionId?: string,
+    @Args('dimensionHash', { nullable: true }) dimensionHash?: string,
+    @Args('periodStart', { nullable: true }) periodStart?: string,
+    @Args('periodEnd', { nullable: true }) periodEnd?: string,
+  ) {
+    const required = this.require(context, 'analytics.read');
+    return this.withTimeout(
+      this.dashboards.summary(required.organization, {
+        metricId,
+        regionId,
+        datasetVersionId,
+        dimensionHash,
+        periodStart,
+        periodEnd,
+      }),
+    );
+  }
+
   private require(
     context: AcresGraphqlContext,
-    permission: 'members.read' | 'invitations.read' | 'audit.read',
+    permission:
+      'members.read' | 'invitations.read' | 'audit.read' | 'analytics.read',
   ): RequiredGraphqlContext {
     const required = this.requireContext(context);
     if (!OrganizationPolicy.has(required.organization.role, permission)) {

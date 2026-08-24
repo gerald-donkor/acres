@@ -7,7 +7,7 @@ import type {
   OrganizationRole,
   OrganizationSummary,
 } from "@acres/shared";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import {
   BarChart3Icon,
   BriefcaseBusinessIcon,
@@ -23,12 +23,15 @@ import { NewOrganizationForm } from "@/components/acres/app/new-organization-for
 import { OrganizationSwitcher } from "@/components/acres/app/organization-switcher";
 import { persistActiveOrganization } from "@/lib/app/active-organization";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type AppShellProps = {
   account: AccountProfile;
   organizations: OrganizationSummary[];
   activeOrganization: OrganizationSummary | null;
+  activeSection?: "workspace" | "dashboards";
+  children?: ReactNode;
 };
 
 const roleLabel: Record<OrganizationRole, string> = {
@@ -42,36 +45,42 @@ const navItems = [
   {
     label: "Workspace",
     status: "Active",
+    href: "/app",
     icon: BriefcaseBusinessIcon,
     roles: ["owner", "admin", "analyst", "viewer"],
   },
   {
     label: "Data Sets",
     status: "Unavailable",
+    href: null,
     icon: DatabaseIcon,
     roles: ["owner", "admin", "analyst"],
   },
   {
     label: "Dashboards",
-    status: "Unavailable",
+    status: "Active",
+    href: "/app/dashboards",
     icon: BarChart3Icon,
     roles: ["owner", "admin", "analyst", "viewer"],
   },
   {
     label: "Reports",
     status: "Unavailable",
+    href: null,
     icon: FileTextIcon,
     roles: ["owner", "admin", "analyst", "viewer"],
   },
   {
     label: "Members",
     status: "Unavailable",
+    href: null,
     icon: ShieldCheckIcon,
     roles: ["owner", "admin"],
   },
 ] satisfies Array<{
   label: string;
   status: "Active" | "Unavailable";
+  href: string | null;
   icon: ComponentType<{ "aria-hidden": true }>;
   roles: OrganizationRole[];
 }>;
@@ -91,7 +100,7 @@ function Ledger({
       </div>
       <div className="min-w-0">
         <dt>Organization</dt>
-        <dd className="truncate text-ink">
+        <dd aria-label="Current organization" className="truncate text-ink">
           {activeOrganization?.name ?? "Not created"}
         </dd>
       </div>
@@ -107,25 +116,22 @@ function Ledger({
 
 function WorkNavigation({
   role,
+  activeSection,
 }: {
   role: OrganizationRole | null;
+  activeSection: "workspace" | "dashboards";
 }) {
   const visible = navItems.filter((item) => role === null || item.roles.includes(role));
   return (
     <nav aria-label="Application" className="grid gap-2">
       {visible.map((item) => {
         const Icon = item.icon;
-        const active = item.status === "Active";
-        return (
-          <Button
-            key={item.label}
-            type="button"
-            variant={active ? "secondary" : "ghost"}
-            size="lg"
-            className="h-target justify-between gap-3"
-            disabled={!active}
-            aria-current={active ? "page" : undefined}
-          >
+        const active =
+          (activeSection === "workspace" && item.href === "/app") ||
+          (activeSection === "dashboards" && item.href === "/app/dashboards");
+        const enabled = item.status === "Active" && item.href !== null;
+        const content = (
+          <>
             <span className="flex min-w-0 items-center gap-2">
               <Icon aria-hidden="true" />
               <span className="truncate">{item.label}</span>
@@ -133,7 +139,32 @@ function WorkNavigation({
             <Badge variant={active ? "secondary" : "outline"}>
               {item.status}
             </Badge>
-          </Button>
+          </>
+        );
+        return enabled ? (
+          <Link
+            key={item.label}
+            href={item.href}
+            className={cn(
+              buttonVariants({ variant: active ? "secondary" : "ghost", size: "lg" }),
+              "h-target justify-between gap-3",
+            )}
+            aria-current={active ? "page" : undefined}
+          >
+            {content}
+          </Link>
+        ) : (
+          <button
+            key={item.label}
+            type="button"
+            disabled
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "lg" }),
+              "h-target justify-between gap-3 opacity-50",
+            )}
+          >
+            {content}
+          </button>
         );
       })}
     </nav>
@@ -211,6 +242,8 @@ export function AppShell({
   account,
   organizations,
   activeOrganization,
+  activeSection = "workspace",
+  children,
 }: AppShellProps) {
   const role = activeOrganization?.membership.role ?? null;
 
@@ -251,21 +284,23 @@ export function AppShell({
               <ClipboardListIcon aria-hidden="true" className="size-4" />
             </summary>
             <div className="mt-3">
-              <WorkNavigation role={role} />
+              <WorkNavigation role={role} activeSection={activeSection} />
             </div>
           </details>
           <div className="hidden md:block">
-            <WorkNavigation role={role} />
+            <WorkNavigation role={role} activeSection={activeSection} />
           </div>
           {activeOrganization && <NewOrganizationForm />}
           <LogoutButton />
         </aside>
         <div className="min-w-0">
           {activeOrganization ? (
-            <WorkspaceOverview
-              account={account}
-              activeOrganization={activeOrganization}
-            />
+            children ?? (
+              <WorkspaceOverview
+                account={account}
+                activeOrganization={activeOrganization}
+              />
+            )
           ) : (
             <CreateOrganizationForm />
           )}

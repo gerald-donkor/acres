@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
 import { AppShell } from "@/components/acres/app/app-shell";
+import { DashboardWorkspace } from "@/components/acres/app/dashboard-workspace";
 import {
+  getDashboardSummary,
   getSession,
   listOrganizations,
 } from "@/lib/api/server";
@@ -78,11 +80,30 @@ export default async function AppPage() {
       ? null
       : organizations.find((organization) => organization.id === activeId) ?? null;
 
+  let dashboardSummary = null;
+  if (activeOrganization !== null) {
+    try {
+      dashboardSummary = await getDashboardSummary(activeOrganization.id);
+    } catch (error) {
+      return <AppError error={error} />;
+    }
+  }
+
   return (
     <AppShell
       account={session.account}
       organizations={organizations}
       activeOrganization={activeOrganization}
-    />
+      activeSection="dashboards"
+    >
+      {activeOrganization && dashboardSummary ? (
+        <DashboardWorkspace
+          organization={activeOrganization}
+          summary={dashboardSummary}
+          filters={{}}
+          canManageDashboards={activeOrganization.membership.role !== "viewer"}
+        />
+      ) : null}
+    </AppShell>
   );
 }

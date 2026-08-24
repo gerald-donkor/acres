@@ -13,6 +13,6 @@ import { AnalyticsService } from './analytics.service';
     AnalyticsService,
     AnalyticsPublicationService,
   ],
-  exports: [AnalyticsPublicationService],
+  exports: [AnalyticsPublicationService, AnalyticsService],
 })
 export class AnalyticsModule {}

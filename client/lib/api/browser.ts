@@ -2,6 +2,8 @@
 
 import type {
   CreateOrganizationInput,
+  CreateDashboardViewInput,
+  DashboardView,
   LoginInput,
   OrganizationSummary,
   RegisterAccountInput,
@@ -55,7 +57,11 @@ async function csrfHeaders(): Promise<Headers> {
 async function apiMutation<TData>(
   path: string,
   body?: unknown,
-  init: { method?: "POST" | "PATCH" | "DELETE"; idempotencyKey?: string } = {},
+  init: {
+    method?: "POST" | "PATCH" | "DELETE";
+    idempotencyKey?: string;
+    organizationId?: string;
+  } = {},
 ): Promise<TData> {
   const headers = await csrfHeaders();
   if (init.idempotencyKey !== undefined) {
@@ -66,6 +72,7 @@ async function apiMutation<TData>(
     return await apiFetch<TData>(path, {
       method: init.method ?? "POST",
       headers,
+      organizationId: init.organizationId,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
@@ -100,6 +107,16 @@ export async function createOrganization(
   input: CreateOrganizationInput,
 ): Promise<OrganizationSummary> {
   return apiMutation<OrganizationSummary>("/organizations", input, {
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function createDashboardView(
+  organizationId: string,
+  input: CreateDashboardViewInput,
+): Promise<DashboardView> {
+  return apiMutation<DashboardView>("/dashboard-views", input, {
+    organizationId,
     idempotencyKey: createIdempotencyKey(),
   });
 }

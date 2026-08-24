@@ -354,6 +354,8 @@ Status: implemented by `prompts/23-versioned-rest-graphql-contracts.md`.
 
 ## 10. Phase 9 — dashboards and optimized GraphQL
 
+Status: implemented by `prompts/30-dashboards-optimized-graphql.md`.
+
 - **Depends on:** phase 8 analytics and phase 5 authenticated shell.
 - **Outcome/behavior:** accessible regional browse/compare dashboards, saved
   views, tenant-safe GraphQL read models, filters and states that explain

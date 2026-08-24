@@ -132,6 +132,12 @@ export interface PrismaDouble {
     deleteMany: jest.Mock;
     createMany: jest.Mock;
   };
+  dashboardView: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    update: jest.Mock;
+  };
   regionCode: {
     findMany: jest.Mock;
   };
@@ -271,6 +277,12 @@ export function createPrismaDouble(): PrismaDouble {
       findMany: jest.fn(),
       deleteMany: jest.fn(),
       createMany: jest.fn(),
+    },
+    dashboardView: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
     },
     regionCode: {
       findMany: jest.fn(),

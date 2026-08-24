@@ -97,7 +97,9 @@ Owners, admins, analysts, and viewers have that permission.
 | `GET`  | `/analytics/aggregates`                       | deterministic aggregate read model with the same bounded filters                      |
 | `GET`  | `/analytics/aggregates/:aggregateId/evidence` | aggregate lineage back to observations and dataset versions                           |
 
-GraphQL dashboard read models remain Phase 9.
+Dashboard-oriented GraphQL read models are implemented in Phase 9; see
+[`dashboards.md`](dashboards.md). The analytics REST routes remain the source
+for direct metric, observation, aggregate, and evidence reads.
 
 ## Query Plan Evidence
 
@@ -173,7 +175,9 @@ applied cleanly.
 
 ## Residual Gaps
 
-- No dashboard UI, saved view, report, export, or AI path exists.
+- Reports, exports, dashboard sharing, collaboration, and AI remain future work;
+  the saved-view dashboard surface is now recorded in
+  [`dashboards.md`](dashboards.md).
 - Aggregation currently rebuilds per-dataset-version aggregates only for rows
   emitted by the just-published version; cross-version rollups are future work.
 - Quality semantics are intentionally small: missing and invalid values are

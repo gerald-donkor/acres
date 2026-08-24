@@ -23,6 +23,7 @@ export const ORGANIZATION_PERMISSIONS = [
   'ingestion.run',
   'ingestion.cancel',
   'analytics.read',
+  'dashboards.manage',
 ] as const;
 
 export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
@@ -48,6 +49,7 @@ const rolePermissions = {
     'ingestion.run',
     'ingestion.cancel',
     'analytics.read',
+    'dashboards.manage',
   ]),
   analyst: new Set<OrganizationPermission>([
     'organization.read',
@@ -60,6 +62,7 @@ const rolePermissions = {
     'ingestion.run',
     'ingestion.cancel',
     'analytics.read',
+    'dashboards.manage',
   ]),
   viewer: new Set<OrganizationPermission>([
     'organization.read',

@@ -33,6 +33,7 @@ model Account {
   ownedDatasets         Dataset[]      @relation("DatasetOwner")
   columnMappings         ColumnMapping[]
   ingestionRuns          IngestionRun[]
+  dashboardViews         DashboardView[]
 }
 
 /// An opaque, server-revocable browser session. Only the hash is stored.
@@ -170,6 +171,7 @@ model Organization {
   observationQualities ObservationQuality[]
   metricAggregates MetricAggregate[]
   aggregateLineage MetricAggregateLineage[]
+  dashboardViews DashboardView[]
 }
 
 /// An account's organization-local role. Revoked rows remain as provenance.
@@ -851,6 +853,30 @@ model MetricAggregateLineage {
   @@unique([organizationId, aggregateId, observationId])
   @@index([organizationId, observationId])
   @@index([organizationId, datasetVersionId])
+}
+
+model DashboardView {
+  id             String              @id @default(uuid(7))
+  organizationId String
+  ownerAccountId String
+  name           String
+  description    String?
+  filters        Json
+  presentation   Json
+  status         DashboardViewStatus @default(active)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  owner          Account             @relation(fields: [ownerAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, ownerAccountId, updatedAt])
+}
+
+enum DashboardViewStatus {
+  active
+  archived
 }
 
 enum MetricValueType {

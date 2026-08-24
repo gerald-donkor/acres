@@ -1,4 +1,4 @@
-import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
 import type { OrganizationRole } from '../generated/prisma/enums';
 
 @ObjectType({ description: 'Pagination metadata for a bounded connection.' })
@@ -294,4 +294,168 @@ export class RegionConnection {
 
   @Field(() => PageInfo, { description: 'Pagination metadata.' })
   pageInfo!: PageInfo;
+}
+
+@ObjectType({ description: 'A governed metric definition.' })
+export class DashboardMetricGql {
+  @Field(() => ID, { description: 'Stable metric identifier.' })
+  id!: string;
+
+  @Field({ description: 'Machine-readable metric key.' })
+  key!: string;
+
+  @Field({ description: 'Human-readable metric label.' })
+  label!: string;
+
+  @Field(() => String, { nullable: true, description: 'Metric description.' })
+  description!: string | null;
+
+  @Field({ description: 'Metric value type.' })
+  valueType!: string;
+
+  @Field({ description: 'Canonical unit for values.' })
+  canonicalUnit!: string;
+
+  @Field({ description: 'Allowed aggregation semantics.' })
+  allowedAggregation!: string;
+
+  @Field({ description: 'Calculation version used for this metric.' })
+  calculationVersion!: string;
+
+  @Field({ description: 'Metric definition status.' })
+  status!: string;
+
+  @Field({ description: 'ISO timestamp when the metric was created.' })
+  createdAt!: string;
+
+  @Field({ description: 'ISO timestamp when the metric was updated.' })
+  updatedAt!: string;
+}
+
+@ObjectType({ description: 'Typed metric value encoded for precision.' })
+export class DashboardValueGql {
+  @Field({ description: 'Value kind.' })
+  type!: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description: 'String value; numeric values remain decimal strings.',
+  })
+  value!: string | null;
+}
+
+@ObjectType({ description: 'Dashboard aggregate read model.' })
+export class DashboardAggregateGql {
+  @Field(() => ID, { description: 'Stable aggregate identifier.' })
+  id!: string;
+
+  @Field(() => ID, { description: 'Source dataset version identifier.' })
+  datasetVersionId!: string;
+
+  @Field(() => ID, { description: 'Region identifier.' })
+  regionId!: string;
+
+  @Field(() => DashboardMetricGql, { description: 'Metric definition.' })
+  metric!: DashboardMetricGql;
+
+  @Field({ description: 'Aggregate type.' })
+  aggregateType!: string;
+
+  @Field({ description: 'ISO period start.' })
+  periodStart!: string;
+
+  @Field({ description: 'ISO period end.' })
+  periodEnd!: string;
+
+  @Field(() => DashboardValueGql, { description: 'Aggregate value.' })
+  value!: DashboardValueGql;
+
+  @Field({ description: 'Displayed unit.' })
+  unit!: string;
+
+  @Field({ description: 'Stable dimension hash.' })
+  dimensionHash!: string;
+
+  @Field(() => Int, { description: 'Observation count in the aggregate.' })
+  observationCount!: number;
+
+  @Field(() => [String], {
+    description: 'Dataset versions that contributed to this aggregate.',
+  })
+  datasetVersionIds!: string[];
+
+  @Field({ description: 'ISO timestamp when the aggregate was created.' })
+  createdAt!: string;
+}
+
+@ObjectType({ description: 'Saved dashboard filter intent.' })
+export class DashboardFiltersGql {
+  @Field(() => ID, { nullable: true })
+  metricId!: string | null;
+
+  @Field(() => ID, { nullable: true })
+  regionId!: string | null;
+
+  @Field(() => ID, { nullable: true })
+  datasetVersionId!: string | null;
+
+  @Field(() => String, { nullable: true })
+  dimensionHash!: string | null;
+
+  @Field(() => String, { nullable: true })
+  periodStart!: string | null;
+
+  @Field(() => String, { nullable: true })
+  periodEnd!: string | null;
+}
+
+@ObjectType({ description: 'Saved dashboard presentation intent.' })
+export class DashboardPresentationGql {
+  @Field(() => String, { nullable: true })
+  chart!: string | null;
+
+  @Field(() => String, { nullable: true })
+  compareBy!: string | null;
+}
+
+@ObjectType({ description: 'Saved dashboard view metadata.' })
+export class DashboardViewGql {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  name!: string;
+
+  @Field(() => String, { nullable: true })
+  description!: string | null;
+
+  @Field(() => DashboardFiltersGql)
+  filters!: DashboardFiltersGql;
+
+  @Field(() => DashboardPresentationGql)
+  presentation!: DashboardPresentationGql;
+
+  @Field(() => ID)
+  ownerAccountId!: string;
+
+  @Field()
+  status!: string;
+
+  @Field()
+  createdAt!: string;
+
+  @Field()
+  updatedAt!: string;
+}
+
+@ObjectType({ description: 'Initial dashboard data for one organization.' })
+export class DashboardSummaryGql {
+  @Field(() => [DashboardMetricGql])
+  metrics!: DashboardMetricGql[];
+
+  @Field(() => [DashboardAggregateGql])
+  aggregates!: DashboardAggregateGql[];
+
+  @Field(() => [DashboardViewGql])
+  savedViews!: DashboardViewGql[];
 }

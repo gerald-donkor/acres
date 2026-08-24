@@ -2106,3 +2106,53 @@ npm run test:server
 Test Suites: 3 passed, 3 total
 Tests: 77 passed, 77 total
 ```
+
+## 20. Dashboards and optimized GraphQL
+
+Implemented by `prompts/30-dashboards-optimized-graphql.md`; full details live
+in [`dashboards.md`](dashboards.md).
+
+New backend state:
+
+- `DashboardView` stores organization-scoped saved filters and presentation
+  intent, is forced through RLS, and uses composite tenant foreign keys to
+  `Organization` and `Account`.
+- `dashboards.manage` is centralized in the role permission map. Owners,
+  admins, and analysts can manage saved dashboard views; viewers can read
+  analytics and saved views but cannot write them.
+- `/api/v1/dashboard-views` exposes list/read/create/update/soft-archive routes
+  with selected-organization scoping. Creates require CSRF and an
+  `Idempotency-Key`.
+- GraphQL adds read-only `dashboardSummary`, returning active metric
+  definitions, aggregate read models, and saved views through
+  `DashboardsService`.
+- The authenticated Next app reads dashboard summaries through server-side
+  GraphQL and forwards the CSRF token/cookie pair required by the global POST
+  defence.
+
+Verification in this session:
+
+```text
+npm run lint
+@acres/client@0.1.0 lint
+@acres/shared@0.1.0 lint
+@acres/server@0.1.0 lint
+
+npm run typecheck
+✔ Generated Prisma Client (7.9.1)
+
+npm run build
+├ ƒ /app/dashboards
+├ ƒ /app/dashboards/[viewId]
+✔ Generated Prisma Client (7.9.1)
+
+npm run test:server
+Test Suites: 3 passed, 3 total
+Tests: 81 passed, 81 total
+
+npm run test:client:e2e
+12 passed (12.8s)
+
+npm run contracts:check
+✔ Generated Prisma Client (7.9.1)
+```

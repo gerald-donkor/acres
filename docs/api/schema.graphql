@@ -10,6 +10,129 @@ type AccountGql {
   id: ID!
 }
 
+"""Dashboard aggregate read model."""
+type DashboardAggregateGql {
+  """Aggregate type."""
+  aggregateType: String!
+
+  """ISO timestamp when the aggregate was created."""
+  createdAt: String!
+
+  """Source dataset version identifier."""
+  datasetVersionId: ID!
+
+  """Dataset versions that contributed to this aggregate."""
+  datasetVersionIds: [String!]!
+
+  """Stable dimension hash."""
+  dimensionHash: String!
+
+  """Stable aggregate identifier."""
+  id: ID!
+
+  """Metric definition."""
+  metric: DashboardMetricGql!
+
+  """Observation count in the aggregate."""
+  observationCount: Int!
+
+  """ISO period end."""
+  periodEnd: String!
+
+  """ISO period start."""
+  periodStart: String!
+
+  """Region identifier."""
+  regionId: ID!
+
+  """Displayed unit."""
+  unit: String!
+
+  """Aggregate value."""
+  value: DashboardValueGql!
+}
+
+"""Saved dashboard filter intent."""
+type DashboardFiltersGql {
+  datasetVersionId: ID
+  dimensionHash: String
+  metricId: ID
+  periodEnd: String
+  periodStart: String
+  regionId: ID
+}
+
+"""A governed metric definition."""
+type DashboardMetricGql {
+  """Allowed aggregation semantics."""
+  allowedAggregation: String!
+
+  """Calculation version used for this metric."""
+  calculationVersion: String!
+
+  """Canonical unit for values."""
+  canonicalUnit: String!
+
+  """ISO timestamp when the metric was created."""
+  createdAt: String!
+
+  """Metric description."""
+  description: String
+
+  """Stable metric identifier."""
+  id: ID!
+
+  """Machine-readable metric key."""
+  key: String!
+
+  """Human-readable metric label."""
+  label: String!
+
+  """Metric definition status."""
+  status: String!
+
+  """ISO timestamp when the metric was updated."""
+  updatedAt: String!
+
+  """Metric value type."""
+  valueType: String!
+}
+
+"""Saved dashboard presentation intent."""
+type DashboardPresentationGql {
+  chart: String
+  compareBy: String
+}
+
+"""Initial dashboard data for one organization."""
+type DashboardSummaryGql {
+  aggregates: [DashboardAggregateGql!]!
+  metrics: [DashboardMetricGql!]!
+  savedViews: [DashboardViewGql!]!
+}
+
+"""Typed metric value encoded for precision."""
+type DashboardValueGql {
+  """Value kind."""
+  type: String!
+
+  """String value; numeric values remain decimal strings."""
+  value: String
+}
+
+"""Saved dashboard view metadata."""
+type DashboardViewGql {
+  createdAt: String!
+  description: String
+  filters: DashboardFiltersGql!
+  id: ID!
+  name: String!
+  ownerAccountId: ID!
+  presentation: DashboardPresentationGql!
+  status: String!
+  updatedAt: String!
+}
+
 """Account membership in the selected organization."""
 type MembershipGql {
   """Account identifier for this membership."""
@@ -176,6 +299,11 @@ type PageInfo {
 }
 
 type Query {
+  """
+  Dashboard-ready metrics, aggregates, and saved views for the selected organization.
+  """
+  dashboardSummary(datasetVersionId: String, dimensionHash: String, metricId: String, periodEnd: String, periodStart: String, regionId: String): DashboardSummaryGql!
+
   """The selected organization from x-organization-id."""
   organization: OrganizationGql!
 

@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 import { AcresConfigService } from '../config/acres-config.service';
 import { requestIdFrom } from '../common/request-context';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { DashboardsModule } from '../dashboards/dashboards.module';
 import { RegionsModule } from '../regions/regions.module';
 import { RegionsService } from '../regions/regions.service';
 import { SessionsModule } from '../sessions/sessions.module';
@@ -26,6 +27,7 @@ const UUID_RE =
     SessionsModule,
     OrganizationsModule,
     RegionsModule,
+    DashboardsModule,
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
       imports: [PrismaModule, SessionsModule, RegionsModule],
