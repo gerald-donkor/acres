@@ -42,12 +42,16 @@ workers, and UI affordances call that policy. String comparisons scattered
 through transports are prohibited. The server remains authoritative; hiding an
 action in the client is only a usability measure.
 
-Current phase-3 permissions are `organization.read`, `organization.update`,
-`members.read`, `members.invite`, `members.change_role`, `members.revoke`,
-`ownership.transfer`, `invitations.read`, `invitations.revoke` and
-`audit.read`. `owner` has all of them; `admin` can read/update organizations
-and manage non-owner memberships/invitations; `analyst` and `viewer` can read
-the organization only. Generic role updates and invitations cannot assign
+Current implemented permissions are `organization.read`,
+`organization.update`, `members.read`, `members.invite`,
+`members.change_role`, `members.revoke`, `ownership.transfer`,
+`invitations.read`, `invitations.revoke`, `audit.read`, `uploads.read`,
+`uploads.create`, `datasets.read`, `datasets.create`, `datasets.update`,
+`ingestion.read`, `ingestion.run`, and `ingestion.cancel`. `owner` has all of
+them; `admin` can manage organization administration, uploads, datasets, and
+ingestion; `analyst` can upload, create/update datasets, run/cancel ingestion,
+and read results; `viewer` can read organizations, uploads, datasets, and
+ingestion status only. Generic role updates and invitations cannot assign
 `owner`.
 
 Organization ownership has these invariants:

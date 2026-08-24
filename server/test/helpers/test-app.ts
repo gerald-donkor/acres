@@ -4,6 +4,7 @@ import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { AcresConfigService } from '../../src/config/acres-config.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { WORK_QUEUE } from '../../src/queue/work-queue.port';
 import { OBJECT_STORAGE } from '../../src/storage/storage.port';
 
 /**
@@ -74,6 +75,45 @@ export interface PrismaDouble {
     findFirst: jest.Mock;
     findUnique: jest.Mock;
     update: jest.Mock;
+  };
+  dataset: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    update: jest.Mock;
+  };
+  datasetVersion: {
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    aggregate: jest.Mock;
+    create: jest.Mock;
+  };
+  columnMapping: {
+    create: jest.Mock;
+    findFirst: jest.Mock;
+    aggregate: jest.Mock;
+    update: jest.Mock;
+  };
+  ingestionRun: {
+    upsert: jest.Mock;
+    findFirst: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
+  validationIssue: {
+    findMany: jest.Mock;
+    createMany: jest.Mock;
+    deleteMany: jest.Mock;
+  };
+  stagedSourceSummary: {
+    create: jest.Mock;
+    deleteMany: jest.Mock;
+  };
+  regionCode: {
+    findMany: jest.Mock;
+  };
+  regionAlias: {
+    findMany: jest.Mock;
   };
   outboxEvent: {
     create: jest.Mock;
@@ -152,6 +192,45 @@ export function createPrismaDouble(): PrismaDouble {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+    },
+    dataset: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
+    datasetVersion: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      aggregate: jest.fn(),
+      create: jest.fn(),
+    },
+    columnMapping: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      aggregate: jest.fn(),
+      update: jest.fn(),
+    },
+    ingestionRun: {
+      upsert: jest.fn(),
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    validationIssue: {
+      findMany: jest.fn(),
+      createMany: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    stagedSourceSummary: {
+      create: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    regionCode: {
+      findMany: jest.fn(),
+    },
+    regionAlias: {
+      findMany: jest.fn(),
     },
     outboxEvent: {
       create: jest.fn(),
@@ -332,6 +411,24 @@ function configDouble(
     get uploadCleanupIntervalMs() {
       return positiveInt(envOverrides, 'UPLOAD_CLEANUP_INTERVAL_MS');
     },
+    get parserMaxRows() {
+      return positiveInt(envOverrides, 'PARSER_MAX_ROWS');
+    },
+    get parserMaxColumns() {
+      return positiveInt(envOverrides, 'PARSER_MAX_COLUMNS');
+    },
+    get parserMaxCellChars() {
+      return positiveInt(envOverrides, 'PARSER_MAX_CELL_CHARS');
+    },
+    get parserMaxSampleRows() {
+      return positiveInt(envOverrides, 'PARSER_MAX_SAMPLE_ROWS');
+    },
+    get parserMaxGeojsonFeatures() {
+      return positiveInt(envOverrides, 'PARSER_MAX_GEOJSON_FEATURES');
+    },
+    get parserMaxGeojsonCoordinates() {
+      return positiveInt(envOverrides, 'PARSER_MAX_GEOJSON_COORDINATES');
+    },
     get outboxClaimBatchSize() {
       return positiveInt(envOverrides, 'OUTBOX_CLAIM_BATCH_SIZE');
     },
@@ -380,6 +477,12 @@ export async function createTestApp(
         getBuffer: jest.fn().mockResolvedValue(Buffer.from('test-content')),
         delete: jest.fn().mockResolvedValue(undefined),
         readiness: jest.fn().mockResolvedValue(true),
+      })
+      .overrideProvider(WORK_QUEUE)
+      .useValue({
+        enqueue: jest.fn().mockResolvedValue(undefined),
+        readiness: jest.fn().mockResolvedValue(true),
+        close: jest.fn().mockResolvedValue(undefined),
       });
 
     if (Object.keys(envOverrides).length > 0) {

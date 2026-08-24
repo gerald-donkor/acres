@@ -194,6 +194,30 @@ export class AcresConfigService {
     return this.get('uploadCleanupIntervalMs');
   }
 
+  get parserMaxRows(): number {
+    return this.get('parserMaxRows');
+  }
+
+  get parserMaxColumns(): number {
+    return this.get('parserMaxColumns');
+  }
+
+  get parserMaxCellChars(): number {
+    return this.get('parserMaxCellChars');
+  }
+
+  get parserMaxSampleRows(): number {
+    return this.get('parserMaxSampleRows');
+  }
+
+  get parserMaxGeojsonFeatures(): number {
+    return this.get('parserMaxGeojsonFeatures');
+  }
+
+  get parserMaxGeojsonCoordinates(): number {
+    return this.get('parserMaxGeojsonCoordinates');
+  }
+
   get outboxClaimBatchSize(): number {
     return this.get('outboxClaimBatchSize');
   }

@@ -15,28 +15,28 @@ Every version below was read from the registry or from `node_modules/` in the
 implementing session (2026-08-21), never recalled. Toolchain: **Node v26.7.0**,
 **npm 12.0.2**.
 
-| package | version | why |
-| --- | --- | --- |
-| `@nestjs/common` · `@nestjs/core` · `@nestjs/platform-express` | `^11.2.1` | the framework, on its **default Express platform** — the security guidance this step follows is the Express guidance, and swapping to Fastify would invalidate it |
-| `@nestjs/config` | `^4.0.4` | environment loading, with a `validate` function that fails the boot |
-| `@nestjs/schedule` | `^6.1.3` | in-process cron; see §7 for the constraint it carries |
-| `@prisma/client` · `prisma` | `^7.9.1` | the data layer |
-| `@prisma/adapter-pg` | `^7.9.1` | **required.** Prisma 7's `PrismaClientOptions` accepts either a driver adapter or an Accelerate URL; there is no plain connection-string form any more. Read from `internal/prismaNamespace.ts` in the generated client |
-| `class-validator` `^0.15.1` · `class-transformer` `^0.5.1` | request validation and DTO transformation |
-| `helmet` | `^8.3.0` | response security headers |
-| `cookie-parser` | `^1.4.7` | the session and CSRF cookies are read by middleware, so they must be parsed first |
-| `csrf-csrf` | `^4.0.3` | double-submit CSRF (§5) |
-| `@nestjs/throttler` | `6.5.0` | per-IP request throttling. The strict tier closes the login/contact availability gap named in §5 and formerly deferred in §12 |
-| `@nestjs/swagger` | `11.4.7` | code-first OpenAPI generation for the committed REST contract artifacts |
-| `@nestjs/graphql` | `13.4.5` | code-first GraphQL integration and deterministic SDL generation |
-| `@nestjs/apollo` | `13.1.0` | Nest Apollo driver pinned below latest because `13.4.5` pulls an Apollo 5 path that conflicts with the installed GraphQL Playground peer graph |
-| `@apollo/server` | `4.13.0` | Apollo Server runtime compatible with the selected Nest Apollo driver. Apollo Server 4 is EOL as of 2026-01-26; this is accepted only as the stable compatible peer set for this phase |
-| `@as-integrations/express5` | `1.1.2` | Apollo/Express 5 integration required by the selected Nest GraphQL stack |
-| `graphql` | `16.14.2` | GraphQL execution and schema primitives |
-| `graphql-query-complexity` | `2.0.0` | cost guard for GraphQL abuse controls |
-| `dataloader` | `2.2.3` | per-request GraphQL lookup caching |
-| `bcryptjs` | `^3.0.3` | password hashing. Pure JavaScript and **ships no install script**, which matters here: this machine's npm blocks unapproved install scripts, so a native hashing binding would not have built |
-| `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7` | from the verified Nest scaffold |
+| package                                                        | version                                   | why                                                                                                                                                                                                                     |
+| -------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@nestjs/common` · `@nestjs/core` · `@nestjs/platform-express` | `^11.2.1`                                 | the framework, on its **default Express platform** — the security guidance this step follows is the Express guidance, and swapping to Fastify would invalidate it                                                       |
+| `@nestjs/config`                                               | `^4.0.4`                                  | environment loading, with a `validate` function that fails the boot                                                                                                                                                     |
+| `@nestjs/schedule`                                             | `^6.1.3`                                  | in-process cron; see §7 for the constraint it carries                                                                                                                                                                   |
+| `@prisma/client` · `prisma`                                    | `^7.9.1`                                  | the data layer                                                                                                                                                                                                          |
+| `@prisma/adapter-pg`                                           | `^7.9.1`                                  | **required.** Prisma 7's `PrismaClientOptions` accepts either a driver adapter or an Accelerate URL; there is no plain connection-string form any more. Read from `internal/prismaNamespace.ts` in the generated client |
+| `class-validator` `^0.15.1` · `class-transformer` `^0.5.1`     | request validation and DTO transformation |
+| `helmet`                                                       | `^8.3.0`                                  | response security headers                                                                                                                                                                                               |
+| `cookie-parser`                                                | `^1.4.7`                                  | the session and CSRF cookies are read by middleware, so they must be parsed first                                                                                                                                       |
+| `csrf-csrf`                                                    | `^4.0.3`                                  | double-submit CSRF (§5)                                                                                                                                                                                                 |
+| `@nestjs/throttler`                                            | `6.5.0`                                   | per-IP request throttling. The strict tier closes the login/contact availability gap named in §5 and formerly deferred in §12                                                                                           |
+| `@nestjs/swagger`                                              | `11.4.7`                                  | code-first OpenAPI generation for the committed REST contract artifacts                                                                                                                                                 |
+| `@nestjs/graphql`                                              | `13.4.5`                                  | code-first GraphQL integration and deterministic SDL generation                                                                                                                                                         |
+| `@nestjs/apollo`                                               | `13.1.0`                                  | Nest Apollo driver pinned below latest because `13.4.5` pulls an Apollo 5 path that conflicts with the installed GraphQL Playground peer graph                                                                          |
+| `@apollo/server`                                               | `4.13.0`                                  | Apollo Server runtime compatible with the selected Nest Apollo driver. Apollo Server 4 is EOL as of 2026-01-26; this is accepted only as the stable compatible peer set for this phase                                  |
+| `@as-integrations/express5`                                    | `1.1.2`                                   | Apollo/Express 5 integration required by the selected Nest GraphQL stack                                                                                                                                                |
+| `graphql`                                                      | `16.14.2`                                 | GraphQL execution and schema primitives                                                                                                                                                                                 |
+| `graphql-query-complexity`                                     | `2.0.0`                                   | cost guard for GraphQL abuse controls                                                                                                                                                                                   |
+| `dataloader`                                                   | `2.2.3`                                   | per-request GraphQL lookup caching                                                                                                                                                                                      |
+| `bcryptjs`                                                     | `^3.0.3`                                  | password hashing. Pure JavaScript and **ships no install script**, which matters here: this machine's npm blocks unapproved install scripts, so a native hashing binding would not have built                           |
+| `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7`            | from the verified Nest scaffold           |
 
 ### A skill was installed mid-step
 
@@ -109,20 +109,20 @@ docs/backend.md       # this file
 
 Root scripts, all run from the repository root:
 
-| script | what it does |
-| --- | --- |
-| `dev` | unchanged — the Next.js dev server |
-| `dev:client` / `dev:server` | one workspace each; the API watches on 3001 |
-| `build` | **shared → client → server.** Shared is first because the server imports its built output |
-| `build:shared` / `build:client` / `build:server` | one workspace each |
-| `contracts:generate` | builds the server and rewrites `docs/api/openapi.json`, `docs/api/schema.graphql` and `docs/api/contracts.md` deterministically |
-| `contracts:check` | generates contracts to a temporary directory and fails on drift; CI runs this after build |
-| `start` | unchanged — serves the built client |
-| `start:server` | `node dist/main` in `server/` |
-| `lint` | client, then shared, then server |
-| `typecheck` | **new.** Builds `@acres/shared`, then `tsc --noEmit` in all three workspaces |
-| `test:server` | the API's e2e suite |
-| `test:client:e2e` | Playwright coverage for the authenticated client shell |
+| script                                           | what it does                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `dev`                                            | unchanged — the Next.js dev server                                                                                              |
+| `dev:client` / `dev:server`                      | one workspace each; the API watches on 3001                                                                                     |
+| `build`                                          | **shared → client → server.** Shared is first because the server imports its built output                                       |
+| `build:shared` / `build:client` / `build:server` | one workspace each                                                                                                              |
+| `contracts:generate`                             | builds the server and rewrites `docs/api/openapi.json`, `docs/api/schema.graphql` and `docs/api/contracts.md` deterministically |
+| `contracts:check`                                | generates contracts to a temporary directory and fails on drift; CI runs this after build                                       |
+| `start`                                          | unchanged — serves the built client                                                                                             |
+| `start:server`                                   | `node dist/main` in `server/`                                                                                                   |
+| `lint`                                           | client, then shared, then server                                                                                                |
+| `typecheck`                                      | **new.** Builds `@acres/shared`, then `tsc --noEmit` in all three workspaces                                                    |
+| `test:server`                                    | the API's e2e suite                                                                                                             |
+| `test:client:e2e`                                | Playwright coverage for the authenticated client shell                                                                          |
 
 `typecheck` did not exist before this step. `AGENTS.md` §8.1 previously said
 `npx tsc --noEmit` "runs from the root and is forwarded to `@acres/client`";
@@ -196,19 +196,19 @@ validation or CSRF rule configured only in `main.ts` is a rule no test can see.
 `JobsController` both need `SessionGuard`, and routing the guard through
 `AuthModule` would make `AuthModule` and `AccountsModule` import each other.
 
-| method | path | auth | notes |
-| --- | --- | --- | --- |
-| `GET` | `/health` | public | status, service name, npm version, uptime. **Takes no database dependency** — a load balancer must not be told the service is down when it is the database that is unreachable |
-| `GET` | `/auth/csrf` | public | **not in the original route table.** A double-submit defence is unusable without a way to read the token; returns `{ csrfToken, headerName: 'x-csrf-token' }` and sets the paired cookie. Uses the library's defaults: re-issuing re-validates any existing cookie against the **current** session identifier and mints a fresh token when that fails, which is what has to happen after login rotates the session cookie |
-| `POST` | `/auth/register` | public + CSRF | 201, sets the session cookie, returns `SessionProfile` |
-| `POST` | `/auth/login` | public + CSRF | 200, sets the session cookie, returns `SessionProfile` |
-| `POST` | `/auth/logout` | session + CSRF | revokes the session server-side, clears the cookie |
-| `GET` | `/auth/session` | optional session | `SessionProfile`, or the shared `ANONYMOUS_SESSION` |
-| `GET` | `/account` | session | `AccountProfile` |
-| `GET` | `/regions` | public | region summaries with their metrics, one query |
-| `GET` | `/regions/:slug` | public | one summary, or 404 `NOT_FOUND` |
-| `POST` | `/forms/contact` | public + CSRF | 201, stores the submission, returns `{ id, receivedAt }` only — echoing the message back would make the endpoint a reflector |
-| `GET` | `/jobs/runs` | session | the 50 most recent runs |
+| method | path             | auth             | notes                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------ | ---------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/health`        | public           | status, service name, npm version, uptime. **Takes no database dependency** — a load balancer must not be told the service is down when it is the database that is unreachable                                                                                                                                                                                                                                            |
+| `GET`  | `/auth/csrf`     | public           | **not in the original route table.** A double-submit defence is unusable without a way to read the token; returns `{ csrfToken, headerName: 'x-csrf-token' }` and sets the paired cookie. Uses the library's defaults: re-issuing re-validates any existing cookie against the **current** session identifier and mints a fresh token when that fails, which is what has to happen after login rotates the session cookie |
+| `POST` | `/auth/register` | public + CSRF    | 201, sets the session cookie, returns `SessionProfile`                                                                                                                                                                                                                                                                                                                                                                    |
+| `POST` | `/auth/login`    | public + CSRF    | 200, sets the session cookie, returns `SessionProfile`                                                                                                                                                                                                                                                                                                                                                                    |
+| `POST` | `/auth/logout`   | session + CSRF   | revokes the session server-side, clears the cookie                                                                                                                                                                                                                                                                                                                                                                        |
+| `GET`  | `/auth/session`  | optional session | `SessionProfile`, or the shared `ANONYMOUS_SESSION`                                                                                                                                                                                                                                                                                                                                                                       |
+| `GET`  | `/account`       | session          | `AccountProfile`                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `GET`  | `/regions`       | public           | region summaries with their metrics, one query                                                                                                                                                                                                                                                                                                                                                                            |
+| `GET`  | `/regions/:slug` | public           | one summary, or 404 `NOT_FOUND`                                                                                                                                                                                                                                                                                                                                                                                           |
+| `POST` | `/forms/contact` | public + CSRF    | 201, stores the submission, returns `{ id, receivedAt }` only — echoing the message back would make the endpoint a reflector                                                                                                                                                                                                                                                                                              |
+| `GET`  | `/jobs/runs`     | session          | the 50 most recent runs                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ### Envelopes
 
@@ -247,7 +247,13 @@ Login with an unknown email, login with a wrong password, and **registration on
 an already-registered email** all return the same shape:
 
 ```json
-{ "ok": false, "error": { "code": "INVALID_CREDENTIALS", "message": "Those credentials did not work." } }
+{
+  "ok": false,
+  "error": {
+    "code": "INVALID_CREDENTIALS",
+    "message": "Those credentials did not work."
+  }
+}
 ```
 
 The prompt required this, and the trade-off is real and recorded: a legitimate
@@ -299,7 +305,7 @@ The library rejects by calling `next(error)`, which lands in Express's default
 handler and returns an **HTML** 403 — outside Nest's filter, and so outside the
 envelope. `CsrfService.protection` wraps it so a rejection is — and compares against the
 library's own `invalidCsrfTokenError` instance before doing so, so a future
-upgrade that forwards some *other* error cannot have it misreported as a CSRF
+upgrade that forwards some _other_ error cannot have it misreported as a CSRF
 failure:
 
 ```text
@@ -319,7 +325,7 @@ defence and is not counted as one here.
 `POST /forms/contact` additionally opt into the `strict` throttler:
 `RATE_LIMIT_STRICT_LIMIT` requests per the same window, per IP. That strict
 tier matters most for `POST /auth/login`, because every unauthenticated attempt
-runs a cost-12 bcrypt comparison *even when the account does not exist* (the
+runs a cost-12 bcrypt comparison _even when the account does not exist_ (the
 timing defence in §4), and `bcryptjs` is pure JavaScript, so it competes with
 the event loop. A client that exceeds a tier receives HTTP 429 in the normal
 error envelope with `RATE_LIMITED`.
@@ -359,21 +365,21 @@ metadata, not configuration. npm only populates that when the process starts
 through a package script, so a container whose entrypoint is
 `node dist/main` directly will report `"version": null`.
 
-| variable | required | default | notes |
-| --- | --- | --- | --- |
-| `DATABASE_URL` | **yes** | — | the running API's non-owner `acres_app` connection (§8.1); read by `AcresConfigService`/`PrismaService` |
-| `DATABASE_MIGRATION_URL` | no | falls back to `DATABASE_URL` | owner `acres_migrator` connection. CLI-only — read directly by `server/prisma.config.ts`, never by `AcresConfigService`, so `prisma migrate`/`validate`/`status` never share a connection with the running app |
-| `CLIENT_ORIGIN` | **yes** | — | CORS origin, credentials enabled |
-| `SESSION_SECRET` | **yes** | — | CSRF HMAC secret. Boot **fails** in production if it is still the `change-me…` placeholder; warns below 32 characters |
-| `PORT` | no | `3001` | never 3000, so it cannot collide with the client |
-| `SESSION_COOKIE_NAME` | no | `acres_session` | |
-| `SESSION_TTL_DAYS` | no | `30` | positive integer |
-| `CSRF_COOKIE_NAME` | no | `acres_csrf` | |
-| `SCHEDULER_ENABLED` | no | `true` | see §7 |
-| `RATE_LIMIT_TTL_MS` | no | `60000` | throttling window in milliseconds |
-| `RATE_LIMIT_DEFAULT_LIMIT` | no | `120` | requests per window per IP for ordinary routes |
-| `RATE_LIMIT_STRICT_LIMIT` | no | `10` | requests per window per IP for auth/contact mutations |
-| `NODE_ENV` | no | `development` | `development` \| `test` \| `production` |
+| variable                   | required | default                      | notes                                                                                                                                                                                                          |
+| -------------------------- | -------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`             | **yes**  | —                            | the running API's non-owner `acres_app` connection (§8.1); read by `AcresConfigService`/`PrismaService`                                                                                                        |
+| `DATABASE_MIGRATION_URL`   | no       | falls back to `DATABASE_URL` | owner `acres_migrator` connection. CLI-only — read directly by `server/prisma.config.ts`, never by `AcresConfigService`, so `prisma migrate`/`validate`/`status` never share a connection with the running app |
+| `CLIENT_ORIGIN`            | **yes**  | —                            | CORS origin, credentials enabled                                                                                                                                                                               |
+| `SESSION_SECRET`           | **yes**  | —                            | CSRF HMAC secret. Boot **fails** in production if it is still the `change-me…` placeholder; warns below 32 characters                                                                                          |
+| `PORT`                     | no       | `3001`                       | never 3000, so it cannot collide with the client                                                                                                                                                               |
+| `SESSION_COOKIE_NAME`      | no       | `acres_session`              |                                                                                                                                                                                                                |
+| `SESSION_TTL_DAYS`         | no       | `30`                         | positive integer                                                                                                                                                                                               |
+| `CSRF_COOKIE_NAME`         | no       | `acres_csrf`                 |                                                                                                                                                                                                                |
+| `SCHEDULER_ENABLED`        | no       | `true`                       | see §7                                                                                                                                                                                                         |
+| `RATE_LIMIT_TTL_MS`        | no       | `60000`                      | throttling window in milliseconds                                                                                                                                                                              |
+| `RATE_LIMIT_DEFAULT_LIMIT` | no       | `120`                        | requests per window per IP for ordinary routes                                                                                                                                                                 |
+| `RATE_LIMIT_STRICT_LIMIT`  | no       | `10`                         | requests per window per IP for auth/contact mutations                                                                                                                                                          |
+| `NODE_ENV`                 | no       | `development`                | `development` \| `test` \| `production`                                                                                                                                                                        |
 
 `server/.env.example` documents all of them. Copy it to `server/.env`; that
 file is gitignored. Root `.env.example` (gitignored the same way) documents the
@@ -472,18 +478,18 @@ Landed by `prompts/18-database-infrastructure.md` (2026-08-23). Three
 PostgreSQL roles, matching `docs/build-plan.md` phase 2's "separate
 migration/owner, non-owner runtime, and test roles" exactly:
 
-| role | privilege | used by |
-| --- | --- | --- |
-| `acres_migrator` | `LOGIN`, `CREATEDB` (for `prisma migrate dev`'s shadow database), owns both databases | `prisma migrate` / `validate` / `status` only — never the running API |
-| `acres_app` | `LOGIN` only; `CONNECT` on `acres`, DML (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) via default privileges, **no DDL, no `TRUNCATE`, no `_prisma_migrations`, no `acres_test` or `postgres` connect** | the running Nest API (`DATABASE_URL`) |
-| `acres_test` | same DML, **plus `TRUNCATE`** (the integration suite's `truncateAll` helper needs it — DML alone is not sufficient in PostgreSQL, discovered this session), scoped to the separate `acres_test` database, with **no `_prisma_migrations` and no `acres` or `postgres` connect** | the real-database integration suite |
+| role             | privilege                                                                                                                                                                                                                                                                       | used by                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `acres_migrator` | `LOGIN`, `CREATEDB` (for `prisma migrate dev`'s shadow database), owns both databases                                                                                                                                                                                           | `prisma migrate` / `validate` / `status` only — never the running API |
+| `acres_app`      | `LOGIN` only; `CONNECT` on `acres`, DML (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) via default privileges, **no DDL, no `TRUNCATE`, no `_prisma_migrations`, no `acres_test` or `postgres` connect**                                                                                 | the running Nest API (`DATABASE_URL`)                                 |
+| `acres_test`     | same DML, **plus `TRUNCATE`** (the integration suite's `truncateAll` helper needs it — DML alone is not sufficient in PostgreSQL, discovered this session), scoped to the separate `acres_test` database, with **no `_prisma_migrations` and no `acres` or `postgres` connect** | the real-database integration suite                                   |
 
 Two databases, `acres` and `acres_test`, both owned by `acres_migrator` with
 PostGIS enabled. `bootstrap-roles.sh` revokes PostgreSQL's default
 `CONNECT`/`TEMPORARY` database privileges from `PUBLIC` on `postgres`, `acres`
 and `acres_test`, then grants each runtime role only its own application
 database. `ALTER DEFAULT PRIVILEGES FOR ROLE acres_migrator ...` grants each
-role's DML (and, for `acres_test`, `TRUNCATE`) on every *future* table a
+role's DML (and, for `acres_test`, `TRUNCATE`) on every _future_ table a
 migration creates, so a later migration needs no manual table re-grant.
 
 `scripts/db/bootstrap-roles.sh` (idempotent — every `CREATE ROLE`/`CREATE
@@ -557,7 +563,7 @@ host and for CI; this sandbox is the one place that does not use it.
 
 Prisma 7's generated client (`runtime: "nodejs"`) lazily loads its WASM query
 compiler via `await import(...)`
-(`server/src/generated/prisma/internal/class.ts`), on the *first real query* —
+(`server/src/generated/prisma/internal/class.ts`), on the _first real query_ —
 not at import time, which is why the existing double-based suite (which never
 issues a real query) never hit this. Jest's default `vm`-sandboxed test
 environment rejects a dynamic `import()` with "A dynamic import callback was
@@ -717,7 +723,7 @@ Added by `prompts/14-server-deployment-infra.md` (2026-08-23):
 
 1. **`deps`** — installs only `@acres/server` and `@acres/shared`'s
    dependencies via `npm ci --workspace=@acres/server --workspace=@acres/shared
-   --include-workspace-root --ignore-scripts`. `client/package.json` (but none
+--include-workspace-root --ignore-scripts`. `client/package.json` (but none
    of `client/`'s source) still has to be copied in, because `npm ci` validates
    every workspace declared in root `package.json`'s `"workspaces"` array
    against `package-lock.json` even when `--workspace` scopes what actually
@@ -726,7 +732,7 @@ Added by `prompts/14-server-deployment-infra.md` (2026-08-23):
    `@acres/shared`) and any package postinstall; both run explicitly in stage 2.
 2. **`build`** (`FROM deps`) — copies `packages/shared` and `server` source,
    then runs `npm run build --workspace=@acres/shared && npm run build
-   --workspace=@acres/server` (`prisma generate && nest build`). The generated
+--workspace=@acres/server` (`prisma generate && nest build`). The generated
    Prisma client (`server/src/generated/prisma`, 15 `.ts` files, no non-`.ts`
    runtime asset) compiles into `server/dist/generated/prisma` along with
    everything else `tsc` touches — confirmed by inspecting the build output
@@ -1474,20 +1480,20 @@ No output.
 
 ## 12. Deferred, and why
 
-| deferred | why |
-| --- | --- |
-| any seed data | it would read as real regional intelligence |
-| a regional-data ingestion provider | none chosen; §7 |
-| `@acres/shared` in `client/` | nothing consumes it yet |
-| any landing-page form UI | the endpoint exists; the form is a later prompt |
-| login / register screens | same |
-| product authorization beyond organizations | `/jobs/runs` is still session-gated only; tenant routes use the organization policy in §14 |
-| email delivery | which is why registration returns a generic failure; §4 |
-| Terraform / IaC, an actual registry + push, choosing a host to run the container | §10.1 built the Dockerfile and CI; no hosting provider has been chosen |
-| OAuth / social login, analytics, billing, CMS, admin | out of scope for step 8 |
-| production PostgreSQL host, volume encryption implementation, key-recovery tooling | §8.1 records the target-state *contract* only; no production host exists to inspect or drill against — phase 12 |
-| organization deletion, mail delivery, product data tenancy beyond the phase-3 tables | deletion/retention/SMTP/later tenant tables remain unapproved or later-phase work |
-| readiness-endpoint container smoke test in the CI `docker` job | that job has no Postgres service attached; adding one grows CI runtime for a check phase 2 does not require there — the `checks` job's integration suite already covers it |
+| deferred                                                                             | why                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| any seed data                                                                        | it would read as real regional intelligence                                                                                                                                |
+| a regional-data ingestion provider                                                   | none chosen; §7                                                                                                                                                            |
+| `@acres/shared` in `client/`                                                         | nothing consumes it yet                                                                                                                                                    |
+| any landing-page form UI                                                             | the endpoint exists; the form is a later prompt                                                                                                                            |
+| login / register screens                                                             | same                                                                                                                                                                       |
+| product authorization beyond organizations                                           | `/jobs/runs` is still session-gated only; tenant routes use the organization policy in §14                                                                                 |
+| email delivery                                                                       | which is why registration returns a generic failure; §4                                                                                                                    |
+| Terraform / IaC, an actual registry + push, choosing a host to run the container     | §10.1 built the Dockerfile and CI; no hosting provider has been chosen                                                                                                     |
+| OAuth / social login, analytics, billing, CMS, admin                                 | out of scope for step 8                                                                                                                                                    |
+| production PostgreSQL host, volume encryption implementation, key-recovery tooling   | §8.1 records the target-state _contract_ only; no production host exists to inspect or drill against — phase 12                                                            |
+| organization deletion, mail delivery, product data tenancy beyond the phase-3 tables | deletion/retention/SMTP/later tenant tables remain unapproved or later-phase work                                                                                          |
+| readiness-endpoint container smoke test in the CI `docker` job                       | that job has no Postgres service attached; adding one grows CI runtime for a check phase 2 does not require there — the `checks` job's integration suite already covers it |
 
 ---
 
@@ -1498,19 +1504,19 @@ was written. This section is a bridge, not a claim that the target has shipped.
 For decisions and sequencing, read `docs/system-architecture.md`,
 `docs/security.md`, `docs/product.md`, and `docs/build-plan.md`.
 
-| current implementation evidenced above | approved target | owning phase |
-| --- | --- | --- |
-| NestJS 11.2/Express API with `/api/v1` product REST, version-neutral `/health`, request IDs and authenticated read-only `/graphql` | Client integration, additional read models and future additive GraphQL expansion | 5+ |
-| `accounts`, `auth`, and `sessions`; opaque hashed database sessions and global CSRF. Identity now also owns account-token persistence with no public delivery route | Recovery UI/mail delivery and client auth shell | 5, mail in a later approved phase |
+| current implementation evidenced above                                                                                                                                        | approved target                                                                                                                                                                           | owning phase                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| NestJS 11.2/Express API with `/api/v1` product REST, version-neutral `/health`, request IDs and authenticated read-only `/graphql`                                            | Client integration, additional read models and future additive GraphQL expansion                                                                                                          | 5+                                   |
+| `accounts`, `auth`, and `sessions`; opaque hashed database sessions and global CSRF. Identity now also owns account-token persistence with no public delivery route           | Recovery UI/mail delivery and client auth shell                                                                                                                                           | 5, mail in a later approved phase    |
 | Prisma 7.9.1 schema with tenant tables, RLS, account tokens and `IdempotencyRecord`; real PostgreSQL 18/PostGIS 3.6, reviewed migrations, three-role separation landed (§8.1) | Same, in production: a provisioned host, and the volume-encryption/key-recovery contract §8.1 records implemented and drilled; Prisma 8 stays deferred until GA and a dedicated migration | 2–4, then 12 for the production host |
-| Organizations, memberships, invitations and audit events are tenant-scoped with transaction-local context and forced RLS | Later tenant-owned datasets/dashboards/reports/exports inherit this boundary in their phases | 6-10 |
-| Flat public `Region` records | Globally shared arbitrary-depth administrative hierarchy, stable external codes/aliases/provenance and reviewed PostGIS geometry SQL | 7 |
-| DB-backed `JobRun` reads and one in-process hourly session purge | PostgreSQL outbox/job authority, Valkey/BullMQ transport, separately runnable Nest worker, idempotent stages, retries/dead letters and audited schedules | 6 |
-| No object storage, upload, parser, or antivirus boundary | Garage quarantine/artifacts, short-lived presigned uploads, ClamAV scan-before-parse, bounded CSV/XLSX/GeoJSON stages and immutable dataset versions | 6–7 |
-| Metric/report placeholder tables without product ingestion | Typed metric definitions/observations/quality/aggregates, dashboards/saved views, immutable report revisions/evidence and secure exports | 8–10 |
-| Next client has a same-origin `/api/v1` bridge, typed server/browser clients, login/register/logout, active organization preference and a first protected `/app` shell | Production Caddy routing and later product dashboards/datasets/reports build on this shell | 5+ |
-| Portable Node 24 API image and GitHub Actions build/smoke test; no full topology | Compose+Caddy single-host reference, private stateful services, OTel/Prometheus/optional Grafana, backups/restores and hardened promotion | 12 |
-| No AI | Optional disabled-by-default local llama.cpp/vLLM adapter receives minimal authorized evidence and proposes schema-validated drafts; deterministic product remains complete | 11 |
+| Organizations, memberships, invitations and audit events are tenant-scoped with transaction-local context and forced RLS                                                      | Later tenant-owned datasets/dashboards/reports/exports inherit this boundary in their phases                                                                                              | 6-10                                 |
+| Flat public `Region` records                                                                                                                                                  | Globally shared arbitrary-depth administrative hierarchy, stable external codes/aliases/provenance and reviewed PostGIS geometry SQL                                                      | 7                                    |
+| DB-backed `JobRun` reads and one in-process hourly session purge                                                                                                              | PostgreSQL outbox/job authority, Valkey/BullMQ transport, separately runnable Nest worker, idempotent stages, retries/dead letters and audited schedules                                  | 6                                    |
+| No object storage, upload, parser, or antivirus boundary                                                                                                                      | Garage quarantine/artifacts, short-lived presigned uploads, ClamAV scan-before-parse, bounded CSV/XLSX/GeoJSON stages and immutable dataset versions                                      | 6–7                                  |
+| Metric/report placeholder tables without product ingestion                                                                                                                    | Typed metric definitions/observations/quality/aggregates, dashboards/saved views, immutable report revisions/evidence and secure exports                                                  | 8–10                                 |
+| Next client has a same-origin `/api/v1` bridge, typed server/browser clients, login/register/logout, active organization preference and a first protected `/app` shell        | Production Caddy routing and later product dashboards/datasets/reports build on this shell                                                                                                | 5+                                   |
+| Portable Node 24 API image and GitHub Actions build/smoke test; no full topology                                                                                              | Compose+Caddy single-host reference, private stateful services, OTel/Prometheus/optional Grafana, backups/restores and hardened promotion                                                 | 12                                   |
+| No AI                                                                                                                                                                         | Optional disabled-by-default local llama.cpp/vLLM adapter receives minimal authorized evidence and proposes schema-validated drafts; deterministic product remains complete               | 11                                   |
 
 The existing route, security, environment, test, and deployment descriptions in
 §§2–11 remain the facts until their owning phase is implemented and committed.
@@ -1529,20 +1535,20 @@ All routes keep the existing success/error envelopes. All mutations remain
 under the global CSRF middleware and all routes require an authenticated
 session.
 
-| method | path | behavior |
-| --- | --- | --- |
-| `GET` | `/organizations` | list active organizations for the account |
-| `POST` | `/organizations` | explicit bootstrap: create organization, owner membership and audit event |
-| `GET` | `/organizations/:organizationId` | read the selected organization and caller membership |
-| `PATCH` | `/organizations/:organizationId` | update organization name |
-| `GET` | `/organizations/:organizationId/members` | list active/revoked membership state |
-| `PATCH` | `/organizations/:organizationId/members/:membershipId` | change a non-owner target role |
-| `DELETE` | `/organizations/:organizationId/members/:membershipId` | soft-revoke a non-owner membership |
-| `POST` | `/organizations/:organizationId/ownership-transfers` | promote a target member to owner and demote the actor to admin |
-| `GET` | `/organizations/:organizationId/invitations` | list invitations without token hashes |
-| `POST` | `/organizations/:organizationId/invitations` | issue one raw invitation token in the response only |
-| `DELETE` | `/organizations/:organizationId/invitations/:invitationId` | revoke an unaccepted invitation |
-| `POST` | `/invitations/accept` | accept a live token for the signed-in account email |
+| method   | path                                                       | behavior                                                                  |
+| -------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `GET`    | `/organizations`                                           | list active organizations for the account                                 |
+| `POST`   | `/organizations`                                           | explicit bootstrap: create organization, owner membership and audit event |
+| `GET`    | `/organizations/:organizationId`                           | read the selected organization and caller membership                      |
+| `PATCH`  | `/organizations/:organizationId`                           | update organization name                                                  |
+| `GET`    | `/organizations/:organizationId/members`                   | list active/revoked membership state                                      |
+| `PATCH`  | `/organizations/:organizationId/members/:membershipId`     | change a non-owner target role                                            |
+| `DELETE` | `/organizations/:organizationId/members/:membershipId`     | soft-revoke a non-owner membership                                        |
+| `POST`   | `/organizations/:organizationId/ownership-transfers`       | promote a target member to owner and demote the actor to admin            |
+| `GET`    | `/organizations/:organizationId/invitations`               | list invitations without token hashes                                     |
+| `POST`   | `/organizations/:organizationId/invitations`               | issue one raw invitation token in the response only                       |
+| `DELETE` | `/organizations/:organizationId/invitations/:invitationId` | revoke an unaccepted invitation                                           |
+| `POST`   | `/invitations/accept`                                      | accept a live token for the signed-in account email                       |
 
 `TENANCY_ENABLED=false` makes the new surface fail closed with `NOT_READY`.
 Existing accounts are not backfilled into organizations.
@@ -1790,12 +1796,12 @@ It does **not** parse CSV/XLSX/GeoJSON into product datasets.
 
 New package versions were verified from npm metadata before install:
 
-| package | version | license | role |
-| --- | --- | --- | --- |
-| `bullmq` | `^6.2.0` | MIT | queue transport over Redis/Valkey |
-| `ioredis` | `^6.0.0` | MIT | BullMQ Redis client |
-| `@aws-sdk/client-s3` | `^3.1116.0` | Apache-2.0 | S3-compatible Garage adapter |
-| `@aws-sdk/s3-request-presigner` | `^3.1116.0` | Apache-2.0 | signed PUT/GET URLs |
+| package                         | version     | license    | role                              |
+| ------------------------------- | ----------- | ---------- | --------------------------------- |
+| `bullmq`                        | `^6.2.0`    | MIT        | queue transport over Redis/Valkey |
+| `ioredis`                       | `^6.0.0`    | MIT        | BullMQ Redis client               |
+| `@aws-sdk/client-s3`            | `^3.1116.0` | Apache-2.0 | S3-compatible Garage adapter      |
+| `@aws-sdk/s3-request-presigner` | `^3.1116.0` | Apache-2.0 | signed PUT/GET URLs               |
 
 `clamscan@2.4.0` was reviewed but not installed; the scanner adapter speaks the
 documented ClamAV `clamd` TCP protocol directly, which avoids adding a
@@ -1841,14 +1847,14 @@ runtime/test privileges needed for the current API and worker. Existing
 
 New REST routes:
 
-| method | path | auth | notes |
-| --- | --- | --- | --- |
-| `POST` | `/api/v1/uploads` | session + org + `uploads.create` + CSRF + idempotency | creates `Upload`/`StoredObject` rows and returns a short-lived signed PUT URL |
-| `POST` | `/api/v1/uploads/:uploadId/complete` | session + org + `uploads.create` + CSRF + idempotency | verifies object metadata, marks completion, records progress, and appends an outbox event |
-| `GET` | `/api/v1/uploads/:uploadId` | session + org + `uploads.read` | returns durable state/progress/failure details |
-| `DELETE` | `/api/v1/uploads/:uploadId` | session + org + `uploads.create` + CSRF + idempotency | records cancellation |
-| `GET` | `/api/v1/uploads/:uploadId/events` | session + org + `uploads.read` | SSE stream backed by durable PostgreSQL status |
-| `GET` | `/api/v1/uploads/:uploadId/download` | session + org + `uploads.read` | returns a short-lived signed attachment URL for accepted uploads |
+| method   | path                                 | auth                                                  | notes                                                                                     |
+| -------- | ------------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `POST`   | `/api/v1/uploads`                    | session + org + `uploads.create` + CSRF + idempotency | creates `Upload`/`StoredObject` rows and returns a short-lived signed PUT URL             |
+| `POST`   | `/api/v1/uploads/:uploadId/complete` | session + org + `uploads.create` + CSRF + idempotency | verifies object metadata, marks completion, records progress, and appends an outbox event |
+| `GET`    | `/api/v1/uploads/:uploadId`          | session + org + `uploads.read`                        | returns durable state/progress/failure details                                            |
+| `DELETE` | `/api/v1/uploads/:uploadId`          | session + org + `uploads.create` + CSRF + idempotency | records cancellation                                                                      |
+| `GET`    | `/api/v1/uploads/:uploadId/events`   | session + org + `uploads.read`                        | SSE stream backed by durable PostgreSQL status                                            |
+| `GET`    | `/api/v1/uploads/:uploadId/download` | session + org + `uploads.read`                        | returns a short-lived signed attachment URL for accepted uploads                          |
 
 Permission policy: owners/admins/analysts can create and manage uploads;
 viewers can read upload status/downloads but cannot create or cancel uploads.
@@ -1942,3 +1948,87 @@ docker compose ps
 That means the real Garage/Valkey/ClamAV integration, real migration apply from
 empty DB, migration status, drift rebuild, and production-profile volume
 inspection still require a machine with Docker available.
+
+## 15. Phase 7A geography and ingestion foundation
+
+Implemented from `prompts/28-geography-ingestion-foundation.md`; the detailed
+record lives in [`ingestion.md`](ingestion.md).
+
+New package dependencies:
+
+| package           | version   | why                                                                                                     |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| `csv-parse`       | `^7.0.2`  | MIT CSV parser with synchronous inspection API used for bounded source summaries                        |
+| `read-excel-file` | `^9.3.10` | MIT XLSX reader used for deterministic first-sheet inspection without evaluating formula-looking values |
+
+GeoJSON validation is implemented locally and bounded. The older LGPL validator
+package considered during implementation was not added.
+
+New schema/migration state:
+
+- `Region` now supports adjacency-list hierarchy with a cycle guard; global
+  `RegionSource`, `RegionCode`, `RegionAlias`, and SQL-owned PostGIS
+  `RegionGeometry.geometry` support source provenance and boundaries.
+- Tenant-owned `Dataset`, `ColumnMapping`, `IngestionRun`, `ValidationIssue`,
+  `StagedSourceSummary`, and `DatasetVersion` tables are additive and forced
+  through RLS using the existing organization/worker context pattern.
+- Composite tenant foreign keys on `(organizationId, id)` prevent cross-org
+  dataset/upload/mapping/run/version references, including worker-scoped writes.
+- `DatasetVersion` publication is immutable for a dataset/upload/mapping tuple;
+  Phase 8 observations and metric definitions are still not built.
+
+New REST routes are generated in [`api/contracts.md`](api/contracts.md):
+dataset create/list/read/update, version list, mapping create, ingestion run
+start/status/issues/cancel. All are `/api/v1`, session scoped, selected-org
+scoped, and use centralized `datasets.*` / `ingestion.*` permissions.
+
+Worker update: the existing worker process now dispatches queue payloads with
+`ingestionRunId` to `IngestionProcessorService`. The BullMQ adapter is lazy, so
+API boot and contract generation no longer open a Valkey connection until
+enqueue/readiness is called.
+
+Verification in this session:
+
+```text
+npm run prisma:validate --workspace=@acres/server
+The schema at prisma/schema.prisma is valid 🚀
+
+npm run typecheck --workspace=@acres/server
+✔ Generated Prisma Client (7.9.1)
+
+npm run test --workspace=@acres/server
+Test Suites: 3 passed, 3 total
+Tests: 9 passed, 9 total
+
+npm run test:e2e --workspace=@acres/server -- api.e2e-spec.ts env-validation.e2e-spec.ts
+Test Suites: 2 passed, 2 total
+Tests: 58 passed, 58 total
+
+npm run test:server
+Test Suites: 3 passed, 3 total
+Tests: 74 passed, 74 total
+
+npm run contracts:generate
+✔ Generated Prisma Client (7.9.1)
+```
+
+Earlier sandboxed database commands failed before escalation:
+
+```text
+docker compose ps
+/bin/bash: line 1: docker: command not found
+
+pg_isready -h localhost -p 5432
+localhost:5432 - no response
+
+npm run prisma:migrate:deploy --workspace=@acres/server
+P1001: Can't reach database server at `localhost:5432`
+```
+
+The escalated local `acres_test` migration deploy then applied pending
+migrations. Post-review tenant-key hardening was recorded as
+`20260824194500_ingestion_tenant_composite_keys`, applied through Prisma, and
+`prisma migrate status` reported the database up to date. Full `test:server`
+passed after that. Migration apply-from-zero outside this incrementally upgraded
+local database, PostGIS geometry validity proof, and real Garage/Valkey/ClamAV
+worker run remain required on a dependency-capable host.

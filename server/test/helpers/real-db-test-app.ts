@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { WORK_QUEUE } from '../../src/queue/work-queue.port';
 import { OBJECT_STORAGE } from '../../src/storage/storage.port';
 
 /**
@@ -29,6 +30,12 @@ export async function createRealDbTestApp(): Promise<{
         delete: jest.fn(),
         readiness: jest.fn().mockResolvedValue(true),
       })
+      .overrideProvider(WORK_QUEUE)
+      .useValue({
+        enqueue: jest.fn().mockResolvedValue(undefined),
+        readiness: jest.fn().mockResolvedValue(true),
+        close: jest.fn().mockResolvedValue(undefined),
+      })
       .compile();
 
     app = moduleRef.createNestApplication({ bodyParser: false });
@@ -46,6 +53,6 @@ export async function createRealDbTestApp(): Promise<{
 
 export async function truncateAll(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "AuditEvent","Invitation","Membership","Organization","IdempotencyRecord","AccountToken","Session","Account","RegionalMetric","InsightReport","Region","ContactSubmission","JobRun" RESTART IDENTITY CASCADE;',
+    'TRUNCATE TABLE "ValidationIssue","StagedSourceSummary","IngestionRun","DatasetVersion","ColumnMapping","Dataset","RegionGeometry","RegionAlias","RegionCode","RegionSource","AuditEvent","Invitation","Membership","Organization","IdempotencyRecord","AccountToken","Session","Account","RegionalMetric","InsightReport","Region","ContactSubmission","JobRun","StoredObject","Upload","OutboxEvent","DurableJob","JobProgressEvent","JobDeadLetter" RESTART IDENTITY CASCADE;',
   );
 }

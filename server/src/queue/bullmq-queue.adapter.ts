@@ -6,25 +6,10 @@ import type { QueuePort, QueueJobPayload } from './work-queue.port';
 
 @Injectable()
 export class BullmqQueueAdapter implements QueuePort, OnModuleDestroy {
-  private readonly connection: IORedis;
-  private readonly queue: Queue<QueueJobPayload>;
+  private connection?: IORedis;
+  private queue?: Queue<QueueJobPayload>;
 
-  constructor(private readonly config: AcresConfigService) {
-    this.connection = new IORedis(config.valkeyUrl, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-    });
-    this.queue = new Queue<QueueJobPayload>(config.queueName, {
-      connection: this.connection,
-      prefix: config.queuePrefix,
-      defaultJobOptions: {
-        attempts: config.queueDefaultAttempts,
-        backoff: { type: 'exponential', delay: config.queueBackoffMs },
-        removeOnComplete: { age: 24 * 60 * 60 },
-        removeOnFail: { age: 7 * 24 * 60 * 60 },
-      },
-    });
-  }
+  constructor(private readonly config: AcresConfigService) {}
 
   async enqueue(input: {
     deterministicKey: string;
@@ -32,7 +17,7 @@ export class BullmqQueueAdapter implements QueuePort, OnModuleDestroy {
     payload: QueueJobPayload;
     delayMs?: number;
   }): Promise<void> {
-    await this.queue.add(input.jobName, input.payload, {
+    await this.getQueue().add(input.jobName, input.payload, {
       jobId: input.deterministicKey,
       delay: input.delayMs ?? 0,
     });
@@ -40,7 +25,7 @@ export class BullmqQueueAdapter implements QueuePort, OnModuleDestroy {
 
   async readiness(): Promise<boolean> {
     try {
-      await this.queue.getJobCounts('waiting');
+      await this.getQueue().getJobCounts('waiting');
       return true;
     } catch {
       return false;
@@ -48,8 +33,27 @@ export class BullmqQueueAdapter implements QueuePort, OnModuleDestroy {
   }
 
   async close(): Promise<void> {
-    await this.queue.close();
-    this.connection.disconnect();
+    await this.queue?.close();
+    this.connection?.disconnect();
+  }
+
+  private getQueue(): Queue<QueueJobPayload> {
+    if (this.queue !== undefined) return this.queue;
+    this.connection = new IORedis(this.config.valkeyUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: true,
+    });
+    this.queue = new Queue<QueueJobPayload>(this.config.queueName, {
+      connection: this.connection,
+      prefix: this.config.queuePrefix,
+      defaultJobOptions: {
+        attempts: this.config.queueDefaultAttempts,
+        backoff: { type: 'exponential', delay: this.config.queueBackoffMs },
+        removeOnComplete: { age: 24 * 60 * 60 },
+        removeOnFail: { age: 7 * 24 * 60 * 60 },
+      },
+    });
+    return this.queue;
   }
 
   async onModuleDestroy(): Promise<void> {

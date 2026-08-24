@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { AcresConfigService } from '../config/acres-config.service';
+import { IngestionProcessorService } from '../ingestion/ingestion-processor.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import {
@@ -16,6 +17,7 @@ import { WORK_QUEUE, type QueuePort } from '../queue/work-queue.port';
 
 interface UploadJobData {
   readonly uploadId?: string;
+  readonly ingestionRunId?: string;
   readonly outboxEventId?: string;
 }
 
@@ -35,6 +37,7 @@ export class UploadWorkerService {
     @Inject(WORK_QUEUE) private readonly queue: QueuePort,
     @Inject(MALWARE_SCANNER) private readonly scanner: MalwareScannerPort,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
+    private readonly ingestionProcessor: IngestionProcessorService,
   ) {}
 
   async start(): Promise<void> {
@@ -117,7 +120,12 @@ export class UploadWorkerService {
   }
 
   async process(data: UploadJobData): Promise<void> {
-    if (this.stopping || data.uploadId === undefined) return;
+    if (this.stopping) return;
+    if (data.ingestionRunId !== undefined) {
+      await this.ingestionProcessor.processRun(data.ingestionRunId);
+      return;
+    }
+    if (data.uploadId === undefined) return;
     const upload = await this.tenants.workerScoped((tx) => {
       return tx.upload.findUnique({
         where: { id: data.uploadId },

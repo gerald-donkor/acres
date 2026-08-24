@@ -49,6 +49,12 @@ process.env.UPLOAD_ACCEPTED_MEDIA_TYPES =
   'text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/geo+json,application/json';
 process.env.UPLOAD_STALE_MINUTES = '60';
 process.env.UPLOAD_CLEANUP_INTERVAL_MS = '300000';
+process.env.PARSER_MAX_ROWS = '10000';
+process.env.PARSER_MAX_COLUMNS = '200';
+process.env.PARSER_MAX_CELL_CHARS = '2000';
+process.env.PARSER_MAX_SAMPLE_ROWS = '5';
+process.env.PARSER_MAX_GEOJSON_FEATURES = '2500';
+process.env.PARSER_MAX_GEOJSON_COORDINATES = '100000';
 process.env.OUTBOX_CLAIM_BATCH_SIZE = '25';
 process.env.OUTBOX_CLAIM_LEASE_MS = '30000';
 process.env.OUTBOX_MAX_ATTEMPTS = '5';

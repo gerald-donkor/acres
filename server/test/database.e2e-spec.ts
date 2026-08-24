@@ -337,6 +337,12 @@ describe('Acres API — real database', () => {
           'IdempotencyRecord',
           'StoredObject',
           'Upload',
+          'Dataset',
+          'DatasetVersion',
+          'ColumnMapping',
+          'IngestionRun',
+          'ValidationIssue',
+          'StagedSourceSummary',
           'OutboxEvent',
           'DurableJob',
           'JobProgressEvent',
@@ -404,13 +410,172 @@ describe('Acres API — real database', () => {
           relforcerowsecurity: true,
         },
       ];
+      const ingestionRows = [
+        {
+          relname: 'ColumnMapping',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'Dataset',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'DatasetVersion',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'IngestionRun',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'StagedSourceSummary',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'ValidationIssue',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+      ];
       const hasStorageMigration = rows.some((row) => row.relname === 'Upload');
+      const hasIngestionMigration = rows.some(
+        (row) => row.relname === 'Dataset',
+      );
       const expected = hasStorageMigration
-        ? [...baseRows, ...storageRows].sort((a, b) =>
-            a.relname.localeCompare(b.relname),
-          )
+        ? [
+            ...baseRows,
+            ...storageRows,
+            ...(hasIngestionMigration ? ingestionRows : []),
+          ].sort((a, b) => a.relname.localeCompare(b.relname))
         : baseRows;
       expect(rows).toEqual(expected);
+    });
+
+    it('rejects cross-tenant ingestion foreign keys even for worker-scoped writes', async () => {
+      const ownerA = await signedInAgent('ingestion-owner-a@example.com');
+      const orgAResponse = await ownerA.agent
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'cross-tenant-ingestion-org-a')
+        .set('x-csrf-token', ownerA.token)
+        .send({ name: 'Ingestion Org A' })
+        .expect(201);
+      const ownerB = await signedInAgent('ingestion-owner-b@example.com');
+      const orgBResponse = await ownerB.agent
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'cross-tenant-ingestion-org-b')
+        .set('x-csrf-token', ownerB.token)
+        .send({ name: 'Ingestion Org B' })
+        .expect(201);
+      const orgAId = (orgAResponse.body as { data: { id: string } }).data.id;
+      const orgBId = (orgBResponse.body as { data: { id: string } }).data.id;
+      const accountA = await prisma.account.findUniqueOrThrow({
+        where: { email: 'ingestion-owner-a@example.com' },
+        select: { id: true },
+      });
+      const accountB = await prisma.account.findUniqueOrThrow({
+        where: { email: 'ingestion-owner-b@example.com' },
+        select: { id: true },
+      });
+
+      await expect(
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('acres.worker_access', 'true', true)`;
+          await tx.$executeRaw`
+            INSERT INTO "StoredObject" (
+              "id",
+              "organizationId",
+              "bucket",
+              "objectKey",
+              "originalFilename",
+              "mediaType",
+              "checksumAlgorithm",
+              "createdAt",
+              "updatedAt"
+            )
+            VALUES (
+              'stored_ingestion_a',
+              ${orgAId},
+              'test',
+              'ingestion-a.csv',
+              'ingestion-a.csv',
+              'text/csv',
+              'sha256',
+              now(),
+              now()
+            )
+          `;
+          await tx.$executeRaw`
+            INSERT INTO "Upload" (
+              "id",
+              "organizationId",
+              "actorAccountId",
+              "storedObjectId",
+              "state",
+              "declaredFilename",
+              "declaredMediaType",
+              "declaredByteCount",
+              "checksumAlgorithm",
+              "presignedUploadExpiresAt",
+              "expiresAt",
+              "createdAt",
+              "updatedAt"
+            )
+            VALUES (
+              'upload_ingestion_a',
+              ${orgAId},
+              ${accountA.id},
+              'stored_ingestion_a',
+              'accepted',
+              'ingestion-a.csv',
+              'text/csv',
+              12,
+              'sha256',
+              now() + interval '1 hour',
+              now() + interval '1 day',
+              now(),
+              now()
+            )
+          `;
+          await tx.$executeRaw`
+            INSERT INTO "Dataset" (
+              "id",
+              "organizationId",
+              "ownerAccountId",
+              "name",
+              "createdAt",
+              "updatedAt"
+            )
+            VALUES
+              ('dataset_ingestion_a', ${orgAId}, ${accountA.id}, 'Dataset A', now(), now()),
+              ('dataset_ingestion_b', ${orgBId}, ${accountB.id}, 'Dataset B', now(), now())
+          `;
+          await tx.$executeRaw`
+            INSERT INTO "ColumnMapping" (
+              "id",
+              "organizationId",
+              "datasetId",
+              "uploadId",
+              "createdByAccountId",
+              "versionNumber",
+              "mapping"
+            )
+            VALUES (
+              'mapping_cross_tenant',
+              ${orgAId},
+              'dataset_ingestion_b',
+              'upload_ingestion_a',
+              ${accountA.id},
+              1,
+              '{"regionColumn":"region"}'::jsonb
+            )
+          `;
+        }),
+      ).rejects.toThrow(/ColumnMapping_org_dataset_fkey/);
     });
 
     it('creates an organization through scoped REST and default-denies unscoped reads', async () => {

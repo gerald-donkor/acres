@@ -30,6 +30,9 @@ model Account {
   auditEventsAuthored   AuditEvent[]  @relation("AuditActor")
   idempotencyRecords    IdempotencyRecord[]
   uploads               Upload[]
+  ownedDatasets         Dataset[]      @relation("DatasetOwner")
+  columnMappings         ColumnMapping[]
+  ingestionRuns          IngestionRun[]
 }
 
 /// An opaque, server-revocable browser session. Only the hash is stored.
@@ -52,10 +55,22 @@ model Region {
   name        String
   countryCode String?
   summary     String?
+  parentId    String?
+  level       String           @default("legacy")
+  regionType  String           @default("legacy")
+  retiredAt   DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  parent      Region?          @relation("RegionHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Region[]         @relation("RegionHierarchy")
   metrics     RegionalMetric[]
   reports     InsightReport[]
+  codes       RegionCode[]
+  aliases     RegionAlias[]
+  geometries  RegionGeometry[]
+
+  @@index([parentId, level])
+  @@index([countryCode, level])
 }
 
 /// One measured figure for one region over one period.
@@ -142,6 +157,12 @@ model Organization {
   durableJobs DurableJob[]
   jobDeadLetters JobDeadLetter[]
   jobProgressEvents JobProgressEvent[]
+  datasets Dataset[]
+  datasetVersions DatasetVersion[]
+  columnMappings ColumnMapping[]
+  ingestionRuns IngestionRun[]
+  validationIssues ValidationIssue[]
+  stagedSourceSummaries StagedSourceSummary[]
 }
 
 /// An account's organization-local role. Revoked rows remain as provenance.
@@ -282,7 +303,9 @@ model StoredObject {
   deletedAt          DateTime?
   organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   uploads            Upload[]
+  datasetVersions    DatasetVersion[]
 
+  @@unique([organizationId, id])
   @@index([organizationId, state, createdAt])
   @@index([organizationId, checksumHex])
 }
@@ -317,7 +340,11 @@ model Upload {
   actor                 Account      @relation(fields: [actorAccountId], references: [id], onDelete: Restrict)
   storedObject          StoredObject @relation(fields: [storedObjectId], references: [id], onDelete: Restrict)
   progressEvents        JobProgressEvent[]
+  datasetVersions       DatasetVersion[]
+  columnMappings        ColumnMapping[]
+  ingestionRuns         IngestionRun[]
 
+  @@unique([organizationId, id])
   @@index([organizationId, state, updatedAt])
   @@index([organizationId, actorAccountId, createdAt])
   @@index([expiresAt, state])
@@ -441,4 +468,252 @@ enum DurableJobState {
   failed
   cancelled
   dead_lettered
+}
+
+model RegionSource {
+  id                  String           @id @default(uuid(7))
+  name                String
+  provider            String
+  codeSystem          String
+  sourceVersion       String
+  sourceDate          DateTime?
+  license             String?
+  provenanceUrl       String?
+  redistributionNotes String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  codes               RegionCode[]
+  aliases             RegionAlias[]
+  geometries          RegionGeometry[]
+
+  @@unique([provider, codeSystem, sourceVersion])
+}
+
+model RegionCode {
+  id          String       @id @default(uuid(7))
+  regionId    String
+  sourceId    String
+  codeSystem  String
+  code        String
+  normalized  String
+  createdAt   DateTime     @default(now())
+  region      Region       @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  source      RegionSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceId, codeSystem, normalized])
+  @@index([regionId, sourceId])
+}
+
+model RegionAlias {
+  id         String       @id @default(uuid(7))
+  regionId   String
+  sourceId   String?
+  locale     String?
+  alias      String
+  normalized String
+  createdAt  DateTime     @default(now())
+  region     Region       @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  source     RegionSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([normalized, locale])
+  @@index([regionId])
+}
+
+model RegionGeometry {
+  id              String       @id @default(uuid(7))
+  regionId        String
+  sourceId        String
+  srid            Int          @default(4326)
+  geometryType    String
+  isValid         Boolean      @default(false)
+  sourcePrecision String?
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  region          Region       @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  source          RegionSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@index([regionId, sourceId])
+}
+
+model Dataset {
+  id             String           @id @default(uuid(7))
+  organizationId String
+  ownerAccountId String
+  name           String
+  description    String?
+  sourceMetadata Json?
+  state          DatasetState     @default(draft)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  owner          Account          @relation("DatasetOwner", fields: [ownerAccountId], references: [id], onDelete: Restrict)
+  versions       DatasetVersion[]
+  mappings       ColumnMapping[]
+  ingestionRuns  IngestionRun[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, state, updatedAt])
+}
+
+model DatasetVersion {
+  id               String                   @id @default(uuid(7))
+  organizationId   String
+  datasetId        String
+  versionNumber    Int
+  sourceUploadId   String
+  storedObjectId   String
+  mappingId        String
+  publicationStatus DatasetPublicationStatus @default(published)
+  checksumHex      String?
+  sourceSummary    Json
+  publishedAt      DateTime                 @default(now())
+  createdAt        DateTime                 @default(now())
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  dataset          Dataset                  @relation(fields: [organizationId, datasetId], references: [organizationId, id], onDelete: Restrict)
+  sourceUpload     Upload                   @relation(fields: [organizationId, sourceUploadId], references: [organizationId, id], onDelete: Restrict)
+  storedObject     StoredObject             @relation(fields: [organizationId, storedObjectId], references: [organizationId, id], onDelete: Restrict)
+  mapping          ColumnMapping            @relation(fields: [organizationId, mappingId], references: [organizationId, id], onDelete: Restrict)
+  ingestionRuns    IngestionRun[]
+
+  @@unique([organizationId, id])
+  @@unique([datasetId, versionNumber])
+  @@unique([organizationId, datasetId, sourceUploadId, mappingId])
+  @@index([organizationId, datasetId, publishedAt])
+}
+
+model ColumnMapping {
+  id               String                  @id @default(uuid(7))
+  organizationId   String
+  datasetId        String
+  uploadId         String
+  createdByAccountId String
+  versionNumber    Int
+  mapping           Json
+  validationStatus  MappingValidationStatus @default(pending)
+  createdAt         DateTime                @default(now())
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  dataset           Dataset                 @relation(fields: [organizationId, datasetId], references: [organizationId, id], onDelete: Restrict)
+  upload            Upload                  @relation(fields: [organizationId, uploadId], references: [organizationId, id], onDelete: Restrict)
+  createdBy         Account                 @relation(fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  datasetVersions   DatasetVersion[]
+  ingestionRuns     IngestionRun[]
+
+  @@unique([organizationId, id])
+  @@unique([datasetId, versionNumber])
+  @@index([organizationId, datasetId, createdAt])
+}
+
+model IngestionRun {
+  id               String              @id @default(uuid(7))
+  organizationId   String
+  datasetId        String
+  uploadId         String
+  mappingId        String
+  datasetVersionId String?
+  actorAccountId   String
+  deterministicKey String
+  state            IngestionRunState   @default(queued)
+  stage            IngestionRunStage   @default(inspect)
+  progressPercent  Int                 @default(0)
+  attempts         Int                 @default(0)
+  failureCode      String?
+  failureMessage   String?
+  cancelledAt      DateTime?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  dataset          Dataset             @relation(fields: [organizationId, datasetId], references: [organizationId, id], onDelete: Restrict)
+  upload           Upload              @relation(fields: [organizationId, uploadId], references: [organizationId, id], onDelete: Restrict)
+  mapping          ColumnMapping       @relation(fields: [organizationId, mappingId], references: [organizationId, id], onDelete: Restrict)
+  datasetVersion   DatasetVersion?     @relation(fields: [organizationId, datasetVersionId], references: [organizationId, id], onDelete: Restrict)
+  actor            Account             @relation(fields: [actorAccountId], references: [id], onDelete: Restrict)
+  issues           ValidationIssue[]
+  stagedSummaries  StagedSourceSummary[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, deterministicKey])
+  @@index([organizationId, datasetId, createdAt])
+  @@index([organizationId, state, updatedAt])
+}
+
+model ValidationIssue {
+  id             String                  @id @default(uuid(7))
+  organizationId String
+  ingestionRunId String
+  severity       ValidationIssueSeverity
+  code           String
+  message        String
+  rowNumber      Int?
+  rowRange       String?
+  columnKey      String?
+  regionRef      String?
+  details        Json?
+  createdAt      DateTime                @default(now())
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  ingestionRun   IngestionRun            @relation(fields: [organizationId, ingestionRunId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, ingestionRunId, severity, createdAt])
+  @@index([organizationId, code, createdAt])
+}
+
+model StagedSourceSummary {
+  id             String       @id @default(uuid(7))
+  organizationId String
+  ingestionRunId String
+  rowCount       Int
+  columnCount    Int
+  sampleRows     Json
+  columnKeys     Json
+  sourceKind     String
+  checksumHex    String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  ingestionRun   IngestionRun @relation(fields: [organizationId, ingestionRunId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([ingestionRunId])
+  @@index([organizationId, createdAt])
+}
+
+enum DatasetState {
+  draft
+  active
+  archived
+}
+
+enum DatasetPublicationStatus {
+  published
+}
+
+enum MappingValidationStatus {
+  pending
+  valid
+  invalid
+}
+
+enum IngestionRunState {
+  queued
+  running
+  validation_failed
+  published
+  failed
+  cancelling
+  cancelled
+}
+
+enum IngestionRunStage {
+  inspect
+  parse
+  map
+  validate
+  publish
+  complete
+}
+
+enum ValidationIssueSeverity {
+  info
+  warning
+  error
 }

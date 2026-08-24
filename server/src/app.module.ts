@@ -17,6 +17,7 @@ import { SessionsModule } from './sessions/sessions.module';
 import { StorageModule } from './storage/storage.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { IngestionModule } from './ingestion/ingestion.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { UploadsModule } from './uploads/uploads.module';
     JobsModule,
     OrganizationsModule,
     UploadsModule,
+    IngestionModule,
     AcresGraphqlModule,
   ],
 })

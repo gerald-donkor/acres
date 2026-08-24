@@ -12,13 +12,16 @@ describe('OrganizationPolicy', () => {
     }
   });
 
-  it('allows owners to do everything and viewers only to read organizations', () => {
+  it('allows owners to do everything and viewers only read safe surfaces', () => {
     for (const permission of ORGANIZATION_PERMISSIONS) {
       expect(OrganizationPolicy.has('owner', permission)).toBe(true);
     }
 
     expect(OrganizationPolicy.has('viewer', 'organization.read')).toBe(true);
+    expect(OrganizationPolicy.has('viewer', 'datasets.read')).toBe(true);
+    expect(OrganizationPolicy.has('viewer', 'ingestion.read')).toBe(true);
     expect(OrganizationPolicy.has('viewer', 'members.read')).toBe(false);
+    expect(OrganizationPolicy.has('viewer', 'ingestion.run')).toBe(false);
   });
 
   it('keeps owner assignment out of generic role changes', () => {

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AcresConfigModule } from '../config/config.module';
+import { IngestionModule } from '../ingestion/ingestion.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { QueueModule } from '../queue/queue.module';
@@ -15,6 +16,7 @@ import { UploadWorkerService } from './upload-worker.service';
     QueueModule,
     ScannerModule,
     StorageModule,
+    IngestionModule,
   ],
   providers: [UploadWorkerService],
 })

@@ -51,6 +51,12 @@ export interface AcresEnv {
   uploadAcceptedMediaTypes: string[];
   uploadStaleMinutes: number;
   uploadCleanupIntervalMs: number;
+  parserMaxRows: number;
+  parserMaxColumns: number;
+  parserMaxCellChars: number;
+  parserMaxSampleRows: number;
+  parserMaxGeojsonFeatures: number;
+  parserMaxGeojsonCoordinates: number;
   outboxClaimBatchSize: number;
   outboxClaimLeaseMs: number;
   outboxMaxAttempts: number;
@@ -98,6 +104,12 @@ const DEFAULTS = {
     'text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/geo+json,application/json',
   UPLOAD_STALE_MINUTES: '60',
   UPLOAD_CLEANUP_INTERVAL_MS: '300000',
+  PARSER_MAX_ROWS: '10000',
+  PARSER_MAX_COLUMNS: '200',
+  PARSER_MAX_CELL_CHARS: '2000',
+  PARSER_MAX_SAMPLE_ROWS: '5',
+  PARSER_MAX_GEOJSON_FEATURES: '2500',
+  PARSER_MAX_GEOJSON_COORDINATES: '100000',
   OUTBOX_CLAIM_BATCH_SIZE: '25',
   OUTBOX_CLAIM_LEASE_MS: '30000',
   OUTBOX_MAX_ATTEMPTS: '5',
@@ -305,6 +317,31 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
     uploadCleanupIntervalMs: positiveInt(
       'UPLOAD_CLEANUP_INTERVAL_MS',
       env.UPLOAD_CLEANUP_INTERVAL_MS ?? DEFAULTS.UPLOAD_CLEANUP_INTERVAL_MS,
+    ),
+    parserMaxRows: positiveInt(
+      'PARSER_MAX_ROWS',
+      env.PARSER_MAX_ROWS ?? DEFAULTS.PARSER_MAX_ROWS,
+    ),
+    parserMaxColumns: positiveInt(
+      'PARSER_MAX_COLUMNS',
+      env.PARSER_MAX_COLUMNS ?? DEFAULTS.PARSER_MAX_COLUMNS,
+    ),
+    parserMaxCellChars: positiveInt(
+      'PARSER_MAX_CELL_CHARS',
+      env.PARSER_MAX_CELL_CHARS ?? DEFAULTS.PARSER_MAX_CELL_CHARS,
+    ),
+    parserMaxSampleRows: positiveInt(
+      'PARSER_MAX_SAMPLE_ROWS',
+      env.PARSER_MAX_SAMPLE_ROWS ?? DEFAULTS.PARSER_MAX_SAMPLE_ROWS,
+    ),
+    parserMaxGeojsonFeatures: positiveInt(
+      'PARSER_MAX_GEOJSON_FEATURES',
+      env.PARSER_MAX_GEOJSON_FEATURES ?? DEFAULTS.PARSER_MAX_GEOJSON_FEATURES,
+    ),
+    parserMaxGeojsonCoordinates: positiveInt(
+      'PARSER_MAX_GEOJSON_COORDINATES',
+      env.PARSER_MAX_GEOJSON_COORDINATES ??
+        DEFAULTS.PARSER_MAX_GEOJSON_COORDINATES,
     ),
     outboxClaimBatchSize: positiveInt(
       'OUTBOX_CLAIM_BATCH_SIZE',

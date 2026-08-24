@@ -364,6 +364,165 @@ describe('Acres API', () => {
     });
   });
 
+  describe('ingestion', () => {
+    const datasetRow = {
+      id: '018f7611-89ab-7abc-9234-444444444444',
+      organizationId: ORG_CONTEXT.organizationId,
+      ownerAccountId: ACCOUNT_ROW.id,
+      name: 'Regional source',
+      description: null,
+      sourceMetadata: {},
+      state: 'draft',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      versions: [],
+    };
+    const acceptedUpload = {
+      id: '018f7611-89ab-7abc-9234-222222222222',
+      organizationId: ORG_CONTEXT.organizationId,
+      state: 'accepted',
+    };
+    const mappingRow = {
+      id: '018f7611-89ab-7abc-9234-555555555555',
+      organizationId: ORG_CONTEXT.organizationId,
+      datasetId: datasetRow.id,
+      uploadId: acceptedUpload.id,
+      createdByAccountId: ACCOUNT_ROW.id,
+      versionNumber: 1,
+      mapping: { regionColumn: 'region' },
+      validationStatus: 'pending',
+      createdAt: new Date('2026-01-01T00:01:00.000Z'),
+    };
+    const runRow = {
+      id: '018f7611-89ab-7abc-9234-666666666666',
+      organizationId: ORG_CONTEXT.organizationId,
+      datasetId: datasetRow.id,
+      uploadId: acceptedUpload.id,
+      mappingId: mappingRow.id,
+      datasetVersionId: null,
+      actorAccountId: ACCOUNT_ROW.id,
+      deterministicKey: `${datasetRow.id}:${acceptedUpload.id}:${mappingRow.id}`,
+      state: 'queued',
+      stage: 'inspect',
+      progressPercent: 0,
+      attempts: 0,
+      failureCode: null,
+      failureMessage: null,
+      cancelledAt: null,
+      startedAt: null,
+      finishedAt: null,
+      createdAt: new Date('2026-01-01T00:02:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:02:00.000Z'),
+    };
+
+    beforeEach(() => {
+      prisma.membership.findFirst.mockResolvedValue(ORG_CONTEXT);
+      prisma.dataset.create.mockResolvedValue(datasetRow);
+      prisma.dataset.findFirst.mockResolvedValue(datasetRow);
+      prisma.dataset.findMany.mockResolvedValue([datasetRow]);
+      prisma.upload.findFirst.mockResolvedValue(acceptedUpload);
+      prisma.columnMapping.aggregate.mockResolvedValue({
+        _max: { versionNumber: null },
+      });
+      prisma.columnMapping.create.mockResolvedValue(mappingRow);
+      prisma.columnMapping.findFirst.mockResolvedValue(mappingRow);
+      prisma.ingestionRun.upsert.mockResolvedValue(runRow);
+      prisma.ingestionRun.findFirst.mockResolvedValue(runRow);
+      prisma.validationIssue.findMany.mockResolvedValue([]);
+    });
+
+    it('creates a dataset, mapping, and queued ingestion run', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      const created = await agent
+        .post('/api/v1/datasets')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'dataset-create-key-0001')
+        .send({ name: ' Regional source ' })
+        .expect(201);
+
+      expect(created.body).toMatchObject({
+        ok: true,
+        data: { id: datasetRow.id, name: 'Regional source' },
+      });
+
+      const mapping = await agent
+        .post(`/api/v1/datasets/${datasetRow.id}/mappings`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'mapping-create-key-0001')
+        .send({
+          uploadId: acceptedUpload.id,
+          mapping: { regionColumn: 'region' },
+        })
+        .expect(201);
+
+      expect(mapping.body).toMatchObject({
+        ok: true,
+        data: { id: mappingRow.id, validationStatus: 'pending' },
+      });
+
+      const run = await agent
+        .post(`/api/v1/datasets/${datasetRow.id}/ingestion-runs`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'ingestion-run-key-0001')
+        .send({ uploadId: acceptedUpload.id, mappingId: mappingRow.id })
+        .expect(201);
+
+      expect(run.body).toMatchObject({
+        ok: true,
+        data: { id: runRow.id, state: 'queued', stage: 'inspect' },
+      });
+    });
+
+    it('lists run status and bounded issues', async () => {
+      const { agent } = await signedInAgent();
+
+      const run = await agent
+        .get(`/api/v1/ingestion-runs/${runRow.id}`)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200);
+
+      expect(run.body).toMatchObject({
+        ok: true,
+        data: { id: runRow.id, state: 'queued' },
+      });
+
+      const issues = await agent
+        .get(`/api/v1/ingestion-runs/${runRow.id}/issues`)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200);
+
+      expect(issues.body).toMatchObject({ ok: true, data: [] });
+    });
+
+    it('does not create a mapping for a foreign or missing upload', async () => {
+      prisma.upload.findFirst.mockResolvedValue(null);
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      const response = await agent
+        .post(`/api/v1/datasets/${datasetRow.id}/mappings`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'mapping-create-key-0002')
+        .send({
+          uploadId: acceptedUpload.id,
+          mapping: { regionColumn: 'region' },
+        })
+        .expect(404);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+      expect(prisma.columnMapping.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('GET /auth/session', () => {
     it('answers with the anonymous profile when no cookie is sent', async () => {
       const response = await request(server)
