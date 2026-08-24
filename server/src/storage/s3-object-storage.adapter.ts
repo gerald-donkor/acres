@@ -43,13 +43,16 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
       'content-type': input.mediaType,
     };
     if (input.checksumHex !== undefined) {
-      headers['x-amz-checksum-sha256'] = input.checksumHex;
+      headers['x-amz-checksum-sha256'] = sha256HexToBase64(input.checksumHex);
     }
     const command = new PutObjectCommand({
       Bucket: this.config.storageBucket,
       Key: input.key,
       ContentType: input.mediaType,
-      ChecksumSHA256: input.checksumHex,
+      ChecksumSHA256:
+        input.checksumHex === undefined
+          ? undefined
+          : sha256HexToBase64(input.checksumHex),
     });
     return {
       method: 'PUT',
@@ -85,6 +88,23 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
         expiresIn: this.config.acceptedDownloadTtlSeconds,
       }),
     };
+  }
+
+  async putBuffer(input: {
+    key: string;
+    body: Buffer;
+    mediaType: string;
+    checksumHex: string;
+  }): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.config.storageBucket,
+        Key: input.key,
+        Body: input.body,
+        ContentType: input.mediaType,
+        ChecksumSHA256: sha256HexToBase64(input.checksumHex),
+      }),
+    );
   }
 
   async stat(key: string): Promise<StoredObjectStat | null> {
@@ -156,6 +176,10 @@ function isNotFound(error: unknown): boolean {
           ?.httpStatusCode === 404
       : false)
   );
+}
+
+function sha256HexToBase64(checksumHex: string): string {
+  return Buffer.from(checksumHex, 'hex').toString('base64');
 }
 
 function safeFilename(filename: string): string {

@@ -1,6 +1,7 @@
 export interface QueueJobPayload {
   readonly uploadId?: string;
   readonly ingestionRunId?: string;
+  readonly exportRequestId?: string;
   readonly outboxEventId?: string;
 }
 

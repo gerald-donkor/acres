@@ -169,6 +169,12 @@ for (const width of [375, 800, 1280]) {
     await createFirstOrganization(page, unique(`Viewport-${width}`));
     await expect(page.getByLabel("Select Organization")).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign Out" })).toBeVisible();
+    await page.getByRole("link", { name: "Reports" }).click();
+    await expect(page).toHaveURL(/\/app\/reports$/);
+    await expect(
+      page.getByRole("heading", { name: "Publish evidence-backed work." }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "New Report" })).toBeVisible();
     await expectMinTouchTarget(
       page.getByLabel("Select Organization"),
       "organization select",
@@ -176,6 +182,10 @@ for (const width of [375, 800, 1280]) {
     await expectMinTouchTarget(
       page.getByRole("button", { name: "Sign Out" }),
       "sign out button",
+    );
+    await expectMinTouchTarget(
+      page.getByRole("link", { name: "New Report" }),
+      "new report link",
     );
     await expectNoHorizontalScroll(page);
   });

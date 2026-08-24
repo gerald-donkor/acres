@@ -42,6 +42,23 @@ export class OutboxService {
     });
   }
 
+  appendExportRequested(
+    tx: TenantTransactionClient,
+    input: { organizationId: string; exportRequestId: string },
+  ) {
+    return tx.outboxEvent.create({
+      data: {
+        organizationId: input.organizationId,
+        eventType: 'export.requested',
+        aggregateType: 'ExportRequest',
+        aggregateId: input.exportRequestId,
+        aggregateVersion: 1,
+        payload: { exportRequestId: input.exportRequestId },
+        maxAttempts: this.config.outboxMaxAttempts,
+      },
+    });
+  }
+
   async claimReady(): Promise<ClaimedOutboxEvent[]> {
     const leaseUntil = new Date(Date.now() + this.config.outboxClaimLeaseMs);
     return this.tenants.workerScoped(async (tx) => {

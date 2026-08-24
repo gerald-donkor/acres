@@ -20,6 +20,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { DashboardsModule } from './dashboards/dashboards.module';
     IngestionModule,
     AnalyticsModule,
     DashboardsModule,
+    ReportsModule,
     AcresGraphqlModule,
   ],
 })

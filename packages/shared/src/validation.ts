@@ -14,6 +14,12 @@ export const VALIDATION = {
     name: { minLength: 1, maxLength: 120 },
     description: { maxLength: 500 },
   },
+  report: {
+    title: { minLength: 1, maxLength: 160 },
+    summary: { maxLength: 1000 },
+    insightHeading: { minLength: 1, maxLength: 160 },
+    insightBody: { minLength: 1, maxLength: 4000 },
+  },
   contact: {
     name: { minLength: 1, maxLength: 120 },
     organization: { maxLength: 160 },

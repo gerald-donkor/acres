@@ -138,6 +138,36 @@ export interface PrismaDouble {
     findFirst: jest.Mock;
     update: jest.Mock;
   };
+  report: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    update: jest.Mock;
+  };
+  reportRevision: {
+    create: jest.Mock;
+    findFirst: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+  };
+  reportInsight: {
+    create: jest.Mock;
+    deleteMany: jest.Mock;
+  };
+  reportEvidence: {
+    create: jest.Mock;
+    deleteMany: jest.Mock;
+  };
+  exportRequest: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
+  exportArtifact: {
+    create: jest.Mock;
+  };
   regionCode: {
     findMany: jest.Mock;
   };
@@ -283,6 +313,36 @@ export function createPrismaDouble(): PrismaDouble {
       findMany: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
+    },
+    report: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
+    reportRevision: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    reportInsight: {
+      create: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    reportEvidence: {
+      create: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    exportRequest: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    exportArtifact: {
+      create: jest.fn(),
     },
     regionCode: {
       findMany: jest.fn(),
@@ -527,6 +587,7 @@ export async function createTestApp(
           headers: {},
           expiresAt: new Date('2026-01-01T00:05:00.000Z'),
         }),
+        putBuffer: jest.fn().mockResolvedValue(undefined),
         stat: jest.fn().mockResolvedValue({
           byteCount: BigInt(12),
           mediaType: 'text/csv',

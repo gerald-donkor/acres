@@ -5,4 +5,5 @@ export * from './forms';
 export * from './jobs';
 export * from './organizations';
 export * from './regions';
+export * from './reports';
 export * from './validation';

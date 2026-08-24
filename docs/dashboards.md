@@ -3,9 +3,9 @@
 Status: Phase 9 implemented from
 `prompts/30-dashboards-optimized-graphql.md`. This is the implemented-state
 record for the saved dashboard-view schema, dashboard REST commands, GraphQL
-dashboard read model, and authenticated dashboard UI. Reports, exports,
-sharing, collaboration, AI, and published dashboard governance remain future
-work.
+dashboard read model, and authenticated dashboard UI. Governed reports and
+exports now live in `docs/reports.md`; sharing, collaboration, AI, and
+published dashboard governance remain future work.
 
 ## Schema and permissions
 
@@ -131,8 +131,7 @@ missing `_prisma_migrations` privileges.
 
 ## Residual gaps
 
-- Dashboard sharing, publishing, report generation, export, collaboration, and
-  AI remain future phases.
+- Dashboard sharing, publishing, collaboration, and AI remain future phases.
 - Saved views do not yet have versioned schema migration for future presentation
   shapes; the JSON shape is intentionally small and validated at the DTO layer.
 - Query-plan timing still needs seeded analytics data large enough to make

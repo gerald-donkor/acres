@@ -14,10 +14,12 @@ import {
   type ObjectStoragePort,
 } from '../storage/storage.port';
 import { WORK_QUEUE, type QueuePort } from '../queue/work-queue.port';
+import { ReportsService } from '../reports/reports.service';
 
 interface UploadJobData {
   readonly uploadId?: string;
   readonly ingestionRunId?: string;
+  readonly exportRequestId?: string;
   readonly outboxEventId?: string;
 }
 
@@ -38,6 +40,7 @@ export class UploadWorkerService {
     @Inject(MALWARE_SCANNER) private readonly scanner: MalwareScannerPort,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
     private readonly ingestionProcessor: IngestionProcessorService,
+    private readonly reports: ReportsService,
   ) {}
 
   async start(): Promise<void> {
@@ -97,7 +100,13 @@ export class UploadWorkerService {
           await this.queue.enqueue({
             deterministicKey,
             jobName: event.eventType,
-            payload: { uploadId: event.aggregateId, outboxEventId: event.id },
+            payload:
+              event.eventType === 'export.requested'
+                ? {
+                    exportRequestId: event.aggregateId,
+                    outboxEventId: event.id,
+                  }
+                : { uploadId: event.aggregateId, outboxEventId: event.id },
           });
           await this.outbox.markDispatched(event.id);
         } catch (error) {
@@ -123,6 +132,10 @@ export class UploadWorkerService {
     if (this.stopping) return;
     if (data.ingestionRunId !== undefined) {
       await this.ingestionProcessor.processRun(data.ingestionRunId);
+      return;
+    }
+    if (data.exportRequestId !== undefined) {
+      await this.reports.processExport(data.exportRequestId);
       return;
     }
     if (data.uploadId === undefined) return;

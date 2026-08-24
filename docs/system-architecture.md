@@ -18,10 +18,12 @@ The decisions in this document are the architecture record for the approved
 and migration, obtain user approval, and change this document and affected
 plans in the same commit. Superseded choices remain visible through git history.
 
-Repository evidence inspected for this decision: `AGENTS.md`, `README.md`, all
-workspace manifests, `skills-lock.json`, the current Prisma schema, Nest module
-and application setup, feature controllers/modules, shared contracts, server
-tests, CI, Dockerfile, `docs/backend.md`, and `docs/landing.md`.
+Repository evidence inspected for the original decision: `AGENTS.md`,
+`README.md`, all workspace manifests, `skills-lock.json`, the current Prisma
+schema, Nest module and application setup, feature controllers/modules, shared
+contracts, server tests, CI, Dockerfile, `docs/backend.md`, and
+`docs/landing.md`. Current implemented-state records added after that decision
+include ingestion, analytics, dashboards, and reports/exports.
 
 Official sources were rechecked on 2026-08-23: [Node releases](https://nodejs.org/en/about/previous-releases),
 [Nest versioning](https://docs.nestjs.com/techniques/versioning),

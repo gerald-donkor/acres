@@ -21,9 +21,12 @@ exact-origin credentialed CORS, Helmet, password hashing, generic errors,
 throttling, server-side revocation, organization memberships,
 centralized organization permissions, hash-only invitations/account tokens,
 append-oriented organization audit events, transaction-local tenant context and
-forced RLS on the phase-3 organization tables. It still has no uploads,
-GraphQL, worker, object storage, mail delivery, or production topology. Those
-remaining controls are targets, not present-day defenses.
+forced RLS on tenant product tables, authenticated read-only GraphQL, a worker
+path for ingestion/export jobs, object-storage metadata and adapters, bounded
+uploads, analytics/dashboard reads, immutable report evidence, and
+formula-safe CSV exports. It still has no mail delivery, SSE progress stream,
+optional AI, or production topology. Those remaining controls are targets, not
+present-day defenses.
 
 ## 2. Scope and assumptions
 
@@ -351,5 +354,5 @@ Residual Phase 7A risks:
   application code; raw geometry import helpers and invalid-geometry fixtures
   remain future hardening.
 - Mapping validation now checks every parser-accepted validation row for the
-  mapped region reference. Full semantic validation and formula-safe exports
-  belong to later observation and export phases.
+  mapped region reference. Full semantic validation remains a later hardening
+  item; formula-safe CSV exports are implemented in the report export path.

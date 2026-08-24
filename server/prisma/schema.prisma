@@ -34,6 +34,13 @@ model Account {
   columnMappings         ColumnMapping[]
   ingestionRuns          IngestionRun[]
   dashboardViews         DashboardView[]
+  reportsOwned           Report[]         @relation("ReportOwner")
+  reportsCreated         Report[]         @relation("ReportCreator")
+  reportRevisionsAuthored ReportRevision[] @relation("ReportRevisionAuthor")
+  reportRevisionsReviewed ReportRevision[] @relation("ReportRevisionReviewer")
+  reportRevisionsPublished ReportRevision[] @relation("ReportRevisionPublisher")
+  reportInsightsAuthored ReportInsight[]  @relation("ReportInsightAuthor")
+  exportRequests         ExportRequest[]
 }
 
 /// An opaque, server-revocable browser session. Only the hash is stored.
@@ -172,6 +179,12 @@ model Organization {
   metricAggregates MetricAggregate[]
   aggregateLineage MetricAggregateLineage[]
   dashboardViews DashboardView[]
+  reports Report[]
+  reportRevisions ReportRevision[]
+  reportInsights ReportInsight[]
+  reportEvidence ReportEvidence[]
+  exportRequests ExportRequest[]
+  exportArtifacts ExportArtifact[]
 }
 
 /// An account's organization-local role. Revoked rows remain as provenance.
@@ -287,6 +300,8 @@ enum AuditAction {
   membership_role_changed
   membership_revoked
   ownership_transferred
+  report_published
+  export_requested
 }
 
 enum IdempotencyState {
@@ -313,6 +328,7 @@ model StoredObject {
   organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   uploads            Upload[]
   datasetVersions    DatasetVersion[]
+  exportArtifacts     ExportArtifact[]
 
   @@unique([organizationId, id])
   @@index([organizationId, state, createdAt])
@@ -830,6 +846,7 @@ model MetricAggregate {
   metricDefinition   MetricDefinition         @relation(fields: [organizationId, metricDefinitionId], references: [organizationId, id], onDelete: Restrict)
   region             Region                   @relation(fields: [regionId], references: [id], onDelete: Restrict)
   lineage            MetricAggregateLineage[]
+  reportEvidence     ReportEvidence[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, datasetVersionId, metricDefinitionId, regionId, periodStart, periodEnd, dimensionHash, aggregateType, calculationVersion])
@@ -868,6 +885,7 @@ model DashboardView {
   updatedAt      DateTime            @updatedAt
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   owner          Account             @relation(fields: [ownerAccountId], references: [id], onDelete: Restrict)
+  reportEvidence ReportEvidence[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, updatedAt])
@@ -877,6 +895,186 @@ model DashboardView {
 enum DashboardViewStatus {
   active
   archived
+}
+
+model Report {
+  id                 String       @id @default(uuid(7))
+  organizationId     String
+  ownerAccountId     String
+  createdByAccountId String
+  title              String
+  summary            String?
+  status             ReportStatus @default(draft)
+  version            Int          @default(1)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  archivedAt         DateTime?
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  owner              Account      @relation("ReportOwner", fields: [ownerAccountId], references: [id], onDelete: Restrict)
+  createdBy          Account      @relation("ReportCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  revisions          ReportRevision[]
+  exportRequests     ExportRequest[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, ownerAccountId, updatedAt])
+}
+
+model ReportRevision {
+  id                   String               @id @default(uuid(7))
+  organizationId       String
+  reportId             String
+  revisionNumber       Int
+  status               ReportRevisionStatus @default(draft)
+  title                String
+  summary              String?
+  sections             Json                 @default("[]")
+  authorAccountId      String
+  reviewerAccountId    String?
+  publisherAccountId   String?
+  submittedForReviewAt DateTime?
+  publishedAt          DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  report               Report               @relation(fields: [organizationId, reportId], references: [organizationId, id], onDelete: Restrict)
+  author               Account              @relation("ReportRevisionAuthor", fields: [authorAccountId], references: [id], onDelete: Restrict)
+  reviewer             Account?             @relation("ReportRevisionReviewer", fields: [reviewerAccountId], references: [id], onDelete: Restrict)
+  publisher            Account?             @relation("ReportRevisionPublisher", fields: [publisherAccountId], references: [id], onDelete: Restrict)
+  insights             ReportInsight[]
+  evidence             ReportEvidence[]
+  exportRequests       ExportRequest[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reportId, revisionNumber])
+  @@index([organizationId, reportId, status, revisionNumber])
+}
+
+model ReportInsight {
+  id              String         @id @default(uuid(7))
+  organizationId  String
+  revisionId      String
+  authorAccountId String
+  position        Int
+  heading         String
+  body            String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  revision        ReportRevision @relation(fields: [organizationId, revisionId], references: [organizationId, id], onDelete: Cascade)
+  author          Account        @relation("ReportInsightAuthor", fields: [authorAccountId], references: [id], onDelete: Restrict)
+  evidence        ReportEvidence[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, revisionId, position])
+  @@index([organizationId, revisionId, createdAt])
+}
+
+model ReportEvidence {
+  id                 String             @id @default(uuid(7))
+  organizationId     String
+  revisionId         String
+  insightId          String?
+  evidenceType       ReportEvidenceType
+  aggregateId        String?
+  dashboardViewId    String?
+  metricDefinitionId String?
+  datasetVersionId   String?
+  observationId      String?
+  snapshot           Json
+  position           Int
+  createdAt          DateTime           @default(now())
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  revision           ReportRevision     @relation(fields: [organizationId, revisionId], references: [organizationId, id], onDelete: Cascade)
+  insight            ReportInsight?     @relation(fields: [organizationId, insightId], references: [organizationId, id], onDelete: Cascade)
+  aggregate          MetricAggregate?   @relation(fields: [organizationId, aggregateId], references: [organizationId, id], onDelete: Restrict)
+  dashboardView      DashboardView?     @relation(fields: [organizationId, dashboardViewId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, revisionId, position])
+  @@index([organizationId, revisionId, evidenceType])
+  @@index([organizationId, aggregateId])
+  @@index([organizationId, dashboardViewId])
+}
+
+model ExportRequest {
+  id                   String          @id @default(uuid(7))
+  organizationId       String
+  requestedByAccountId String
+  reportId             String?
+  revisionId           String?
+  format               ExportFormat
+  status               ExportStatus    @default(queued)
+  deterministicKey     String
+  renderingVersion     String          @default("reports-v1")
+  failureCode          String?
+  failureMessage       String?
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  expiresAt            DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  organization         Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestedBy          Account         @relation(fields: [requestedByAccountId], references: [id], onDelete: Restrict)
+  report               Report?         @relation(fields: [organizationId, reportId], references: [organizationId, id], onDelete: Restrict)
+  revision             ReportRevision? @relation(fields: [organizationId, revisionId], references: [organizationId, id], onDelete: Restrict)
+  artifact             ExportArtifact?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, deterministicKey])
+  @@index([organizationId, requestedByAccountId, createdAt])
+  @@index([organizationId, status, updatedAt])
+  @@index([organizationId, revisionId, createdAt])
+}
+
+model ExportArtifact {
+  id              String        @id @default(uuid(7))
+  organizationId  String
+  exportRequestId String        @unique
+  storedObjectId  String
+  filename        String
+  mediaType       String
+  byteCount       BigInt
+  checksumHex     String
+  createdAt       DateTime      @default(now())
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  exportRequest   ExportRequest @relation(fields: [organizationId, exportRequestId], references: [organizationId, id], onDelete: Cascade)
+  storedObject    StoredObject  @relation(fields: [organizationId, storedObjectId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, exportRequestId])
+  @@index([organizationId, storedObjectId])
+}
+
+enum ReportStatus {
+  draft
+  published
+  archived
+}
+
+enum ReportRevisionStatus {
+  draft
+  in_review
+  published
+  superseded
+}
+
+enum ReportEvidenceType {
+  aggregate
+  dashboard_view
+}
+
+enum ExportFormat {
+  csv
+  pdf
+}
+
+enum ExportStatus {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
 }
 
 enum MetricValueType {

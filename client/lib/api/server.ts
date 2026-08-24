@@ -3,7 +3,9 @@ import type {
   AccountProfile,
   DashboardSummary,
   DashboardView,
+  ExportRequest,
   OrganizationSummary,
+  Report,
   SessionProfile,
 } from "@acres/shared";
 
@@ -253,4 +255,21 @@ export function getDashboardView(
   return apiGet<DashboardView>(`/dashboard-views/${viewId}`, {
     organizationId,
   });
+}
+
+export function listReports(organizationId: string): Promise<Report[]> {
+  return apiGet<Report[]>("/reports", { organizationId });
+}
+
+export function getReport(
+  organizationId: string,
+  reportId: string,
+): Promise<Report> {
+  return apiGet<Report>(`/reports/${reportId}`, { organizationId });
+}
+
+export function listExports(
+  organizationId: string,
+): Promise<ExportRequest[]> {
+  return apiGet<ExportRequest[]>("/exports", { organizationId });
 }

@@ -11,6 +11,8 @@ const allowedDetailsByAction = {
   invitation_issued: ['role'],
   invitation_revoked: [],
   invitation_accepted: ['membershipId'],
+  report_published: ['reportId'],
+  export_requested: ['format', 'reportId'],
 } satisfies Record<AuditAction, string[]>;
 
 @Injectable()

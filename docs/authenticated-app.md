@@ -301,6 +301,8 @@ verify the route-group and authenticated shell code path.
 - Account recovery UI and mail delivery.
 - Invitation acceptance UI and email flow.
 - Richer authenticated loading boundaries and route-level error files.
-- Product datasets, dashboards, reports, metrics, jobs, uploads, and exports.
+- Product dataset management, upload mapping, richer job views, report review
+  workflow, export progress streaming, and production Caddy same-origin
+  routing.
 - Production Caddy same-origin routing; this prompt uses the Next Route Handler
   bridge for local/current browser traffic.

@@ -6,6 +6,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { QueueModule } from '../queue/queue.module';
 import { ScannerModule } from '../scanner/scanner.module';
 import { StorageModule } from '../storage/storage.module';
+import { ReportsModule } from '../reports/reports.module';
 import { UploadWorkerService } from './upload-worker.service';
 
 @Module({
@@ -17,6 +18,7 @@ import { UploadWorkerService } from './upload-worker.service';
     ScannerModule,
     StorageModule,
     IngestionModule,
+    ReportsModule,
   ],
   providers: [UploadWorkerService],
 })

@@ -29,6 +29,12 @@ export interface ObjectStoragePort {
     filename: string;
     mediaType: string;
   }): Promise<PresignedGet>;
+  putBuffer(input: {
+    key: string;
+    body: Buffer;
+    mediaType: string;
+    checksumHex: string;
+  }): Promise<void>;
   stat(key: string): Promise<StoredObjectStat | null>;
   getBuffer(key: string): Promise<Buffer | null>;
   delete(key: string): Promise<void>;

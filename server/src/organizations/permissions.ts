@@ -24,6 +24,12 @@ export const ORGANIZATION_PERMISSIONS = [
   'ingestion.cancel',
   'analytics.read',
   'dashboards.manage',
+  'reports.read',
+  'reports.create',
+  'reports.update',
+  'reports.publish',
+  'exports.create',
+  'exports.read',
 ] as const;
 
 export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
@@ -50,6 +56,12 @@ const rolePermissions = {
     'ingestion.cancel',
     'analytics.read',
     'dashboards.manage',
+    'reports.read',
+    'reports.create',
+    'reports.update',
+    'reports.publish',
+    'exports.create',
+    'exports.read',
   ]),
   analyst: new Set<OrganizationPermission>([
     'organization.read',
@@ -63,6 +75,11 @@ const rolePermissions = {
     'ingestion.cancel',
     'analytics.read',
     'dashboards.manage',
+    'reports.read',
+    'reports.create',
+    'reports.update',
+    'exports.create',
+    'exports.read',
   ]),
   viewer: new Set<OrganizationPermission>([
     'organization.read',
@@ -70,6 +87,8 @@ const rolePermissions = {
     'datasets.read',
     'ingestion.read',
     'analytics.read',
+    'reports.read',
+    'exports.read',
   ]),
 } satisfies Record<OrganizationRole, ReadonlySet<OrganizationPermission>>;
 

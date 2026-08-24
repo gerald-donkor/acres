@@ -279,7 +279,10 @@ describe('Acres API', () => {
     };
 
     beforeEach(() => {
-      prisma.membership.findFirst.mockResolvedValue(ORG_CONTEXT);
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'admin',
+      });
       prisma.storedObject.create.mockResolvedValue({
         id: uploadRow.storedObjectId,
       });
@@ -417,7 +420,10 @@ describe('Acres API', () => {
     };
 
     beforeEach(() => {
-      prisma.membership.findFirst.mockResolvedValue(ORG_CONTEXT);
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'admin',
+      });
       prisma.dataset.create.mockResolvedValue(datasetRow);
       prisma.dataset.findFirst.mockResolvedValue(datasetRow);
       prisma.dataset.findMany.mockResolvedValue([datasetRow]);
@@ -817,6 +823,345 @@ describe('Acres API', () => {
         error: { code: 'VALIDATION_FAILED' },
       });
       expect(prisma.dashboardView.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reports and exports', () => {
+    const now = new Date('2026-01-01T00:00:00.000Z');
+    const reportId = '018f7611-89ab-7abc-9234-313131313131';
+    const revisionId = '018f7611-89ab-7abc-9234-323232323232';
+    const aggregateId = '018f7611-89ab-7abc-9234-333333333333';
+    const exportId = '018f7611-89ab-7abc-9234-343434343434';
+    const reportRow = {
+      id: reportId,
+      organizationId: ORG_CONTEXT.organizationId,
+      ownerAccountId: ACCOUNT_ROW.id,
+      createdByAccountId: ACCOUNT_ROW.id,
+      title: 'Population report',
+      summary: 'Evidence-backed population summary.',
+      status: 'draft',
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      archivedAt: null,
+      revisions: [
+        {
+          id: revisionId,
+          organizationId: ORG_CONTEXT.organizationId,
+          reportId,
+          revisionNumber: 1,
+          status: 'draft',
+          title: 'Population report',
+          summary: 'Evidence-backed population summary.',
+          sections: [],
+          authorAccountId: ACCOUNT_ROW.id,
+          reviewerAccountId: null,
+          publisherAccountId: null,
+          submittedForReviewAt: null,
+          publishedAt: null,
+          createdAt: now,
+          updatedAt: now,
+          insights: [
+            {
+              id: '018f7611-89ab-7abc-9234-353535353535',
+              organizationId: ORG_CONTEXT.organizationId,
+              revisionId,
+              authorAccountId: ACCOUNT_ROW.id,
+              position: 0,
+              heading: 'Population changed',
+              body: 'The published aggregate changed across the selected period.',
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+          evidence: [
+            {
+              id: '018f7611-89ab-7abc-9234-363636363636',
+              organizationId: ORG_CONTEXT.organizationId,
+              revisionId,
+              insightId: null,
+              evidenceType: 'aggregate',
+              aggregateId,
+              dashboardViewId: null,
+              metricDefinitionId: '018f7611-89ab-7abc-9234-777777777777',
+              datasetVersionId: '018f7611-89ab-7abc-9234-888888888888',
+              observationId: null,
+              snapshot: { value: '42' },
+              position: 0,
+              createdAt: now,
+            },
+          ],
+        },
+      ],
+    };
+    const aggregateRow = {
+      id: aggregateId,
+      organizationId: ORG_CONTEXT.organizationId,
+      datasetVersionId: '018f7611-89ab-7abc-9234-888888888888',
+      metricDefinitionId: '018f7611-89ab-7abc-9234-777777777777',
+      regionId: 'region-1',
+      periodStart: now,
+      periodEnd: now,
+      dimensionHash:
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      aggregateType: 'sum',
+      numericValue: new Prisma.Decimal(42),
+      textValue: null,
+      booleanValue: null,
+      unit: 'people',
+      calculationVersion: 'analytics-v1',
+      observationCount: 2,
+      metricDefinition: {
+        id: '018f7611-89ab-7abc-9234-777777777777',
+        key: 'population',
+        label: 'Population',
+        description: null,
+        valueType: 'numeric',
+        canonicalUnit: 'people',
+        allowedAggregation: 'sum',
+        calculationVersion: 'analytics-v1',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+    };
+    const exportRow = {
+      id: exportId,
+      organizationId: ORG_CONTEXT.organizationId,
+      requestedByAccountId: ACCOUNT_ROW.id,
+      reportId,
+      revisionId,
+      format: 'csv',
+      status: 'queued',
+      deterministicKey: 'export-key',
+      renderingVersion: 'reports-v1',
+      failureCode: null,
+      failureMessage: null,
+      startedAt: null,
+      finishedAt: null,
+      expiresAt: null,
+      createdAt: now,
+      updatedAt: now,
+      artifact: null,
+    };
+
+    beforeEach(() => {
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'admin',
+      });
+      prisma.report.create.mockResolvedValue({ ...reportRow, revisions: [] });
+      prisma.reportRevision.create.mockResolvedValue(reportRow.revisions[0]);
+      prisma.report.findMany.mockResolvedValue([reportRow]);
+      prisma.report.findFirst.mockResolvedValue(reportRow);
+      prisma.reportRevision.findFirst.mockResolvedValue(reportRow.revisions[0]);
+      prisma.reportRevision.update.mockResolvedValue({
+        ...reportRow.revisions[0],
+        status: 'published',
+        publisherAccountId: ACCOUNT_ROW.id,
+        publishedAt: now,
+      });
+      prisma.reportRevision.updateMany.mockResolvedValue({ count: 0 });
+      prisma.report.update.mockResolvedValue({
+        ...reportRow,
+        status: 'published',
+        version: 2,
+      });
+      prisma.reportInsight.create.mockResolvedValue(
+        reportRow.revisions[0].insights[0],
+      );
+      prisma.reportInsight.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.reportEvidence.create.mockResolvedValue(
+        reportRow.revisions[0].evidence[0],
+      );
+      prisma.reportEvidence.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.metricAggregate.findFirst.mockResolvedValue(aggregateRow);
+      prisma.exportRequest.create.mockResolvedValue(exportRow);
+      prisma.exportRequest.findMany.mockResolvedValue([exportRow]);
+      prisma.exportRequest.findFirst.mockResolvedValue(exportRow);
+      prisma.outboxEvent.create.mockResolvedValue({ id: 'outbox-export-1' });
+      prisma.auditEvent.create.mockResolvedValue({ id: 'audit-report-1' });
+    });
+
+    it('creates, publishes, and queues an export for a report', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      const created = await agent
+        .post('/api/v1/reports')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-create-key-0001')
+        .send({
+          title: 'Population report',
+          summary: 'Evidence-backed population summary.',
+          insights: [
+            {
+              heading: 'Population changed',
+              body: 'The published aggregate changed across the selected period.',
+            },
+          ],
+          evidence: [{ aggregateId }],
+        })
+        .expect(201);
+
+      expect(created.body).toMatchObject({
+        ok: true,
+        data: { id: reportId, latestRevision: { evidence: [{ aggregateId }] } },
+      });
+
+      await agent
+        .post(`/api/v1/reports/${reportId}/revisions/${revisionId}/publish`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-publish-key-0001')
+        .send({})
+        .expect(200);
+
+      const exported = await agent
+        .post('/api/v1/exports')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-export-key-0001')
+        .send({ revisionId, format: 'csv' })
+        .expect(201);
+
+      expect(exported.body).toMatchObject({
+        ok: true,
+        data: { id: exportId, status: 'queued', format: 'csv' },
+      });
+      expect(prisma.outboxEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            eventType: 'export.requested',
+            payload: { exportRequestId: exportId },
+          }) as unknown,
+        }),
+      );
+    });
+
+    it('creates a new draft revision after publication', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+      const publishedRevision = {
+        ...reportRow.revisions[0],
+        status: 'published',
+        publisherAccountId: ACCOUNT_ROW.id,
+        publishedAt: now,
+      };
+      const publishedReport = {
+        ...reportRow,
+        status: 'published',
+        version: 2,
+        revisions: [publishedRevision],
+      };
+      const draftRevision = {
+        ...reportRow.revisions[0],
+        id: '018f7611-89ab-7abc-9234-373737373737',
+        revisionNumber: 2,
+        status: 'draft',
+        publishedAt: null,
+        publisherAccountId: null,
+      };
+      prisma.report.findFirst
+        .mockResolvedValueOnce(publishedReport)
+        .mockResolvedValueOnce({
+          ...publishedReport,
+          version: 3,
+          revisions: [draftRevision],
+        });
+      prisma.reportRevision.create.mockResolvedValue(draftRevision);
+
+      await agent
+        .post(`/api/v1/reports/${reportId}/revisions`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-revision-key-0001')
+        .send({
+          title: 'Population report update',
+          insights: [
+            {
+              heading: 'Population changed again',
+              body: 'The published aggregate changed again.',
+            },
+          ],
+          evidence: [{ aggregateId }],
+          expectedVersion: 2,
+        })
+        .expect(201);
+
+      expect(prisma.reportRevision.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ revisionNumber: 2 }) as unknown,
+        }),
+      );
+    });
+
+    it('rejects stale draft revision edits', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      await agent
+        .patch(`/api/v1/reports/${reportId}/revisions/${revisionId}`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .send({
+          title: 'Population report',
+          insights: [
+            {
+              heading: 'Population changed',
+              body: 'The published aggregate changed across the selected period.',
+            },
+          ],
+          expectedVersion: 99,
+        })
+        .expect(409);
+    });
+
+    it('keeps viewers from creating reports or exports', async () => {
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'viewer',
+      });
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      await agent
+        .post('/api/v1/reports')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-create-key-0002')
+        .send({ title: 'Viewer report' })
+        .expect(403);
+
+      await agent
+        .post('/api/v1/exports')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-export-key-0002')
+        .send({ revisionId, format: 'csv' })
+        .expect(403);
+    });
+
+    it('limits viewer report reads to published report rows', async () => {
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'viewer',
+      });
+      prisma.report.findMany.mockResolvedValue([]);
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get('/api/v1/reports')
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200);
+
+      expect(response.body).toMatchObject({ ok: true, data: [] });
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'published' }) as unknown,
+        }),
+      );
     });
   });
 

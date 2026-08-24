@@ -3,11 +3,18 @@
 import type {
   CreateOrganizationInput,
   CreateDashboardViewInput,
+  CreateExportInput,
+  CreateRevisionInput,
+  CreateReportInput,
   DashboardView,
+  ExportRequest,
+  ExportDownload,
   LoginInput,
   OrganizationSummary,
+  Report,
   RegisterAccountInput,
   SessionProfile,
+  UpdateRevisionInput,
 } from "@acres/shared";
 
 import { isApiClientError, parseApiResponse } from "@/lib/api/envelope";
@@ -118,5 +125,77 @@ export async function createDashboardView(
   return apiMutation<DashboardView>("/dashboard-views", input, {
     organizationId,
     idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function createReport(
+  organizationId: string,
+  input: CreateReportInput,
+): Promise<Report> {
+  return apiMutation<Report>("/reports", input, {
+    organizationId,
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function updateReportRevision(
+  organizationId: string,
+  reportId: string,
+  revisionId: string,
+  input: UpdateRevisionInput,
+): Promise<Report> {
+  return apiMutation<Report>(
+    `/reports/${reportId}/revisions/${revisionId}`,
+    input,
+    {
+      method: "PATCH",
+      organizationId,
+    },
+  );
+}
+
+export async function createReportRevision(
+  organizationId: string,
+  reportId: string,
+  input: CreateRevisionInput,
+): Promise<Report> {
+  return apiMutation<Report>(`/reports/${reportId}/revisions`, input, {
+    organizationId,
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function publishReportRevision(
+  organizationId: string,
+  reportId: string,
+  revisionId: string,
+): Promise<Report> {
+  return apiMutation<Report>(
+    `/reports/${reportId}/revisions/${revisionId}/publish`,
+    {},
+    {
+      organizationId,
+      idempotencyKey: createIdempotencyKey(),
+    },
+  );
+}
+
+export async function createExport(
+  organizationId: string,
+  input: CreateExportInput,
+): Promise<ExportRequest> {
+  return apiMutation<ExportRequest>("/exports", input, {
+    organizationId,
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function getExportDownload(
+  organizationId: string,
+  exportId: string,
+): Promise<ExportDownload> {
+  return apiFetch<ExportDownload>(`/exports/${exportId}/download`, {
+    method: "GET",
+    organizationId,
   });
 }

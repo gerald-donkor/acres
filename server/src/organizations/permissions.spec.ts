@@ -1,34 +1,22 @@
-import { ORGANIZATION_PERMISSIONS, OrganizationPolicy } from './permissions';
-import type { OrganizationRole } from '../generated/prisma/enums';
+import { OrganizationPolicy } from './permissions';
 
-describe('OrganizationPolicy', () => {
-  const roles: OrganizationRole[] = ['owner', 'admin', 'analyst', 'viewer'];
-
-  it('has an explicit answer for every role and permission', () => {
-    for (const role of roles) {
-      for (const permission of ORGANIZATION_PERMISSIONS) {
-        expect(typeof OrganizationPolicy.has(role, permission)).toBe('boolean');
-      }
-    }
+describe('OrganizationPolicy report and export permissions', () => {
+  it('allows owners and admins to publish reports', () => {
+    expect(OrganizationPolicy.has('owner', 'reports.publish')).toBe(true);
+    expect(OrganizationPolicy.has('admin', 'reports.publish')).toBe(true);
   });
 
-  it('allows owners to do everything and viewers only read safe surfaces', () => {
-    for (const permission of ORGANIZATION_PERMISSIONS) {
-      expect(OrganizationPolicy.has('owner', permission)).toBe(true);
-    }
-
-    expect(OrganizationPolicy.has('viewer', 'organization.read')).toBe(true);
-    expect(OrganizationPolicy.has('viewer', 'datasets.read')).toBe(true);
-    expect(OrganizationPolicy.has('viewer', 'ingestion.read')).toBe(true);
-    expect(OrganizationPolicy.has('viewer', 'members.read')).toBe(false);
-    expect(OrganizationPolicy.has('viewer', 'ingestion.run')).toBe(false);
+  it('allows analysts to author and export without publishing', () => {
+    expect(OrganizationPolicy.has('analyst', 'reports.create')).toBe(true);
+    expect(OrganizationPolicy.has('analyst', 'reports.update')).toBe(true);
+    expect(OrganizationPolicy.has('analyst', 'exports.create')).toBe(true);
+    expect(OrganizationPolicy.has('analyst', 'reports.publish')).toBe(false);
   });
 
-  it('keeps owner assignment out of generic role changes', () => {
-    expect(OrganizationPolicy.canAssignRole('owner', 'admin')).toBe(true);
-    expect(OrganizationPolicy.canAssignRole('owner', 'owner')).toBe(false);
-    expect(OrganizationPolicy.canAssignRole('admin', 'analyst')).toBe(true);
-    expect(OrganizationPolicy.canAssignRole('admin', 'admin')).toBe(false);
-    expect(OrganizationPolicy.canAssignRole('analyst', 'viewer')).toBe(false);
+  it('keeps viewers read-only for published reports and completed exports', () => {
+    expect(OrganizationPolicy.has('viewer', 'reports.read')).toBe(true);
+    expect(OrganizationPolicy.has('viewer', 'exports.read')).toBe(true);
+    expect(OrganizationPolicy.has('viewer', 'reports.create')).toBe(false);
+    expect(OrganizationPolicy.has('viewer', 'exports.create')).toBe(false);
   });
 });

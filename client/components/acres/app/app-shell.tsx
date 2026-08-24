@@ -7,7 +7,7 @@ import type {
   OrganizationRole,
   OrganizationSummary,
 } from "@acres/shared";
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   BarChart3Icon,
   BriefcaseBusinessIcon,
@@ -16,6 +16,7 @@ import {
   FileTextIcon,
   ShieldCheckIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { CreateOrganizationForm } from "@/components/acres/app/create-organization-form";
 import { LogoutButton } from "@/components/acres/app/logout-button";
@@ -30,7 +31,7 @@ type AppShellProps = {
   account: AccountProfile;
   organizations: OrganizationSummary[];
   activeOrganization: OrganizationSummary | null;
-  activeSection?: "workspace" | "dashboards";
+  activeSection?: "workspace" | "dashboards" | "reports";
   children?: ReactNode;
 };
 
@@ -41,7 +42,13 @@ const roleLabel: Record<OrganizationRole, string> = {
   viewer: "Viewer",
 };
 
-const navItems = [
+const navItems: Array<{
+  label: string;
+  status: "Active" | "Unavailable";
+  href: string | null;
+  icon: LucideIcon;
+  roles: OrganizationRole[];
+}> = [
   {
     label: "Workspace",
     status: "Active",
@@ -65,8 +72,8 @@ const navItems = [
   },
   {
     label: "Reports",
-    status: "Unavailable",
-    href: null,
+    status: "Active",
+    href: "/app/reports",
     icon: FileTextIcon,
     roles: ["owner", "admin", "analyst", "viewer"],
   },
@@ -77,13 +84,7 @@ const navItems = [
     icon: ShieldCheckIcon,
     roles: ["owner", "admin"],
   },
-] satisfies Array<{
-  label: string;
-  status: "Active" | "Unavailable";
-  href: string | null;
-  icon: ComponentType<{ "aria-hidden": true }>;
-  roles: OrganizationRole[];
-}>;
+];
 
 function Ledger({
   account,
@@ -119,7 +120,7 @@ function WorkNavigation({
   activeSection,
 }: {
   role: OrganizationRole | null;
-  activeSection: "workspace" | "dashboards";
+  activeSection: "workspace" | "dashboards" | "reports";
 }) {
   const visible = navItems.filter((item) => role === null || item.roles.includes(role));
   return (
@@ -128,8 +129,10 @@ function WorkNavigation({
         const Icon = item.icon;
         const active =
           (activeSection === "workspace" && item.href === "/app") ||
-          (activeSection === "dashboards" && item.href === "/app/dashboards");
+          (activeSection === "dashboards" && item.href === "/app/dashboards") ||
+          (activeSection === "reports" && item.href === "/app/reports");
         const enabled = item.status === "Active" && item.href !== null;
+        const href = item.href;
         const content = (
           <>
             <span className="flex min-w-0 items-center gap-2">
@@ -141,10 +144,10 @@ function WorkNavigation({
             </Badge>
           </>
         );
-        return enabled ? (
+        return enabled && href !== null ? (
           <Link
             key={item.label}
-            href={item.href}
+            href={href}
             className={cn(
               buttonVariants({ variant: active ? "secondary" : "ghost", size: "lg" }),
               "h-target justify-between gap-3",
