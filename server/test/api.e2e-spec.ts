@@ -26,7 +26,7 @@ describe('Acres API', () => {
   /** Fetches a CSRF token on an agent that keeps the paired cookie. */
   async function csrfAgent() {
     const agent = request.agent(server);
-    const response = await agent.get('/auth/csrf').expect(200);
+    const response = await agent.get('/api/v1/auth/csrf').expect(200);
     const body = response.body as {
       data: { csrfToken: string; headerName: string };
     };
@@ -40,7 +40,7 @@ describe('Acres API', () => {
    * bound to the session cookie's value, which login has just changed.
    */
   async function csrfTokenFor(agent: Agent): Promise<string> {
-    const response = await agent.get('/auth/csrf').expect(200);
+    const response = await agent.get('/api/v1/auth/csrf').expect(200);
     return (response.body as { data: { csrfToken: string } }).data.csrfToken;
   }
 
@@ -51,6 +51,14 @@ describe('Acres API', () => {
     prisma = createPrismaDouble();
     ({ app } = await createTestApp(prisma, envOverrides));
     server = app.getHttpServer() as App;
+  }
+
+  function rawSqlCalls(): string {
+    return prisma.$executeRaw.mock.calls
+      .map(([strings]) =>
+        Array.isArray(strings) ? (strings as string[]).join('?') : '',
+      )
+      .join('\n');
   }
 
   function sessionCookieValue(response: request.Response): string {
@@ -79,7 +87,7 @@ describe('Acres API', () => {
     prisma.session.create.mockResolvedValue({ id: 'session-1' });
 
     const response = await agent
-      .post('/auth/register')
+      .post('/api/v1/auth/register')
       .set('x-csrf-token', token)
       .send({
         email: 'ada@example.com',
@@ -118,10 +126,30 @@ describe('Acres API', () => {
     });
   });
 
+  describe('request IDs and route migration', () => {
+    it('returns a safe request id and ignores hostile values', async () => {
+      const response = await request(server)
+        .get('/health')
+        .set('x-request-id', 'not-a-safe-id')
+        .expect(200);
+
+      expect(response.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/i);
+      expect((response.body as { data?: unknown }).data).toBeDefined();
+    });
+
+    it('removes old unversioned product routes without redirecting', async () => {
+      await request(server).get('/auth/session').expect(404);
+      await request(server).get('/account').expect(404);
+      await request(server).get('/regions').expect(404);
+      const { agent, token } = await csrfAgent();
+      await agent.post('/forms/contact').set('x-csrf-token', token).expect(404);
+    });
+  });
+
   describe('CSRF', () => {
     it('rejects a mutation with no token', async () => {
       const response = await request(server)
-        .post('/forms/contact')
+        .post('/api/v1/forms/contact')
         .send({ name: 'A', email: 'a@example.com', message: 'x'.repeat(20) })
         .expect(403);
 
@@ -137,7 +165,7 @@ describe('Acres API', () => {
       const { agent, token } = await csrfAgent();
 
       const response = await agent
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('x-csrf-token', token)
         .send({ email: 'someone@example.com', password: 'short' })
         .expect(400);
@@ -153,7 +181,7 @@ describe('Acres API', () => {
       const { agent, token } = await csrfAgent();
 
       const response = await agent
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('x-csrf-token', token)
         .send({
           email: 'someone@example.com',
@@ -175,7 +203,7 @@ describe('Acres API', () => {
       const { agent, token } = await csrfAgent();
 
       const response = await agent
-        .post('/auth/login')
+        .post('/api/v1/auth/login')
         .set('x-csrf-token', token)
         .send({ email: 'nobody@example.com', password: 'wrong-password-here' })
         .expect(401);
@@ -190,7 +218,7 @@ describe('Acres API', () => {
 
   describe('the session guard', () => {
     it('rejects GET /account without a session', async () => {
-      const response = await request(server).get('/account').expect(401);
+      const response = await request(server).get('/api/v1/account').expect(401);
 
       expect(response.body).toMatchObject({
         ok: false,
@@ -199,7 +227,9 @@ describe('Acres API', () => {
     });
 
     it('rejects GET /jobs/runs without a session', async () => {
-      const response = await request(server).get('/jobs/runs').expect(401);
+      const response = await request(server)
+        .get('/api/v1/jobs/runs')
+        .expect(401);
 
       expect(response.body).toMatchObject({
         ok: false,
@@ -211,7 +241,9 @@ describe('Acres API', () => {
 
   describe('GET /auth/session', () => {
     it('answers with the anonymous profile when no cookie is sent', async () => {
-      const response = await request(server).get('/auth/session').expect(200);
+      const response = await request(server)
+        .get('/api/v1/auth/session')
+        .expect(200);
 
       expect(response.body).toMatchObject({
         ok: true,
@@ -224,7 +256,7 @@ describe('Acres API', () => {
       const { agent } = await signedInAgent();
       prisma.session.findUnique.mockResolvedValue(null);
 
-      const response = await agent.get('/auth/session').expect(200);
+      const response = await agent.get('/api/v1/auth/session').expect(200);
 
       expect(response.body).toMatchObject({
         ok: true,
@@ -240,7 +272,7 @@ describe('Acres API', () => {
       const { agent, token } = await csrfAgent();
 
       const response = await agent
-        .post('/forms/contact')
+        .post('/api/v1/forms/contact')
         .set('x-csrf-token', token)
         .send({ name: 'Ada', email: 'ada@example.com', message: 'too short' })
         .expect(400);
@@ -261,7 +293,7 @@ describe('Acres API', () => {
       const { agent, token } = await csrfAgent();
 
       const response = await agent
-        .post('/forms/contact')
+        .post('/api/v1/forms/contact')
         .set('x-csrf-token', token)
         .send({
           name: 'Ada Lovelace',
@@ -320,7 +352,7 @@ describe('Acres API', () => {
     it('admits the session to GET /account', async () => {
       const { agent, response: registration } = await signedInAgent();
 
-      const response = await agent.get('/account').expect(200);
+      const response = await agent.get('/api/v1/account').expect(200);
 
       expect(response.body).toMatchObject({
         ok: true,
@@ -343,7 +375,7 @@ describe('Acres API', () => {
       prisma.jobRun.findMany.mockResolvedValue([]);
       const { agent } = await signedInAgent();
 
-      const response = await agent.get('/jobs/runs').expect(200);
+      const response = await agent.get('/api/v1/jobs/runs').expect(200);
 
       expect(response.body).toMatchObject({ ok: true, data: [] });
       expect(prisma.jobRun.findMany).toHaveBeenCalled();
@@ -355,7 +387,7 @@ describe('Acres API', () => {
       const token = await csrfTokenFor(agent);
 
       const response = await agent
-        .post('/auth/logout')
+        .post('/api/v1/auth/logout')
         .set('x-csrf-token', token)
         .expect(200);
 
@@ -378,7 +410,7 @@ describe('Acres API', () => {
       await recreateApp({ TENANCY_ENABLED: 'false' });
       const { agent } = await signedInAgent();
 
-      const response = await agent.get('/organizations').expect(503);
+      const response = await agent.get('/api/v1/organizations').expect(503);
 
       expect(response.body).toMatchObject({
         ok: false,
@@ -392,7 +424,7 @@ describe('Acres API', () => {
       const { agent } = await signedInAgent();
 
       const response = await agent
-        .get('/organizations/018f0000-0000-7000-8000-000000000001')
+        .get('/api/v1/organizations/018f0000-0000-7000-8000-000000000001')
         .expect(503);
 
       expect(response.body).toMatchObject({
@@ -425,8 +457,9 @@ describe('Acres API', () => {
       prisma.auditEvent.create.mockResolvedValue({ id: 'audit-1' });
 
       const response = await agent
-        .post('/organizations')
+        .post('/api/v1/organizations')
         .set('x-csrf-token', csrf)
+        .set('Idempotency-Key', 'create-org-key-0001')
         .send({ name: ' Acme Analytics ' })
         .expect(201);
 
@@ -446,10 +479,120 @@ describe('Acres API', () => {
       });
     });
 
+    it('replays a matching organization create idempotency key', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      const responseBody = {
+        id: '018f0000-0000-7000-8000-000000000001',
+        name: 'Acme Analytics',
+        createdAt: '2026-08-24T10:00:00.000Z',
+        updatedAt: '2026-08-24T10:01:00.000Z',
+        membership: {
+          id: '018f0000-0000-7000-8000-000000000002',
+          role: 'owner',
+        },
+      };
+      prisma.idempotencyRecord.findFirst.mockResolvedValue({
+        id: 'idempotency-1',
+        keyDigest: 'digest',
+        accountId: 'account-1',
+        organizationId: null,
+        operation: 'organizations.create',
+        requestHash:
+          '66615894ccf7a1e708653aa9463b17e38f583d544add5707ad7f884b743afcea',
+        state: 'succeeded',
+        responseStatus: 201,
+        responseBody,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      const response = await agent
+        .post('/api/v1/organizations')
+        .set('x-csrf-token', csrf)
+        .set('Idempotency-Key', 'create-org-key-0001')
+        .send({ name: ' Acme Analytics ' })
+        .expect(201);
+
+      expect(response.body).toMatchObject({ ok: true, data: responseBody });
+      expect(prisma.organization.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a changed body for a reused idempotency key', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.idempotencyRecord.findFirst.mockResolvedValue({
+        id: 'idempotency-1',
+        keyDigest: 'digest',
+        accountId: 'account-1',
+        organizationId: null,
+        operation: 'organizations.create',
+        requestHash: 'different-body',
+        state: 'succeeded',
+        responseStatus: 201,
+        responseBody: {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      const response = await agent
+        .post('/api/v1/organizations')
+        .set('x-csrf-token', csrf)
+        .set('Idempotency-Key', 'create-org-key-0001')
+        .send({ name: 'Different' })
+        .expect(409);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'IDEMPOTENCY_CONFLICT' },
+      });
+    });
+
+    it('cleans an expired idempotency key before reserving a new request', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      const createdAt = new Date('2026-08-24T10:00:00.000Z');
+      const updatedAt = new Date('2026-08-24T10:01:00.000Z');
+      prisma.organization.create.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000001',
+        name: 'Acme Analytics',
+        createdAt,
+        updatedAt,
+      });
+      prisma.membership.create.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId: '018f0000-0000-7000-8000-000000000001',
+        accountId: 'account-1',
+        role: 'owner',
+        createdAt,
+        updatedAt,
+        revokedAt: null,
+      });
+      prisma.auditEvent.create.mockResolvedValue({ id: 'audit-1' });
+
+      await agent
+        .post('/api/v1/organizations')
+        .set('x-csrf-token', csrf)
+        .set('Idempotency-Key', 'expired-org-key-0001')
+        .send({ name: ' Acme Analytics ' })
+        .expect(201);
+
+      expect(prisma.idempotencyRecord.deleteMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          expiresAt: { lte: expect.any(Date) as Date },
+        }) as unknown,
+      });
+      expect(prisma.organization.create).toHaveBeenCalledTimes(1);
+    });
+
     it('returns NOT_FOUND for malformed organization context before querying', async () => {
       const { agent } = await signedInAgent();
 
-      const response = await agent.get('/organizations/not-a-uuid').expect(404);
+      const response = await agent
+        .get('/api/v1/organizations/not-a-uuid')
+        .expect(404);
 
       expect(response.body).toMatchObject({
         ok: false,
@@ -471,9 +614,10 @@ describe('Acres API', () => {
 
       const response = await agent
         .post(
-          '/organizations/018f0000-0000-7000-8000-000000000001/ownership-transfers',
+          '/api/v1/organizations/018f0000-0000-7000-8000-000000000001/ownership-transfers',
         )
         .set('x-csrf-token', csrf)
+        .set('Idempotency-Key', 'transfer-org-key-1')
         .send({ membershipId: 'not-a-uuid' })
         .expect(400);
 
@@ -490,13 +634,328 @@ describe('Acres API', () => {
       prisma.region.findUnique.mockResolvedValue(null);
 
       const response = await request(server)
-        .get('/regions/nowhere')
+        .get('/api/v1/regions/nowhere')
         .expect(404);
 
       expect(response.body).toMatchObject({
         ok: false,
         error: { code: 'NOT_FOUND' },
       });
+    });
+  });
+
+  describe('GraphQL', () => {
+    const organizationId = '018f0000-0000-7000-8000-000000000001';
+
+    it('rejects GET requests', async () => {
+      const response = await request(server).get('/graphql').expect(405);
+
+      const body = response.body as {
+        errors: { extensions: Record<string, unknown> }[];
+      };
+      expect(body.errors[0].extensions).toMatchObject({
+        code: 'METHOD_NOT_ALLOWED',
+      });
+      expect(response.headers['x-request-id']).toBeDefined();
+    });
+
+    it('requires a session before resolver work', async () => {
+      const { agent, token } = await csrfAgent();
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', token)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'Viewer',
+          query: 'query Viewer { viewer { account { id } } }',
+        })
+        .expect(200);
+
+      const body = response.body as {
+        errors: { extensions: Record<string, unknown> }[];
+      };
+      expect(body.errors[0].extensions).toMatchObject({
+        code: 'UNAUTHENTICATED',
+        requestId: expect.any(String) as string,
+      });
+    });
+
+    it('answers viewer for an authenticated organization member', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.membership.findFirst.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId,
+        accountId: 'account-1',
+        role: 'owner',
+        revokedAt: null,
+      });
+
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', csrf)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'Viewer',
+          query:
+            'query Viewer { viewer { account { id email } membership { id role } } }',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        data: {
+          viewer: {
+            account: { id: 'account-1', email: 'ada@example.com' },
+            membership: { role: 'owner' },
+          },
+        },
+      });
+    });
+
+    it('shares duplicate region lookups through a request loader', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.membership.findFirst.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId,
+        accountId: 'account-1',
+        role: 'owner',
+        revokedAt: null,
+      });
+      prisma.region.findMany.mockResolvedValue([
+        {
+          id: 'region-1',
+          slug: 'acadia',
+          name: 'Acadia',
+          countryCode: 'US',
+          summary: 'A coastal region.',
+          metrics: [],
+        },
+      ]);
+
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', csrf)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'RegionAliases',
+          query:
+            'query RegionAliases { a: region(slug: "acadia") { slug } b: region(slug: "acadia") { name } }',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        data: {
+          a: { slug: 'acadia' },
+          b: { name: 'Acadia' },
+        },
+      });
+      expect(prisma.region.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.region.findMany).toHaveBeenCalledWith({
+        where: { slug: { in: ['acadia'] } },
+        include: { metrics: { orderBy: { key: 'asc' } } },
+      });
+    });
+
+    it('bounds GraphQL region connection database reads', async () => {
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.membership.findFirst.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId,
+        accountId: 'account-1',
+        role: 'owner',
+        revokedAt: null,
+      });
+      prisma.region.findMany.mockResolvedValue([
+        {
+          id: 'region-1',
+          slug: 'acadia',
+          name: 'Acadia',
+          countryCode: 'US',
+          summary: null,
+          metrics: [],
+        },
+        {
+          id: 'region-2',
+          slug: 'boston',
+          name: 'Boston',
+          countryCode: 'US',
+          summary: null,
+          metrics: [],
+        },
+        {
+          id: 'region-3',
+          slug: 'chicago',
+          name: 'Chicago',
+          countryCode: 'US',
+          summary: null,
+          metrics: [],
+        },
+      ]);
+
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', csrf)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'Regions',
+          query:
+            'query Regions { regions(first: 2) { edges { node { slug } } pageInfo { hasNextPage } } }',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        data: {
+          regions: {
+            edges: [{ node: { slug: 'acadia' } }, { node: { slug: 'boston' } }],
+            pageInfo: { hasNextPage: true },
+          },
+        },
+      });
+      expect(prisma.region.findMany).toHaveBeenCalledWith({
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        include: { metrics: { orderBy: { key: 'asc' } } },
+        take: 3,
+      });
+      expect(rawSqlCalls()).toContain('statement_timeout');
+    });
+
+    it('counts variable-based first values in aggregate node limits', async () => {
+      await recreateApp({ GRAPHQL_MAX_NODES: '3' });
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.membership.findFirst.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId,
+        accountId: 'account-1',
+        role: 'owner',
+        revokedAt: null,
+      });
+
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', csrf)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'TooManyNodes',
+          query:
+            'query TooManyNodes($n: Int!) { a: regions(first: $n) { edges { node { id } } } b: regions(first: $n) { edges { node { id } } } }',
+          variables: { n: 2 },
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        errors: [
+          {
+            extensions: {
+              code: 'QUERY_LIMIT_EXCEEDED',
+              requestId: expect.any(String) as string,
+            },
+          },
+        ],
+      });
+      expect(prisma.region.findMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects oversized GraphQL bodies before parsing', async () => {
+      await recreateApp({ GRAPHQL_MAX_BYTES: '80' });
+      const { agent, token } = await csrfAgent();
+
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', token)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'Oversized',
+          query:
+            'query Oversized { viewer { account { id email displayName } membership { id role } } }',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        errors: [
+          {
+            extensions: {
+              code: 'QUERY_LIMIT_EXCEEDED',
+              requestId: expect.any(String) as string,
+            },
+          },
+        ],
+      });
+      expect(prisma.membership.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('counts aliases inside fragments before resolver work', async () => {
+      await recreateApp({ GRAPHQL_MAX_ALIASES: '1' });
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.membership.findFirst.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId,
+        accountId: 'account-1',
+        role: 'owner',
+        revokedAt: null,
+      });
+
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', csrf)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'FragmentAliases',
+          query:
+            'query FragmentAliases { ...RegionFields } fragment RegionFields on Query { a: region(slug: "acadia") { id } b: region(slug: "boston") { id } }',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        errors: [
+          {
+            extensions: {
+              code: 'QUERY_LIMIT_EXCEEDED',
+              requestId: expect.any(String) as string,
+            },
+          },
+        ],
+      });
+      expect(prisma.region.findMany).not.toHaveBeenCalled();
+    });
+
+    it('applies list-aware GraphQL cost to connection children', async () => {
+      await recreateApp({ GRAPHQL_MAX_COST: '30' });
+      const { agent } = await signedInAgent();
+      const csrf = await csrfTokenFor(agent);
+      prisma.membership.findFirst.mockResolvedValue({
+        id: '018f0000-0000-7000-8000-000000000002',
+        organizationId,
+        accountId: 'account-1',
+        role: 'owner',
+        revokedAt: null,
+      });
+
+      const response = await agent
+        .post('/graphql')
+        .set('x-csrf-token', csrf)
+        .set('x-organization-id', organizationId)
+        .send({
+          operationName: 'CostlyConnection',
+          query:
+            'query CostlyConnection { regions(first: 10) { edges { node { id slug name countryCode summary metrics { id key label value unit } } } pageInfo { hasNextPage endCursor } } }',
+        })
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        errors: [
+          {
+            extensions: {
+              code: 'QUERY_LIMIT_EXCEEDED',
+              requestId: expect.any(String) as string,
+            },
+          },
+        ],
+      });
+      expect(prisma.region.findMany).not.toHaveBeenCalled();
     });
   });
 
@@ -518,17 +977,17 @@ describe('Acres API', () => {
       };
 
       await agent
-        .post('/forms/contact')
+        .post('/api/v1/forms/contact')
         .set('x-csrf-token', token)
         .send(body)
         .expect(201);
       await agent
-        .post('/forms/contact')
+        .post('/api/v1/forms/contact')
         .set('x-csrf-token', token)
         .send(body)
         .expect(201);
       const response = await agent
-        .post('/forms/contact')
+        .post('/api/v1/forms/contact')
         .set('x-csrf-token', token)
         .send(body)
         .expect(429);
@@ -552,17 +1011,17 @@ describe('Acres API', () => {
       };
 
       await agent
-        .post('/auth/login')
+        .post('/api/v1/auth/login')
         .set('x-csrf-token', token)
         .send(body)
         .expect(401);
       await agent
-        .post('/auth/login')
+        .post('/api/v1/auth/login')
         .set('x-csrf-token', token)
         .send(body)
         .expect(401);
       const response = await agent
-        .post('/auth/login')
+        .post('/api/v1/auth/login')
         .set('x-csrf-token', token)
         .send(body)
         .expect(429);
@@ -589,19 +1048,19 @@ describe('Acres API', () => {
       };
 
       await agent
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('x-csrf-token', token)
         .send(body)
         .expect(201);
       const secondToken = await csrfTokenFor(agent);
       await agent
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('x-csrf-token', secondToken)
         .send(body)
         .expect(201);
       const blockedToken = await csrfTokenFor(agent);
       const response = await agent
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('x-csrf-token', blockedToken)
         .send(body)
         .expect(429);
@@ -620,7 +1079,7 @@ describe('Acres API', () => {
       const agent = request.agent(server);
 
       for (let attempt = 0; attempt < 7; attempt += 1) {
-        await agent.get('/auth/csrf').expect(200);
+        await agent.get('/api/v1/auth/csrf').expect(200);
       }
     });
 
@@ -631,9 +1090,9 @@ describe('Acres API', () => {
       });
       const agent = request.agent(server);
 
-      await agent.get('/auth/csrf').expect(200);
-      await agent.get('/auth/csrf').expect(200);
-      const response = await agent.get('/auth/csrf').expect(429);
+      await agent.get('/api/v1/auth/csrf').expect(200);
+      await agent.get('/api/v1/auth/csrf').expect(200);
+      const response = await agent.get('/api/v1/auth/csrf').expect(429);
 
       expect(response.body).toMatchObject({
         ok: false,

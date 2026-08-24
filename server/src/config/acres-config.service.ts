@@ -77,4 +77,36 @@ export class AcresConfigService {
   get accountTokenTtlMinutes(): number {
     return this.get('accountTokenTtlMinutes');
   }
+
+  get graphqlMaxBytes(): number {
+    return this.get('graphqlMaxBytes');
+  }
+
+  get graphqlMaxDepth(): number {
+    return this.get('graphqlMaxDepth');
+  }
+
+  get graphqlMaxAliases(): number {
+    return this.get('graphqlMaxAliases');
+  }
+
+  get graphqlMaxCost(): number {
+    return this.get('graphqlMaxCost');
+  }
+
+  get graphqlMaxFirst(): number {
+    return this.get('graphqlMaxFirst');
+  }
+
+  get graphqlMaxNodes(): number {
+    return this.get('graphqlMaxNodes');
+  }
+
+  get graphqlTimeoutMs(): number {
+    return this.get('graphqlTimeoutMs');
+  }
+
+  get idempotencyTtlHours(): number {
+    return this.get('idempotencyTtlHours');
+  }
 }

@@ -28,6 +28,14 @@ implementing session (2026-08-21), never recalled. Toolchain: **Node v26.7.0**,
 | `cookie-parser` | `^1.4.7` | the session and CSRF cookies are read by middleware, so they must be parsed first |
 | `csrf-csrf` | `^4.0.3` | double-submit CSRF (§5) |
 | `@nestjs/throttler` | `6.5.0` | per-IP request throttling. The strict tier closes the login/contact availability gap named in §5 and formerly deferred in §12 |
+| `@nestjs/swagger` | `11.4.7` | code-first OpenAPI generation for the committed REST contract artifacts |
+| `@nestjs/graphql` | `13.4.5` | code-first GraphQL integration and deterministic SDL generation |
+| `@nestjs/apollo` | `13.1.0` | Nest Apollo driver pinned below latest because `13.4.5` pulls an Apollo 5 path that conflicts with the installed GraphQL Playground peer graph |
+| `@apollo/server` | `4.13.0` | Apollo Server runtime compatible with the selected Nest Apollo driver. Apollo Server 4 is EOL as of 2026-01-26; this is accepted only as the stable compatible peer set for this phase |
+| `@as-integrations/express5` | `1.1.2` | Apollo/Express 5 integration required by the selected Nest GraphQL stack |
+| `graphql` | `16.14.2` | GraphQL execution and schema primitives |
+| `graphql-query-complexity` | `2.0.0` | cost guard for GraphQL abuse controls |
+| `dataloader` | `2.2.3` | per-request GraphQL lookup caching |
 | `bcryptjs` | `^3.0.3` | password hashing. Pure JavaScript and **ships no install script**, which matters here: this machine's npm blocks unapproved install scripts, so a native hashing binding would not have built |
 | `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7` | from the verified Nest scaffold |
 
@@ -76,6 +84,15 @@ downgrade that would change the generated client. **Not applied.** Revisit when
 `prisma validate` and `prisma generate` both run, and Prisma 7's query
 compiler is WASM.
 
+The Phase 4 transport install raised `npm audit` to **7 findings** (4 moderate,
+3 high) and added deprecation warnings for Apollo Server 4 packages. The latest
+`@nestjs/apollo@13.4.5` graph was tested first and rejected because it resolves
+through Apollo 5 while the bundled Playground path still expects Apollo 4-only
+peers. The implemented graph pins `@nestjs/apollo@13.1.0` with
+`@apollo/server@4.13.0`; this keeps Nest GraphQL stable for the read-only
+Phase 4 endpoint but must be revisited before any broad production GraphQL
+launch.
+
 ---
 
 ## 2. Workspace shape and scripts
@@ -99,6 +116,8 @@ Root scripts, all run from the repository root:
 | `dev:client` / `dev:server` | one workspace each; the API watches on 3001 |
 | `build` | **shared → client → server.** Shared is first because the server imports its built output |
 | `build:shared` / `build:client` / `build:server` | one workspace each |
+| `contracts:generate` | builds the server and rewrites `docs/api/openapi.json`, `docs/api/schema.graphql` and `docs/api/contracts.md` deterministically |
+| `contracts:check` | generates contracts to a temporary directory and fails on drift; CI runs this after build |
 | `start` | unchanged — serves the built client |
 | `start:server` | `node dist/main` in `server/` |
 | `lint` | client, then shared, then server |
@@ -1481,9 +1500,9 @@ For decisions and sequencing, read `docs/system-architecture.md`,
 
 | current implementation evidenced above | approved target | owning phase |
 | --- | --- | --- |
-| NestJS 11.2/Express API with unversioned routes | Keep Nest 11; `/health` remains unversioned, application REST moves to `/api/v1`, and authenticated read-heavy queries gain complementary `/graphql` | 4 |
+| NestJS 11.2/Express API with `/api/v1` product REST, version-neutral `/health`, request IDs and authenticated read-only `/graphql` | Client integration, additional read models and future additive GraphQL expansion | 5+ |
 | `accounts`, `auth`, and `sessions`; opaque hashed database sessions and global CSRF. Identity now also owns account-token persistence with no public delivery route | Recovery UI/mail delivery and client auth shell | 5, mail in a later approved phase |
-| Prisma 7.9.1 schema with seven models; real PostgreSQL 18/PostGIS 3.6, first migration (`20260823204922_init`) generated/reviewed/committed, three-role separation landed (§8.1) | Same, in production: a provisioned host, and the volume-encryption/key-recovery contract §8.1 records implemented and drilled; Prisma 8 stays deferred until GA and a dedicated migration | 2, then 12 for the production host |
+| Prisma 7.9.1 schema with tenant tables, RLS, account tokens and `IdempotencyRecord`; real PostgreSQL 18/PostGIS 3.6, reviewed migrations, three-role separation landed (§8.1) | Same, in production: a provisioned host, and the volume-encryption/key-recovery contract §8.1 records implemented and drilled; Prisma 8 stays deferred until GA and a dedicated migration | 2–4, then 12 for the production host |
 | Organizations, memberships, invitations and audit events are tenant-scoped with transaction-local context and forced RLS | Later tenant-owned datasets/dashboards/reports/exports inherit this boundary in their phases | 6-10 |
 | Flat public `Region` records | Globally shared arbitrary-depth administrative hierarchy, stable external codes/aliases/provenance and reviewed PostGIS geometry SQL | 7 |
 | DB-backed `JobRun` reads and one in-process hourly session purge | PostgreSQL outbox/job authority, Valkey/BullMQ transport, separately runnable Nest worker, idempotent stages, retries/dead letters and audited schedules | 6 |
@@ -1610,3 +1629,152 @@ by `acres_migrator`; `Organization`, `Membership`, `Invitation` and
 the live invitation/account-token partial indexes exist; `acres_test` has
 `INSERT`, `SELECT` and test-only `TRUNCATE` on `AuditEvent`, with no update or
 delete privilege.
+
+---
+
+## 15. Versioned REST, GraphQL and checked contracts
+
+Implemented by `prompts/23-versioned-rest-graphql-contracts.md`.
+
+### REST versioning and request IDs
+
+All product REST controllers now use Nest URI versioning under the global
+`api` prefix, so the canonical route shape is `/api/v1/<resource>`.
+`/health` and `/health/ready` are `VERSION_NEUTRAL`; `/graphql` is also
+unversioned and is not served at `/api/v1/graphql`. Old unversioned product
+paths are removed, not redirected, and E2E tests cover representative 404s.
+
+`server/src/common/request-context.ts` assigns or sanitizes `x-request-id` for
+every request, exposes it on the response and includes it in REST error
+envelopes. The CORS allow/expose list includes request, organization and
+idempotency headers.
+
+### OpenAPI, SDL and CI drift guard
+
+The committed generated artifacts are:
+
+- `docs/api/openapi.json`
+- `docs/api/schema.graphql`
+- `docs/api/contracts.md`
+
+`npm run contracts:generate` boots the compiled Nest app without listening,
+extracts Swagger and `GraphQLSchemaHost`, then writes deterministic JSON/SDL
+and the human route/resolver matrix. `npm run contracts:check` generates to a
+temporary directory and fails if any artifact drifts. `.github/workflows/ci.yml`
+runs the contract check after build and before database setup.
+
+### GraphQL read surface
+
+`/graphql` accepts POST only; `GET /graphql` returns a sanitized
+`METHOD_NOT_ALLOWED` GraphQL error with `x-request-id`. GraphiQL and Playground
+are disabled; introspection is disabled in production. The schema is read-only:
+there is no mutation or subscription root in Phase 4.
+
+GraphQL context resolves the session cookie and the selected
+`x-organization-id`/`x-acres-organization-id` membership before service access.
+Resolvers call the same application services and organization permission map as
+REST; they do not call REST or Prisma directly. Connection resolvers validate
+`first`/`after` before service calls and pass `take: first + 1` into the data
+service, so GraphQL pagination caps database rows instead of slicing an
+unbounded in-memory array. A request-scoped DataLoader batches `region(slug)`
+through one set-based lookup per request batch and preserves per-key
+missing-region errors. Current queries are listed in `docs/api/contracts.md`.
+
+GraphQL abuse controls are split between the HTTP parser and
+`server/src/graphql/graphql-limits.ts`: the configured byte limit is enforced
+before GraphQL parsing/context work, production requires `operationName`, only
+one operation is accepted, and aliases, depth, literal-or-variable `first`
+nodes and list-aware field cost are counted through inline and named fragments.
+`graphql-query-complexity` remains as a schema-aware cost backstop. Resolver
+service calls are wrapped by the configured `GRAPHQL_TIMEOUT_MS` execution
+timeout, and GraphQL database reads also set transaction-local PostgreSQL
+`statement_timeout` so long-running session, membership, tenant and global region
+queries are cancelled by the database. Errors are sanitized to
+`extensions.code`/`extensions.requestId`; unexpected GraphQL exceptions are
+logged server-side with bounded request metadata.
+
+### Idempotency
+
+`IdempotencyRecord` stores key digest, request hash, account, optional
+organization, operation, state, recorded response body/status and expiry. The
+SQL migration creates RLS policies and a null-safe unique key for
+account/org/operation/key. The follow-up
+`20260824121000_idempotency_expiry_cleanup` migration adds scoped delete access
+for expired records so replay keys can be reused after their TTL. The following
+duplicate-producing commands require `Idempotency-Key`:
+
+- `POST /api/v1/organizations`
+- `POST /api/v1/organizations/:organizationId/invitations`
+- `POST /api/v1/organizations/:organizationId/ownership-transfers`
+- `POST /api/v1/invitations/accept`
+
+Same key/same body replays the stored success body while the record is live.
+Same key/different body returns `IDEMPOTENCY_CONFLICT`. Expired records in the
+same account/org/operation/key scope are deleted before reservation so the key
+can be reused after `IDEMPOTENCY_TTL_HOURS`. Login, register, logout, CSRF,
+contact and pure reads deliberately remain outside generic idempotency.
+
+### Environment
+
+New required variables:
+
+```text
+GRAPHQL_MAX_BYTES=12000
+GRAPHQL_MAX_DEPTH=8
+GRAPHQL_MAX_ALIASES=12
+GRAPHQL_MAX_COST=250
+GRAPHQL_MAX_FIRST=50
+GRAPHQL_MAX_NODES=250
+GRAPHQL_TIMEOUT_MS=5000
+IDEMPOTENCY_TTL_HOURS=24
+```
+
+`GRAPHQL_TIMEOUT_MS` is enforced both at the resolver promise boundary and, for
+GraphQL database reads, as a transaction-local PostgreSQL `statement_timeout`.
+REST calls do not opt into that timeout unless they pass the same optional
+transaction setting.
+
+### Verification evidence
+
+Executed locally on 2026-08-24:
+
+```text
+DATABASE_URL=... DATABASE_MIGRATION_URL=... npm run prisma:migrate:deploy --workspace=@acres/server
+Applying migration `20260824120000_transport_contracts`
+All migrations have been successfully applied.
+
+npm run test:server
+Test Suites: 3 passed, 3 total
+Tests:       68 passed, 68 total
+
+npm run lint
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+
+npm run typecheck
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+
+npm run contracts:check
+> @acres/server@0.1.0 contracts:check
+> prisma generate && nest build && node dist/contracts/generate-contracts.js --check
+
+npm run build:server
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+```
+
+The root `npm run build` still fails in the unchanged client workspace with the
+previously recorded Next/Turbopack port-binding panic:
+
+```text
+Failed to write app endpoint /page
+- [project]/client/app/globals.css [app-client] (css)
+- creating new process
+- binding to a port
+- Operation not permitted (os error 1)
+```
+
+Re-running the root build as a standalone escalated command produced the same
+client-only failure before the server workspace ran; `npm run build:server`
+passes for the changed workspace.

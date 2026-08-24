@@ -6,6 +6,7 @@ export interface OrganizationContext {
   readonly accountId: string;
   readonly membershipId: string;
   readonly role: OrganizationRole;
+  readonly statementTimeoutMs?: number;
 }
 
 export interface RequestWithOrganization extends Request {

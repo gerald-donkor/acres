@@ -400,8 +400,10 @@ whether an authorized member may perform an operation inside the tenant.
 | Webhooks/admin mutations | REST only | none | inbound signed webhooks only if added |
 
 GraphQL is initially authenticated and read-only. It is not duplicate CRUD.
-Both transports call the same permission policies and application services;
-resolvers do not call REST or Prisma.
+Phase 4 implements `/graphql` with cookie session context, selected
+organization membership, sanitized errors and the route matrix committed in
+`docs/api/contracts.md`. Both transports call the same permission policies and
+application services; resolvers do not call REST or Prisma.
 
 ### 8.2 Cross-transport rules
 
@@ -410,8 +412,10 @@ resolvers do not call REST or Prisma.
   CI on unintended drift. Each phase still reviews actual DTO fields.
 - Generate code-first GraphQL SDL deterministically and check breaking drift.
 - GraphQL uses opaque cursor pagination, per-request tenant context and
-  DataLoaders, plus query-byte, depth, complexity, timeout, pagination, and
-  result-size limits. GraphiQL and verbose errors are development-only.
+  request-scoped DataLoader caching, plus query-byte, depth, alias, complexity,
+  pagination, result-size, resolver execution-time and transaction-local
+  PostgreSQL statement-timeout limits. GraphiQL, Playground and verbose errors
+  are disabled on the served endpoint.
 - Production introspection is an explicit deployment choice, never an
   authorization mechanism.
 - Commands safe to retry accept an idempotency key scoped to principal,

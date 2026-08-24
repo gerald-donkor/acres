@@ -10,6 +10,7 @@ import { ApiException } from '../common/api-exception';
 import { uuidV7 } from '../common/ids';
 import { hashToken, issueRawToken } from '../common/tokens';
 import { AcresConfigService } from '../config/acres-config.service';
+import { IdempotencyService } from '../idempotency/idempotency.service';
 import {
   TenantTransactionService,
   type TenantTransactionClient,
@@ -26,6 +27,7 @@ export class OrganizationsService {
     private readonly tenants: TenantTransactionService,
     private readonly audit: AuditService,
     private readonly config: AcresConfigService,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   private ensureEnabled(): void {
@@ -52,33 +54,50 @@ export class OrganizationsService {
     });
   }
 
-  async create(accountId: string, name: string): Promise<OrganizationSummary> {
+  async create(
+    accountId: string,
+    name: string,
+    idempotencyKey?: string,
+  ): Promise<OrganizationSummary> {
     this.ensureEnabled();
     return this.tenants.accountScoped(accountId, async (tx) => {
-      const organizationId = uuidV7();
-      await tx.$executeRaw`
-        SELECT set_config('acres.organization_id', ${organizationId}, true)
-      `;
-      const organization = await tx.organization.create({
-        data: { id: organizationId, name },
-      });
-      const membership = await tx.membership.create({
-        data: { organizationId: organization.id, accountId, role: 'owner' },
-      });
-      await this.audit.append(tx, {
-        organizationId: organization.id,
-        actorAccountId: accountId,
-        action: 'organization_created',
-        targetType: 'organization',
-        targetId: organization.id,
-      });
-      return {
-        id: organization.id,
-        name: organization.name,
-        createdAt: organization.createdAt.toISOString(),
-        updatedAt: organization.updatedAt.toISOString(),
-        membership: { id: membership.id, role: membership.role },
-      };
+      return this.idempotency.run(
+        tx,
+        {
+          key: idempotencyKey,
+          accountId,
+          organizationId: null,
+          operation: 'organizations.create',
+          requestBody: { name },
+          responseStatus: 201,
+        },
+        async () => {
+          const organizationId = uuidV7();
+          await tx.$executeRaw`
+            SELECT set_config('acres.organization_id', ${organizationId}, true)
+          `;
+          const organization = await tx.organization.create({
+            data: { id: organizationId, name },
+          });
+          const membership = await tx.membership.create({
+            data: { organizationId: organization.id, accountId, role: 'owner' },
+          });
+          await this.audit.append(tx, {
+            organizationId: organization.id,
+            actorAccountId: accountId,
+            action: 'organization_created',
+            targetType: 'organization',
+            targetId: organization.id,
+          });
+          return {
+            id: organization.id,
+            name: organization.name,
+            createdAt: organization.createdAt.toISOString(),
+            updatedAt: organization.updatedAt.toISOString(),
+            membership: { id: membership.id, role: membership.role },
+          };
+        },
+      );
     });
   }
 
@@ -106,6 +125,7 @@ export class OrganizationsService {
           membership: { id: actor.id, role: actor.role },
         };
       },
+      { statementTimeoutMs: context.statementTimeoutMs },
     );
   }
 
@@ -168,6 +188,45 @@ export class OrganizationsService {
           revokedAt: row.revokedAt?.toISOString() ?? null,
         }));
       },
+      { statementTimeoutMs: context.statementTimeoutMs },
+    );
+  }
+
+  async membersPage(
+    context: OrganizationContext,
+    take: number,
+    afterId?: string,
+  ): Promise<OrganizationMember[]> {
+    this.ensureEnabled();
+    return this.tenants.organizationScoped(
+      context.accountId,
+      context.organizationId,
+      async (tx) => {
+        await this.requirePermission(tx, context, 'members.read');
+        const rows = await tx.membership
+          .findMany({
+            where: { organizationId: context.organizationId },
+            include: { account: true },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            ...(afterId ? { cursor: { id: afterId }, skip: 1 } : {}),
+            take,
+          })
+          .catch((error: unknown) => {
+            if (isMissingCursor(error)) throw ApiException.cursorInvalid();
+            throw error;
+          });
+        return rows.map((row) => ({
+          id: row.id,
+          accountId: row.accountId,
+          email: row.account.email,
+          displayName: row.account.displayName,
+          role: row.role,
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+          revokedAt: row.revokedAt?.toISOString() ?? null,
+        }));
+      },
+      { statementTimeoutMs: context.statementTimeoutMs },
     );
   }
 
@@ -248,39 +307,57 @@ export class OrganizationsService {
   async transferOwnership(
     context: OrganizationContext,
     membershipId: string,
+    idempotencyKey?: string,
   ): Promise<{ transferred: true }> {
     this.ensureEnabled();
     return this.tenants.organizationScoped(
       context.accountId,
       context.organizationId,
       async (tx) => {
-        const actor = await this.requirePermission(
+        return this.idempotency.run(
           tx,
-          context,
-          'ownership.transfer',
+          {
+            key: idempotencyKey,
+            accountId: context.accountId,
+            organizationId: context.organizationId,
+            operation: 'organizations.transferOwnership',
+            requestBody: { membershipId },
+            responseStatus: 200,
+          },
+          async () => {
+            const actor = await this.requirePermission(
+              tx,
+              context,
+              'ownership.transfer',
+            );
+            const target = await this.activeMembership(
+              tx,
+              context,
+              membershipId,
+            );
+            if (target.accountId === actor.accountId) {
+              throw ApiException.conflict('Choose another active member.');
+            }
+            await tx.$executeRaw`SELECT 1 FROM "Organization" WHERE id = ${context.organizationId} FOR UPDATE`;
+            await tx.membership.update({
+              where: { id: membershipId },
+              data: { role: 'owner' },
+            });
+            await tx.membership.update({
+              where: { id: context.membershipId },
+              data: { role: 'admin' },
+            });
+            await this.audit.append(tx, {
+              organizationId: context.organizationId,
+              actorAccountId: context.accountId,
+              action: 'ownership_transferred',
+              targetType: 'membership',
+              targetId: membershipId,
+              details: { previousOwnerMembershipId: context.membershipId },
+            });
+            return { transferred: true };
+          },
         );
-        const target = await this.activeMembership(tx, context, membershipId);
-        if (target.accountId === actor.accountId) {
-          throw ApiException.conflict('Choose another active member.');
-        }
-        await tx.$executeRaw`SELECT 1 FROM "Organization" WHERE id = ${context.organizationId} FOR UPDATE`;
-        await tx.membership.update({
-          where: { id: membershipId },
-          data: { role: 'owner' },
-        });
-        await tx.membership.update({
-          where: { id: context.membershipId },
-          data: { role: 'admin' },
-        });
-        await this.audit.append(tx, {
-          organizationId: context.organizationId,
-          actorAccountId: context.accountId,
-          action: 'ownership_transferred',
-          targetType: 'membership',
-          targetId: membershipId,
-          details: { previousOwnerMembershipId: context.membershipId },
-        });
-        return { transferred: true };
       },
     );
   }
@@ -310,6 +387,123 @@ export class OrganizationsService {
           revokedAt: row.revokedAt?.toISOString() ?? null,
         }));
       },
+      { statementTimeoutMs: context.statementTimeoutMs },
+    );
+  }
+
+  async invitationsPage(
+    context: OrganizationContext,
+    take: number,
+    afterId?: string,
+  ): Promise<OrganizationInvitation[]> {
+    this.ensureEnabled();
+    return this.tenants.organizationScoped(
+      context.accountId,
+      context.organizationId,
+      async (tx) => {
+        await this.requirePermission(tx, context, 'invitations.read');
+        const rows = await tx.invitation
+          .findMany({
+            where: { organizationId: context.organizationId },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            ...(afterId ? { cursor: { id: afterId }, skip: 1 } : {}),
+            take,
+          })
+          .catch((error: unknown) => {
+            if (isMissingCursor(error)) throw ApiException.cursorInvalid();
+            throw error;
+          });
+        return rows.map((row) => ({
+          id: row.id,
+          organizationId: row.organizationId,
+          email: row.email,
+          role: row.role as Exclude<OrganizationRole, 'owner'>,
+          invitedByAccountId: row.invitedByAccountId,
+          expiresAt: row.expiresAt.toISOString(),
+          createdAt: row.createdAt.toISOString(),
+          acceptedAt: row.acceptedAt?.toISOString() ?? null,
+          revokedAt: row.revokedAt?.toISOString() ?? null,
+        }));
+      },
+      { statementTimeoutMs: context.statementTimeoutMs },
+    );
+  }
+
+  async auditEvents(context: OrganizationContext): Promise<
+    Array<{
+      id: string;
+      action: string;
+      targetType: string;
+      targetId: string | null;
+      actorAccountId: string | null;
+      createdAt: string;
+    }>
+  > {
+    this.ensureEnabled();
+    return this.tenants.organizationScoped(
+      context.accountId,
+      context.organizationId,
+      async (tx) => {
+        await this.requirePermission(tx, context, 'audit.read');
+        const rows = await tx.auditEvent.findMany({
+          where: { organizationId: context.organizationId },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: this.config.graphqlMaxFirst + 1,
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          action: row.action,
+          targetType: row.targetType,
+          targetId: row.targetId,
+          actorAccountId: row.actorAccountId,
+          createdAt: row.createdAt.toISOString(),
+        }));
+      },
+      { statementTimeoutMs: context.statementTimeoutMs },
+    );
+  }
+
+  async auditEventsPage(
+    context: OrganizationContext,
+    take: number,
+    afterId?: string,
+  ): Promise<
+    Array<{
+      id: string;
+      action: string;
+      targetType: string;
+      targetId: string | null;
+      actorAccountId: string | null;
+      createdAt: string;
+    }>
+  > {
+    this.ensureEnabled();
+    return this.tenants.organizationScoped(
+      context.accountId,
+      context.organizationId,
+      async (tx) => {
+        await this.requirePermission(tx, context, 'audit.read');
+        const rows = await tx.auditEvent
+          .findMany({
+            where: { organizationId: context.organizationId },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            ...(afterId ? { cursor: { id: afterId }, skip: 1 } : {}),
+            take,
+          })
+          .catch((error: unknown) => {
+            if (isMissingCursor(error)) throw ApiException.cursorInvalid();
+            throw error;
+          });
+        return rows.map((row) => ({
+          id: row.id,
+          action: row.action,
+          targetType: row.targetType,
+          targetId: row.targetId,
+          actorAccountId: row.actorAccountId,
+          createdAt: row.createdAt.toISOString(),
+        }));
+      },
+      { statementTimeoutMs: context.statementTimeoutMs },
     );
   }
 
@@ -317,63 +511,78 @@ export class OrganizationsService {
     context: OrganizationContext,
     email: string,
     role: Exclude<OrganizationRole, 'owner'>,
+    idempotencyKey?: string,
   ): Promise<IssuedInvitation> {
     this.ensureEnabled();
-    const token = issueRawToken();
-    const tokenHash = hashToken(token);
-    const expiresAt = new Date(
-      Date.now() + this.config.invitationTtlHours * 60 * 60 * 1000,
-    );
-
     return this.tenants.organizationScoped(
       context.accountId,
       context.organizationId,
       async (tx) => {
-        const actor = await this.requirePermission(
+        return this.idempotency.run(
           tx,
-          context,
-          'members.invite',
-        );
-        if (!OrganizationPolicy.canAssignRole(actor.role, role)) {
-          throw ApiException.forbidden();
-        }
-        await tx.invitation.updateMany({
-          where: {
+          {
+            key: idempotencyKey,
+            accountId: context.accountId,
             organizationId: context.organizationId,
-            email,
-            acceptedAt: null,
-            revokedAt: null,
-            expiresAt: { lte: new Date() },
+            operation: 'organizations.invite',
+            requestBody: { email, role },
+            responseStatus: 201,
           },
-          data: { revokedAt: new Date() },
-        });
-        const row = await tx.invitation
-          .create({
-            data: {
-              organizationId: context.organizationId,
-              email,
-              role,
-              tokenHash,
-              invitedByAccountId: context.accountId,
-              expiresAt,
-            },
-          })
-          .catch((error: unknown) => {
-            if (isUniqueConflict(error)) {
-              throw ApiException.conflict('A live invitation already exists.');
+          async () => {
+            const token = issueRawToken();
+            const tokenHash = hashToken(token);
+            const expiresAt = new Date(
+              Date.now() + this.config.invitationTtlHours * 60 * 60 * 1000,
+            );
+            const actor = await this.requirePermission(
+              tx,
+              context,
+              'members.invite',
+            );
+            if (!OrganizationPolicy.canAssignRole(actor.role, role)) {
+              throw ApiException.forbidden();
             }
-            throw error;
-          });
-        await this.audit.append(tx, {
-          organizationId: context.organizationId,
-          actorAccountId: context.accountId,
-          action: 'invitation_issued',
-          targetType: 'invitation',
-          targetId: row.id,
-          details: { role },
-        });
-        this.logger.log('Invitation issued');
-        return { ...this.invitationDto(row), token };
+            await tx.invitation.updateMany({
+              where: {
+                organizationId: context.organizationId,
+                email,
+                acceptedAt: null,
+                revokedAt: null,
+                expiresAt: { lte: new Date() },
+              },
+              data: { revokedAt: new Date() },
+            });
+            const row = await tx.invitation
+              .create({
+                data: {
+                  organizationId: context.organizationId,
+                  email,
+                  role,
+                  tokenHash,
+                  invitedByAccountId: context.accountId,
+                  expiresAt,
+                },
+              })
+              .catch((error: unknown) => {
+                if (isUniqueConflict(error)) {
+                  throw ApiException.conflict(
+                    'A live invitation already exists.',
+                  );
+                }
+                throw error;
+              });
+            await this.audit.append(tx, {
+              organizationId: context.organizationId,
+              actorAccountId: context.accountId,
+              action: 'invitation_issued',
+              targetType: 'invitation',
+              targetId: row.id,
+              details: { role },
+            });
+            this.logger.log('Invitation issued');
+            return { ...this.invitationDto(row), token };
+          },
+        );
       },
     );
   }
@@ -415,74 +624,94 @@ export class OrganizationsService {
     );
   }
 
-  async accept(accountId: string, accountEmail: string, token: string) {
+  async accept(
+    accountId: string,
+    accountEmail: string,
+    token: string,
+    idempotencyKey?: string,
+  ) {
     this.ensureEnabled();
     const tokenHash = hashToken(token);
     const now = new Date();
     return this.tenants.invitationScoped(accountId, tokenHash, async (tx) => {
-      const invitation = await tx.invitation.findUnique({
-        where: { tokenHash },
-      });
-      if (
-        invitation === null ||
-        invitation.acceptedAt !== null ||
-        invitation.revokedAt !== null ||
-        invitation.expiresAt.getTime() <= now.getTime() ||
-        invitation.email !== accountEmail.toLowerCase()
-      ) {
-        throw ApiException.notFound('Invitation not found.');
-      }
-      await tx.$executeRaw`
-        SELECT set_config('acres.organization_id', ${invitation.organizationId}, true)
-      `;
-      const accepted = await tx.invitation.updateMany({
-        where: {
-          id: invitation.id,
-          acceptedAt: null,
-          revokedAt: null,
-          expiresAt: { gt: now },
+      return this.idempotency.run(
+        tx,
+        {
+          key: idempotencyKey,
+          accountId,
+          organizationId: null,
+          operation: 'invitations.accept',
+          requestBody: { tokenHash },
+          responseStatus: 200,
         },
-        data: { acceptedAt: now, acceptedByAccountId: accountId },
-      });
-      if (accepted.count !== 1) {
-        throw ApiException.notFound('Invitation not found.');
-      }
-      const existing = await tx.membership.findUnique({
-        where: {
-          organizationId_accountId: {
-            organizationId: invitation.organizationId,
-            accountId,
-          },
-        },
-      });
-      if (existing?.revokedAt === null) {
-        throw ApiException.conflict('The account is already an active member.');
-      }
-      const membership =
-        existing === null
-          ? await tx.membership.create({
-              data: {
+        async () => {
+          const invitation = await tx.invitation.findUnique({
+            where: { tokenHash },
+          });
+          if (
+            invitation === null ||
+            invitation.acceptedAt !== null ||
+            invitation.revokedAt !== null ||
+            invitation.expiresAt.getTime() <= now.getTime() ||
+            invitation.email !== accountEmail.toLowerCase()
+          ) {
+            throw ApiException.notFound('Invitation not found.');
+          }
+          await tx.$executeRaw`
+            SELECT set_config('acres.organization_id', ${invitation.organizationId}, true)
+          `;
+          const accepted = await tx.invitation.updateMany({
+            where: {
+              id: invitation.id,
+              acceptedAt: null,
+              revokedAt: null,
+              expiresAt: { gt: now },
+            },
+            data: { acceptedAt: now, acceptedByAccountId: accountId },
+          });
+          if (accepted.count !== 1) {
+            throw ApiException.notFound('Invitation not found.');
+          }
+          const existing = await tx.membership.findUnique({
+            where: {
+              organizationId_accountId: {
                 organizationId: invitation.organizationId,
                 accountId,
-                role: invitation.role,
               },
-            })
-          : await tx.membership.update({
-              where: { id: existing.id },
-              data: { role: invitation.role, revokedAt: null },
-            });
-      await this.audit.append(tx, {
-        organizationId: invitation.organizationId,
-        actorAccountId: accountId,
-        action: 'invitation_accepted',
-        targetType: 'invitation',
-        targetId: invitation.id,
-        details: { membershipId: membership.id },
-      });
-      return {
-        organizationId: invitation.organizationId,
-        membershipId: membership.id,
-      };
+            },
+          });
+          if (existing?.revokedAt === null) {
+            throw ApiException.conflict(
+              'The account is already an active member.',
+            );
+          }
+          const membership =
+            existing === null
+              ? await tx.membership.create({
+                  data: {
+                    organizationId: invitation.organizationId,
+                    accountId,
+                    role: invitation.role,
+                  },
+                })
+              : await tx.membership.update({
+                  where: { id: existing.id },
+                  data: { role: invitation.role, revokedAt: null },
+                });
+          await this.audit.append(tx, {
+            organizationId: invitation.organizationId,
+            actorAccountId: accountId,
+            action: 'invitation_accepted',
+            targetType: 'invitation',
+            targetId: invitation.id,
+            details: { membershipId: membership.id },
+          });
+          return {
+            organizationId: invitation.organizationId,
+            membershipId: membership.id,
+          };
+        },
+      );
     });
   }
 
@@ -579,5 +808,14 @@ function isUniqueConflict(error: unknown): boolean {
     error !== null &&
     'code' in error &&
     (error as { code?: string }).code === 'P2002'
+  );
+}
+
+function isMissingCursor(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2025'
   );
 }

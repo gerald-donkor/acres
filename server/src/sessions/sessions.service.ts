@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Response } from 'express';
+import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcresConfigService } from '../config/acres-config.service';
 import { toAccountProfile } from '../accounts/account-profile';
@@ -31,11 +32,18 @@ export class SessionsService {
   }
 
   /** Resolves a raw token to its session, or null when it is not usable. */
-  async resolve(token: string): Promise<SessionContext | null> {
-    const session = await this.prisma.session.findUnique({
-      where: { tokenHash: hashToken(token) },
-      include: { account: true },
-    });
+  async resolve(
+    token: string,
+    options: { statementTimeoutMs?: number } = {},
+  ): Promise<SessionContext | null> {
+    const session = await this.withOptionalStatementTimeout(
+      options.statementTimeoutMs,
+      (client) =>
+        client.session.findUnique({
+          where: { tokenHash: hashToken(token) },
+          include: { account: true },
+        }),
+    );
 
     if (
       session === null ||
@@ -100,6 +108,23 @@ export class SessionsService {
       sameSite: 'lax',
       secure: this.config.isProduction,
       path: '/',
+    });
+  }
+
+  private withOptionalStatementTimeout<T>(
+    statementTimeoutMs: number | undefined,
+    callback: (client: Prisma.TransactionClient | PrismaService) => Promise<T>,
+  ): Promise<T> {
+    if (statementTimeoutMs === undefined) return callback(this.prisma);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        SELECT set_config(
+          'statement_timeout',
+          ${String(statementTimeoutMs)},
+          true
+        )
+      `;
+      return callback(tx);
     });
   }
 }

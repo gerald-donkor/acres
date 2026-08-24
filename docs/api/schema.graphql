@@ -1,0 +1,297 @@
+"""Authenticated Acres account."""
+type AccountGql {
+  """Optional user-facing display name."""
+  displayName: String
+
+  """Account email address."""
+  email: String!
+
+  """Stable account identifier."""
+  id: ID!
+}
+
+"""Account membership in the selected organization."""
+type MembershipGql {
+  """Account identifier for this membership."""
+  accountId: ID!
+
+  """Stable membership identifier."""
+  id: ID!
+
+  """Organization role for this member."""
+  role: String!
+}
+
+"""Bounded organization audit-event connection."""
+type OrganizationAuditEventConnection {
+  """Audit-event edges in this page."""
+  edges: [OrganizationAuditEventEdge!]!
+
+  """Pagination metadata."""
+  pageInfo: PageInfo!
+}
+
+"""Cursor edge for an organization audit event."""
+type OrganizationAuditEventEdge {
+  """Opaque cursor for this audit-event edge."""
+  cursor: String!
+
+  """Audit event node."""
+  node: OrganizationAuditEventGql!
+}
+
+"""Organization audit event metadata."""
+type OrganizationAuditEventGql {
+  """Audit action name."""
+  action: String!
+
+  """Account identifier for the actor, when available."""
+  actorAccountId: ID
+
+  """ISO timestamp when the audit event was recorded."""
+  createdAt: String!
+
+  """Stable audit event identifier."""
+  id: ID!
+
+  """Identifier of the affected entity, when applicable."""
+  targetId: String
+
+  """Type of entity affected by the event."""
+  targetType: String!
+}
+
+"""Selected organization metadata."""
+type OrganizationGql {
+  """ISO timestamp when the organization was created."""
+  createdAt: String!
+
+  """Stable organization identifier."""
+  id: ID!
+
+  """Organization display name."""
+  name: String!
+
+  """ISO timestamp when the organization was updated."""
+  updatedAt: String!
+}
+
+"""Bounded organization invitation connection."""
+type OrganizationInvitationConnection {
+  """Invitation edges in this page."""
+  edges: [OrganizationInvitationEdge!]!
+
+  """Pagination metadata."""
+  pageInfo: PageInfo!
+}
+
+"""Cursor edge for an organization invitation."""
+type OrganizationInvitationEdge {
+  """Opaque cursor for this invitation edge."""
+  cursor: String!
+
+  """Invitation node."""
+  node: OrganizationInvitationGql!
+}
+
+"""Organization invitation metadata."""
+type OrganizationInvitationGql {
+  """ISO timestamp when the invitation was accepted."""
+  acceptedAt: String
+
+  """ISO timestamp when the invitation was created."""
+  createdAt: String!
+
+  """Invited email address."""
+  email: String!
+
+  """ISO timestamp when the invitation expires."""
+  expiresAt: String!
+
+  """Stable invitation identifier."""
+  id: ID!
+
+  """Account identifier that issued the invite."""
+  invitedByAccountId: ID!
+
+  """ISO timestamp when the invitation was revoked."""
+  revokedAt: String
+
+  """Role offered by the invitation."""
+  role: String!
+}
+
+"""Bounded organization member connection."""
+type OrganizationMemberConnection {
+  """Member edges in this page."""
+  edges: [OrganizationMemberEdge!]!
+
+  """Pagination metadata."""
+  pageInfo: PageInfo!
+}
+
+"""Cursor edge for an organization member."""
+type OrganizationMemberEdge {
+  """Opaque cursor for this member edge."""
+  cursor: String!
+
+  """Member node."""
+  node: OrganizationMemberGql!
+}
+
+"""Organization member account and role metadata."""
+type OrganizationMemberGql {
+  """Stable account identifier."""
+  accountId: ID!
+
+  """ISO timestamp when membership was created."""
+  createdAt: String!
+
+  """Optional user-facing display name."""
+  displayName: String
+
+  """Member email address."""
+  email: String!
+
+  """Stable membership identifier."""
+  id: ID!
+
+  """ISO timestamp when membership was revoked, when applicable."""
+  revokedAt: String
+
+  """Current or historical member role."""
+  role: String!
+
+  """ISO timestamp when membership was updated."""
+  updatedAt: String!
+}
+
+"""Pagination metadata for a bounded connection."""
+type PageInfo {
+  """Opaque cursor for the final edge in this window."""
+  endCursor: String
+
+  """Whether another page exists after this window."""
+  hasNextPage: Boolean!
+}
+
+type Query {
+  """The selected organization from x-organization-id."""
+  organization: OrganizationGql!
+
+  """Bounded audit-event metadata for the selected organization."""
+  organizationAuditEvents(
+    """Opaque organizationAuditEvents cursor from pageInfo.endCursor."""
+    after: String
+
+    """Maximum audit events to return, capped by GRAPHQL_MAX_FIRST."""
+    first: Int
+  ): OrganizationAuditEventConnection!
+
+  """Invitation metadata for the selected organization."""
+  organizationInvitations(
+    """Opaque organizationInvitations cursor from pageInfo.endCursor."""
+    after: String
+
+    """Maximum invitations to return, capped by GRAPHQL_MAX_FIRST."""
+    first: Int
+  ): OrganizationInvitationConnection!
+
+  """Active and historical members in the selected organization."""
+  organizationMembers(
+    """Opaque organizationMembers cursor from pageInfo.endCursor."""
+    after: String
+
+    """Maximum members to return, capped by GRAPHQL_MAX_FIRST."""
+    first: Int
+  ): OrganizationMemberConnection!
+
+  """One global region by slug."""
+  region(
+    """Stable region slug."""
+    slug: String!
+  ): RegionGql!
+
+  """Authenticated GraphQL view of global public regions."""
+  regions(
+    """Opaque regions cursor from pageInfo.endCursor."""
+    after: String
+
+    """Maximum regions to return, capped by GRAPHQL_MAX_FIRST."""
+    first: Int
+  ): RegionConnection!
+
+  """
+  The authenticated account and its membership in the selected organization.
+  """
+  viewer: ViewerGql!
+}
+
+"""Bounded region connection."""
+type RegionConnection {
+  """Region edges in this page."""
+  edges: [RegionEdge!]!
+
+  """Pagination metadata."""
+  pageInfo: PageInfo!
+}
+
+"""Cursor edge for a region."""
+type RegionEdge {
+  """Opaque cursor for this region edge."""
+  cursor: String!
+
+  """Region node."""
+  node: RegionGql!
+}
+
+"""Global regional profile and metrics."""
+type RegionGql {
+  """ISO country code, when the region maps to one country."""
+  countryCode: String
+
+  """Stable region identifier."""
+  id: ID!
+
+  """Metrics associated with this region."""
+  metrics: [RegionalMetricGql!]!
+
+  """Region display name."""
+  name: String!
+
+  """Stable region slug."""
+  slug: String!
+
+  """Short regional summary."""
+  summary: String
+}
+
+"""Metric attached to a region."""
+type RegionalMetricGql {
+  """Stable metric identifier."""
+  id: ID!
+
+  """Machine-readable metric key."""
+  key: String!
+
+  """Human-readable metric label."""
+  label: String!
+
+  """Region identifier for this metric."""
+  regionId: ID!
+
+  """Optional unit for the metric value."""
+  unit: String
+
+  """Numeric metric value."""
+  value: Float!
+}
+
+"""Authenticated viewer and selected membership."""
+type ViewerGql {
+  """Authenticated account."""
+  account: AccountGql!
+
+  """Membership in the selected organization."""
+  membership: MembershipGql!
+}

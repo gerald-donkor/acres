@@ -16,6 +16,8 @@
     "build:shared": "npm run build --workspace=@acres/shared",
     "build:client": "npm run build --workspace=@acres/client",
     "build:server": "npm run build --workspace=@acres/server",
+    "contracts:generate": "npm run contracts:generate --workspace=@acres/server",
+    "contracts:check": "npm run contracts:check --workspace=@acres/server",
     "start": "npm run start --workspace=@acres/client",
     "start:server": "npm run start --workspace=@acres/server",
     "lint": "npm run lint --workspace=@acres/client && npm run lint --workspace=@acres/shared && npm run lint --workspace=@acres/server",

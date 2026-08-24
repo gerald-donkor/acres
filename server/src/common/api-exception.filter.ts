@@ -6,8 +6,9 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import type { ApiError, ApiErrorCode } from '@acres/shared';
+import { requestIdFrom } from './request-context';
 
 const STATUS_CODES: Partial<Record<number, ApiErrorCode>> = {
   [HttpStatus.BAD_REQUEST]: 'VALIDATION_FAILED',
@@ -27,12 +28,17 @@ export class ApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ApiExceptionFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost): void {
+    if (host.getType<string>() !== 'http') {
+      throw exception;
+    }
+    const request = host.switchToHttp().getRequest<Request>();
     const response = host.switchToHttp().getResponse<Response>();
+    const requestId = requestIdFrom(request);
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const payload = exception.getResponse();
-      response.status(status).json(this.toEnvelope(status, payload));
+      response.status(status).json(this.toEnvelope(status, payload, requestId));
       return;
     }
 
@@ -45,11 +51,16 @@ export class ApiExceptionFilter implements ExceptionFilter {
       error: {
         code: 'INTERNAL_ERROR',
         message: 'Something went wrong.',
+        ...(requestId ? { requestId } : {}),
       },
     } satisfies ApiError);
   }
 
-  private toEnvelope(status: number, payload: unknown): ApiError {
+  private toEnvelope(
+    status: number,
+    payload: unknown,
+    requestId?: string,
+  ): ApiError {
     const fallbackCode: ApiErrorCode = STATUS_CODES[status] ?? 'INTERNAL_ERROR';
 
     if (payload && typeof payload === 'object') {
@@ -70,6 +81,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
           ...(Array.isArray(body.details)
             ? { details: body.details as string[] }
             : {}),
+          ...(requestId ? { requestId } : {}),
         },
       };
     }
@@ -79,6 +91,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
       error: {
         code: fallbackCode,
         message: typeof payload === 'string' ? payload : 'Request failed.',
+        ...(requestId ? { requestId } : {}),
       },
     };
   }

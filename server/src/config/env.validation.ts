@@ -22,6 +22,14 @@ export interface AcresEnv {
   tenancyEnabled: boolean;
   invitationTtlHours: number;
   accountTokenTtlMinutes: number;
+  graphqlMaxBytes: number;
+  graphqlMaxDepth: number;
+  graphqlMaxAliases: number;
+  graphqlMaxCost: number;
+  graphqlMaxFirst: number;
+  graphqlMaxNodes: number;
+  graphqlTimeoutMs: number;
+  idempotencyTtlHours: number;
 }
 
 const REQUIRED = ['DATABASE_URL', 'CLIENT_ORIGIN', 'SESSION_SECRET'] as const;
@@ -36,6 +44,14 @@ const DEFAULTS = {
   RATE_LIMIT_DEFAULT_LIMIT: '120',
   RATE_LIMIT_STRICT_LIMIT: '10',
   TENANCY_ENABLED: 'false',
+  GRAPHQL_MAX_BYTES: '12000',
+  GRAPHQL_MAX_DEPTH: '8',
+  GRAPHQL_MAX_ALIASES: '12',
+  GRAPHQL_MAX_COST: '250',
+  GRAPHQL_MAX_FIRST: '50',
+  GRAPHQL_MAX_NODES: '250',
+  GRAPHQL_TIMEOUT_MS: '5000',
+  IDEMPOTENCY_TTL_HOURS: '24',
 } as const;
 
 function positiveInt(name: string, raw: string): number {
@@ -127,6 +143,38 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
     accountTokenTtlMinutes: positiveInt(
       'ACCOUNT_TOKEN_TTL_MINUTES',
       env.ACCOUNT_TOKEN_TTL_MINUTES ?? '',
+    ),
+    graphqlMaxBytes: positiveInt(
+      'GRAPHQL_MAX_BYTES',
+      env.GRAPHQL_MAX_BYTES ?? DEFAULTS.GRAPHQL_MAX_BYTES,
+    ),
+    graphqlMaxDepth: positiveInt(
+      'GRAPHQL_MAX_DEPTH',
+      env.GRAPHQL_MAX_DEPTH ?? DEFAULTS.GRAPHQL_MAX_DEPTH,
+    ),
+    graphqlMaxAliases: positiveInt(
+      'GRAPHQL_MAX_ALIASES',
+      env.GRAPHQL_MAX_ALIASES ?? DEFAULTS.GRAPHQL_MAX_ALIASES,
+    ),
+    graphqlMaxCost: positiveInt(
+      'GRAPHQL_MAX_COST',
+      env.GRAPHQL_MAX_COST ?? DEFAULTS.GRAPHQL_MAX_COST,
+    ),
+    graphqlMaxFirst: positiveInt(
+      'GRAPHQL_MAX_FIRST',
+      env.GRAPHQL_MAX_FIRST ?? DEFAULTS.GRAPHQL_MAX_FIRST,
+    ),
+    graphqlMaxNodes: positiveInt(
+      'GRAPHQL_MAX_NODES',
+      env.GRAPHQL_MAX_NODES ?? DEFAULTS.GRAPHQL_MAX_NODES,
+    ),
+    graphqlTimeoutMs: positiveInt(
+      'GRAPHQL_TIMEOUT_MS',
+      env.GRAPHQL_TIMEOUT_MS ?? DEFAULTS.GRAPHQL_TIMEOUT_MS,
+    ),
+    idempotencyTtlHours: positiveInt(
+      'IDEMPOTENCY_TTL_HOURS',
+      env.IDEMPOTENCY_TTL_HOURS ?? DEFAULTS.IDEMPOTENCY_TTL_HOURS,
     ),
   };
 }

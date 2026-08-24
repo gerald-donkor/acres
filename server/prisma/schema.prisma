@@ -28,6 +28,7 @@ model Account {
   invitationsAccepted   Invitation[]  @relation("InvitationAcceptor")
   accountTokens         AccountToken[]
   auditEventsAuthored   AuditEvent[]  @relation("AuditActor")
+  idempotencyRecords    IdempotencyRecord[]
 }
 
 /// An opaque, server-revocable browser session. Only the hash is stored.
@@ -133,6 +134,7 @@ model Organization {
   memberships Membership[]
   invitations Invitation[]
   auditEvents AuditEvent[]
+  idempotencyRecords IdempotencyRecord[]
 }
 
 /// An account's organization-local role. Revoked rows remain as provenance.
@@ -206,6 +208,27 @@ model AuditEvent {
   @@index([actorAccountId, createdAt])
 }
 
+/// Replay-safe storage for duplicate-producing organization commands.
+model IdempotencyRecord {
+  id              String            @id @default(uuid(7))
+  keyDigest       String
+  accountId       String
+  organizationId  String?
+  operation       String
+  requestHash     String
+  state           IdempotencyState
+  responseStatus  Int?
+  responseBody    Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  expiresAt       DateTime
+  account         Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization    Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, organizationId, operation, expiresAt])
+  @@index([expiresAt])
+}
+
 enum OrganizationRole {
   owner
   admin
@@ -227,4 +250,9 @@ enum AuditAction {
   membership_role_changed
   membership_revoked
   ownership_transferred
+}
+
+enum IdempotencyState {
+  in_progress
+  succeeded
 }

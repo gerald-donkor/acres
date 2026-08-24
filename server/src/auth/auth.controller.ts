@@ -9,8 +9,17 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { SessionProfile } from '@acres/shared';
+import {
+  ApiCsrfHeader,
+  ApiEnvelope,
+  ApiSessionAuth,
+  objectSchema,
+  sessionProfileSchema,
+  stringSchema,
+} from '../contracts/openapi';
 import { CsrfService } from '../security/csrf.service';
 import { StrictThrottle } from '../security/strict-throttle.decorator';
 import { OptionalSessionGuard, SessionGuard } from '../sessions/session.guard';
@@ -23,7 +32,8 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterAccountDto } from './dto/register-account.dto';
 
-@Controller('auth')
+@Controller({ path: 'auth', version: '1' })
+@ApiTags('auth')
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
@@ -37,6 +47,14 @@ export class AuthController {
    * without a way for the client to read the token.
    */
   @Get('csrf')
+  @ApiEnvelope({
+    summary: 'Issue CSRF token',
+    description: 'Returns a CSRF token and sets the paired CSRF cookie.',
+    data: objectSchema({
+      csrfToken: stringSchema(),
+      headerName: { type: 'string', enum: ['x-csrf-token'] },
+    }),
+  })
   csrfToken(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -50,6 +68,14 @@ export class AuthController {
   @Post('register')
   @StrictThrottle()
   @HttpCode(HttpStatus.CREATED)
+  @ApiCsrfHeader()
+  @ApiEnvelope({
+    summary: 'Register account',
+    status: HttpStatus.CREATED,
+    description:
+      'Creates an account, starts a session and sets the session cookie.',
+    data: sessionProfileSchema,
+  })
   async register(
     @Body() body: RegisterAccountDto,
     @Res({ passthrough: true }) response: Response,
@@ -62,6 +88,13 @@ export class AuthController {
   @Post('login')
   @StrictThrottle()
   @HttpCode(HttpStatus.OK)
+  @ApiCsrfHeader()
+  @ApiEnvelope({
+    summary: 'Log in',
+    description:
+      'Authenticates credentials, starts a session and sets the session cookie.',
+    data: sessionProfileSchema,
+  })
   async login(
     @Body() body: LoginDto,
     @Res({ passthrough: true }) response: Response,
@@ -74,6 +107,13 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(SessionGuard)
+  @ApiSessionAuth()
+  @ApiCsrfHeader()
+  @ApiEnvelope({
+    summary: 'Log out',
+    description: 'Revokes the current session and clears the session cookie.',
+    data: objectSchema({ signedOut: { type: 'boolean', enum: [true] } }),
+  })
   async logout(
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,
@@ -90,6 +130,11 @@ export class AuthController {
    */
   @Get('session')
   @UseGuards(OptionalSessionGuard)
+  @ApiEnvelope({
+    summary: 'Describe current session',
+    description: 'Returns the active session profile or an anonymous session.',
+    data: sessionProfileSchema,
+  })
   session(
     @Req() request: RequestWithSession,
     @Res({ passthrough: true }) response: Response,

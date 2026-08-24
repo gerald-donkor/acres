@@ -122,9 +122,9 @@ Classification details are owned by [`product.md`](product.md#5-data-classificat
 
 | entry point | current evidence | target gate |
 | --- | --- | --- |
-| REST/auth/session | Unversioned Nest routes; DTO allowlist; opaque SHA-256 session token hashes; cost-12 bcrypt passwords; revocation | `/api/v1`, centralized org permission, idempotency, request IDs, stable errors, tenant repository + RLS |
+| REST/auth/session | `/api/v1` product routes; DTO allowlist; opaque SHA-256 session token hashes; cost-12 bcrypt passwords; revocation; selected organization commands require scoped idempotency keys and responses carry safe request IDs | Same-origin proxy trust review, distributed throttling and future stale-write/version contracts |
 | Cookies/CSRF/CORS | `HttpOnly`, `SameSite=Lax`, production `Secure`; session-bound double-submit token; exact configured origin; credentialed allowed headers/methods | Same-origin Caddy; canonical origin; CSRF rotation regression; proxy trust review; no state-changing GET |
-| GraphQL | Not present | Authenticated read-only boundary; tenant context, request-scoped DataLoader, depth/complexity/byte/time/result limits, sanitized errors |
+| GraphQL | Authenticated read-only `/graphql`; selected-organization context; same permission/application services as REST; request-scoped DataLoader caching; pre-parse byte/depth/alias/complexity/result/execution-time limits; transaction-local DB cancellation; sanitized errors; no mutations/subscriptions | Broader query-count matrix and future dashboard read models |
 | SSE | Not present | Authorized status only, reconnect cursor where needed, bounded connections, durable PG state independent of stream |
 | Upload/presigned storage | Not present | Short expiry/method/key; quarantine; checksum/type/size/shape checks; scan before parse; attachment downloads |
 | Parsers/worker | Not present | Isolated staged jobs; memory/CPU/time/expansion/geometry bounds; identifier-only payloads; idempotency and cancellation |
@@ -204,7 +204,7 @@ Current evidence anchors include `server/src/app.setup.ts`,
 | TM-07 | Archive/parser/geometry resource exhaustion | High / High | Uploads absent | Streamed limits, expansion/nesting/row/column/geometry/time/memory budgets, worker isolation; bomb/timeout tests | Phase 6/7 |
 | TM-08 | Object-key traversal, foreign overwrite/read, signature replay | Medium / Critical | Object storage absent | Server-derived org/upload keys, method/expiry/checksum binding, metadata auth, attachment response; tamper/cross-org tests | Phase 6 |
 | TM-09 | Spreadsheet formula injection or stored UI XSS | Medium / High | React escapes current fixed content; no product export | Formula neutralization, structured rendering, no raw HTML/SVG, CSP; export/open and browser sink tests | Phase 5/10 |
-| TM-10 | GraphQL complexity, N+1, data inference, verbose errors | High / High | GraphQL absent | Auth before resolution, tenant loaders, depth/complexity/byte/result/time caps, sanitized errors; adversarial queries/query-count tests | Phase 4 |
+| TM-10 | GraphQL complexity, N+1, data inference, verbose errors | Medium / High | Phase 4 adds authenticated read-only GraphQL, tenant membership context, bounded DB windows, request-scoped loader caching, POST-only operation handling, pre-parse byte/depth/alias/complexity/result/execution-time caps, transaction-local DB cancellation and sanitized `extensions.code`/request IDs | Broaden adversarial query-count fixtures as read models grow | Phase 9 |
 | TM-11 | Queue poisoning/replay or stale authorization | Medium / High | Queue absent | Private authenticated queue, identifier-only schema, deterministic IDs, re-authorize against PG, idempotency/dead letter; replay/poison tests | Phase 6 |
 | TM-12 | Outbox loss/duplicate delivery or split-brain state | Medium / High | Current jobs are DB reads/in-process schedule | Transactional outbox, claim locks, unique event/handler identity, reconciliation; crash-after-commit/duplicate tests | Phase 6 |
 | TM-13 | SSRF through future URLs/webhooks/connectors | Low now / High | No such fetch path evidenced | Default no arbitrary fetch; protocol/host/IP allowlists, DNS recheck, redirect/body/time limits; private-network fixtures | Owning future phase |
@@ -214,7 +214,7 @@ Current evidence anchors include `server/src/app.setup.ts`,
 | TM-17 | SQL injection or RLS bypass via raw PostGIS SQL | Medium / Critical | Tenant context uses tagged Prisma raw SQL; runtime/test roles are non-owner/no `BYPASSRLS`; forced RLS is catalog-tested | PostGIS-specific raw SQL and SAST remain for geography/analytics phases | Phase 7/12 |
 | TM-18 | Dependency/action/container supply-chain compromise | Medium / Critical | npm lockfile/`npm ci`, CI `contents: read`, non-root image | Pin/review actions/images, dependency/container/SAST/secret scans, artifact provenance and controlled promotion | Phase 12 |
 | TM-19 | Backup theft, incomplete restore, or destructive migration | Medium / Critical | No production DB/backups/migration | Separate migration role, reviewed SQL, encrypted off-host backup, scheduled restore/reconcile, forward-fix plan | Phase 2/12 |
-| TM-20 | Targeted DoS across auth/query/upload/worker/storage | High / High | In-process per-IP throttling and body validation; proxy not defined | Caddy limits, distributed throttles, complexity/size/time/concurrency/backpressure, capacity alerts and degraded modes | Phase 4/6/12 |
+| TM-20 | Targeted DoS across auth/query/upload/worker/storage | High / High | In-process per-IP throttling and body validation; GraphQL pre-parse byte/depth/alias/complexity/result/timeout caps; proxy not defined | Caddy limits, distributed throttles, concurrency/backpressure, capacity alerts and degraded modes | Phase 6/12 |
 | TM-21 | Offline disclosure of live database/object volumes or keys | Medium / Critical | No production stateful volumes exist | Production host/block-volume encryption for PostgreSQL and Garage; operator-owned keys separate from data/backups; mount/key-recovery inspection | Phase 2/6/12 |
 
 ## 9. Security acceptance suite
@@ -232,7 +232,9 @@ Before launch, automated evidence must include:
 - queue duplicate/replay/poison/stale-auth, crash-after-commit, outbox recovery,
   dead-letter, cancellation, and graceful-drain tests;
 - GraphQL depth/complexity/alias/oversize/timeout/cursor/global-ID/error-leak
-  cases plus measured query-count assertions;
+  cases plus measured query-count assertions; transaction-level database
+  cancellation remains a hardening option before heavier dashboard/report read
+  models;
 - formula injection, untrusted text/URL rendering, CSP/security-header runtime,
   cached prior-organization data, and accessible error/status browser tests;
 - SQL injection/static analysis, dependency/secret/container scans, CI

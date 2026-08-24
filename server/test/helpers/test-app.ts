@@ -56,6 +56,13 @@ export interface PrismaDouble {
   };
   auditEvent: {
     create: jest.Mock;
+    findMany: jest.Mock;
+  };
+  idempotencyRecord: {
+    create: jest.Mock;
+    deleteMany: jest.Mock;
+    findFirst: jest.Mock;
+    update: jest.Mock;
   };
   accountToken: {
     create: jest.Mock;
@@ -101,7 +108,23 @@ export function createPrismaDouble(): PrismaDouble {
       update: jest.fn(),
       updateMany: jest.fn(),
     },
-    auditEvent: { create: jest.fn() },
+    auditEvent: { create: jest.fn(), findMany: jest.fn() },
+    idempotencyRecord: {
+      create: jest.fn((input: { data: Record<string, unknown> }) =>
+        Promise.resolve({
+          id: 'idempotency-1',
+          ...input.data,
+        }),
+      ),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      update: jest.fn((input: { data: Record<string, unknown> }) =>
+        Promise.resolve({
+          id: 'idempotency-1',
+          ...input.data,
+        }),
+      ),
+    },
     accountToken: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -114,7 +137,8 @@ export function createPrismaDouble(): PrismaDouble {
     $disconnect: jest.fn().mockResolvedValue(undefined),
   };
   prisma.$transaction.mockImplementation(
-    (callback: (tx: PrismaDouble) => unknown) => callback(prisma),
+    (callback: (tx: PrismaDouble) => unknown) =>
+      Promise.resolve(callback(prisma)),
   );
   return prisma;
 }
@@ -186,6 +210,30 @@ function configDouble(
     get accountTokenTtlMinutes() {
       return positiveInt(envOverrides, 'ACCOUNT_TOKEN_TTL_MINUTES');
     },
+    get graphqlMaxBytes() {
+      return positiveInt(envOverrides, 'GRAPHQL_MAX_BYTES');
+    },
+    get graphqlMaxDepth() {
+      return positiveInt(envOverrides, 'GRAPHQL_MAX_DEPTH');
+    },
+    get graphqlMaxAliases() {
+      return positiveInt(envOverrides, 'GRAPHQL_MAX_ALIASES');
+    },
+    get graphqlMaxCost() {
+      return positiveInt(envOverrides, 'GRAPHQL_MAX_COST');
+    },
+    get graphqlMaxFirst() {
+      return positiveInt(envOverrides, 'GRAPHQL_MAX_FIRST');
+    },
+    get graphqlMaxNodes() {
+      return positiveInt(envOverrides, 'GRAPHQL_MAX_NODES');
+    },
+    get graphqlTimeoutMs() {
+      return positiveInt(envOverrides, 'GRAPHQL_TIMEOUT_MS');
+    },
+    get idempotencyTtlHours() {
+      return positiveInt(envOverrides, 'IDEMPOTENCY_TTL_HOURS');
+    },
   } as AcresConfigService;
 }
 
@@ -212,7 +260,7 @@ export async function createTestApp(
 
     const moduleRef = await builder.compile();
 
-    app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication({ bodyParser: false });
     configureApp(app);
     await app.init();
     initialized = true;

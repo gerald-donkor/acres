@@ -25,6 +25,29 @@ export class RegionsService {
     return regions.map((region) => toRegionSummary(region));
   }
 
+  async listPage(
+    take: number,
+    afterId?: string,
+    statementTimeoutMs?: number,
+  ): Promise<RegionSummary[]> {
+    const regions = await this.withOptionalStatementTimeout(
+      statementTimeoutMs,
+      (client) =>
+        client.region
+          .findMany({
+            orderBy: [{ name: 'asc' }, { id: 'asc' }],
+            include: WITH_METRICS,
+            ...(afterId ? { cursor: { id: afterId }, skip: 1 } : {}),
+            take,
+          })
+          .catch((error: unknown) => {
+            if (isMissingCursor(error)) throw ApiException.cursorInvalid();
+            throw error;
+          }),
+    );
+    return regions.map((region) => toRegionSummary(region));
+  }
+
   async findBySlug(slug: string): Promise<RegionSummary> {
     const region = await this.prisma.region.findUnique({
       where: { slug },
@@ -36,6 +59,40 @@ export class RegionsService {
     }
 
     return toRegionSummary(region);
+  }
+
+  async findBySlugs(
+    slugs: readonly string[],
+    statementTimeoutMs?: number,
+  ): Promise<Map<string, RegionSummary>> {
+    const regions = await this.withOptionalStatementTimeout(
+      statementTimeoutMs,
+      (client) =>
+        client.region.findMany({
+          where: { slug: { in: [...new Set(slugs)] } },
+          include: WITH_METRICS,
+        }),
+    );
+    return new Map(
+      regions.map((region) => [region.slug, toRegionSummary(region)]),
+    );
+  }
+
+  private withOptionalStatementTimeout<T>(
+    statementTimeoutMs: number | undefined,
+    callback: (client: Prisma.TransactionClient | PrismaService) => Promise<T>,
+  ): Promise<T> {
+    if (statementTimeoutMs === undefined) return callback(this.prisma);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        SELECT set_config(
+          'statement_timeout',
+          ${String(statementTimeoutMs)},
+          true
+        )
+      `;
+      return callback(tx);
+    });
   }
 }
 
@@ -69,4 +126,13 @@ function toRegionalMetric(metric: MetricRow): RegionalMetric {
     periodEnd: metric.periodEnd?.toISOString() ?? null,
     source: metric.source,
   };
+}
+
+function isMissingCursor(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'P2025'
+  );
 }

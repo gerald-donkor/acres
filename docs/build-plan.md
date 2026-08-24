@@ -151,6 +151,8 @@ Status: implemented by `prompts/22-organizations-permissions-rls.md`.
 
 ## 5. Phase 4 — versioned REST and complementary GraphQL
 
+Status: implemented by `prompts/23-versioned-rest-graphql-contracts.md`.
+
 - **Depends on:** phase 3 organization context and policy.
 - **Outcome/behavior:** `/api/v1`, finite old-route migration, generated
   OpenAPI, authenticated initially read-only `/graphql`, deterministic SDL,

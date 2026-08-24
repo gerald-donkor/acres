@@ -17,9 +17,12 @@ export class ResponseEnvelopeInterceptor<T> implements NestInterceptor<
   ApiSuccess<T>
 > {
   intercept(
-    _context: ExecutionContext,
+    context: ExecutionContext,
     next: CallHandler<T>,
   ): Observable<ApiSuccess<T>> {
+    if (context.getType<string>() !== 'http') {
+      return next.handle() as Observable<ApiSuccess<T>>;
+    }
     return next.handle().pipe(map((data) => ({ ok: true as const, data })));
   }
 }

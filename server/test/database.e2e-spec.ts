@@ -46,7 +46,7 @@ describe('Acres API — real database', () => {
   /** Fetches a CSRF token on an agent that keeps the paired cookie. */
   async function csrfAgent() {
     const agent = request.agent(server);
-    const response = await agent.get('/auth/csrf').expect(200);
+    const response = await agent.get('/api/v1/auth/csrf').expect(200);
     const body = response.body as {
       data: { csrfToken: string; headerName: string };
     };
@@ -56,7 +56,7 @@ describe('Acres API — real database', () => {
   async function signedInAgent(email = 'tenant@example.com') {
     const { agent, token } = await csrfAgent();
     await agent
-      .post('/auth/register')
+      .post('/api/v1/auth/register')
       .set('x-csrf-token', token)
       .send({
         email,
@@ -64,7 +64,7 @@ describe('Acres API — real database', () => {
         displayName: 'Tenant User',
       })
       .expect(201);
-    const csrf = await agent.get('/auth/csrf').expect(200);
+    const csrf = await agent.get('/api/v1/auth/csrf').expect(200);
     return {
       agent,
       token: (csrf.body as { data: { csrfToken: string } }).data.csrfToken,
@@ -127,7 +127,7 @@ describe('Acres API — real database', () => {
       const { agent, token } = await csrfAgent();
 
       const response = await agent
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('x-csrf-token', token)
         .send({
           email: 'ada@example.com',
@@ -161,11 +161,11 @@ describe('Acres API — real database', () => {
 
       const [firstResponse, secondResponse] = await Promise.all([
         first.agent
-          .post('/auth/register')
+          .post('/api/v1/auth/register')
           .set('x-csrf-token', first.token)
           .send(body),
         second.agent
-          .post('/auth/register')
+          .post('/api/v1/auth/register')
           .set('x-csrf-token', second.token)
           .send(body),
       ]);
@@ -191,7 +191,7 @@ describe('Acres API — real database', () => {
     it('deleting an account cascades to its sessions', async () => {
       const { agent, token } = await csrfAgent();
       await agent
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('x-csrf-token', token)
         .send({
           email: 'cascade@example.com',
@@ -233,7 +233,9 @@ describe('Acres API — real database', () => {
         },
       });
 
-      const listResponse = await request(server).get('/regions').expect(200);
+      const listResponse = await request(server)
+        .get('/api/v1/regions')
+        .expect(200);
       expect(listResponse.body).toMatchObject({
         ok: true,
         data: [
@@ -245,7 +247,7 @@ describe('Acres API — real database', () => {
       });
 
       const oneResponse = await request(server)
-        .get(`/regions/${region.slug}`)
+        .get(`/api/v1/regions/${region.slug}`)
         .expect(200);
       expect(oneResponse.body).toMatchObject({
         ok: true,
@@ -253,7 +255,7 @@ describe('Acres API — real database', () => {
       });
 
       const missingResponse = await request(server)
-        .get('/regions/nowhere')
+        .get('/api/v1/regions/nowhere')
         .expect(404);
       expect(missingResponse.body).toMatchObject({
         ok: false,
@@ -327,13 +329,18 @@ describe('Acres API — real database', () => {
       >`
         SELECT relname, relrowsecurity, relforcerowsecurity
         FROM pg_class
-        WHERE relname IN ('Organization','Membership','Invitation','AuditEvent')
+        WHERE relname IN ('Organization','Membership','Invitation','AuditEvent','IdempotencyRecord')
         ORDER BY relname
       `;
 
       expect(rows).toEqual([
         {
           relname: 'AuditEvent',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'IdempotencyRecord',
           relrowsecurity: true,
           relforcerowsecurity: true,
         },
@@ -359,7 +366,8 @@ describe('Acres API — real database', () => {
       const { agent, token } = await signedInAgent('owner@example.com');
 
       const response = await agent
-        .post('/organizations')
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'real-create-org-key-0001')
         .set('x-csrf-token', token)
         .send({ name: 'Owner Org' })
         .expect(201);
@@ -378,7 +386,8 @@ describe('Acres API — real database', () => {
       const other = await signedInAgent('other@example.com');
 
       const created = await owner.agent
-        .post('/organizations')
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'real-create-org-key-0002')
         .set('x-csrf-token', owner.token)
         .send({ name: 'Owner Org' })
         .expect(201);
@@ -386,10 +395,10 @@ describe('Acres API — real database', () => {
       const absentId = '018f0000-0000-7000-8000-000000000099';
 
       const foreign = await other.agent
-        .get(`/organizations/${foreignId}`)
+        .get(`/api/v1/organizations/${foreignId}`)
         .expect(404);
       const absent = await other.agent
-        .get(`/organizations/${absentId}`)
+        .get(`/api/v1/organizations/${absentId}`)
         .expect(404);
 
       expect(foreign.body).toMatchObject({
@@ -407,21 +416,24 @@ describe('Acres API — real database', () => {
       const invited = await signedInAgent('invited@example.com');
 
       const created = await owner.agent
-        .post('/organizations')
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'real-create-org-key-0003')
         .set('x-csrf-token', owner.token)
         .send({ name: 'Owner Org' })
         .expect(201);
       const organizationId = (created.body as { data: { id: string } }).data.id;
 
       const issued = await owner.agent
-        .post(`/organizations/${organizationId}/invitations`)
+        .post(`/api/v1/organizations/${organizationId}/invitations`)
+        .set('Idempotency-Key', 'real-invite-key-0001')
         .set('x-csrf-token', owner.token)
         .send({ email: 'invited@example.com', role: 'viewer' })
         .expect(201);
       const token = (issued.body as { data: { token: string } }).data.token;
 
       const accepted = await invited.agent
-        .post('/invitations/accept')
+        .post('/api/v1/invitations/accept')
+        .set('Idempotency-Key', 'real-accept-key-0001')
         .set('x-csrf-token', invited.token)
         .send({ token })
         .expect(200);
@@ -432,7 +444,8 @@ describe('Acres API — real database', () => {
       });
 
       const replay = await invited.agent
-        .post('/invitations/accept')
+        .post('/api/v1/invitations/accept')
+        .set('Idempotency-Key', 'real-accept-key-0002')
         .set('x-csrf-token', invited.token)
         .send({ token })
         .expect(404);
@@ -449,14 +462,16 @@ describe('Acres API — real database', () => {
       const owner = await signedInAgent('owner@example.com');
 
       const created = await owner.agent
-        .post('/organizations')
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'real-create-org-key-0004')
         .set('x-csrf-token', owner.token)
         .send({ name: 'Owner Org' })
         .expect(201);
       const organizationId = (created.body as { data: { id: string } }).data.id;
 
       const first = await owner.agent
-        .post(`/organizations/${organizationId}/invitations`)
+        .post(`/api/v1/organizations/${organizationId}/invitations`)
+        .set('Idempotency-Key', 'real-invite-key-0002')
         .set('x-csrf-token', owner.token)
         .send({ email: 'expired@example.com', role: 'viewer' })
         .expect(201);
@@ -476,7 +491,8 @@ describe('Acres API — real database', () => {
       });
 
       const replacement = await owner.agent
-        .post(`/organizations/${organizationId}/invitations`)
+        .post(`/api/v1/organizations/${organizationId}/invitations`)
+        .set('Idempotency-Key', 'real-invite-key-0003')
         .set('x-csrf-token', owner.token)
         .send({ email: 'expired@example.com', role: 'viewer' })
         .expect(201);
@@ -494,7 +510,8 @@ describe('Acres API — real database', () => {
       const { agent, token } = await signedInAgent('owner@example.com');
 
       await agent
-        .post('/organizations')
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'real-create-org-key-0005')
         .set('x-csrf-token', token)
         .send({ name: 'Owner Org' })
         .expect(201);

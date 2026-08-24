@@ -15,6 +15,7 @@ export interface ApiError {
   error: {
     code: ApiErrorCode;
     message: string;
+    requestId?: string;
     /** Field-level validation detail, present only for `VALIDATION_FAILED`. */
     details?: string[];
   };
@@ -31,6 +32,10 @@ export const API_ERROR_CODES = [
   'NOT_FOUND',
   'CSRF_INVALID',
   'RATE_LIMITED',
+  'QUERY_LIMIT_EXCEEDED',
+  'CURSOR_INVALID',
+  'IDEMPOTENCY_KEY_REQUIRED',
+  'IDEMPOTENCY_CONFLICT',
   'NOT_READY',
   'INTERNAL_ERROR',
 ] as const;

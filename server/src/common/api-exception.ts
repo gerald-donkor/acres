@@ -54,6 +54,40 @@ export class ApiException extends HttpException {
     return new ApiException('CONFLICT', message, HttpStatus.CONFLICT);
   }
 
+  static idempotencyKeyRequired(): ApiException {
+    return new ApiException(
+      'IDEMPOTENCY_KEY_REQUIRED',
+      'This command requires an Idempotency-Key header.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  static idempotencyConflict(): ApiException {
+    return new ApiException(
+      'IDEMPOTENCY_CONFLICT',
+      'That Idempotency-Key was already used for a different request.',
+      HttpStatus.CONFLICT,
+    );
+  }
+
+  static cursorInvalid(): ApiException {
+    return new ApiException(
+      'CURSOR_INVALID',
+      'The cursor is not valid for this connection.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  static queryLimitExceeded(
+    message = 'The GraphQL query is too large.',
+  ): ApiException {
+    return new ApiException(
+      'QUERY_LIMIT_EXCEEDED',
+      message,
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
   static notFound(message: string): ApiException {
     return new ApiException('NOT_FOUND', message, HttpStatus.NOT_FOUND);
   }
