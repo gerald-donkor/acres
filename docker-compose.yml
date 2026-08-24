@@ -20,8 +20,69 @@ services:
       timeout: 5s
       retries: 10
 
+  valkey:
+    image: valkey/valkey:9
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - --requirepass
+      - ${VALKEY_PASSWORD:-acres_valkey_dev_password}
+      - --appendonly
+      - 'yes'
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - '6379:6379'
+    volumes:
+      - acres_valkeydata:/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'valkey-cli -a "$${VALKEY_PASSWORD:-acres_valkey_dev_password}" ping | grep PONG',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  garage:
+    image: dxflrs/garage:v2.1.0
+    restart: unless-stopped
+    ports:
+      - '3900:3900'
+      - '3901:3901'
+      - '3902:3902'
+    volumes:
+      - acres_garage_meta:/var/lib/garage/meta
+      - acres_garage_data:/var/lib/garage/data
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3903/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  clamav:
+    image: clamav/clamav:1.4
+    restart: unless-stopped
+    ports:
+      - '3310:3310'
+    volumes:
+      - acres_clamavdata:/var/lib/clamav
+    healthcheck:
+      test: ['CMD-SHELL', "printf 'zPING\\0' | nc -w 5 localhost 3310 | grep PONG"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
 volumes:
   # Disposable local-development volume, intentionally unencrypted at rest —
   # docs/backend.md records the target production encryption/key-recovery
   # contract this volume does not need to satisfy.
   acres_pgdata:
+  acres_valkeydata:
+  # Disposable local-development Garage volumes. Production Garage storage must
+  # use the encrypted volume/key-separation contract recorded in docs/backend.md.
+  acres_garage_meta:
+  acres_garage_data:
+  acres_clamavdata:

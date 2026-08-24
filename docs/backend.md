@@ -1778,3 +1778,167 @@ Failed to write app endpoint /page
 Re-running the root build as a standalone escalated command produced the same
 client-only failure before the server workspace ran; `npm run build:server`
 passes for the changed workspace.
+
+---
+
+## 15. Storage, queue, worker, and upload foundation
+
+Implemented from `prompts/27-storage-queues-secure-uploads.md` on 2026-08-24.
+This is the Phase 6 foundation only: it adds object metadata, upload commands,
+an outbox, a queue adapter, a scanner adapter, and a separately runnable worker.
+It does **not** parse CSV/XLSX/GeoJSON into product datasets.
+
+New package versions were verified from npm metadata before install:
+
+| package | version | license | role |
+| --- | --- | --- | --- |
+| `bullmq` | `^6.2.0` | MIT | queue transport over Redis/Valkey |
+| `ioredis` | `^6.0.0` | MIT | BullMQ Redis client |
+| `@aws-sdk/client-s3` | `^3.1116.0` | Apache-2.0 | S3-compatible Garage adapter |
+| `@aws-sdk/s3-request-presigner` | `^3.1116.0` | Apache-2.0 | signed PUT/GET URLs |
+
+`clamscan@2.4.0` was reviewed but not installed; the scanner adapter speaks the
+documented ClamAV `clamd` TCP protocol directly, which avoids adding a
+third-party wrapper for a small `PING`/`INSTREAM` surface.
+
+Local Compose now includes `postgres`, `valkey`, `garage`, and `clamav`.
+Valkey uses password auth, append-only persistence, and `noeviction`. Garage
+uses disposable local volumes and `infra/garage/garage.toml`; production Garage
+storage still inherits the encrypted-volume/key-separation contract from the
+architecture docs. ClamAV exposes TCP 3310 for local development only.
+
+New scripts:
+
+```text
+npm run deps:up
+npm run garage:setup
+npm run start:worker
+npm run start:worker --workspace=@acres/server
+npm run start:worker:dev --workspace=@acres/server
+```
+
+New validated environment groups cover Valkey/BullMQ, Garage/S3, ClamAV,
+temporary upload limits, stale-upload cleanup, outbox claiming, retry limits,
+and signed URL TTLs. Development defaults are intentionally temporary safety
+limits, not product upload policy. Production rejects placeholder storage/queue
+secrets.
+
+New schema state:
+
+- `StoredObject` stores organization-owned opaque object keys, bucket, media
+  metadata, byte count, checksum, lifecycle state, and timestamps.
+- `Upload` stores organization, actor, declared/completed metadata, scan state,
+  progress, cancellation/expiry/acceptance timestamps, and version.
+- `OutboxEvent` stores transactional upload-completed events with lease,
+  attempt, retry, and idempotent aggregate identity fields.
+- `DurableJob`, `JobProgressEvent`, and `JobDeadLetter` record worker-visible
+  job state, stage progress, and exhausted/poison work.
+
+The migration is additive, enables and forces RLS on all new tenant-owned
+tables, uses transaction-local `acres.organization_id`, and grants only the
+runtime/test privileges needed for the current API and worker. Existing
+`JobRun` and `/api/v1/jobs/runs` behavior remain unchanged.
+
+New REST routes:
+
+| method | path | auth | notes |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/uploads` | session + org + `uploads.create` + CSRF + idempotency | creates `Upload`/`StoredObject` rows and returns a short-lived signed PUT URL |
+| `POST` | `/api/v1/uploads/:uploadId/complete` | session + org + `uploads.create` + CSRF + idempotency | verifies object metadata, marks completion, records progress, and appends an outbox event |
+| `GET` | `/api/v1/uploads/:uploadId` | session + org + `uploads.read` | returns durable state/progress/failure details |
+| `DELETE` | `/api/v1/uploads/:uploadId` | session + org + `uploads.create` + CSRF + idempotency | records cancellation |
+| `GET` | `/api/v1/uploads/:uploadId/events` | session + org + `uploads.read` | SSE stream backed by durable PostgreSQL status |
+| `GET` | `/api/v1/uploads/:uploadId/download` | session + org + `uploads.read` | returns a short-lived signed attachment URL for accepted uploads |
+
+Permission policy: owners/admins/analysts can create and manage uploads;
+viewers can read upload status/downloads but cannot create or cancel uploads.
+
+Worker behavior: `server/src/worker.ts` starts a Nest application context,
+claims ready outbox rows on startup and on a non-overlapping interval, enqueues
+deterministic BullMQ jobs only after PostgreSQL has a `DurableJob` row, re-reads
+authoritative DB state, records progress, reads quarantined object bytes through
+the storage port, scans before acceptance, writes succeeded/failed durable job
+state, writes dead-letter rows for failed scans or worker exceptions, marks
+cancelled work as cancelled instead of failed, rejects scanner/object failures
+fail-closed, observes cancellation before final state, and drains on
+`SIGTERM`/`SIGINT`. Outbox dispatch attempts that exhaust their configured
+maximum are marked `dead_lettered` with visible `JobDeadLetter` evidence instead
+of remaining stuck in `retrying`. Worker/outbox reads use a transaction-local
+`acres.worker_access` context reflected in the new RLS policies; ordinary tenant
+transactions clear it. Parser budgets are left for the ingestion phase.
+
+Upload completion verifies object byte count, stored object media type when the
+backend reports one, and SHA-256 of the actual object bytes before it records
+completion or appends the outbox event. It reads the object outside the tenant
+database transaction, then re-checks pending state in the final transaction
+before updating the upload and outbox. The client-supplied checksum is not
+trusted by itself.
+
+API readiness now checks PostgreSQL and object storage, because upload routes
+need both. Queue and scanner readiness remain worker-process dependencies.
+
+`scripts/garage/setup-local.sh` is the local Garage setup path. It creates the
+bucket, creates a Garage key, grants read/write bucket access, and prints the
+`STORAGE_ACCESS_KEY_ID` plus a reminder to copy the one-time secret into
+`server/.env`. The committed `.env.example` keeps placeholder values rather
+than pretending to contain usable Garage credentials.
+
+Verification on 2026-08-24:
+
+```text
+npm audit --json
+metadata: 7 vulnerabilities total, 4 moderate and 3 high
+```
+
+The audit findings are the pre-existing Apollo/uuid and Prisma CLI findings
+documented above; the new BullMQ/ioredis/AWS packages did not change the count.
+
+```text
+npm run build:shared
+> @acres/shared@0.1.0 build
+> tsc -p tsconfig.json
+
+npm run lint
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+
+npm run typecheck
+> @acres/shared@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+> @acres/client@0.1.0 typecheck
+> tsc --noEmit
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+
+npm run build
+✓ Compiled successfully in 4.1s
+✓ Generated Prisma Client (7.9.1)
+
+npm run test:server
+Test Suites: 3 passed, 3 total
+Tests:       70 passed, 70 total
+
+npm run contracts:check
+> prisma generate && nest build && node dist/contracts/generate-contracts.js --check
+
+npm run prisma:validate --workspace=@acres/server
+The schema at prisma/schema.prisma is valid 🚀
+
+git diff --check
+<no output>
+```
+
+Docker/Compose verification could not run in this execution environment:
+
+```text
+docker compose ps
+/bin/bash: line 1: docker: command not found
+```
+
+That means the real Garage/Valkey/ClamAV integration, real migration apply from
+empty DB, migration status, drift rebuild, and production-profile volume
+inspection still require a machine with Docker available.

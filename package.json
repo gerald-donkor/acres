@@ -20,11 +20,14 @@
     "contracts:check": "npm run contracts:check --workspace=@acres/server",
     "start": "npm run start --workspace=@acres/client",
     "start:server": "npm run start --workspace=@acres/server",
+    "start:worker": "npm run start:worker --workspace=@acres/server",
     "lint": "npm run lint --workspace=@acres/client && npm run lint --workspace=@acres/shared && npm run lint --workspace=@acres/server",
     "typecheck": "npm run build --workspace=@acres/shared && npm run typecheck --workspace=@acres/shared && npm run typecheck --workspace=@acres/client && npm run typecheck --workspace=@acres/server",
     "test:server": "npm run test:e2e --workspace=@acres/server",
     "test:client:e2e": "npm run test:e2e --workspace=@acres/client",
     "db:up": "docker compose up -d postgres",
+    "deps:up": "docker compose up -d postgres valkey garage clamav",
+    "garage:setup": "scripts/garage/setup-local.sh",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d postgres"
   }

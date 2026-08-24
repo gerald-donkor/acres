@@ -14,6 +14,8 @@ export const ORGANIZATION_PERMISSIONS = [
   'invitations.read',
   'invitations.revoke',
   'audit.read',
+  'uploads.read',
+  'uploads.create',
 ] as const;
 
 export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
@@ -30,9 +32,18 @@ const rolePermissions = {
     'invitations.read',
     'invitations.revoke',
     'audit.read',
+    'uploads.read',
+    'uploads.create',
   ]),
-  analyst: new Set<OrganizationPermission>(['organization.read']),
-  viewer: new Set<OrganizationPermission>(['organization.read']),
+  analyst: new Set<OrganizationPermission>([
+    'organization.read',
+    'uploads.read',
+    'uploads.create',
+  ]),
+  viewer: new Set<OrganizationPermission>([
+    'organization.read',
+    'uploads.read',
+  ]),
 } satisfies Record<OrganizationRole, ReadonlySet<OrganizationPermission>>;
 
 export function RequiresOrganizationPermission(

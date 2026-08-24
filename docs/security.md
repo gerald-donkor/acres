@@ -268,3 +268,42 @@ Every phase review should trace at least these end to end:
 Open values from §2 must be resolved by the phase that first needs them. If a
 new boundary or attacker capability is introduced, update this threat model in
 the same change.
+
+## 11. Phase 6 boundary update
+
+As of 2026-08-24, upload/storage/queue/worker controls have moved from absent
+to partially implemented:
+
+- Upload commands require session auth, selected organization context,
+  centralized `uploads.*` permissions, CSRF on mutations, and idempotency keys
+  on duplicate-producing commands.
+- Object keys are server-derived opaque paths under the organization quarantine
+  prefix; raw filenames are stored only as metadata and used in sanitized
+  attachment disposition for accepted downloads.
+- The browser receives presigned PUT/GET URLs only. Storage access key and
+  secret key stay in server/worker environment config and production rejects
+  placeholder values.
+- New upload/object/outbox/job tables enable and force RLS and default-deny
+  without `acres.organization_id`, matching the existing tenant boundary.
+- The worker claims outbox rows, records PostgreSQL `DurableJob` state before
+  queue publish, enqueues deterministic BullMQ jobs, re-reads database state
+  before transitions, records progress, reads object bytes through the storage
+  port, finalizes success/failure/cancellation in PostgreSQL, and rejects
+  scanner/object failures fail-closed.
+- Upload completion verifies object byte count, object media type when present,
+  and SHA-256 of the stored bytes outside the database transaction before
+  re-checking state and writing the completed state.
+- Outbox and worker reads use transaction-local `acres.worker_access`; ordinary
+  tenant transactions clear that setting before tenant work.
+
+Residual Phase 6 risks:
+
+- Docker was unavailable in the execution environment, so real Garage, Valkey,
+  ClamAV, migration-apply, restart, orphan, and production-volume checks still
+  need to run on a Docker-capable host.
+- The current worker reads quarantined object bytes through the storage port
+  before scanning, but hostile fixtures, archive/parser budgets, and parser
+  isolation remain target controls for the ingestion phase.
+- Dead-letter and reconciliation tables exist, but exhaustive poison,
+  crash-after-commit, stale-upload cleanup, and orphan-reconcile automation is
+  not yet complete enough to count as launch evidence.

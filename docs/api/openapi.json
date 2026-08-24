@@ -32,6 +32,10 @@
         ],
         "type": "object"
       },
+      "CompleteUploadDto": {
+        "properties": {},
+        "type": "object"
+      },
       "ContactSubmissionDto": {
         "properties": {
           "email": {
@@ -82,6 +86,10 @@
         "required": [
           "name"
         ],
+        "type": "object"
+      },
+      "InitiateUploadDto": {
+        "properties": {},
         "type": "object"
       },
       "InviteMemberDto": {
@@ -10803,6 +10811,2296 @@
         ]
       }
     },
+    "/api/v1/uploads": {
+      "post": {
+        "operationId": "UploadsController_initiate_v1",
+        "parameters": [
+          {
+            "description": "Session-bound CSRF token from /api/v1/auth/csrf.",
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitiateUploadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "uploadId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "uploadId"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Creates an upload ledger row and returns a short-lived signed PUT URL."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "Initiate upload",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/v1/uploads/{uploadId}": {
+      "delete": {
+        "operationId": "UploadsController_cancel_v1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uploadId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session-bound CSRF token from /api/v1/auth/csrf.",
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "filename": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "mediaType": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "filename",
+                        "mediaType"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Records cancellation for queued or in-flight upload work."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "Cancel upload",
+        "tags": [
+          "uploads"
+        ]
+      },
+      "get": {
+        "operationId": "UploadsController_get_v1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uploadId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "filename": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "mediaType": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "filename",
+                        "mediaType"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Returns durable upload state and progress."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "Get upload status",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/v1/uploads/{uploadId}/complete": {
+      "post": {
+        "operationId": "UploadsController_complete_v1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uploadId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session-bound CSRF token from /api/v1/auth/csrf.",
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "filename": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "mediaType": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state",
+                        "filename",
+                        "mediaType"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Verifies object metadata and queues the scan worker."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "Complete upload",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/v1/uploads/{uploadId}/download": {
+      "get": {
+        "operationId": "UploadsController_download_v1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uploadId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "method": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "method"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Returns a short-lived attachment download URL for accepted uploads."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "summary": "Create accepted object download URL",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/v1/uploads/{uploadId}/events": {
+      "get": {
+        "operationId": "UploadsController_events_v1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uploadId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_check",
@@ -11271,11 +13569,18 @@
                             "ok"
                           ],
                           "type": "string"
+                        },
+                        "storage": {
+                          "enum": [
+                            "ok"
+                          ],
+                          "type": "string"
                         }
                       },
                       "required": [
                         "status",
-                        "database"
+                        "database",
+                        "storage"
                       ],
                       "type": "object"
                     },

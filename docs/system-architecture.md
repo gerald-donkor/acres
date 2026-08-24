@@ -560,3 +560,33 @@ audit access, and production introspection policy. Any move to microservices,
 Prisma 8, a different object store, hosted AI, public connectors, GraphQL
 mutations/subscriptions, Kubernetes, or cloud-managed dependencies requires an
 explicit decision and migration plan rather than incidental implementation.
+
+## 13. Phase 6 current-state update
+
+As of 2026-08-24, the storage/queue/worker foundation is partly current:
+
+- Local Compose declares PostgreSQL/PostGIS, Valkey, Garage, and ClamAV. Docker
+  was not available in the execution environment, so service startup and real
+  dependency integration remain to be verified on a Docker-capable host.
+- The Nest API has versioned upload initiate, complete, status, cancel, SSE,
+  and accepted-download routes under `/api/v1`.
+- Browser code receives only short-lived signed object URLs; Garage/S3
+  administrator credentials remain server-only environment values.
+- PostgreSQL has additive `StoredObject`, `Upload`, `OutboxEvent`,
+  `DurableJob`, `JobProgressEvent`, and `JobDeadLetter` models with RLS
+  enabled/forced in the migration.
+- The worker is separately runnable from `server/src/worker.ts`, uses BullMQ
+  with deterministic job IDs, claims outbox rows on startup and interval, writes
+  PostgreSQL `DurableJob` state before queue publish, re-reads DB state before
+  transitions, records durable progress, reads object bytes through the storage
+  port, finalizes success/failure/cancellation in PostgreSQL, and fails closed
+  on scanner/object failure.
+- Worker-owned outbox and upload reads use a transaction-local
+  `acres.worker_access` context represented in the Phase 6 RLS policies; normal
+  tenant transactions clear that setting.
+- API readiness checks PostgreSQL and object storage. Queue and scanner
+  readiness belong to the worker process.
+
+Still target/deferred: CSV/XLSX/GeoJSON parsing, parser resource budgets,
+dataset publication, deeper reconciliation schedules, production volume
+inspection, and real dependency restart/orphan/dead-letter tests.

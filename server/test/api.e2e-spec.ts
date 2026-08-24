@@ -74,6 +74,15 @@ describe('Acres API', () => {
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
+  const ORG_CONTEXT = {
+    id: '018f7611-89ab-7abc-9234-111111111111',
+    accountId: ACCOUNT_ROW.id,
+    organizationId: '018f7611-89ab-7abc-9234-111111111111',
+    role: 'analyst',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    revokedAt: null,
+  };
 
   /**
    * Registers, then hands back an agent carrying the real session cookie the
@@ -236,6 +245,122 @@ describe('Acres API', () => {
         error: { code: 'UNAUTHENTICATED' },
       });
       expect(prisma.jobRun.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('uploads', () => {
+    const uploadRow = {
+      id: '018f7611-89ab-7abc-9234-222222222222',
+      organizationId: ORG_CONTEXT.organizationId,
+      actorAccountId: ACCOUNT_ROW.id,
+      storedObjectId: '018f7611-89ab-7abc-9234-333333333333',
+      state: 'pending_upload',
+      declaredFilename: 'regions.csv',
+      declaredMediaType: 'text/csv',
+      declaredByteCount: BigInt(12),
+      completedByteCount: null,
+      checksumAlgorithm: 'sha256',
+      checksumHex: null,
+      scanStatus: null,
+      scanResult: null,
+      failureCode: null,
+      failureMessage: null,
+      progressStage: 'created',
+      progressPercent: 0,
+      version: 1,
+      presignedUploadExpiresAt: new Date('2026-01-01T00:15:00.000Z'),
+      expiresAt: new Date('2026-01-01T01:00:00.000Z'),
+      completedAt: null,
+      cancelledAt: null,
+      acceptedAt: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+
+    beforeEach(() => {
+      prisma.membership.findFirst.mockResolvedValue(ORG_CONTEXT);
+      prisma.storedObject.create.mockResolvedValue({
+        id: uploadRow.storedObjectId,
+      });
+      prisma.upload.create.mockResolvedValue(uploadRow);
+      prisma.upload.findFirst.mockResolvedValue({
+        ...uploadRow,
+        storedObject: {
+          id: uploadRow.storedObjectId,
+          objectKey: 'organizations/org/quarantine/object',
+        },
+      });
+      prisma.upload.update.mockResolvedValue({
+        ...uploadRow,
+        state: 'completed',
+        completedByteCount: BigInt(12),
+        checksumHex:
+          '0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e',
+        progressStage: 'queued_scan',
+        progressPercent: 20,
+        completedAt: new Date('2026-01-01T00:01:00.000Z'),
+        version: 2,
+      });
+      prisma.storedObject.update.mockResolvedValue({});
+      prisma.outboxEvent.create.mockResolvedValue({ id: 'outbox-1' });
+      prisma.jobProgressEvent.create.mockResolvedValue({ id: 'progress-1' });
+    });
+
+    it('requires an idempotency key to initiate an upload', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      const response = await agent
+        .post('/api/v1/uploads')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .send({ filename: 'regions.csv', mediaType: 'text/csv', byteCount: 12 })
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'IDEMPOTENCY_KEY_REQUIRED' },
+      });
+    });
+
+    it('initiates and completes a tenant-scoped upload', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      const initiated = await agent
+        .post('/api/v1/uploads')
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'upload-initiate-key')
+        .send({ filename: 'regions.csv', mediaType: 'text/csv', byteCount: 12 })
+        .expect(201);
+
+      expect(initiated.body).toMatchObject({
+        ok: true,
+        data: { uploadId: uploadRow.id, upload: { method: 'PUT' } },
+      });
+
+      const completed = await agent
+        .post(`/api/v1/uploads/${uploadRow.id}/complete`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'upload-complete-key')
+        .send({
+          byteCount: 12,
+          checksumHex:
+            '0a3666a0710c08aa6d0de92ce72beeb5b93124cce1bf3701c9d6cdeb543cb73e',
+        })
+        .expect(200);
+
+      expect(completed.body).toMatchObject({
+        ok: true,
+        data: {
+          id: uploadRow.id,
+          state: 'completed',
+          progress: { stage: 'queued_scan', percent: 20 },
+        },
+      });
+      expect(prisma.outboxEvent.create).toHaveBeenCalled();
     });
   });
 

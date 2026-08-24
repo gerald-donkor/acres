@@ -29,6 +29,7 @@ model Account {
   accountTokens         AccountToken[]
   auditEventsAuthored   AuditEvent[]  @relation("AuditActor")
   idempotencyRecords    IdempotencyRecord[]
+  uploads               Upload[]
 }
 
 /// An opaque, server-revocable browser session. Only the hash is stored.
@@ -135,6 +136,12 @@ model Organization {
   invitations Invitation[]
   auditEvents AuditEvent[]
   idempotencyRecords IdempotencyRecord[]
+  storedObjects StoredObject[]
+  uploads Upload[]
+  outboxEvents OutboxEvent[]
+  durableJobs DurableJob[]
+  jobDeadLetters JobDeadLetter[]
+  jobProgressEvents JobProgressEvent[]
 }
 
 /// An account's organization-local role. Revoked rows remain as provenance.
@@ -255,4 +262,183 @@ enum AuditAction {
 enum IdempotencyState {
   in_progress
   succeeded
+}
+
+/// Opaque metadata for an object held outside PostgreSQL.
+model StoredObject {
+  id                 String            @id @default(uuid(7))
+  organizationId     String
+  bucket             String
+  objectKey          String            @unique
+  originalFilename   String
+  mediaType          String
+  detectedMediaType  String?
+  byteCount          BigInt?
+  checksumAlgorithm  String
+  checksumHex        String?
+  state              StoredObjectState @default(pending_upload)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  uploads            Upload[]
+
+  @@index([organizationId, state, createdAt])
+  @@index([organizationId, checksumHex])
+}
+
+model Upload {
+  id                   String        @id @default(uuid(7))
+  organizationId        String
+  actorAccountId        String
+  storedObjectId        String
+  state                UploadState   @default(pending_upload)
+  declaredFilename      String
+  declaredMediaType     String
+  declaredByteCount     BigInt
+  completedByteCount    BigInt?
+  checksumAlgorithm     String
+  checksumHex           String?
+  scanStatus            ScanStatus?
+  scanResult            String?
+  failureCode           String?
+  failureMessage        String?
+  progressStage         String       @default("created")
+  progressPercent       Int          @default(0)
+  version               Int          @default(1)
+  presignedUploadExpiresAt DateTime
+  expiresAt             DateTime
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+  acceptedAt            DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actor                 Account      @relation(fields: [actorAccountId], references: [id], onDelete: Restrict)
+  storedObject          StoredObject @relation(fields: [storedObjectId], references: [id], onDelete: Restrict)
+  progressEvents        JobProgressEvent[]
+
+  @@index([organizationId, state, updatedAt])
+  @@index([organizationId, actorAccountId, createdAt])
+  @@index([expiresAt, state])
+}
+
+model OutboxEvent {
+  id              String          @id @default(uuid(7))
+  organizationId  String?
+  eventType       String
+  aggregateType   String
+  aggregateId     String
+  aggregateVersion Int
+  payload         Json
+  state           OutboxState     @default(pending)
+  lockedBy        String?
+  lockedUntil     DateTime?
+  attempts        Int             @default(0)
+  maxAttempts     Int             @default(5)
+  nextAttemptAt   DateTime        @default(now())
+  lastErrorCode   String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  dispatchedAt    DateTime?
+  organization    Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([eventType, aggregateType, aggregateId, aggregateVersion])
+  @@index([state, nextAttemptAt, lockedUntil])
+  @@index([organizationId, state, createdAt])
+}
+
+model DurableJob {
+  id             String           @id @default(uuid(7))
+  organizationId String?
+  uploadId       String?
+  jobType        String
+  deterministicKey String         @unique
+  state          DurableJobState  @default(queued)
+  attempts       Int              @default(0)
+  maxAttempts    Int              @default(5)
+  lastErrorCode  String?
+  lastErrorMessage String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deadLetters    JobDeadLetter[]
+  progressEvents JobProgressEvent[]
+
+  @@index([organizationId, state, updatedAt])
+  @@index([state, updatedAt])
+}
+
+model JobProgressEvent {
+  id              String        @id @default(uuid(7))
+  organizationId  String
+  uploadId        String
+  durableJobId    String?
+  stage           String
+  percent         Int
+  message         String?
+  createdAt       DateTime      @default(now())
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  upload          Upload        @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  durableJob      DurableJob?   @relation(fields: [durableJobId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, uploadId, createdAt])
+}
+
+model JobDeadLetter {
+  id              String       @id @default(uuid(7))
+  organizationId  String?
+  durableJobId    String?
+  outboxEventId   String?
+  reasonCode      String
+  reasonMessage   String
+  payload         Json?
+  createdAt       DateTime     @default(now())
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  durableJob      DurableJob?  @relation(fields: [durableJobId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}
+
+enum StoredObjectState {
+  pending_upload
+  quarantined
+  accepted
+  rejected
+  deleted
+}
+
+enum UploadState {
+  pending_upload
+  completed
+  scanning
+  accepted
+  rejected
+  cancelled
+  expired
+}
+
+enum ScanStatus {
+  pending
+  clean
+  infected
+  failed
+}
+
+enum OutboxState {
+  pending
+  dispatched
+  retrying
+  dead_lettered
+}
+
+enum DurableJobState {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
+  dead_lettered
 }

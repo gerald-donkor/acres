@@ -47,6 +47,31 @@ export class TenantTransactionService {
     });
   }
 
+  workerScoped<T>(
+    callback: (tx: TenantTransactionClient) => Promise<T>,
+    options: TenantTransactionOptions = {},
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        SELECT
+          set_config('acres.account_id', '', true),
+          set_config('acres.organization_id', '', true),
+          set_config('acres.invitation_token_hash', '', true),
+          set_config('acres.worker_access', 'true', true)
+      `;
+      if (options.statementTimeoutMs !== undefined) {
+        await tx.$executeRaw`
+          SELECT set_config(
+            'statement_timeout',
+            ${String(options.statementTimeoutMs)},
+            true
+          )
+        `;
+      }
+      return callback(tx);
+    });
+  }
+
   private async setContext(
     tx: TenantTransactionClient,
     accountId: string,
@@ -58,7 +83,8 @@ export class TenantTransactionService {
       SELECT
         set_config('acres.account_id', ${accountId}, true),
         set_config('acres.organization_id', ${organizationId}, true),
-        set_config('acres.invitation_token_hash', ${invitationTokenHash}, true)
+        set_config('acres.invitation_token_hash', ${invitationTokenHash}, true),
+        set_config('acres.worker_access', '', true)
     `;
     if (options.statementTimeoutMs !== undefined) {
       await tx.$executeRaw`

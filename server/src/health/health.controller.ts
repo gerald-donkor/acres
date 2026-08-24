@@ -38,9 +38,10 @@ export class HealthController {
     data: objectSchema({
       status: { type: 'string', enum: ['ok'] },
       database: { type: 'string', enum: ['ok'] },
+      storage: { type: 'string', enum: ['ok'] },
     }),
   })
-  async ready(): Promise<{ status: 'ok'; database: 'ok' }> {
+  async ready(): Promise<{ status: 'ok'; database: 'ok'; storage: 'ok' }> {
     try {
       return await this.health.readiness();
     } catch {

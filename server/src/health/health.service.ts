@@ -1,5 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  OBJECT_STORAGE,
+  type ObjectStoragePort,
+} from '../storage/storage.port';
 
 export interface HealthStatus {
   status: 'ok';
@@ -11,7 +15,10 @@ export interface HealthStatus {
 
 @Injectable()
 export class HealthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
+  ) {}
 
   check(): HealthStatus {
     return {
@@ -22,8 +29,15 @@ export class HealthService {
     };
   }
 
-  async readiness(): Promise<{ status: 'ok'; database: 'ok' }> {
+  async readiness(): Promise<{
+    status: 'ok';
+    database: 'ok';
+    storage: 'ok';
+  }> {
     await this.prisma.$queryRaw`SELECT 1`;
-    return { status: 'ok', database: 'ok' };
+    if (!(await this.storage.readiness())) {
+      throw new Error('Object storage is not ready');
+    }
+    return { status: 'ok', database: 'ok', storage: 'ok' };
   }
 }

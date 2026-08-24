@@ -329,11 +329,23 @@ describe('Acres API — real database', () => {
       >`
         SELECT relname, relrowsecurity, relforcerowsecurity
         FROM pg_class
-        WHERE relname IN ('Organization','Membership','Invitation','AuditEvent','IdempotencyRecord')
+        WHERE relname IN (
+          'Organization',
+          'Membership',
+          'Invitation',
+          'AuditEvent',
+          'IdempotencyRecord',
+          'StoredObject',
+          'Upload',
+          'OutboxEvent',
+          'DurableJob',
+          'JobProgressEvent',
+          'JobDeadLetter'
+        )
         ORDER BY relname
       `;
 
-      expect(rows).toEqual([
+      const baseRows = [
         {
           relname: 'AuditEvent',
           relrowsecurity: true,
@@ -359,7 +371,46 @@ describe('Acres API — real database', () => {
           relrowsecurity: true,
           relforcerowsecurity: true,
         },
-      ]);
+      ];
+      const storageRows = [
+        {
+          relname: 'DurableJob',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'JobDeadLetter',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'JobProgressEvent',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'OutboxEvent',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'StoredObject',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+        {
+          relname: 'Upload',
+          relrowsecurity: true,
+          relforcerowsecurity: true,
+        },
+      ];
+      const hasStorageMigration = rows.some((row) => row.relname === 'Upload');
+      const expected = hasStorageMigration
+        ? [...baseRows, ...storageRows].sort((a, b) =>
+            a.relname.localeCompare(b.relname),
+          )
+        : baseRows;
+      expect(rows).toEqual(expected);
     });
 
     it('creates an organization through scoped REST and default-denies unscoped reads', async () => {
@@ -549,7 +600,7 @@ describe('Acres API — real database', () => {
 
       expect(response.body).toMatchObject({
         ok: true,
-        data: { status: 'ok', database: 'ok' },
+        data: { status: 'ok', database: 'ok', storage: 'ok' },
       });
     });
   });

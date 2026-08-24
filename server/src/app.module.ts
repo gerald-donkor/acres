@@ -14,6 +14,9 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RegionsModule } from './regions/regions.module';
 import { SecurityModule } from './security/security.module';
 import { SessionsModule } from './sessions/sessions.module';
+import { StorageModule } from './storage/storage.module';
+import { OutboxModule } from './outbox/outbox.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -26,11 +29,14 @@ import { SessionsModule } from './sessions/sessions.module';
     AccountsModule,
     IdentityModule,
     IdempotencyModule,
+    StorageModule,
+    OutboxModule,
     AuthModule,
     RegionsModule,
     FormsModule,
     JobsModule,
     OrganizationsModule,
+    UploadsModule,
     AcresGraphqlModule,
   ],
 })

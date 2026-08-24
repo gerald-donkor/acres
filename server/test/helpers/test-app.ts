@@ -4,6 +4,7 @@ import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { AcresConfigService } from '../../src/config/acres-config.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { OBJECT_STORAGE } from '../../src/storage/storage.port';
 
 /**
  * No database is provisioned for this repository, so the tests replace
@@ -63,6 +64,23 @@ export interface PrismaDouble {
     deleteMany: jest.Mock;
     findFirst: jest.Mock;
     update: jest.Mock;
+  };
+  storedObject: {
+    create: jest.Mock;
+    update: jest.Mock;
+  };
+  upload: {
+    create: jest.Mock;
+    findFirst: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
+  outboxEvent: {
+    create: jest.Mock;
+    update: jest.Mock;
+  };
+  jobProgressEvent: {
+    create: jest.Mock;
   };
   accountToken: {
     create: jest.Mock;
@@ -124,6 +142,23 @@ export function createPrismaDouble(): PrismaDouble {
           ...input.data,
         }),
       ),
+    },
+    storedObject: {
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    upload: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    outboxEvent: {
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    jobProgressEvent: {
+      create: jest.fn(),
     },
     accountToken: {
       create: jest.fn(),
@@ -234,6 +269,78 @@ function configDouble(
     get idempotencyTtlHours() {
       return positiveInt(envOverrides, 'IDEMPOTENCY_TTL_HOURS');
     },
+    get valkeyUrl() {
+      return envValue(envOverrides, 'VALKEY_URL');
+    },
+    get queueName() {
+      return envValue(envOverrides, 'QUEUE_NAME');
+    },
+    get queuePrefix() {
+      return envValue(envOverrides, 'QUEUE_PREFIX');
+    },
+    get queueDefaultAttempts() {
+      return positiveInt(envOverrides, 'QUEUE_DEFAULT_ATTEMPTS');
+    },
+    get queueBackoffMs() {
+      return positiveInt(envOverrides, 'QUEUE_BACKOFF_MS');
+    },
+    get queueShutdownMs() {
+      return positiveInt(envOverrides, 'QUEUE_SHUTDOWN_MS');
+    },
+    get storageEndpoint() {
+      return envValue(envOverrides, 'STORAGE_ENDPOINT');
+    },
+    get storageRegion() {
+      return envValue(envOverrides, 'STORAGE_REGION');
+    },
+    get storageBucket() {
+      return envValue(envOverrides, 'STORAGE_BUCKET');
+    },
+    get storageAccessKeyId() {
+      return envValue(envOverrides, 'STORAGE_ACCESS_KEY_ID');
+    },
+    get storageSecretAccessKey() {
+      return envValue(envOverrides, 'STORAGE_SECRET_ACCESS_KEY');
+    },
+    get storageForcePathStyle() {
+      return envValue(envOverrides, 'STORAGE_FORCE_PATH_STYLE') === 'true';
+    },
+    get presignedUploadTtlSeconds() {
+      return positiveInt(envOverrides, 'PRESIGNED_UPLOAD_TTL_SECONDS');
+    },
+    get acceptedDownloadTtlSeconds() {
+      return positiveInt(envOverrides, 'ACCEPTED_DOWNLOAD_TTL_SECONDS');
+    },
+    get clamavHost() {
+      return envValue(envOverrides, 'CLAMAV_HOST');
+    },
+    get clamavPort() {
+      return positiveInt(envOverrides, 'CLAMAV_PORT');
+    },
+    get clamavScanTimeoutMs() {
+      return positiveInt(envOverrides, 'CLAMAV_SCAN_TIMEOUT_MS');
+    },
+    get uploadMaxBytes() {
+      return positiveInt(envOverrides, 'UPLOAD_MAX_BYTES');
+    },
+    get uploadAcceptedMediaTypes() {
+      return envValue(envOverrides, 'UPLOAD_ACCEPTED_MEDIA_TYPES').split(',');
+    },
+    get uploadStaleMinutes() {
+      return positiveInt(envOverrides, 'UPLOAD_STALE_MINUTES');
+    },
+    get uploadCleanupIntervalMs() {
+      return positiveInt(envOverrides, 'UPLOAD_CLEANUP_INTERVAL_MS');
+    },
+    get outboxClaimBatchSize() {
+      return positiveInt(envOverrides, 'OUTBOX_CLAIM_BATCH_SIZE');
+    },
+    get outboxClaimLeaseMs() {
+      return positiveInt(envOverrides, 'OUTBOX_CLAIM_LEASE_MS');
+    },
+    get outboxMaxAttempts() {
+      return positiveInt(envOverrides, 'OUTBOX_MAX_ATTEMPTS');
+    },
   } as AcresConfigService;
 }
 
@@ -250,7 +357,30 @@ export async function createTestApp(
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
-      .useValue(prisma);
+      .useValue(prisma)
+      .overrideProvider(OBJECT_STORAGE)
+      .useValue({
+        presignPut: jest.fn().mockResolvedValue({
+          url: 'http://storage.local/upload',
+          method: 'PUT',
+          headers: { 'content-type': 'text/csv' },
+          expiresAt: new Date('2026-01-01T00:15:00.000Z'),
+        }),
+        presignGet: jest.fn().mockResolvedValue({
+          url: 'http://storage.local/download',
+          method: 'GET',
+          headers: {},
+          expiresAt: new Date('2026-01-01T00:05:00.000Z'),
+        }),
+        stat: jest.fn().mockResolvedValue({
+          byteCount: BigInt(12),
+          mediaType: 'text/csv',
+          checksumHex: null,
+        }),
+        getBuffer: jest.fn().mockResolvedValue(Buffer.from('test-content')),
+        delete: jest.fn().mockResolvedValue(undefined),
+        readiness: jest.fn().mockResolvedValue(true),
+      });
 
     if (Object.keys(envOverrides).length > 0) {
       builder

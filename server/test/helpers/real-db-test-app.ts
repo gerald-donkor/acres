@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { OBJECT_STORAGE } from '../../src/storage/storage.port';
 
 /**
  * The opposite of `test-app.ts`: that helper overrides `PrismaService` with a
@@ -18,7 +19,17 @@ export async function createRealDbTestApp(): Promise<{
   try {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(OBJECT_STORAGE)
+      .useValue({
+        presignPut: jest.fn(),
+        presignGet: jest.fn(),
+        stat: jest.fn(),
+        getBuffer: jest.fn(),
+        delete: jest.fn(),
+        readiness: jest.fn().mockResolvedValue(true),
+      })
+      .compile();
 
     app = moduleRef.createNestApplication({ bodyParser: false });
     configureApp(app);
