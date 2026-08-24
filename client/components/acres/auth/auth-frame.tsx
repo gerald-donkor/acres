@@ -49,20 +49,6 @@ export function AuthFrame({
             </h2>
           </div>
         </div>
-        <dl className="grid gap-4 border-t border-rule pt-6 font-mono text-label text-ink-muted lg:text-label-lg">
-          <div className="flex items-center justify-between gap-6">
-            <dt>Session</dt>
-            <dd className="text-ink">Cookie-backed</dd>
-          </div>
-          <div className="flex items-center justify-between gap-6">
-            <dt>API</dt>
-            <dd className="text-ink">Same-origin</dd>
-          </div>
-          <div className="flex items-center justify-between gap-6">
-            <dt>Tenancy</dt>
-            <dd className="text-ink">Server verified</dd>
-          </div>
-        </dl>
       </section>
       <section
         aria-labelledby="auth-title"

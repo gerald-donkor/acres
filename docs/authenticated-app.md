@@ -101,16 +101,23 @@ Organization switching updates the preference cookie and calls
 
 The authenticated shell is a restrained product surface, not a marketing page.
 It uses existing Acres tokens only, white canvas, hairline rules, DM Sans for
-body/UI, Roboto Mono for the ledger/status strip, and Crimson Text only for the
-small workspace heading. Marketing header/footer are not mounted inside
-`/app`.
+body/UI, Roboto Mono only where the protected workspace shell still uses
+status/organization labels, and Crimson Text only for the small workspace
+heading. Marketing header/footer are not mounted inside `/app`.
+
+The public auth entry frame at `/login` and `/register` keeps the Acres
+wordmark, eyebrow, heading, description, form, and footer action, but it no
+longer renders the earlier technical status ledger (`Session`, `API`,
+`Tenancy`). That metadata block was intentionally removed after review as
+filler copy, and it should not be reintroduced unless the product gains a real
+user-facing need for it.
 
 Breakpoints:
 
-- `375px`: compact top ledger, visible disclosure navigation, 44px touch
-  targets, single-column forms and shell content.
-- `800px`: persistent navigation column, visible organization/status ledger and
-  44px work controls.
+- `375px`: compact top shell controls, visible disclosure navigation, 44px
+  touch targets, single-column forms and shell content.
+- `800px`: persistent navigation column, visible organization/status labels in
+  the protected app shell, and 44px work controls.
 - `1280px`: same persistent shell inside the existing `max-w-page` container
   with the same minimum work-control target size.
 
