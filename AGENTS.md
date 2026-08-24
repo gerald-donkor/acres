@@ -355,11 +355,14 @@ For every implementation request:
 7. **Write a prompt file in `prompts/`** per the contract in §5. Plan and detail every step, measurement, dependency, and file change thoroughly so implementation and execution are straightforward and unambiguous.
 8. Ask exactly: `I prepared the implementation prompt at prompts/<file-name>.md. Is this good to execute?`
 9. **On approval, re-read the approved prompt file and implement it strictly.**
-   A standalone `y` or `Y` executes only the prompt identified by the immediately
+   A standalone `y` or `Y` executes the prompt identified by the immediately
    preceding approval request, as defined by the phase-control protocol below.
-   If no current prompt can be identified safely, stop and ask which prompt is
-   being approved. Have `requesting-code-review` available before finishing
-   implementation so the workflow for preparing a clean review request is ready.
+   If no current prompt is available from chat context, identify the next or
+   written prompt in `prompts/` and execute it when that file can be resolved
+   unambiguously. If no current prompt can be identified safely, stop and ask
+   which prompt is being approved. Have `requesting-code-review` available
+   before finishing implementation so the workflow for preparing a clean review
+   request is ready.
 10. Run the checks in §6 and **quote their real output** (self-verification:
     format, lint, typecheck, build, and diff review). Fix any discovered
     issues before requesting review.
@@ -422,7 +425,7 @@ Lowercase `p` is deliberately undefined.
 | input | valid starting state | action | stopping state |
 | --- | --- | --- | --- |
 | `i` or `I` | no current prompt is awaiting approval or approved execution | resolve the next unbuilt target phase or dependency-safe step within one, write exactly one new numbered prompt, and ask the exact §2 step 8 approval question | the prompt is uncommitted, no implementation changed, and control returns to the user |
-| `y` or `Y` | the intended prompt is identifiable from the immediately preceding approval request | re-read and execute only that prompt through implementation, verification, review, documentation, and its required local commit to `main` | all approved-task changes are committed locally, any pre-existing unrelated changes remain untouched, and nothing was pushed |
+| `y` or `Y` | the intended prompt is identifiable from the immediately preceding approval request, or from the next/written prompt in `prompts/` when chat context is unavailable | re-read and execute only that prompt through implementation, verification, review, documentation, and its required local commit to `main` | all approved-task changes are committed locally, any pre-existing unrelated changes remain untouched, and nothing was pushed |
 | `P` | the intended work is committed, the worktree is clean, the current branch is `main`, and it has a configured upstream | run the §7 read-only preflight, then make one normal non-force push | the upstream contains the local commits, nothing needed pushing, or Git failed safely without changing the repository |
 
 ```text
@@ -465,11 +468,14 @@ never creates, approves, executes, reviews, documents, or commits a prompt.
 
 ### Executing the prepared prompt for `y` / `Y`
 
-Identify the current prompt from the immediately preceding approval request;
-never substitute the highest-numbered file merely because it is newest. Re-read
-that prompt, this file, its owning documentation, verified framework references,
-and every named skill. Then follow all of §2: preserve unrelated changes,
-implement only the approved scope, run and quote the real checks, complete the
+Identify the current prompt from the immediately preceding approval request
+when possible. If chat context does not expose that request, inspect
+`prompts/` and accept the next or written prompt there when it can be resolved
+unambiguously; never substitute the highest-numbered file merely because it is
+newest when multiple plausible prompt files exist. Re-read that prompt, this
+file, its owning documentation, verified framework references, and every named
+skill. Then follow all of §2: preserve unrelated changes, implement only the
+approved scope, run and quote the real checks, complete the
 requesting/receiving review loop, update the owning documentation, stage only
 approved files, inspect the staged diff, and commit locally to `main` with
 `caveman-commit`. Return the result and exact inspection or run instructions,
