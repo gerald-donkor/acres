@@ -101,12 +101,12 @@ function MobileNavigation({ className }: { className?: string }) {
 
             <div className="px-5 pt-4 pb-8">
               <Button
-                render={<Link href="#how-to" />}
+                render={<Link href="/register" />}
                 nativeButton={false}
                 onClick={() => setOpen(false)}
                 variant="primary"
               >
-                Learn More
+                Create Account
               </Button>
             </div>
           </nav>

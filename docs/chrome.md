@@ -26,7 +26,7 @@ menu at 375, and the footer at all three widths. Built to `prompts/03-chrome.md`
 - **Container:** `Container` content is 720 px (40 px gutters) at 800, and 1200 px (40 px gutters) at 1280.
 - **Wordmark:** `Acres` in DM Sans 500, 30 px, tracking −0.05em (`--text-wordmark`). Ink measures 70 × 22 px at x = 40.
 - **Nav Links:** `Benefits`, `Specifications`, `How-to`, `Contact Us`. Set in DM Sans 600, 14 px, tracking −0.018em (`--text-ui`).
-- **Primary CTA:** `Learn More` with `arrow_outward`, rendered via Base UI's verified `render={<Link href="#how-to" />}` prop with `nativeButton={false}`. Height is 48 px, fill width is 126.03 px spanning x = 1113.97–1240.00 at 1280, and x = 633.97–760.00 at 800.
+- **Primary CTA:** `Create Account` with `arrow_outward`, rendered via Base UI's verified `render={<Link href="/register" />}` prop with `nativeButton={false}`. Height remains the 48 px primitive height; prompt 25 intentionally changes the original measured `Learn More` / `#how-to` comp CTA into the authenticated-app entry point, so its width now follows the longer label.
 - **Visual alignment:** Wordmark, nav links, and CTA share visual vertical centre at y ≈ 44.
 
 ### 2.2 Closed Mobile Nav — 375
@@ -44,7 +44,7 @@ Measured directly from the 1:1 render of `acres-design-system.pdf` (crop `900x80
 - **Header row:** 78 px header row swapping `menu` for `close` glyph in a 44 × 44 target.
 - **Link Rows:** 4 links (`Benefits`, `Specifications`, `How-to`, `Contact Us`), each in an **80 px high row** (`h-20`).
 - **Rules:** Hairlines `#E9E9E9` run across x = 20–354 (335 px wide) between link rows.
-- **CTA:** Primary `Learn More` pill positioned below the link rows with 20 px left alignment.
+- **CTA:** Primary `Create Account` pill positioned below the link rows with 20 px left alignment, linking to `/register` and preserving close-on-activation.
 - **Interactions:** Closes on link activation, toggle trigger click, or `Escape` keypress.
 
 ### 2.4 Footer — 375, 800 and 1280
@@ -125,6 +125,7 @@ The standalone logo mark vector was extracted from the vector stream in `acres-d
 | 4 | Open mobile menu overlays from the top | Preserves document layout of the underlying page |
 | 5 | CTA hover label is black on sage | Inherited contrast correction; 7.16:1 vs 2.93:1 |
 | 6 | No mobile-menu backdrop | Matches the board design without inventing surfaces outside the 8-value palette |
+| 7 | Primary chrome CTA is `Create Account` → `/register` | Prompt 25 bridges the marketing page to the authenticated app; section nav and secondary exploration links remain in-page anchors |
 
 ---
 
@@ -175,7 +176,7 @@ Measured on live production server:
 | --- | --- | --- | --- | --- |
 | 1280 | Container | Width | 1200 px (40 px gutters) | Pass |
 | 1280 | Wordmark | Font / Size / Weight | "DM Sans" 500 30px (−1.5px tracking) | Pass |
-| 1280 | CTA Button | Dimensions / Tag | 126.03 × 48 px, `<a href="#how-to">` | Pass |
+| 1280 | CTA Button | Tag / Height | `<a href="/register">`, 48 px primitive height | Pass |
 | 1280 | CTA Arrow | Presence | `arrow_outward` inside anchor | Pass |
 | 1280 | Console | Base UI Warnings | 0 mismatch warnings (`nativeButton={false}`) | Pass |
 | 1280 | Footer Rule | Width | 1200 px (`#E9E9E9`) | Pass |
@@ -188,7 +189,7 @@ Measured on live production server:
 | 375 | Closed Card | Shadow | `0 4px 16px rgba(0,0,0,0.05)` | Pass |
 | 375 | Trigger | Target / ARIA | 44 × 44 px, `aria-expanded="false"` | Pass |
 | 375 | Open Menu | Rows Height | 4 rows × 80 px (`h-20`) | Pass |
-| 375 | Open Menu CTA | Tag / Dimensions | `<a href="#how-to">`, 126.03 × 48 px | Pass |
+| 375 | Open Menu CTA | Tag / Height | `<a href="/register">`, 48 px primitive height | Pass |
 | 375 | Open Menu CTA | Action | Closes disclosure (`aria-expanded="false"`) | Pass |
 | 375 | Open Menu | Console Warnings | 0 mismatch warnings | Pass |
 | 375 | Open Menu | ARIA / Escape | `aria-expanded="true"` → `false` on Escape | Pass |

@@ -510,13 +510,13 @@ export default function Home() {
             powerful advantage.
           </p>
           <Button
-            render={<Link href="#how-to" />}
+            render={<Link href="/register" />}
             nativeButton={false}
             variant="primary"
             data-motion-item
             className="mt-12"
           >
-            Learn More
+            Create Account
           </Button>
         </div>
       </Section>

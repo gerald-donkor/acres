@@ -149,7 +149,7 @@ function LandingMotion({ children }: { children: React.ReactNode }) {
             // focusable element OUT of the tab order entirely. Measured before
             // this line existed: a keyboard user tabbing down the built page
             // went header → the two scroller regions → footer and never reached
-            // any of the four "Discover More"/"Learn More" links on the first
+            // any of the visible CTA links on the first
             // pass (WCAG 2.1.1). At `opacity: 0` the control stays tabbable,
             // focusing it scrolls it into view, and that scroll is what fires
             // its own reveal. `autoAlpha` is kept for the hero and the

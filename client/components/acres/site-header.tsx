@@ -71,11 +71,11 @@ function SiteHeader({ className }: { className?: string }) {
             </nav>
 
             <Button
-              render={<Link href="#how-to" />}
+              render={<Link href="/register" />}
               nativeButton={false}
               variant="primary"
             >
-              Learn More
+              Create Account
             </Button>
           </div>
         </Container>

@@ -520,6 +520,22 @@ The wrapper carries no resting transform in a class, so AGENTS.md §9.3 rule 6
 holds; the reduced-motion branch leaves the content visible and untransformed,
 which is §9.3 rule 4.
 
+## Auth Entry CTA
+
+Built to `prompts/25-landing-auth-entry-cta.md`.
+
+The final "Connect with us" primary CTA is intentionally no longer the comp's
+`Learn More` link to `#how-to`. It now renders the existing primary Acres pill
+as `Create Account` with `render={<Link href="/register" />}` and
+`nativeButton={false}`. This creates the smallest visible bridge from the
+marketing page into the authenticated app without changing the button primitive,
+motion hooks, section rhythm, image geometry, or secondary in-page exploration
+links.
+
+The missing `returnTo` query is deliberate: `client/lib/auth/return-to.ts`
+defaults missing return paths to `/app`, keeping return-path sanitization inside
+the auth route.
+
 ## Accessibility and Guideline Audit
 
 Source fetched: `https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md`.
