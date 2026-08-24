@@ -15,9 +15,10 @@ presigned storage, CI/migrations, and optional AI add powerful boundaries that
 must be introduced only with the negative tests assigned below.
 
 The current API has meaningful controls—opaque hashed sessions, secure
-cookie attributes in production, global double-submit CSRF, strict DTO
-validation, exact-origin credentialed CORS, Helmet, password hashing, generic
-errors, throttling, server-side revocation, organization memberships,
+cookie attributes in production, global double-submit CSRF, a same-origin Next
+API bridge for browser auth/organization traffic, strict DTO validation,
+exact-origin credentialed CORS, Helmet, password hashing, generic errors,
+throttling, server-side revocation, organization memberships,
 centralized organization permissions, hash-only invitations/account tokens,
 append-oriented organization audit events, transaction-local tenant context and
 forced RLS on the phase-3 organization tables. It still has no uploads,
@@ -209,7 +210,7 @@ Current evidence anchors include `server/src/app.setup.ts`,
 | TM-12 | Outbox loss/duplicate delivery or split-brain state | Medium / High | Current jobs are DB reads/in-process schedule | Transactional outbox, claim locks, unique event/handler identity, reconciliation; crash-after-commit/duplicate tests | Phase 6 |
 | TM-13 | SSRF through future URLs/webhooks/connectors | Low now / High | No such fetch path evidenced | Default no arbitrary fetch; protocol/host/IP allowlists, DNS recheck, redirect/body/time limits; private-network fixtures | Owning future phase |
 | TM-14 | AI injection, unsupported claim, cross-tenant leakage | Medium if enabled / High | AI absent | Disabled/no tools, minimal tenant evidence, schema + claim validation, prompt/version/eval record, human publish; injection/leak/no-AI tests | Phase 11 |
-| TM-15 | Secrets in client, git, image, CI output, queue, or logs | Medium / Critical | Env validation; client currently has no API secrets; CI read-only contents | Secret manager/injection, scoped identities, scanning, redaction, rotation drill; artifact/image/log inspection | Phase 2/6/12 |
+| TM-15 | Secrets in client, git, image, CI output, queue, or logs | Medium / Critical | Env validation; client uses a server-only `ACRES_API_ORIGIN` and stores no session token or CSRF secret; CI read-only contents | Secret manager/injection, scoped identities, scanning, redaction, rotation drill; artifact/image/log inspection | Phase 2/5/6/12 |
 | TM-16 | Audit alteration or sensitive audit leakage | Medium / High | Organization `AuditEvent` is append-oriented for runtime roles; update/delete are not granted, and tests/catalog checks cover forced RLS and privileges | Retention, alerting, backup integrity and later product audit surfaces remain phase 12/later work | Phase 12 |
 | TM-17 | SQL injection or RLS bypass via raw PostGIS SQL | Medium / Critical | Tenant context uses tagged Prisma raw SQL; runtime/test roles are non-owner/no `BYPASSRLS`; forced RLS is catalog-tested | PostGIS-specific raw SQL and SAST remain for geography/analytics phases | Phase 7/12 |
 | TM-18 | Dependency/action/container supply-chain compromise | Medium / Critical | npm lockfile/`npm ci`, CI `contents: read`, non-root image | Pin/review actions/images, dependency/container/SAST/secret scans, artifact provenance and controlled promotion | Phase 12 |

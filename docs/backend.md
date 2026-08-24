@@ -2,11 +2,10 @@
 
 The build record for step 8 (`AGENTS.md` §8.2), implemented from
 `prompts/10-nestjs-server.md`. It covers `server/`, `packages/shared/`, the
-root workspace wiring, and what is deliberately not built yet.
-
-**Nothing visual changed.** `client/` was touched in exactly one place — a
-`typecheck` script — and `client/app/`, `client/components/`, `client/lib/`
-and `client/public/` are byte-identical to `5d9899a`.
+root workspace wiring, and what is deliberately not built yet. Later client
+integration is recorded in [`authenticated-app.md`](authenticated-app.md);
+historical notes in this file that say `client/` is unchanged describe the
+original backend prompt, not the current repository after Phase 5 began.
 
 ---
 
@@ -123,6 +122,7 @@ Root scripts, all run from the repository root:
 | `lint` | client, then shared, then server |
 | `typecheck` | **new.** Builds `@acres/shared`, then `tsc --noEmit` in all three workspaces |
 | `test:server` | the API's e2e suite |
+| `test:client:e2e` | Playwright coverage for the authenticated client shell |
 
 `typecheck` did not exist before this step. `AGENTS.md` §8.1 previously said
 `npx tsc --noEmit` "runs from the root and is forwarded to `@acres/client`";
@@ -146,9 +146,9 @@ no `paths` alias, so the type the compiler checks and the file Node loads are
 the same artefact. The cost is ordering: shared must be built before the server
 type-checks, which is why every root chain builds it first.
 
-`client/` does **not** depend on `@acres/shared` yet. Wiring the client to the
-API is a later prompt, and an unused dependency in the client's tree buys
-nothing today.
+`client/` now depends on `@acres/shared` for the typed authenticated API client
+added in Phase 5. The detailed route/client boundary is owned by
+[`authenticated-app.md`](authenticated-app.md).
 
 No `zod`. The shared package has **zero runtime dependencies**; validation
 bounds live in `packages/shared/src/validation.ts` as a plain `VALIDATION`
@@ -1508,7 +1508,7 @@ For decisions and sequencing, read `docs/system-architecture.md`,
 | DB-backed `JobRun` reads and one in-process hourly session purge | PostgreSQL outbox/job authority, Valkey/BullMQ transport, separately runnable Nest worker, idempotent stages, retries/dead letters and audited schedules | 6 |
 | No object storage, upload, parser, or antivirus boundary | Garage quarantine/artifacts, short-lived presigned uploads, ClamAV scan-before-parse, bounded CSV/XLSX/GeoJSON stages and immutable dataset versions | 6–7 |
 | Metric/report placeholder tables without product ingestion | Typed metric definitions/observations/quality/aggregates, dashboards/saved views, immutable report revisions/evidence and secure exports | 8–10 |
-| No client API consumer or authenticated application UI | Same-origin Caddy routing, verified Next 16.3 server/browser clients, accessible authenticated shell and real-browser journeys | 5 |
+| Next client has a same-origin `/api/v1` bridge, typed server/browser clients, login/register/logout, active organization preference and a first protected `/app` shell | Production Caddy routing and later product dashboards/datasets/reports build on this shell | 5+ |
 | Portable Node 24 API image and GitHub Actions build/smoke test; no full topology | Compose+Caddy single-host reference, private stateful services, OTel/Prometheus/optional Grafana, backups/restores and hardened promotion | 12 |
 | No AI | Optional disabled-by-default local llama.cpp/vLLM adapter receives minimal authorized evidence and proposes schema-validated drafts; deterministic product remains complete | 11 |
 

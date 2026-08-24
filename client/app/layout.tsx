@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Crimson_Text, DM_Sans, Roboto_Mono } from "next/font/google";
 
-import { SiteFooter } from "@/components/acres/site-footer";
-import { SiteHeader } from "@/components/acres/site-header";
 import {
   SITE_DESCRIPTION,
   SITE_NAME,
@@ -116,21 +114,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           Skip to Main Content
         </a>
-        <SiteHeader />
-        {/*
-          `tabIndex={-1}` is what makes the skip link's target focusable; without
-          it focus stays on <body> and the next Tab returns to the top of the
-          page. The `outline-none` is paired with a focus-visible replacement,
-          never left bare (AGENTS.md §9.4 rule 1).
-        */}
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="flex-1 flex flex-col outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          {children}
-        </main>
-        <SiteFooter />
+        {children}
       </body>
     </html>
   );

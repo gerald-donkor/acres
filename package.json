@@ -23,6 +23,7 @@
     "lint": "npm run lint --workspace=@acres/client && npm run lint --workspace=@acres/shared && npm run lint --workspace=@acres/server",
     "typecheck": "npm run build --workspace=@acres/shared && npm run typecheck --workspace=@acres/shared && npm run typecheck --workspace=@acres/client && npm run typecheck --workspace=@acres/server",
     "test:server": "npm run test:e2e --workspace=@acres/server",
+    "test:client:e2e": "npm run test:e2e --workspace=@acres/client",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d postgres"

@@ -1,9 +1,10 @@
 # Acres product definition
 
 Status: canonical target product definition, approved 2026-08-23. This file
-describes what Acres is meant to become; it does not claim that the target
-application exists today. Current implementation evidence lives in
-[`landing.md`](landing.md) and [`backend.md`](backend.md).
+describes what Acres is meant to become; it does not claim that every target
+application surface exists today. Current implementation evidence lives in
+[`landing.md`](landing.md), [`backend.md`](backend.md), and
+[`authenticated-app.md`](authenticated-app.md).
 
 ## 1. Product job
 

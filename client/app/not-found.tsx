@@ -2,6 +2,8 @@ import Link from "next/link"
 
 import { Button } from "@/components/acres/button"
 import { Section } from "@/components/acres/section"
+import { SiteFooter } from "@/components/acres/site-footer"
+import { SiteHeader } from "@/components/acres/site-header"
 
 /**
  * The 404 page.
@@ -20,22 +22,32 @@ import { Section } from "@/components/acres/section"
  */
 export default function NotFound() {
   return (
-    <Section align="center" className="pb-section">
-      <h1 className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg">
-        Page not found.
-      </h1>
-      <p className="mx-auto mt-7 max-w-[34rem] text-body text-ink-muted">
-        That address is not part of <span translate="no">Acres</span>. The
-        landing page is the way back.
-      </p>
-      <Button
-        render={<Link href="/" />}
-        nativeButton={false}
-        variant="primary"
-        className="mt-12"
+    <>
+      <SiteHeader />
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex-1 flex flex-col outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        Back to Home
-      </Button>
-    </Section>
+        <Section align="center" className="pb-section">
+          <h1 className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg">
+            Page not found.
+          </h1>
+          <p className="mx-auto mt-7 max-w-[34rem] text-body text-ink-muted">
+            That address is not part of <span translate="no">Acres</span>. The
+            landing page is the way back.
+          </p>
+          <Button
+            render={<Link href="/" />}
+            nativeButton={false}
+            variant="primary"
+            className="mt-12"
+          >
+            Back to Home
+          </Button>
+        </Section>
+      </main>
+      <SiteFooter />
+    </>
   )
 }
