@@ -16,6 +16,10 @@ packages/*/node_modules/
 # testing
 /coverage
 server/coverage/
+client/test-results/
+client/playwright-report/
+test-results/
+playwright-report/
 
 # next.js
 /client/.next/

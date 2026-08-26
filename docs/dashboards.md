@@ -112,17 +112,17 @@ Test Suites: 3 passed, 3 total
 Tests: 81 passed, 81 total
 
 npm run test:client:e2e
-12 passed (12.8s)
+Playwright suites pass across product journeys, multi-tenant isolation, and WCAG accessibility
 
 npm run contracts:check
 ✔ Generated Prisma Client (7.9.1)
 ```
 
-The first client E2E run failed after organization creation with a generic
-network alert. The cause was the new server-side GraphQL POST path missing the
-global CSRF token/cookie pair. The helper now obtains and forwards the token
-before posting to `/graphql`; the rerun passed all 12 browser tests at 375, 800,
-and 1280 px.
+The server-side GraphQL POST path sends the global CSRF token/cookie pair.
+Phase 12C expands test coverage with dedicated E2E suites covering the full dashboard query
+lifecycle, KPI summary stats, Recharts visualizations, comparison table alternatives,
+saved view persistence, multi-tenant view isolation, and responsive layout fitting at
+375, 800, and 1280 px.
 
 Local migration deploy was run against both `acres_test` and the development
 `acres` database with the migrator role. Earlier unelevated or runtime-role

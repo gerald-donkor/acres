@@ -282,6 +282,11 @@ Running 12 tests using 2 workers
   12 passed (15.8s)
 ```
 
+Phase 12C expands browser testing with dedicated end-to-end suites:
+- `client/e2e/product-journeys.spec.ts`: full product journey coverage across dashboards, GraphQL queries, saved views, reports, and async exports.
+- `client/e2e/multi-tenant-isolation.spec.ts`: multi-tenant browser isolation, cross-tenant report denial, and header tampering defense.
+- `client/e2e/accessibility-responsive.spec.ts`: WCAG 2.2 AA audit across 375/800/1280px viewports, touch targets, and telemetry.
+
 `npx next typegen` was also run after the route-group move to refresh
 route-aware types:
 

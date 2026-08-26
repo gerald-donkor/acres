@@ -1,14 +1,14 @@
 # Operations and launch hardening
 
-Status: Phase 12B implemented from
-`prompts/33-operational-telemetry-metrics-hardening.md`. Extends the Phase 12A
-foundation with low-cardinality Prometheus telemetry, operational alert rules,
-live Grafana panels, automated retention maintenance jobs, deterministic
-backup/restore scripts, and supply-chain GitHub Action pinning.
+Status: Phase 12C implemented from
+`prompts/34-launch-e2e-accessibility-verification.md`. Extends the Phase 12A/12B
+foundation with comprehensive end-to-end browser suites, WCAG 2.2 Level AA accessibility
+auditing across all 3 viewports (375px, 800px, 1280px), strict horizontal overflow checks,
+multi-tenant isolation verification, and live Prometheus telemetry assertions.
 
 Phase 11 optional local AI remains absent. No model, runtime, license, quality
 threshold, prompt store, or AI operating profile has been approved. Every Phase
-12B artifact and check validates the deterministic no-AI path.
+12C artifact and check validates the deterministic no-AI path.
 
 ## Topology & Telemetry
 
@@ -59,6 +59,10 @@ messages are strictly excluded from metric labels.
 | `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json` | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, and scheduled job health |
 | `server/src/metrics/*` | `MetricsModule`, `MetricsService`, `MetricsController`, `MetricsMiddleware`, and `route-normalizer` |
 | `server/src/jobs/retention-maintenance.job.ts` | Cron-driven retention maintenance for expired uploads, idempotency records, and authentication/recovery tokens |
+| `client/e2e/helpers.ts` | Shared Playwright test helpers and deterministic mock fixture generators |
+| `client/e2e/product-journeys.spec.ts` | Full product journey E2E suite (auth, dashboards, saved views, reports, revisions, exports, downloads) |
+| `client/e2e/multi-tenant-isolation.spec.ts` | Multi-tenant browser isolation suite (independent contexts, cross-tenant report blocking, org switching) |
+| `client/e2e/accessibility-responsive.spec.ts` | WCAG 2.2 Level AA accessibility audit, responsive overflow at 375/800/1280px, touch targets, and telemetry check |
 | `scripts/ops/backup-postgres.sh` | Structured PostgreSQL `pg_dump` backup helper with fail-closed credentials and permission hardening |
 | `scripts/ops/restore-postgres.sh` | Structured PostgreSQL restore helper with connection verification and table count validation |
 | `scripts/ops/audit-dependencies.sh` | Deterministic dependency security audit script for production dependencies |
@@ -85,6 +89,31 @@ npm run ops:launch-readiness
 `ops:check` passes in CI. `ops:launch-readiness` is expected to fail until the
 operator-owned production decisions below are resolved and the runbook evidence
 is captured on the chosen host.
+
+## Phase 12C Browser & E2E Verification
+
+The complete product surface is covered by dedicated Playwright end-to-end suites:
+
+1. **`client/e2e/product-journeys.spec.ts`**:
+   - Authentication flow (registration, login, logout, returnTo preservation).
+   - Organization selection and creation empty state.
+   - Dashboards workspace rendering: KPI summary stats, Recharts bar chart, aggregate comparison table with accessible headers and evidence identifiers.
+   - Saved view lifecycle: form submission, persistent sidebar listing, and view switching.
+   - Reports workspace: draft authoring (`/app/reports/new`), revision editing, immutable publication, asynchronous CSV/PDF export generation, and secure artifact download.
+
+2. **`client/e2e/multi-tenant-isolation.spec.ts`**:
+   - Isolated browser contexts for independent tenant organizations (Org A vs Org B).
+   - Strict absence of cross-tenant saved views, draft reports, or published evidence.
+   - Immediate context switching between multiple organization memberships without client cache bleed.
+   - Header tampering rejection: cross-tenant mutations with forged headers are rejected by backend RLS guards.
+
+3. **`client/e2e/accessibility-responsive.spec.ts`**:
+   - WCAG 2.2 AA responsive audit across exact comp breakpoints: `375px` (Mobile), `800px` (Tablet), and `1280px` (Desktop).
+   - Strict horizontal overflow check (`scrollWidth <= clientWidth` = 0px overflow).
+   - Mobile touch target minimum size verification (`>= 44x44px`) on all interactive buttons, links, inputs, and dropdowns.
+   - Skip-link landmark verification (`a[href="#main-content"]` target attached and reachable).
+   - Keyboard accessibility and screen-reader table alternatives.
+   - Prometheus telemetry verification: `acres_http_requests_total` output retains low cardinality with normalized route templates and zero raw UUIDs/secrets.
 
 ## Launch Blockers
 
