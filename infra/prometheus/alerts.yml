@@ -1,0 +1,5 @@
+groups: []
+
+# Phase 12A keeps this file syntactically valid but intentionally empty.
+# Add real alert rules only after Acres exposes reviewed, low-cardinality
+# Prometheus metrics and operators approve owners, thresholds and runbooks.

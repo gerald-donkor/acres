@@ -1,0 +1,53 @@
+{
+	admin off
+	email {$ACRES_TLS_CONTACT_EMAIL}
+}
+
+{$ACRES_PRODUCTION_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Enable only after the production domain, certificate recovery plan, and
+	# preload posture are operator-approved.
+	# header Strict-Transport-Security "max-age={$ACRES_HSTS_MAX_AGE}; includeSubDomains"
+
+	request_body {
+		max_size {$ACRES_MAX_REQUEST_BODY}
+	}
+
+	@api path /api/* /graphql /health /health/ready
+	reverse_proxy @api api:3001 {
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		transport http {
+			read_timeout {$ACRES_API_READ_TIMEOUT}
+			write_timeout {$ACRES_API_WRITE_TIMEOUT}
+			dial_timeout {$ACRES_API_DIAL_TIMEOUT}
+		}
+	}
+
+	@objects path /acres-quarantine/*
+	reverse_proxy @objects garage:3900 {
+		header_up Host {host}
+		transport http {
+			read_timeout {$ACRES_OBJECT_READ_TIMEOUT}
+			write_timeout {$ACRES_OBJECT_WRITE_TIMEOUT}
+			dial_timeout {$ACRES_OBJECT_DIAL_TIMEOUT}
+		}
+	}
+
+	reverse_proxy next:3000 {
+		transport http {
+			read_timeout {$ACRES_NEXT_READ_TIMEOUT}
+			write_timeout {$ACRES_NEXT_WRITE_TIMEOUT}
+			dial_timeout {$ACRES_NEXT_DIAL_TIMEOUT}
+		}
+	}
+}

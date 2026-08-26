@@ -1,0 +1,17 @@
+# Dockerfile-specific ignore for the production client example. The root
+# .dockerignore intentionally excludes client/** for the server image, so this
+# file redefines the client build context.
+
+.git
+.github
+node_modules
+**/node_modules
+client/.next
+client/test-results
+server/dist
+server/coverage
+server/src/generated
+packages/shared/dist
+**/*.tsbuildinfo
+.env*
+*.log

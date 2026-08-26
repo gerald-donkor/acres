@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1
+
+FROM node:24-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY client/package.json client/package.json
+COPY server/package.json server/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN npm ci --workspace=@acres/client --workspace=@acres/shared --include-workspace-root --ignore-scripts
+
+FROM deps AS build
+COPY client client
+COPY packages/shared packages/shared
+RUN npm run build --workspace=@acres/shared && npm run build --workspace=@acres/client
+
+FROM node:24-alpine AS prod-deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY client/package.json client/package.json
+COPY server/package.json server/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN npm ci --omit=dev --workspace=@acres/client --workspace=@acres/shared --include-workspace-root --ignore-scripts
+
+FROM node:24-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/package.json ./package.json
+COPY --from=build /app/packages/shared/package.json packages/shared/package.json
+COPY --from=build /app/packages/shared/dist packages/shared/dist
+COPY --from=build /app/client/package.json client/package.json
+COPY --from=build /app/client/next.config.ts client/next.config.ts
+COPY --from=build /app/client/.next client/.next
+COPY --from=build /app/client/public client/public
+USER node
+EXPOSE 3000
+CMD ["node_modules/.bin/next", "start", "client", "--port", "3000"]

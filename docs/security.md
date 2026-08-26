@@ -136,7 +136,7 @@ Classification details are owned by [`product.md`](product.md#5-data-classificat
 | SMTP                     | Not present                                                                                                                                                                                                                                                                                             | Provider-neutral adapter, recipient/content validation, throttling, no credentials/content in logs                                  |
 | Optional AI              | Not present                                                                                                                                                                                                                                                                                             | Disabled by default; tenant-bound minimal evidence; schema validation; no tools/mutation/publication; evaluation and human decision |
 | Logs/metrics             | Nest logs exist; generic client 500s; no canonical telemetry stack                                                                                                                                                                                                                                      | Structured redaction; low-cardinality metrics; access-controlled telemetry; raw data/prompts excluded by default                    |
-| CI/dependencies/images   | Lockfile, `npm ci`, least `contents: read`, build/test and non-root server image                                                                                                                                                                                                                        | Pin/review actions, dependency/container/SAST/secret scans, provenance, protected promotion, rotated deploy credentials             |
+| CI/dependencies/images   | Lockfile, `npm ci`, least `contents: read`, build/test, non-root server image, Phase 12A operations preflights, tracked-file default/secret-pattern scan, and static Docker runtime check                                                                                                                | Pin/review actions/images, dependency/container/SAST beyond local deterministic scans, provenance, protected promotion, rotated deploy credentials |
 | Migrations/database      | Local/CI PostgreSQL + PostGIS, separate migrator/runtime/test roles, committed first Prisma migration, pending-migration readiness, and real-database integration tests                                                                                                                                 | Production host/encryption/backups; RLS/PostGIS tenant-isolation tests                                                              |
 
 Current evidence anchors include `server/src/app.setup.ts`,
@@ -216,7 +216,7 @@ dashboard GraphQL/UI path; see [`dashboards.md`](dashboards.md).
 | TM-12 | Outbox loss/duplicate delivery or split-brain state            | Medium / High            | Current jobs are DB reads/in-process schedule                                                                                                                                                                                                                                                             | Transactional outbox, claim locks, unique event/handler identity, reconciliation; crash-after-commit/duplicate tests                             | Phase 6             |
 | TM-13 | SSRF through future URLs/webhooks/connectors                   | Low now / High           | No such fetch path evidenced                                                                                                                                                                                                                                                                              | Default no arbitrary fetch; protocol/host/IP allowlists, DNS recheck, redirect/body/time limits; private-network fixtures                        | Owning future phase |
 | TM-14 | AI injection, unsupported claim, cross-tenant leakage          | Medium if enabled / High | AI absent                                                                                                                                                                                                                                                                                                 | Disabled/no tools, minimal tenant evidence, schema + claim validation, prompt/version/eval record, human publish; injection/leak/no-AI tests     | Phase 11            |
-| TM-15 | Secrets in client, git, image, CI output, queue, or logs       | Medium / Critical        | Env validation; client uses a server-only `ACRES_API_ORIGIN` and stores no session token or CSRF secret; CI read-only contents                                                                                                                                                                            | Secret manager/injection, scoped identities, scanning, redaction, rotation drill; artifact/image/log inspection                                  | Phase 2/5/6/12      |
+| TM-15 | Secrets in client, git, image, CI output, queue, or logs       | Medium / Critical        | Env validation; client uses a server-only `ACRES_API_ORIGIN` and stores no session token or CSRF secret; CI read-only contents; Phase 12A scans tracked files for known local defaults, `change-me` placeholders outside approved examples, launch sentinels outside docs/examples, and secret-looking `NEXT_PUBLIC_*` names | Secret manager/injection, scoped identities, deeper SAST/dependency/container scanning, redaction, rotation drill; artifact/image/log inspection | Phase 2/5/6/12      |
 | TM-16 | Audit alteration or sensitive audit leakage                    | Medium / High            | Organization `AuditEvent` is append-oriented for runtime roles; update/delete are not granted, and tests/catalog checks cover forced RLS and privileges                                                                                                                                                   | Retention, alerting, backup integrity and later product audit surfaces remain phase 12/later work                                                | Phase 12            |
 | TM-17 | SQL injection or RLS bypass via raw PostGIS SQL                | Medium / Critical        | Tenant context uses tagged Prisma raw SQL; runtime/test roles are non-owner/no `BYPASSRLS`; forced RLS is catalog-tested                                                                                                                                                                                  | PostGIS-specific raw SQL and SAST remain for geography/analytics phases                                                                          | Phase 7/12          |
 | TM-18 | Dependency/action/container supply-chain compromise            | Medium / Critical        | npm lockfile/`npm ci`, CI `contents: read`, non-root image                                                                                                                                                                                                                                                | Pin/review actions/images, dependency/container/SAST/secret scans, artifact provenance and controlled promotion                                  | Phase 12            |
@@ -356,3 +356,44 @@ Residual Phase 7A risks:
 - Mapping validation now checks every parser-accepted validation row for the
   mapped region reference. Full semantic validation remains a later hardening
   item; formula-safe CSV exports are implemented in the report export path.
+
+## 15. Phase 12A operations foundation update
+
+As of 2026-08-26, production operations foundations exist but launch is still
+blocked on operator-owned decisions. The new examples and checks are recorded
+in [`operations.md`](operations.md).
+
+- `infra/compose/docker-compose.production.example.yml` keeps Postgres,
+  Valkey, Garage, ClamAV, Prometheus, and Grafana private; only Caddy publishes
+  host ports.
+- `infra/caddy/Caddyfile.example` models same-origin app/API/GraphQL routing,
+  baseline security headers, path-style presigned object proxying for the
+  current `acres-quarantine` bucket, request-size and timeout placeholders, and
+  an HSTS approval gate.
+- `infra/env/production.env.example` enumerates required production secrets and
+  operator values with `__REQUIRED_*__` sentinels; no real secret is committed.
+- `scripts/ops/*` adds deterministic CI-safe preflights for template shape,
+  tracked-file placeholder/default scanning, and server Dockerfile runtime
+  posture.
+- Production Garage overrides the local TOML's RPC, admin, and metrics secrets
+  through service-scoped environment variables, so the committed local admin
+  token is not a production credential source and non-Garage containers do not
+  receive Garage admin tokens.
+- `scripts/db/bootstrap-production-roles.sh` creates only production database
+  roles and the `acres` database; the local `acres_test` role/database remains
+  outside the production Compose example.
+- `npm run ops:launch-readiness` intentionally exits non-zero after printing
+  the unresolved launch blockers. Passing `npm run ops:check` is not launch
+  approval.
+
+Residual Phase 12A risks:
+
+- No production domain, host, registry, secret store, SMTP provider, backup
+  destination, alert owner, SLO, RPO/RTO, retention period, capacity target, or
+  production introspection policy has been selected.
+- Docker/Compose production config, image builds, readiness through Caddy,
+  rollback, backup restore, DB/object reconciliation, and encrypted-mount/key
+  recovery drills still require a Docker-capable production-like host.
+- Prometheus/Grafana are scaffolding only; alert rules are intentionally empty
+  until real application metrics, measured thresholds, alert routing, telemetry
+  access control, and operations dashboard hardening land.

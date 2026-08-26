@@ -123,6 +123,11 @@ Root scripts, all run from the repository root:
 | `typecheck`                                      | **new.** Builds `@acres/shared`, then `tsc --noEmit` in all three workspaces                                                    |
 | `test:server`                                    | the API's e2e suite                                                                                                             |
 | `test:client:e2e`                                | Playwright coverage for the authenticated client shell                                                                          |
+| `ops:templates`                                  | validates the inert production Caddy/Compose/env/observability examples added in Phase 12A                                      |
+| `ops:scan-secrets`                               | scans tracked files for known local passwords, `change-me` defaults, launch sentinels outside approved docs/examples, and secret-looking public env names |
+| `ops:docker-runtime`                             | checks `server/Dockerfile` still uses Node 24, non-root runtime, a healthcheck, and direct Node startup                         |
+| `ops:check`                                      | runs the deterministic Phase 12A operations gates; CI runs this after contract drift checks                                     |
+| `ops:launch-readiness`                           | runs the same gates, prints remaining operator-owned blockers, and exits non-zero until launch values and drills are complete   |
 
 `typecheck` did not exist before this step. `AGENTS.md` §8.1 previously said
 `npx tsc --noEmit` "runs from the root and is forwarded to `@acres/client`";
@@ -774,10 +779,22 @@ image with `docker/build-push-action@v7` and `push: false`, `load: true` — it
 proves the image builds and its container answers `/health`, and stops there.
 Choosing a registry and a host is deferred (§12).
 
+Phase 12A adds an inert production reference under `infra/` plus deterministic
+operations checks. `infra/compose/docker-compose.production.example.yml` models
+Caddy, Next, API, worker, Postgres/PostGIS, Valkey, Garage, ClamAV, and
+optional Prometheus/Grafana with only Caddy publishing host ports. The example
+keeps `SCHEDULER_ENABLED=false` on the API and `true` on the worker, declares
+encrypted production mount placeholders for stateful services, and consumes
+`infra/env/production.env.example` sentinels rather than real secrets. It uses
+`scripts/db/bootstrap-production-roles.sh`, not the local bootstrap that creates
+`acres_test`. The authoritative runbook and blocker list live in
+[`operations.md`](operations.md).
+
 **The CI workflow** (`.github/workflows/ci.yml`) runs two jobs on push/PR to
 `main`: `checks` (uses `actions/setup-node@v7` with Node 24, then `npm ci`,
-lint, typecheck, build, bootstrap roles, apply migrations to both `acres` and
-`acres_test`, harden runtime privileges, `test:server`) and
+lint, typecheck, build, contract drift, the Phase 12A `ops:check`, bootstrap
+roles, apply migrations to both `acres` and `acres_test`, harden runtime
+privileges, `test:server`) and
 `docker` (needs `checks`; builds the image, runs it with a throwaway
 `SESSION_SECRET` and a `DATABASE_URL` nothing connects to — `GET /health` takes
 no database dependency by design (§3), so the smoke test does not need a real

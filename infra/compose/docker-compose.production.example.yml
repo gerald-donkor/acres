@@ -1,0 +1,233 @@
+name: acres-production-example
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    env_file:
+      - ../env/production.env.example
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../caddy/Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - ${ACRES_CADDY_DATA_MOUNT:?set encrypted Caddy data mount path}:/data
+      - ${ACRES_CADDY_CONFIG_MOUNT:?set encrypted Caddy config mount path}:/config
+    depends_on:
+      next:
+        condition: service_started
+      api:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    networks:
+      - public
+      - private
+    stop_grace_period: 30s
+
+  next:
+    build:
+      context: ../..
+      dockerfile: infra/docker/client.Dockerfile.example
+    restart: unless-stopped
+    env_file:
+      - ../env/production.env.example
+    environment:
+      NODE_ENV: production
+      ACRES_API_ORIGIN: http://api:3001
+    expose:
+      - "3000"
+    networks:
+      - private
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+
+  api:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../env/production.env.example
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      SCHEDULER_ENABLED: "false"
+    expose:
+      - "3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    networks:
+      - private
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 45s
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    command: ["node", "server/dist/worker.js"]
+    env_file:
+      - ../env/production.env.example
+    environment:
+      NODE_ENV: production
+      SCHEDULER_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    networks:
+      - private
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 60s
+
+  postgres:
+    image: postgis/postgis:18-3.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?inject postgres superuser password}
+      POSTGRES_DB: postgres
+      ACRES_MIGRATOR_PASSWORD: ${ACRES_MIGRATOR_PASSWORD:?inject migrator password}
+      ACRES_APP_PASSWORD: ${ACRES_APP_PASSWORD:?inject app password}
+    expose:
+      - "5432"
+    volumes:
+      - ${ACRES_POSTGRES_ENCRYPTED_MOUNT:?set encrypted Postgres mount path}:/var/lib/postgresql/data
+      - ../../scripts/db/bootstrap-production-roles.sh:/docker-entrypoint-initdb.d/001-bootstrap-production-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
+    stop_grace_period: 60s
+
+  valkey:
+    image: valkey/valkey:9
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - --requirepass
+      - ${VALKEY_PASSWORD:?inject Valkey password}
+      - --appendonly
+      - "yes"
+      - --maxmemory-policy
+      - noeviction
+    expose:
+      - "6379"
+    volumes:
+      - ${ACRES_VALKEY_ENCRYPTED_MOUNT:?set encrypted Valkey mount path}:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$${VALKEY_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
+    stop_grace_period: 45s
+
+  garage:
+    image: dxflrs/garage:v2.1.0
+    restart: unless-stopped
+    env_file:
+      - ../env/garage.production.env.example
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?inject Garage RPC secret}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?inject Garage admin token}
+      GARAGE_METRICS_TOKEN: ${GARAGE_METRICS_TOKEN:?inject Garage metrics token}
+    expose:
+      - "3900"
+      - "3901"
+      - "3902"
+      - "3903"
+    volumes:
+      - ${ACRES_GARAGE_META_ENCRYPTED_MOUNT:?set encrypted Garage metadata mount path}:/var/lib/garage/meta
+      - ${ACRES_GARAGE_DATA_ENCRYPTED_MOUNT:?set encrypted Garage data mount path}:/var/lib/garage/data
+      - ../garage/garage.toml:/etc/garage.toml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3903/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    networks:
+      - private
+    stop_grace_period: 60s
+
+  clamav:
+    image: clamav/clamav:1.4
+    restart: unless-stopped
+    expose:
+      - "3310"
+    volumes:
+      - ${ACRES_CLAMAV_ENCRYPTED_MOUNT:?set ClamAV signature/cache mount path}:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "printf 'zPING\\0' | nc -w 5 localhost 3310 | grep PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+    networks:
+      - private
+    stop_grace_period: 45s
+
+  prometheus:
+    image: prom/prometheus:v3.8.0
+    restart: unless-stopped
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:?set operator-approved Prometheus retention}
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ${ACRES_PROMETHEUS_ENCRYPTED_MOUNT:?set Prometheus data mount path}:/prometheus
+    expose:
+      - "9090"
+    networks:
+      - private
+    stop_grace_period: 45s
+
+  grafana:
+    image: grafana/grafana:12.3.0
+    restart: unless-stopped
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?inject Grafana admin user}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?inject Grafana admin password}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: https://${ACRES_PRODUCTION_DOMAIN:?set production domain}/ops/grafana/
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ${ACRES_GRAFANA_ENCRYPTED_MOUNT:?set Grafana data mount path}:/var/lib/grafana
+    expose:
+      - "3000"
+    networks:
+      - private
+    stop_grace_period: 45s
+
+networks:
+  public:
+  private:
+    internal: true

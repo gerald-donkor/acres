@@ -218,6 +218,11 @@ reference is Docker Compose plus Caddy on one host with off-host backups. The
 scale-out drawing is a seam, not a commitment to Kubernetes, a cloud, or a
 managed service.
 
+Phase 12A adds inert production examples for this reference topology under
+`infra/`, plus local CI-safe preflight scripts. They do not choose a host,
+registry, domain, SLO, RPO/RTO, retention policy, backup destination, alert
+owner, or encryption provider, and they do not make the system launch-complete.
+
 ## 4. Runtime component and FOSS inventory
 
 This is an engineering inventory, not legal advice. License obligations must
@@ -506,6 +511,10 @@ secret store or protected host mechanism, never `NEXT_PUBLIC_*`, images,
 Compose files, logs, queue payloads, or git. API, worker, migration, storage,
 SMTP, and telemetry identities are separate and least-privileged. Rotation and
 compromise response are tested before launch.
+
+`infra/env/production.env.example` is the Phase 12A inventory for those values.
+It deliberately uses `__REQUIRED_*__` sentinels that launch readiness rejects;
+the sentinels are not production defaults.
 
 TLS protects production traffic in transit. PostgreSQL and Garage live data use
 operator-managed host/block-volume encryption in the single-host reference;

@@ -38,6 +38,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm run contracts:check
+      - run: npm run ops:check
       - name: Bootstrap database roles
         env:
           PGHOST: localhost
