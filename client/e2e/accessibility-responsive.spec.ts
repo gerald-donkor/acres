@@ -7,10 +7,12 @@ import {
   unique,
 } from "./helpers";
 
+// Target width breakpoints (375px mobile, 800px tablet, 1280px desktop)
+// Height is standardized to 900px for responsive layout testing
 const VIEWPORTS = [
-  { name: "Mobile", width: 375, height: 8833 },
-  { name: "Tablet", width: 800, height: 8825 },
-  { name: "Desktop", width: 1280, height: 7389 },
+  { name: "Mobile", width: 375, height: 900 },
+  { name: "Tablet", width: 800, height: 900 },
+  { name: "Desktop", width: 1280, height: 900 },
 ];
 
 const apiPort = Number(process.env.PLAYWRIGHT_API_PORT ?? "3101");

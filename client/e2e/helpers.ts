@@ -23,8 +23,9 @@ export async function expectMinTouchTarget(
   locator: Locator,
   label: string,
 ) {
+  await expect(locator, `${label} should be visible`).toBeVisible();
   const box = await locator.boundingBox();
-  expect(box, `${label} should be visible`).not.toBeNull();
+  expect(box, `${label} bounding box should exist`).not.toBeNull();
   expect(box!.height, `${label} height`).toBeGreaterThanOrEqual(44);
   expect(box!.width, `${label} width`).toBeGreaterThanOrEqual(44);
 }
