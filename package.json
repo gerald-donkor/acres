@@ -7,7 +7,11 @@
     "server",
     "packages/shared"
   ],
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
+  },
   "scripts": {
+
     "prepare": "npm run build --workspace=@acres/shared",
     "dev": "npm run dev --workspace=@acres/client",
     "dev:client": "npm run dev --workspace=@acres/client",
@@ -28,7 +32,11 @@
     "ops:templates": "scripts/ops/check-production-templates.sh",
     "ops:scan-secrets": "scripts/ops/scan-secrets.sh",
     "ops:docker-runtime": "scripts/ops/check-docker-runtime.sh",
-    "ops:check": "npm run ops:templates && npm run ops:scan-secrets && npm run ops:docker-runtime",
+    "ops:audit": "scripts/ops/audit-dependencies.sh",
+    "ops:backup": "scripts/ops/backup-postgres.sh",
+    "ops:restore": "scripts/ops/restore-postgres.sh",
+    "ops:check": "npm run ops:templates && npm run ops:scan-secrets && npm run ops:docker-runtime && npm run ops:audit",
+
     "ops:launch-readiness": "scripts/ops/launch-readiness.sh",
     "db:up": "docker compose up -d postgres",
     "deps:up": "docker compose up -d postgres valkey garage clamav",

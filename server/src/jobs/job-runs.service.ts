@@ -1,18 +1,23 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type { JobRunStatus, JobRunSummary } from '@acres/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 const RECENT_RUN_LIMIT = 50;
 
 @Injectable()
 export class JobRunsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly metrics?: MetricsService,
+  ) {}
 
   async start(jobName: string): Promise<string> {
     const run = await this.prisma.jobRun.create({
       data: { jobName, status: 'running' },
       select: { id: true },
     });
+    this.metrics?.recordJobRun(jobName, 'running');
     return run.id;
   }
 
@@ -21,10 +26,14 @@ export class JobRunsService {
     status: Exclude<JobRunStatus, 'running'>,
     message?: string,
   ): Promise<void> {
-    await this.prisma.jobRun.update({
+    const updated = await this.prisma.jobRun.update({
       where: { id },
       data: { status, finishedAt: new Date(), message: message ?? null },
+      select: { jobName: true },
     });
+    if (updated?.jobName) {
+      this.metrics?.recordJobRun(updated.jobName, status);
+    }
   }
 
   async listRecent(limit = RECENT_RUN_LIMIT): Promise<JobRunSummary[]> {

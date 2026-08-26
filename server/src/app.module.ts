@@ -18,6 +18,7 @@ import { StorageModule } from './storage/storage.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { IngestionModule } from './ingestion/ingestion.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
 import { ReportsModule } from './reports/reports.module';
@@ -30,6 +31,7 @@ import { ReportsModule } from './reports/reports.module';
     SessionsModule,
     ScheduleModule.forRoot(),
     HealthModule,
+    MetricsModule,
     AccountsModule,
     IdentityModule,
     IdempotencyModule,

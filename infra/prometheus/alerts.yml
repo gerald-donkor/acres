@@ -1,5 +1,38 @@
-groups: []
+groups:
+  - name: acres_service_alerts
+    rules:
+      - alert: AcresApiDown
+        expr: up{job="acres-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Acres API instance is down
+          description: The Acres API process at api:3001 has been unreachable for more than 1 minute.
 
-# Phase 12A keeps this file syntactically valid but intentionally empty.
-# Add real alert rules only after Acres exposes reviewed, low-cardinality
-# Prometheus metrics and operators approve owners, thresholds and runbooks.
+      - alert: HighHttp5xxRate
+        expr: (sum(rate(acres_http_requests_total{status_class="5xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: High HTTP 5xx error rate detected
+          description: HTTP 5xx response rate has exceeded 5% of total requests over a 5-minute window.
+
+      - alert: QueueDeadLettersDetected
+        expr: sum(acres_queue_jobs_total{status="failed"}) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker queue dead letters detected
+          description: One or more background worker jobs have encountered fatal errors and entered dead-letter storage.
+
+      - alert: OutboxDeliveryLag
+        expr: acres_outbox_pending_events > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbox event publication lag
+          description: More than 50 outbox events have remained pending delivery for over 10 minutes.

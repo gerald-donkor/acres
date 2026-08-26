@@ -136,6 +136,29 @@ describe('Acres API', () => {
     });
   });
 
+  describe('GET /metrics', () => {
+    it('returns Prometheus text exposition format without json wrapping', async () => {
+      const response = await request(server)
+        .get('/metrics')
+        .expect(200)
+        .expect('Content-Type', /text\/plain/);
+
+      expect(response.text).toContain(
+        '# TYPE acres_http_requests_total counter',
+      );
+      expect(response.text).toContain(
+        '# TYPE acres_http_request_duration_seconds histogram',
+      );
+      expect(response.text).toContain(
+        '# TYPE acres_http_active_requests gauge',
+      );
+      expect(response.text).toContain(
+        '# TYPE acres_outbox_pending_events gauge',
+      );
+      expect(response.body).toEqual({});
+    });
+  });
+
   describe('request IDs and route migration', () => {
     it('returns a safe request id and ignores hostile values', async () => {
       const response = await request(server)

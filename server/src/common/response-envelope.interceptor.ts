@@ -14,14 +14,18 @@ import type { ApiSuccess } from '@acres/shared';
 @Injectable()
 export class ResponseEnvelopeInterceptor<T> implements NestInterceptor<
   T,
-  ApiSuccess<T>
+  ApiSuccess<T> | T
 > {
   intercept(
     context: ExecutionContext,
     next: CallHandler<T>,
-  ): Observable<ApiSuccess<T>> {
+  ): Observable<ApiSuccess<T> | T> {
     if (context.getType<string>() !== 'http') {
-      return next.handle() as Observable<ApiSuccess<T>>;
+      return next.handle();
+    }
+    const request = context.switchToHttp().getRequest<{ path?: string }>();
+    if (request?.path === '/metrics') {
+      return next.handle();
     }
     return next.handle().pipe(map((data) => ({ ok: true as const, data })));
   }

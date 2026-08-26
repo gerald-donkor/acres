@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { AcresConfigService } from '../config/acres-config.service';
 import { IngestionProcessorService } from '../ingestion/ingestion-processor.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import {
@@ -41,6 +42,7 @@ export class UploadWorkerService {
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
     private readonly ingestionProcessor: IngestionProcessorService,
     private readonly reports: ReportsService,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async start(): Promise<void> {
@@ -57,6 +59,12 @@ export class UploadWorkerService {
         concurrency: 2,
       },
     );
+    this.worker.on('completed', () => {
+      this.metrics?.recordQueueJob(this.config.queueName, 'completed');
+    });
+    this.worker.on('failed', () => {
+      this.metrics?.recordQueueJob(this.config.queueName, 'failed');
+    });
     await this.dispatchOutboxOnce();
     this.outboxTimer = setInterval(
       () => void this.dispatchOutboxOnce(),

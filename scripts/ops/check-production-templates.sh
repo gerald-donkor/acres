@@ -134,8 +134,23 @@ for (const [name, service] of Object.entries(services)) {
   }
 }
 
-readYaml('infra/prometheus/prometheus.yml');
-readYaml('infra/prometheus/alerts.yml');
+const prom = readYaml('infra/prometheus/prometheus.yml');
+const scrapeJobs = (prom.scrape_configs || []).map((c) => c.job_name);
+if (!scrapeJobs.includes('acres-api')) {
+  console.error('ops template check failed: Prometheus config missing acres-api scrape target');
+  process.exit(1);
+}
+
+const alerts = readYaml('infra/prometheus/alerts.yml');
+const alertNames = (alerts.groups || []).flatMap((g) => (g.rules || []).map((r) => r.alert));
+const requiredAlerts = ['AcresApiDown', 'HighHttp5xxRate', 'QueueDeadLettersDetected', 'OutboxDeliveryLag'];
+for (const reqAlert of requiredAlerts) {
+  if (!alertNames.includes(reqAlert)) {
+    console.error(`ops template check failed: Prometheus alerts missing required rule ${reqAlert}`);
+    process.exit(1);
+  }
+}
+
 readYaml('infra/grafana/provisioning/datasources/prometheus.yml');
 readYaml('infra/grafana/provisioning/dashboards/acres.yml');
 
@@ -144,6 +159,11 @@ if (dashboard.uid !== 'acres-operations-foundation') {
   console.error('ops template check failed: Grafana dashboard uid drifted');
   process.exit(1);
 }
+if (!Array.isArray(dashboard.panels) || dashboard.panels.length < 5) {
+  console.error('ops template check failed: Grafana dashboard missing operational panels');
+  process.exit(1);
+}
+
 NODE
 
 if grep -Eq '^NEXT_PUBLIC_.*(SECRET|PASSWORD|TOKEN|KEY)=' infra/env/production.env.example; then

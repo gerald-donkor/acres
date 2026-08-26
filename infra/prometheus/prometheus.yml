@@ -11,11 +11,9 @@ scrape_configs:
       - targets:
           - localhost:9090
 
-  # Acres does not expose a Prometheus metrics endpoint in Phase 12A. Add a
-  # real, low-cardinality endpoint in application code before uncommenting.
-  # - job_name: acres-api
-  #   metrics_path: /metrics
-  #   scheme: http
-  #   static_configs:
-  #     - targets:
-  #         - api:3001
+  - job_name: acres-api
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - api:3001

@@ -32621,6 +32621,27 @@
           "health"
         ]
       }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "MetricsController_getMetrics",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain; version=0.0.4; charset=utf-8": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Prometheus metrics text exposition format"
+          }
+        },
+        "tags": [
+          "metrics"
+        ]
+      }
     }
   },
   "tags": []

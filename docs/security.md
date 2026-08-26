@@ -394,6 +394,29 @@ Residual Phase 12A risks:
 - Docker/Compose production config, image builds, readiness through Caddy,
   rollback, backup restore, DB/object reconciliation, and encrypted-mount/key
   recovery drills still require a Docker-capable production-like host.
-- Prometheus/Grafana are scaffolding only; alert rules are intentionally empty
-  until real application metrics, measured thresholds, alert routing, telemetry
-  access control, and operations dashboard hardening land.
+
+## 16. Phase 12B telemetry, retention, and supply-chain update
+
+As of 2026-08-26, operational telemetry, retention maintenance, and supply-chain
+hardening are implemented:
+
+- The API exposes a private, version-neutral `GET /metrics` Prometheus endpoint
+  with strict low-cardinality label normalization (`/api/v1/auth`,
+  `/api/v1/organizations`, `/api/v1/reports`, etc.). Dynamic IDs, tokens, query
+  parameters, and PII are strictly excluded from labels.
+- Prometheus configuration scrapes `acres-api` at `/metrics`, and alert rules
+  are active for `AcresApiDown`, `HighHttp5xxRate`, `QueueDeadLettersDetected`,
+  and `OutboxDeliveryLag`.
+- Grafana dashboard `infra/grafana/dashboards/acres-operations.json` contains
+  operational panels for API status, request rates, error percentages, latency
+  quantiles, queue depth, and job execution.
+- Automated retention jobs (`RetentionMaintenanceJob`) purge expired upload
+  sessions, idempotency records, and authentication/recovery tokens on the single
+  scheduler instance (`SCHEDULER_ENABLED=true`), logging all executions to `JobRun`.
+- Structured PostgreSQL backup and restore helper scripts (`scripts/ops/backup-postgres.sh`,
+  `scripts/ops/restore-postgres.sh`) enforce fail-closed credentials and avoid
+  printing secrets to logs.
+- GitHub Actions in `.github/workflows/ci.yml` are pinned to immutable 40-character
+  commit SHAs to mitigate workflow tampering (TM-18).
+- Production dependency auditing is enforced via `scripts/ops/audit-dependencies.sh`
+  and integrated into `npm run ops:check`.
