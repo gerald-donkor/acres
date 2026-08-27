@@ -529,6 +529,44 @@ describe('Acres API', () => {
       expect(issues.body).toMatchObject({ ok: true, data: [] });
     });
 
+    it('streams ingestion run events until a terminal state', async () => {
+      const terminalRun = {
+        ...runRow,
+        state: 'published',
+        stage: 'publish',
+        progressPercent: 100,
+      };
+      prisma.ingestionRun.findFirst.mockResolvedValue(terminalRun);
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get(`/api/v1/ingestion-runs/${runRow.id}/events`)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200)
+        .expect('content-type', /^text\/event-stream/);
+
+      expect(response.text).toContain('event: ingestion.progress');
+      expect(response.text).toContain(`id: ${runRow.id}:published:publish:100`);
+      expect(response.text).toContain('"state":"published"');
+    });
+
+    it('returns 404 for ingestion events on a missing run before stream starts', async () => {
+      prisma.ingestionRun.findFirst.mockResolvedValue(null);
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get(
+          '/api/v1/ingestion-runs/018f7611-89ab-7abc-9234-999999999999/events',
+        )
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(404);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+    });
+
     it('does not create a mapping for a foreign or missing upload', async () => {
       prisma.upload.findFirst.mockResolvedValue(null);
       const { agent } = await signedInAgent();
@@ -1185,6 +1223,66 @@ describe('Acres API', () => {
           where: expect.objectContaining({ status: 'published' }) as unknown,
         }),
       );
+    });
+
+    it('streams export events until a terminal state', async () => {
+      const completedExport = {
+        ...exportRow,
+        status: 'succeeded',
+        finishedAt: now,
+      };
+      prisma.exportRequest.findFirst.mockResolvedValue(completedExport);
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get(`/api/v1/exports/${exportId}/events`)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200)
+        .expect('content-type', /^text\/event-stream/);
+
+      expect(response.text).toContain('event: export.progress');
+      expect(response.text).toContain(
+        `id: ${exportId}:succeeded:${now.toISOString()}`,
+      );
+      expect(response.text).toContain('"status":"succeeded"');
+    });
+
+    it('allows viewers with exports.read to stream export events', async () => {
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'viewer',
+      });
+      const completedExport = {
+        ...exportRow,
+        status: 'succeeded',
+        finishedAt: now,
+      };
+      prisma.exportRequest.findFirst.mockResolvedValue(completedExport);
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get(`/api/v1/exports/${exportId}/events`)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(200)
+        .expect('content-type', /^text\/event-stream/);
+
+      expect(response.text).toContain('event: export.progress');
+      expect(response.text).toContain('"status":"succeeded"');
+    });
+
+    it('returns 404 for export events on a missing export before stream starts', async () => {
+      prisma.exportRequest.findFirst.mockResolvedValue(null);
+      const { agent } = await signedInAgent();
+
+      const response = await agent
+        .get('/api/v1/exports/018f7611-89ab-7abc-9234-999999999999/events')
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .expect(404);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
     });
   });
 

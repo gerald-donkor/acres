@@ -6,11 +6,15 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  MessageEvent,
   Param,
   Patch,
   Post,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
+import { concat, from, of, timer, type Observable } from 'rxjs';
+import { map, switchMap, takeWhile } from 'rxjs/operators';
 import { ApiTags } from '@nestjs/swagger';
 import {
   ApiCsrfHeader,
@@ -234,6 +238,38 @@ export class IngestionController {
     return this.ingestion.getRun(organization, runId);
   }
 
+  @Sse('ingestion-runs/:runId/events')
+  @RequiresOrganizationPermission('ingestion.read')
+  async events(
+    @CurrentOrganization() organization: OrganizationContext,
+    @Param('runId') runId: string,
+  ): Promise<Observable<MessageEvent>> {
+    const initial = await this.ingestion.getRun(organization, runId);
+    const initialEvent: MessageEvent = {
+      type: 'ingestion.progress',
+      id: `${initial.id}:${initial.state}:${initial.stage}:${initial.progressPercent}`,
+      data: initial,
+    };
+    if (isIngestionTerminal(initial.state)) {
+      return of(initialEvent);
+    }
+    return concat(
+      of(initialEvent),
+      timer(1500, 1500).pipe(
+        switchMap(() => from(this.ingestion.getRun(organization, runId))),
+        takeWhile((status) => !isIngestionTerminal(status.state), true),
+        map(
+          (status) =>
+            ({
+              type: 'ingestion.progress',
+              id: `${status.id}:${status.state}:${status.stage}:${status.progressPercent}`,
+              data: status,
+            }) satisfies MessageEvent,
+        ),
+      ),
+    );
+  }
+
   @Get('ingestion-runs/:runId/issues')
   @RequiresOrganizationPermission('ingestion.read')
   @ApiEnvelope({
@@ -269,4 +305,8 @@ export class IngestionController {
   ) {
     return this.ingestion.cancelRun(organization, runId);
   }
+}
+
+function isIngestionTerminal(state: string): boolean {
+  return ['published', 'failed', 'cancelled'].includes(state);
 }

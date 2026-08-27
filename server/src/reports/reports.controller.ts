@@ -5,12 +5,16 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  MessageEvent,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
+import { concat, from, of, timer, type Observable } from 'rxjs';
+import { map, switchMap, takeWhile } from 'rxjs/operators';
 import { ApiTags } from '@nestjs/swagger';
 import {
   ApiCsrfHeader,
@@ -325,4 +329,40 @@ export class ReportsController {
   ) {
     return this.reports.downloadExport(organization, exportId);
   }
+
+  @Sse('exports/:exportId/events')
+  @RequiresOrganizationPermission('exports.read')
+  async events(
+    @CurrentOrganization() organization: OrganizationContext,
+    @Param('exportId', ParseUUIDPipe) exportId: string,
+  ): Promise<Observable<MessageEvent>> {
+    const initial = await this.reports.getExport(organization, exportId);
+    const initialEvent: MessageEvent = {
+      type: 'export.progress',
+      id: `${initial.id}:${initial.status}:${initial.finishedAt ?? initial.updatedAt}`,
+      data: initial,
+    };
+    if (isExportTerminal(initial.status)) {
+      return of(initialEvent);
+    }
+    return concat(
+      of(initialEvent),
+      timer(1500, 1500).pipe(
+        switchMap(() => from(this.reports.getExport(organization, exportId))),
+        takeWhile((status) => !isExportTerminal(status.status), true),
+        map(
+          (status) =>
+            ({
+              type: 'export.progress',
+              id: `${status.id}:${status.status}:${status.finishedAt ?? status.updatedAt}`,
+              data: status,
+            }) satisfies MessageEvent,
+        ),
+      ),
+    );
+  }
+}
+
+function isExportTerminal(status: string): boolean {
+  return ['succeeded', 'failed', 'cancelled'].includes(status);
 }

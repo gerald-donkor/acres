@@ -233,6 +233,14 @@ live server with no database:
 GET /regions  →  {"ok":false,"error":{"code":"INTERNAL_ERROR","message":"Something went wrong."}}
 ```
 
+**SSE endpoints bypass the JSON envelope**: Routes decorated with `@Sse()` (such as
+`GET /api/v1/exports/:exportId/events` and `GET /api/v1/ingestion-runs/:runId/events`)
+are excluded in `ResponseEnvelopeInterceptor` using `Reflect.getMetadata(SSE_METADATA, handler)`.
+They stream W3C SSE event frames (`event:`, `id:`, `data:`) with `timer(0, 1500)`
+frequency, completing automatically when terminal states are reached.
+Setup errors (404, 403) thrown before stream initiation are formatted through `ApiExceptionFilter`
+as standard JSON error envelopes.
+
 `/jobs/runs` sits behind the session guard only. **Role-based authorization
 does not exist**; "any signed-in account" is the floor, not the intended final
 rule, and it is a later prompt.

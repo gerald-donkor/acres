@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { IngestionRunSummary } from '@acres/shared';
 import type { Prisma } from '../generated/prisma/client';
 import { ApiException } from '../common/api-exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
@@ -9,6 +10,8 @@ import type { CreateDatasetDto } from './dto/create-dataset.dto';
 import type { CreateMappingDto } from './dto/create-mapping.dto';
 import type { StartIngestionRunDto } from './dto/start-ingestion-run.dto';
 import type { UpdateDatasetDto } from './dto/update-dataset.dto';
+
+export type { IngestionRunSummary };
 
 export interface DatasetSummary {
   readonly id: string;
@@ -36,21 +39,6 @@ export interface MappingSummary {
   readonly versionNumber: number;
   readonly validationStatus: string;
   readonly createdAt: string;
-}
-
-export interface IngestionRunSummary {
-  readonly id: string;
-  readonly datasetId: string;
-  readonly uploadId: string;
-  readonly mappingId: string;
-  readonly datasetVersionId: string | null;
-  readonly state: string;
-  readonly stage: string;
-  readonly progressPercent: number;
-  readonly failure: { code: string; message: string | null } | null;
-  readonly createdAt: string;
-  readonly startedAt: string | null;
-  readonly finishedAt: string | null;
 }
 
 @Injectable()

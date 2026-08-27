@@ -64,6 +64,15 @@ same-origin `/api/v1/*` with `credentials: "include"`, issues CSRF with
 after login/register, and adds a fresh `crypto.randomUUID()` idempotency key
 for create-organization commands.
 
+### 3.1 Server-Sent Events (SSE) client
+
+`client/lib/api/sse.ts` implements fetch-based SSE stream consumption (`streamSse` and `parseSseLines`):
+- Standard browser `EventSource` cannot send custom headers. `streamSse` uses `fetch()` with `ReadableStream` to inject `x-acres-organization-id`, `accept: text/event-stream`, `credentials: "include"`, and `cache: "no-store"`.
+- The parser handles single and multiline `data:` frames, extracts `event` and `id` metadata, ignores heartbeat/comment lines starting with `:`, and cleans up listeners via `AbortSignal`.
+- Terminal predicates (`isTerminal`) cleanly close stream readers on terminal events (`succeeded`, `failed`, `cancelled`, `published`).
+- If stream connection fails or the server returns an initial non-200 status, `fallbackPoll` performs a single REST read to keep UI updated.
+- `client/components/acres/app/export-status.tsx` uses `streamExportProgress` to stream queued/in-flight exports live and announces completion using `<div className="sr-only" aria-live="polite">`.
+
 ## 4. Auth behavior
 
 `returnTo` is sanitized by `client/lib/auth/return-to.ts`: only relative paths

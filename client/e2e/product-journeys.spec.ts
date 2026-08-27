@@ -171,7 +171,25 @@ test.describe("Product Journeys", () => {
     page,
   }) => {
     const report = createMockReport();
-    const exportReq = createMockExport(report.id, "csv");
+    const queuedExport = createMockExport(report.id, "csv", {
+      status: "queued",
+      artifact: null,
+      finishedAt: null,
+    });
+    const succeededExport = {
+      ...queuedExport,
+      status: "succeeded" as const,
+      finishedAt: "2026-08-15T10:00:00.000Z",
+      artifact: {
+        id: `art-${queuedExport.id}`,
+        filename: `report-${report.id}.csv`,
+        mediaType: "text/csv",
+        byteCount: 4096,
+        checksumHex:
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        createdAt: "2026-08-15T10:00:00.000Z",
+      },
+    };
 
     await page.route("**/api/v1/reports", async (route) => {
       await route.fulfill({
@@ -202,7 +220,7 @@ test.describe("Product Journeys", () => {
           contentType: "application/json",
           body: JSON.stringify({
             ok: true,
-            data: exportReq,
+            data: queuedExport,
           }),
         });
         return;
@@ -212,26 +230,42 @@ test.describe("Product Journeys", () => {
         contentType: "application/json",
         body: JSON.stringify({
           ok: true,
-          data: [exportReq],
+          data: [queuedExport],
         }),
       });
     });
 
-    await page.route(`**/api/v1/exports/${exportReq.id}/download`, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          ok: true,
-          data: {
-            url: `https://storage.acres.internal/artifacts/${exportReq.id}.csv`,
-            method: "GET",
-            headers: {},
-            expiresAt: "2026-08-27T00:00:00Z",
-          },
-        }),
-      });
-    });
+    await page.route(
+      `**/api/v1/exports/${queuedExport.id}/events`,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "text/event-stream",
+          body:
+            `event: export.progress\nid: ${queuedExport.id}:succeeded:2026-08-15T10:00:00.000Z\n` +
+            `data: ${JSON.stringify(succeededExport)}\n\n`,
+        });
+      },
+    );
+
+    await page.route(
+      `**/api/v1/exports/${queuedExport.id}/download`,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ok: true,
+            data: {
+              url: `https://storage.acres.internal/artifacts/${queuedExport.id}.csv`,
+              method: "GET",
+              headers: {},
+              expiresAt: "2026-08-27T00:00:00Z",
+            },
+          }),
+        });
+      },
+    );
 
     await registerAccount(page);
     const orgName = unique("Governed Reports Org");

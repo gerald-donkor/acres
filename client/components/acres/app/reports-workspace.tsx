@@ -4,9 +4,9 @@ import { FileTextIcon } from "lucide-react";
 
 import {
   CreateReportForm,
-  ExportDownloadButton,
   RevisionEditor,
 } from "@/components/acres/app/report-actions";
+import { ExportStatus } from "@/components/acres/app/export-status";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -275,45 +275,6 @@ function EvidenceTable({ report }: { report: Report }) {
         </TableBody>
       </Table>
     </div>
-  );
-}
-
-function ExportStatus({
-  organizationId,
-  exports,
-}: {
-  organizationId: string;
-  exports: ExportRequest[];
-}) {
-  return (
-    <aside className="grid content-start gap-3 border border-rule p-4">
-      <h2 className="text-ui text-ink">Exports</h2>
-      {exports.length === 0 ? (
-        <p className="text-body text-ink-muted">No exports requested yet.</p>
-      ) : (
-        exports.map((item) => (
-          <div key={item.id} className="border-b border-rule pb-3 last:border-0">
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-mono text-label uppercase text-ink-muted lg:text-label-lg">
-                {item.format}
-              </span>
-              <Badge variant={item.status === "succeeded" ? "secondary" : "outline"}>
-                {item.status}
-              </Badge>
-            </div>
-            <p className="mt-2 text-body text-ink-muted">
-              {item.failure?.message ?? formatDate(item.createdAt)}
-            </p>
-            {item.status === "succeeded" ? (
-              <ExportDownloadButton
-                organizationId={organizationId}
-                exportId={item.id}
-              />
-            ) : null}
-          </div>
-        ))
-      )}
-    </aside>
   );
 }
 

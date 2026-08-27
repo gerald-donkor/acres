@@ -23,10 +23,10 @@ centralized organization permissions, hash-only invitations/account tokens,
 append-oriented organization audit events, transaction-local tenant context and
 forced RLS on tenant product tables, authenticated read-only GraphQL, a worker
 path for ingestion/export jobs, object-storage metadata and adapters, bounded
-uploads, analytics/dashboard reads, immutable report evidence, and
-formula-safe CSV exports. It still has no mail delivery, SSE progress stream,
-optional AI, or production topology. Those remaining controls are targets, not
-present-day defenses.
+uploads, analytics/dashboard reads, immutable report evidence,
+formula-safe CSV exports, and SSE job progress streams. It still has no
+mail delivery, optional AI, or production topology. Those remaining
+controls are targets, not present-day defenses.
 
 ## 2. Scope and assumptions
 
@@ -129,7 +129,7 @@ Classification details are owned by [`product.md`](product.md#5-data-classificat
 | REST/auth/session        | `/api/v1` product routes; DTO allowlist; opaque SHA-256 session token hashes; cost-12 bcrypt passwords; revocation; selected organization commands require scoped idempotency keys and responses carry safe request IDs                                                                                 | Same-origin proxy trust review, distributed throttling and future stale-write/version contracts                                     |
 | Cookies/CSRF/CORS        | `HttpOnly`, `SameSite=Lax`, production `Secure`; session-bound double-submit token; exact configured origin; credentialed allowed headers/methods                                                                                                                                                       | Same-origin Caddy; canonical origin; CSRF rotation regression; proxy trust review; no state-changing GET                            |
 | GraphQL                  | Authenticated read-only `/graphql`; selected-organization context; same permission/application services as REST; request-scoped DataLoader caching; pre-parse byte/depth/alias/complexity/result/execution-time limits; transaction-local DB cancellation; sanitized errors; no mutations/subscriptions; dashboard summary read model | Broader query-count matrix as read models grow                                                                                      |
-| SSE                      | Not present                                                                                                                                                                                                                                                                                             | Authorized status only, reconnect cursor where needed, bounded connections, durable PG state independent of stream                  |
+| SSE                      | Implemented for exports (`GET /api/v1/exports/:exportId/events`) and ingestion runs (`GET /api/v1/ingestion-runs/:runId/events`). Authenticated session, active organization context, scoped permission guards (`exports.read`, `ingestion.read`), pre-stream 404/403 validation, low-risk event IDs, terminal state disconnection, and fallback polling. | Authorized status only, reconnect cursor where needed, bounded connections, durable PG state independent of stream                  |
 | Upload/presigned storage | Not present                                                                                                                                                                                                                                                                                             | Short expiry/method/key; quarantine; checksum/type/size/shape checks; scan before parse; attachment downloads                       |
 | Parsers/worker           | Not present                                                                                                                                                                                                                                                                                             | Isolated staged jobs; memory/CPU/time/expansion/geometry bounds; identifier-only payloads; idempotency and cancellation             |
 | Queue/outbox             | Not present                                                                                                                                                                                                                                                                                             | Private authenticated `noeviction` Valkey; deterministic job IDs; PG outbox; replay/poison/dead-letter handling                     |

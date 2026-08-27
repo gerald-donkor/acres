@@ -9,6 +9,7 @@ import type {
   DashboardView,
   ExportRequest,
   ExportDownload,
+  IngestionRunSummary,
   LoginInput,
   OrganizationSummary,
   Report,
@@ -19,6 +20,7 @@ import type {
 
 import { isApiClientError, parseApiResponse } from "@/lib/api/envelope";
 import { createIdempotencyKey } from "@/lib/api/idempotency";
+import { streamSse } from "@/lib/api/sse";
 
 type CsrfToken = {
   csrfToken: string;
@@ -190,6 +192,38 @@ export async function createExport(
   });
 }
 
+export async function getExport(
+  organizationId: string,
+  exportId: string,
+): Promise<ExportRequest> {
+  return apiFetch<ExportRequest>(`/exports/${exportId}`, {
+    method: "GET",
+    organizationId,
+  });
+}
+
+export function streamExportProgress(
+  organizationId: string,
+  exportId: string,
+  options: {
+    signal?: AbortSignal;
+    onUpdate: (exportRequest: ExportRequest) => void;
+    onError?: (error: unknown) => void;
+  },
+): () => void {
+  return streamSse<ExportRequest>(`/exports/${exportId}/events`, {
+    organizationId,
+    signal: options.signal,
+    onMessage: (data) => options.onUpdate(data),
+    onError: options.onError,
+    fallbackPoll: () => getExport(organizationId, exportId),
+    isTerminal: (data) =>
+      data.status === "succeeded" ||
+      data.status === "failed" ||
+      data.status === "cancelled",
+  });
+}
+
 export async function getExportDownload(
   organizationId: string,
   exportId: string,
@@ -197,5 +231,37 @@ export async function getExportDownload(
   return apiFetch<ExportDownload>(`/exports/${exportId}/download`, {
     method: "GET",
     organizationId,
+  });
+}
+
+export async function getIngestionRun(
+  organizationId: string,
+  runId: string,
+): Promise<IngestionRunSummary> {
+  return apiFetch<IngestionRunSummary>(`/ingestion-runs/${runId}`, {
+    method: "GET",
+    organizationId,
+  });
+}
+
+export function streamIngestionRunProgress(
+  organizationId: string,
+  runId: string,
+  options: {
+    signal?: AbortSignal;
+    onUpdate: (run: IngestionRunSummary) => void;
+    onError?: (error: unknown) => void;
+  },
+): () => void {
+  return streamSse<IngestionRunSummary>(`/ingestion-runs/${runId}/events`, {
+    organizationId,
+    signal: options.signal,
+    onMessage: (data) => options.onUpdate(data),
+    onError: options.onError,
+    fallbackPoll: () => getIngestionRun(organizationId, runId),
+    isTerminal: (data) =>
+      data.state === "published" ||
+      data.state === "failed" ||
+      data.state === "cancelled",
   });
 }

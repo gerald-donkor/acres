@@ -144,12 +144,22 @@ the selected organization context.
 | `POST`   | `/datasets/:datasetId/mappings`       | `ingestion.run`    | CSRF + idempotency; accepted upload only  |
 | `POST`   | `/datasets/:datasetId/ingestion-runs` | `ingestion.run`    | CSRF + idempotency; queues worker run     |
 | `GET`    | `/ingestion-runs/:runId`              | `ingestion.read`   | durable run status                        |
+| `GET`    | `/ingestion-runs/:runId/events`       | `ingestion.read`   | SSE stream; 1500ms interval to completion |
 | `GET`    | `/ingestion-runs/:runId/issues`       | `ingestion.read`   | up to 100 issues                          |
 | `DELETE` | `/ingestion-runs/:runId`              | `ingestion.cancel` | cancel before publication                 |
 
 Owners/admins have all dataset and ingestion permissions. Analysts can create,
 update, run, cancel, and read. Viewers can read datasets and ingestion status
 only.
+
+### Ingestion progress streaming
+
+`GET /api/v1/ingestion-runs/:runId/events` streams live ingestion progress via Server-Sent Events (SSE):
+- Scoped by active organization context and requires `ingestion.read` permission.
+- Pre-flight checks verify the run exists and belongs to the organization before starting the stream.
+- Emits `ingestion.progress` events at 1500ms intervals until reaching a terminal state (`published`, `failed`, `cancelled`).
+- Event IDs use low-risk composite identifiers (`${runId}:${state}:${stage}:${progressPercent}`).
+- Client helper `streamIngestionRunProgress` connects via `fetch()` + `ReadableStream` and falls back to `getIngestionRun` polling if the stream fails to establish.
 
 GraphQL remains read-only and unchanged.
 

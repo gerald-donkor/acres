@@ -4,6 +4,7 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { SSE_METADATA } from '@nestjs/common/constants';
 import { map, Observable } from 'rxjs';
 import type { ApiSuccess } from '@acres/shared';
 
@@ -23,8 +24,12 @@ export class ResponseEnvelopeInterceptor<T> implements NestInterceptor<
     if (context.getType<string>() !== 'http') {
       return next.handle();
     }
+    const handler = context.getHandler();
+    if (Reflect.getMetadata(SSE_METADATA, handler)) {
+      return next.handle();
+    }
     const request = context.switchToHttp().getRequest<{ path?: string }>();
-    if (request?.path === '/metrics') {
+    if (request?.path === '/metrics' || request?.path?.endsWith('/events')) {
       return next.handle();
     }
     return next.handle().pipe(map((data) => ({ ok: true as const, data })));

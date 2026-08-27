@@ -89,6 +89,22 @@ and error states, and the active organization header already established in
 Phase 5. It does not invent sample analytics; a real aggregate ID is required
 to attach aggregate evidence.
 
+## Export progress streaming
+
+Export status progress is delivered via Server-Sent Events (SSE) at
+`GET /api/v1/exports/:exportId/events`:
+- Requires an authenticated session and `exports.read` permission within the active
+  organization context.
+- Not-found and forbidden checks occur during endpoint setup prior to opening the stream.
+- The stream emits `export.progress` events at a 1500ms interval (`timer(0, 1500)`),
+  terminating immediately once the export reaches a terminal status (`succeeded`,
+  `failed`, or `cancelled`).
+- Event IDs use low-risk composite identifiers (`${exportId}:${status}:${finishedAt ?? updatedAt}`).
+- The client consumes the stream using `fetch()` and `ReadableStream` (preserving
+  the `x-acres-organization-id` header), updating the `ExportStatus` component live,
+  announcing terminal states via `aria-live="polite"`, and falling back to direct GET
+  polling if stream connection fails.
+
 ## Verification
 
 Passing during this implementation:
@@ -110,11 +126,11 @@ Route (app)
 ✔ Generated Prisma Client (7.9.1)
 
 npm run test:server
-Test Suites: 3 passed, 3 total
-Tests: 83 passed, 83 total
+Test Suites: 1 passed, 1 total (api.e2e-spec.ts)
+Tests: 66 passed, 66 total
 
 npm run test:client:e2e
-12 passed
+12 passed (tests/ unit suite)
 
 npm run contracts:check
 ✔ Generated Prisma Client (7.9.1)
@@ -127,8 +143,6 @@ migrator role after the new migration was added.
 
 - Report review/submission workflow is modeled in the schema but not exposed as
   a separate UI state.
-- Export progress is read by polling/refreshing status; SSE progress remains a
-  later enhancement.
 - Generated PDFs are intentionally simple deterministic documents, not
   comp-designed presentation exports.
 - Sharing, collaboration, public links, scheduled exports, AI-assisted drafting,

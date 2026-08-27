@@ -2,6 +2,7 @@ export * from './accounts';
 export * from './api';
 export * from './dashboards';
 export * from './forms';
+export * from './ingestion';
 export * from './jobs';
 export * from './organizations';
 export * from './regions';

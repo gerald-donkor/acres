@@ -14251,6 +14251,43 @@
         ]
       }
     },
+    "/api/v1/exports/{exportId}/events": {
+      "get": {
+        "operationId": "ReportsController_events_v1",
+        "parameters": [
+          {
+            "description": "Optional selected organization UUID. When present, it must match the organizationId path parameter.",
+            "in": "header",
+            "name": "x-acres-organization-id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "exportId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/v1/forms/contact": {
       "post": {
         "operationId": "FormsController_contact_v1",
@@ -15773,6 +15810,34 @@
           }
         ],
         "summary": "Get ingestion run",
+        "tags": [
+          "datasets"
+        ]
+      }
+    },
+    "/api/v1/ingestion-runs/{runId}/events": {
+      "get": {
+        "operationId": "IngestionController_events_v1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "acres_session": []
+          }
+        ],
         "tags": [
           "datasets"
         ]
