@@ -9,23 +9,14 @@ import {
   OBJECT_STORAGE,
   type ObjectStoragePort,
 } from '../storage/storage.port';
+import type { UploadStatus } from '@acres/shared';
 import type { OrganizationContext } from '../organizations/organization-context';
 import type { CompleteUploadDto } from './dto/complete-upload.dto';
 import type { InitiateUploadDto } from './dto/initiate-upload.dto';
 
 const IDEMPOTENCY_KEY_RE = /^[\x21-\x7e]{16,128}$/;
 
-export interface UploadStatus {
-  readonly id: string;
-  readonly state: string;
-  readonly filename: string;
-  readonly mediaType: string;
-  readonly byteCount: number;
-  readonly checksumHex: string | null;
-  readonly progress: { stage: string; percent: number };
-  readonly failure: { code: string; message: string | null } | null;
-  readonly acceptedAt: string | null;
-}
+export type { UploadStatus };
 
 @Injectable()
 export class UploadsService {

@@ -1,5 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { IngestionRunSummary } from '@acres/shared';
+import type {
+  DatasetSummary,
+  DatasetVersionSummary,
+  IngestionRunSummary,
+  MappingSummary,
+  ValidationIssueSummary,
+} from '@acres/shared';
 import type { Prisma } from '../generated/prisma/client';
 import { ApiException } from '../common/api-exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
@@ -11,35 +17,13 @@ import type { CreateMappingDto } from './dto/create-mapping.dto';
 import type { StartIngestionRunDto } from './dto/start-ingestion-run.dto';
 import type { UpdateDatasetDto } from './dto/update-dataset.dto';
 
-export type { IngestionRunSummary };
-
-export interface DatasetSummary {
-  readonly id: string;
-  readonly name: string;
-  readonly description: string | null;
-  readonly state: string;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-  readonly latestVersion: DatasetVersionSummary | null;
-}
-
-export interface DatasetVersionSummary {
-  readonly id: string;
-  readonly versionNumber: number;
-  readonly publicationStatus: string;
-  readonly publishedAt: string;
-  readonly checksumHex: string | null;
-  readonly sourceSummary: unknown;
-}
-
-export interface MappingSummary {
-  readonly id: string;
-  readonly datasetId: string;
-  readonly uploadId: string;
-  readonly versionNumber: number;
-  readonly validationStatus: string;
-  readonly createdAt: string;
-}
+export type {
+  DatasetSummary,
+  DatasetVersionSummary,
+  IngestionRunSummary,
+  MappingSummary,
+  ValidationIssueSummary,
+};
 
 @Injectable()
 export class IngestionService {
@@ -326,7 +310,7 @@ export class IngestionService {
   async listIssues(
     organization: OrganizationContext,
     runId: string,
-  ): Promise<unknown[]> {
+  ): Promise<ValidationIssueSummary[]> {
     return this.tenants.organizationScoped(
       organization.accountId,
       organization.organizationId,

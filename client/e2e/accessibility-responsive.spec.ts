@@ -62,6 +62,16 @@ test.describe("WCAG 2.2 Accessibility & Responsive Audit", () => {
       await page.getByRole("link", { name: "New Report" }).click();
       await expect(page).toHaveURL(/\/app\/reports\/new$/);
       await expectNoHorizontalScroll(page);
+
+      // /app/datasets
+      await page.getByRole("link", { name: "Data Sets" }).click();
+      await expect(page).toHaveURL(/\/app\/datasets$/);
+      await expectNoHorizontalScroll(page);
+
+      // /app/datasets/new
+      await page.getByRole("link", { name: "New Dataset" }).click();
+      await expect(page).toHaveURL(/\/app\/datasets\/new$/);
+      await expectNoHorizontalScroll(page);
     });
   }
 

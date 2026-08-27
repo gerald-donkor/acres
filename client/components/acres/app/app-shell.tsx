@@ -31,7 +31,7 @@ type AppShellProps = {
   account: AccountProfile;
   organizations: OrganizationSummary[];
   activeOrganization: OrganizationSummary | null;
-  activeSection?: "workspace" | "dashboards" | "reports";
+  activeSection?: "workspace" | "datasets" | "dashboards" | "reports";
   children?: ReactNode;
 };
 
@@ -58,10 +58,10 @@ const navItems: Array<{
   },
   {
     label: "Data Sets",
-    status: "Unavailable",
-    href: null,
+    status: "Active",
+    href: "/app/datasets",
     icon: DatabaseIcon,
-    roles: ["owner", "admin", "analyst"],
+    roles: ["owner", "admin", "analyst", "viewer"],
   },
   {
     label: "Dashboards",
@@ -120,7 +120,7 @@ function WorkNavigation({
   activeSection,
 }: {
   role: OrganizationRole | null;
-  activeSection: "workspace" | "dashboards" | "reports";
+  activeSection: "workspace" | "datasets" | "dashboards" | "reports";
 }) {
   const visible = navItems.filter((item) => role === null || item.roles.includes(role));
   return (
@@ -129,6 +129,7 @@ function WorkNavigation({
         const Icon = item.icon;
         const active =
           (activeSection === "workspace" && item.href === "/app") ||
+          (activeSection === "datasets" && item.href === "/app/datasets") ||
           (activeSection === "dashboards" && item.href === "/app/dashboards") ||
           (activeSection === "reports" && item.href === "/app/reports");
         const enabled = item.status === "Active" && item.href !== null;
@@ -225,14 +226,35 @@ function WorkspaceOverview({
         ))}
       </dl>
       <div className="grid gap-3 sm:grid-cols-3">
-        {["Data Sets", "Dashboards", "Reports"].map((label) => (
-          <div key={label} className="border border-rule p-4">
+        {[
+          {
+            label: "Data Sets",
+            href: "/app/datasets",
+            description: "Upload, map, and publish source data files.",
+          },
+          {
+            label: "Dashboards",
+            href: "/app/dashboards",
+            description: "Explore regional analytics and metrics.",
+          },
+          {
+            label: "Reports",
+            href: "/app/reports",
+            description: "Publish evidence-backed reports and exports.",
+          },
+        ].map((item) => (
+          <div key={item.label} className="border border-rule p-4">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-ui text-ink">{label}</h2>
-              <Badge variant="outline">Unavailable</Badge>
+              <Link
+                href={item.href}
+                className="text-ui text-ink underline-offset-4 hover:underline"
+              >
+                {item.label}
+              </Link>
+              <Badge variant="secondary">Active</Badge>
             </div>
             <p className="mt-3 text-body text-ink-muted">
-              No product data is shown in this phase.
+              {item.description}
             </p>
           </div>
         ))}

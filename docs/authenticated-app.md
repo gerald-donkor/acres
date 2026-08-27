@@ -15,7 +15,12 @@ new server contracts.
 | `/` | unchanged marketing landing page. The page file now lives in the `(marketing)` route group so marketing chrome is not global. |
 | `/login` | accessible credential form. It issues CSRF, logs in through `POST /api/v1/auth/login`, refreshes CSRF after the session cookie changes, then redirects to a sanitized `returnTo` path. |
 | `/register` | accessible account form. It issues CSRF, registers through `POST /api/v1/auth/register`, refreshes CSRF after the session cookie changes, then redirects to a sanitized `returnTo` path. |
-| `/app` | server-protected workspace shell. Anonymous users redirect to `/login?returnTo=/app`; authenticated users see organization selection or create-organization empty state. |
+| `/app` | server-protected workspace shell. Anonymous users redirect to `/login?returnTo=/app`; authenticated users see organization selection, overview metric cards, or create-organization empty state. |
+| `/app/dashboards` | saved views, summary metrics, and analytics exploration workspace. |
+| `/app/reports` | governed reports library, authoring drafts, and evidence binding. |
+| `/app/datasets` | organization datasets workspace, listing datasets, states, publication versions, and ingestion CTA. |
+| `/app/datasets/new` | new dataset creation form for authorized analysts/admins/owners. |
+| `/app/datasets/[datasetId]` | dataset detail, version history, direct file upload, column/metric mapping, live SSE ingestion progress, and validation issues reporting. |
 | `/api/v1/[...path]` | same-origin Route Handler bridge for browser calls to the Nest API. It forwards only the approved REST surface used by the client. |
 
 The top-level root layout owns fonts, `<html>`, `<body>`, and the skip link.
@@ -56,13 +61,22 @@ does not branch on server message text.
 `client/lib/api/server.ts` is used only by Server Components. It calls the Nest
 API origin directly, forwards the request cookies from `cookies()`, sends
 `x-acres-organization-id` only for organization-scoped reads, and uses
-`cache: "no-store"` for every authenticated read.
+`cache: "no-store"` for every authenticated read. Server helpers cover
+organizations, memberships, invitations, audit events, saved dashboard views,
+metrics, aggregates, reports, report revisions, evidence, exports, datasets
+(`listDatasets`, `getDataset`, `listDatasetVersions`), and ingestion issues
+(`listIngestionIssues`).
 
-`client/lib/api/browser.ts` is the only browser mutation client. It calls
+`client/lib/api/browser.ts` is the browser mutation and read client. It calls
 same-origin `/api/v1/*` with `credentials: "include"`, issues CSRF with
 `GET /api/v1/auth/csrf`, sends `x-csrf-token` on mutations, refreshes CSRF
-after login/register, and adds a fresh `crypto.randomUUID()` idempotency key
-for create-organization commands.
+after login/register, and attaches unique `crypto.randomUUID()` idempotency keys
+on command endpoints. Browser helpers cover auth, organization lifecycle,
+members, invitations, uploads (`initiateUpload`, `completeUpload`, `getUpload`,
+`cancelUpload`, `getUploadDownload`), datasets (`createDataset`, `updateDataset`,
+`getDataset`, `listDatasets`, `listDatasetVersions`), mappings (`createMapping`),
+ingestion runs (`startIngestionRun`, `listIngestionIssues`, `cancelIngestionRun`),
+dashboard views, reports, revisions, and exports.
 
 ### 3.1 Server-Sent Events (SSE) client
 
@@ -315,8 +329,4 @@ verify the route-group and authenticated shell code path.
 - Account recovery UI and mail delivery.
 - Invitation acceptance UI and email flow.
 - Richer authenticated loading boundaries and route-level error files.
-- Product dataset management, upload mapping, richer job views, report review
-  workflow, export progress streaming, and production Caddy same-origin
-  routing.
-- Production Caddy same-origin routing; this prompt uses the Next Route Handler
-  bridge for local/current browser traffic.
+- Production Caddy same-origin routing; current local/dev browser traffic routes via the Next Route Handler bridge.

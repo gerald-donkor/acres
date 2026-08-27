@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
+import type { IngestionRunSummary } from "@acres/shared";
 import {
   createFirstOrganization,
   createMockDashboardSummary,
+  createMockDataset,
   createMockExport,
   createMockReport,
   registerAccount,
@@ -293,5 +295,372 @@ test.describe("Product Journeys", () => {
     await expect(page.getByRole("heading", { name: "Exports" })).toBeVisible();
     await expect(page.getByText("CSV")).toBeVisible();
     await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
+  });
+
+  test("dataset lifecycle: create dataset, upload file, map columns, stream ingestion, and view published version", async ({
+    page,
+  }) => {
+    await registerAccount(page);
+    const orgName = unique("Geo Data Corp");
+    await createFirstOrganization(page, orgName);
+
+    // Navigate to Data Sets section
+    await page.getByRole("link", { name: "Data Sets" }).click();
+    await expect(page).toHaveURL(/\/app\/datasets$/);
+    await expect(
+      page.getByRole("heading", { name: "Manage source data and versions." }),
+    ).toBeVisible();
+
+    // Verify empty state
+    await expect(page.getByRole("heading", { name: "No datasets yet" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "New Dataset" })).toBeVisible();
+
+    // Navigate to New Dataset form
+    await page.getByRole("link", { name: "New Dataset" }).click();
+    await expect(page).toHaveURL(/\/app\/datasets\/new$/);
+    await expect(page.getByRole("heading", { name: "New dataset." })).toBeVisible();
+
+    // Fill dataset form
+    const datasetName = unique("Census Ingestion Test");
+    const datasetDesc = "Provincial census statistics with demographic mappings.";
+    await page.getByLabel("Name").fill(datasetName);
+    await page.getByLabel("Description").fill(datasetDesc);
+
+    // Submit dataset
+    await page.getByRole("button", { name: "Create Dataset" }).click();
+
+    // Expect navigation to detail page
+    await expect(page).toHaveURL(/\/app\/datasets\/[a-zA-Z0-9_-]+$/);
+    await expect(page.getByRole("heading", { name: datasetName })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ingestion Pipeline" })).toBeVisible();
+
+    // Setup route interception for upload and ingestion
+    const uploadId = unique("upl");
+    const mappingId = unique("map");
+    const runId = unique("run");
+    const storageUrl = "http://localhost:3000/api/mock-storage/upload";
+
+    await page.route("**/api/v1/uploads", async (route) => {
+      if (route.request().method() === "POST") {
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ok: true,
+            data: {
+              uploadId,
+              object: { key: "quarantine/test", bucket: "acres", checksumAlgorithm: "sha256" },
+              upload: {
+                url: storageUrl,
+                method: "PUT",
+                headers: { "content-type": "text/csv" },
+                expiresAt: "2026-12-31T00:00:00Z",
+              },
+              complete: { method: "POST", url: `/api/v1/uploads/${uploadId}/complete`, requiredHeaders: [] },
+            },
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.route(storageUrl, async (route) => {
+      await route.fulfill({ status: 200, body: "OK" });
+    });
+
+    await page.route(`**/api/v1/uploads/${uploadId}/complete`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            id: uploadId,
+            state: "accepted",
+            filename: "census_data.csv",
+            mediaType: "text/csv",
+            byteCount: 42,
+            checksumHex: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+            progress: { stage: "scan", percent: 100 },
+            failure: null,
+            acceptedAt: new Date().toISOString(),
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/v1/datasets/*/mappings", async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            id: mappingId,
+            datasetId: "ds-1",
+            uploadId,
+            versionNumber: 1,
+            validationStatus: "pending",
+            createdAt: new Date().toISOString(),
+          },
+        }),
+      });
+    });
+
+    const runningRun: IngestionRunSummary = {
+      id: runId,
+      datasetId: "ds-1",
+      uploadId,
+      mappingId,
+      datasetVersionId: null,
+      state: "running",
+      stage: "validate",
+      progressPercent: 50,
+      failure: null,
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+    };
+
+    const publishedRun: IngestionRunSummary = {
+      id: runId,
+      datasetId: "ds-1",
+      uploadId,
+      mappingId,
+      datasetVersionId: "ver-1",
+      state: "published",
+      stage: "publish",
+      progressPercent: 100,
+      failure: null,
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+    };
+
+    await page.route("**/api/v1/datasets/*/ingestion-runs", async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: runningRun,
+        }),
+      });
+    });
+
+    await page.route(`**/api/v1/ingestion-runs/${runId}/events`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body:
+          `event: ingestion.progress\nid: ${runId}:running:validate:50\n` +
+          `data: ${JSON.stringify(runningRun)}\n\n` +
+          `event: ingestion.progress\nid: ${runId}:published:publish:100\n` +
+          `data: ${JSON.stringify(publishedRun)}\n\n`,
+      });
+    });
+
+    // Set file input
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles({
+      name: "census_data.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("region,population\nnorth-01,15000\n"),
+    });
+
+    // Verify inspection summary
+    await expect(page.getByText("Selected File Inspection")).toBeVisible();
+    await expect(page.getByText("census_data.csv")).toBeVisible();
+
+    // Click Initiate & Upload File
+    await page.getByRole("button", { name: "Initiate & Upload File" }).click();
+
+    // Verify transition to Step 2 (Column Mapping)
+    await expect(page.getByText("Upload accepted: census_data.csv")).toBeVisible();
+    await expect(page.getByLabel("Region Column")).toHaveValue("region");
+    await expect(page.getByLabel("Source Column")).toHaveValue("population");
+
+    // Click Start Ingestion Run
+    await page.getByRole("button", { name: "Start Ingestion Run" }).click();
+
+    // Verify progress card and final published state
+    await expect(page.getByRole("heading", { name: "Ingestion Run" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ingest Another File" })).toBeVisible();
+  });
+
+  test("dataset ingestion error displays validation issues table", async ({
+    page,
+  }) => {
+    const dataset = createMockDataset();
+    const uploadId = unique("upl");
+    const mappingId = unique("map");
+    const runId = unique("run");
+    const storageUrl = "http://localhost:3000/api/mock-storage/upload-fail";
+
+    await page.route("**/api/v1/datasets", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, data: [dataset] }),
+      });
+    });
+
+    await page.route(`**/api/v1/datasets/${dataset.id}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, data: dataset }),
+      });
+    });
+
+    await page.route(`**/api/v1/datasets/${dataset.id}/versions`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, data: [] }),
+      });
+    });
+
+    await page.route("**/api/v1/uploads", async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            uploadId,
+            object: { key: "quarantine/fail", bucket: "acres", checksumAlgorithm: "sha256" },
+            upload: { url: storageUrl, method: "PUT", headers: {}, expiresAt: "2026-12-31" },
+            complete: { method: "POST", url: `/api/v1/uploads/${uploadId}/complete`, requiredHeaders: [] },
+          },
+        }),
+      });
+    });
+
+    await page.route(storageUrl, async (route) => {
+      await route.fulfill({ status: 200, body: "OK" });
+    });
+
+    await page.route(`**/api/v1/uploads/${uploadId}/complete`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            id: uploadId,
+            state: "accepted",
+            filename: "bad_data.csv",
+            mediaType: "text/csv",
+            byteCount: 30,
+            checksumHex: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+            progress: { stage: "scan", percent: 100 },
+            failure: null,
+            acceptedAt: new Date().toISOString(),
+          },
+        }),
+      });
+    });
+
+    await page.route("**/api/v1/datasets/*/mappings", async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            id: mappingId,
+            datasetId: dataset.id,
+            uploadId,
+            versionNumber: 1,
+            validationStatus: "pending",
+            createdAt: new Date().toISOString(),
+          },
+        }),
+      });
+    });
+
+    const failedRun: IngestionRunSummary = {
+      id: runId,
+      datasetId: dataset.id,
+      uploadId,
+      mappingId,
+      datasetVersionId: null,
+      state: "failed",
+      stage: "validate",
+      progressPercent: 50,
+      failure: { code: "validation_failed", message: "Geography resolution failed for row 1." },
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+    };
+
+    await page.route("**/api/v1/datasets/*/ingestion-runs", async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, data: failedRun }),
+      });
+    });
+
+    await page.route(`**/api/v1/ingestion-runs/${runId}/events`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body:
+          `event: ingestion.progress\nid: ${runId}:failed:validate:50\n` +
+          `data: ${JSON.stringify(failedRun)}\n\n`,
+      });
+    });
+
+    await page.route(`**/api/v1/ingestion-runs/${runId}/issues`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: [
+            {
+              id: "iss-1",
+              severity: "error",
+              code: "region_unresolved",
+              message: "Unknown region code 'invalid-999'.",
+              rowNumber: 1,
+              columnKey: "region",
+              regionRef: "invalid-999",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        }),
+      });
+    });
+
+    await registerAccount(page);
+    const orgName = unique("Fail Test Org");
+    await createFirstOrganization(page, orgName);
+
+    // Open dataset detail
+    await page.goto(`/app/datasets/${dataset.id}`);
+    await expect(page.getByRole("heading", { name: dataset.name })).toBeVisible();
+
+    // Select file & upload
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles({
+      name: "bad_data.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("region,population\ninvalid-999,100\n"),
+    });
+
+    await page.getByRole("button", { name: "Initiate & Upload File" }).click();
+    await expect(page.getByText("Upload accepted: bad_data.csv")).toBeVisible();
+
+    // Start ingestion
+    await page.getByRole("button", { name: "Start Ingestion Run" }).click();
+
+    // Verify failure state & issues table
+    await expect(page.getByText("Validation Issues (1)")).toBeVisible();
+    await expect(page.getByText("Unknown region code 'invalid-999'.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Retry Ingestion" })).toBeVisible();
   });
 });

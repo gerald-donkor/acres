@@ -1,21 +1,34 @@
 "use client";
 
 import type {
-  CreateOrganizationInput,
+  ColumnMappingSummary,
+  CompleteUploadInput,
+  CreateDatasetInput,
   CreateDashboardViewInput,
   CreateExportInput,
-  CreateRevisionInput,
+  CreateMappingInput,
+  CreateOrganizationInput,
   CreateReportInput,
+  CreateRevisionInput,
   DashboardView,
-  ExportRequest,
+  DatasetSummary,
+  DatasetVersionSummary,
   ExportDownload,
+  ExportRequest,
   IngestionRunSummary,
+  InitiateUploadInput,
+  InitiateUploadResult,
   LoginInput,
   OrganizationSummary,
-  Report,
   RegisterAccountInput,
+  Report,
   SessionProfile,
+  StartIngestionRunInput,
+  UpdateDatasetInput,
   UpdateRevisionInput,
+  UploadDownload,
+  UploadStatus,
+  ValidationIssueSummary,
 } from "@acres/shared";
 
 import { isApiClientError, parseApiResponse } from "@/lib/api/envelope";
@@ -264,4 +277,164 @@ export function streamIngestionRunProgress(
       data.state === "failed" ||
       data.state === "cancelled",
   });
+}
+
+export async function initiateUpload(
+  organizationId: string,
+  input: InitiateUploadInput,
+): Promise<InitiateUploadResult> {
+  return apiMutation<InitiateUploadResult>("/uploads", input, {
+    organizationId,
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function completeUpload(
+  organizationId: string,
+  uploadId: string,
+  input: CompleteUploadInput,
+): Promise<UploadStatus> {
+  return apiMutation<UploadStatus>(`/uploads/${uploadId}/complete`, input, {
+    organizationId,
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function getUpload(
+  organizationId: string,
+  uploadId: string,
+): Promise<UploadStatus> {
+  return apiFetch<UploadStatus>(`/uploads/${uploadId}`, {
+    method: "GET",
+    organizationId,
+  });
+}
+
+export async function cancelUpload(
+  organizationId: string,
+  uploadId: string,
+): Promise<UploadStatus> {
+  return apiMutation<UploadStatus>(
+    `/uploads/${uploadId}`,
+    {},
+    {
+      method: "DELETE",
+      organizationId,
+      idempotencyKey: createIdempotencyKey(),
+    },
+  );
+}
+
+export async function getUploadDownload(
+  organizationId: string,
+  uploadId: string,
+): Promise<UploadDownload> {
+  return apiFetch<UploadDownload>(`/uploads/${uploadId}/download`, {
+    method: "GET",
+    organizationId,
+  });
+}
+
+export async function createDataset(
+  organizationId: string,
+  input: CreateDatasetInput,
+): Promise<DatasetSummary> {
+  return apiMutation<DatasetSummary>("/datasets", input, {
+    organizationId,
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function updateDataset(
+  organizationId: string,
+  datasetId: string,
+  input: UpdateDatasetInput,
+): Promise<DatasetSummary> {
+  return apiMutation<DatasetSummary>(`/datasets/${datasetId}`, input, {
+    method: "PATCH",
+    organizationId,
+  });
+}
+
+export async function getDataset(
+  organizationId: string,
+  datasetId: string,
+): Promise<DatasetSummary> {
+  return apiFetch<DatasetSummary>(`/datasets/${datasetId}`, {
+    method: "GET",
+    organizationId,
+  });
+}
+
+export async function listDatasets(
+  organizationId: string,
+): Promise<DatasetSummary[]> {
+  return apiFetch<DatasetSummary[]>("/datasets", {
+    method: "GET",
+    organizationId,
+  });
+}
+
+export async function listDatasetVersions(
+  organizationId: string,
+  datasetId: string,
+): Promise<DatasetVersionSummary[]> {
+  return apiFetch<DatasetVersionSummary[]>(`/datasets/${datasetId}/versions`, {
+    method: "GET",
+    organizationId,
+  });
+}
+
+export async function createMapping(
+  organizationId: string,
+  datasetId: string,
+  input: CreateMappingInput,
+): Promise<ColumnMappingSummary> {
+  return apiMutation<ColumnMappingSummary>(
+    `/datasets/${datasetId}/mappings`,
+    input,
+    {
+      organizationId,
+      idempotencyKey: createIdempotencyKey(),
+    },
+  );
+}
+
+export async function startIngestionRun(
+  organizationId: string,
+  datasetId: string,
+  input: StartIngestionRunInput,
+): Promise<IngestionRunSummary> {
+  return apiMutation<IngestionRunSummary>(
+    `/datasets/${datasetId}/ingestion-runs`,
+    input,
+    {
+      organizationId,
+      idempotencyKey: createIdempotencyKey(),
+    },
+  );
+}
+
+export async function listIngestionIssues(
+  organizationId: string,
+  runId: string,
+): Promise<ValidationIssueSummary[]> {
+  return apiFetch<ValidationIssueSummary[]>(`/ingestion-runs/${runId}/issues`, {
+    method: "GET",
+    organizationId,
+  });
+}
+
+export async function cancelIngestionRun(
+  organizationId: string,
+  runId: string,
+): Promise<IngestionRunSummary> {
+  return apiMutation<IngestionRunSummary>(
+    `/ingestion-runs/${runId}`,
+    {},
+    {
+      method: "DELETE",
+      organizationId,
+    },
+  );
 }

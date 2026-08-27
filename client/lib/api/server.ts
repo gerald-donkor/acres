@@ -3,10 +3,13 @@ import type {
   AccountProfile,
   DashboardSummary,
   DashboardView,
+  DatasetSummary,
+  DatasetVersionSummary,
   ExportRequest,
   OrganizationSummary,
   Report,
   SessionProfile,
+  ValidationIssueSummary,
 } from "@acres/shared";
 
 import { parseApiResponse } from "@/lib/api/envelope";
@@ -272,4 +275,35 @@ export function listExports(
   organizationId: string,
 ): Promise<ExportRequest[]> {
   return apiGet<ExportRequest[]>("/exports", { organizationId });
+}
+
+export function listDatasets(
+  organizationId: string,
+): Promise<DatasetSummary[]> {
+  return apiGet<DatasetSummary[]>("/datasets", { organizationId });
+}
+
+export function getDataset(
+  organizationId: string,
+  datasetId: string,
+): Promise<DatasetSummary> {
+  return apiGet<DatasetSummary>(`/datasets/${datasetId}`, { organizationId });
+}
+
+export function listDatasetVersions(
+  organizationId: string,
+  datasetId: string,
+): Promise<DatasetVersionSummary[]> {
+  return apiGet<DatasetVersionSummary[]>(`/datasets/${datasetId}/versions`, {
+    organizationId,
+  });
+}
+
+export function listIngestionIssues(
+  organizationId: string,
+  runId: string,
+): Promise<ValidationIssueSummary[]> {
+  return apiGet<ValidationIssueSummary[]>(`/ingestion-runs/${runId}/issues`, {
+    organizationId,
+  });
 }

@@ -7,4 +7,5 @@ export * from './jobs';
 export * from './organizations';
 export * from './regions';
 export * from './reports';
+export * from './uploads';
 export * from './validation';

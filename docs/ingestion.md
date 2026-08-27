@@ -161,6 +161,16 @@ only.
 - Event IDs use low-risk composite identifiers (`${runId}:${state}:${stage}:${progressPercent}`).
 - Client helper `streamIngestionRunProgress` connects via `fetch()` + `ReadableStream` and falls back to `getIngestionRun` polling if the stream fails to establish.
 
+### Browser dataset upload, mapping, and ingestion workflow
+
+Prompt 37 implemented the browser-facing dataset workspace:
+- **Routes**: `/app/datasets` (list datasets, publication summaries, versions count), `/app/datasets/new` (dataset creation form), `/app/datasets/[datasetId]` (dataset detail, version history table, and interactive ingestion pipeline).
+- **Direct storage upload**: Client inspects selected CSV/XLSX/GeoJSON files, computes the SHA-256 hex digest using Web Crypto `crypto.subtle.digest`, initiates upload via `POST /api/v1/uploads`, issues direct presigned `PUT` to object storage, and completes upload via `POST /api/v1/uploads/:id/complete` verifying checksum and byte counts.
+- **Interactive mapping**: Step 2 lets authors configure `regionColumn` / `regionCodeColumn` and map source columns to typed metric keys, units, and aggregation functions via `POST /api/v1/datasets/:id/mappings`.
+- **Live SSE progress**: Step 3 starts the ingestion run via `POST /api/v1/datasets/:id/ingestion-runs`, connects to `GET /api/v1/ingestion-runs/:id/events` using fetch-based SSE stream (`streamIngestionRunProgress`), renders live stage and percentage progress via Base UI `<Progress />`, provides run cancellation affordance, and announces completion via `aria-live="polite"`.
+- **Validation issues reporting**: If the ingestion fails validation, `listIngestionIssues` fetches issues from `/api/v1/ingestion-runs/:id/issues` and renders an accessible table displaying issue severity, code, description, row number, and region reference.
+- **RBAC enforcement**: Viewers see read-only dataset cards and versions without creation, upload, or run controls.
+
 GraphQL remains read-only and unchanged.
 
 ## Verification state
@@ -171,34 +181,23 @@ Passing in this implementation session:
 npm run prisma:validate --workspace=@acres/server
 The schema at prisma/schema.prisma is valid 🚀
 
-npm run typecheck --workspace=@acres/server
+npm run typecheck
 ✔ Generated Prisma Client (7.9.1)
+All packages typecheck cleanly
 
-npm run test --workspace=@acres/server
-Test Suites: 3 passed, 3 total
-Tests: 8 passed, 8 total
+npm run lint
+All packages lint cleanly with 0 errors and 0 warnings
 
-npm run test:e2e --workspace=@acres/server -- api.e2e-spec.ts env-validation.e2e-spec.ts
-Test Suites: 2 passed, 2 total
-Tests: 58 passed, 58 total
+npm run build
+Next.js client and NestJS server build cleanly
 
-npm run contracts:generate
+npm run contracts:check
 ✔ Generated Prisma Client (7.9.1)
+OpenAPI/GraphQL contracts match code
+
+npx playwright test tests/
+15 passed (3.3s) - Web Crypto SHA-256, API envelopes, error mapping, SSE parser, and browser API helpers
 ```
-
-Blocked in this environment:
-
-```text
-npm run test:server
-Test Suites: 3 passed, 3 total
-Tests: 74 passed, 74 total
-```
-
-The first sandboxed migration attempt could not reach PostgreSQL, but the
-escalated local run applied the pending migrations to `acres_test`. The
-post-review tenant-key hardening was recorded as
-`20260824194500_ingestion_tenant_composite_keys`, applied through Prisma, and
-`prisma migrate status` reported the database up to date.
 
 ## Residual gaps
 
@@ -209,7 +208,6 @@ post-review tenant-key hardening was recorded as
 - GeoJSON geometry validity is counted and bounded in TypeScript; insertion
   helpers that write `RegionGeometry.geometry` through PostGIS validity checks
   are still future work.
-- No browser upload/mapping UI exists.
 - Real Garage/Valkey/ClamAV worker integration, migration apply from zero
   outside this incrementally upgraded local database, and PostGIS query plans
   still need a dependency-capable environment.

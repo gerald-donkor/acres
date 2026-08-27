@@ -4,6 +4,8 @@ import type {
   DashboardMetric,
   DashboardSummary,
   DashboardView,
+  DatasetSummary,
+  DatasetVersionSummary,
   ExportRequest,
   Report,
 } from "@acres/shared";
@@ -240,6 +242,44 @@ export function createMockExport(
     expiresAt: "2026-08-22T10:00:00.000Z",
     createdAt: "2026-08-15T09:59:45.000Z",
     updatedAt: "2026-08-15T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+export function createMockDatasetVersion(
+  overrides: Partial<DatasetVersionSummary> = {},
+): DatasetVersionSummary {
+  const id = overrides.id ?? unique("ver");
+  return {
+    id,
+    versionNumber: 1,
+    publicationStatus: "published",
+    publishedAt: "2026-08-15T09:30:00.000Z",
+    checksumHex: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+    sourceSummary: {
+      rowCount: 120,
+      columnKeys: ["region", "population"],
+      sampleRows: [
+        { region: "north-01", population: 15000 },
+        { region: "south-02", population: 22000 },
+      ],
+    },
+    ...overrides,
+  };
+}
+
+export function createMockDataset(
+  overrides: Partial<DatasetSummary> = {},
+): DatasetSummary {
+  const id = overrides.id ?? unique("ds");
+  return {
+    id,
+    name: "Regional Census Statistics",
+    description: "Annual municipal census summaries.",
+    state: "active",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-15T09:30:00.000Z",
+    latestVersion: createMockDatasetVersion({ id: `ver-${id}-1` }),
     ...overrides,
   };
 }
