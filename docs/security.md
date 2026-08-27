@@ -420,3 +420,19 @@ hardening are implemented:
   commit SHAs to mitigate workflow tampering (TM-18).
 - Production dependency auditing is enforced via `scripts/ops/audit-dependencies.sh`
   and integrated into `npm run ops:check`.
+
+## 17. Phase 12D launch readiness decision record and fail-closed gate
+
+As of 2026-08-27, a structured launch-readiness decision record schema
+(`infra/launch/readiness.example.json`) and a deterministic, fail-closed
+validator (`scripts/ops/check-launch-readiness.js`) are implemented:
+
+- **Threat mapping**:
+  - **TM-03 / TM-04**: Session tokens and CSRF signing secret sources are verified as indirect references (`vault:`, `aws-sm:`, `env:`), never raw values.
+  - **TM-14**: Optional AI enablement is strictly rejected (`ai_enabled: true` triggers a fatal blocker); deterministic no-AI verification is enforced.
+  - **TM-15**: Requires explicit secret injection mechanism, log masking policy, rotation cadence (days), and compromise response runbook reference. Validates that no raw passwords or client-exposed `NEXT_PUBLIC_*` secrets are used.
+  - **TM-18**: Enforces image provenance policy, designated deployment approver, and rollback authority.
+  - **TM-19**: Enforces RPO/RTO targets, off-host backup destination, completed restore drill date, and PostgreSQL/Garage DB-object reconciliation verification.
+  - **TM-20**: Enforces defined SLO targets, capacity targets, and confirmed alert thresholds with designated on-call routes.
+  - **TM-21**: Enforces volume encryption mechanism, stateful mount paths (PostgreSQL, Valkey, Garage), key separation confirmation, and designated key recovery owner.
+- **Fail-Closed Execution**: Running `npm run ops:launch-readiness` executes baseline template, secret, and runtime checks, then validates the readiness record. The checked-in template intentionally fails with 61 blockers, preventing unauthorized launch approval until real operator decisions and live drills are conducted.

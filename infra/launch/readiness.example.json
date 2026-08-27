@@ -1,0 +1,145 @@
+{
+  "$schema": "./readiness.schema.json",
+  "version": "1.0.0",
+  "environment": "production",
+  "target_architecture": "single-host-compose-caddy",
+  "created_at": "2026-08-27T00:00:00Z",
+  "notes": "Template launch readiness record. Deliberately unresolved until operator-owned values and live drills are completed.",
+  "sections": {
+    "production_domain_tls": {
+      "status": "unresolved",
+      "domain": "__REQUIRED_OPERATOR_DOMAIN__",
+      "tls_contact_email": "__REQUIRED_OPERATOR_TLS_EMAIL__",
+      "hsts_approved": false,
+      "custom_certificates": false,
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires public DNS record, TLS certificate contact, and Caddyfile HSTS approval."
+    },
+    "smtp_delivery": {
+      "status": "unresolved",
+      "provider": "__REQUIRED_SMTP_PROVIDER__",
+      "host": "__REQUIRED_SMTP_HOST__",
+      "port": 587,
+      "tls_mode": "STARTTLS",
+      "from_address": "__REQUIRED_SMTP_FROM_EMAIL__",
+      "credentials_source_reference": "__REQUIRED_SECRET_REF_SMTP__",
+      "delivery_policy": "__REQUIRED_SMTP_DELIVERY_POLICY__",
+      "bounce_abuse_handling": "__REQUIRED_BOUNCE_ABUSE_PROCEDURE__",
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires production SMTP provider credentials reference, DKIM/SPF setup, and bounce handling."
+    },
+    "secrets_management": {
+      "status": "unresolved",
+      "injection_mechanism": "__REQUIRED_SECRET_INJECTION_MECHANISM__",
+      "masking_policy": "__REQUIRED_SECRET_MASKING_POLICY__",
+      "rotation_cadence_days": 90,
+      "compromise_response_plan": "__REQUIRED_COMPROMISE_RESPONSE_RUNBOOK_REF__",
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires runtime injection via protected host env or secret store (Vault/AWS SM/Infisical), with no secrets in images or git."
+    },
+    "secret_references": {
+      "status": "unresolved",
+      "session_secret_source": "__REQUIRED_SECRET_REF_SESSION__",
+      "csrf_secret_source": "__REQUIRED_SECRET_REF_CSRF__",
+      "db_migrator_secret_source": "__REQUIRED_SECRET_REF_DB_MIGRATOR__",
+      "db_app_secret_source": "__REQUIRED_SECRET_REF_DB_APP__",
+      "valkey_secret_source": "__REQUIRED_SECRET_REF_VALKEY__",
+      "garage_rpc_secret_source": "__REQUIRED_SECRET_REF_GARAGE_RPC__",
+      "garage_admin_secret_source": "__REQUIRED_SECRET_REF_GARAGE_ADMIN__",
+      "garage_metrics_secret_source": "__REQUIRED_SECRET_REF_GARAGE_METRICS__",
+      "garage_s3_secret_source": "__REQUIRED_SECRET_REF_GARAGE_S3__",
+      "smtp_secret_source": "__REQUIRED_SECRET_REF_SMTP__",
+      "grafana_admin_secret_source": "__REQUIRED_SECRET_REF_GRAFANA_ADMIN__",
+      "approver": null,
+      "evidence": [],
+      "notes": "Each field must contain a secret store reference (e.g. vault:acres/prod#key), never a literal secret value."
+    },
+    "slo_and_alerting": {
+      "status": "unresolved",
+      "availability_target_percent": 99.9,
+      "max_p95_latency_ms": 500,
+      "capacity_target_rps": 100,
+      "alert_recipients": [
+        "__REQUIRED_ON_CALL_ALERT_CONTACT__"
+      ],
+      "alert_thresholds_defined": false,
+      "escalation_runbook_ref": "__REQUIRED_ESCALATION_RUNBOOK_REF__",
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires operator-confirmed availability SLO, alert routing (PagerDuty/Opsgenie/email), and escalation contacts."
+    },
+    "backup_and_disaster_recovery": {
+      "status": "unresolved",
+      "rpo_hours": 1,
+      "rto_hours": 4,
+      "backup_destination": "__REQUIRED_OFF_HOST_BACKUP_DESTINATION__",
+      "backup_schedule_cron": "0 2 * * *",
+      "restore_drill_completed": false,
+      "restore_drill_date": null,
+      "db_object_reconciliation_tested": false,
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires tested off-host encrypted backups and verified restore drill reconciling PostgreSQL and Garage object storage."
+    },
+    "data_retention_policy": {
+      "status": "unresolved",
+      "account_retention_policy": "__REQUIRED_ACCOUNT_RETENTION_POLICY__",
+      "audit_retention_policy": "__REQUIRED_AUDIT_RETENTION_POLICY__",
+      "upload_quarantine_retention_policy": "7d",
+      "rejected_object_retention_policy": "1d",
+      "export_retention_policy": "30d",
+      "report_retention_policy": "__REQUIRED_REPORT_RETENTION_POLICY__",
+      "telemetry_retention_policy": "15d",
+      "backup_retention_policy": "30d",
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires operator-defined retention windows for tenant data, audit logs, and backups."
+    },
+    "volume_encryption": {
+      "status": "unresolved",
+      "encryption_mechanism": "__REQUIRED_VOLUME_ENCRYPTION_MECHANISM__",
+      "encrypted_mount_paths": [
+        "__REQUIRED_POSTGRES_ENCRYPTED_MOUNT__",
+        "__REQUIRED_VALKEY_ENCRYPTED_MOUNT__",
+        "__REQUIRED_GARAGE_ENCRYPTED_MOUNT__"
+      ],
+      "key_separation_confirmed": false,
+      "key_recovery_owner": "__REQUIRED_KEY_RECOVERY_OWNER__",
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires host-level LUKS/dm-crypt or cloud volume encryption for stateful volumes with key stored separately from data."
+    },
+    "graphql_introspection": {
+      "status": "unresolved",
+      "production_introspection_enabled": false,
+      "justification": "__REQUIRED_INTROSPECTION_POLICY_JUSTIFICATION__",
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires explicit decision on whether GraphQL schema introspection is enabled in production (default: false for security)."
+    },
+    "deployment_and_rollback": {
+      "status": "unresolved",
+      "target_host_profile": "__REQUIRED_HOST_SPEC_OR_PROVIDER__",
+      "image_registry_path": "__REQUIRED_OCI_REGISTRY_PATH__",
+      "deployment_approver": "__REQUIRED_DEPLOYMENT_APPROVER__",
+      "rollback_authority": "__REQUIRED_ROLLBACK_AUTHORITY__",
+      "image_provenance_policy": "__REQUIRED_IMAGE_PROVENANCE_POLICY__",
+      "live_readiness_drill_completed": false,
+      "approver": null,
+      "evidence": [],
+      "notes": "Requires designated deployer/rollback authority, immutable tagged image build pipeline, and smoke-tested Caddy routing."
+    },
+    "optional_ai_posture": {
+      "status": "unresolved",
+      "ai_enabled": false,
+      "no_ai_path_verified": false,
+      "phase11_status": "blocked_pending_user_decision",
+      "approver": null,
+      "evidence": [],
+      "notes": "Phase 11 AI is not implemented or approved. Launch evidence must verify the deterministic product path functions with zero AI dependencies."
+    }
+  }
+}

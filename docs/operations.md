@@ -1,14 +1,16 @@
 # Operations and launch hardening
 
-Status: Phase 12C implemented from
-`prompts/34-launch-e2e-accessibility-verification.md`. Extends the Phase 12A/12B
-foundation with comprehensive end-to-end browser suites, WCAG 2.2 Level AA accessibility
-auditing across all 3 viewports (375px, 800px, 1280px), strict horizontal overflow checks,
-multi-tenant isolation verification, and live Prometheus telemetry assertions.
+Status: Phase 12D implemented from
+`prompts/35-launch-readiness-decision-record.md`. Extends the Phase 12A–12C
+foundation with a structured launch-readiness decision record schema
+(`infra/launch/readiness.example.json`) and a deterministic, fail-closed
+validator (`scripts/ops/check-launch-readiness.js`) that verifies all operator-owned
+decisions, secret store references, disaster recovery drills, volume encryption,
+and no-AI postures without committing sensitive material.
 
 Phase 11 optional local AI remains absent. No model, runtime, license, quality
 threshold, prompt store, or AI operating profile has been approved. Every Phase
-12C artifact and check validates the deterministic no-AI path.
+12D artifact and check validates the deterministic no-AI path.
 
 ## Topology & Telemetry
 
@@ -66,10 +68,12 @@ messages are strictly excluded from metric labels.
 | `scripts/ops/backup-postgres.sh` | Structured PostgreSQL `pg_dump` backup helper with fail-closed credentials and permission hardening |
 | `scripts/ops/restore-postgres.sh` | Structured PostgreSQL restore helper with connection verification and table count validation |
 | `scripts/ops/audit-dependencies.sh` | Deterministic dependency security audit script for production dependencies |
-| `scripts/ops/check-production-templates.sh` | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, and env placeholder checks |
+| `scripts/ops/check-production-templates.sh` | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, readiness schema, and env placeholder checks |
 | `scripts/ops/scan-secrets.sh` | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names |
 | `scripts/ops/check-docker-runtime.sh` | Static server Dockerfile check for Node 24, non-root runtime, healthcheck, and direct Node startup |
-| `scripts/ops/launch-readiness.sh` | Aggregates operational checks and fails closed with the unresolved launch blockers |
+| `infra/launch/readiness.example.json` | Inert, structured launch-readiness decision template covering all 11 operator categories with explicit placeholders |
+| `scripts/ops/check-launch-readiness.js` | Deterministic fail-closed launch readiness validator enforcing approval status, secret source references, recovery drills, and no-AI posture |
+| `scripts/ops/launch-readiness.sh` | Aggregates operational checks and runs the fail-closed launch readiness validator |
 | `.github/workflows/ci.yml` | Pinned GitHub Actions (full 40-char commit SHAs) running `npm run ops:check` and verification suite |
 | `scripts/db/bootstrap-production-roles.sh` | Production Postgres bootstrap for `acres_migrator`, `acres_app`, and `acres`; deliberately omits local `acres_test` database |
 
@@ -115,19 +119,69 @@ The complete product surface is covered by dedicated Playwright end-to-end suite
    - Keyboard accessibility and screen-reader table alternatives.
    - Prometheus telemetry verification: `acres_http_requests_total` output retains low cardinality with normalized route templates and zero raw UUIDs/secrets.
 
-## Launch Blockers
+## Launch Readiness Decision Record & Fail-Closed Gate
 
-These values are deliberately unset and must block launch when absent:
+Phase 12D introduces a machine-checkable launch-readiness decision record schema
+(`infra/launch/readiness.example.json`) and a local fail-closed validator
+(`scripts/ops/check-launch-readiness.js`).
 
-- production domain and TLS contact email;
-- SMTP host, port, credentials, delivery policy, and abuse/complaint handling;
-- secret-injection mechanism and rotation/masking procedure;
-- session, CSRF/signing, database, storage, queue, SMTP, and Grafana secrets;
-- SLO/availability target, capacity target, alert owners, and alert thresholds;
-- RPO/RTO, backup destination, restore schedule, and DB/object reconciliation procedure;
-- production volume-encryption mechanism, encrypted mount paths, key-separation rule, and key-recovery owner;
-- production GraphQL introspection policy;
-- production host, registry/image promotion path, rollback authority, and container/image provenance expectations.
+### Schema Structure & Required Categories
+
+The readiness document contains 11 structured categories under `sections`:
+
+1. `production_domain_tls`: Domain name, TLS contact email, and explicit HSTS approval.
+2. `smtp_delivery`: SMTP provider, host, port, credentials reference, delivery policy, and abuse/bounce procedure.
+3. `secrets_management`: Injection mechanism (e.g. Vault/AWS SM), log masking policy, rotation cadence (days), and compromise response runbook.
+4. `secret_references`: Indirect secret store references (`<provider>:<path>#<key>`) for session, CSRF, database migrator/app, Valkey, Garage RPC/admin/metrics/S3, SMTP, and Grafana secrets. Plaintext passwords or connection strings are strictly rejected.
+5. `slo_and_alerting`: Availability target percent (e.g. 99.9%), p95 latency ceiling, capacity target RPS, alert recipient routes, defined alert rules, and escalation runbooks.
+6. `backup_and_disaster_recovery`: RPO/RTO targets, off-host backup destination, cron schedule, completed restore drill date, and PostgreSQL/Garage DB-object reconciliation verification.
+7. `data_retention_policy`: Formal retention windows for accounts, audit logs, upload quarantine, rejected objects, report exports, generated reports, telemetry metrics, and backups.
+8. `volume_encryption`: Host-level volume encryption mechanism (LUKS2/KMS), encrypted mount paths for all stateful services (PostgreSQL, Valkey, Garage), key separation confirmation, and key recovery owner.
+9. `graphql_introspection`: Production introspection state and security justification.
+10. `deployment_and_rollback`: Target host architecture, OCI image registry, deployment approver, rollback authority, image provenance policy (Cosign/OIDC), and live readiness drill status.
+11. `optional_ai_posture`: Verification that `ai_enabled` is `false`, `no_ai_path_verified` is `true`, and Phase 11 remains blocked. Any record with `ai_enabled: true` fails immediately.
+
+### Running the Validator
+
+```bash
+# Evaluate the default checked-in example (expected: fails closed with blockers)
+npm run ops:launch-readiness
+
+# Or evaluate a specific operator-provided readiness record:
+npm run ops:launch-readiness -- infra/launch/production-readiness.json
+# or directly:
+node scripts/ops/check-launch-readiness.js infra/launch/production-readiness.json
+```
+
+### Distinction: `ops:check` vs `ops:launch-readiness`
+
+- `npm run ops:check`: **CI-safe**. Validates that all production templates exist, parse cleanly as YAML/JSON, have correct service scopes, do not leak secrets into git, and that dependencies have no critical vulnerabilities. It passes in CI on every push.
+- `npm run ops:launch-readiness`: **Launch-gated fail-closed validator**. Runs all baseline checks and then validates the readiness record. The checked-in template `infra/launch/readiness.example.json` intentionally fails with 61 unresolved blockers across all 11 categories because operator decisions and live host drills have not been performed.
+
+### Expected Failing Output on Checked-in Example
+
+When run against `infra/launch/readiness.example.json`, `npm run ops:launch-readiness` outputs:
+
+```
+================================================================================
+ACRES LAUNCH READINESS EVALUATION
+Target: infra/launch/readiness.example.json
+================================================================================
+
+Unresolved Launch Blockers by Category:
+... (lists all 61 unresolved placeholders and unapproved categories) ...
+
+--------------------------------------------------------------------------------
+SUMMARY:
+  Total Required Categories: 11
+  Approved Categories:       0
+  Unresolved / Blocked:      11
+  Total Blockers Detected:   61
+================================================================================
+
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+This repository intentionally fails closed until real operator decisions and live drills are recorded.
+```
 
 ## Runbooks
 

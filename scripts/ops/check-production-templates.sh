@@ -21,6 +21,8 @@ require_file infra/prometheus/alerts.yml
 require_file infra/grafana/provisioning/datasources/prometheus.yml
 require_file infra/grafana/provisioning/dashboards/acres.yml
 require_file infra/grafana/dashboards/acres-operations.json
+require_file infra/launch/readiness.example.json
+require_file scripts/ops/check-launch-readiness.js
 require_file scripts/db/bootstrap-production-roles.sh
 
 node <<'NODE'
@@ -161,6 +163,12 @@ if (dashboard.uid !== 'acres-operations-foundation') {
 }
 if (!Array.isArray(dashboard.panels) || dashboard.panels.length < 5) {
   console.error('ops template check failed: Grafana dashboard missing operational panels');
+  process.exit(1);
+}
+
+const readinessExample = readJson('infra/launch/readiness.example.json');
+if (!readinessExample || typeof readinessExample !== 'object' || !readinessExample.sections) {
+  console.error('ops template check failed: infra/launch/readiness.example.json missing sections object');
   process.exit(1);
 }
 

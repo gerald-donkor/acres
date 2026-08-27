@@ -218,10 +218,12 @@ reference is Docker Compose plus Caddy on one host with off-host backups. The
 scale-out drawing is a seam, not a commitment to Kubernetes, a cloud, or a
 managed service.
 
-Phase 12A adds inert production examples for this reference topology under
-`infra/`, plus local CI-safe preflight scripts. They do not choose a host,
+Phase 12A–12D adds inert production examples for this reference topology under
+`infra/`, plus local CI-safe preflight scripts and a structured launch-readiness
+decision record (`infra/launch/readiness.example.json`) validated by
+`scripts/ops/check-launch-readiness.js`. They do not choose a host,
 registry, domain, SLO, RPO/RTO, retention policy, backup destination, alert
-owner, or encryption provider, and they do not make the system launch-complete.
+owner, or encryption provider, and they fail closed until real operator decisions exist.
 
 ## 4. Runtime component and FOSS inventory
 
@@ -512,8 +514,9 @@ Compose files, logs, queue payloads, or git. API, worker, migration, storage,
 SMTP, and telemetry identities are separate and least-privileged. Rotation and
 compromise response are tested before launch.
 
-`infra/env/production.env.example` is the Phase 12A inventory for those values.
-It deliberately uses `__REQUIRED_*__` sentinels that launch readiness rejects;
+`infra/env/production.env.example` is the Phase 12A inventory for those values,
+and `infra/launch/readiness.example.json` formalizes the operator decision record.
+They deliberately use `__REQUIRED_*__` sentinels that launch readiness rejects;
 the sentinels are not production defaults.
 
 TLS protects production traffic in transit. PostgreSQL and Garage live data use
@@ -521,7 +524,7 @@ operator-managed host/block-volume encryption in the single-host reference;
 application-level field encryption is not implied. Unlock material is stored
 separately from data volumes and backups. Phase 2 owns the database-volume and
 key-recovery contract, phase 6 extends it to Garage, and phase 12 inspects the
-production mounts, documents rotation/recovery, and gates launch. Local
+production mounts, documents rotation/recovery, and gates launch via `scripts/ops/check-launch-readiness.js`. Local
 development may use unencrypted disposable volumes when clearly labelled.
 
 ### 11.2 Health and shutdown
