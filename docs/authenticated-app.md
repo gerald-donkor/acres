@@ -76,7 +76,7 @@ members, invitations, uploads (`initiateUpload`, `completeUpload`, `getUpload`,
 `cancelUpload`, `getUploadDownload`), datasets (`createDataset`, `updateDataset`,
 `getDataset`, `listDatasets`, `listDatasetVersions`), mappings (`createMapping`),
 ingestion runs (`startIngestionRun`, `listIngestionIssues`, `cancelIngestionRun`),
-dashboard views, reports, revisions, and exports.
+dashboard views, reports, revisions (`createReportRevision`, `updateReportRevision`, `submitReportRevisionForReview`, `publishReportRevision`), and exports.
 
 ### 3.1 Server-Sent Events (SSE) client
 

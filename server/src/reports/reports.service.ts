@@ -315,6 +315,74 @@ export class ReportsService {
     );
   }
 
+  submitRevisionForReview(
+    organization: OrganizationContext,
+    reportId: string,
+    revisionId: string,
+    idempotencyKey?: string,
+  ): Promise<Report> {
+    return this.reports.organizationScoped(organization, (tx) =>
+      this.idempotency.run(
+        tx,
+        {
+          key: idempotencyKey,
+          accountId: organization.accountId,
+          organizationId: organization.organizationId,
+          operation: `reports.submit_review:${revisionId}`,
+          requestBody: {},
+          responseStatus: 200,
+        },
+        async () => {
+          const revision = await tx.reportRevision.findFirst({
+            where: {
+              id: revisionId,
+              reportId,
+              organizationId: organization.organizationId,
+            },
+            include: revisionInclude(),
+          });
+          if (revision === null) {
+            throw ApiException.notFound('Report revision not found.');
+          }
+          if (revision.status !== 'draft') {
+            throw ApiException.conflict(
+              'Only draft revisions can be submitted for review.',
+            );
+          }
+          if (
+            revision.insights.length === 0 ||
+            revision.evidence.length === 0
+          ) {
+            throw ApiException.validationFailed([
+              'A report submitted for review requires at least one insight and one evidence link.',
+            ]);
+          }
+          await tx.reportRevision.update({
+            where: { id: revision.id },
+            data: {
+              status: 'in_review',
+              reviewerAccountId: null,
+              submittedForReviewAt: new Date(),
+            },
+          });
+          await tx.report.update({
+            where: { id: reportId },
+            data: { version: { increment: 1 }, updatedAt: new Date() },
+          });
+          const current = await this.reports.findReport(
+            tx,
+            organization.organizationId,
+            reportId,
+          );
+          if (current === null) {
+            throw ApiException.notFound('Report not found.');
+          }
+          return toReport(current);
+        },
+      ),
+    );
+  }
+
   publishRevision(
     organization: OrganizationContext,
     reportId: string,

@@ -179,6 +179,22 @@ test("browser API helpers attach organization headers and idempotency keys", asy
     const lastUploadReq = requests.find((r) => r.url.endsWith("/uploads"));
     expect(lastUploadReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
     expect(lastUploadReq?.headers["idempotency-key"]).toBeDefined();
+
+    const { submitReportRevisionForReview, publishReportRevision } = await import("@/lib/api/browser");
+
+    await submitReportRevisionForReview("org-test-1", "rep-1", "rev-1");
+    const lastSubmitReq = requests.find((r) => r.url.endsWith("/reports/rep-1/revisions/rev-1/submit-review"));
+    expect(lastSubmitReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
+    expect(lastSubmitReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
+    expect(lastSubmitReq?.headers["idempotency-key"]).toBeDefined();
+    expect(lastSubmitReq?.method).toBe("POST");
+
+    await publishReportRevision("org-test-1", "rep-1", "rev-1");
+    const lastPublishReq = requests.find((r) => r.url.endsWith("/reports/rep-1/revisions/rev-1/publish"));
+    expect(lastPublishReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
+    expect(lastPublishReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
+    expect(lastPublishReq?.headers["idempotency-key"]).toBeDefined();
+    expect(lastPublishReq?.method).toBe("POST");
   } finally {
     globalThis.fetch = originalFetch;
   }

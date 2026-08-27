@@ -1101,6 +1101,115 @@ describe('Acres API', () => {
       );
     });
 
+    it('submits a draft revision for review', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+      const inReviewRevision = {
+        ...reportRow.revisions[0],
+        status: 'in_review',
+        submittedForReviewAt: now,
+      };
+      const inReviewReport = {
+        ...reportRow,
+        version: 2,
+        revisions: [inReviewRevision],
+      };
+      prisma.reportRevision.findFirst.mockResolvedValue(reportRow.revisions[0]);
+      prisma.report.findFirst.mockResolvedValue(inReviewReport);
+
+      const response = await agent
+        .post(
+          `/api/v1/reports/${reportId}/revisions/${revisionId}/submit-review`,
+        )
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-submit-review-key-0001')
+        .send({})
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        ok: true,
+        data: {
+          id: reportId,
+          version: 2,
+          latestRevision: {
+            status: 'in_review',
+            submittedForReviewAt: now.toISOString(),
+            reviewerAccountId: null,
+          },
+        },
+      });
+      expect(prisma.reportRevision.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: revisionId },
+          data: expect.objectContaining({
+            status: 'in_review',
+            reviewerAccountId: null,
+          }) as unknown,
+        }),
+      );
+    });
+
+    it('rejects submitting a revision for review without insights or evidence', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+      const emptyRevision = {
+        ...reportRow.revisions[0],
+        insights: [],
+        evidence: [],
+      };
+      prisma.reportRevision.findFirst.mockResolvedValue(emptyRevision);
+
+      await agent
+        .post(
+          `/api/v1/reports/${reportId}/revisions/${revisionId}/submit-review`,
+        )
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-submit-review-key-empty')
+        .send({})
+        .expect(400);
+    });
+
+    it('rejects submitting an already non-draft revision for review', async () => {
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+      const publishedRevision = {
+        ...reportRow.revisions[0],
+        status: 'published',
+      };
+      prisma.reportRevision.findFirst.mockResolvedValue(publishedRevision);
+
+      await agent
+        .post(
+          `/api/v1/reports/${reportId}/revisions/${revisionId}/submit-review`,
+        )
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-submit-review-key-published')
+        .send({})
+        .expect(409);
+    });
+
+    it('keeps viewers from submitting revisions for review', async () => {
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'viewer',
+      });
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      await agent
+        .post(
+          `/api/v1/reports/${reportId}/revisions/${revisionId}/submit-review`,
+        )
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'report-submit-review-key-viewer')
+        .send({})
+        .expect(403);
+    });
+
     it('creates a new draft revision after publication', async () => {
       const { agent } = await signedInAgent();
       const token = await csrfTokenFor(agent);

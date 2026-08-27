@@ -47,6 +47,7 @@ and return the standard envelope.
 | `PATCH` | `/reports/:reportId` | `reports.update` | metadata update with expected version |
 | `POST` | `/reports/:reportId/revisions` | `reports.update` | creates the next draft revision from supplied content or the latest published revision |
 | `PATCH` | `/reports/:reportId/revisions/:revisionId` | `reports.update` | draft content update with expected version; published/superseded revisions reject mutation |
+| `POST` | `/reports/:reportId/revisions/:revisionId/submit-review` | `reports.update` | CSRF and `Idempotency-Key`; transitions draft revision to in_review status once insight/evidence requirements pass |
 | `POST` | `/reports/:reportId/revisions/:revisionId/publish` | `reports.publish` | CSRF and `Idempotency-Key`; freezes the revision |
 | `GET` | `/reports/:reportId/revisions/:revisionId/evidence` | `reports.read` | requested revision evidence, not only the latest revision |
 | `GET` | `/exports` | `exports.read` | recent export requests |
@@ -78,14 +79,18 @@ retain the hex digest used elsewhere in the product.
 `/app/reports` is part of the authenticated app shell and appears in the main
 navigation. It lists reports, shows export status, and links to
 `/app/reports/new` for members who can create drafts. Report detail pages at
-`/app/reports/[reportId]` expose the current revision, evidence table, draft
-editing for non-viewers, publishing for admins/owners, CSV/PDF export requests,
-new draft revision creation from a published revision, and download actions for
-completed artifacts.
+`/app/reports/[reportId]` expose a structured status and readiness panel,
+readiness blockers, draft editing, explicit "Submit for review" action, a
+dedicated review panel for `in_review` revisions with claims and structured
+evidence snapshots, publish actions for admins/owners, clear awaiting-publication
+status for analysts, CSV/PDF export requests on published revisions, new draft
+revision creation from a published revision, and download actions for completed
+artifacts.
 
 The UI uses the existing same-origin API bridge, typed server/browser API
-helpers, `Field`/`Alert`/`Table`/`Badge`/`Button` primitives, visible pending
-and error states, and the active organization header already established in
+helpers (`submitReportRevisionForReview`), `Field`/`Alert`/`Table`/`Badge`/`Button`
+primitives, visible pending and error states, `aria-live="polite"` status
+announcements, and the active organization header already established in
 Phase 5. It does not invent sample analytics; a real aggregate ID is required
 to attach aggregate evidence.
 
@@ -141,8 +146,6 @@ migrator role after the new migration was added.
 
 ## Residual gaps
 
-- Report review/submission workflow is modeled in the schema but not exposed as
-  a separate UI state.
 - Generated PDFs are intentionally simple deterministic documents, not
   comp-designed presentation exports.
 - Sharing, collaboration, public links, scheduled exports, AI-assisted drafting,

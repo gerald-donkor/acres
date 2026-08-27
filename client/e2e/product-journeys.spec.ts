@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { IngestionRunSummary } from "@acres/shared";
+import type { IngestionRunSummary, Report } from "@acres/shared";
 import {
   createFirstOrganization,
   createMockDashboardSummary,
@@ -162,11 +162,187 @@ test.describe("Product Journeys", () => {
       page.getByText("Publishing requires at least one evidence link."),
     ).toBeVisible();
 
+    // Verify Submit for review is disabled while evidence is missing
+    const submitBtn = page.getByRole("button", { name: "Submit for review" });
+    await expect(submitBtn).toBeDisabled();
+
     // Update draft content and save
     const updatedSummary = `${summaryText} Reviewed and verified.`;
     await page.getByLabel("Summary").fill(updatedSummary);
     await page.getByRole("button", { name: "Save Draft" }).click();
     await expect(page.getByLabel("Summary")).toHaveValue(updatedSummary);
+  });
+
+  test("report review workflow: submit draft for review and publish from review panel", async ({
+    page,
+  }) => {
+    const reportId = unique("rep-review");
+    const revisionId = `rev-${reportId}-1`;
+    const draftReport: Report = {
+      id: reportId,
+      title: "Carbon Offset Verification",
+      summary: "Verification report covering southern forest parcel.",
+      status: "draft",
+      version: 1,
+      ownerAccountId: "acc-owner",
+      createdByAccountId: "acc-owner",
+      createdAt: "2026-08-20T10:00:00.000Z",
+      updatedAt: "2026-08-20T10:00:00.000Z",
+      latestRevision: {
+        id: revisionId,
+        reportId,
+        revisionNumber: 1,
+        status: "draft",
+        title: "Carbon Offset Verification",
+        summary: "Verification report covering southern forest parcel.",
+        sections: [],
+        authorAccountId: "acc-owner",
+        reviewerAccountId: null,
+        publisherAccountId: null,
+        submittedForReviewAt: null,
+        publishedAt: null,
+        createdAt: "2026-08-20T10:00:00.000Z",
+        updatedAt: "2026-08-20T10:00:00.000Z",
+        insights: [
+          {
+            id: `ins-${reportId}-1`,
+            position: 0,
+            heading: "Carbon Stock Stability",
+            body: "Net carbon storage remained steady across the verification interval.",
+            createdAt: "2026-08-20T10:00:00.000Z",
+            updatedAt: "2026-08-20T10:00:00.000Z",
+          },
+        ],
+        evidence: [
+          {
+            id: `evi-${reportId}-1`,
+            evidenceType: "aggregate",
+            aggregateId: "agg-carbon-01",
+            dashboardViewId: null,
+            metricDefinitionId: "metric-carbon-1",
+            datasetVersionId: "ds-carbon-v1",
+            observationId: null,
+            snapshot: {
+              metric: { label: "Carbon Stock", unit: "tCO2e" },
+              value: 1240.5,
+              unit: "tCO2e",
+              observationCount: 18,
+            },
+            position: 0,
+            createdAt: "2026-08-20T10:00:00.000Z",
+          },
+        ],
+      },
+    };
+
+    const inReviewReport: Report = {
+      ...draftReport,
+      version: 2,
+      updatedAt: "2026-08-20T10:30:00.000Z",
+      latestRevision: {
+        ...draftReport.latestRevision!,
+        status: "in_review",
+        submittedForReviewAt: "2026-08-20T10:30:00.000Z",
+        updatedAt: "2026-08-20T10:30:00.000Z",
+      },
+    };
+
+    const publishedReport: Report = {
+      ...inReviewReport,
+      status: "published",
+      version: 3,
+      updatedAt: "2026-08-20T11:00:00.000Z",
+      latestRevision: {
+        ...inReviewReport.latestRevision!,
+        status: "published",
+        publisherAccountId: "acc-owner",
+        publishedAt: "2026-08-20T11:00:00.000Z",
+        updatedAt: "2026-08-20T11:00:00.000Z",
+      },
+    };
+
+    let currentReport = draftReport;
+
+    await page.route("**/api/v1/reports", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, data: [currentReport] }),
+      });
+    });
+
+    await page.route(`**/api/v1/reports/${reportId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, data: currentReport }),
+      });
+    });
+
+    await page.route(
+      `**/api/v1/reports/${reportId}/revisions/${revisionId}/submit-review`,
+      async (route) => {
+        currentReport = inReviewReport;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, data: currentReport }),
+        });
+      },
+    );
+
+    await page.route(
+      `**/api/v1/reports/${reportId}/revisions/${revisionId}/publish`,
+      async (route) => {
+        currentReport = publishedReport;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, data: currentReport }),
+        });
+      },
+    );
+
+    await registerAccount(page);
+    const orgName = unique("Verification Org");
+    await createFirstOrganization(page, orgName);
+
+    // Open reports list
+    await page.getByRole("link", { name: "Reports" }).click();
+    await expect(page).toHaveURL(/\/app\/reports$/);
+    await expect(page.getByRole("link", { name: draftReport.title })).toBeVisible();
+
+    // Navigate to report detail
+    await page.getByRole("link", { name: draftReport.title }).click();
+    await expect(page).toHaveURL(new RegExp(`/app/reports/${reportId}$`));
+
+    // Verify readiness requirement is satisfied and Submit for Review is enabled
+    await expect(
+      page.getByText("Ready for review. All insight and evidence requirements are met."),
+    ).toBeVisible();
+    const submitForReviewBtn = page.getByRole("button", { name: "Submit for review" });
+    await expect(submitForReviewBtn).toBeEnabled();
+
+    // Submit for review
+    await submitForReviewBtn.click();
+
+    // Verify transition to In Review state
+    await expect(page.getByText("In Review", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Claims & Insights" })).toBeVisible();
+    await expect(page.getByText("Carbon Stock Stability")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review Decision" })).toBeVisible();
+
+    // Publish from the review panel
+    const publishBtn = page.getByRole("button", { name: "Publish" });
+    await expect(publishBtn).toBeVisible();
+    await publishBtn.click();
+
+    // Verify transition to Published state
+    await expect(page.getByText("Published", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Published Insights (1)" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "New Draft Revision" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export CSV" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
   });
 
   test("published report rendering, export request queuing, and artifact download", async ({
@@ -284,8 +460,9 @@ test.describe("Product Journeys", () => {
     await expect(page).toHaveURL(new RegExp(`/app/reports/${report.id}$`));
     await expect(page.getByRole("heading", { name: report.title })).toBeVisible();
 
-    // Verify published state is immutable
-    await expect(page.getByLabel("Title")).toBeDisabled();
+    // Verify published state is immutable and displays published insights
+    await expect(page.getByText("Published", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Published Insights (1)" })).toBeVisible();
 
     // Verify Evidence table
     await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();

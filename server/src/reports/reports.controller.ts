@@ -228,6 +228,31 @@ export class ReportsController {
     );
   }
 
+  @Post('reports/:reportId/revisions/:revisionId/submit-review')
+  @RequiresOrganizationPermission('reports.update')
+  @HttpCode(HttpStatus.OK)
+  @ApiCsrfHeader()
+  @ApiIdempotencyHeader()
+  @ApiEnvelope({
+    summary: 'Submit report revision for review',
+    description:
+      'Transitions a draft revision to in_review status once insight and evidence requirements are met.',
+    data: reportSchema,
+  })
+  submitRevisionForReview(
+    @CurrentOrganization() organization: OrganizationContext,
+    @Param('reportId', ParseUUIDPipe) reportId: string,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.reports.submitRevisionForReview(
+      organization,
+      reportId,
+      revisionId,
+      idempotencyKey,
+    );
+  }
+
   @Post('reports/:reportId/revisions/:revisionId/publish')
   @RequiresOrganizationPermission('reports.publish')
   @HttpCode(HttpStatus.OK)

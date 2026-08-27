@@ -4,6 +4,7 @@ import { FileTextIcon } from "lucide-react";
 
 import {
   CreateReportForm,
+  getEvidenceDetails,
   RevisionEditor,
 } from "@/components/acres/app/report-actions";
 import { ExportStatus } from "@/components/acres/app/export-status";
@@ -114,25 +115,15 @@ export function ReportDetailWorkspace({
       </div>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className="grid gap-6">
-          <div className="border border-rule p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-ui text-ink">Revision</h2>
-              <Badge variant={revision?.status === "published" ? "secondary" : "outline"}>
-                {revision?.status ?? "missing"}
-              </Badge>
-            </div>
-            {revision ? (
-              <div className="mt-4">
-                <RevisionEditor
-                  organizationId={organization.id}
-                  report={report}
-                  canUpdate={role !== "viewer"}
-                  canPublish={role === "owner" || role === "admin"}
-                  canExport={role !== "viewer"}
-                />
-              </div>
-            ) : null}
-          </div>
+          {revision ? (
+            <RevisionEditor
+              organizationId={organization.id}
+              report={report}
+              canUpdate={role !== "viewer"}
+              canPublish={role === "owner" || role === "admin"}
+              canExport={role !== "viewer"}
+            />
+          ) : null}
           <EvidenceTable report={report} />
         </div>
         <ExportStatus
@@ -248,32 +239,57 @@ function EvidenceTable({ report }: { report: Report }) {
       <h2 id="evidence-table-title" className="mb-3 text-ui text-ink">
         Evidence
       </h2>
-      <Table>
-        <TableCaption>
-          Evidence links store identifiers and a frozen snapshot for
-          reproducible exports.
-        </TableCaption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Type</TableHead>
-            <TableHead>Source</TableHead>
-            <TableHead>Dataset</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {evidence.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell>{item.evidenceType}</TableCell>
-              <TableCell className="font-mono text-label text-ink-muted lg:text-label-lg">
-                {item.aggregateId ?? item.dashboardViewId}
-              </TableCell>
-              <TableCell className="font-mono text-label text-ink-muted lg:text-label-lg">
-                {item.datasetVersionId ?? "view"}
-              </TableCell>
+      {evidence.length === 0 ? (
+        <p className="text-body text-ink-muted">
+          No evidence links attached to this revision.
+        </p>
+      ) : (
+        <Table>
+          <TableCaption>
+            Evidence links store identifiers and a frozen snapshot for
+            reproducible exports.
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Type</TableHead>
+              <TableHead>Source / Metric</TableHead>
+              <TableHead>Value / Summary</TableHead>
+              <TableHead>Dataset</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {evidence.map((item) => {
+              const details = getEvidenceDetails(item);
+              return (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    <Badge variant="outline">{item.evidenceType}</Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-label text-ink lg:text-label-lg">
+                    {details.label}
+                  </TableCell>
+                  <TableCell className="text-body text-ink-muted">
+                    {details.value !== null ? (
+                      <span>
+                        {details.value}
+                        {details.unit ? ` ${details.unit}` : ""}
+                        {details.observationCount !== null
+                          ? ` (${details.observationCount} obs)`
+                          : ""}
+                      </span>
+                    ) : (
+                      details.chartType ?? "—"
+                    )}
+                  </TableCell>
+                  <TableCell className="font-mono text-label text-ink-muted lg:text-label-lg">
+                    {details.datasetVersion ?? item.aggregateId ?? item.dashboardViewId ?? "view"}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
     </div>
   );
 }

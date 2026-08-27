@@ -180,6 +180,21 @@ export async function createReportRevision(
   });
 }
 
+export async function submitReportRevisionForReview(
+  organizationId: string,
+  reportId: string,
+  revisionId: string,
+): Promise<Report> {
+  return apiMutation<Report>(
+    `/reports/${reportId}/revisions/${revisionId}/submit-review`,
+    {},
+    {
+      organizationId,
+      idempotencyKey: createIdempotencyKey(),
+    },
+  );
+}
+
 export async function publishReportRevision(
   organizationId: string,
   reportId: string,
