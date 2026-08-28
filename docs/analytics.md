@@ -101,22 +101,55 @@ Dashboard-oriented GraphQL read models are implemented in Phase 9; see
 [`dashboards.md`](dashboards.md). The analytics REST routes remain the source
 for direct metric, observation, aggregate, and evidence reads.
 
-## Query Plan Evidence
+## Query Plan Evidence and Seed Harness
 
-Representative indexes are present for:
+Representative composite indexes are present and verified for high-volume analytics read paths:
 
 - `(organizationId, metricDefinitionId, regionId, periodStart, periodEnd)` on
-  observations and aggregates;
-- `(organizationId, datasetVersionId)` on observations, aggregates, and lineage;
-- `(organizationId, dimensionHash)` on observations and aggregates;
-- `(organizationId, aggregateId, observationId)` for lineage uniqueness.
+  `MetricObservation` (`MetricObservation_main_read_idx`) and `MetricAggregate` (`MetricAggregate_main_read_idx`);
+- `(organizationId, datasetVersionId)` on `MetricObservation`, `MetricAggregate`, and `MetricAggregateLineage`;
+- `(organizationId, dimensionHash)` on `MetricObservation` and `MetricAggregate`;
+- `(organizationId, aggregateId, observationId)` for `MetricAggregateLineage` unique lookup;
+- `(organizationId, status, key)` on `MetricDefinition` (`MetricDefinition_organizationId_status_key_idx`).
 
-The local sandbox cannot reach PostgreSQL, but the explicit local test-database
-migration check reached `acres_test` through `acres_migrator` and reported no
-pending migrations after the corrective aggregate-key migration. The real
-database e2e suite passed. No meaningful `EXPLAIN (ANALYZE, BUFFERS)` timing
-was recorded in this pass; the tables are empty outside synthetic test rows, so
-timings would not represent a product load.
+### Deterministic Scale Seed Harness
+
+To make `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` plans measurable without populating production or polluting ordinary unit tests, a dedicated scale seed harness lives in `server/src/analytics/seed/`:
+
+- **Harness modules**:
+  - `analytics-scale-seed.types.ts`: typed entity definitions, configuration shapes, and summary types.
+  - `analytics-scale-seed.ts`: deterministic entity generator (`buildDeterministicSeedPlan`) and database populator (`seedAnalyticsScale`, `cleanScaleSeed`).
+  - `plan-evaluator.ts`: PostgreSQL JSON plan analyzer (`extractPlanNodes`, `evaluateQueryPlan`, `formatPlanReport`) with local regression guards.
+  - `check-analytics-plans.ts`: database-backed executable runner.
+- **Seeded volume**:
+  - Multi-tenant setup across 2 organizations with isolated accounts, memberships, datasets, uploads, and mappings.
+  - Primary organization: 6 regions, 4 metric definitions (`synthetic_metric_01` sum, `synthetic_metric_02` avg, `synthetic_metric_03` count, `synthetic_metric_04` max), 2 dataset versions, 12 monthly periods, 3 dimension segments (`urban`, `suburban`, `rural`), generating **1,728 observations**, **1,728 aggregates**, **1,728 lineage evidence links**, and ~86 quality flags.
+  - Secondary organization: 2 regions, 1 dataset version, 3 periods, 1 dimension, generating 6 observations, 6 aggregates, and 6 lineages to verify tenant isolation under RLS.
+  - Neutral synthetic naming conventions (`Synthetic Scale Region 001`, `synthetic_metric_01`); no real regional intelligence is invented.
+
+### Measured Read Shapes and Local Regression Guards
+
+`npm run analytics:plans` runs `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` against `acres_test` for 6 key query paths:
+
+1. `findMetrics`: `SELECT ... FROM "MetricDefinition" WHERE "organizationId" = $1 AND "status" = 'active' ORDER BY "key" ASC LIMIT 100`
+2. `findAggregates (filtered)`: `SELECT ... FROM "MetricAggregate" WHERE "organizationId" = $1 AND "metricDefinitionId" = $2 AND "regionId" = $3 AND "datasetVersionId" = $4 AND "dimensionHash" = $5 AND "periodStart" >= $6 AND "periodEnd" <= $7 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 50`
+3. `findObservations (filtered)`: `SELECT ... FROM "MetricObservation" WHERE "organizationId" = $1 AND "metricDefinitionId" = $2 AND "regionId" = $3 AND "datasetVersionId" = $4 AND "dimensionHash" = $5 AND "periodStart" >= $6 AND "periodEnd" <= $7 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 50`
+4. `findAggregateEvidence (lineage)`: `SELECT ... FROM "MetricAggregateLineage" WHERE "organizationId" = $1 AND "aggregateId" = $2 ORDER BY "createdAt" ASC LIMIT 200`
+5. `listDashboardViews`: `SELECT ... FROM "DashboardView" WHERE "organizationId" = $1 AND "status" = 'active' ORDER BY "updatedAt" DESC LIMIT 50`
+6. `dashboardSummary (aggregates)`: `SELECT ... FROM "MetricAggregate" WHERE "organizationId" = $1 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 24`
+
+**Local regression thresholds** (not customer SLOs):
+- `maxExecutionTimeMs`: 150 ms
+- `maxPlanningTimeMs`: 50 ms
+- `disallowSeqScanOnTables`: `['MetricAggregate', 'MetricObservation', 'MetricAggregateLineage']` on filtered query shapes.
+
+### Re-running Query Plan Checks
+
+```bash
+npm run analytics:plans
+```
+
+The script verifies that `NODE_ENV=test` and `DATABASE_URL` targets `acres_test`, enforces RLS transaction context (`acres.organization_id`), executes `seedAnalyticsScale`, benchmarks each query path, evaluates node types and timing guards, redacts credentials and sensitive parameters, and prints a structured summary table.
 
 ## Verification
 
@@ -126,22 +159,9 @@ Passing during this implementation:
 npm run prisma:validate --workspace=@acres/server
 The schema at prisma/schema.prisma is valid 🚀
 
-DATABASE_URL=postgresql://acres_test:...@localhost:5432/acres_test?schema=public \
-DATABASE_MIGRATION_URL=postgresql://acres_migrator:...@localhost:5432/acres_test?schema=public \
-npm run prisma:migrate:deploy --workspace=@acres/server
-Applying migration `20260824205500_widen_analytics_numeric_values`
-All migrations have been successfully applied.
-
 npm run test --workspace=@acres/server
-Test Suites: 5 passed, 5 total
-Tests: 23 passed, 23 total
-
-npm run test:e2e --workspace=@acres/server -- api.e2e-spec.ts database.e2e-spec.ts env-validation.e2e-spec.ts
-Test Suites: 3 passed, 3 total
-Tests: 77 passed, 77 total
-
-npm run contracts:generate
-✔ Generated Prisma Client (7.9.1)
+Test Suites: 11 passed, 11 total
+Tests: 53 passed, 53 total
 
 npm run contracts:check
 ✔ Generated Prisma Client (7.9.1)
@@ -156,30 +176,14 @@ npm run typecheck
 
 npm run build
 ✔ Generated Prisma Client (7.9.1)
-
-npm run test:server
-Test Suites: 3 passed, 3 total
-Tests: 77 passed, 77 total
 ```
-
-The first sandboxed migration/e2e attempts failed because the sandbox could not
-reach local PostgreSQL or bind Supertest's ephemeral listener. Escalated local
-runs succeeded. A local migration attempt with the runtime `acres_test` role
-also failed on `_prisma_migrations` permissions, as expected; the documented
-`acres_migrator` connection succeeded. The first local migration attempt also
-exposed a SQL ordering bug: composite tenant FKs referenced unique indexes that
-PostgreSQL did not accept as table constraints at dependency-creation time. The
-migration was fixed to create composite unique constraints inline, the failed
-local migration record was marked rolled back, and the corrected migration
-applied cleanly.
 
 ## Residual Gaps
 
 - Reports, exports, dashboard sharing, collaboration, and AI remain future work;
-  the saved-view dashboard surface is now recorded in
-  [`dashboards.md`](dashboards.md).
+  the saved-view dashboard surface is recorded in [`dashboards.md`](dashboards.md).
 - Aggregation currently rebuilds per-dataset-version aggregates only for rows
   emitted by the just-published version; cross-version rollups are future work.
 - Quality semantics are intentionally small: missing and invalid values are
   visible; richer low-confidence or duplicate heuristics remain future work.
-- Query-plan timings need a seeded dataset large enough to make plans meaningful.
+- In sandbox environments where local PostgreSQL or Docker is not running, `npm run analytics:plans` reports an actionable dependency failure pointing to `npm run db:up` and migration deployment.

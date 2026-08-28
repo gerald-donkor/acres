@@ -125,6 +125,7 @@ Root scripts, all run from the repository root:
 | `typecheck`                                      | **new.** Builds `@acres/shared`, then `tsc --noEmit` in all three workspaces                                                    |
 | `test:server`                                    | the API's e2e suite                                                                                                             |
 | `test:client:e2e`                                | Playwright coverage for the authenticated client shell                                                                          |
+| `analytics:plans`                                | seeds deterministic scale data in `acres_test` and benchmarks PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)` plans against regression guards |
 | `ops:templates`                                  | validates the inert production Caddy/Compose/env/observability examples added in Phase 12A                                      |
 | `ops:scan-secrets`                               | scans tracked files for known local passwords, `change-me` defaults, launch sentinels outside approved docs/examples, and secret-looking public env names |
 | `ops:docker-runtime`                             | checks `server/Dockerfile` still uses Node 24, non-root runtime, a healthcheck, and direct Node startup                         |
@@ -549,8 +550,11 @@ migrations still follow the forward-fix-preferred rule.
 `prisma migrate status` now also runs against both `acres` and `acres_test`
 and reports no drift (§8.3, verification record).
 
-**No seed data.** Fixtures that looked like regional intelligence would be read
-as real.
+**No default seed data in production.** Fixtures that looked like regional intelligence would be read
+as real. For performance and query-plan testing, a dedicated test-only scale seed harness
+lives under `server/src/analytics/seed/` and is executed via `npm run analytics:plans`. It creates
+synthetic rows (`Synthetic Scale Region 001`, `synthetic_metric_01`) in `acres_test` and never runs during
+production bootstrap or application startup.
 
 **Production volume encryption and key recovery — a target-state contract,
 not an implementation.** No production Postgres host exists to inspect (that

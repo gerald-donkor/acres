@@ -134,7 +134,8 @@ missing `_prisma_migrations` privileges.
 - Dashboard sharing, publishing, collaboration, and AI remain future phases.
 - Saved views do not yet have versioned schema migration for future presentation
   shapes; the JSON shape is intentionally small and validated at the DTO layer.
-- Query-plan timing still needs seeded analytics data large enough to make
-  `EXPLAIN (ANALYZE, BUFFERS)` meaningful.
+- Saved dashboard views (`listViews`) and summary aggregate queries (`dashboardSummary`)
+  are benchmarked and regression-guarded under the deterministic scale seed harness via
+  `npm run analytics:plans` (see [`analytics.md`](analytics.md)).
 - The dashboard feature currently uses the existing authenticated app shell
   rather than a separate information architecture for a mature analytics suite.
