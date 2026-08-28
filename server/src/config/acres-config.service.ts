@@ -229,4 +229,36 @@ export class AcresConfigService {
   get outboxMaxAttempts(): number {
     return this.get('outboxMaxAttempts');
   }
+
+  get aiDraftEnabled(): boolean {
+    return this.get('aiDraftEnabled');
+  }
+
+  get aiDraftProviderTierUnpaidAcknowledged(): boolean {
+    return this.get('aiDraftProviderTierUnpaidAcknowledged');
+  }
+
+  get geminiApiKey(): string | undefined {
+    return this.get('geminiApiKey');
+  }
+
+  get aiDraftModel(): string {
+    return this.get('aiDraftModel');
+  }
+
+  get aiDraftTimeoutMs(): number {
+    return this.get('aiDraftTimeoutMs');
+  }
+
+  get aiDraftMaxProposals(): number {
+    return this.get('aiDraftMaxProposals');
+  }
+
+  get aiDraftMaxContextBytes(): number {
+    return this.get('aiDraftMaxContextBytes');
+  }
+
+  get aiDraftMaxOutputTokens(): number {
+    return this.get('aiDraftMaxOutputTokens');
+  }
 }

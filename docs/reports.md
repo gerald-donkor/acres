@@ -49,6 +49,7 @@ and return the standard envelope.
 | `PATCH` | `/reports/:reportId/revisions/:revisionId` | `reports.update` | draft content update with expected version; published/superseded revisions reject mutation |
 | `POST` | `/reports/:reportId/revisions/:revisionId/submit-review` | `reports.update` | CSRF and `Idempotency-Key`; transitions draft revision to in_review status once insight/evidence requirements pass |
 | `POST` | `/reports/:reportId/revisions/:revisionId/publish` | `reports.publish` | CSRF and `Idempotency-Key`; freezes the revision |
+| `POST` | `/reports/:reportId/revisions/:revisionId/ai-drafts` | `reports.update` | CSRF and `Idempotency-Key`; Phase 11A grounded candidate proposal generation |
 | `GET` | `/reports/:reportId/revisions/:revisionId/evidence` | `reports.read` | requested revision evidence, not only the latest revision |
 | `GET` | `/exports` | `exports.read` | recent export requests |
 | `POST` | `/exports` | `exports.create` | CSRF and `Idempotency-Key`; appends an `export.requested` outbox event |

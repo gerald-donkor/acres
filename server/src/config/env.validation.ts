@@ -60,6 +60,14 @@ export interface AcresEnv {
   outboxClaimBatchSize: number;
   outboxClaimLeaseMs: number;
   outboxMaxAttempts: number;
+  aiDraftEnabled: boolean;
+  aiDraftProviderTierUnpaidAcknowledged: boolean;
+  geminiApiKey?: string;
+  aiDraftModel: string;
+  aiDraftTimeoutMs: number;
+  aiDraftMaxProposals: number;
+  aiDraftMaxContextBytes: number;
+  aiDraftMaxOutputTokens: number;
 }
 
 const REQUIRED = ['DATABASE_URL', 'CLIENT_ORIGIN', 'SESSION_SECRET'] as const;
@@ -113,6 +121,13 @@ const DEFAULTS = {
   OUTBOX_CLAIM_BATCH_SIZE: '25',
   OUTBOX_CLAIM_LEASE_MS: '30000',
   OUTBOX_MAX_ATTEMPTS: '5',
+  AI_DRAFT_ENABLED: 'false',
+  AI_DRAFT_PROVIDER_TIER_UNPAID_ACKNOWLEDGED: 'false',
+  AI_DRAFT_MODEL: 'gemini-2.5-flash',
+  AI_DRAFT_TIMEOUT_MS: '15000',
+  AI_DRAFT_MAX_PROPOSALS: '3',
+  AI_DRAFT_MAX_CONTEXT_BYTES: '16384',
+  AI_DRAFT_MAX_OUTPUT_TOKENS: '2048',
 } as const;
 
 function positiveInt(name: string, raw: string): number {
@@ -183,6 +198,61 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
     throw new Error(
       'Storage/queue credentials still use development placeholders.',
     );
+  }
+
+  const aiDraftEnabled = boolean(
+    'AI_DRAFT_ENABLED',
+    env.AI_DRAFT_ENABLED ?? DEFAULTS.AI_DRAFT_ENABLED,
+  );
+  const aiDraftProviderTierUnpaidAcknowledged = boolean(
+    'AI_DRAFT_PROVIDER_TIER_UNPAID_ACKNOWLEDGED',
+    env.AI_DRAFT_PROVIDER_TIER_UNPAID_ACKNOWLEDGED ??
+      DEFAULTS.AI_DRAFT_PROVIDER_TIER_UNPAID_ACKNOWLEDGED,
+  );
+  const geminiApiKey = env.GEMINI_API_KEY?.trim() || undefined;
+  const aiDraftModel = env.AI_DRAFT_MODEL?.trim() || DEFAULTS.AI_DRAFT_MODEL;
+  const aiDraftTimeoutMs = positiveInt(
+    'AI_DRAFT_TIMEOUT_MS',
+    env.AI_DRAFT_TIMEOUT_MS ?? DEFAULTS.AI_DRAFT_TIMEOUT_MS,
+  );
+  const aiDraftMaxProposals = positiveInt(
+    'AI_DRAFT_MAX_PROPOSALS',
+    env.AI_DRAFT_MAX_PROPOSALS ?? DEFAULTS.AI_DRAFT_MAX_PROPOSALS,
+  );
+  const aiDraftMaxContextBytes = positiveInt(
+    'AI_DRAFT_MAX_CONTEXT_BYTES',
+    env.AI_DRAFT_MAX_CONTEXT_BYTES ?? DEFAULTS.AI_DRAFT_MAX_CONTEXT_BYTES,
+  );
+  const aiDraftMaxOutputTokens = positiveInt(
+    'AI_DRAFT_MAX_OUTPUT_TOKENS',
+    env.AI_DRAFT_MAX_OUTPUT_TOKENS ?? DEFAULTS.AI_DRAFT_MAX_OUTPUT_TOKENS,
+  );
+
+  if (aiDraftEnabled) {
+    if (!aiDraftProviderTierUnpaidAcknowledged) {
+      throw new Error(
+        'AI_DRAFT_ENABLED requires AI_DRAFT_PROVIDER_TIER_UNPAID_ACKNOWLEDGED="true" to acknowledge the unpaid Gemini Developer API terms.',
+      );
+    }
+    if (!geminiApiKey) {
+      throw new Error(
+        'GEMINI_API_KEY is required when AI_DRAFT_ENABLED="true".',
+      );
+    }
+    if (nodeEnv === 'production' && geminiApiKey.startsWith('change-me')) {
+      throw new Error('GEMINI_API_KEY cannot use a placeholder in production.');
+    }
+    if (!aiDraftModel) {
+      throw new Error(
+        'AI_DRAFT_MODEL is required when AI_DRAFT_ENABLED="true".',
+      );
+    }
+    if (aiDraftMaxProposals > 5) {
+      throw new Error('AI_DRAFT_MAX_PROPOSALS must be <= 5.');
+    }
+    if (aiDraftTimeoutMs < 1000 || aiDraftTimeoutMs > 60000) {
+      throw new Error('AI_DRAFT_TIMEOUT_MS must be between 1000 and 60000 ms.');
+    }
   }
 
   return {
@@ -355,5 +425,13 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
       'OUTBOX_MAX_ATTEMPTS',
       env.OUTBOX_MAX_ATTEMPTS ?? DEFAULTS.OUTBOX_MAX_ATTEMPTS,
     ),
+    aiDraftEnabled,
+    aiDraftProviderTierUnpaidAcknowledged,
+    geminiApiKey,
+    aiDraftModel,
+    aiDraftTimeoutMs,
+    aiDraftMaxProposals,
+    aiDraftMaxContextBytes,
+    aiDraftMaxOutputTokens,
   };
 }

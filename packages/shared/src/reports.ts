@@ -98,6 +98,44 @@ export type Report = {
   createdAt: string;
   updatedAt: string;
   latestRevision: ReportRevision | null;
+  aiDraftEnabled?: boolean;
+};
+
+export type AiGenerationState =
+  | 'succeeded'
+  | 'validation_rejected'
+  | 'rate_limited'
+  | 'timeout'
+  | 'unavailable'
+  | 'malformed_output'
+  | 'grounding_rejected'
+  | 'failed';
+
+export type AiDraftProposal = {
+  heading: string;
+  body: string;
+  citedEvidenceIds: string[];
+};
+
+export type AiDraftGenerationMetadata = {
+  generationId: string;
+  provider: string;
+  model: string;
+  promptTemplateVersion: string;
+  proposalCount: number;
+  createdAt: string;
+};
+
+export type AiDraftProposalsResult = {
+  proposals: AiDraftProposal[];
+  metadata: AiDraftGenerationMetadata;
+};
+
+export type CreateAiDraftInput = {
+  purpose: string;
+  evidenceIds: string[];
+  proposalCount?: number;
+  acknowledgement: boolean | string;
 };
 
 export type ExportRequest = {

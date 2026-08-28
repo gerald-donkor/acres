@@ -1311,6 +1311,133 @@ describe('Acres API', () => {
         .set('idempotency-key', 'report-export-key-0002')
         .send({ revisionId, format: 'csv' })
         .expect(403);
+
+      await agent
+        .post(`/api/v1/reports/${reportId}/revisions/${revisionId}/ai-drafts`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'ai-draft-key-viewer')
+        .send({
+          purpose: 'Analyze yield',
+          evidenceIds: ['11111111-1111-7111-8111-111111111111'],
+          acknowledgement: true,
+        })
+        .expect(403);
+    });
+
+    it('rejects AI draft requests when AI_DRAFT_ENABLED is false', async () => {
+      prisma.membership.findFirst.mockResolvedValue(ORG_CONTEXT);
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      const response = await agent
+        .post(`/api/v1/reports/${reportId}/revisions/${revisionId}/ai-drafts`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'ai-draft-key-disabled')
+        .send({
+          purpose: 'Analyze yield',
+          evidenceIds: ['11111111-1111-7111-8111-111111111111'],
+          acknowledgement: true,
+        })
+        .expect(403);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'AI_DISABLED' },
+      });
+    });
+
+    it('generates grounded AI draft proposals when AI_DRAFT_ENABLED is true and user acknowledges unpaid terms', async () => {
+      await recreateApp({
+        AI_DRAFT_ENABLED: 'true',
+        AI_DRAFT_PROVIDER_TIER_UNPAID_ACKNOWLEDGED: 'true',
+        GEMINI_API_KEY: 'test-gemini-key',
+        AI_DRAFT_MODEL: 'gemini-2.5-flash',
+      });
+
+      prisma.membership.findFirst.mockResolvedValue(ORG_CONTEXT);
+      prisma.reportRevision.findFirst.mockResolvedValue({
+        id: revisionId,
+        reportId,
+        organizationId: ORG_CONTEXT.organizationId,
+        status: 'draft',
+      });
+      prisma.reportEvidence.findMany.mockResolvedValue([
+        {
+          id: '11111111-1111-7111-8111-111111111111',
+          evidenceType: 'aggregate',
+          organizationId: ORG_CONTEXT.organizationId,
+          revisionId,
+          snapshot: { metric: { label: 'Corn Yield' }, value: 180 },
+        },
+      ]);
+
+      const { agent } = await signedInAgent();
+      const token = await csrfTokenFor(agent);
+
+      // Rejects without acknowledgement
+      const noAckResponse = await agent
+        .post(`/api/v1/reports/${reportId}/revisions/${revisionId}/ai-drafts`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'ai-draft-key-noack')
+        .send({
+          purpose: 'Analyze yield',
+          evidenceIds: ['11111111-1111-7111-8111-111111111111'],
+          acknowledgement: false,
+        })
+        .expect(400);
+
+      const noAckBody = noAckResponse.body as { ok: boolean };
+      expect(noAckBody.ok).toBe(false);
+
+      // Succeeds with acknowledgement
+      const response = await agent
+        .post(`/api/v1/reports/${reportId}/revisions/${revisionId}/ai-drafts`)
+        .set('x-csrf-token', token)
+        .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+        .set('idempotency-key', 'ai-draft-key-success')
+        .send({
+          purpose: 'Analyze yield',
+          evidenceIds: ['11111111-1111-7111-8111-111111111111'],
+          proposalCount: 1,
+          acknowledgement: true,
+        })
+        .expect(201);
+
+      const responseBody = response.body as {
+        ok: boolean;
+        data: {
+          proposals: Array<{
+            heading: string;
+            body: string;
+            citedEvidenceIds: string[];
+          }>;
+          metadata: {
+            proposalCount: number;
+            promptTemplateVersion: string;
+          };
+        };
+      };
+      expect(responseBody.ok).toBe(true);
+      expect(responseBody.data.proposals).toHaveLength(1);
+      expect(responseBody.data.proposals[0].citedEvidenceIds).toEqual([
+        '11111111-1111-7111-8111-111111111111',
+      ]);
+      expect(responseBody.data.metadata.proposalCount).toBe(1);
+      expect(responseBody.data.metadata.promptTemplateVersion).toBe('v1');
+
+      const expectedAiGenData: unknown = expect.objectContaining({
+        organizationId: ORG_CONTEXT.organizationId,
+        reportId,
+        revisionId,
+        state: 'succeeded',
+        proposalCount: 1,
+      });
+      expect(prisma.aiGeneration.create).toHaveBeenCalledWith({
+        data: expectedAiGenData,
+      });
     });
 
     it('limits viewer report reads to published report rows', async () => {

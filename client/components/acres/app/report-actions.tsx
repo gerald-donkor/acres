@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Report, ReportEvidence } from "@acres/shared";
+import type { AiDraftProposal, Report, ReportEvidence } from "@acres/shared";
 import {
   CheckCircle2Icon,
   DownloadIcon,
@@ -13,6 +13,7 @@ import {
   SendIcon,
   ShieldAlertIcon,
   ShieldCheckIcon,
+  SparklesIcon,
 } from "lucide-react";
 
 import {
@@ -20,6 +21,7 @@ import {
   createReportRevision,
   getExportDownload,
   createReport,
+  generateAiDrafts,
   publishReportRevision,
   submitReportRevisionForReview,
   updateReportRevision,
@@ -28,6 +30,7 @@ import { ApiClientError, getApiErrorCopy } from "@/lib/api/envelope";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
@@ -151,6 +154,15 @@ export function RevisionEditor({
   const [isEditingInReview, setIsEditingInReview] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  const [title, setTitle] = useState(revision?.title ?? "");
+  const [summary, setSummary] = useState(revision?.summary ?? "");
+  const [insightHeading, setInsightHeading] = useState(
+    revision?.insights[0]?.heading ?? "",
+  );
+  const [insightBody, setInsightBody] = useState(
+    revision?.insights[0]?.body ?? "",
+  );
+
   if (revision === null) return null;
   const revisionId = revision.id;
 
@@ -179,6 +191,12 @@ export function RevisionEditor({
     });
   }
 
+  function onApplyAiDraft(heading: string, body: string) {
+    setInsightHeading(heading);
+    setInsightBody(body);
+    setStatusAnnouncement("Copied AI proposal to draft insight fields.");
+  }
+
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canUpdate || isPublished || isSuperseded) return;
@@ -187,12 +205,12 @@ export function RevisionEditor({
     run(
       () =>
         updateReportRevision(organizationId, report.id, revisionId, {
-          title: String(form.get("title") ?? ""),
-          summary: String(form.get("summary") ?? ""),
+          title: title.trim(),
+          summary: summary.trim() ? summary.trim() : undefined,
           insights: [
             {
-              heading: String(form.get("insightHeading") ?? ""),
-              body: String(form.get("insightBody") ?? ""),
+              heading: insightHeading.trim(),
+              body: insightBody.trim(),
             },
           ],
           evidence: aggregateId ? [{ aggregateId }] : undefined,
@@ -222,7 +240,7 @@ export function RevisionEditor({
 
       {/* State-specific UI */}
       {isDraft || (isInReview && isEditingInReview) ? (
-        <div className="grid gap-5">
+        <div className="grid gap-6">
           {isInReview && isEditingInReview ? (
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule pb-3">
               <p className="text-ui text-ink">Editing In-Review Revision</p>
@@ -237,6 +255,16 @@ export function RevisionEditor({
             </div>
           ) : null}
 
+          {isDraft && report.aiDraftEnabled ? (
+            <AiDraftPanel
+              organizationId={organizationId}
+              report={report}
+              revision={revision}
+              canUpdate={canUpdate}
+              onApplyDraft={onApplyAiDraft}
+            />
+          ) : null}
+
           <form onSubmit={onSubmit} aria-busy={isPending} className="grid gap-5">
             <FieldGroup>
               <Field data-disabled={!canUpdate}>
@@ -244,7 +272,8 @@ export function RevisionEditor({
                 <Input
                   id="edit-title"
                   name="title"
-                  defaultValue={revision.title}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                   disabled={!canUpdate}
                   required
                   maxLength={160}
@@ -255,7 +284,8 @@ export function RevisionEditor({
                 <Textarea
                   id="edit-summary"
                   name="summary"
-                  defaultValue={revision.summary ?? ""}
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
                   disabled={!canUpdate}
                   maxLength={1000}
                 />
@@ -265,7 +295,8 @@ export function RevisionEditor({
                 <Input
                   id="edit-insight-heading"
                   name="insightHeading"
-                  defaultValue={revision.insights[0]?.heading ?? ""}
+                  value={insightHeading}
+                  onChange={(e) => setInsightHeading(e.target.value)}
                   disabled={!canUpdate}
                   required
                   maxLength={160}
@@ -276,7 +307,8 @@ export function RevisionEditor({
                 <Textarea
                   id="edit-insight-body"
                   name="insightBody"
-                  defaultValue={revision.insights[0]?.body ?? ""}
+                  value={insightBody}
+                  onChange={(e) => setInsightBody(e.target.value)}
                   disabled={!canUpdate}
                   required
                   maxLength={4000}
@@ -837,4 +869,293 @@ export function getEvidenceDetails(item: ReportEvidence) {
     datasetVersion,
     chartType,
   };
+}
+
+export function AiDraftPanel({
+  organizationId,
+  report,
+  revision,
+  canUpdate,
+  onApplyDraft,
+}: {
+  organizationId: string;
+  report: Report;
+  revision: NonNullable<Report["latestRevision"]>;
+  canUpdate: boolean;
+  onApplyDraft: (heading: string, body: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [purpose, setPurpose] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>(() =>
+    revision.evidence.map((e) => e.id),
+  );
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<AiDraftProposal[]>([]);
+
+  if (!report.aiDraftEnabled || !canUpdate || revision.status !== "draft") {
+    return null;
+  }
+
+  function toggleEvidence(id: string) {
+    setSelectedEvidenceIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+    );
+  }
+
+  async function handleGenerate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!acknowledged || !purpose.trim() || selectedEvidenceIds.length === 0) {
+      return;
+    }
+    setIsPending(true);
+    setError(null);
+    setStatusMessage("Generating draft proposals with Gemini...");
+    try {
+      const result = await generateAiDrafts(
+        organizationId,
+        report.id,
+        revision.id,
+        {
+          purpose: purpose.trim(),
+          evidenceIds: selectedEvidenceIds,
+          acknowledgement: true,
+        },
+      );
+      setProposals(result.proposals);
+      setStatusMessage(
+        `Generated ${result.proposals.length} proposal(s). Review candidates below.`,
+      );
+    } catch (err) {
+      const apiErr = err instanceof ApiClientError ? err : null;
+      setError(
+        apiErr?.message ||
+          "AI draft generation failed. Please check network connectivity or try again.",
+      );
+      setStatusMessage(null);
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  return (
+    <div className="rounded-card border border-rule bg-page p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-surface text-primary">
+            <SparklesIcon className="size-4" aria-hidden="true" />
+          </div>
+          <div>
+            <h3 className="font-serif text-base font-semibold text-ink">
+              Draft with Gemini preview
+            </h3>
+            <p className="text-xs text-ink-muted">
+              Generate grounded insight proposals citing attached evidence.
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-expanded={isOpen}
+        >
+          {isOpen ? "Hide generator" : "Open generator"}
+        </Button>
+      </div>
+
+      {isOpen ? (
+        <form
+          onSubmit={handleGenerate}
+          className="mt-5 grid gap-4 border-t border-rule pt-4"
+        >
+          {/* Plain language disclosure */}
+          <div className="rounded-card border border-rule bg-canvas p-4 text-xs leading-relaxed text-ink-muted">
+            <p className="mb-1 font-semibold text-ink">
+              Third-Party AI Disclosure (Unpaid Gemini Developer API)
+            </p>
+            <p>
+              Selected report evidence and prompt text will be transmitted to
+              Google&apos;s unpaid Gemini Developer API. Google may use content
+              submitted to this service for model training and product
+              improvement, which may involve human review. Do not submit
+              confidential organizational metrics or personal data.
+            </p>
+          </div>
+
+          {/* Explicit Acknowledgement Checkbox */}
+          <div className="flex items-start gap-2.5">
+            <Checkbox
+              id="ai-terms-ack"
+              checked={acknowledged}
+              onCheckedChange={(checked) => setAcknowledged(Boolean(checked))}
+              className="mt-0.5"
+            />
+            <label
+              htmlFor="ai-terms-ack"
+              className="cursor-pointer text-xs leading-snug text-ink select-none"
+            >
+              I understand and agree that this request sends selected report
+              evidence to Google&apos;s unpaid Gemini Developer API.
+            </label>
+          </div>
+
+          {/* Purpose / Focus Statement */}
+          <div className="grid gap-1.5">
+            <label
+              htmlFor="ai-purpose"
+              className="text-xs font-medium text-ink"
+            >
+              Focus instruction / purpose
+            </label>
+            <Textarea
+              id="ai-purpose"
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              placeholder="e.g. Highlight regional yield anomalies and water efficiency trends"
+              rows={2}
+              maxLength={500}
+              required
+            />
+          </div>
+
+          {/* Evidence selection */}
+          <div className="grid gap-2">
+            <label className="text-xs font-medium text-ink">
+              Select attached evidence as context ({selectedEvidenceIds.length}/
+              {revision.evidence.length})
+            </label>
+            {revision.evidence.length === 0 ? (
+              <p className="text-xs italic text-ink-muted">
+                No evidence items currently attached to this draft revision.
+                Attach evidence below before generating proposals.
+              </p>
+            ) : (
+              <div className="grid max-h-40 gap-1.5 overflow-y-auto rounded border border-rule p-2">
+                {revision.evidence.map((ev) => {
+                  const snap =
+                    ev.snapshot && typeof ev.snapshot === "object"
+                      ? (ev.snapshot as Record<string, unknown>)
+                      : {};
+                  const metric =
+                    snap.metric && typeof snap.metric === "object"
+                      ? (snap.metric as Record<string, unknown>)
+                      : {};
+                  const label =
+                    (typeof metric.label === "string" && metric.label) ||
+                    (typeof snap.name === "string" && snap.name) ||
+                    `Evidence ${ev.id.slice(0, 8)}`;
+                  const isChecked = selectedEvidenceIds.includes(ev.id);
+                  return (
+                    <div
+                      key={ev.id}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <Checkbox
+                        id={`ev-select-${ev.id}`}
+                        checked={isChecked}
+                        onCheckedChange={() => toggleEvidence(ev.id)}
+                      />
+                      <label
+                        htmlFor={`ev-select-${ev.id}`}
+                        className="cursor-pointer truncate"
+                      >
+                        {label}{" "}
+                        <span className="font-mono text-[10px] text-ink-muted">
+                          ({ev.id.slice(0, 8)})
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Live Status and Alerts */}
+          {statusMessage ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="text-xs font-medium text-primary"
+            >
+              {statusMessage}
+            </div>
+          ) : null}
+
+          {error ? (
+            <Alert variant="destructive">
+              <ShieldAlertIcon className="size-4" />
+              <AlertTitle>Generation Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {/* Submit Action */}
+          <div>
+            <Button
+              type="submit"
+              disabled={
+                isPending ||
+                !acknowledged ||
+                !purpose.trim() ||
+                selectedEvidenceIds.length === 0
+              }
+            >
+              {isPending ? "Generating..." : "Generate insight proposals"}
+            </Button>
+          </div>
+
+          {/* Returned proposals */}
+          {proposals.length > 0 ? (
+            <div className="mt-4 grid gap-3 border-t border-rule pt-4">
+              <h4 className="text-sm font-medium text-ink">
+                Candidate Proposals ({proposals.length})
+              </h4>
+              {proposals.map((p, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-card border border-rule bg-canvas p-4 text-xs grid gap-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h5 className="font-serif text-sm font-semibold text-ink">
+                      {p.heading}
+                    </h5>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onApplyDraft(p.heading, p.body)}
+                    >
+                      Use as draft
+                    </Button>
+                  </div>
+                  <p className="text-xs leading-relaxed text-ink-muted">
+                    {p.body}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <span className="font-mono text-[10px] uppercase text-ink-muted">
+                      Cites:
+                    </span>
+                    {p.citedEvidenceIds.map((citeId) => (
+                      <Badge
+                        key={citeId}
+                        variant="outline"
+                        className="font-mono text-[10px]"
+                      >
+                        {citeId.slice(0, 8)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </form>
+      ) : null}
+    </div>
+  );
 }

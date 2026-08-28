@@ -41,6 +41,7 @@ model Account {
   reportRevisionsPublished ReportRevision[] @relation("ReportRevisionPublisher")
   reportInsightsAuthored ReportInsight[]  @relation("ReportInsightAuthor")
   exportRequests         ExportRequest[]
+  aiGenerationsRequested AiGeneration[]
 }
 
 /// An opaque, server-revocable browser session. Only the hash is stored.
@@ -185,6 +186,7 @@ model Organization {
   reportEvidence ReportEvidence[]
   exportRequests ExportRequest[]
   exportArtifacts ExportArtifact[]
+  aiGenerations AiGeneration[]
 }
 
 /// An account's organization-local role. Revoked rows remain as provenance.
@@ -914,6 +916,7 @@ model Report {
   createdBy          Account      @relation("ReportCreator", fields: [createdByAccountId], references: [id], onDelete: Restrict)
   revisions          ReportRevision[]
   exportRequests     ExportRequest[]
+  aiGenerations      AiGeneration[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, updatedAt])
@@ -944,6 +947,7 @@ model ReportRevision {
   insights             ReportInsight[]
   evidence             ReportEvidence[]
   exportRequests       ExportRequest[]
+  aiGenerations        AiGeneration[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reportId, revisionNumber])
@@ -1044,6 +1048,45 @@ model ExportArtifact {
   @@unique([organizationId, id])
   @@unique([organizationId, exportRequestId])
   @@index([organizationId, storedObjectId])
+}
+
+model AiGeneration {
+  id                    String            @id @default(uuid(7))
+  organizationId        String
+  reportId              String
+  revisionId            String
+  accountId             String
+  provider              String
+  model                 String
+  promptTemplateVersion String
+  inputHash             String
+  state                 AiGenerationState
+  errorCategory         String?
+  proposalCount         Int               @default(0)
+  evidenceCount         Int               @default(0)
+  durationMs            Int?
+  createdAt             DateTime          @default(now())
+  completedAt           DateTime?
+  organization          Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  report                Report            @relation(fields: [organizationId, reportId], references: [organizationId, id], onDelete: Cascade)
+  revision              ReportRevision    @relation(fields: [organizationId, revisionId], references: [organizationId, id], onDelete: Cascade)
+  account               Account           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, revisionId, createdAt])
+  @@index([organizationId, accountId, createdAt])
+  @@index([organizationId, state, createdAt])
+}
+
+enum AiGenerationState {
+  succeeded
+  validation_rejected
+  rate_limited
+  timeout
+  unavailable
+  malformed_output
+  grounding_rejected
+  failed
 }
 
 enum ReportStatus {

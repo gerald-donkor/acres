@@ -44,9 +44,7 @@ export async function runAnalyticsPlanChecks(
   options: PlanCheckOptions = {},
 ): Promise<PlanCheckOutcome> {
   const connectionString =
-    options.connectionString ??
-    process.env.DATABASE_URL ??
-    'postgresql://acres_test:acres_test_dev_password@localhost:5432/acres_test?schema=public';
+    options.connectionString ?? process.env.DATABASE_URL ?? '';
 
   const prisma = new PrismaClient({
     adapter: new PrismaPg({
@@ -210,9 +208,7 @@ async function main() {
     process.env.NODE_ENV === 'test' ||
     process.env.ACRES_ALLOW_TEST_SEED === '1';
 
-  const dbUrl =
-    process.env.DATABASE_URL ||
-    'postgresql://acres_test:acres_test_dev_password@localhost:5432/acres_test?schema=public';
+  const dbUrl = process.env.DATABASE_URL || '';
 
   const isTestDb =
     dbUrl.includes('acres_test') || process.env.ACRES_ALLOW_TEST_SEED === '1';

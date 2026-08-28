@@ -46,7 +46,7 @@ export class ReportsService {
         organization.organizationId,
         reportVisibility(organization),
       );
-      return rows.map(toReport);
+      return rows.map((r) => toReport(r, this.config.aiDraftEnabled));
     });
   }
 
@@ -62,7 +62,7 @@ export class ReportsService {
         reportVisibility(organization),
       );
       if (row === null) throw ApiException.notFound('Report not found.');
-      return toReport(row);
+      return toReport(row, this.config.aiDraftEnabled);
     });
   }
 
@@ -136,7 +136,7 @@ export class ReportsService {
             report.id,
           );
           if (row === null) throw ApiException.notFound('Report not found.');
-          return toReport(row);
+          return toReport(row, this.config.aiDraftEnabled);
         },
       ),
     );
@@ -172,7 +172,7 @@ export class ReportsService {
         reportId,
       );
       if (row === null) throw ApiException.notFound('Report not found.');
-      return toReport(row);
+      return toReport(row, this.config.aiDraftEnabled);
     });
   }
 
@@ -223,7 +223,7 @@ export class ReportsService {
         reportId,
       );
       if (row === null) throw ApiException.notFound('Report not found.');
-      return toReport(row);
+      return toReport(row, this.config.aiDraftEnabled);
     });
   }
 
@@ -309,7 +309,7 @@ export class ReportsService {
             reportId,
           );
           if (row === null) throw ApiException.notFound('Report not found.');
-          return toReport(row);
+          return toReport(row, this.config.aiDraftEnabled);
         },
       ),
     );
@@ -377,7 +377,7 @@ export class ReportsService {
           if (current === null) {
             throw ApiException.notFound('Report not found.');
           }
-          return toReport(current);
+          return toReport(current, this.config.aiDraftEnabled);
         },
       ),
     );
@@ -419,7 +419,7 @@ export class ReportsService {
             );
             if (current === null)
               throw ApiException.notFound('Report not found.');
-            return toReport(current);
+            return toReport(current, this.config.aiDraftEnabled);
           }
           if (
             revision.insights.length === 0 ||
@@ -470,7 +470,7 @@ export class ReportsService {
           );
           if (current === null)
             throw ApiException.notFound('Report not found.');
-          return toReport(current);
+          return toReport(current, this.config.aiDraftEnabled);
         },
       ),
     );
@@ -871,18 +871,21 @@ function optionalText(value: string | undefined): string | null {
   return trimmed.length === 0 ? null : trimmed;
 }
 
-function toReport(row: {
-  id: string;
-  title: string;
-  summary: string | null;
-  status: string;
-  version: number;
-  ownerAccountId: string;
-  createdByAccountId: string;
-  createdAt: Date;
-  updatedAt: Date;
-  revisions: Array<Parameters<typeof toRevision>[0]>;
-}): Report {
+function toReport(
+  row: {
+    id: string;
+    title: string;
+    summary: string | null;
+    status: string;
+    version: number;
+    ownerAccountId: string;
+    createdByAccountId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    revisions: Array<Parameters<typeof toRevision>[0]>;
+  },
+  aiDraftEnabled = false,
+): Report {
   return {
     id: row.id,
     title: row.title,
@@ -894,6 +897,7 @@ function toReport(row: {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     latestRevision: row.revisions[0] ? toRevision(row.revisions[0]) : null,
+    aiDraftEnabled,
   };
 }
 

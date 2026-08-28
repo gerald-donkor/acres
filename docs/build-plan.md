@@ -429,45 +429,30 @@ Status: implemented by `prompts/30-dashboards-optimized-graphql.md`.
 - **Exit:** a permitted user publishes a reproducible revision and receives a
   secure, formula-safe export; unauthorized/stale/duplicate paths fail safely.
 
-## 12. Phase 11 — optional local AI
+## 12. Phase 11 — optional AI draft preview (Phase 11A Gemini Free-Tier Preview)
 
-- **Depends on:** phase 10 report/evidence workflow and a user-approved model,
-  license, quality threshold, and operating profile.
-- **Outcome/behavior:** disabled-by-default provider-neutral local draft
-  generation through llama.cpp CPU or vLLM GPU; minimal authorized evidence;
-  versioned prompts; schema/grounding/safety evaluation; human publication; full
-  no-AI fallback.
-- **Subsystems/config/migrations:** `AiGeneration` metadata/evidence/evaluation;
-  `AiGenerationPort`; model/license registry; concurrency/timeout/circuit
-  breaker; prompt and evaluation fixtures. No arbitrary tools or outbound fetch.
-- **Non-goals:** authoritative metrics, source mutation, autonomous actions or
-  publishing, RAG/vector DB, proprietary-host requirement.
-- **Security/failure cases:** prompt injection in source text, cross-tenant
-  canaries, unsupported claims, schema/size abuse, model timeout/crash, raw
-  prompt/output logs, stale evidence, malicious model artifact/license drift.
-- **Tests:** deterministic selection/authorization; prompt injection/leakage;
-  schema and evidence-claim checks; quality regression set; concurrency/
-  timeout/circuit break; human decision; runtime absent/disabled no-AI suite.
-- **Observability:** model/runtime/prompt version, duration, token/size-like
-  resource use, evaluation/pass/failure and circuit state; raw sensitive content
-  excluded unless a separately protected diagnostic mode is approved.
-- **Rollback/compatibility:** one configuration disables the adapter; drafts are
-  marked AI-proposed and retain version metadata; deterministic report workflow
-  and stored evidence remain valid.
-- **Documentation owner:** AI model card/operations/evaluation record plus
-  `system-architecture.md`, `security.md`, `product.md`.
-- **Skills:** required — `architecture-patterns`, `nestjs-best-practices`,
-  `security-best-practices`, `security-threat-model`,
-  `prompt-engineering-patterns`, `llm-evaluation`, `data-storytelling`,
-  `error-handling-patterns`, `javascript-testing-patterns`,
-  `e2e-testing-patterns`, `secrets-management`, `requesting-code-review`,
-  `receiving-code-review`, `caveman-commit`. Conditional —
-  `api-design-principles`/`openapi-spec-generation` for command/status routes;
-  `postgres-best-practices` for schema. Do not use `rag-implementation` without
-  a separately approved retrieval design.
-- **Exit:** measured evaluation meets the approved threshold, isolation and
-  injection tests pass, humans remain authoritative, and removing AI leaves all
-  core journeys passing.
+- **Depends on:** phase 10 report/evidence workflow and explicit operator acknowledgment
+  of unpaid Gemini Developer API terms.
+- **Outcome/behavior:** disabled-by-default assistive draft proposal generation
+  via Port/Adapter (`AiDraftProvider`, `GeminiDraftAdapter`, `FakeDraftAdapter`);
+  strict evidence grounding verification; versioned prompt builder (`v1`);
+  mandatory user disclosure and unchecked acknowledgment checkbox on client;
+  human-in-the-loop review before draft saving; full no-AI fallback.
+- **Subsystems/config/migrations:** `AiGeneration` metadata model with RLS & SHA-256
+  canonical input hash regex constraint; `AI_DRAFT_PROVIDER` port token;
+  `server/src/ai/` module; synthetic categorical evaluation suite (`ai-evaluation-fixtures.ts`,
+  `ai-evaluation.spec.ts`). No arbitrary tools, database mutation, or outbound fetch beyond Gemini.
+- **Non-goals:** authoritative metrics, autonomous saving/publishing, vector DB / RAG.
+- **Security/failure cases:** prompt injection in user purpose/snapshots (contained by structured XML delimiters),
+  cross-tenant leakage (enforced by RLS & tenant isolation), unsupported claims / foreign citations (rejected by server grounding validator with `AI_GROUNDING_REJECTED`),
+  rate limits (`AI_RATE_LIMITED`), timeouts (`AI_TIMEOUT`), sensitive prompt/output logging (zero raw text persisted).
+- **Tests:** unit tests, synthetic evaluation suite (`ai-evaluation.spec.ts`), E2E tests (`api.e2e-spec.ts`, `product-journeys.spec.ts`).
+- **Observability:** model, runtime, prompt version (`v1`), duration, token counts, completion state;
+  raw sensitive prompt/output excluded from audit logs and database.
+- **Rollback/compatibility:** `AI_DRAFT_ENABLED=false` cleanly disables the endpoint; core report authoring remains 100% deterministic without AI.
+- **Documentation owner:** `docs/ai.md`, `docs/security.md`, `docs/system-architecture.md`, `docs/product.md`.
+- **Exit:** all synthetic evaluation tests pass, injection/leakage tests pass, human author remains authoritative,
+  no-AI fallback fully functional.
 
 ## 13. Phase 12 — operations and launch hardening
 

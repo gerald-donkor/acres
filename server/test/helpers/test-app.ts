@@ -6,6 +6,8 @@ import { AcresConfigService } from '../../src/config/acres-config.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { WORK_QUEUE } from '../../src/queue/work-queue.port';
 import { OBJECT_STORAGE } from '../../src/storage/storage.port';
+import { AI_DRAFT_PROVIDER } from '../../src/ai/ai.port';
+import { FakeDraftAdapter } from '../../src/ai/adapters/fake-draft.adapter';
 
 /**
  * No database is provisioned for this repository, so the tests replace
@@ -156,6 +158,7 @@ export interface PrismaDouble {
   };
   reportEvidence: {
     create: jest.Mock;
+    findMany: jest.Mock;
     deleteMany: jest.Mock;
   };
   exportRequest: {
@@ -186,6 +189,11 @@ export interface PrismaDouble {
     findUnique: jest.Mock;
     update: jest.Mock;
     updateMany: jest.Mock;
+  };
+  aiGeneration: {
+    create: jest.Mock;
+    findMany: jest.Mock;
+    findFirst: jest.Mock;
   };
   $executeRaw: jest.Mock;
   $queryRaw: jest.Mock;
@@ -332,6 +340,7 @@ export function createPrismaDouble(): PrismaDouble {
     },
     reportEvidence: {
       create: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       deleteMany: jest.fn(),
     },
     exportRequest: {
@@ -363,6 +372,17 @@ export function createPrismaDouble(): PrismaDouble {
       update: jest.fn(),
       updateMany: jest.fn(),
     },
+    aiGeneration: {
+      create: jest.fn((input: { data: Record<string, unknown> }) =>
+        Promise.resolve({
+          id: 'ai-gen-1',
+          createdAt: new Date(),
+          ...input?.data,
+        }),
+      ),
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     $executeRaw: jest.fn().mockResolvedValue(0),
     $queryRaw: jest.fn(),
     $transaction: jest.fn(),
@@ -386,7 +406,8 @@ function positiveInt(
   envOverrides: Partial<Record<string, string>>,
   key: string,
 ): number {
-  return Number(envValue(envOverrides, key));
+  const value = Number(envValue(envOverrides, key));
+  return Number.isInteger(value) && value > 0 ? value : 1;
 }
 
 function configDouble(
@@ -556,6 +577,33 @@ function configDouble(
     get outboxMaxAttempts() {
       return positiveInt(envOverrides, 'OUTBOX_MAX_ATTEMPTS');
     },
+    get aiDraftEnabled() {
+      return envValue(envOverrides, 'AI_DRAFT_ENABLED') === 'true';
+    },
+    get aiDraftProviderTierUnpaidAcknowledged() {
+      return (
+        envValue(envOverrides, 'AI_DRAFT_PROVIDER_TIER_UNPAID_ACKNOWLEDGED') ===
+        'true'
+      );
+    },
+    get geminiApiKey() {
+      return envValue(envOverrides, 'GEMINI_API_KEY') || 'test-key';
+    },
+    get aiDraftModel() {
+      return envValue(envOverrides, 'AI_DRAFT_MODEL') || 'gemini-2.5-flash';
+    },
+    get aiDraftTimeoutMs() {
+      return positiveInt(envOverrides, 'AI_DRAFT_TIMEOUT_MS') || 15000;
+    },
+    get aiDraftMaxProposals() {
+      return positiveInt(envOverrides, 'AI_DRAFT_MAX_PROPOSALS') || 3;
+    },
+    get aiDraftMaxContextBytes() {
+      return positiveInt(envOverrides, 'AI_DRAFT_MAX_CONTEXT_BYTES') || 16384;
+    },
+    get aiDraftMaxOutputTokens() {
+      return positiveInt(envOverrides, 'AI_DRAFT_MAX_OUTPUT_TOKENS') || 2048;
+    },
   } as AcresConfigService;
 }
 
@@ -564,15 +612,19 @@ export async function createTestApp(
   envOverrides: Partial<Record<string, string>> = {},
 ): Promise<{
   app: INestApplication;
+  fakeAiDraftAdapter?: FakeDraftAdapter;
 }> {
   let app: INestApplication | undefined;
   let initialized = false;
+  const fakeAiDraftAdapter = new FakeDraftAdapter();
   try {
     const builder = Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(AI_DRAFT_PROVIDER)
+      .useValue(fakeAiDraftAdapter)
       .overrideProvider(OBJECT_STORAGE)
       .useValue({
         presignPut: jest.fn().mockResolvedValue({
@@ -616,7 +668,7 @@ export async function createTestApp(
     configureApp(app);
     await app.init();
     initialized = true;
-    return { app };
+    return { app, fakeAiDraftAdapter };
   } finally {
     if (!initialized) {
       await app?.close();

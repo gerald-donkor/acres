@@ -1,8 +1,10 @@
 "use client";
 
 import type {
+  AiDraftProposalsResult,
   ColumnMappingSummary,
   CompleteUploadInput,
+  CreateAiDraftInput,
   CreateDatasetInput,
   CreateDashboardViewInput,
   CreateExportInput,
@@ -203,6 +205,22 @@ export async function publishReportRevision(
   return apiMutation<Report>(
     `/reports/${reportId}/revisions/${revisionId}/publish`,
     {},
+    {
+      organizationId,
+      idempotencyKey: createIdempotencyKey(),
+    },
+  );
+}
+
+export async function generateAiDrafts(
+  organizationId: string,
+  reportId: string,
+  revisionId: string,
+  input: CreateAiDraftInput,
+): Promise<AiDraftProposalsResult> {
+  return apiMutation<AiDraftProposalsResult>(
+    `/reports/${reportId}/revisions/${revisionId}/ai-drafts`,
+    input,
     {
       organizationId,
       idempotencyKey: createIdempotencyKey(),

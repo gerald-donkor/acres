@@ -840,4 +840,197 @@ test.describe("Product Journeys", () => {
     await expect(page.getByText("Unknown region code 'invalid-999'.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Retry Ingestion" })).toBeVisible();
   });
+
+  test("gemini draft preview: disclosure, acknowledgement requirement, proposal generation, and copying to draft fields", async ({
+    page,
+  }) => {
+    const reportId = unique("rep-ai");
+    const revisionId = `rev-${reportId}-1`;
+    const evidenceId = "11111111-1111-7111-8111-111111111111";
+
+    const initialReport = {
+      id: reportId,
+      title: "Regional Agricultural Growth Report",
+      summary: "Overview of agricultural metrics and trends.",
+      status: "draft",
+      version: 1,
+      ownerAccountId: "acc-1",
+      createdByAccountId: "acc-1",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      aiDraftEnabled: true,
+      latestRevision: {
+        id: revisionId,
+        reportId,
+        revisionNumber: 1,
+        status: "draft",
+        title: "Regional Agricultural Growth Report",
+        summary: "Overview of agricultural metrics and trends.",
+        sections: [],
+        authorAccountId: "acc-1",
+        reviewerAccountId: null,
+        publisherAccountId: null,
+        submittedForReviewAt: null,
+        publishedAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        insights: [
+          {
+            id: "ins-1",
+            position: 0,
+            heading: "Initial Baseline",
+            body: "Initial baseline notes.",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+        evidence: [
+          {
+            id: evidenceId,
+            evidenceType: "aggregate",
+            aggregateId: "agg-1",
+            dashboardViewId: null,
+            metricDefinitionId: "met-1",
+            datasetVersionId: "ver-1",
+            observationId: "obs-1",
+            snapshot: {
+              metric: { label: "Crop Yield", unit: "bushels/acre" },
+              value: 185,
+            },
+            position: 0,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    };
+
+    await page.route("**/api/v1/reports", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, data: [initialReport] }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.route(`**/api/v1/reports/${reportId}`, async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, data: initialReport }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.route(
+      `**/api/v1/reports/${reportId}/revisions/${revisionId}/ai-drafts`,
+      async (route) => {
+        if (route.request().method() === "POST") {
+          const body = JSON.parse(route.request().postData() || "{}");
+          if (!body.acknowledgement) {
+            await route.fulfill({
+              status: 400,
+              contentType: "application/json",
+              body: JSON.stringify({
+                ok: false,
+                error: {
+                  code: "VALIDATION_FAILED",
+                  message: "Acknowledgement of unpaid Gemini terms is required.",
+                },
+              }),
+            });
+            return;
+          }
+
+          await route.fulfill({
+            status: 201,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ok: true,
+              data: {
+                proposals: [
+                  {
+                    heading: "Elevated Crop Yield Across Northern Acres",
+                    body: "Analysis indicates corn yield reached 185 bushels/acre, exceeding target baseline.",
+                    citedEvidenceIds: [evidenceId],
+                  },
+                ],
+                metadata: {
+                  generationId: "gen-test-1",
+                  provider: "gemini",
+                  model: "gemini-2.5-flash",
+                  promptTemplateVersion: "v1",
+                  proposalCount: 1,
+                  createdAt: new Date().toISOString(),
+                },
+              },
+            }),
+          });
+          return;
+        }
+        await route.continue();
+      },
+    );
+
+    await registerAccount(page);
+    const orgName = unique("AI Draft Preview Org");
+    await createFirstOrganization(page, orgName);
+
+    // Navigate to report detail page
+    await page.goto(`/app/reports/${reportId}`);
+    await expect(
+      page.getByRole("heading", { name: "Regional Agricultural Growth Report" }),
+    ).toBeVisible();
+
+    // Verify AI preview generator header is present
+    await expect(
+      page.getByRole("heading", { name: "Draft with Gemini preview" }),
+    ).toBeVisible();
+
+    // Open generator
+    await page.getByRole("button", { name: "Open generator" }).click();
+
+    // Verify disclosure is visible
+    await expect(
+      page.getByText("Third-Party AI Disclosure (Unpaid Gemini Developer API)"),
+    ).toBeVisible();
+
+    // Submit button is disabled before checking acknowledgement
+    const generateBtn = page.getByRole("button", {
+      name: "Generate insight proposals",
+    });
+    await expect(generateBtn).toBeDisabled();
+
+    // Check acknowledgement checkbox and fill purpose
+    await page.getByLabel(/I understand and agree that this request sends selected report evidence/i).click();
+    await page.getByLabel("Focus instruction / purpose").fill("Summarize corn yield trends");
+
+    // Click generate proposals
+    await generateBtn.click();
+
+    // Verify proposal appears
+    await expect(
+      page.getByText("Elevated Crop Yield Across Northern Acres"),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Analysis indicates corn yield reached 185 bushels/acre"),
+    ).toBeVisible();
+
+    // Click "Use as draft"
+    await page.getByRole("button", { name: "Use as draft" }).click();
+
+    // Verify draft revision fields were updated with proposal content
+    await expect(page.getByLabel("Insight heading")).toHaveValue(
+      "Elevated Crop Yield Across Northern Acres",
+    );
+    await expect(page.getByLabel("Insight body")).toHaveValue(
+      "Analysis indicates corn yield reached 185 bushels/acre, exceeding target baseline.",
+    );
+  });
 });

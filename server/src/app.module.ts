@@ -22,6 +22,7 @@ import { MetricsModule } from './metrics/metrics.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
 import { ReportsModule } from './reports/reports.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ReportsModule } from './reports/reports.module';
     AnalyticsModule,
     DashboardsModule,
     ReportsModule,
+    AiModule,
     AcresGraphqlModule,
   ],
 })

@@ -180,7 +180,7 @@ test("browser API helpers attach organization headers and idempotency keys", asy
     expect(lastUploadReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
     expect(lastUploadReq?.headers["idempotency-key"]).toBeDefined();
 
-    const { submitReportRevisionForReview, publishReportRevision } = await import("@/lib/api/browser");
+    const { submitReportRevisionForReview, publishReportRevision, generateAiDrafts } = await import("@/lib/api/browser");
 
     await submitReportRevisionForReview("org-test-1", "rep-1", "rev-1");
     const lastSubmitReq = requests.find((r) => r.url.endsWith("/reports/rep-1/revisions/rev-1/submit-review"));
@@ -195,6 +195,17 @@ test("browser API helpers attach organization headers and idempotency keys", asy
     expect(lastPublishReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
     expect(lastPublishReq?.headers["idempotency-key"]).toBeDefined();
     expect(lastPublishReq?.method).toBe("POST");
+
+    await generateAiDrafts("org-test-1", "rep-1", "rev-1", {
+      purpose: "Analyze yield",
+      evidenceIds: ["ev-1"],
+      acknowledgement: true,
+    });
+    const lastAiReq = requests.find((r) => r.url.endsWith("/reports/rep-1/revisions/rev-1/ai-drafts"));
+    expect(lastAiReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
+    expect(lastAiReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
+    expect(lastAiReq?.headers["idempotency-key"]).toBeDefined();
+    expect(lastAiReq?.method).toBe("POST");
   } finally {
     globalThis.fetch = originalFetch;
   }

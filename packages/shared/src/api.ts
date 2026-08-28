@@ -38,6 +38,12 @@ export const API_ERROR_CODES = [
   'IDEMPOTENCY_CONFLICT',
   'NOT_READY',
   'INTERNAL_ERROR',
+  'AI_DISABLED',
+  'AI_UNAVAILABLE',
+  'AI_TIMEOUT',
+  'AI_RATE_LIMITED',
+  'AI_OUTPUT_INVALID',
+  'AI_GROUNDING_REJECTED',
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
