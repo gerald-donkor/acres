@@ -7,7 +7,7 @@ trap 'rm -f "$tmp"' EXIT
 
 is_allowed_path() {
   case "$1" in
-    .env.example|server/.env.example|infra/env/*|infra/launch/*|.github/workflows/ci.yml|docker-compose.yml|infra/garage/garage.toml|client/playwright.config.ts|server/src/config/env.validation.ts|server/src/contracts/generate-contracts.ts|docs/*|prompts/*|server/test/*|server/src/**/*.spec.ts|client/tests/*|scripts/ops/scan-secrets.sh|scripts/ops/check-launch-readiness.js)
+    .env.example|server/.env.example|infra/env/*|infra/launch/*|.github/workflows/ci.yml|docker-compose.yml|infra/garage/garage.toml|client/playwright.config.ts|server/src/config/env.validation.ts|server/src/contracts/generate-contracts.ts|docs/*|prompts/*|server/test/*|server/src/**/*.spec.ts|client/tests/*|scripts/ops/scan-secrets.sh|scripts/ops/check-launch-readiness.js|scripts/ops/check-launch-readiness.spec.js|scripts/ops/*.spec.js)
       return 0
       ;;
     *)

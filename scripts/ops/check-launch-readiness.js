@@ -56,7 +56,15 @@ function checkPlaceholdersAndSecrets(obj, currentPath, blockers) {
       blockers.push(`Field '${currentPath}' contains unresolved placeholder: "${obj}"`);
     }
     if (/NEXT_PUBLIC_.*(SECRET|PASSWORD|TOKEN|KEY)/i.test(obj)) {
-      blockers.push(`Field '${currentPath}' contains client-exposed secret pattern: "${obj}"`);
+      blockers.push(`Field '${currentPath}' contains client-exposed secret pattern`);
+    }
+    if (
+      /AIza[0-9A-Za-z-_]{30,}/.test(obj) ||
+      /sk-[a-zA-Z0-9]{20,}/.test(obj) ||
+      /ghp_[a-zA-Z0-9]{20,}/.test(obj) ||
+      /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/.test(obj)
+    ) {
+      blockers.push(`Field '${currentPath}' appears to contain a literal secret value; secret values must never be stored in readiness records`);
     }
     for (const devPass of DEV_PASSWORDS) {
       if (obj.includes(devPass)) {
@@ -74,7 +82,7 @@ function checkPlaceholdersAndSecrets(obj, currentPath, blockers) {
   }
 }
 
-function validateReadiness(record, filePath) {
+function validateReadiness(record, _filePath) {
   const categoryBlockers = {};
   let totalApproved = 0;
 
@@ -197,6 +205,18 @@ function validateReadiness(record, filePath) {
   // 3.4 secret_references
   const secRefs = sections.secret_references;
   if (secRefs) {
+    for (const key of Object.keys(secRefs)) {
+      if (
+        key.toLowerCase().includes('gemini') ||
+        key.toLowerCase().includes('ai_draft') ||
+        key.toLowerCase().includes('ai_key')
+      ) {
+        addBlocker(
+          'optional_ai_posture',
+          `Contradiction: field 'sections.secret_references.${key}' declares an AI/Gemini secret source when AI is excluded from launch`
+        );
+      }
+    }
     for (const key of REQUIRED_SECRET_KEYS) {
       const val = secRefs[key];
       if (!val || typeof val !== 'string') {
@@ -335,14 +355,59 @@ function validateReadiness(record, filePath) {
   const aiSec = sections.optional_ai_posture;
   if (aiSec) {
     if (aiSec.ai_enabled === true) {
-      addBlocker('optional_ai_posture', 'FATAL: Optional AI is marked enabled, but Phase 11 is blocked and not approved/implemented');
+      addBlocker(
+        'optional_ai_posture',
+        'FATAL: Optional AI is marked enabled (ai_enabled: true), but the Phase 11A unpaid Gemini Developer API preview is excluded from production launch'
+      );
+    }
+    if (typeof aiSec.ai_enabled !== 'boolean') {
+      addBlocker(
+        'optional_ai_posture',
+        "Field 'ai_enabled' is required and must be a boolean (false)"
+      );
+    }
+    if (aiSec.gemini_api_key || aiSec.gemini_key || aiSec.api_key) {
+      addBlocker(
+        'optional_ai_posture',
+        'Contradiction: optional_ai_posture must not contain a Gemini API key or key reference'
+      );
     }
     if (aiSec.status === 'approved') {
       if (aiSec.ai_enabled !== false) {
-        addBlocker('optional_ai_posture', 'AI posture approval requires ai_enabled: false until Phase 11 is approved');
+        addBlocker(
+          'optional_ai_posture',
+          'Launch approval requires ai_enabled: false because the unpaid Gemini Developer API preview is excluded from production launch'
+        );
       }
       if (aiSec.no_ai_path_verified !== true) {
-        addBlocker('optional_ai_posture', 'Deterministic no-AI product path must be verified (no_ai_path_verified: true)');
+        addBlocker(
+          'optional_ai_posture',
+          'Deterministic no-AI product journeys must be verified (no_ai_path_verified: true)'
+        );
+      }
+      if (aiSec.server_ai_draft_enabled_false !== true) {
+        addBlocker(
+          'optional_ai_posture',
+          'Server configuration must explicitly assert AI_DRAFT_ENABLED=false (server_ai_draft_enabled_false: true)'
+        );
+      }
+      if (aiSec.no_gemini_api_key_provisioned !== true) {
+        addBlocker(
+          'optional_ai_posture',
+          'Absence of GEMINI_API_KEY in production API/worker runtime secrets must be confirmed (no_gemini_api_key_provisioned: true)'
+        );
+      }
+      if (aiSec.unpaid_provider_excluded !== true) {
+        addBlocker(
+          'optional_ai_posture',
+          'Exclusion of unpaid Gemini Developer API provider from production launch must be confirmed (unpaid_provider_excluded: true)'
+        );
+      }
+      if (typeof aiSec.phase11_status !== 'string' || !aiSec.phase11_status.trim()) {
+        addBlocker(
+          'optional_ai_posture',
+          "Field 'phase11_status' is required and must be a non-empty string"
+        );
       }
     }
   }
@@ -418,4 +483,14 @@ function main() {
   process.exit(0);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  validateReadiness,
+  checkPlaceholdersAndSecrets,
+  REQUIRED_SECTIONS,
+  REQUIRED_SECRET_KEYS,
+  DEV_PASSWORDS,
+};

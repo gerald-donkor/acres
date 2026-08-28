@@ -76,13 +76,15 @@ flowchart LR
   Browser --> Acres[Acres system]
   Acres -->|provider-neutral SMTP| SMTP[Optional production SMTP]
   Acres -->|approved adapter only| DataProvider[Deferred public-data provider]
-  Acres -->|minimal authorized evidence| AI[Optional local AI runtime]
+  Acres -->|minimal authorized evidence| AI[Optional AI preview provider]
   Operations --> Acres
 ```
 
 `DataProvider` and `AI` are optional boundaries. A provider connector needs a
-named source and approved license. AI is disabled by default and no core
-journey depends on it.
+named source and approved license. AI is disabled by default (`AI_DRAFT_ENABLED=false`);
+Phase 11A implements an unpaid Gemini Developer API preview behind a port with
+mandatory user disclosure/acknowledgment, but this unpaid tier is excluded from
+the production launch profile. No core journey depends on it.
 
 ### 3.2 Runtime containers
 
@@ -96,12 +98,13 @@ flowchart TB
   API --> Valkey[(Valkey + BullMQ)]
   API --> Garage
   API --> Mail[SMTP / Mailpit]
+  API -. optional preview port .-> Gemini[Gemini Developer API preview]
   Worker[Nest worker] --> PG
   Worker --> Valkey
   Worker --> Garage
   Worker --> ClamAV[ClamAV]
   Worker --> Mail
-  Worker -. optional port .-> LocalAI[llama.cpp / vLLM]
+  Worker -. deferred private port .-> LocalAI[Deferred private runtime: llama.cpp / vLLM]
   API --> Telemetry[OpenTelemetry collector]
   Worker --> Telemetry
   Caddy --> Telemetry
@@ -110,8 +113,9 @@ flowchart TB
 ```
 
 Only Caddy is internet-exposed in the reference production profile. Database,
-queue, storage admin API, scanner, telemetry, and AI remain private. Garage data
-paths are exposed only through scoped, short-lived presigned requests.
+queue, storage admin API, scanner, telemetry, and any private adapters remain private.
+The reference production profile is strictly no-AI (`AI_DRAFT_ENABLED=false`).
+Garage data paths are exposed only through scoped, short-lived presigned requests.
 
 ### 3.3 Same-origin HTTP routing
 
@@ -245,8 +249,7 @@ baselines, not permission for an unreviewed upgrade.
 | OpenTelemetry **target**                                                        | Vendor-neutral traces/metrics/log correlation                                    | Reduced diagnosis; product work should degrade safely         | Collector config in git; telemetry retention external                                                                                                                                                                                                                                                    | Private collector; scale collectors                                  | Apache-2.0; OTLP seam. JS logs/browser signals require maturity review                                                  |
 | Prometheus **target**                                                           | Operational time-series and alerts                                               | Metrics/alerts unavailable; never billing/product truth       | Retention/backup chosen operationally                                                                                                                                                                                                                                                                    | Private or operator-authenticated; shard only from need              | Apache-2.0; metrics scrape/remote-write seam                                                                            |
 | Grafana **optional target**                                                     | Operator dashboards over telemetry                                               | Visual operations view unavailable                            | Provisioned dashboards/config in git                                                                                                                                                                                                                                                                     | Operator-only                                                        | AGPL-3.0-only; dashboard consumer is replaceable                                                                        |
-| Mailpit **development target** / SMTP **production target**                     | Local email inspection / provider-neutral delivery                               | Invitations/recovery notifications delayed or fail            | Mailpit data disposable; notification state in PG                                                                                                                                                                                                                                                        | Private dev UI; production outbound SMTP                             | Mailpit MIT; `MailPort` hides provider                                                                                  |
-| llama.cpp CPU / vLLM GPU **optional target**                                    | Local schema-constrained narrative drafts                                        | AI drafts unavailable; deterministic product unaffected       | Model artifacts/license records and generation metadata                                                                                                                                                                                                                                                  | Private; scale by model/runtime capacity                             | llama.cpp MIT / vLLM Apache-2.0; one `AiGenerationPort`                                                                 |
+| `AiDraftProvider` port + Gemini adapter (Phase 11A preview) **current**, local private runtime (llama.cpp / vLLM) **deferred** | Assistive evidence-constrained draft proposals | AI drafts unavailable; deterministic product unaffected | `AiGeneration` metadata audit row with SHA-256 hash | Private API dependency; excluded from production launch | `@google/genai` Apache-2.0 / llama.cpp MIT / vLLM Apache-2.0; `AiDraftProvider` port |
 
 MinIO is rejected as the reference implementation: its current default terms
 permit unpaid non-production internal evaluation rather than the selected FOSS
@@ -485,23 +488,35 @@ timeouts are launch inputs, not invented constants in this blueprint.
 
 ## 10. Optional AI boundary
 
-AI is **target-optional**, disabled by default, and non-authoritative. It cannot
-authorize, mutate source data, publish reports, execute arbitrary tools, fetch
-arbitrary URLs, or bypass tenant policy.
+AI is **implemented as an optional, disabled-by-default preview (Phase 11A)** and
+is non-authoritative. It cannot authorize, mutate source data, publish reports,
+execute arbitrary tools, fetch arbitrary URLs, or bypass tenant policy.
 
-The deterministic reports service selects a minimal set of authorized evidence
-and sends it through `AiGenerationPort` with a versioned prompt and structured
-schema. The adapter returns a schema-validated draft. Persistence records the
-model and model-license record, runtime, prompt version, organization,
-dataset/report revision, evidence IDs, timestamps, output, evaluation result,
-and human publication decision.
+The architecture uses Ports and Adapters:
+- `AiDraftProvider` (`server/src/ai/ai.port.ts`) defines the provider interface
+  (`generateDraftProposals`).
+- `GeminiDraftAdapter` (`server/src/ai/adapters/gemini-draft.adapter.ts`)
+  implements the adapter for Google's Gemini Developer API (via `@google/genai`),
+  enforcing structured JSON output (`responseSchema`), timeout races, and domain
+  error mapping.
+- `FakeDraftAdapter` (`server/src/ai/adapters/fake-draft.adapter.ts`) provides
+  deterministic in-memory test execution without live network calls.
 
-The boundary requires tenant-bound context, prompt-injection and data-leakage
-tests, unsupported-claim/evidence checks, output-size and concurrency limits,
-timeouts and circuit breaking, cancellation, and metrics that exclude raw
-sensitive prompts by default. Failure returns the same human-authored workflow;
-it never blocks deterministic browsing, reporting, or exporting. RAG, a vector
-database, hosted proprietary inference, and autonomous actions are deferred.
+The assistive draft workflow selects minimal authorized evidence from an active
+draft report revision, builds a versioned prompt (`v1`) with XML delimiters,
+verifies strict evidence grounding, requires explicit user disclosure and
+acknowledgment, and validates candidate proposals against an evidence citation
+allow-list. The `AiGeneration` ledger records operational metadata (SHA-256
+canonical input hash, tokens, duration, proposal count, completion state) with
+forced PostgreSQL RLS; **raw prompt text, evidence snapshots, and generated
+output text are never persisted to the database or operational logs.**
+
+**Launch Exclusion Posture**: The unpaid Gemini Developer API is strictly
+excluded from the production launch profile. Production launch gates enforce
+`AI_DRAFT_ENABLED=false`, verify the absence of `GEMINI_API_KEY` from runtime
+secrets, and require evidence of deterministic no-AI journeys. Any future
+production AI service requires an explicit decision regarding a paid, private,
+or local runtime (such as llama.cpp / vLLM).
 
 ## 11. Operations and deployment
 

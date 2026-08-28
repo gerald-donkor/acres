@@ -432,7 +432,9 @@ Status: implemented by `prompts/30-dashboards-optimized-graphql.md`.
 ## 12. Phase 11 — optional AI draft preview (Phase 11A Gemini Free-Tier Preview)
 
 - **Depends on:** phase 10 report/evidence workflow and explicit operator acknowledgment
-  of unpaid Gemini Developer API terms.
+  of unpaid Gemini Developer API terms. (Note: Phase 11A is implemented as an optional,
+  disabled-by-default preview, but the unpaid Gemini Developer API tier is strictly excluded
+  from the production launch profile, which enforces deterministic no-AI operation).
 - **Outcome/behavior:** disabled-by-default assistive draft proposal generation
   via Port/Adapter (`AiDraftProvider`, `GeminiDraftAdapter`, `FakeDraftAdapter`);
   strict evidence grounding verification; versioned prompt builder (`v1`);

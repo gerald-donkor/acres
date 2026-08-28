@@ -114,9 +114,10 @@ an opaque copy of untraceable numbers.
 ### 3.7 Draft and publish a report
 
 An analyst creates a report revision from saved evidence. Insights may be
-written by a person or proposed by optional local AI, but remain drafts until a
-permitted person publishes them. Published revisions are reproducible from
-immutable evidence identities.
+written by a person or proposed by optional AI (Phase 11A assistive draft
+preview with mandatory user disclosure and acknowledgment), but remain drafts
+until a permitted person publishes them. Published revisions are reproducible
+from immutable evidence identities.
 
 ### 3.8 Export evidence
 
@@ -144,8 +145,10 @@ V1 includes:
 - versioned report revisions, evidence links, and asynchronous exports;
 - auditable background jobs and an operationally recoverable self-hosted
   deployment;
-- a complete no-AI path; optional local evidence-constrained draft generation
-  may be added only in its own phase.
+- a complete no-AI path; the Phase 11A evidence-constrained assistive drafting
+  preview is implemented as an optional, disabled-by-default preview using the
+  unpaid Gemini Developer API with mandatory disclosure/acknowledgment. It is
+  excluded from the production launch profile and is not a launch entitlement.
 
 V1 explicitly excludes:
 
@@ -219,7 +222,7 @@ The following decisions deliberately remain open:
 - dashboard sharing/publishing rules and whether external viewers ever exist;
 - exact entitlements, if any, and any future billing model;
 - production SMTP provider and abuse/complaint handling;
-- optional AI model/runtime profile and the product threshold for enabling it;
+- optional AI production profile: the unpaid Gemini Developer API preview is not approved for production launch; any future production AI enablement requires a separate decision regarding a paid, private, or local runtime, data processing agreements, and commercial terms;
 - any regulatory or contractual obligations for launch markets.
 
 These are not implementation-agent defaults. A phase that needs one must obtain

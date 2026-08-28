@@ -8,9 +8,13 @@ validator (`scripts/ops/check-launch-readiness.js`) that verifies all operator-o
 decisions, secret store references, disaster recovery drills, volume encryption,
 and no-AI postures without committing sensitive material.
 
-Phase 11 optional local AI remains absent. No model, runtime, license, quality
-threshold, prompt store, or AI operating profile has been approved. Every Phase
-12D artifact and check validates the deterministic no-AI path.
+Phase 11A optional evidence-draft preview is implemented in code behind
+`AI_DRAFT_ENABLED=false` and uses the unpaid Gemini Developer API with mandatory
+disclosure/acknowledgment. Because the unpaid API tier is not approved for
+production use, it is deliberately excluded from the production launch profile.
+Launch readiness requires a verified deterministic no-AI deployment,
+`AI_DRAFT_ENABLED=false`, zero `GEMINI_API_KEY` provisioned to production images or
+secrets, and unpaid provider exclusion.
 
 ## Topology & Telemetry
 
@@ -139,7 +143,7 @@ The readiness document contains 11 structured categories under `sections`:
 8. `volume_encryption`: Host-level volume encryption mechanism (LUKS2/KMS), encrypted mount paths for all stateful services (PostgreSQL, Valkey, Garage), key separation confirmation, and key recovery owner.
 9. `graphql_introspection`: Production introspection state and security justification.
 10. `deployment_and_rollback`: Target host architecture, OCI image registry, deployment approver, rollback authority, image provenance policy (Cosign/OIDC), and live readiness drill status.
-11. `optional_ai_posture`: Verification that `ai_enabled` is `false`, `no_ai_path_verified` is `true`, and Phase 11 remains blocked. Any record with `ai_enabled: true` fails immediately.
+11. `optional_ai_posture`: Verification that `ai_enabled` is `false`, `no_ai_path_verified` is `true`, `server_ai_draft_enabled_false` is `true`, `no_gemini_api_key_provisioned` is `true`, `unpaid_provider_excluded` is `true`, and `phase11_status` documents the exclusion. Any record with `ai_enabled: true` fails immediately because the unpaid Gemini Developer API preview is excluded from production launch.
 
 ### Running the Validator
 
@@ -227,6 +231,6 @@ All runs are logged to the `JobRun` audit table.
 
 CI has `permissions: contents: read` and pins all actions to immutable 40-character commit SHAs. The `checks` job runs the full lint, typecheck, build, contract drift, database role/migration, and server test sequence, plus `npm run ops:check`. The Docker job builds the server image and smoke-tests `/health` with `push: false`.
 
-## No-AI Posture
+## No-AI Production Posture
 
-Optional AI remains unimplemented. Launch evidence must demonstrate that regional browsing, dashboards, governed reports, exports, and operational runbooks work without AI enabled. Any later AI work needs its own model, license, evaluation, security, and operating-profile decision.
+Phase 11A's assistive drafting preview is implemented in the application codebase behind a feature toggle (`AI_DRAFT_ENABLED=false`) and evaluated with synthetic fixtures. However, the unpaid Gemini Developer API is strictly excluded from the production launch profile. Launch evidence must demonstrate that regional browsing, dashboards, governed reports, exports, and operational runbooks work in a verified deterministic no-AI deployment. The production launch gate enforces `AI_DRAFT_ENABLED=false`, ensures no `GEMINI_API_KEY` is present in production environments or images, and requires explicit attestation of unpaid provider exclusion. Any future production AI service requires a separate decision regarding a paid, private, or local runtime and approved operational profile.

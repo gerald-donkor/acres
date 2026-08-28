@@ -34,9 +34,10 @@
     "ops:scan-secrets": "scripts/ops/scan-secrets.sh",
     "ops:docker-runtime": "scripts/ops/check-docker-runtime.sh",
     "ops:audit": "scripts/ops/audit-dependencies.sh",
+    "ops:readiness-test": "node --test scripts/ops/check-launch-readiness.spec.js",
     "ops:backup": "scripts/ops/backup-postgres.sh",
     "ops:restore": "scripts/ops/restore-postgres.sh",
-    "ops:check": "npm run ops:templates && npm run ops:scan-secrets && npm run ops:docker-runtime && npm run ops:audit",
+    "ops:check": "npm run ops:templates && npm run ops:scan-secrets && npm run ops:docker-runtime && npm run ops:audit && npm run ops:readiness-test",
 
     "ops:launch-readiness": "scripts/ops/launch-readiness.sh",
     "db:up": "docker compose up -d postgres",

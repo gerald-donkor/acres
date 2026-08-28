@@ -136,10 +136,13 @@
       "status": "unresolved",
       "ai_enabled": false,
       "no_ai_path_verified": false,
-      "phase11_status": "blocked_pending_user_decision",
+      "server_ai_draft_enabled_false": false,
+      "no_gemini_api_key_provisioned": false,
+      "unpaid_provider_excluded": false,
+      "phase11_status": "implemented_unpaid_preview_excluded_from_launch",
       "approver": null,
       "evidence": [],
-      "notes": "Phase 11 AI is not implemented or approved. Launch evidence must verify the deterministic product path functions with zero AI dependencies."
+      "notes": "Phase 11A unpaid Gemini Developer API preview is implemented but excluded from production launch. Launch approval requires explicit verification of deterministic no-AI journeys, AI_DRAFT_ENABLED=false, absence of GEMINI_API_KEY in production environments, and unpaid provider exclusion."
     }
   }
 }

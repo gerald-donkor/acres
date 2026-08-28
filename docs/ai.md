@@ -13,7 +13,7 @@ Phase 11A introduces an optional, assistive drafting workflow for report authors
 2. **Strict Grounding Enforcement**: Every candidate proposal must explicitly cite one or more valid evidence items attached to the active draft revision. Proposals with missing, foreign, or empty citations are rejected server-side with `AI_GROUNDING_REJECTED` (HTTP 400).
 3. **Mandatory Unpaid Tier Disclosure & Acknowledgement**: Because this phase uses Google's unpaid Gemini Developer API, users are shown an explicit disclosure stating that data sent to this API may be used for model improvement and human review. An explicit, unchecked confirmation checkbox is required on every request.
 4. **Metadata-Only Audit Ledger**: The database persists only operational audit metadata (`AiGeneration` table with SHA-256 canonical input hash, token counts, duration, proposal count, and completion state). **Raw prompt text, evidence snapshots, generated output text, and API keys are never stored in the database or logged.**
-5. **Fail-Closed Production Posture**: `AI_DRAFT_ENABLED` defaults to `false`. Launch hardening and production templates fail closed without AI enabled. Enabling requires explicit operator configuration and acknowledgement.
+5. **Fail-Closed Production Posture**: `AI_DRAFT_ENABLED` defaults to `false`. The unpaid Gemini Developer API is strictly excluded from production launch. Launch hardening and production templates fail closed without a verified deterministic no-AI deployment and explicit attestation of unpaid provider exclusion.
 
 ---
 
@@ -152,3 +152,27 @@ Comprehensive synthetic test fixtures covering:
 | `AI_DRAFT_MAX_PROPOSALS` | integer | `3` | Maximum candidate proposals generated per request (1..5) |
 | `AI_DRAFT_MAX_CONTEXT_BYTES` | integer | `16384` | Context payload byte limit |
 | `AI_DRAFT_MAX_OUTPUT_TOKENS` | integer | `2048` | Output token generation limit |
+
+---
+
+## 7. Production Launch Exclusion Policy & Test Evidence
+
+### 7.1 Authoritative Launch Policy
+While Phase 11A is implemented and tested as an assistive preview feature in the application codebase, the **unpaid Gemini Developer API is strictly excluded from production launch**.
+
+The reasons for this strict launch exclusion are:
+1. **Terms of Service & Data Governance**: Unpaid developer API tiers permit Google to review prompts and use submitted content for model improvement, which conflicts with Acres' tenant-confidential business data classification baseline.
+2. **Deterministic Core Invariant**: All core Acres workflows (geography browsing, analytics, dashboards, governed report revisions, data exports, background jobs) are fully functional, verified, and complete without any AI dependency.
+3. **Fail-Closed Launch Hardening**: Production launch gating enforces `AI_DRAFT_ENABLED=false`, forbids `GEMINI_API_KEY` from being provisioned to production runtime secrets or containers, and requires explicit operator attestation of deterministic no-AI journeys.
+
+### 7.2 Launch Gate Integration & Verification
+The launch readiness validator (`scripts/ops/check-launch-readiness.js`) and its dedicated test suite (`scripts/ops/check-launch-readiness.spec.js`) enforce the following invariants:
+- Any readiness record with `ai_enabled: true` is immediately rejected with a fatal blocker: `FATAL: Optional AI is marked enabled (ai_enabled: true), but the Phase 11A unpaid Gemini Developer API preview is excluded from production launch`.
+- Readiness approval requires explicit boolean attestations:
+  - `ai_enabled: false`
+  - `no_ai_path_verified: true`
+  - `server_ai_draft_enabled_false: true`
+  - `no_gemini_api_key_provisioned: true`
+  - `unpaid_provider_excluded: true`
+  - `phase11_status: "implemented_unpaid_preview_excluded_from_launch"`
+- Any inclusion of `GEMINI_API_KEY` in production secret references or readiness records is rejected as a contradiction.
