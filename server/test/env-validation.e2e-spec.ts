@@ -85,6 +85,26 @@ describe('validateEnv tenancy', () => {
       '0',
       'ACCOUNT_TOKEN_TTL_MINUTES must be a positive integer',
     ],
+    [
+      'PARSER_CHILD_TIMEOUT_MS',
+      '500',
+      'PARSER_CHILD_TIMEOUT_MS must be between 1000 and 60000 ms.',
+    ],
+    [
+      'PARSER_CHILD_TIMEOUT_MS',
+      '70000',
+      'PARSER_CHILD_TIMEOUT_MS must be between 1000 and 60000 ms.',
+    ],
+    [
+      'PARSER_CHILD_MAX_OLD_SPACE_MB',
+      '16',
+      'PARSER_CHILD_MAX_OLD_SPACE_MB must be between 32 and 1024 MB.',
+    ],
+    [
+      'PARSER_CHILD_MAX_OLD_SPACE_MB',
+      '2048',
+      'PARSER_CHILD_MAX_OLD_SPACE_MB must be between 32 and 1024 MB.',
+    ],
   ])('rejects invalid %s', (name, value, message) => {
     expect(() =>
       validateEnv({
@@ -92,5 +112,27 @@ describe('validateEnv tenancy', () => {
         [name]: value,
       }),
     ).toThrow(message);
+  });
+});
+
+describe('validateEnv parser child isolation settings', () => {
+  it('defaults parser child settings when omitted', () => {
+    expect(validateEnv(BASE_ENV)).toMatchObject({
+      parserChildTimeoutMs: 15000,
+      parserChildMaxOldSpaceMb: 192,
+    });
+  });
+
+  it('parses valid parser child overrides', () => {
+    expect(
+      validateEnv({
+        ...BASE_ENV,
+        PARSER_CHILD_TIMEOUT_MS: '20000',
+        PARSER_CHILD_MAX_OLD_SPACE_MB: '256',
+      }),
+    ).toMatchObject({
+      parserChildTimeoutMs: 20000,
+      parserChildMaxOldSpaceMb: 256,
+    });
   });
 });

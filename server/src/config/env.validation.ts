@@ -57,6 +57,8 @@ export interface AcresEnv {
   parserMaxSampleRows: number;
   parserMaxGeojsonFeatures: number;
   parserMaxGeojsonCoordinates: number;
+  parserChildTimeoutMs: number;
+  parserChildMaxOldSpaceMb: number;
   outboxClaimBatchSize: number;
   outboxClaimLeaseMs: number;
   outboxMaxAttempts: number;
@@ -118,6 +120,8 @@ const DEFAULTS = {
   PARSER_MAX_SAMPLE_ROWS: '5',
   PARSER_MAX_GEOJSON_FEATURES: '2500',
   PARSER_MAX_GEOJSON_COORDINATES: '100000',
+  PARSER_CHILD_TIMEOUT_MS: '15000',
+  PARSER_CHILD_MAX_OLD_SPACE_MB: '192',
   OUTBOX_CLAIM_BATCH_SIZE: '25',
   OUTBOX_CLAIM_LEASE_MS: '30000',
   OUTBOX_MAX_ATTEMPTS: '5',
@@ -413,6 +417,31 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
       env.PARSER_MAX_GEOJSON_COORDINATES ??
         DEFAULTS.PARSER_MAX_GEOJSON_COORDINATES,
     ),
+    parserChildTimeoutMs: (() => {
+      const val = positiveInt(
+        'PARSER_CHILD_TIMEOUT_MS',
+        env.PARSER_CHILD_TIMEOUT_MS ?? DEFAULTS.PARSER_CHILD_TIMEOUT_MS,
+      );
+      if (val < 1000 || val > 60000) {
+        throw new Error(
+          'PARSER_CHILD_TIMEOUT_MS must be between 1000 and 60000 ms.',
+        );
+      }
+      return val;
+    })(),
+    parserChildMaxOldSpaceMb: (() => {
+      const val = positiveInt(
+        'PARSER_CHILD_MAX_OLD_SPACE_MB',
+        env.PARSER_CHILD_MAX_OLD_SPACE_MB ??
+          DEFAULTS.PARSER_CHILD_MAX_OLD_SPACE_MB,
+      );
+      if (val < 32 || val > 1024) {
+        throw new Error(
+          'PARSER_CHILD_MAX_OLD_SPACE_MB must be between 32 and 1024 MB.',
+        );
+      }
+      return val;
+    })(),
     outboxClaimBatchSize: positiveInt(
       'OUTBOX_CLAIM_BATCH_SIZE',
       env.OUTBOX_CLAIM_BATCH_SIZE ?? DEFAULTS.OUTBOX_CLAIM_BATCH_SIZE,

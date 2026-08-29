@@ -1,56 +1,51 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ApiException } from '../../common/api-exception';
 import { AcresConfigService } from '../../config/acres-config.service';
-import { CsvSourceParser } from './csv-source.parser';
-import { GeojsonSourceParser } from './geojson-source.parser';
-import type { ParsedSourceSummary, ParserLimits } from './parser.types';
-import { XlsxSourceParser } from './xlsx-source.parser';
+import { MetricsService } from '../../metrics/metrics.service';
+import {
+  PARSER_EXECUTOR,
+  type ParserExecutorPort,
+} from './parser-executor.port';
+import { PARSER_MAX_BUFFER_BYTES } from './parser-utils';
+import type {
+  ParsedSourceSummary,
+  ParserLimits,
+  SourceKind,
+} from './parser.types';
 
 @Injectable()
 export class SourceParserService {
-  private readonly csv: CsvSourceParser;
-  private readonly xlsx: XlsxSourceParser;
-  private readonly geojson: GeojsonSourceParser;
-
-  constructor(config: AcresConfigService) {
-    const limits: ParserLimits = {
-      maxRows: config.parserMaxRows,
-      maxColumns: config.parserMaxColumns,
-      maxCellChars: config.parserMaxCellChars,
-      maxSampleRows: config.parserMaxSampleRows,
-      maxGeojsonFeatures: config.parserMaxGeojsonFeatures,
-      maxGeojsonCoordinates: config.parserMaxGeojsonCoordinates,
-    };
-    this.csv = new CsvSourceParser(limits);
-    this.xlsx = new XlsxSourceParser(limits);
-    this.geojson = new GeojsonSourceParser(limits);
-  }
+  constructor(
+    private readonly config: AcresConfigService,
+    @Inject(PARSER_EXECUTOR)
+    private readonly executor: ParserExecutorPort,
+    @Optional() private readonly metrics?: MetricsService,
+  ) {}
 
   async inspect(
     buffer: Buffer,
     mediaType: string,
   ): Promise<ParsedSourceSummary> {
-    try {
-      if (mediaType === 'text/csv') return this.csv.inspect(buffer);
-      if (
-        mediaType ===
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      ) {
-        return await this.xlsx.inspect(buffer);
-      }
-      if (
-        mediaType === 'application/geo+json' ||
-        mediaType === 'application/json'
-      ) {
-        return this.geojson.inspect(buffer);
-      }
-    } catch (error) {
-      return {
-        sourceKind: mediaType.includes('sheet')
-          ? 'xlsx'
-          : mediaType.includes('json')
-            ? 'geojson'
-            : 'csv',
+    const isCsv = mediaType === 'text/csv';
+    const isXlsx =
+      mediaType ===
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const isGeoJson =
+      mediaType === 'application/geo+json' || mediaType === 'application/json';
+
+    if (!isCsv && !isXlsx && !isGeoJson) {
+      throw ApiException.validationFailed(['mediaType is not accepted.']);
+    }
+
+    const sourceKind: SourceKind = isXlsx
+      ? 'xlsx'
+      : isGeoJson
+        ? 'geojson'
+        : 'csv';
+
+    if (buffer.length > PARSER_MAX_BUFFER_BYTES) {
+      const summary: ParsedSourceSummary = {
+        sourceKind,
         rowCount: 0,
         columnCount: 0,
         columnKeys: [],
@@ -59,16 +54,51 @@ export class SourceParserService {
         issues: [
           {
             severity: 'error',
-            code: 'parser_exception',
-            message:
-              error instanceof Error
-                ? error.message.slice(0, 180)
-                : 'Parser failed.',
+            code: 'file_size_limit_exceeded',
+            message: 'Source file size exceeds the temporary parser limit.',
           },
         ],
         metadata: {},
       };
+      this.metrics?.recordParserExecution(sourceKind, 'validation_issue', 0);
+      return summary;
     }
-    throw ApiException.validationFailed(['mediaType is not accepted.']);
+
+    const limits: ParserLimits = {
+      maxRows: this.config.parserMaxRows,
+      maxColumns: this.config.parserMaxColumns,
+      maxCellChars: this.config.parserMaxCellChars,
+      maxSampleRows: this.config.parserMaxSampleRows,
+      maxGeojsonFeatures: this.config.parserMaxGeojsonFeatures,
+      maxGeojsonCoordinates: this.config.parserMaxGeojsonCoordinates,
+    };
+
+    const startTime = performance.now();
+    const summary = await this.executor.execute(buffer, mediaType, limits);
+    const durationSeconds = (performance.now() - startTime) / 1000;
+
+    const hasErrors = summary.issues.some((i) => i.severity === 'error');
+    const isTimeout = summary.issues.some(
+      (i) => i.code === 'parser_execution_timed_out',
+    );
+    const isFailure = summary.issues.some(
+      (i) => i.code === 'parser_execution_failed',
+    );
+
+    const status = isTimeout
+      ? 'timeout'
+      : isFailure
+        ? 'failed'
+        : hasErrors
+          ? 'validation_issue'
+          : 'success';
+
+    this.metrics?.recordParserExecution(
+      summary.sourceKind,
+      status,
+      durationSeconds,
+    );
+
+    return summary;
   }
 }

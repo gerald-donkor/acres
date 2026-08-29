@@ -31,12 +31,14 @@ export class MetricsService implements OnModuleDestroy {
   readonly queueWaitingJobs: Gauge<'queue_name'>;
   readonly scheduledJobRunsTotal: Counter<'job_name' | 'status'>;
   readonly databaseQueryDurationSeconds: Histogram<'operation'>;
+  readonly parserExecutionsTotal: Counter<'source_kind' | 'status'>;
+  readonly parserExecutionDurationSeconds: Histogram<'source_kind' | 'status'>;
 
   constructor(@Optional() private readonly prisma?: PrismaService) {
     this.registry = new Registry();
     collectDefaultMetrics({
-      register: this.registry,
       prefix: 'acres_',
+      register: this.registry,
     });
 
     this.httpRequestsTotal = new Counter({
@@ -113,6 +115,21 @@ export class MetricsService implements OnModuleDestroy {
       buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
       registers: [this.registry],
     });
+
+    this.parserExecutionsTotal = new Counter({
+      name: 'acres_parser_executions_total',
+      help: 'Total number of parser executions',
+      labelNames: ['source_kind', 'status'],
+      registers: [this.registry],
+    });
+
+    this.parserExecutionDurationSeconds = new Histogram({
+      name: 'acres_parser_execution_duration_seconds',
+      help: 'Duration of parser executions in seconds',
+      labelNames: ['source_kind', 'status'],
+      buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15],
+      registers: [this.registry],
+    });
   }
 
   get contentType(): string {
@@ -165,6 +182,22 @@ export class MetricsService implements OnModuleDestroy {
 
   recordQueueJob(queueName: string, status: 'completed' | 'failed'): void {
     this.queueJobsTotal.inc({ queue_name: queueName, status });
+  }
+
+  recordParserExecution(
+    sourceKind: string,
+    status: 'success' | 'validation_issue' | 'failed' | 'timeout',
+    durationSeconds: number,
+  ): void {
+    const safeKind =
+      sourceKind === 'csv' || sourceKind === 'xlsx' || sourceKind === 'geojson'
+        ? sourceKind
+        : 'unknown';
+    this.parserExecutionsTotal.inc({ source_kind: safeKind, status });
+    this.parserExecutionDurationSeconds.observe(
+      { source_kind: safeKind, status },
+      durationSeconds,
+    );
   }
 
   onModuleDestroy(): void {

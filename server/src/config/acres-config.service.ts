@@ -218,6 +218,14 @@ export class AcresConfigService {
     return this.get('parserMaxGeojsonCoordinates');
   }
 
+  get parserChildTimeoutMs(): number {
+    return this.get('parserChildTimeoutMs');
+  }
+
+  get parserChildMaxOldSpaceMb(): number {
+    return this.get('parserChildMaxOldSpaceMb');
+  }
+
   get outboxClaimBatchSize(): number {
     return this.get('outboxClaimBatchSize');
   }

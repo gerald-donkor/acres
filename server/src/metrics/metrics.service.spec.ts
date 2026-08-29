@@ -21,6 +21,10 @@ describe('MetricsService', () => {
     expect(text).toContain('# TYPE acres_outbox_pending_events gauge');
     expect(text).toContain('# TYPE acres_queue_jobs_total counter');
     expect(text).toContain('# TYPE acres_scheduled_job_runs_total counter');
+    expect(text).toContain('# TYPE acres_parser_executions_total counter');
+    expect(text).toContain(
+      '# TYPE acres_parser_execution_duration_seconds histogram',
+    );
   });
 
   it('records http request metrics with sanitized labels', async () => {
@@ -41,9 +45,11 @@ describe('MetricsService', () => {
     );
   });
 
-  it('records scheduled job and queue metrics', async () => {
+  it('records scheduled job, queue, and parser metrics', async () => {
     service.recordJobRun('sessions.purge-expired', 'succeeded');
     service.recordQueueJob('acres-work', 'completed');
+    service.recordParserExecution('csv', 'success', 0.045);
+    service.recordParserExecution('xlsx', 'timeout', 15.0);
 
     const text = await service.getMetrics();
     expect(text).toContain(
@@ -51,6 +57,12 @@ describe('MetricsService', () => {
     );
     expect(text).toContain(
       'acres_queue_jobs_total{queue_name="acres-work",status="completed"} 1',
+    );
+    expect(text).toContain(
+      'acres_parser_executions_total{source_kind="csv",status="success"} 1',
+    );
+    expect(text).toContain(
+      'acres_parser_executions_total{source_kind="xlsx",status="timeout"} 1',
     );
   });
 });

@@ -111,6 +111,47 @@ avoid materializing over-limit rows; XLSX and GeoJSON reject buffers above the
 temporary parser byte ceiling before format parsing, then apply row, feature,
 coordinate, column, and cell checks after decoding.
 
+### Child-process parser isolation
+
+To prevent parser engine bugs, memory leaks, or non-terminating CPU loops from
+disturbing the long-lived worker (which manages database connections, outbox
+dispatch, queues, and object storage), parser execution is isolated into dedicated
+short-lived Node child processes:
+
+- **Framework-free Port**: `ParserExecutorPort` accepts only `Buffer`, `mediaType`,
+  and serializable `ParserLimits`, resolving a `ParsedSourceSummary`.
+- **Pure Dispatch**: `parseSourceBuffer()` provides shared format inspection
+  for CSV, XLSX, and GeoJSON without importing Nest, Prisma, or infrastructure.
+- **Single-Use Child Process**: `ChildProcessParserExecutor` spawns one child per
+  parse request via `child_process.fork()`, pointing to the emitted
+  `parser-child.entry.js` in `dist/`.
+- **Least-Privilege Child Environment**: The child receives only `{ NODE_ENV: config.nodeEnv }`.
+  No database credentials (`DATABASE_URL`), session secrets, Valkey, Garage, ClamAV,
+  SMTP, or Gemini keys are passed. Stdio is ignored (`['ignore', 'ignore', 'ignore', 'ipc']`)
+  and advanced serialization handles buffer IPC transfer.
+- **Resource Abuse Guards**:
+  - `PARSER_CHILD_TIMEOUT_MS=15000` (bounds: 1,000–60,000 ms) parent watchdog timer.
+  - `PARSER_CHILD_MAX_OLD_SPACE_MB=192` (bounds: 32–1,024 MB) enforced via
+    `--max-old-space-size=192` child execution argument.
+- **Local Benchmark Evidence** (measured under Node v26 / Node 24 runtime against max boundaries):
+  - 10,000-row CSV (485 KB): ~58.6 ms, Heap ~13.7 MB, RSS ~90.7 MB
+  - 2,500-feature GeoJSON (382 KB): ~12.0 ms, Heap ~21.2 MB, RSS ~96.9 MB
+  - 10,000-row XLSX (181 KB): ~120.9 ms, Heap ~32.8 MB, RSS ~134.7 MB
+- **Untrusted IPC Validation**: Every child IPC response is validated in the parent
+  against expected `sourceKind`, integer row/column counts, string length limits
+  (<= 200 chars), cell bounds, and issue code regex (`/^[a-z0-9_]{1,64}$/`). Malformed,
+  mismatched, or unhandled failures return deterministic safe blocking issues
+  (`parser_execution_failed` or `parser_execution_timed_out`) and never leak exception
+  stacks, process IDs, or system paths to database tables or logs.
+- **Lifecycle Cleanup**: In-flight child processes are tracked and killed (`SIGKILL`)
+  on job completion, error, timeout, or Nest `onApplicationShutdown` worker shutdown.
+- **Telemetry**: Low-cardinality parser execution metrics are recorded via
+  `acres_parser_executions_total` and `acres_parser_execution_duration_seconds`
+  with `source_kind` and `status` (`success`, `validation_issue`, `failed`, `timeout`) labels.
+- **Security Boundary**: This isolation is fault containment, **not** an OS or container
+  sandbox (the child runs under the same service account and container filesystem). Full OS
+  sandboxing (seccomp, UID isolation, network namespaces) remains an infrastructure concern.
+
 ## Worker publication flow
 
 `POST /api/v1/datasets/:datasetId/ingestion-runs` creates an `IngestionRun` and
@@ -208,7 +249,7 @@ npx playwright test tests/
 ## Residual gaps
 
 - No Phase 8 observation or metric tables are created.
-- XLSX macro and encrypted container hardening is implemented (pre-parse OLE magic detection, case-insensitive VBA project rejection, 1000-entry cap, and fail-closed container error classification). Hostile parser process isolation remains future work.
+- XLSX container inspection and child-process fault containment isolation are implemented (pre-parse OLE magic detection, case-insensitive VBA project rejection, 1000-entry cap, fail-closed container error classification, single-use child process execution with isolated environment and resource bounds). OS-level container sandboxing (seccomp, network namespaces) remains an infrastructure concern.
 - GeoJSON geometry validity is counted and bounded in TypeScript; insertion
   helpers that write `RegionGeometry.geometry` through PostGIS validity checks
   are still future work.
