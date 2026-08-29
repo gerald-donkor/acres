@@ -30,6 +30,7 @@
     "test:server": "npm run test:e2e --workspace=@acres/server",
     "test:client:e2e": "npm run test:e2e --workspace=@acres/client",
     "analytics:plans": "npm run analytics:plans --workspace=@acres/server",
+    "geography:plans": "npm run geography:plans --workspace=@acres/server",
     "ops:templates": "scripts/ops/check-production-templates.sh",
     "ops:scan-secrets": "scripts/ops/scan-secrets.sh",
     "ops:docker-runtime": "scripts/ops/check-docker-runtime.sh",

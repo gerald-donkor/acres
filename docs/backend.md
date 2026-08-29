@@ -2022,6 +2022,12 @@ Worker update: the existing worker process now dispatches queue payloads with
 API boot and contract generation no longer open a Valkey connection until
 enqueue/readiness is called.
 
+PostGIS geometry write hardening (Prompt 44):
+- Added `server/src/geography/` with `GeographyModule`, `PostgisRegionGeometryRepository`, pure `validateGeometryInput`, and domain error mappings.
+- Forward-only migration `20260829200000_region_geometry_unique_key` replaces `RegionGeometry` index with a unique constraint on `(regionId, sourceId)`.
+- Database write enforces PostGIS `ST_IsValid`, `ST_IsEmpty`, `ST_GeometryType`, and `ST_SRID` in a single tagged parameterized SQL template.
+- Test-only scale seed and query plan check harness (`npm run geography:plans`) validates GiST index participation for spatial point lookups.
+
 Verification in this session:
 
 ```text

@@ -560,7 +560,7 @@ model RegionGeometry {
   region          Region       @relation(fields: [regionId], references: [id], onDelete: Cascade)
   source          RegionSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
 
-  @@index([regionId, sourceId])
+  @@unique([regionId, sourceId])
 }
 
 model Dataset {

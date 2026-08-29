@@ -218,7 +218,64 @@ Prompt 37 implemented the browser-facing dataset workspace:
 - **Validation issues reporting**: If the ingestion fails validation, `listIngestionIssues` fetches issues from `/api/v1/ingestion-runs/:id/issues` and renders an accessible table displaying issue severity, code, description, row number, and region reference.
 - **RBAC enforcement**: Viewers see read-only dataset cards and versions without creation, upload, or run controls.
 
-GraphQL remains read-only and unchanged.
+## PostGIS geometry write and spatial read boundary
+
+Prompt 44 implemented the internal geography write repository, topological
+validity enforcement, and spatial query plan proof:
+
+- **Module & Boundary Location**: `server/src/geography/` owns `GeographyModule`,
+  `PostgisRegionGeometryRepository`, `validateGeometryInput`, and domain error
+  definitions. This is an internal administrative/importer seam without public
+  REST controllers, GraphQL mutations, DTOs, or browser GIS endpoints.
+- **Accepted Input Contract**: `WriteRegionGeometryInput` accepts opaque
+  authorized `regionId` and `sourceId`, a finite `GeoJsonGeometry` value
+  (`Point`, `MultiPoint`, `LineString`, `MultiLineString`, `Polygon`,
+  `MultiPolygon`), optional `sourcePrecision` (string <= 100 characters without
+  control characters), and optional `metadata` (plain JSON object <= 64 KB).
+- **Rejected Inputs**: Feature and FeatureCollection wrappers, unsupported types
+  (`GeometryCollection`), 3D/4D ordinates (Z/M coordinates), non-finite numbers
+  (`NaN`, `Infinity`), out-of-range coordinates (longitude outside `[-180, 180]`,
+  latitude outside `[-90, 90]`), unclosed polygon linear rings (first position !=
+  last position), rings with < 4 positions, lines with < 2 positions, nesting
+  depth > 6 (`GEOMETRY_MAX_DEPTH`), coordinate count > 100,000
+  (`GEOMETRY_MAX_COORDINATES`), and serialized JSON > 10 MB
+  (`GEOMETRY_MAX_JSON_BYTES`).
+- **Order of Database Operations & Topological Validity**:
+  1. Authoritative framework-free prevalidation in TypeScript before any SQL call.
+  2. Construction of spatial geometry using verified PostGIS function
+     `ST_SetSRID(ST_GeomFromGeoJSON(CAST($json AS json)), 4326)` in a single
+     parameterized tagged SQL template (no `$queryRawUnsafe` or dynamic SQL).
+  3. CTE evaluation of `ST_IsValid(geom)`, `ST_IsEmpty(geom)`,
+     `ST_GeometryType(geom)`, and `ST_SRID(geom)`.
+  4. Deterministic atomic upsert on `(regionId, sourceId)` unique key with
+     `WHERE e.is_valid = true AND e.is_empty = false AND e.srid = 4326 AND UPPER(e.geom_type) = UPPER($expectedType)`.
+  5. If PostGIS topological check fails (e.g. self-intersecting bow-tie polygon),
+     0 rows are selected for insertion, returning an empty set. The repository
+     detects this and throws `GeometryError.invalid` (`INVALID_GEOMETRY`) with zero
+     database mutations and complete atomicity.
+  6. Foreign key constraint violations (`23503` / `P2003`) map to
+     `GeometryError.referenceNotFound` (`REFERENCE_NOT_FOUND`).
+- **Safe Error Classification**: Expected validation and constraint failures map
+  to stable domain codes without leaking raw SQL, coordinates, PostGIS notices,
+  connection details, or exception stacks.
+- **Identity & Migration**: Forward-only migration
+  `20260829200000_region_geometry_unique_key` replaces the non-unique index with
+  a unique index `RegionGeometry_regionId_sourceId_key` on `(regionId, sourceId)`.
+- **Global Ownership**: Global geography is shared reference data and does not
+  enable tenant RLS. Foreign keys ensure valid global `Region` and `RegionSource`
+  provenance references.
+- **Bounded Spatial Read & Edge Semantics**: `findRegionsContainingPoint({ longitude, latitude, limit })`
+  validates coordinates, clamps limit (`1..50`), and queries using the bounding-box
+  prefilter operator (`&&`) plus exact `ST_Intersects` (including points on boundary
+  edges as well as interior points) returning only the smallest safe metadata
+  projection (`id`, `regionId`, `sourceId`, `srid`, `geometryType`, `isValid`,
+  `sourcePrecision`, `metadata`, `createdAt`, `updatedAt`—no raw geometry payloads).
+- **Query Plan Evidence Harness**: `npm run geography:plans`
+  (`server/src/geography/seed/check-geography-plans.ts`) runs under `NODE_ENV=test`
+  against `acres_test`, creates deterministic synthetic grid fixtures through the
+  production repository, runs `ANALYZE`, evaluates `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`,
+  and verifies `RegionGeometry_geometry_gist_idx` participation, cleaning up fixtures
+  in `finally`.
 
 ## Verification state
 
@@ -229,7 +286,6 @@ npm run prisma:validate --workspace=@acres/server
 The schema at prisma/schema.prisma is valid 🚀
 
 npm run typecheck
-✔ Generated Prisma Client (7.9.1)
 All packages typecheck cleanly
 
 npm run lint
@@ -239,20 +295,20 @@ npm run build
 Next.js client and NestJS server build cleanly
 
 npm run contracts:check
-✔ Generated Prisma Client (7.9.1)
 OpenAPI/GraphQL contracts match code
 
-npx playwright test tests/
-15 passed (3.3s) - Web Crypto SHA-256, API envelopes, error mapping, SSE parser, and browser API helpers
+npm run ops:check
+All operational preflights, templates, secret scans, and readiness tests pass cleanly
+
+npm run test --workspace=@acres/server -- --runInBand
+Test Suites: 24 passed, 24 total
+Tests: 153 passed, 153 total
 ```
 
 ## Residual gaps
 
 - No Phase 8 observation or metric tables are created.
 - XLSX container inspection and child-process fault containment isolation are implemented (pre-parse OLE magic detection, case-insensitive VBA project rejection, 1000-entry cap, fail-closed container error classification, single-use child process execution with isolated environment and resource bounds). OS-level container sandboxing (seccomp, network namespaces) remains an infrastructure concern.
-- GeoJSON geometry validity is counted and bounded in TypeScript; insertion
-  helpers that write `RegionGeometry.geometry` through PostGIS validity checks
-  are still future work.
-- Real Garage/Valkey/ClamAV worker integration, migration apply from zero
-  outside this incrementally upgraded local database, and PostGIS query plans
-  still need a dependency-capable environment.
+- Real PostGIS geometry write and validation repository (`PostgisRegionGeometryRepository`), unique identity constraint, and spatial index query path are implemented.
+- Provider geography imports, licensed dataset selection, external source ingestion scripts, and real dependency-capable execution (when PostgreSQL/Garage/Valkey/ClamAV services are not local) remain future operational work.
+

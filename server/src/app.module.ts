@@ -12,6 +12,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RegionsModule } from './regions/regions.module';
+import { GeographyModule } from './geography/geography.module';
 import { SecurityModule } from './security/security.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { StorageModule } from './storage/storage.module';
@@ -40,6 +41,7 @@ import { AiModule } from './ai/ai.module';
     OutboxModule,
     AuthModule,
     RegionsModule,
+    GeographyModule,
     FormsModule,
     JobsModule,
     OrganizationsModule,
