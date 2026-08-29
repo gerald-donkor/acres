@@ -616,13 +616,18 @@ As of 2026-08-24, the storage/queue/worker foundation is partly current:
 - API readiness checks PostgreSQL and object storage. Queue and scanner
   readiness belong to the worker process.
 
-Still target/deferred: CSV/XLSX/GeoJSON parsing, parser resource budgets,
-dataset publication, deeper reconciliation schedules, production volume
+Current: bounded CSV/XLSX/GeoJSON parsing with temporary environment-based
+resource limits; XLSX encrypted-OLE/macro/container classification and
+child-process fault containment (single-use processes, 15 s watchdog, 192 MB
+heap ceiling, untrusted IPC validation); immutable dataset version publication.
+
+Still target/deferred: OS/container parser sandboxing (seccomp, UID isolation,
+network namespaces), deeper reconciliation schedules, production volume
 inspection, and real dependency restart/orphan/dead-letter tests.
 
 ## 14. Phase 7A current-state update
 
-As of 2026-08-24, the geography and ingestion foundation is partly current.
+As of 2026-08-29, the geography and ingestion foundation is partly current.
 The implementation record is [`ingestion.md`](ingestion.md).
 
 - Global geography has an adjacency-list hierarchy, source/provenance records,
@@ -645,7 +650,16 @@ The implementation record is [`ingestion.md`](ingestion.md).
 - The queue adapter opens Valkey lazily. API boot and contract generation do
   not require queue connectivity; enqueue/readiness still do.
 
-Still target/deferred: provider geography imports, real PostGIS insertion
-helpers and query plans, dashboard/report analytics, browser mapping UI, and
-dependency-capable proof for migration apply-from-zero, Garage, Valkey, and
-ClamAV.
+Current: the private global-geography `PostgisRegionGeometryRepository`
+validates bounded 2D GeoJSON in framework-free TypeScript, binds values in tagged
+Prisma SQL, evaluates SRID/type/non-empty/topological validity in PostGIS, owns
+`(regionId, sourceId)` unique identity, and has an opt-in test-DB GiST-plan
+harness (`npm run geography:plans`). Dashboard, report, and analytics surfaces
+are current and recorded in their own canonical documents
+([`dashboards.md`](dashboards.md), [`reports.md`](reports.md),
+[`analytics.md`](analytics.md)).
+
+Still target/deferred: named licensed provider geography imports and governance,
+browser mapping UI, OS-level parser sandboxing, and dependency-capable proof for
+migration apply-from-zero, Garage, Valkey, and ClamAV. The plan harness is not
+measured plan evidence until it has run on a dependency-capable host.

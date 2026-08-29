@@ -319,7 +319,7 @@ Residual Phase 6 risks:
 
 ## 12. Phase 7A boundary update
 
-As of 2026-08-24, the first ingestion/parser/PostGIS controls have moved from
+As of 2026-08-29, the first ingestion/parser/PostGIS controls have moved from
 target to partly implemented. The implementation record is
 [`ingestion.md`](ingestion.md).
 
@@ -332,6 +332,9 @@ target to partly implemented. The implementation record is
 - Composite tenant foreign keys prevent cross-organization ingestion
   references even when a worker-scoped write bypasses ordinary tenant context.
 - Parser adapters are isolated from Prisma writes. They return bounded
+  summaries and validation issues rather than raw rows in PostgreSQL; mapped
+  region validation checks every parser-accepted validation row, not just
+  preview samples.
 - CSV and XLSX use verified MIT packages (`csv-parse`, `read-excel-file`, `fflate`);
   XLSX inspects archive metadata and rejects encrypted OLE packages, macro
   payloads (`xl/vbaProject.bin`), and excessive entry counts before workbook parsing.
@@ -355,12 +358,19 @@ Residual Phase 7A risks:
   processes (NODE_ENV only, 15s timeout watchdog, 192MB heap ceiling, untrusted
   IPC validation), but OS/container sandboxing (seccomp, UID isolation, network
   namespaces) remains an infrastructure concern.
-- GeoJSON validity is not yet inserted through PostGIS helper functions in
-  application code; raw geometry import helpers and invalid-geometry fixtures
-  remain future hardening.
-- Mapping validation now checks every parser-accepted validation row for the
-  mapped region reference. Full semantic validation remains a later hardening
-  item; formula-safe CSV exports are implemented in the report export path.
+- The private `PostgisRegionGeometryRepository` validates bounded 2D GeoJSON in
+  framework-free TypeScript before any SQL call, then binds values in tagged
+  Prisma SQL templates with `ST_SetSRID(ST_GeomFromGeoJSON(...), 4326)`,
+  evaluates `ST_IsValid`/`ST_IsEmpty`/`ST_GeometryType`/`ST_SRID` in a CTE,
+  performs deterministic upsert on `(regionId, sourceId)` unique identity, and
+  maps expected failures to stable domain codes without leaking SQL or PostGIS
+  internals. This is the internal administrative/importer boundary; it is not
+  public, tenant-scoped, or provider-importing.
+- An opt-in test-DB GiST-plan harness (`npm run geography:plans`) exists; it is
+  not measured plan evidence until it has run on a dependency-capable host.
+- Provider geography provenance and licence approval, OS/container sandboxing,
+  migration apply-from-zero, and real Garage/Valkey/ClamAV/restart/dead-letter
+  proof on a dependency-capable environment remain required.
 
 ## 15. Phase 12A operations foundation update
 
