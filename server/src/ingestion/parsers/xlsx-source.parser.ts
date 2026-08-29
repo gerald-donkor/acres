@@ -14,6 +14,7 @@ import {
   safeCell,
   scalarText,
 } from './parser-utils';
+import { inspectXlsxContainer } from './xlsx-container-inspector';
 
 @Injectable()
 export class XlsxSourceParser implements SourceParser {
@@ -30,7 +31,25 @@ export class XlsxSourceParser implements SourceParser {
         },
       ]);
     }
-    const rows = (await readSheet(buffer)) as unknown[][];
+
+    const containerCheck = await inspectXlsxContainer(buffer);
+    if (!containerCheck.ok) {
+      return this.emptySummary([containerCheck.issue]);
+    }
+
+    let rows: unknown[][];
+    try {
+      rows = await readSheet(buffer);
+    } catch {
+      return this.emptySummary([
+        {
+          severity: 'error',
+          code: 'invalid_xlsx_container',
+          message: 'Workbook container is invalid or unreadable.',
+        },
+      ]);
+    }
+
     if (rows.length === 0) {
       return this.emptySummary([
         {

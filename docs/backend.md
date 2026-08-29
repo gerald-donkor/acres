@@ -1994,6 +1994,7 @@ New package dependencies:
 | ----------------- | --------- | ------------------------------------------------------------------------------------------------------- |
 | `csv-parse`       | `^7.0.2`  | MIT CSV parser with synchronous inspection API used for bounded source summaries                        |
 | `read-excel-file` | `^9.3.10` | MIT XLSX reader used for deterministic first-sheet inspection without evaluating formula-looking values |
+| `fflate`          | `^0.8.3`  | MIT lightweight compression library used for pre-parse XLSX container inspection and abuse filtering     |
 
 GeoJSON validation is implemented locally and bounded. The older LGPL validator
 package considered during implementation was not added.

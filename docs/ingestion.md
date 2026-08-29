@@ -74,6 +74,7 @@ Parser packages were selected from current npm metadata during implementation:
 
 - `csv-parse` `7.0.2`, MIT, for CSV parsing;
 - `read-excel-file` `9.3.10`, MIT, for XLSX sheet inspection;
+- `fflate` `0.8.3`, MIT, for direct XLSX container inspection without payload decompression;
 - GeoJSON validation is local and bounded; the older LGPL GeoJSON validator
   package was deliberately not added.
 
@@ -91,11 +92,16 @@ PARSER_MAX_GEOJSON_COORDINATES=100000
 These are safety defaults, not customer product limits or launch SLOs.
 
 CSV defaults to UTF-8, header rows, comma delimiter, skipped empty lines, and
-formula-looking values treated as text. XLSX reads the first sheet
-deterministically and treats formula-looking values as text. GeoJSON accepts
-`Feature` and `FeatureCollection`, counts features/coordinates, records
-property columns plus geometry type, and assumes SRID 4326 unless future logic
-detects a contradictory CRS.
+formula-looking values treated as text. GeoJSON accepts `Feature` and
+`FeatureCollection`, counts features/coordinates, records property columns plus
+geometry type, and assumes SRID 4326 unless future logic detects a contradictory CRS.
+
+XLSX implements pre-parse container classification before sheet parsing:
+- detects the OLE Compound File signature (`D0 CF 11 E0 A1 B1 1A E1`) and rejects encrypted or password-protected workbooks (`encrypted_workbook_unsupported`);
+- inspects ZIP archive entry metadata using `fflate` filtering without decompressing entry payloads, rejecting macro payloads (`xl/vbaProject.bin`, normalized and case-insensitive) with `macro_enabled_workbook_unsupported`;
+- enforces `MAX_XLSX_ENTRIES = 1000` entry count cap against archive abuse (`xlsx_entry_limit_exceeded`);
+- fails closed on corrupt ZIPs or `readSheet` errors with stable `invalid_xlsx_container` validation issues without leaking exception text or internals;
+- reads the first sheet deterministically and treats formula-looking values as text.
 
 The preview sent back in `sampleRows` is capped by `PARSER_MAX_SAMPLE_ROWS`.
 Validation uses a separate bounded `validationRows` set up to the row/feature
@@ -202,9 +208,7 @@ npx playwright test tests/
 ## Residual gaps
 
 - No Phase 8 observation or metric tables are created.
-- XLSX macro/encryption detection is limited to what `read-excel-file` exposes
-  safely through parse failure. Unsupported suspicious features should be
-  hardened before launch.
+- XLSX macro and encrypted container hardening is implemented (pre-parse OLE magic detection, case-insensitive VBA project rejection, 1000-entry cap, and fail-closed container error classification). Hostile parser process isolation remains future work.
 - GeoJSON geometry validity is counted and bounded in TypeScript; insertion
   helpers that write `RegionGeometry.geometry` through PostGIS validity checks
   are still future work.

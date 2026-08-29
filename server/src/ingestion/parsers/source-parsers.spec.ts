@@ -94,6 +94,112 @@ describe('source parsers', () => {
       ]),
     );
   });
+
+  it('rejects macro-enabled XLSX workbooks containing vbaProject.bin', async () => {
+    const parser = new XlsxSourceParser(limits);
+    const summary = await parser.inspect(macroXlsx());
+
+    expect(summary).toMatchObject({
+      sourceKind: 'xlsx',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+    });
+    expect(summary.issues).toHaveLength(1);
+    expect(summary.issues[0]).toEqual({
+      severity: 'error',
+      code: 'macro_enabled_workbook_unsupported',
+      message: 'Macro-enabled workbooks are not supported.',
+    });
+  });
+
+  it('rejects encrypted Office OLE compound files before workbook parsing', async () => {
+    const parser = new XlsxSourceParser(limits);
+    const summary = await parser.inspect(encryptedOleCompoundFile());
+
+    expect(summary).toMatchObject({
+      sourceKind: 'xlsx',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+    });
+    expect(summary.issues).toHaveLength(1);
+    expect(summary.issues[0]).toEqual({
+      severity: 'error',
+      code: 'encrypted_workbook_unsupported',
+      message: 'Encrypted or password-protected workbooks are not supported.',
+    });
+  });
+
+  it('rejects corrupt and non-ZIP bytes as invalid containers without throwing', async () => {
+    const parser = new XlsxSourceParser(limits);
+    const summary = await parser.inspect(Buffer.from('not a real zip archive'));
+
+    expect(summary).toMatchObject({
+      sourceKind: 'xlsx',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+    });
+    expect(summary.issues).toHaveLength(1);
+    expect(summary.issues[0]).toEqual({
+      severity: 'error',
+      code: 'invalid_xlsx_container',
+      message: 'Workbook container is invalid or unreadable.',
+    });
+  });
+
+  it('rejects archives exceeding the entry cap before extracting contents', async () => {
+    const parser = new XlsxSourceParser(limits);
+    const summary = await parser.inspect(manyEntriesZip(1005));
+
+    expect(summary).toMatchObject({
+      sourceKind: 'xlsx',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+    });
+    expect(summary.issues).toHaveLength(1);
+    expect(summary.issues[0]).toEqual({
+      severity: 'error',
+      code: 'xlsx_entry_limit_exceeded',
+      message: 'Workbook archive entry count exceeds the parser safety limit.',
+    });
+  });
+
+  it('catches readSheet failures on malformed OOXML as invalid container issues', async () => {
+    const parser = new XlsxSourceParser(limits);
+    // Valid ZIP with arbitrary files but missing required OOXML sheets
+    const nonOoxmlZip = Buffer.from(
+      zipSync({
+        'dummy.txt': strToU8('not an excel workbook'),
+      }),
+    );
+    const summary = await parser.inspect(nonOoxmlZip);
+
+    expect(summary).toMatchObject({
+      sourceKind: 'xlsx',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+    });
+    expect(summary.issues).toHaveLength(1);
+    expect(summary.issues[0]).toEqual({
+      severity: 'error',
+      code: 'invalid_xlsx_container',
+      message: 'Workbook container is invalid or unreadable.',
+    });
+  });
 });
 
 function point(name: string, coordinates: [number, number]) {
@@ -145,4 +251,41 @@ function minimalXlsx(): Buffer {
 
 function xml(value: string): Uint8Array {
   return strToU8(value.replace(/\n\s+/g, ''));
+}
+
+function macroXlsx(): Buffer {
+  const files: Record<string, Uint8Array> = {
+    '[Content_Types].xml': xml(`<?xml version="1.0" encoding="UTF-8"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+        <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+      </Types>`),
+    '_rels/.rels': xml(`<?xml version="1.0" encoding="UTF-8"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+      </Relationships>`),
+    'xl/workbook.xml': xml(`<?xml version="1.0" encoding="UTF-8"?>
+      <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>
+      </workbook>`),
+    'xl/vbaProject.bin': strToU8('fake_vba_project_payload'),
+  };
+  return Buffer.from(zipSync(files));
+}
+
+function encryptedOleCompoundFile(): Buffer {
+  return Buffer.from([
+    0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00, 0x00, 0x00, 0x00,
+  ]);
+}
+
+function manyEntriesZip(count: number): Buffer {
+  const files: Record<string, Uint8Array> = {};
+  for (let i = 0; i < count; i++) {
+    files[`entry_${i}.txt`] = strToU8('x');
+  }
+  return Buffer.from(zipSync(files));
 }

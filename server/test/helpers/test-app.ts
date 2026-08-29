@@ -405,9 +405,12 @@ function envValue(
 function positiveInt(
   envOverrides: Partial<Record<string, string>>,
   key: string,
+  defaultValue = 1,
 ): number {
-  const value = Number(envValue(envOverrides, key));
-  return Number.isInteger(value) && value > 0 ? value : 1;
+  const raw = envValue(envOverrides, key);
+  if (!raw) return defaultValue;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : defaultValue;
 }
 
 function configDouble(
@@ -593,16 +596,16 @@ function configDouble(
       return envValue(envOverrides, 'AI_DRAFT_MODEL') || 'gemini-2.5-flash';
     },
     get aiDraftTimeoutMs() {
-      return positiveInt(envOverrides, 'AI_DRAFT_TIMEOUT_MS') || 15000;
+      return positiveInt(envOverrides, 'AI_DRAFT_TIMEOUT_MS', 15000);
     },
     get aiDraftMaxProposals() {
-      return positiveInt(envOverrides, 'AI_DRAFT_MAX_PROPOSALS') || 3;
+      return positiveInt(envOverrides, 'AI_DRAFT_MAX_PROPOSALS', 3);
     },
     get aiDraftMaxContextBytes() {
-      return positiveInt(envOverrides, 'AI_DRAFT_MAX_CONTEXT_BYTES') || 16384;
+      return positiveInt(envOverrides, 'AI_DRAFT_MAX_CONTEXT_BYTES', 16384);
     },
     get aiDraftMaxOutputTokens() {
-      return positiveInt(envOverrides, 'AI_DRAFT_MAX_OUTPUT_TOKENS') || 2048;
+      return positiveInt(envOverrides, 'AI_DRAFT_MAX_OUTPUT_TOKENS', 2048);
     },
   } as AcresConfigService;
 }

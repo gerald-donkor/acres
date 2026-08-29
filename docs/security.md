@@ -332,9 +332,9 @@ target to partly implemented. The implementation record is
 - Composite tenant foreign keys prevent cross-organization ingestion
   references even when a worker-scoped write bypasses ordinary tenant context.
 - Parser adapters are isolated from Prisma writes. They return bounded
-  summaries and safe validation issues; they do not log or persist raw full
-  uploaded rows.
-- CSV and XLSX use verified MIT packages (`csv-parse`, `read-excel-file`);
+- CSV and XLSX use verified MIT packages (`csv-parse`, `read-excel-file`, `fflate`);
+  XLSX inspects archive metadata and rejects encrypted OLE packages, macro
+  payloads (`xl/vbaProject.bin`), and excessive entry counts before workbook parsing.
   GeoJSON inspection is local and bounded rather than delegated to the older
   LGPL validator package considered during implementation.
 - Temporary parser limits are explicit environment values for rows, columns,
@@ -351,8 +351,9 @@ Residual Phase 7A risks:
   composite-constraint migration was applied to an incrementally upgraded local
   database. Migration apply-from-zero and PostGIS constraint/query-plan proof
   still need to run on a dependency-capable host.
-- Parser isolation is still in-process Node work. Hostile XLSX/GeoJSON resource
-  fixtures beyond unit-level bounded examples remain required before launch.
+- Parser isolation is still in-process Node work (encrypted and macro-enabled
+  XLSX containers are rejected before parsing, but process isolation and external
+  worker sandboxing remain future hardening).
 - GeoJSON validity is not yet inserted through PostGIS helper functions in
   application code; raw geometry import helpers and invalid-geometry fixtures
   remain future hardening.
