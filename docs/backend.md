@@ -7,6 +7,12 @@ integration is recorded in [`authenticated-app.md`](authenticated-app.md);
 historical notes in this file that say `client/` is unchanged describe the
 original backend prompt, not the current repository after Phase 5 began.
 
+## geoBoundaries operator import
+
+The geography module includes an internal gbOpen acquisition/manifest/import
+CLI. It is not a controller, worker, scheduler, or public contract. See
+[`ingestion.md`](ingestion.md) for commands, provenance and hierarchy limits.
+
 ---
 
 ## 1. Resolved versions

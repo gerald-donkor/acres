@@ -18,6 +18,15 @@ The decisions in this document are the architecture record for the approved
 and migration, obtain user approval, and change this document and affected
 plans in the same commit. Superseded choices remain visible through git history.
 
+## Current provider boundary — geoBoundaries gbOpen
+
+The geography module has an operator-only `geoBoundaries` adapter behind a
+private provider/manifest/import boundary. It allowlists HTTPS discovery and
+commit-addressed GeoJSON artifacts, emits immutable reviewable manifests, and
+uses the existing PostGIS repository in a transaction. Automatic refresh,
+source precedence, authoritative overrides, and ADM2–ADM5 parent resolution
+remain deferred.
+
 Repository evidence inspected for the original decision: `AGENTS.md`,
 `README.md`, all workspace manifests, `skills-lock.json`, the current Prisma
 schema, Nest module and application setup, feature controllers/modules, shared

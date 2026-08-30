@@ -31,6 +31,8 @@
     "test:client:e2e": "npm run test:e2e --workspace=@acres/client",
     "analytics:plans": "npm run analytics:plans --workspace=@acres/server",
     "geography:plans": "npm run geography:plans --workspace=@acres/server",
+    "geography:provider:acquire": "npm run geography:provider:acquire --workspace=@acres/server --",
+    "geography:provider:import": "npm run geography:provider:import --workspace=@acres/server --",
     "ops:templates": "scripts/ops/check-production-templates.sh",
     "ops:scan-secrets": "scripts/ops/scan-secrets.sh",
     "ops:docker-runtime": "scripts/ops/check-docker-runtime.sh",

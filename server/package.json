@@ -26,7 +26,9 @@
     "test:cov": "jest --coverage",
     "test:e2e": "prisma generate && NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json",
     "analytics:plans": "prisma generate && nest build && NODE_ENV=test node dist/analytics/seed/check-analytics-plans.js",
-    "geography:plans": "prisma generate && nest build && NODE_ENV=test node dist/geography/seed/check-geography-plans.js"
+    "geography:plans": "prisma generate && nest build && NODE_ENV=test node dist/geography/seed/check-geography-plans.js",
+    "geography:provider:acquire": "prisma generate && nest build && node dist/geography/geoboundaries-cli.js acquire",
+    "geography:provider:import": "prisma generate && nest build && node dist/geography/geoboundaries-cli.js import"
   },
   "dependencies": {
     "@acres/shared": "*",

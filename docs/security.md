@@ -4,6 +4,18 @@ Status: repository-grounded threat model, reviewed for the **current** code and
 the **target** architecture approved 2026-08-23. It is not a penetration test,
 certification, compliance claim, or assertion that target controls are shipped.
 
+## Provider acquisition boundary — Phase 7B
+
+geoBoundaries discovery and artifact responses are untrusted. The operator CLI
+constructs selection-only `gbOpen` discovery paths, rejects redirects and
+non-HTTPS/unknown hosts, applies timeout/content-type/byte limits, and records
+only commit-addressed artifact URLs with SHA-256 and byte length. Manifest,
+metadata, GeoJSON identity and geometry are fail-closed before a single
+transactional PostGIS publication. Logs exclude geometry, credentials, query
+strings and response bodies. Remaining risk includes upstream compromise and
+the legal/political status of provider data; retained provenance supports review
+but does not eliminate either risk.
+
 ## 1. Executive summary
 
 Acres' highest-risk property is organization isolation: one authenticated

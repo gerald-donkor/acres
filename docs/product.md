@@ -6,6 +6,15 @@ application surface exists today. Current implementation evidence lives in
 [`landing.md`](landing.md), [`backend.md`](backend.md), and
 [`authenticated-app.md`](authenticated-app.md).
 
+## Geography-provider decision — accepted 2026-08-30
+
+geoBoundaries `gbOpen` is the first global administrative-boundary baseline.
+Its global standardized coverage and CC BY 4.0 attribution model were preferred
+to GADM's non-commercial restriction and OSM's broader ODbL database
+obligations. This does not make it politically or legally authoritative for
+every jurisdiction. Acres retains a provider seam for later jurisdictional
+authoritative sources and preserves per-layer original-source and licence facts.
+
 ## 1. Product job
 
 Acres is a B2B regional-data analytics SaaS. Its job is to turn unreadable

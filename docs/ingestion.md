@@ -6,6 +6,28 @@ geography persistence additions, parser adapters, and dataset ingestion REST
 routes. It does not claim Phase 8 observations, analytics, dashboards, exports,
 or a browser mapping UI exist.
 
+## geoBoundaries gbOpen baseline (Phase 7B)
+
+Acres' first global administrative-boundary baseline is geoBoundaries `gbOpen`.
+It is acquired only by an explicit operator command; no API, worker, scheduler,
+or startup path fetches provider data. `npm run geography:provider:acquire --
+--workdir /safe/operator-dir --select GHA/ADM0,GHA/ADM1` discovers selected
+layers and writes only a reviewable manifest plus local artifacts. `npm run
+geography:provider:import -- --workdir /safe/operator-dir --manifest
+/safe/operator-dir/manifest.json [--dry-run]` validates checksums and imports a
+single immutable source revision transactionally.
+
+The manifest pins a commit-addressed raw GeoJSON URL, SHA-256, byte count,
+boundary/build/source dates, original source/licence/detail/source, boundary ID,
+attribution and modification statement. Its identity excludes acquisition time.
+A new upstream build is a new `RegionSource.sourceVersion`; no automatic
+`current` refresh, source replacement, or retirement occurs.
+
+ADM0 roots and ADM1-to-ADM0 links are explicit within one manifest. ADM2–ADM5
+are blocked when their immediate parent is unresolved; Acres never derives a
+parent from names, centroids, containment, or other spatial heuristics. The
+operator template is [`server/src/geography/ATTRIBUTION.md`](../server/src/geography/ATTRIBUTION.md).
+
 ## Current boundary
 
 Phase 7A adds the foundation required to publish an immutable dataset version
@@ -310,5 +332,7 @@ Tests: 153 passed, 153 total
 - No Phase 8 observation or metric tables are created.
 - XLSX container inspection and child-process fault containment isolation are implemented (pre-parse OLE magic detection, case-insensitive VBA project rejection, 1000-entry cap, fail-closed container error classification, single-use child process execution with isolated environment and resource bounds). OS-level container sandboxing (seccomp, network namespaces) remains an infrastructure concern.
 - Real PostGIS geometry write and validation repository (`PostgisRegionGeometryRepository`), unique identity constraint, and spatial index query path are implemented.
-- Provider geography imports, licensed dataset selection, external source ingestion scripts, and real dependency-capable execution (when PostgreSQL/Garage/Valkey/ClamAV services are not local) remain future operational work.
-
+- The gbOpen operator import is implemented; other providers, source precedence,
+  deeper hierarchy governance, real provider publication, and dependency-capable
+  execution (when PostgreSQL/Garage/Valkey/ClamAV services are not local) remain
+  future operational work.
