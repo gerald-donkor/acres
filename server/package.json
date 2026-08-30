@@ -28,6 +28,7 @@
     "analytics:plans": "prisma generate && nest build && NODE_ENV=test node dist/analytics/seed/check-analytics-plans.js",
     "geography:plans": "prisma generate && nest build && NODE_ENV=test node dist/geography/seed/check-geography-plans.js",
     "geography:provider:acquire": "prisma generate && nest build && node dist/geography/geoboundaries-cli.js acquire",
+    "geography:provider:review": "prisma generate && nest build && node dist/geography/geoboundaries-cli.js review",
     "geography:provider:import": "prisma generate && nest build && node dist/geography/geoboundaries-cli.js import"
   },
   "dependencies": {

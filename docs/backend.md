@@ -9,8 +9,10 @@ original backend prompt, not the current repository after Phase 5 began.
 
 ## geoBoundaries operator import
 
-The geography module includes an internal gbOpen acquisition/manifest/import
-CLI. It is not a controller, worker, scheduler, or public contract. See
+The geography module includes an internal gbOpen acquisition/review/import
+CLI. The review phase creates an identity-bound canonical parent-map manifest
+for ADM2–ADM5; it never infers parentage. It is not a controller, worker,
+scheduler, or public contract. See
 [`ingestion.md`](ingestion.md) for commands, provenance and hierarchy limits.
 
 ---
@@ -42,9 +44,8 @@ implementing session (2026-08-21), never recalled. Toolchain: **Node v26.7.0**,
 | `graphql-query-complexity`                                     | `2.0.0`                                   | cost guard for GraphQL abuse controls                                                                                                                                                                                   |
 | `dataloader`                                                   | `2.2.3`                                   | per-request GraphQL lookup caching                                                                                                                                                                                      |
 | `bcryptjs`                                                     | `^3.0.3`                                  | password hashing. Pure JavaScript and **ships no install script**, which matters here: this machine's npm blocks unapproved install scripts, so a native hashing binding would not have built                           |
-| `prom-client`                                                  | `^15.1.3`                                 | Prometheus application metrics exposition client (Apache-2.0, pure JS, Node 24 compatible)                                                                                                                               |
+| `prom-client`                                                  | `^15.1.3`                                 | Prometheus application metrics exposition client (Apache-2.0, pure JS, Node 24 compatible)                                                                                                                              |
 | `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7`            | from the verified Nest scaffold           |
-
 
 ### A skill was installed mid-step
 
@@ -117,26 +118,26 @@ docs/backend.md       # this file
 
 Root scripts, all run from the repository root:
 
-| script                                           | what it does                                                                                                                    |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `dev`                                            | unchanged — the Next.js dev server                                                                                              |
-| `dev:client` / `dev:server`                      | one workspace each; the API watches on 3001                                                                                     |
-| `build`                                          | **shared → client → server.** Shared is first because the server imports its built output                                       |
-| `build:shared` / `build:client` / `build:server` | one workspace each                                                                                                              |
-| `contracts:generate`                             | builds the server and rewrites `docs/api/openapi.json`, `docs/api/schema.graphql` and `docs/api/contracts.md` deterministically |
-| `contracts:check`                                | generates contracts to a temporary directory and fails on drift; CI runs this after build                                       |
-| `start`                                          | unchanged — serves the built client                                                                                             |
-| `start:server`                                   | `node dist/main` in `server/`                                                                                                   |
-| `lint`                                           | client, then shared, then server                                                                                                |
-| `typecheck`                                      | **new.** Builds `@acres/shared`, then `tsc --noEmit` in all three workspaces                                                    |
-| `test:server`                                    | the API's e2e suite                                                                                                             |
-| `test:client:e2e`                                | Playwright coverage for the authenticated client shell                                                                          |
-| `analytics:plans`                                | seeds deterministic scale data in `acres_test` and benchmarks PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)` plans against regression guards |
-| `ops:templates`                                  | validates the inert production Caddy/Compose/env/observability examples added in Phase 12A                                      |
+| script                                           | what it does                                                                                                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev`                                            | unchanged — the Next.js dev server                                                                                                                        |
+| `dev:client` / `dev:server`                      | one workspace each; the API watches on 3001                                                                                                               |
+| `build`                                          | **shared → client → server.** Shared is first because the server imports its built output                                                                 |
+| `build:shared` / `build:client` / `build:server` | one workspace each                                                                                                                                        |
+| `contracts:generate`                             | builds the server and rewrites `docs/api/openapi.json`, `docs/api/schema.graphql` and `docs/api/contracts.md` deterministically                           |
+| `contracts:check`                                | generates contracts to a temporary directory and fails on drift; CI runs this after build                                                                 |
+| `start`                                          | unchanged — serves the built client                                                                                                                       |
+| `start:server`                                   | `node dist/main` in `server/`                                                                                                                             |
+| `lint`                                           | client, then shared, then server                                                                                                                          |
+| `typecheck`                                      | **new.** Builds `@acres/shared`, then `tsc --noEmit` in all three workspaces                                                                              |
+| `test:server`                                    | the API's e2e suite                                                                                                                                       |
+| `test:client:e2e`                                | Playwright coverage for the authenticated client shell                                                                                                    |
+| `analytics:plans`                                | seeds deterministic scale data in `acres_test` and benchmarks PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)` plans against regression guards                     |
+| `ops:templates`                                  | validates the inert production Caddy/Compose/env/observability examples added in Phase 12A                                                                |
 | `ops:scan-secrets`                               | scans tracked files for known local passwords, `change-me` defaults, launch sentinels outside approved docs/examples, and secret-looking public env names |
-| `ops:docker-runtime`                             | checks `server/Dockerfile` still uses Node 24, non-root runtime, a healthcheck, and direct Node startup                         |
-| `ops:check`                                      | runs the deterministic Phase 12A operations gates; CI runs this after contract drift checks                                     |
-| `ops:launch-readiness`                           | runs the same gates, prints remaining operator-owned blockers, and exits non-zero until launch values and drills are complete   |
+| `ops:docker-runtime`                             | checks `server/Dockerfile` still uses Node 24, non-root runtime, a healthcheck, and direct Node startup                                                   |
+| `ops:check`                                      | runs the deterministic Phase 12A operations gates; CI runs this after contract drift checks                                                               |
+| `ops:launch-readiness`                           | runs the same gates, prints remaining operator-owned blockers, and exits non-zero until launch values and drills are complete                             |
 
 `typecheck` did not exist before this step. `AGENTS.md` §8.1 previously said
 `npx tsc --noEmit` "runs from the root and is forwarded to `@acres/client`";
@@ -210,22 +211,22 @@ validation or CSRF rule configured only in `main.ts` is a rule no test can see.
 `JobsController` both need `SessionGuard`, and routing the guard through
 `AuthModule` would make `AuthModule` and `AccountsModule` import each other.
 
-| method | path             | auth             | notes                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ------ | ---------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/health`        | public           | status, service name, npm version, uptime. **Takes no database dependency** — a load balancer must not be told the service is down when it is the database that is unreachable                                                                                                                                                                                                                                            |
-| `GET`  | `/health/ready`  | public           | database readiness for dependency-aware health checks                                                                                                                                                                                                                                                                                                                                                                     |
-| `GET`  | `/metrics`       | private/ops      | Prometheus text exposition format (`text/plain; version=0.0.4`). Low-cardinality, strictly redacted route groups (`/api/v1/auth`, `/api/v1/organizations`, `/api/v1/reports`, `/graphql`, `/health`, `/metrics`, `other`), RED metrics, outbox lag, queue depth, job runs. Bypasses JSON response envelopes and rate limiting                                                                                     |
-| `GET`  | `/auth/csrf`     | public           | **not in the original route table.** A double-submit defence is unusable without a way to read the token; returns `{ csrfToken, headerName: 'x-csrf-token' }` and sets the paired cookie. Uses the library's defaults: re-issuing re-validates any existing cookie against the **current** session identifier and mints a fresh token when that fails, which is what has to happen after login rotates the session cookie |
+| method | path            | auth        | notes                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------ | --------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/health`       | public      | status, service name, npm version, uptime. **Takes no database dependency** — a load balancer must not be told the service is down when it is the database that is unreachable                                                                                                                                                                                                                                            |
+| `GET`  | `/health/ready` | public      | database readiness for dependency-aware health checks                                                                                                                                                                                                                                                                                                                                                                     |
+| `GET`  | `/metrics`      | private/ops | Prometheus text exposition format (`text/plain; version=0.0.4`). Low-cardinality, strictly redacted route groups (`/api/v1/auth`, `/api/v1/organizations`, `/api/v1/reports`, `/graphql`, `/health`, `/metrics`, `other`), RED metrics, outbox lag, queue depth, job runs. Bypasses JSON response envelopes and rate limiting                                                                                             |
+| `GET`  | `/auth/csrf`    | public      | **not in the original route table.** A double-submit defence is unusable without a way to read the token; returns `{ csrfToken, headerName: 'x-csrf-token' }` and sets the paired cookie. Uses the library's defaults: re-issuing re-validates any existing cookie against the **current** session identifier and mints a fresh token when that fails, which is what has to happen after login rotates the session cookie |
 
-| `POST` | `/auth/register` | public + CSRF    | 201, sets the session cookie, returns `SessionProfile`                                                                                                                                                                                                                                                                                                                                                                    |
-| `POST` | `/auth/login`    | public + CSRF    | 200, sets the session cookie, returns `SessionProfile`                                                                                                                                                                                                                                                                                                                                                                    |
-| `POST` | `/auth/logout`   | session + CSRF   | revokes the session server-side, clears the cookie                                                                                                                                                                                                                                                                                                                                                                        |
-| `GET`  | `/auth/session`  | optional session | `SessionProfile`, or the shared `ANONYMOUS_SESSION`                                                                                                                                                                                                                                                                                                                                                                       |
-| `GET`  | `/account`       | session          | `AccountProfile`                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `GET`  | `/regions`       | public           | region summaries with their metrics, one query                                                                                                                                                                                                                                                                                                                                                                            |
-| `GET`  | `/regions/:slug` | public           | one summary, or 404 `NOT_FOUND`                                                                                                                                                                                                                                                                                                                                                                                           |
-| `POST` | `/forms/contact` | public + CSRF    | 201, stores the submission, returns `{ id, receivedAt }` only — echoing the message back would make the endpoint a reflector                                                                                                                                                                                                                                                                                              |
-| `GET`  | `/jobs/runs`     | session          | the 50 most recent runs                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `POST` | `/auth/register` | public + CSRF | 201, sets the session cookie, returns `SessionProfile` |
+| `POST` | `/auth/login` | public + CSRF | 200, sets the session cookie, returns `SessionProfile` |
+| `POST` | `/auth/logout` | session + CSRF | revokes the session server-side, clears the cookie |
+| `GET` | `/auth/session` | optional session | `SessionProfile`, or the shared `ANONYMOUS_SESSION` |
+| `GET` | `/account` | session | `AccountProfile` |
+| `GET` | `/regions` | public | region summaries with their metrics, one query |
+| `GET` | `/regions/:slug` | public | one summary, or 404 `NOT_FOUND` |
+| `POST` | `/forms/contact` | public + CSRF | 201, stores the submission, returns `{ id, receivedAt }` only — echoing the message back would make the endpoint a reflector |
+| `GET` | `/jobs/runs` | session | the 50 most recent runs |
 
 ### Envelopes
 
@@ -1553,7 +1554,7 @@ For decisions and sequencing, read `docs/system-architecture.md`,
 | Flat public `Region` records                                                                                                                                                  | Globally shared arbitrary-depth administrative hierarchy, stable external codes/aliases/provenance and reviewed PostGIS geometry SQL                                                      | 7                                    |
 | DB-backed `JobRun` reads and one in-process hourly session purge                                                                                                              | PostgreSQL outbox/job authority, Valkey/BullMQ transport, separately runnable Nest worker, idempotent stages, retries/dead letters and audited schedules                                  | 6                                    |
 | No object storage, upload, parser, or antivirus boundary                                                                                                                      | Garage quarantine/artifacts, short-lived presigned uploads, ClamAV scan-before-parse, bounded CSV/XLSX/GeoJSON stages and immutable dataset versions                                      | 6–7                                  |
-| Typed metric definitions/observations/quality/aggregates, dashboard saved views, report revisions/evidence, export requests/artifacts and object-storage-backed artifacts     | Larger read models, export progress streaming, collaboration, sharing, scheduled exports and optional AI draft generation                                                                  | 8–11                                 |
+| Typed metric definitions/observations/quality/aggregates, dashboard saved views, report revisions/evidence, export requests/artifacts and object-storage-backed artifacts     | Larger read models, export progress streaming, collaboration, sharing, scheduled exports and optional AI draft generation                                                                 | 8–11                                 |
 | Next client has a same-origin `/api/v1` bridge, typed server/browser clients, login/register/logout, active organization preference and a first protected `/app` shell        | Production Caddy routing and later product dashboards/datasets/reports build on this shell                                                                                                | 5+                                   |
 | Portable Node 24 API image and GitHub Actions build/smoke test; no full topology                                                                                              | Compose+Caddy single-host reference, private stateful services, OTel/Prometheus/optional Grafana, backups/restores and hardened promotion                                                 | 12                                   |
 | No AI                                                                                                                                                                         | Optional disabled-by-default local llama.cpp/vLLM adapter receives minimal authorized evidence and proposes schema-validated drafts; deterministic product remains complete               | 11                                   |
@@ -2000,7 +2001,7 @@ New package dependencies:
 | ----------------- | --------- | ------------------------------------------------------------------------------------------------------- |
 | `csv-parse`       | `^7.0.2`  | MIT CSV parser with synchronous inspection API used for bounded source summaries                        |
 | `read-excel-file` | `^9.3.10` | MIT XLSX reader used for deterministic first-sheet inspection without evaluating formula-looking values |
-| `fflate`          | `^0.8.3`  | MIT lightweight compression library used for pre-parse XLSX container inspection and abuse filtering     |
+| `fflate`          | `^0.8.3`  | MIT lightweight compression library used for pre-parse XLSX container inspection and abuse filtering    |
 
 GeoJSON validation is implemented locally and bounded. The older LGPL validator
 package considered during implementation was not added.
@@ -2029,6 +2030,7 @@ API boot and contract generation no longer open a Valkey connection until
 enqueue/readiness is called.
 
 PostGIS geometry write hardening (Prompt 44):
+
 - Added `server/src/geography/` with `GeographyModule`, `PostgisRegionGeometryRepository`, pure `validateGeometryInput`, and domain error mappings.
 - Forward-only migration `20260829200000_region_geometry_unique_key` replaces `RegionGeometry` index with a unique constraint on `(regionId, sourceId)`.
 - Database write enforces PostGIS `ST_IsValid`, `ST_IsEmpty`, `ST_GeometryType`, and `ST_SRID` in a single tagged parameterized SQL template.

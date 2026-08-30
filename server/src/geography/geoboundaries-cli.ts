@@ -1,10 +1,21 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import {
+  lstat,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import { dirname, relative, resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { GeoBoundariesImportService } from './geoboundaries-import.service';
-import { validateGeoBoundariesManifest } from './geoboundaries-manifest';
+import {
+  publishReviewedManifest,
+  validateGeoBoundariesHierarchyReview,
+  validateGeoBoundariesManifest,
+} from './geoboundaries-manifest';
 import { normalizeGeoBoundariesLayer } from './geoboundaries-normalizer';
 import {
   GeoBoundariesProvider,
@@ -67,6 +78,51 @@ async function atomicJson(path: string, value: unknown): Promise<void> {
   }
 }
 
+async function regularInside(
+  directory: string,
+  path: string,
+  name: string,
+): Promise<void> {
+  if (
+    relative(directory, path).startsWith('..') ||
+    relative(directory, path) === ''
+  )
+    fail(`${name} must be a file inside --workdir.`);
+  const stat = await lstat(path).catch(() =>
+    fail(`${name} is not a regular file.`),
+  );
+  if (!stat.isFile() || stat.isSymbolicLink())
+    fail(`${name} must be a non-symlink regular file.`);
+}
+
+async function normalizedManifest(directory: string, manifestPath: string) {
+  await regularInside(directory, manifestPath, '--manifest');
+  const manifest = validateGeoBoundariesManifest(
+    JSON.parse(await readFile(manifestPath, 'utf8')) as unknown,
+  );
+  const normalized = [];
+  for (const layer of manifest.layers) {
+    const path = resolve(
+      directory,
+      `${layer.countryCode}-${layer.level}.geojson`,
+    );
+    await regularInside(directory, path, 'artifact');
+    const bytes = await readFile(path);
+    if (
+      bytes.byteLength !== layer.byteLength ||
+      createHash('sha256').update(bytes).digest('hex') !== layer.sha256
+    )
+      fail(`checksum mismatch for ${layer.countryCode}/${layer.level}`);
+    normalized.push(
+      normalizeGeoBoundariesLayer(
+        layer,
+        JSON.parse(bytes.toString('utf8')) as unknown,
+      ),
+    );
+  }
+  return { manifest, normalized };
+}
+
 async function acquire(args: string[]): Promise<void> {
   const directory = workDirectory(arg(args, '--workdir'));
   const selected = selections(arg(args, '--select'));
@@ -107,31 +163,10 @@ async function importManifest(args: string[]): Promise<void> {
   const manifestPath = resolve(arg(args, '--manifest'));
   const directory = workDirectory(arg(args, '--workdir'));
   const dryRun = args.includes('--dry-run');
-  if (dirname(manifestPath) !== directory)
-    fail('--manifest must be inside --workdir.');
-  const manifest = validateGeoBoundariesManifest(
-    JSON.parse(await readFile(manifestPath, 'utf8')) as unknown,
+  const { manifest, normalized } = await normalizedManifest(
+    directory,
+    manifestPath,
   );
-  const normalized = [];
-  for (const layer of manifest.layers) {
-    const path = resolve(
-      directory,
-      `${layer.countryCode}-${layer.level}.geojson`,
-    );
-    if (dirname(path) !== directory) fail('artifact path escapes workdir.');
-    const bytes = await readFile(path);
-    if (
-      bytes.byteLength !== layer.byteLength ||
-      createHash('sha256').update(bytes).digest('hex') !== layer.sha256
-    )
-      fail(`checksum mismatch for ${layer.countryCode}/${layer.level}`);
-    normalized.push(
-      normalizeGeoBoundariesLayer(
-        layer,
-        JSON.parse(bytes.toString('utf8')) as unknown,
-      ),
-    );
-  }
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: false,
   });
@@ -152,15 +187,72 @@ async function importManifest(args: string[]): Promise<void> {
   }
 }
 
+async function reviewHierarchy(args: string[]): Promise<void> {
+  const directory = workDirectory(arg(args, '--workdir'));
+  const manifestPath = resolve(arg(args, '--manifest'));
+  const parentMapPath = resolve(arg(args, '--parent-map'));
+  const outputPath = resolve(arg(args, '--output'));
+  if (
+    outputPath === manifestPath ||
+    outputPath === parentMapPath ||
+    relative(directory, outputPath).startsWith('..')
+  )
+    fail('--output must be a distinct path inside --workdir.');
+  await regularInside(directory, parentMapPath, '--parent-map');
+  const { manifest, normalized } = await normalizedManifest(
+    directory,
+    manifestPath,
+  );
+  const review = validateGeoBoundariesHierarchyReview(
+    JSON.parse(await readFile(parentMapPath, 'utf8')) as unknown,
+  );
+  const featureIds = new Map(
+    normalized.map((item) => [
+      `${item.layer.countryCode}/${item.layer.level}`,
+      new Set(item.features.map((feature) => feature.shapeId)),
+    ]),
+  );
+  const published = publishReviewedManifest(manifest, review, featureIds);
+  const counts = review.layers.map((item) => ({
+    country: item.countryCode,
+    level: item.level,
+    assignments: item.assignments.length,
+  }));
+  if (args.includes('--dry-run')) {
+    console.log(
+      JSON.stringify({
+        outcome: 'dry-run',
+        baseIdentity: manifest.identitySha256.slice(0, 12),
+        publishIdentity: published.identitySha256.slice(0, 12),
+        reviewedLayers: counts,
+        assignmentCount: counts.reduce(
+          (sum, item) => sum + item.assignments,
+          0,
+        ),
+      }),
+    );
+    return;
+  }
+  await atomicJson(outputPath, published);
+  console.log(
+    JSON.stringify({
+      outcome: 'reviewed',
+      publishIdentity: published.identitySha256.slice(0, 12),
+      reviewedLayers: counts,
+    }),
+  );
+}
+
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
   if (args.includes('--help') || command === '--help' || !command) {
     console.log(
-      'Usage: geography-provider <acquire|import> --workdir /safe/operator/dir [--select GHA/ADM0] [--manifest /safe/operator/dir/manifest.json] [--dry-run]',
+      'Usage: geography-provider <acquire|review|import> --workdir /safe/operator/dir [--select GHA/ADM0] [--manifest /safe/operator/dir/manifest.json] [--parent-map /safe/operator/dir/parent-map.json --output /safe/operator/dir/publish-manifest.json] [--dry-run]',
     );
     return;
   }
   if (command === 'acquire') return acquire(args);
+  if (command === 'review') return reviewHierarchy(args);
   if (command === 'import') return importManifest(args);
   fail('command must be acquire or import.');
 }

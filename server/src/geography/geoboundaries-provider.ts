@@ -47,7 +47,7 @@ export class GeoBoundariesAcquisitionError extends Error {
 function selectionPath(selection: GeoBoundariesSelection): URL {
   if (
     !/^[A-Z]{3}$/.test(selection.countryCode) ||
-    !/^ADM[01]$/.test(selection.level)
+    !/^ADM[0-5]$/.test(selection.level)
   )
     throw new GeoBoundariesAcquisitionError(
       'selection',

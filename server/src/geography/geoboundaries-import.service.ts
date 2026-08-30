@@ -36,6 +36,13 @@ function slug(feature: {
   return `gb-${feature.shapeGroup.toLowerCase()}-${feature.shapeType.toLowerCase()}-${digest}`;
 }
 
+function providerIdentity(
+  layer: { countryCode: string; level: string },
+  shapeId: string,
+): string {
+  return `${layer.countryCode}/${layer.level}/${shapeId}`;
+}
+
 @Injectable()
 export class GeoBoundariesImportService {
   constructor(
@@ -53,7 +60,12 @@ export class GeoBoundariesImportService {
         'database',
         'At least one normalized layer is required.',
       );
-    for (const normalized of layers) {
+    const ordered = [...layers].sort((a, b) =>
+      `${a.layer.countryCode}/${a.layer.level}`.localeCompare(
+        `${b.layer.countryCode}/${b.layer.level}`,
+      ),
+    );
+    for (const normalized of ordered) {
       if (
         normalized.layer.level >= 'ADM2' &&
         normalized.layer.hierarchyMode === 'unresolved'
@@ -76,7 +88,7 @@ export class GeoBoundariesImportService {
       };
     try {
       return await this.prisma.$transaction(async (tx) =>
-        this.persist(tx, layers, sourceVersion),
+        this.persist(tx, ordered, sourceVersion),
       );
     } catch (error) {
       if (error instanceof GeoBoundariesImportError) throw error;
@@ -116,30 +128,68 @@ export class GeoBoundariesImportService {
     const all = layers.flatMap((item) =>
       item.features.map((feature) => ({ feature, layer: item.layer })),
     );
+    for (const item of layers.filter((item) => item.layer.level === 'ADM0')) {
+      if (item.features.length !== 1)
+        throw new GeoBoundariesImportError(
+          'hierarchy',
+          `${item.layer.countryCode}/ADM0 requires exactly one country root.`,
+        );
+    }
     const existing = await tx.regionCode.findMany({
       where: {
         sourceId: source.id,
         codeSystem: 'geoBoundaries:shapeID',
-        normalized: { in: all.map(({ feature }) => feature.shapeId) },
+        normalized: {
+          in: all.map(({ feature, layer }) =>
+            providerIdentity(layer, feature.shapeId),
+          ),
+        },
       },
-      select: { normalized: true, regionId: true },
+      select: {
+        normalized: true,
+        regionId: true,
+        region: { select: { parentId: true } },
+      },
     });
     const existingByCode = new Map(
-      existing.map((row) => [row.normalized, row.regionId]),
+      existing.map((row) => [row.normalized, row]),
+    );
+    const existingRegions = await tx.region.findMany({
+      where: { slug: { in: all.map(({ feature }) => slug(feature)) } },
+      select: { id: true, slug: true, parentId: true },
+    });
+    const existingRegionBySlug = new Map(
+      existingRegions.map((region) => [region.slug, region]),
     );
     const regions = new Map<string, string>();
     for (const { feature, layer } of all) {
-      let regionId = existingByCode.get(feature.shapeId);
+      const identity = providerIdentity(layer, feature.shapeId);
+      const prior = existingByCode.get(identity);
+      const existingRegion = existingRegionBySlug.get(slug(feature));
+      let regionId = prior?.regionId ?? existingRegion?.id;
+      let parentId: string | undefined;
+      if (layer.level === 'ADM1') {
+        parentId = regions.get(
+          `${layer.countryCode}/ADM0/${layers.find((item) => item.layer.countryCode === layer.countryCode && item.layer.level === 'ADM0')?.features[0]?.shapeId ?? ''}`,
+        );
+      } else if (layer.level !== 'ADM0') {
+        const parentShapeId = layer.explicitParentMap?.[feature.shapeId];
+        const parentLevel = `ADM${Number(layer.level.slice(3)) - 1}`;
+        parentId = parentShapeId
+          ? regions.get(`${layer.countryCode}/${parentLevel}/${parentShapeId}`)
+          : undefined;
+      }
+      if (layer.level !== 'ADM0' && !parentId)
+        throw new GeoBoundariesImportError(
+          'hierarchy',
+          `${layer.countryCode}/${layer.level} has an unresolved parent.`,
+        );
+      if (existingRegion && existingRegion.parentId !== (parentId ?? null))
+        throw new GeoBoundariesImportError(
+          'hierarchy',
+          'Existing region parent conflicts with reviewed hierarchy.',
+        );
       if (!regionId) {
-        const parentId =
-          layer.level === 'ADM1'
-            ? regions.get(`${layer.countryCode}/ADM0`)
-            : undefined;
-        if (layer.level === 'ADM1' && !parentId)
-          throw new GeoBoundariesImportError(
-            'hierarchy',
-            `ADM1 ${layer.countryCode} requires its ADM0 layer in the same manifest.`,
-          );
         const region = await tx.region.upsert({
           where: { slug: slug(feature) },
           create: {
@@ -150,7 +200,7 @@ export class GeoBoundariesImportService {
             regionType: 'administrative',
             parentId,
           },
-          update: { name: feature.shapeName, parentId },
+          update: { name: feature.shapeName },
         });
         regionId = region.id;
         await tx.regionCode.create({
@@ -159,7 +209,7 @@ export class GeoBoundariesImportService {
             sourceId: source.id,
             codeSystem: 'geoBoundaries:shapeID',
             code: feature.shapeId,
-            normalized: feature.shapeId,
+            normalized: identity,
           },
         });
         await tx.regionAlias.create({
@@ -171,7 +221,7 @@ export class GeoBoundariesImportService {
           },
         });
       }
-      regions.set(`${layer.countryCode}/${layer.level}`, regionId);
+      regions.set(identity, regionId);
       await this.geometries.writeGeometry(
         {
           regionId,

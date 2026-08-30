@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import {
   manifestIdentity,
+  publishReviewedManifest,
+  validateGeoBoundariesHierarchyReview,
   validateGeoBoundariesManifest,
 } from './geoboundaries-manifest';
 import type { GeoBoundariesLayerManifest } from './geoboundaries.types';
@@ -72,5 +74,84 @@ describe('geoBoundaries manifest', () => {
         identitySha256: manifestIdentity(inferred),
       }),
     ).toThrow('Unsupported hierarchy mode');
+  });
+
+  it('publishes a complete, canonical deep review only', () => {
+    const layers = [
+      layer({ level: 'ADM0', featureCount: 1, hierarchyMode: 'country-root' }),
+      layer({
+        level: 'ADM1',
+        boundaryId: 'GHA-ADM1',
+        featureCount: 1,
+        hierarchyMode: 'explicit-parent-map',
+      }),
+      layer({
+        level: 'ADM2',
+        boundaryId: 'GHA-ADM2',
+        featureCount: 2,
+        hierarchyMode: 'unresolved',
+      }),
+    ];
+    const manifest = validateGeoBoundariesManifest({
+      schemaVersion: 1,
+      acquiredAt: '2026-08-30T00:00:00.000Z',
+      layers,
+      identitySha256: manifestIdentity(layers),
+    });
+    const review = validateGeoBoundariesHierarchyReview({
+      schemaVersion: 1,
+      baseManifestIdentitySha256: manifest.identitySha256,
+      layers: [
+        {
+          countryCode: 'GHA',
+          level: 'ADM2',
+          parentLevel: 'ADM1',
+          assignments: [
+            { childShapeId: 'child-b', parentShapeId: 'parent' },
+            { childShapeId: 'child-a', parentShapeId: 'parent' },
+          ],
+        },
+      ],
+    });
+    const published = publishReviewedManifest(
+      manifest,
+      review,
+      new Map([
+        ['GHA/ADM0', new Set(['root'])],
+        ['GHA/ADM1', new Set(['parent'])],
+        ['GHA/ADM2', new Set(['child-a', 'child-b'])],
+      ]),
+    );
+    expect(published.layers[2].explicitParentMap).toEqual({
+      'child-a': 'parent',
+      'child-b': 'parent',
+    });
+    expect(() =>
+      publishReviewedManifest(
+        manifest,
+        { ...review, baseManifestIdentitySha256: 'b'.repeat(64) },
+        new Map(),
+      ),
+    ).toThrow('different base manifest');
+    expect(() =>
+      publishReviewedManifest(
+        manifest,
+        {
+          ...review,
+          layers: [
+            ...review.layers,
+            {
+              countryCode: 'GHA',
+              level: 'ADM3',
+              parentLevel: 'ADM2',
+              assignments: [
+                { childShapeId: 'extra', parentShapeId: 'child-a' },
+              ],
+            },
+          ],
+        },
+        new Map(),
+      ),
+    ).toThrow('not a deep base-manifest layer');
   });
 });

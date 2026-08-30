@@ -11,7 +11,6 @@
     "deepmerge-ts": "^8.0.0"
   },
   "scripts": {
-
     "prepare": "npm run build --workspace=@acres/shared",
     "dev": "npm run dev --workspace=@acres/client",
     "dev:client": "npm run dev --workspace=@acres/client",
@@ -32,6 +31,7 @@
     "analytics:plans": "npm run analytics:plans --workspace=@acres/server",
     "geography:plans": "npm run geography:plans --workspace=@acres/server",
     "geography:provider:acquire": "npm run geography:provider:acquire --workspace=@acres/server --",
+    "geography:provider:review": "npm run geography:provider:review --workspace=@acres/server --",
     "geography:provider:import": "npm run geography:provider:import --workspace=@acres/server --",
     "ops:templates": "scripts/ops/check-production-templates.sh",
     "ops:scan-secrets": "scripts/ops/scan-secrets.sh",
@@ -41,7 +41,6 @@
     "ops:backup": "scripts/ops/backup-postgres.sh",
     "ops:restore": "scripts/ops/restore-postgres.sh",
     "ops:check": "npm run ops:templates && npm run ops:scan-secrets && npm run ops:docker-runtime && npm run ops:audit && npm run ops:readiness-test",
-
     "ops:launch-readiness": "scripts/ops/launch-readiness.sh",
     "db:up": "docker compose up -d postgres",
     "deps:up": "docker compose up -d postgres valkey garage clamav",

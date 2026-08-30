@@ -24,9 +24,17 @@ A new upstream build is a new `RegionSource.sourceVersion`; no automatic
 `current` refresh, source replacement, or retirement occurs.
 
 ADM0 roots and ADM1-to-ADM0 links are explicit within one manifest. ADM2–ADM5
-are blocked when their immediate parent is unresolved; Acres never derives a
-parent from names, centroids, containment, or other spatial heuristics. The
-operator template is [`server/src/geography/ATTRIBUTION.md`](../server/src/geography/ATTRIBUTION.md).
+are acquired but may only be published after `npm run geography:provider:review
+-- --workdir ... --manifest ... --parent-map ... --output ...` validates a
+schema-v1 operator review artifact. It binds complete immediate-parent
+`shapeID` assignments to the base manifest identity and local artifact
+checksums; the output manifest canonicalizes those assignments into its source
+identity. Import resolves parents by `(country, ADM level, shapeID)`, publishes
+every level in one transaction, and aborts rather than reparenting an existing
+global region. Acres never derives a parent from names, centroids, containment,
+or other spatial heuristics. Source precedence, refresh, jurisdictional
+authority, and production publication remain operator decisions. The operator
+template is [`server/src/geography/ATTRIBUTION.md`](../server/src/geography/ATTRIBUTION.md).
 
 ## Current boundary
 
@@ -119,6 +127,7 @@ formula-looking values treated as text. GeoJSON accepts `Feature` and
 geometry type, and assumes SRID 4326 unless future logic detects a contradictory CRS.
 
 XLSX implements pre-parse container classification before sheet parsing:
+
 - detects the OLE Compound File signature (`D0 CF 11 E0 A1 B1 1A E1`) and rejects encrypted or password-protected workbooks (`encrypted_workbook_unsupported`);
 - inspects ZIP archive entry metadata using `fflate` filtering without decompressing entry payloads, rejecting macro payloads (`xl/vbaProject.bin`, normalized and case-insensitive) with `macro_enabled_workbook_unsupported`;
 - enforces `MAX_XLSX_ENTRIES = 1000` entry count cap against archive abuse (`xlsx_entry_limit_exceeded`);
@@ -224,6 +233,7 @@ only.
 ### Ingestion progress streaming
 
 `GET /api/v1/ingestion-runs/:runId/events` streams live ingestion progress via Server-Sent Events (SSE):
+
 - Scoped by active organization context and requires `ingestion.read` permission.
 - Pre-flight checks verify the run exists and belongs to the organization before starting the stream.
 - Emits `ingestion.progress` events at 1500ms intervals until reaching a terminal state (`published`, `failed`, `cancelled`).
@@ -233,6 +243,7 @@ only.
 ### Browser dataset upload, mapping, and ingestion workflow
 
 Prompt 37 implemented the browser-facing dataset workspace:
+
 - **Routes**: `/app/datasets` (list datasets, publication summaries, versions count), `/app/datasets/new` (dataset creation form), `/app/datasets/[datasetId]` (dataset detail, version history table, and interactive ingestion pipeline).
 - **Direct storage upload**: Client inspects selected CSV/XLSX/GeoJSON files, computes the SHA-256 hex digest using Web Crypto `crypto.subtle.digest`, initiates upload via `POST /api/v1/uploads`, issues direct presigned `PUT` to object storage, and completes upload via `POST /api/v1/uploads/:id/complete` verifying checksum and byte counts.
 - **Interactive mapping**: Step 2 lets authors configure `regionColumn` / `regionCodeColumn` and map source columns to typed metric keys, units, and aggregation functions via `POST /api/v1/datasets/:id/mappings`.

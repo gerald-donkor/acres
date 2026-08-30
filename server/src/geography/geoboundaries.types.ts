@@ -47,6 +47,23 @@ export interface GeoBoundariesManifest {
   readonly identitySha256: string;
 }
 
+export interface GeoBoundariesHierarchyReviewLayer {
+  readonly countryCode: string;
+  readonly level: Exclude<GeoBoundariesLevel, 'ADM0' | 'ADM1'>;
+  readonly parentLevel: GeoBoundariesLevel;
+  readonly assignments: readonly {
+    readonly childShapeId: string;
+    readonly parentShapeId: string;
+  }[];
+}
+
+/** Operator evidence, bound to one acquired manifest; it is not an authority claim. */
+export interface GeoBoundariesHierarchyReview {
+  readonly schemaVersion: 1;
+  readonly baseManifestIdentitySha256: string;
+  readonly layers: readonly GeoBoundariesHierarchyReviewLayer[];
+}
+
 export interface GeoBoundariesFeature {
   readonly shapeId: string;
   readonly shapeName: string;

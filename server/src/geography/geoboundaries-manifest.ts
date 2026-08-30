@@ -2,14 +2,24 @@ import { createHash } from 'node:crypto';
 import {
   GEOBOUNDARIES_MANIFEST_SCHEMA_VERSION,
   GEOBOUNDARIES_MAX_ARTIFACT_BYTES,
+  GEOBOUNDARIES_MAX_FEATURES,
   GEOBOUNDARIES_MAX_LAYERS,
   type GeoBoundariesLayerManifest,
+  type GeoBoundariesHierarchyReview,
+  type GeoBoundariesHierarchyReviewLayer,
   type GeoBoundariesLevel,
   type GeoBoundariesManifest,
   type HierarchyMode,
 } from './geoboundaries.types';
 
-const LEVELS = new Set<GeoBoundariesLevel>(['ADM0', 'ADM1']);
+const LEVELS = new Set<GeoBoundariesLevel>([
+  'ADM0',
+  'ADM1',
+  'ADM2',
+  'ADM3',
+  'ADM4',
+  'ADM5',
+]);
 const HIERARCHY_MODES = new Set<HierarchyMode>([
   'country-root',
   'explicit-parent-map',
@@ -147,7 +157,10 @@ function layer(value: unknown): GeoBoundariesLayerManifest {
   if (
     (level === 'ADM0' && hierarchyMode !== 'country-root') ||
     (level === 'ADM1' && hierarchyMode === 'unresolved') ||
-    (level >= 'ADM2' &&
+    ((level === 'ADM2' ||
+      level === 'ADM3' ||
+      level === 'ADM4' ||
+      level === 'ADM5') &&
       hierarchyMode !== 'unresolved' &&
       hierarchyMode !== 'explicit-parent-map')
   )
@@ -182,8 +195,15 @@ function layer(value: unknown): GeoBoundariesLayerManifest {
         'explicitParentMap requires explicit-parent-map mode.',
       );
     const rawParentMap = object(item.explicitParentMap, 'explicitParentMap');
-    explicitParentMap = {};
-    for (const [child, parent] of Object.entries(rawParentMap)) {
+    const entries = Object.entries(rawParentMap).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    if (entries.length === 0 || entries.length > (item.featureCount as number))
+      throw new GeoBoundariesManifestError(
+        'explicitParentMap is outside feature bounds.',
+      );
+    explicitParentMap = Object.create(null) as Record<string, string>;
+    for (const [child, parent] of entries) {
       explicitParentMap[text(child, 'explicit parent child', 256)] = text(
         parent,
         'explicit parent value',
@@ -219,11 +239,24 @@ function layer(value: unknown): GeoBoundariesLayerManifest {
 export function canonicalManifestContent(
   layers: readonly GeoBoundariesLayerManifest[],
 ): string {
-  const sorted = [...layers].sort((a, b) =>
-    `${a.countryCode}/${a.level}/${a.boundaryId}`.localeCompare(
-      `${b.countryCode}/${b.level}/${b.boundaryId}`,
-    ),
-  );
+  const sorted = [...layers]
+    .map((layer) => ({
+      ...layer,
+      ...(layer.explicitParentMap
+        ? {
+            explicitParentMap: Object.fromEntries(
+              Object.entries(layer.explicitParentMap).sort(([a], [b]) =>
+                a.localeCompare(b),
+              ),
+            ),
+          }
+        : {}),
+    }))
+    .sort((a, b) =>
+      `${a.countryCode}/${a.level}/${a.boundaryId}`.localeCompare(
+        `${b.countryCode}/${b.level}/${b.boundaryId}`,
+      ),
+    );
   return JSON.stringify({
     schemaVersion: GEOBOUNDARIES_MANIFEST_SCHEMA_VERSION,
     layers: sorted,
@@ -268,6 +301,30 @@ export function validateGeoBoundariesManifest(
       throw new GeoBoundariesManifestError(`Duplicate selection ${key}.`);
     selection.add(key);
   }
+  for (const item of layers) {
+    if (
+      (item.level === 'ADM2' ||
+        item.level === 'ADM3' ||
+        item.level === 'ADM4' ||
+        item.level === 'ADM5') &&
+      item.hierarchyMode === 'explicit-parent-map' &&
+      !item.explicitParentMap
+    )
+      throw new GeoBoundariesManifestError(
+        'Deep explicit-parent-map layers require a parent map.',
+      );
+    if (
+      item.level !== 'ADM0' &&
+      item.level !== 'ADM1' &&
+      item.hierarchyMode === 'explicit-parent-map'
+    ) {
+      const parent = `ADM${Number(item.level.slice(3)) - 1}`;
+      if (!selection.has(`${item.countryCode}/${parent}`))
+        throw new GeoBoundariesManifestError(
+          'Reviewed deep layers require their immediate parent layer.',
+        );
+    }
+  }
   const identitySha256 = text(manifest.identitySha256, 'identitySha256', 64);
   if (
     !SHA256.test(identitySha256) ||
@@ -282,4 +339,183 @@ export function validateGeoBoundariesManifest(
     layers,
     identitySha256,
   };
+}
+
+function immediateParent(
+  level: GeoBoundariesLevel,
+): GeoBoundariesLevel | undefined {
+  const number = Number(level.slice(3));
+  return number > 1 ? (`ADM${number - 1}` as GeoBoundariesLevel) : undefined;
+}
+
+export function validateGeoBoundariesHierarchyReview(
+  value: unknown,
+): GeoBoundariesHierarchyReview {
+  const review = object(value, 'hierarchy review');
+  if (
+    Object.keys(review).some(
+      (key) =>
+        !['schemaVersion', 'baseManifestIdentitySha256', 'layers'].includes(
+          key,
+        ),
+    )
+  )
+    throw new GeoBoundariesManifestError('Unknown hierarchy review key.');
+  if (
+    review.schemaVersion !== 1 ||
+    !Array.isArray(review.layers) ||
+    review.layers.length === 0 ||
+    review.layers.length > GEOBOUNDARIES_MAX_LAYERS
+  )
+    throw new GeoBoundariesManifestError(
+      'Invalid hierarchy review schemaVersion or layer count.',
+    );
+  const baseManifestIdentitySha256 = text(
+    review.baseManifestIdentitySha256,
+    'baseManifestIdentitySha256',
+    64,
+  );
+  if (!SHA256.test(baseManifestIdentitySha256))
+    throw new GeoBoundariesManifestError(
+      'Invalid hierarchy review base identity.',
+    );
+  const seenLayers = new Set<string>();
+  const layers = review.layers.map((raw): GeoBoundariesHierarchyReviewLayer => {
+    const item = object(raw, 'review layer');
+    if (
+      Object.keys(item).some(
+        (key) =>
+          !['countryCode', 'level', 'parentLevel', 'assignments'].includes(key),
+      )
+    )
+      throw new GeoBoundariesManifestError('Unknown review layer key.');
+    const countryCode = text(item.countryCode, 'countryCode', 3);
+    const level = text(item.level, 'level', 4) as GeoBoundariesLevel;
+    const parentLevel = immediateParent(level);
+    if (
+      !ISO3.test(countryCode) ||
+      !parentLevel ||
+      item.parentLevel !== parentLevel
+    )
+      throw new GeoBoundariesManifestError(
+        'Review layers require a deep ADM level and immediate parent.',
+      );
+    const key = `${countryCode}/${level}`;
+    if (seenLayers.has(key))
+      throw new GeoBoundariesManifestError(
+        `Duplicate hierarchy review layer ${key}.`,
+      );
+    seenLayers.add(key);
+    if (
+      !Array.isArray(item.assignments) ||
+      item.assignments.length === 0 ||
+      item.assignments.length > GEOBOUNDARIES_MAX_FEATURES
+    )
+      throw new GeoBoundariesManifestError(
+        'Review assignments are outside accepted bounds.',
+      );
+    const seenChildren = new Set<string>();
+    const assignments = item.assignments
+      .map((rawAssignment) => {
+        const assignment = object(rawAssignment, 'review assignment');
+        if (
+          Object.keys(assignment).some(
+            (key) => key !== 'childShapeId' && key !== 'parentShapeId',
+          )
+        )
+          throw new GeoBoundariesManifestError(
+            'Unknown review assignment key.',
+          );
+        const childShapeId = text(assignment.childShapeId, 'childShapeId', 256);
+        if (seenChildren.has(childShapeId))
+          throw new GeoBoundariesManifestError(
+            'Duplicate review childShapeId.',
+          );
+        seenChildren.add(childShapeId);
+        return {
+          childShapeId,
+          parentShapeId: text(assignment.parentShapeId, 'parentShapeId', 256),
+        };
+      })
+      .sort((a, b) => a.childShapeId.localeCompare(b.childShapeId));
+    return {
+      countryCode,
+      level: level as Exclude<GeoBoundariesLevel, 'ADM0' | 'ADM1'>,
+      parentLevel,
+      assignments,
+    };
+  });
+  return { schemaVersion: 1, baseManifestIdentitySha256, layers };
+}
+
+export function publishReviewedManifest(
+  manifest: GeoBoundariesManifest,
+  review: GeoBoundariesHierarchyReview,
+  featureIds: ReadonlyMap<string, ReadonlySet<string>>,
+): GeoBoundariesManifest {
+  if (review.baseManifestIdentitySha256 !== manifest.identitySha256)
+    throw new GeoBoundariesManifestError(
+      'Hierarchy review is bound to a different base manifest.',
+    );
+  const reviews = new Map(
+    review.layers.map((item) => [`${item.countryCode}/${item.level}`, item]),
+  );
+  for (const key of reviews.keys()) {
+    const matched = manifest.layers.find(
+      (layer) => `${layer.countryCode}/${layer.level}` === key,
+    );
+    if (!matched || matched.level === 'ADM0' || matched.level === 'ADM1')
+      throw new GeoBoundariesManifestError(
+        `Hierarchy review layer ${key} is not a deep base-manifest layer.`,
+      );
+  }
+  const layers = manifest.layers.map((layer) => {
+    if (layer.level === 'ADM0' || layer.level === 'ADM1') return layer;
+    const key = `${layer.countryCode}/${layer.level}`;
+    const childIds = featureIds.get(key);
+    const parentIds = featureIds.get(
+      `${layer.countryCode}/${immediateParent(layer.level)}`,
+    );
+    const item = reviews.get(key);
+    if (
+      !childIds ||
+      !parentIds ||
+      !item ||
+      item.assignments.length !== childIds.size
+    )
+      throw new GeoBoundariesManifestError(`Deep layer ${key} is unresolved.`);
+    const explicitParentMap = Object.create(null) as Record<string, string>;
+    for (const assignment of item.assignments) {
+      if (
+        !childIds.has(assignment.childShapeId) ||
+        !parentIds.has(assignment.parentShapeId)
+      )
+        throw new GeoBoundariesManifestError(
+          `Hierarchy review has unknown identity for ${key}.`,
+        );
+      explicitParentMap[assignment.childShapeId] = assignment.parentShapeId;
+    }
+    return {
+      ...layer,
+      hierarchyMode: 'explicit-parent-map' as const,
+      explicitParentMap,
+    };
+  });
+  if (
+    layers.some(
+      (layer) =>
+        layer.level !== 'ADM0' &&
+        layer.level !== 'ADM1' &&
+        layer.hierarchyMode !== 'explicit-parent-map',
+    )
+  )
+    throw new GeoBoundariesManifestError(
+      'All deep layers must be reviewed before publication.',
+    );
+  return validateGeoBoundariesManifest({
+    schemaVersion: 1,
+    acquiredAt: manifest.acquiredAt,
+    layers,
+    identitySha256: manifestIdentity(layers),
+  });
 }
