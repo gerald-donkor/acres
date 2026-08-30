@@ -48,6 +48,7 @@ function readJson(path) {
 }
 
 const compose = readYaml('infra/compose/docker-compose.production.example.yml');
+const localCompose = readYaml('docker-compose.yml');
 const services = compose && compose.services ? compose.services : {};
 const requiredServices = [
   'caddy',
@@ -68,6 +69,72 @@ for (const service of requiredServices) {
     process.exit(1);
   }
 }
+
+function mountDetails(entry) {
+  if (typeof entry === 'string') {
+    const parts = entry.split(':');
+    const mode = /^(?:ro|rw|z|Z|delegated|cached|consistent)(?:,[A-Za-z]+)*$/.test(
+      parts.at(-1) || '',
+    )
+      ? parts.pop()
+      : undefined;
+    const target = parts.pop();
+    return {
+      source: parts.join(':'),
+      target,
+      persistent: true,
+      writable: !mode?.split(',').includes('ro'),
+    };
+  }
+
+  if (entry && typeof entry === 'object') {
+    return {
+      source: entry.source,
+      target: entry.target,
+      persistent: entry.type === 'volume' || entry.type === 'bind',
+      writable: entry.read_only !== true && entry.readOnly !== true,
+    };
+  }
+
+  return {};
+}
+
+function assertPostgres18Mount(composeDocument, path) {
+  const postgresServices = Object.entries(composeDocument?.services || {}).filter(
+    ([, service]) => /^postgis\/postgis:18-/.test(String(service?.image || '')),
+  );
+
+  if (postgresServices.length === 0) {
+    console.error(`ops template check failed: ${path} missing postgis/postgis:18-* service`);
+    process.exit(1);
+  }
+
+  for (const [name, service] of postgresServices) {
+    const mounts = (service.volumes || []).map(mountDetails);
+    const postgresMount = mounts.find(({ target }) => target === '/var/lib/postgresql');
+    if (!postgresMount) {
+      console.error(
+        `ops template check failed: ${path} ${name} must mount persistent storage at /var/lib/postgresql`,
+      );
+      process.exit(1);
+    }
+    if (!postgresMount.source || !postgresMount.persistent || !postgresMount.writable) {
+      console.error(
+        `ops template check failed: ${path} ${name} must use a writable bind or volume mount at /var/lib/postgresql`,
+      );
+      process.exit(1);
+    }
+    if (mounts.some(({ target }) => target === '/var/lib/postgresql/data')) {
+      console.error(
+        `ops template check failed: ${path} ${name} must not mount /var/lib/postgresql/data`,
+      );
+      process.exit(1);
+    }
+  }
+}
+
+assertPostgres18Mount(localCompose, 'docker-compose.yml');
+assertPostgres18Mount(compose, 'infra/compose/docker-compose.production.example.yml');
 
 for (const [name, service] of Object.entries(services)) {
   if (name !== 'caddy' && Array.isArray(service.ports) && service.ports.length > 0) {

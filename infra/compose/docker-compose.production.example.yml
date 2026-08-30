@@ -113,7 +113,7 @@ services:
     expose:
       - "5432"
     volumes:
-      - ${ACRES_POSTGRES_ENCRYPTED_MOUNT:?set encrypted Postgres mount path}:/var/lib/postgresql/data
+      - ${ACRES_POSTGRES_ENCRYPTED_MOUNT:?set encrypted Postgres mount path}:/var/lib/postgresql
       - ../../scripts/db/bootstrap-production-roles.sh:/docker-entrypoint-initdb.d/001-bootstrap-production-roles.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

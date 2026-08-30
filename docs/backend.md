@@ -528,6 +528,26 @@ values (`acres_migrator_dev_password` etc.), the same pattern
 `server/.env.example`'s `SESSION_SECRET` placeholder already uses — a real
 deployment overrides all three (phase 12).
 
+### 8.1.1 PostgreSQL 18 Compose data-directory contract
+
+Implemented by `prompts/48-postgresql-18-compose-volume-layout.md` on
+2026-08-30. PostgreSQL 18's container image owns a major-version-specific
+subdirectory beneath `/var/lib/postgresql`; both the local named volume and the
+production encrypted host mount therefore target `/var/lib/postgresql`, not
+the obsolete `/var/lib/postgresql/data`. No custom `PGDATA` preserves the old
+path. The static `npm run ops:templates` check parses both Compose documents,
+requires every `postgis/postgis:18-*` service to mount the correct target, and
+rejects the obsolete target without requiring Docker.
+
+This was exposed by the first attempted local Compose boot on 2026-08-30:
+`acres-postgres-1` restarted before initialization because the image reported
+an unused `/var/lib/postgresql/data` mount. The newly created
+`acres_acres_pgdata` volume from that failed first boot contained no usable
+Acres database and can be recreated after its identity and failure state are
+verified. That conclusion is limited to this failed initialization; never
+delete or relocate an existing populated volume as part of a PostgreSQL major
+version change.
+
 `scripts/db/harden-runtime-privileges.sh` runs **after** migrations. Prisma
 creates `_prisma_migrations` before applying the first migration, so the broad
 future-table default privileges would otherwise let runtime roles mutate

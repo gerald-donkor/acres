@@ -32,6 +32,12 @@ Node 24 processes from the same server image. The API has
 the single scheduler path until a separate distributed scheduler decision
 exists.
 
+The production PostgreSQL encrypted host mount targets `/var/lib/postgresql`.
+PostgreSQL 18 manages its major-version-specific data subdirectory beneath that
+mount; `/var/lib/postgresql/data` is not a compatible persistent target for the
+reference image. This changes neither the encryption/key-recovery requirement
+nor the separate production upgrade, backup, and restore responsibilities.
+
 ### Prometheus Metrics (`/metrics`)
 
 The NestJS API exposes a private, version-neutral `GET /metrics` endpoint
