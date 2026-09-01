@@ -120,6 +120,18 @@ describe('plan-evaluator', () => {
       expect(result.passed).toBe(false);
       expect(result.reasons[0]).toMatch(/exceeded regression guard threshold/);
     });
+
+    it('fails when planning time exceeds the regression guard threshold', () => {
+      const result = evaluateQueryPlan(
+        'slowPlan',
+        'SELECT 1',
+        [],
+        sampleIndexScanPlan,
+        { maxPlanningTimeMs: 0.01 },
+      );
+      expect(result.passed).toBe(false);
+      expect(result.reasons[0]).toMatch(/Planning time/);
+    });
   });
 
   describe('redactParams', () => {

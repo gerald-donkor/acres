@@ -235,7 +235,11 @@ All runs are logged to the `JobRun` audit table.
 
 ## CI State
 
-CI has `permissions: contents: read` and pins all actions to immutable 40-character commit SHAs. The `checks` job runs the full lint, typecheck, build, contract drift, database role/migration, and server test sequence, plus `npm run ops:check`. The Docker job builds the server image and smoke-tests `/health` with `push: false`.
+CI has `permissions: contents: read` and pins all actions to immutable
+40-character commit SHAs. The `checks` job runs the full lint, typecheck, build,
+contract drift, database role/migration, fail-closed server E2E, and separate
+`npm run geography:plans` sequence, plus `npm run ops:check`. The Docker job
+builds the server image and smoke-tests `/health` with `push: false`.
 
 ## No-AI Production Posture
 

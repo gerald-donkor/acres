@@ -6,6 +6,16 @@ import { createRealDbTestApp, truncateAll } from './helpers/real-db-test-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PrismaClient } from '../src/generated/prisma/client';
 
+function redactedDatabaseTarget(): string {
+  try {
+    const parsed = new URL(process.env.DATABASE_URL ?? '');
+    parsed.password = '***';
+    return parsed.toString();
+  } catch {
+    return 'the configured acres_test target';
+  }
+}
+
 /**
  * Real-database integration suite. Unlike `api.e2e-spec.ts` (which overrides
  * `PrismaService` with a recorded double), every test here runs against a
@@ -24,13 +34,11 @@ describe('Acres API — real database', () => {
 
     try {
       await prisma.$queryRaw`SELECT 1`;
-    } catch (error) {
+    } catch {
       throw new Error(
-        `acres_test database is not reachable at ${process.env.DATABASE_URL}. ` +
+        `acres_test database is not reachable at ${redactedDatabaseTarget()}. ` +
           'Run "npm run db:up" (or the native bootstrap in prompts/18-database-infrastructure.md) ' +
-          `and apply migrations before running this suite. Underlying error: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          'and apply migrations before running this suite.',
       );
     }
   });

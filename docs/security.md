@@ -365,12 +365,12 @@ target to partly implemented. The implementation record is
 - `RegionGeometry` uses a reviewed SQL PostGIS geometry column and GiST index;
   Prisma does not model the raw geometry column.
 
-Residual Phase 7A risks:
+Residual Phase 7 risks and evidence:
 
-- Docker is not installed in the execution environment, and the final
-  composite-constraint migration was applied to an incrementally upgraded local
-  database. Migration apply-from-zero and PostGIS constraint/query-plan proof
-  still need to run on a dependency-capable host.
+- Phase 7C ran the complete migration chain from zero in an isolated temporary
+  PostgreSQL 18/PostGIS 3.6 database, then removed that exact database. The
+  fail-closed geography E2E suite now covers synthetic deep hierarchy,
+  transaction rollback, PostGIS validity, and foreign-reference rejection.
 - Parser isolation provides fault containment via single-use Node child
   processes (NODE_ENV only, 15s timeout watchdog, 192MB heap ceiling, untrusted
   IPC validation), but OS/container sandboxing (seccomp, UID isolation, network
@@ -383,11 +383,13 @@ Residual Phase 7A risks:
   maps expected failures to stable domain codes without leaking SQL or PostGIS
   internals. This is the internal administrative/importer boundary; it is not
   public, tenant-scoped, or provider-importing.
-- An opt-in test-DB GiST-plan harness (`npm run geography:plans`) exists; it is
-  not measured plan evidence until it has run on a dependency-capable host.
-- Provider geography provenance and licence approval, OS/container sandboxing,
-  migration apply-from-zero, and real Garage/Valkey/ClamAV/restart/dead-letter
-  proof on a dependency-capable environment remain required.
+- The measured `npm run geography:plans` evidence requires the named GiST and
+  `(parentId, level)` indexes without disabling sequential scans or otherwise
+  coercing the planner.
+- These controls strengthen evidence for TM-07 and TM-17 but do not mitigate an
+  upstream provider compromise, establish legal or political authority, replace
+  OS/container parser isolation, or provide the still-open real Garage, Valkey,
+  ClamAV, restart, orphan, and dead-letter drills.
 
 ## 15. Phase 12A operations foundation update
 

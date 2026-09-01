@@ -183,6 +183,11 @@ export function evaluateQueryPlan(
       `Execution time ${parsed.executionTimeMs.toFixed(2)}ms exceeded regression guard threshold ${thresholds.maxExecutionTimeMs}ms.`,
     );
   }
+  if (parsed.planningTimeMs > thresholds.maxPlanningTimeMs) {
+    reasons.push(
+      `Planning time ${parsed.planningTimeMs.toFixed(2)}ms exceeded regression guard threshold ${thresholds.maxPlanningTimeMs}ms.`,
+    );
+  }
 
   const passed = reasons.length === 0;
 

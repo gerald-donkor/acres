@@ -661,16 +661,24 @@ The implementation record is [`ingestion.md`](ingestion.md).
 - The queue adapter opens Valkey lazily. API boot and contract generation do
   not require queue connectivity; enqueue/readiness still do.
 
-Current: the private global-geography `PostgisRegionGeometryRepository`
+Current: the named geoBoundaries gbOpen operator boundary supports reviewed
+ADM0-ADM5 hierarchy manifests and transactionally publishes arbitrary input
+order without heuristic parent inference. The private global-geography
+`PostgisRegionGeometryRepository`
 validates bounded 2D GeoJSON in framework-free TypeScript, binds values in tagged
 Prisma SQL, evaluates SRID/type/non-empty/topological validity in PostGIS, owns
-`(regionId, sourceId)` unique identity, and has an opt-in test-DB GiST-plan
-harness (`npm run geography:plans`). Dashboard, report, and analytics surfaces
-are current and recorded in their own canonical documents
+`(regionId, sourceId)` unique identity, and has a test-DB plan
+harness (`npm run geography:plans`). Phase 7C ran that harness and the
+fail-closed database E2E suite against PostgreSQL 18/PostGIS 3.6; the two
+bounded plan assertions used the GiST spatial and composite hierarchy indexes.
+Dashboard, report, and analytics surfaces are current and recorded in their own
+canonical documents
 ([`dashboards.md`](dashboards.md), [`reports.md`](reports.md),
 [`analytics.md`](analytics.md)).
 
-Still target/deferred: named licensed provider geography imports and governance,
-browser mapping UI, OS-level parser sandboxing, and dependency-capable proof for
-migration apply-from-zero, Garage, Valkey, and ClamAV. The plan harness is not
-measured plan evidence until it has run on a dependency-capable host.
+Still target/deferred: live provider publication and its legal/authority,
+precedence, refresh, dispute, and retirement decisions; browser mapping UI;
+OS-level parser sandboxing; and real Garage, Valkey, ClamAV, restart, orphan,
+and dead-letter drills. Phase 7C is controlled synthetic/database evidence; it
+does not publish provider data or resolve those governance and operations
+decisions.

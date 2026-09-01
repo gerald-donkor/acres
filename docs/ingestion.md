@@ -36,6 +36,26 @@ or other spatial heuristics. Source precedence, refresh, jurisdictional
 authority, and production publication remain operator decisions. The operator
 template is [`server/src/geography/ATTRIBUTION.md`](../server/src/geography/ATTRIBUTION.md).
 
+### Phase 7C database evidence
+
+`server/test/geography-database.e2e-spec.ts` is an explicit fail-closed
+PostgreSQL/PostGIS suite. It sends shuffled synthetic ADM0-ADM3 layers through
+`GeoBoundariesImportService` and proves exact provider codes and adjacency,
+complete aliases/geometries, identical-import idempotency, conflict-safe
+no-reparent behavior, late-geometry transaction rollback, supported PostGIS
+types, foreign-reference mapping, and interior/edge/exterior point semantics.
+It captures exact source and region IDs for cleanup and does not select or
+delete fixtures by a broad provider prefix.
+
+`npm run geography:plans` now creates a run-scoped synthetic hierarchy and
+grid, reports both the GiST spatial lookup and bounded `(parentId, level)`
+lookup, and requires `RegionGeometry_geometry_gist_idx` and
+`Region_parentId_level_idx` without planner coercion. The database-free suite
+passed 26/26 suites and 157/157 tests; the real server E2E gate passed 4/4
+suites and 107/107 tests; and the geography report passed both plans. Live
+provider publication, legal review, precedence, refresh, parser OS isolation,
+and Garage/Valkey/ClamAV drills remain open.
+
 ## Current boundary
 
 Phase 7A adds the foundation required to publish an immutable dataset version
@@ -305,10 +325,10 @@ validity enforcement, and spatial query plan proof:
   `sourcePrecision`, `metadata`, `createdAt`, `updatedAt`—no raw geometry payloads).
 - **Query Plan Evidence Harness**: `npm run geography:plans`
   (`server/src/geography/seed/check-geography-plans.ts`) runs under `NODE_ENV=test`
-  against `acres_test`, creates deterministic synthetic grid fixtures through the
-  production repository, runs `ANALYZE`, evaluates `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`,
-  and verifies `RegionGeometry_geometry_gist_idx` participation, cleaning up fixtures
-  in `finally`.
+  against `acres_test`, creates run-scoped synthetic grid and hierarchy fixtures
+  through the production repository, evaluates
+  `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, and verifies both named spatial and
+  hierarchy indexes, cleaning up only captured source and region IDs.
 
 ## Verification state
 
@@ -334,16 +354,22 @@ npm run ops:check
 All operational preflights, templates, secret scans, and readiness tests pass cleanly
 
 npm run test --workspace=@acres/server -- --runInBand
-Test Suites: 24 passed, 24 total
-Tests: 153 passed, 153 total
+Test Suites: 26 passed, 26 total
+Tests: 157 passed, 157 total
+
+npm run test:server
+Test Suites: 4 passed, 4 total
+Tests: 107 passed, 107 total
+
+npm run geography:plans
+Overall result: ALL PLANS PASSED (2/2 passed)
 ```
 
 ## Residual gaps
 
-- No Phase 8 observation or metric tables are created.
 - XLSX container inspection and child-process fault containment isolation are implemented (pre-parse OLE magic detection, case-insensitive VBA project rejection, 1000-entry cap, fail-closed container error classification, single-use child process execution with isolated environment and resource bounds). OS-level container sandboxing (seccomp, network namespaces) remains an infrastructure concern.
 - Real PostGIS geometry write and validation repository (`PostgisRegionGeometryRepository`), unique identity constraint, and spatial index query path are implemented.
-- The gbOpen operator import is implemented; other providers, source precedence,
-  deeper hierarchy governance, real provider publication, and dependency-capable
-  execution (when PostgreSQL/Garage/Valkey/ClamAV services are not local) remain
-  future operational work.
+- The gbOpen operator import and reviewed ADM0-ADM5 hierarchy boundary are
+  implemented. Other providers, source precedence, refresh/retirement/dispute
+  policy, legal authority, live provider publication, and real
+  Garage/Valkey/ClamAV failure drills remain future operational work.

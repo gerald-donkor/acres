@@ -6,8 +6,27 @@
 process.env.NODE_ENV = 'test';
 process.env.PORT = '3999';
 process.env.CLIENT_ORIGIN = 'http://localhost:3000';
-process.env.DATABASE_URL =
+const databaseUrl =
+  process.env.DATABASE_URL ??
   'postgresql://acres_test:acres_test_dev_password@localhost:5432/acres_test?schema=public';
+let parsedDatabaseUrl: URL;
+try {
+  parsedDatabaseUrl = new URL(databaseUrl);
+} catch {
+  throw new Error(
+    'Server E2E DATABASE_URL must be a valid PostgreSQL URL for the acres_test role and acres_test database.',
+  );
+}
+if (
+  !['postgres:', 'postgresql:'].includes(parsedDatabaseUrl.protocol) ||
+  decodeURIComponent(parsedDatabaseUrl.username) !== 'acres_test' ||
+  decodeURIComponent(parsedDatabaseUrl.pathname) !== '/acres_test'
+) {
+  throw new Error(
+    'Server E2E DATABASE_URL must target the acres_test role and acres_test database; refusing to initialize a destructive test suite against another target.',
+  );
+}
+process.env.DATABASE_URL = databaseUrl;
 process.env.SESSION_COOKIE_NAME = 'acres_session';
 process.env.SESSION_TTL_DAYS = '30';
 process.env.SESSION_SECRET = 'test-secret-that-is-at-least-32-characters';

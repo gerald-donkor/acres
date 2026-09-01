@@ -315,6 +315,13 @@ Status: implemented by `prompts/23-versioned-rest-graphql-contracts.md`.
   safely with useful issues, region queries are correct/measured, no tenant or
   partial-data leak.
 
+### Phase 7C evidence record
+
+Prompt 49 adds the Phase 7 database evidence unit: fail-closed PostgreSQL/PostGIS
+E2E coverage and separate synthetic spatial/hierarchy plan gates in CI. It is
+not a declaration that provider governance, live publication, or all Phase 7
+operations work is complete.
+
 ## 9. Phase 8 — metrics and deterministic analytics
 
 - **Depends on:** phase 7 published normalized versions.

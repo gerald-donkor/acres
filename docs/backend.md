@@ -2098,9 +2098,43 @@ The escalated local `acres_test` migration deploy then applied pending
 migrations. Post-review tenant-key hardening was recorded as
 `20260824194500_ingestion_tenant_composite_keys`, applied through Prisma, and
 `prisma migrate status` reported the database up to date. Full `test:server`
-passed after that. Migration apply-from-zero outside this incrementally upgraded
-local database, PostGIS geometry validity proof, and real Garage/Valkey/ClamAV
-worker run remain required on a dependency-capable host.
+passed after that. At that checkpoint, migration apply-from-zero outside this
+incrementally upgraded local database, PostGIS geometry validity proof, and real
+Garage/Valkey/ClamAV worker execution still required a dependency-capable host.
+
+### Phase 7C database evidence
+
+Prompt 49 removes the silently skipping source-tree PostGIS spec. The explicit
+`server/test/geography-database.e2e-spec.ts` uses the production importer and
+geometry repository with captured synthetic fixture IDs; it fails closed when
+the configured database is unavailable. `server/test/setup-env.ts` now keeps an
+explicit caller-supplied `DATABASE_URL`, which made an unreachable-port run
+exit nonzero with the actionable PostgreSQL/PostGIS setup error.
+
+The corrected PostgreSQL 18 Compose service was healthy during verification.
+The idempotent role bootstrap, migration deploy to `acres` and `acres_test`,
+and runtime privilege hardening completed successfully. A separately named
+`acres_p49_verify_20260831` database was created with `acres_migrator`
+ownership. Its first migration attempt demonstrated the documented requirement
+that the PostgreSQL administrator bootstrap PostGIS before the non-superuser
+migrator runs. After that prerequisite was applied to a fresh temporary
+database, all 17 committed migrations applied, migration status was current,
+the expected geography tables and both indexes were present, and the exact
+temporary database was dropped and confirmed absent.
+
+The database-free server suite passed 26/26 suites and 157/157 tests. The full
+server E2E gate passed 4/4 suites and 107/107 tests. `npm run geography:plans`
+passed 2/2 plans with `RegionGeometry_geometry_gist_idx` and
+`Region_parentId_level_idx`. The required `npm run analytics:plans` regression
+run reached the pre-existing Phase 8 seed boundary and failed before plan
+evaluation with PostgreSQL `42501`: its `Organization` insert lacks the
+transaction-local organization context required by forced RLS. Prompt 49 does
+not weaken that policy or change the analytics fixture lifecycle because
+analytics is an explicit non-goal; that defect remains a separately scoped
+Phase 8 follow-up.
+
+CI runs the full server E2E gate and then the separately named geography plan
+gate after migrations and privilege hardening.
 
 ---
 
