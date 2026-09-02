@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AcresConfigService } from '../config/acres-config.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import { JobRunsService } from './job-runs.service';
 
 export const UPLOADS_RETENTION_JOB = 'uploads.purge-expired';
@@ -18,6 +19,7 @@ export class RetentionMaintenanceJob {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly tenants: TenantTransactionService,
     private readonly runs: JobRunsService,
     private readonly config: AcresConfigService,
   ) {}
@@ -38,7 +40,7 @@ export class RetentionMaintenanceJob {
 
     try {
       const now = new Date();
-      const count = await this.prisma.$transaction(async (tx) => {
+      const count = await this.tenants.workerScoped(async (tx) => {
         const expired = await tx.upload.findMany({
           where: {
             state: 'pending_upload',

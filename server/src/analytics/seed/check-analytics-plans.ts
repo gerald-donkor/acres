@@ -79,6 +79,11 @@ export async function runAnalyticsPlanChecks(
     // 3. Seed or refresh deterministic scale data
     const plan = options.plan ?? buildDeterministicSeedPlan();
     const summary = await seedAnalyticsScale(prisma, plan);
+    await prisma.$executeRawUnsafe('ANALYZE "MetricAggregate"');
+    await prisma.$executeRawUnsafe('ANALYZE "MetricObservation"');
+    await prisma.$executeRawUnsafe('ANALYZE "MetricDefinition"');
+    await prisma.$executeRawUnsafe('ANALYZE "MetricAggregateLineage"');
+    await prisma.$executeRawUnsafe('ANALYZE "DashboardView"');
 
     const orgId = summary.sampleIds.primaryOrgId;
     const metricId = summary.sampleIds.metricId;

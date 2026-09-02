@@ -269,7 +269,9 @@ Status: implemented by `prompts/23-versioned-rest-graphql-contracts.md`.
   `sql-optimization-patterns` for polling/cleanup; `prometheus-configuration`
   when queue metrics land.
 - **Exit:** durable restart and duplicate-delivery proof, secure quarantine
-  threat tests, visible dead letters, and outbox/object reconciliation.
+  threat tests, visible dead letters, and outbox/object reconciliation (verified
+  by `outbox.service.spec.ts`, `upload-worker.service.spec.ts`, and
+  `retention-maintenance.job.spec.ts`).
 
 ## 8. Phase 7 — geography and ingestion
 

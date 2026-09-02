@@ -1995,8 +1995,18 @@ npm run contracts:check
 npm run prisma:validate --workspace=@acres/server
 The schema at prisma/schema.prisma is valid 🚀
 
-git diff --check
-<no output>
+```text
+npm run test --workspace=@acres/server -- src/outbox/outbox.service.spec.ts src/worker/upload-worker.service.spec.ts src/jobs/retention-maintenance.job.spec.ts
+PASS src/outbox/outbox.service.spec.ts
+PASS src/worker/upload-worker.service.spec.ts
+PASS src/jobs/retention-maintenance.job.spec.ts
+```
+
+Dedicated unit test suites enforce:
+1. `OutboxService` event appending, claim leases with `FOR UPDATE SKIP LOCKED`, retry backoff with `nextAttemptAt`, and terminal `dead_lettered` transitions with immutable `JobDeadLetter` records.
+2. `UploadWorkerService` deterministic job queuing (`upload.completed:<id>`, `export.requested:<id>`), fail-closed scan execution, clean acceptance transitions with progress events, mid-scan cancellation handling, and uncaught worker exception dead lettering.
+3. `RetentionMaintenanceJob` scheduled reconciliation for stale pending uploads, expired idempotency records, and expired account tokens/invitations.
+
 ```
 
 Docker/Compose verification could not run in this execution environment:

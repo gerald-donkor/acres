@@ -82,6 +82,8 @@ export class UploadWorkerService {
         try {
           const deterministicKey = `${event.eventType}:${event.aggregateId}`;
           await this.tenants.workerScoped(async (tx) => {
+            const uploadId =
+              event.eventType === 'upload.completed' ? event.aggregateId : null;
             await tx.durableJob.upsert({
               where: {
                 deterministicKey,
@@ -89,7 +91,7 @@ export class UploadWorkerService {
               update: {
                 state: 'queued',
                 organizationId: event.organizationId,
-                uploadId: event.aggregateId,
+                uploadId,
                 jobType: event.eventType,
                 maxAttempts: this.config.queueDefaultAttempts,
                 lastErrorCode: null,
@@ -98,7 +100,7 @@ export class UploadWorkerService {
               create: {
                 deterministicKey,
                 organizationId: event.organizationId,
-                uploadId: event.aggregateId,
+                uploadId,
                 jobType: event.eventType,
                 state: 'queued',
                 maxAttempts: this.config.queueDefaultAttempts,
@@ -178,14 +180,14 @@ export class UploadWorkerService {
       }),
     );
     try {
-      await this.tenants.organizationScoped(
+      const canScan = await this.tenants.organizationScoped(
         upload.actorAccountId,
         upload.organizationId,
         async (tx) => {
           const fresh = await tx.upload.findFirst({
             where: { id: upload.id, organizationId: upload.organizationId },
           });
-          if (fresh === null || fresh.state !== 'completed') return;
+          if (fresh === null || fresh.state !== 'completed') return false;
           await tx.upload.update({
             where: { id: upload.id },
             data: {
@@ -203,8 +205,10 @@ export class UploadWorkerService {
               percent: 50,
             },
           });
+          return true;
         },
       );
+      if (!canScan) return;
 
       const bytes = await this.storage.getBuffer(upload.storedObject.objectKey);
       const scan =

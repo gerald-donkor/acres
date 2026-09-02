@@ -131,6 +131,8 @@ export async function runGeographyPlanChecks(
     // 3. Seed deterministic scale fixtures
     const gridDim = options.gridDimension ?? 10;
     summary = await seedGeographyScale(prisma, gridDim);
+    await prisma.$executeRawUnsafe('ANALYZE "RegionGeometry"');
+    await prisma.$executeRawUnsafe('ANALYZE "Region"');
 
     const queries = buildGeographyPlanQueries(summary);
     const results: QueryPlanResult[] = [];

@@ -330,9 +330,13 @@ Residual Phase 6 risks:
 - The current worker reads quarantined object bytes through the storage port
   before scanning, but hostile fixtures, archive/parser budgets, and parser
   isolation remain target controls for the ingestion phase.
-- Dead-letter and reconciliation tables exist, but exhaustive poison,
-  crash-after-commit, stale-upload cleanup, and orphan-reconcile automation is
-  not yet complete enough to count as launch evidence.
+- Outbox claim leases, retry backoff, dead-letter audit trail creation, worker
+  fail-closed malware quarantine/object missing rejection, mid-scan cancellation,
+  and scheduled retention maintenance reconciliation (stale upload garbage
+  collection, expired tokens/invitations, idempotency records) are verified
+  with unit test suites (`outbox.service.spec.ts`, `upload-worker.service.spec.ts`,
+  `retention-maintenance.job.spec.ts`). Continuous live multi-node crash-recovery
+  remains subject to operational staging verification.
 
 ## 12. Phase 7A boundary update
 

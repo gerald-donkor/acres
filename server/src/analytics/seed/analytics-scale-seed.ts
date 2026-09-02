@@ -601,13 +601,19 @@ export async function cleanScaleSeed(
     async (tx) => {
       await tx.$executeRaw`
         SELECT
+          set_config('acres.account_id', ${accountIds[0] ?? ''}, true),
           set_config('acres.worker_access', 'true', true),
           set_config('acres.organization_id', '', true)
       `;
 
-      await tx.dashboardView.deleteMany({
-        where: { organizationId: { in: orgIds } },
-      });
+      for (const orgId of orgIds) {
+        await tx.$executeRaw`
+          SELECT set_config('acres.organization_id', ${orgId}, true)
+        `;
+        await tx.dashboardView.deleteMany({
+          where: { organizationId: orgId },
+        });
+      }
       await tx.metricAggregateLineage.deleteMany({
         where: { organizationId: { in: orgIds } },
       });
@@ -667,18 +673,10 @@ export async function seedAnalyticsScale(
     async (tx) => {
       await tx.$executeRaw`
         SELECT
+          set_config('acres.account_id', ${plan.accounts[0]?.id ?? ''}, true),
           set_config('acres.worker_access', 'true', true),
           set_config('acres.organization_id', '', true)
       `;
-
-      for (const org of plan.organizations) {
-        await tx.organization.create({
-          data: {
-            id: org.id,
-            name: org.name,
-          },
-        });
-      }
 
       for (const acc of plan.accounts) {
         await tx.account.create({
@@ -691,7 +689,22 @@ export async function seedAnalyticsScale(
         });
       }
 
+      for (const org of plan.organizations) {
+        await tx.$executeRaw`
+          SELECT set_config('acres.organization_id', ${org.id}, true)
+        `;
+        await tx.organization.create({
+          data: {
+            id: org.id,
+            name: org.name,
+          },
+        });
+      }
+
       for (const mem of plan.memberships) {
+        await tx.$executeRaw`
+          SELECT set_config('acres.organization_id', ${mem.organizationId}, true)
+        `;
         await tx.membership.create({
           data: {
             id: mem.id,
@@ -701,6 +714,10 @@ export async function seedAnalyticsScale(
           },
         });
       }
+
+      await tx.$executeRaw`
+        SELECT set_config('acres.worker_access', 'true', true)
+      `;
 
       for (const reg of plan.regions) {
         await tx.region.create({
@@ -763,6 +780,9 @@ export async function seedAnalyticsScale(
       }
 
       for (const view of plan.dashboardViews) {
+        await tx.$executeRaw`
+          SELECT set_config('acres.organization_id', ${view.organizationId}, true)
+        `;
         await tx.dashboardView.create({ data: view });
       }
     },
