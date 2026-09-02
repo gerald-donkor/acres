@@ -338,7 +338,9 @@ operations work is complete.
 - **Security/failure cases:** ambiguous value types, unit mismatch, double
   counting, invalid aggregation, stale aggregate, dimension explosion, foreign
   version/metric, sensitive small-group disclosure where applicable.
-- **Tests:** golden calculations, property/invariant tests, lineage from result
+- **Tests:** unit test suite (`analytics.service.spec.ts`, 19 tests) verifying
+  metric definitions, observations, aggregates, evidence lineage, value normalization,
+  and tenant-isolated error handling; golden calculations, property/invariant tests, lineage from result
   to observation/version, compatible/incompatible units and dimensions,
   time-grain/time-zone/leap-boundary behavior, null versus zero, duplicates,
   precision and threshold edges, aggregate invalidation/rebuild, late data and

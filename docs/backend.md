@@ -2195,9 +2195,13 @@ npm run prisma:migrate:deploy --workspace=@acres/server
 Applying migration `20260824205500_widen_analytics_numeric_values`
 All migrations have been successfully applied.
 
+npm run test --workspace=@acres/server -- src/analytics/analytics.service.spec.ts
+PASS src/analytics/analytics.service.spec.ts
+Tests: 19 passed, 19 total
+
 npm run test --workspace=@acres/server
-Test Suites: 5 passed, 5 total
-Tests: 23 passed, 23 total
+Test Suites: 30 passed, 30 total
+Tests: 282 passed, 282 total
 
 npm run test:e2e --workspace=@acres/server -- api.e2e-spec.ts database.e2e-spec.ts env-validation.e2e-spec.ts
 Test Suites: 3 passed, 3 total
@@ -2216,8 +2220,8 @@ npm run build
 ✔ Generated Prisma Client (7.9.1)
 
 npm run test:server
-Test Suites: 3 passed, 3 total
-Tests: 77 passed, 77 total
+Test Suites: 4 passed, 4 total
+Tests: 107 passed, 107 total
 ```
 
 ## 20. Dashboards and optimized GraphQL

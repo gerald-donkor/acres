@@ -159,9 +159,21 @@ Passing during this implementation:
 npm run prisma:validate --workspace=@acres/server
 The schema at prisma/schema.prisma is valid 🚀
 
+npm run test --workspace=@acres/server -- src/analytics/analytics.service.spec.ts
+PASS src/analytics/analytics.service.spec.ts (19 passed, 19 total)
+- metric definition listing, ISO timestamp formatting, and 404 on unowned or non-existent metric IDs
+- observation listing, query filter propagation, and typed value normalization (numeric, text, boolean, nulls)
+- aggregate listing, query filter propagation, and typed aggregate read models
+- aggregate lineage evidence traversal back to observations and dataset versions with ISO timestamps
+- decimal normalization and numeric serialization edge cases (string, number, Prisma.Decimal, invalid shape rejection)
+
 npm run test --workspace=@acres/server
-Test Suites: 11 passed, 11 total
-Tests: 53 passed, 53 total
+Test Suites: 30 passed, 30 total
+Tests: 282 passed, 282 total
+
+npm run test:server
+Test Suites: 4 passed, 4 total
+Tests: 107 passed, 107 total
 
 npm run contracts:check
 ✔ Generated Prisma Client (7.9.1)
