@@ -107,6 +107,15 @@ Route (app)
 ├ ƒ /app/dashboards/[viewId]
 ✔ Generated Prisma Client (7.9.1)
 
+npm run test --workspace=@acres/server -- src/dashboards/dashboards.service.spec.ts
+PASS src/dashboards/dashboards.service.spec.ts (18 passed, 18 total)
+- saved view listing, mapped ISO strings, and fallback handling for nullable filters/presentation
+- single view retrieval and fail-closed 404 for non-existent or foreign tenant views
+- idempotent creation coordinating with IdempotencyService.run, input normalization, and default presentation fallback
+- partial mutation verifying tenant scope and trimming whitespace
+- soft-archival setting status to archived
+- GraphQL dashboardSummary concurrent aggregation and decimal string scalar serialization
+
 npm run test:server
 Test Suites: 3 passed, 3 total
 Tests: 81 passed, 81 total

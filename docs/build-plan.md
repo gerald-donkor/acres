@@ -377,8 +377,10 @@ Status: implemented by `prompts/30-dashboards-optimized-graphql.md`.
 - **Security/failure cases:** foreign saved view/global ID, cached prior-org
   response, oversized filters/query, hidden low-quality/missing data, unsafe
   labels/URLs, inaccessible chart-only meaning.
-- **Tests:** query-count/plan and complexity tests; cross-org nodes/views;
-  keyboard/screen-reader table alternative; filters/deep link/back-forward;
+- **Tests:** unit test suite (`dashboards.service.spec.ts`, 18 tests) verifying
+  saved-view CRUD, tenant isolation, normalization, idempotency integration, and
+  decimal string scalar serialization; query-count/plan and complexity tests;
+  cross-org nodes/views; keyboard/screen-reader table alternative; filters/deep link/back-forward;
   loading/empty/error/partial-quality; visual/responsive/browser coverage.
 - **Observability:** operation/query latency, loader hit/query count, slow
   filters, render/client errors, saved-view failures; no high-cardinality values.

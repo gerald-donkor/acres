@@ -2259,6 +2259,10 @@ npm run build
 ├ ƒ /app/dashboards/[viewId]
 ✔ Generated Prisma Client (7.9.1)
 
+npm run test --workspace=@acres/server -- src/dashboards/dashboards.service.spec.ts
+PASS src/dashboards/dashboards.service.spec.ts
+Tests: 18 passed, 18 total
+
 npm run test:server
 Test Suites: 3 passed, 3 total
 Tests: 81 passed, 81 total

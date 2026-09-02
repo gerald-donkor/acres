@@ -3,6 +3,9 @@ import type {
   CreateDashboardViewInput,
   DashboardFilters,
   DashboardPresentation,
+  DashboardSummary,
+  DashboardView,
+  MetricValueKind,
   UpdateDashboardViewInput,
 } from '@acres/shared';
 import { ApiException } from '../common/api-exception';
@@ -19,7 +22,7 @@ export class DashboardsService {
     private readonly idempotency: IdempotencyService,
   ) {}
 
-  listViews(organization: OrganizationContext) {
+  listViews(organization: OrganizationContext): Promise<DashboardView[]> {
     return this.dashboards.organizationScoped(organization, async (tx) => {
       const rows = await this.dashboards.listViews(
         tx,
@@ -29,7 +32,10 @@ export class DashboardsService {
     });
   }
 
-  getView(organization: OrganizationContext, viewId: string) {
+  getView(
+    organization: OrganizationContext,
+    viewId: string,
+  ): Promise<DashboardView> {
     return this.dashboards.organizationScoped(organization, async (tx) => {
       const row = await this.dashboards.findView(
         tx,
@@ -46,7 +52,7 @@ export class DashboardsService {
     organization: OrganizationContext,
     input: CreateDashboardViewInput,
     idempotencyKey?: string,
-  ) {
+  ): Promise<DashboardView> {
     const body = normalizeCreate(input);
     return this.dashboards.organizationScoped(organization, async (tx) =>
       this.idempotency.run(
@@ -80,7 +86,7 @@ export class DashboardsService {
     organization: OrganizationContext,
     viewId: string,
     input: UpdateDashboardViewInput,
-  ) {
+  ): Promise<DashboardView> {
     return this.dashboards.organizationScoped(organization, async (tx) => {
       const existing = await this.dashboards.findView(
         tx,
@@ -106,7 +112,10 @@ export class DashboardsService {
     });
   }
 
-  archiveView(organization: OrganizationContext, viewId: string) {
+  archiveView(
+    organization: OrganizationContext,
+    viewId: string,
+  ): Promise<{ archived: true }> {
     return this.dashboards.organizationScoped(organization, async (tx) => {
       const existing = await this.dashboards.findView(
         tx,
@@ -123,7 +132,10 @@ export class DashboardsService {
     });
   }
 
-  async summary(organization: OrganizationContext, filters: DashboardFilters) {
+  async summary(
+    organization: OrganizationContext,
+    filters: DashboardFilters,
+  ): Promise<DashboardSummary> {
     const [metrics, aggregates, savedViews] = await Promise.all([
       this.analytics.listMetrics(organization),
       this.analytics.listAggregates(organization, {
@@ -136,8 +148,11 @@ export class DashboardsService {
       metrics,
       aggregates: aggregates.map((aggregate) => ({
         ...aggregate,
+        datasetVersionIds: Array.isArray(aggregate.datasetVersionIds)
+          ? (aggregate.datasetVersionIds as string[])
+          : [],
         value: {
-          ...aggregate.value,
+          type: aggregate.value.type as MetricValueKind,
           value:
             aggregate.value.value === null
               ? null
