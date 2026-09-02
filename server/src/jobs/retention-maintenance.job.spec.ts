@@ -5,10 +5,7 @@ import {
   TOKENS_RETENTION_JOB,
 } from './retention-maintenance.job';
 import type { PrismaService } from '../prisma/prisma.service';
-import type {
-  TenantTransactionClient,
-  TenantTransactionService,
-} from '../prisma/tenant-transaction.service';
+import type { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import type { JobRunsService } from './job-runs.service';
 import type { AcresConfigService } from '../config/acres-config.service';
 

@@ -131,9 +131,13 @@ Route (app)
 ├ ƒ /app/reports/new
 ✔ Generated Prisma Client (7.9.1)
 
+npm run test --workspace=@acres/server (including reports.service.spec.ts: 67 passed, 67 total)
+Test Suites: 28 passed, 28 total
+Tests:       245 passed, 245 total
+
 npm run test:server
-Test Suites: 1 passed, 1 total (api.e2e-spec.ts)
-Tests: 66 passed, 66 total
+Test Suites: 4 passed, 4 total (api.e2e-spec.ts, database.e2e-spec.ts, geography-database.e2e-spec.ts, env-validation.e2e-spec.ts)
+Tests: 107 passed, 107 total
 
 npm run test:client:e2e
 12 passed (tests/ unit suite)
@@ -149,5 +153,4 @@ migrator role after the new migration was added.
 
 - Generated PDFs are intentionally simple deterministic documents, not
   comp-designed presentation exports.
-- Sharing, collaboration, public links, scheduled exports, AI-assisted drafting,
-  and retention/deletion policy are still future phases or open decisions.
+- Sharing, collaboration, public links, scheduled exports, and retention/deletion policy are still future phases or open decisions (Phase 11A covers grounded AI-assisted drafting).
