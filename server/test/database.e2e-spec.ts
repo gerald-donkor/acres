@@ -160,7 +160,8 @@ describe('Acres API — real database', () => {
 
   describe('unique — concurrent registration of the same email', () => {
     it('the loser gets INVALID_CREDENTIALS from a real P2002, not a mock', async () => {
-      const [first, second] = await Promise.all([csrfAgent(), csrfAgent()]);
+      const first = await csrfAgent();
+      const second = await csrfAgent();
       const body = {
         email: 'race@example.com',
         password: 'a-long-enough-password',
@@ -193,6 +194,124 @@ describe('Acres API — real database', () => {
       });
       expect(accounts).toHaveLength(1);
     });
+  });
+
+  describe('idempotency — concurrent organization creation', () => {
+    it('converges simultaneous same-key commands on one completed response', async () => {
+      const email = 'idempotency-race@example.com';
+      const { agent, token } = await signedInAgent(email);
+      const idempotencyKey = 'real-concurrent-org-key-0001';
+      const body = { name: 'Concurrent Organization' };
+
+      const [first, second] = await Promise.all([
+        agent
+          .post('/api/v1/organizations')
+          .set('Idempotency-Key', idempotencyKey)
+          .set('x-csrf-token', token)
+          .send(body),
+        agent
+          .post('/api/v1/organizations')
+          .set('Idempotency-Key', idempotencyKey)
+          .set('x-csrf-token', token)
+          .send(body),
+      ]);
+
+      const firstBody = first.body as {
+        ok: boolean;
+        data: {
+          id: string;
+          name: string;
+          createdAt: string;
+          updatedAt: string;
+          membership: { id: string; role: string };
+        };
+      };
+      const secondBody = second.body as typeof firstBody;
+
+      expect([first.status, second.status]).toEqual([201, 201]);
+      expect(firstBody).toMatchObject({
+        ok: true,
+        data: {
+          id: expect.any(String) as string,
+          name: body.name,
+          membership: { id: expect.any(String) as string, role: 'owner' },
+        },
+      });
+      expect(secondBody).toMatchObject({ ok: true, data: firstBody.data });
+
+      const account = await prisma.account.findUniqueOrThrow({
+        where: { email },
+      });
+      const organizationId = firstBody.data.id;
+      const evidence = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+            SELECT
+              set_config('acres.account_id', ${account.id}, true),
+              set_config('acres.organization_id', ${organizationId}, true),
+              set_config('acres.invitation_token_hash', '', true)
+          `;
+        return {
+          organizationCount: await tx.organization.count({
+            where: { name: body.name },
+          }),
+          membershipCount: await tx.membership.count({
+            where: { accountId: account.id, role: 'owner' },
+          }),
+          records: await tx.idempotencyRecord.findMany({
+            where: {
+              accountId: account.id,
+              organizationId: null,
+              operation: 'organizations.create',
+              expiresAt: { gt: new Date() },
+            },
+          }),
+        };
+      });
+
+      expect(evidence.organizationCount).toBe(1);
+      expect(evidence.membershipCount).toBe(1);
+      expect(evidence.records).toHaveLength(1);
+      expect(evidence.records[0]).toMatchObject({
+        state: 'succeeded',
+        responseStatus: 201,
+        responseBody: firstBody.data,
+      });
+
+      const replay = await agent
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', idempotencyKey)
+        .set('x-csrf-token', token)
+        .send({ name: body.name })
+        .expect(201);
+      expect(replay.body as typeof firstBody).toMatchObject({
+        ok: true,
+        data: firstBody.data,
+      });
+
+      const changed = await agent
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', idempotencyKey)
+        .set('x-csrf-token', token)
+        .send({ name: 'Changed Organization' })
+        .expect(409);
+      expect(changed.body).toMatchObject({
+        ok: false,
+        error: { code: 'IDEMPOTENCY_CONFLICT' },
+      });
+
+      const changedCount = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+            SELECT
+              set_config('acres.account_id', ${account.id}, true),
+              set_config('acres.organization_id', ${organizationId}, true),
+              set_config('acres.invitation_token_hash', '', true)
+          `;
+        return tx.organization.count({
+          where: { name: 'Changed Organization' },
+        });
+      });
+      expect(changedCount).toBe(0);
+    }, 15_000);
   });
 
   describe('FK + session-cascade', () => {

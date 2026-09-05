@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ApiException } from '../common/api-exception';
+import { uuidV7 } from '../common/ids';
 import { AcresConfigService } from '../config/acres-config.service';
 import type { TenantTransactionClient } from '../prisma/tenant-transaction.service';
 
@@ -67,44 +68,40 @@ export class IdempotencyService {
       throw ApiException.conflict('That idempotency request is still running.');
     }
 
-    const record = await tx.idempotencyRecord
-      .create({
-        data: {
-          keyDigest,
-          accountId: scope.accountId,
-          organizationId: scope.organizationId,
-          operation: scope.operation,
-          requestHash,
-          state: 'in_progress',
-          expiresAt,
-        },
-      })
-      .catch(async (error: unknown) => {
-        if (!isUniqueConflict(error)) throw error;
-        const row = await tx.idempotencyRecord.findFirst({
-          where: {
-            ...scopeWhere,
-            expiresAt: { gt: now },
-          },
-        });
-        if (row == null || row.requestHash !== requestHash) {
-          throw ApiException.idempotencyConflict();
-        }
-        if (row.state === 'succeeded' && row.responseBody !== null) {
-          return row;
-        }
-        throw ApiException.conflict(
-          'That idempotency request is still running.',
-        );
-      });
+    const recordId = uuidV7();
+    const reservation = await tx.idempotencyRecord.createMany({
+      data: {
+        id: recordId,
+        keyDigest,
+        accountId: scope.accountId,
+        organizationId: scope.organizationId,
+        operation: scope.operation,
+        requestHash,
+        state: 'in_progress',
+        expiresAt,
+      },
+      skipDuplicates: true,
+    });
 
-    if (record.state === 'succeeded' && record.responseBody !== null) {
-      return record.responseBody as T;
+    if (reservation.count === 0) {
+      const row = await tx.idempotencyRecord.findFirst({
+        where: {
+          ...scopeWhere,
+          expiresAt: { gt: now },
+        },
+      });
+      if (row == null || row.requestHash !== requestHash) {
+        throw ApiException.idempotencyConflict();
+      }
+      if (row.state === 'succeeded' && row.responseBody !== null) {
+        return row.responseBody as T;
+      }
+      throw ApiException.conflict('That idempotency request is still running.');
     }
 
     const response = await callback();
     await tx.idempotencyRecord.update({
-      where: { id: record.id },
+      where: { id: recordId },
       data: {
         state: 'succeeded',
         responseStatus: scope.responseStatus,
@@ -133,13 +130,4 @@ function sortValue(value: unknown): unknown {
     );
   }
   return value;
-}
-
-function isUniqueConflict(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: string }).code === 'P2002'
-  );
 }

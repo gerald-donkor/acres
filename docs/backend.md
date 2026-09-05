@@ -1781,6 +1781,40 @@ same account/org/operation/key scope are deleted before reservation so the key
 can be reused after `IDEMPOTENCY_TTL_HOURS`. Login, register, logout, CSRF,
 contact and pure reads deliberately remain outside generic idempotency.
 
+Prompt 54 replaced the reservation's catch-after-`P2002` sequence with Prisma
+7.9.1's installed and type-verified
+`idempotencyRecord.createMany({ skipDuplicates: true })` insert-or-observe
+operation. A PostgreSQL unique violation aborts the current transaction, so a
+losing `create()` followed by `findFirst()` in that same transaction is not a
+safe recovery path. `createMany` emits the non-throwing duplicate-skip path:
+the contender either reserves its generated UUIDv7 record (`count: 1`) or,
+after the unique-index owner commits, observes `count: 0` and reads the live
+winner. A rolled-back contender does not leave a conflict to skip. The
+callback and completion update remain inside the enclosing tenant transaction,
+so callback failure rolls back both the reservation and command side effect.
+No raw key or request body is persisted, and the existing unique index, RLS,
+TTL, hashes, response storage, public method, and API errors are unchanged.
+
+`server/src/idempotency/idempotency.service.spec.ts` now covers 23 cases:
+printable-ASCII key boundaries and rejection, exact domain-separated hashes,
+recursive object canonicalization versus array/type preservation, exact scope
+and expiry, cleanup order, replay, changed-body and active/null-response
+conflicts, callback success/failure, database-error preservation, and all four
+duplicate-reservation winner outcomes. The database-independent API and env
+E2E suites remained green after the Prisma double moved to `createMany`.
+
+`server/test/database.e2e-spec.ts` now contains the real HTTP/PostgreSQL race
+gate: two simultaneous organization creates share one session, key, scope, and
+body; it requires two `201` responses with the same durable identifiers, one
+organization/membership/idempotency record, replay, and changed-body conflict.
+Executed and verified on 2026-09-05 against the migrated `acres_test` database:
+both concurrent requests converged on the single created organization and
+membership, exactly one `succeeded` idempotency record was persisted, replay
+returned the identical body, and changed-body reuse returned `409 IDEMPOTENCY_CONFLICT`.
+Organization creation has a single-field DTO, so it provides no meaningful JSON
+property-reordering variant at the HTTP boundary; recursive reordering is
+proven in the isolated service suite instead.
+
 ### Environment
 
 New required variables:
@@ -1831,8 +1865,9 @@ npm run build:server
 > prisma generate && nest build
 ```
 
-The root `npm run build` still fails in the unchanged client workspace with the
-previously recorded Next/Turbopack port-binding panic:
+At the original Phase 4 verification, the root `npm run build` failed in the
+unchanged client workspace with the then-recorded Next/Turbopack port-binding
+panic:
 
 ```text
 Failed to write app endpoint /page
@@ -1842,9 +1877,50 @@ Failed to write app endpoint /page
 - Operation not permitted (os error 1)
 ```
 
-Re-running the root build as a standalone escalated command produced the same
-client-only failure before the server workspace ran; `npm run build:server`
-passes for the changed workspace.
+Re-running that original build as a standalone escalated command produced the
+same client-only failure before the server workspace ran; the server workspace
+passed. Prompt 54's later host build evidence below supersedes that old root
+build limitation.
+
+Prompt 54 verification on 2026-09-05 produced:
+
+```text
+npm run test --workspace=@acres/server -- src/idempotency/idempotency.service.spec.ts --runInBand
+Test Suites: 1 passed, 1 total
+Tests:       23 passed, 23 total
+
+npm run test --workspace=@acres/server -- --runInBand
+Test Suites: 31 passed, 31 total
+Tests:       305 passed, 305 total
+
+npm run test:e2e --workspace=@acres/server -- --runInBand test/api.e2e-spec.ts test/env-validation.e2e-spec.ts
+Test Suites: 2 passed, 2 total
+Tests:       88 passed, 88 total
+
+npm run test:server -- --runInBand
+Test Suites: 4 passed, 4 total
+Tests:       108 passed, 108 total
+
+npm run contracts:check
+exit 0
+
+npm run lint
+exit 0
+
+npm run typecheck
+exit 0
+
+npm run build
+shared, Next production build, and Nest production build passed (host run)
+
+npm run ops:check
+exit 0; 0 critical production dependency vulnerabilities
+```
+
+The first sandboxed build attempt could not capture Next's detached
+`tsc --showConfig` child output; the standalone host run completed all three
+workspaces. The first sandboxed operations run could not reach the npm audit
+endpoint; the host rerun completed. Neither environmental retry changed code.
 
 ---
 
@@ -1960,7 +2036,7 @@ metadata: 7 vulnerabilities total, 4 moderate and 3 high
 The audit findings are the pre-existing Apollo/uuid and Prisma CLI findings
 documented above; the new BullMQ/ioredis/AWS packages did not change the count.
 
-```text
+````text
 npm run build:shared
 > @acres/shared@0.1.0 build
 > tsc -p tsconfig.json
@@ -2000,21 +2076,22 @@ npm run test --workspace=@acres/server -- src/outbox/outbox.service.spec.ts src/
 PASS src/outbox/outbox.service.spec.ts
 PASS src/worker/upload-worker.service.spec.ts
 PASS src/jobs/retention-maintenance.job.spec.ts
-```
+````
 
 Dedicated unit test suites enforce:
+
 1. `OutboxService` event appending, claim leases with `FOR UPDATE SKIP LOCKED`, retry backoff with `nextAttemptAt`, and terminal `dead_lettered` transitions with immutable `JobDeadLetter` records.
 2. `UploadWorkerService` deterministic job queuing (`upload.completed:<id>`, `export.requested:<id>`), fail-closed scan execution, clean acceptance transitions with progress events, mid-scan cancellation handling, and uncaught worker exception dead lettering.
 3. `RetentionMaintenanceJob` scheduled reconciliation for stale pending uploads, expired idempotency records, and expired account tokens/invitations.
 
-```
+````
 
 Docker/Compose verification could not run in this execution environment:
 
 ```text
 docker compose ps
 /bin/bash: line 1: docker: command not found
-```
+````
 
 That means the real Garage/Valkey/ClamAV integration, real migration apply from
 empty DB, migration status, drift rebuild, and production-profile volume

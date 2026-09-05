@@ -151,7 +151,9 @@ Status: implemented by `prompts/22-organizations-permissions-rls.md`.
 
 ## 5. Phase 4 — versioned REST and complementary GraphQL
 
-Status: implemented by `prompts/23-versioned-rest-graphql-contracts.md`.
+Status: implemented by `prompts/23-versioned-rest-graphql-contracts.md`;
+Prompt 54 adds the isolated idempotency matrix and a pending real-PostgreSQL
+simultaneous-request gate.
 
 - **Depends on:** phase 3 organization context and policy.
 - **Outcome/behavior:** `/api/v1`, finite old-route migration, generated
@@ -169,7 +171,13 @@ Status: implemented by `prompts/23-versioned-rest-graphql-contracts.md`.
 - **Tests:** route version/deprecation deadline, errors/envelopes, session/CSRF
   parity, GraphQL auth/isolation, cursor stability, N+1 query counts, complexity
   rejection, idempotent replay/conflict/concurrency, OpenAPI/SDL snapshots and
-  breaking-change classification.
+  breaking-change classification. Prompt 54's isolated suite passes 23/23 and
+  the full server unit suite passes 305/305. Its two-request PostgreSQL race
+  gate passed against the migrated `acres_test` database in
+  `database.e2e-spec.ts` on 2026-09-05 (17/17 tests passing, full server E2E
+  suite 4/4 suites and 108/108 tests passing), proving that concurrent commands
+  produce one durable effect and identical successful responses under forced
+  RLS.
 - **Observability:** request/trace ID across both transports; operation name and
   bounded cost/latency metrics without query variables; idempotency outcomes.
 - **Rollback/compatibility:** explicitly label each old route alias, redirect,

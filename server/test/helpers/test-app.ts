@@ -63,7 +63,7 @@ export interface PrismaDouble {
     findMany: jest.Mock;
   };
   idempotencyRecord: {
-    create: jest.Mock;
+    createMany: jest.Mock;
     deleteMany: jest.Mock;
     findFirst: jest.Mock;
     update: jest.Mock;
@@ -235,12 +235,7 @@ export function createPrismaDouble(): PrismaDouble {
     },
     auditEvent: { create: jest.fn(), findMany: jest.fn() },
     idempotencyRecord: {
-      create: jest.fn((input: { data: Record<string, unknown> }) =>
-        Promise.resolve({
-          id: 'idempotency-1',
-          ...input.data,
-        }),
-      ),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       findFirst: jest.fn().mockResolvedValue(null),
       update: jest.fn((input: { data: Record<string, unknown> }) =>
