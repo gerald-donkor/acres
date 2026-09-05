@@ -914,6 +914,268 @@ describe('Acres API — real database', () => {
         'Membership_last_owner_guard',
       );
     });
+
+    it('serializes competing ownership transfers to one active owner', async () => {
+      const owner = await signedInAgent('transfer-owner@example.com');
+      const firstTarget = await signedInAgent('transfer-first@example.com');
+      const secondTarget = await signedInAgent('transfer-second@example.com');
+
+      const created = await owner.agent
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'real-transfer-create-key-0001')
+        .set('x-csrf-token', owner.token)
+        .send({ name: 'Concurrent Transfer Org' })
+        .expect(201);
+      const organization = (
+        created.body as {
+          data: { id: string; membership: { id: string } };
+        }
+      ).data;
+
+      async function inviteAndAccept(
+        email: string,
+        keySuffix: string,
+        target: Awaited<ReturnType<typeof signedInAgent>>,
+      ): Promise<string> {
+        const invitation = await owner.agent
+          .post(`/api/v1/organizations/${organization.id}/invitations`)
+          .set('x-acres-organization-id', organization.id)
+          .set('Idempotency-Key', `real-transfer-invite-key-${keySuffix}`)
+          .set('x-csrf-token', owner.token)
+          .send({ email, role: 'viewer' })
+          .expect(201);
+        const invitationToken = (invitation.body as { data: { token: string } })
+          .data.token;
+
+        const accepted = await target.agent
+          .post('/api/v1/invitations/accept')
+          .set('Idempotency-Key', `real-transfer-accept-key-${keySuffix}`)
+          .set('x-csrf-token', target.token)
+          .send({ token: invitationToken })
+          .expect(200);
+        return (accepted.body as { data: { membershipId: string } }).data
+          .membershipId;
+      }
+
+      const firstMembershipId = await inviteAndAccept(
+        'transfer-first@example.com',
+        '0001',
+        firstTarget,
+      );
+      const secondMembershipId = await inviteAndAccept(
+        'transfer-second@example.com',
+        '0002',
+        secondTarget,
+      );
+
+      const [first, second] = await Promise.all([
+        owner.agent
+          .post(`/api/v1/organizations/${organization.id}/ownership-transfers`)
+          .set('x-acres-organization-id', organization.id)
+          .set('Idempotency-Key', 'real-transfer-race-key-0001')
+          .set('x-csrf-token', owner.token)
+          .send({ membershipId: firstMembershipId }),
+        owner.agent
+          .post(`/api/v1/organizations/${organization.id}/ownership-transfers`)
+          .set('x-acres-organization-id', organization.id)
+          .set('Idempotency-Key', 'real-transfer-race-key-0002')
+          .set('x-csrf-token', owner.token)
+          .send({ membershipId: secondMembershipId }),
+      ]);
+
+      const responses = [first, second];
+      const success = responses.filter((response) => response.status === 200);
+      const denied = responses.filter((response) => response.status === 403);
+      expect(success).toHaveLength(1);
+      expect(denied).toHaveLength(1);
+      expect(success[0].body).toMatchObject({
+        ok: true,
+        data: { transferred: true },
+      });
+      expect(denied[0].body).toMatchObject({
+        ok: false,
+        error: { code: 'FORBIDDEN' },
+      });
+
+      const ownerAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'transfer-owner@example.com' },
+      });
+      const evidence = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+            SELECT
+              set_config('acres.account_id', ${ownerAccount.id}, true),
+              set_config('acres.organization_id', ${organization.id}, true),
+              set_config('acres.invitation_token_hash', '', true)
+          `;
+        return {
+          memberships: await tx.membership.findMany({
+            where: { organizationId: organization.id },
+            orderBy: { accountId: 'asc' },
+          }),
+          transfers: await tx.auditEvent.findMany({
+            where: {
+              organizationId: organization.id,
+              action: 'ownership_transferred',
+            },
+          }),
+          records: await tx.idempotencyRecord.findMany({
+            where: {
+              organizationId: organization.id,
+              operation: 'organizations.transferOwnership',
+            },
+          }),
+        };
+      });
+
+      const activeOwners = evidence.memberships.filter(
+        (membership) =>
+          membership.role === 'owner' && membership.revokedAt === null,
+      );
+      expect(activeOwners).toHaveLength(1);
+      expect(activeOwners[0].id).toBe(
+        first.status === 200 ? firstMembershipId : secondMembershipId,
+      );
+      const losingMembershipId =
+        first.status === 200 ? secondMembershipId : firstMembershipId;
+      expect(
+        evidence.memberships.find(
+          (membership) => membership.id === organization.membership.id,
+        ),
+      ).toMatchObject({ role: 'admin', revokedAt: null });
+      expect(
+        evidence.memberships.find(
+          (membership) => membership.id === losingMembershipId,
+        ),
+      ).toMatchObject({ role: 'viewer', revokedAt: null });
+      expect(evidence.transfers).toHaveLength(1);
+      expect(evidence.transfers[0]).toMatchObject({
+        actorAccountId: ownerAccount.id,
+        targetId: activeOwners[0].id,
+        details: { previousOwnerMembershipId: organization.membership.id },
+      });
+      expect(evidence.records).toHaveLength(1);
+      expect(evidence.records[0]).toMatchObject({
+        state: 'succeeded',
+        responseStatus: 200,
+      });
+
+      const winnerKey =
+        first.status === 200
+          ? 'real-transfer-race-key-0001'
+          : 'real-transfer-race-key-0002';
+      const winnerMembershipId =
+        first.status === 200 ? firstMembershipId : secondMembershipId;
+      await owner.agent
+        .post(`/api/v1/organizations/${organization.id}/ownership-transfers`)
+        .set('x-acres-organization-id', organization.id)
+        .set('Idempotency-Key', winnerKey)
+        .set('x-csrf-token', owner.token)
+        .send({ membershipId: winnerMembershipId })
+        .expect(403)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'FORBIDDEN' },
+          });
+        });
+
+      await owner.agent
+        .post(`/api/v1/organizations/${organization.id}/ownership-transfers`)
+        .set('x-acres-organization-id', organization.id)
+        .set('Idempotency-Key', 'real-transfer-fresh-denied-0001')
+        .set('x-csrf-token', owner.token)
+        .send({ membershipId: winnerMembershipId })
+        .expect(403);
+
+      const postDenialEvidence = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+            SELECT
+              set_config('acres.account_id', ${ownerAccount.id}, true),
+              set_config('acres.organization_id', ${organization.id}, true),
+              set_config('acres.invitation_token_hash', '', true)
+          `;
+        return {
+          memberships: await tx.membership.findMany({
+            where: { organizationId: organization.id },
+            orderBy: { accountId: 'asc' },
+          }),
+          transfers: await tx.auditEvent.findMany({
+            where: {
+              organizationId: organization.id,
+              action: 'ownership_transferred',
+            },
+          }),
+          records: await tx.idempotencyRecord.findMany({
+            where: {
+              organizationId: organization.id,
+              operation: 'organizations.transferOwnership',
+            },
+          }),
+        };
+      });
+      expect(postDenialEvidence.memberships).toEqual(evidence.memberships);
+      expect(postDenialEvidence.transfers).toEqual(evidence.transfers);
+      expect(postDenialEvidence.records).toEqual(evidence.records);
+    }, 15_000);
+
+    it('actively rejects removal of the sole owner under forced RLS', async () => {
+      const { agent, token } = await signedInAgent('last-owner@example.com');
+      const created = await agent
+        .post('/api/v1/organizations')
+        .set('Idempotency-Key', 'real-last-owner-create-key-0001')
+        .set('x-csrf-token', token)
+        .send({ name: 'Last Owner Guard Org' })
+        .expect(201);
+      const organization = (
+        created.body as {
+          data: { id: string; membership: { id: string } };
+        }
+      ).data;
+      const account = await prisma.account.findUniqueOrThrow({
+        where: { email: 'last-owner@example.com' },
+      });
+
+      await expect(
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`
+            SELECT
+              set_config('acres.account_id', ${account.id}, true),
+              set_config('acres.organization_id', ${organization.id}, true),
+              set_config('acres.invitation_token_hash', '', true)
+          `;
+          await tx.membership.update({
+            where: { id: organization.membership.id },
+            data: { role: 'admin' },
+          });
+        }),
+      ).rejects.toThrow(/cannot remove last active owner/i);
+
+      const evidence = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${account.id}, true),
+            set_config('acres.organization_id', ${organization.id}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return {
+          membership: await tx.membership.findUniqueOrThrow({
+            where: { id: organization.membership.id },
+          }),
+          audits: await tx.auditEvent.findMany({
+            where: { organizationId: organization.id },
+          }),
+        };
+      });
+      expect(evidence.membership).toMatchObject({
+        role: 'owner',
+        revokedAt: null,
+      });
+      expect(evidence.audits).toHaveLength(1);
+      expect(evidence.audits[0]).toMatchObject({
+        action: 'organization_created',
+        targetId: organization.id,
+      });
+    });
   });
 
   describe('GET /health/ready', () => {

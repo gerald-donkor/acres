@@ -1697,6 +1697,49 @@ the live invitation/account-token partial indexes exist; `acres_test` has
 `INSERT`, `SELECT` and test-only `TRUNCATE` on `AuditEvent`, with no update or
 delete privilege.
 
+### Ownership-transfer concurrency evidence
+
+Prompt 55 adds two real PostgreSQL gates in `database.e2e-spec.ts`, executed
+against migrated `acres_test` on 2026-09-05. Two simultaneous distinct-key
+ownership transfers from one owner to two different invited members now settle
+as one `200` success and one `403 FORBIDDEN`: exactly one invited member is the
+sole active owner, the former owner is an active admin, exactly one
+`ownership_transferred` audit row exists, and only the winning idempotency
+record commits as `succeeded`. A subsequent new command and a same-key replay
+from the demoted owner both return `403`, because the organization context and
+permission guards run before the service/idempotency boundary; neither changes
+the durable ownership graph or audit history.
+
+The proof found that `transferOwnership()` acquired its existing organization
+row lock after reading the actor's membership permission. The lock now precedes
+that read, so a waiter re-evaluates the actor after the winner commits and
+cannot act on a stale owner role. This is a service ordering correction only:
+no public contract, schema, RLS policy, trigger, idempotency contract, or
+migration changed.
+
+The second gate creates a sole owner through the API, then attempts to demote
+it inside a normal scoped `acres_test` transaction. PostgreSQL rejects the
+write with `cannot remove last active owner`; the transaction rolls back and
+the membership remains an active owner with only its original creation audit
+row. The existing catalog test remains, so both trigger presence and active
+runtime enforcement are covered.
+
+Observed verification after the correction:
+
+```text
+npm run test:e2e --workspace=@acres/server -- --runInBand --testNamePattern='ownership|last-owner'
+Test Suites: 2 skipped, 2 passed, 2 of 4 total
+Tests:       107 skipped, 3 passed, 110 total
+
+npm run test:e2e --workspace=@acres/server -- --runInBand
+Test Suites: 4 passed, 4 total
+Tests:       110 passed, 110 total
+
+npm run test --workspace=@acres/server -- --runInBand
+Test Suites: 31 passed, 31 total
+Tests:       305 passed, 305 total
+```
+
 ---
 
 ## 15. Versioned REST, GraphQL and checked contracts

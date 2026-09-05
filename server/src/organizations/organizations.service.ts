@@ -314,6 +314,7 @@ export class OrganizationsService {
       context.accountId,
       context.organizationId,
       async (tx) => {
+        await tx.$executeRaw`SELECT 1 FROM "Organization" WHERE id = ${context.organizationId} FOR UPDATE`;
         return this.idempotency.run(
           tx,
           {
@@ -338,7 +339,6 @@ export class OrganizationsService {
             if (target.accountId === actor.accountId) {
               throw ApiException.conflict('Choose another active member.');
             }
-            await tx.$executeRaw`SELECT 1 FROM "Organization" WHERE id = ${context.organizationId} FOR UPDATE`;
             await tx.membership.update({
               where: { id: membershipId },
               data: { role: 'owner' },

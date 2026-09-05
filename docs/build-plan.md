@@ -113,7 +113,9 @@ input; implementation must not invent them.
 
 ## 4. Phase 3 — organizations, permissions, and RLS
 
-Status: implemented by `prompts/22-organizations-permissions-rls.md`.
+Status: implemented by `prompts/22-organizations-permissions-rls.md`; Prompt
+55 adds real PostgreSQL ownership-transfer concurrency and active last-owner
+trigger evidence.
 
 - **Depends on:** phase 2 real database, roles, and migration harness.
 - **Outcome/behavior:** organizations, memberships, invitations, recovery
@@ -148,6 +150,17 @@ Status: implemented by `prompts/22-organizations-permissions-rls.md`.
   `api-design-principles` if public membership routes change.
 - **Exit:** automated negative isolation proof, reviewed SQL policies, no
   controller-local role strings, and documented permission semantics.
+
+**Verification update — 2026-09-05:** `server/test/database.e2e-spec.ts`
+proves two simultaneous ownership-transfer commands serialize to one active
+owner/one audit row/one succeeded idempotency record, while the waiter is
+denied after the winning transition. It also proves the forced-RLS runtime role
+cannot demote the sole owner: PostgreSQL raises the last-owner trigger error and
+rolls the transaction back. `npm run test:e2e --workspace=@acres/server --
+--runInBand` passed 4 suites / 110 tests; `npm run test --workspace=@acres/server
+-- --runInBand` passed 31 suites / 305 tests. The broader lifecycle matrix
+(additional membership evolution, invitation delivery/recovery, and operator
+policy) remains separately scoped.
 
 ## 5. Phase 4 — versioned REST and complementary GraphQL
 
