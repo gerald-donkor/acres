@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Post,
@@ -11,10 +12,15 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import type { SessionProfile } from '@acres/shared';
+import type {
+  ForgotPasswordResult,
+  ResetPasswordResult,
+  SessionProfile,
+} from '@acres/shared';
 import {
   ApiCsrfHeader,
   ApiEnvelope,
+  ApiIdempotencyHeader,
   ApiSessionAuth,
   objectSchema,
   sessionProfileSchema,
@@ -29,8 +35,10 @@ import type {
   RequestWithSession,
 } from '../sessions/authenticated-request';
 import { AuthService } from './auth.service';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterAccountDto } from './dto/register-account.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller({ path: 'auth', version: '1' })
 @ApiTags('auth')
@@ -102,6 +110,40 @@ export class AuthController {
     const started = await this.auth.login(body);
     this.sessions.writeCookie(response, started.token, started.expiresAt);
     return started.profile;
+  }
+
+  @Post('forgot-password')
+  @StrictThrottle()
+  @HttpCode(HttpStatus.OK)
+  @ApiCsrfHeader()
+  @ApiIdempotencyHeader()
+  @ApiEnvelope({
+    summary: 'Request password reset',
+    description:
+      'Issues a single-use password recovery token and dispatches an email if an account exists.',
+    data: objectSchema({ accepted: { type: 'boolean', enum: [true] } }),
+  })
+  async forgotPassword(
+    @Body() body: ForgotPasswordDto,
+  ): Promise<ForgotPasswordResult> {
+    return this.auth.forgotPassword(body);
+  }
+
+  @Post('reset-password')
+  @StrictThrottle()
+  @HttpCode(HttpStatus.OK)
+  @ApiCsrfHeader()
+  @ApiIdempotencyHeader()
+  @ApiEnvelope({
+    summary: 'Reset password',
+    description:
+      'Consumes a single-use recovery token, updates the password, and revokes all active sessions.',
+    data: objectSchema({ reset: { type: 'boolean', enum: [true] } }),
+  })
+  async resetPassword(
+    @Body() body: ResetPasswordDto,
+  ): Promise<ResetPasswordResult> {
+    return this.auth.resetPassword(body);
   }
 
   @Post('logout')

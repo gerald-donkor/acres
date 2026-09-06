@@ -130,6 +130,13 @@ export function getApiErrorCopy(error: unknown): ApiErrorCopy {
         message: "The requested record is not available to this account.",
         action: "Select another organization or try again.",
       };
+    case "INVALID_TOKEN":
+    case "TOKEN_EXPIRED":
+      return {
+        title: "Reset Link Unavailable",
+        message: "This password reset link is invalid or has expired.",
+        action: "Request a new password reset link to continue.",
+      };
     default:
       return {
         title: "Request Failed",

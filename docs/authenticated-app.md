@@ -367,9 +367,30 @@ typecheck, production build, operations checks (0 critical production
 advisories; 7 moderate and 5 high advisories remain under the existing policy),
 token-safety search, and diff checks.
 
+### Account recovery & mail delivery evidence — 2026-09-06
+
+Prompt 58 implements Phase 5C: provider-neutral mail delivery and account
+recovery.
+
+1. **Provider-neutral Mail Delivery (`server/src/mail/`)**:
+   - `MailModule` exports `MailService` providing HTML/text templated email delivery.
+   - `SmtpMailAdapter` connects to Mailpit in development and standard SMTP in production.
+   - `MemoryMailAdapter` enables deterministic test execution by storing dispatched messages in memory.
+   - `mailpit` container service (`axllent/mailpit:v1.23`) added to `docker-compose.yml` (SMTP: 1025, Web UI: 8025).
+2. **Account Recovery REST API**:
+   - `POST /api/v1/auth/forgot-password`: strictly throttled (`@StrictThrottle()`), CSRF-protected, idempotent, anti-enumeration compliant (dummy verification delay on missing accounts, returning generic `{ accepted: true }` without sending email), single-use token issuance (`AccountTokenPurpose.password_recovery`), and async mail dispatch.
+   - `POST /api/v1/auth/reset-password`: strictly throttled, CSRF-protected, idempotent, atomic single-use token consumption, updating password with cost-12 bcrypt, revoking all active sessions for the account (`revokeAllForAccount`) per TM-03, and revoking outstanding recovery tokens.
+3. **Client UI & Security Hygiene**:
+   - `/forgot-password`: accessible email submission form within `AuthFrame`, with polite asynchronous announcement (`aria-live="polite"`), clear 30-minute expiry explanation, and return-to-sign-in navigation.
+   - `/reset-password`: accessible password reset form within `AuthFrame` validating minimum 12 characters and confirmation matching. On mount, executes `window.history.replaceState({}, '', '/reset-password')` to sanitize the recovery bearer token from browser URL history and prevent referrer leakage. Supports direct token paste if opened without query parameters.
+   - `/login`: includes visible, accessible "Forgot password?" link below password field.
+4. **Verification Evidence**:
+   - Backend Supertest suite `server/test/auth-recovery.e2e-spec.ts` passes 9/9 tests (CSRF enforcement, anti-enumeration, mail dispatch, token consumption, session revocation across all sessions, single-use replay rejection).
+   - Client API helper suite `client/tests/api-helpers.spec.ts` passes 9/9 tests (CSRF headers, idempotency keys, error mapping for `INVALID_TOKEN` and `TOKEN_EXPIRED`).
+   - Browser Playwright suite `client/e2e/account-recovery.spec.ts` passes 7/7 tests (full recovery flow, URL token scrubbing, manual token fallback, expired token handling, min 44px touch targets and zero horizontal scroll at 375/800/1280px).
+
 ## 9. Open Phase 5 Work
 
-- Account recovery UI and mail delivery.
 - Invitation issuance/member administration UI and invitation email delivery.
 - Richer authenticated loading boundaries and route-level error files.
 - Production Caddy same-origin routing; current local/dev browser traffic routes via the Next Route Handler bridge.

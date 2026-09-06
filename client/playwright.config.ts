@@ -31,6 +31,7 @@ export default defineConfig({
             "SESSION_SECRET='test-secret-that-is-at-least-32-characters' " +
             "SCHEDULER_ENABLED=false TENANCY_ENABLED=true " +
             "INVITATION_TTL_HOURS=24 ACCOUNT_TOKEN_TTL_MINUTES=30 " +
+            "MAIL_TRANSPORT=memory " +
             "npm run start:server",
           cwd: rootDir,
           url: `${apiURL}/health`,

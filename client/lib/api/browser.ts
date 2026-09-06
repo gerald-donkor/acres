@@ -19,12 +19,16 @@ import type {
   DatasetVersionSummary,
   ExportDownload,
   ExportRequest,
+  ForgotPasswordInput,
+  ForgotPasswordResult,
   IngestionRunSummary,
   InitiateUploadInput,
   InitiateUploadResult,
   LoginInput,
   OrganizationSummary,
   RegisterAccountInput,
+  ResetPasswordInput,
+  ResetPasswordResult,
   Report,
   SessionProfile,
   StartIngestionRunInput,
@@ -127,6 +131,22 @@ export async function logout(): Promise<{ signedOut: true }> {
   const result = await apiMutation<{ signedOut: true }>("/auth/logout");
   csrfToken = null;
   return result;
+}
+
+export async function forgotPassword(
+  input: ForgotPasswordInput,
+): Promise<ForgotPasswordResult> {
+  return apiMutation<ForgotPasswordResult>("/auth/forgot-password", input, {
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function resetPassword(
+  input: ResetPasswordInput,
+): Promise<ResetPasswordResult> {
+  return apiMutation<ResetPasswordResult>("/auth/reset-password", input, {
+    idempotencyKey: createIdempotencyKey(),
+  });
 }
 
 export async function createOrganization(

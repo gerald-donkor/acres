@@ -8,6 +8,7 @@ import { AcresGraphqlModule } from './graphql/graphql.module';
 import { HealthModule } from './health/health.module';
 import { IdentityModule } from './identity/identity.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
+import { MailModule } from './mail/mail.module';
 import { JobsModule } from './jobs/jobs.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -37,6 +38,7 @@ import { AiModule } from './ai/ai.module';
     AccountsModule,
     IdentityModule,
     IdempotencyModule,
+    MailModule,
     StorageModule,
     OutboxModule,
     AuthModule,

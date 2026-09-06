@@ -77,6 +77,17 @@ export class AccountsService {
   toProfile(account: Account): AccountProfile {
     return toAccountProfile(account);
   }
+
+  async updatePassword(
+    accountId: string,
+    newPassword: string,
+  ): Promise<Account> {
+    const passwordHash = await hash(newPassword, BCRYPT_COST);
+    return this.prisma.account.update({
+      where: { id: accountId },
+      data: { passwordHash },
+    });
+  }
 }
 
 /** P2002 is Prisma's unique-constraint violation. */

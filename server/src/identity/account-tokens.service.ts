@@ -74,10 +74,11 @@ export class AccountTokensService {
     accountId: string,
     purpose: AccountTokenPurpose,
   ): Promise<number> {
-    const { count } = await this.prisma.accountToken.updateMany({
+    const result = await this.prisma.accountToken.updateMany({
       where: { accountId, purpose, consumedAt: null, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    const count = result?.count ?? 0;
     this.logger.log(`Account tokens revoked for purpose ${purpose}`);
     return count;
   }

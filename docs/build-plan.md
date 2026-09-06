@@ -267,6 +267,21 @@ pass. This is not the Phase 5 exit: email delivery, recovery, richer route
 boundaries, production same-origin evidence, and 10 pre-existing failures in
 the 50-case full client suite remain open.
 
+**Phase 5C evidence — 2026-09-06:** Prompt 58 adds provider-neutral mail delivery
+and account recovery. `MailModule` provides Nodemailer SMTP transport for Mailpit
+in dev (`axllent/mailpit:v1.23` in `docker-compose.yml`) and `MemoryMailAdapter`
+for deterministic test execution. Public endpoints `POST /api/v1/auth/forgot-password`
+and `POST /api/v1/auth/reset-password` implement strict throttling, CSRF
+protection, idempotency, anti-enumeration constant-time dummy verification,
+atomic single-use SHA-256 token consumption, cost-12 bcrypt password updates,
+and session revocation across all active sessions (`revokeAllForAccount`) per
+TM-03. Client routes `/forgot-password` and `/reset-password` enforce 44px touch
+targets, zero horizontal scroll at 375/800/1280px, and mount-time URL token
+hygiene (`replaceState`) to eliminate bearer token leakage. Backend recovery
+tests (`9/9`), client helper tests (`9/9`), and browser recovery tests (`7/7`)
+pass. Open Phase 5 work: invitation issuance/admin UI with email delivery,
+richer loading/error boundaries, and production Caddy same-origin routing.
+
 ## 7. Phase 6 — storage, queues, worker, and secure uploads
 
 - **Depends on:** phase 4 commands/contracts and phase 3 tenant policy. Phase 5

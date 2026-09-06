@@ -70,6 +70,13 @@ export interface AcresEnv {
   aiDraftMaxProposals: number;
   aiDraftMaxContextBytes: number;
   aiDraftMaxOutputTokens: number;
+  mailTransport: 'smtp' | 'memory';
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser?: string;
+  smtpPass?: string;
+  mailFrom: string;
 }
 
 const REQUIRED = ['DATABASE_URL', 'CLIENT_ORIGIN', 'SESSION_SECRET'] as const;
@@ -132,6 +139,11 @@ const DEFAULTS = {
   AI_DRAFT_MAX_PROPOSALS: '3',
   AI_DRAFT_MAX_CONTEXT_BYTES: '16384',
   AI_DRAFT_MAX_OUTPUT_TOKENS: '2048',
+  MAIL_TRANSPORT: 'smtp',
+  SMTP_HOST: 'localhost',
+  SMTP_PORT: '1025',
+  SMTP_SECURE: 'false',
+  MAIL_FROM: 'Acres <no-reply@acres.local>',
 } as const;
 
 function positiveInt(name: string, raw: string): number {
@@ -258,6 +270,28 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
       throw new Error('AI_DRAFT_TIMEOUT_MS must be between 1000 and 60000 ms.');
     }
   }
+
+  const rawTransport =
+    env.MAIL_TRANSPORT ??
+    (nodeEnv === 'test' ? 'memory' : DEFAULTS.MAIL_TRANSPORT);
+  if (rawTransport !== 'smtp' && rawTransport !== 'memory') {
+    throw new Error(
+      `MAIL_TRANSPORT must be "smtp" or "memory", received "${rawTransport}"`,
+    );
+  }
+  const mailTransport = rawTransport;
+  const smtpHost = env.SMTP_HOST ?? DEFAULTS.SMTP_HOST;
+  const smtpPort = positiveInt(
+    'SMTP_PORT',
+    env.SMTP_PORT ?? DEFAULTS.SMTP_PORT,
+  );
+  const smtpSecure = boolean(
+    'SMTP_SECURE',
+    env.SMTP_SECURE ?? DEFAULTS.SMTP_SECURE,
+  );
+  const smtpUser = env.SMTP_USER?.trim() || undefined;
+  const smtpPass = env.SMTP_PASS?.trim() || undefined;
+  const mailFrom = env.MAIL_FROM?.trim() || DEFAULTS.MAIL_FROM;
 
   return {
     nodeEnv,
@@ -462,5 +496,12 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
     aiDraftMaxProposals,
     aiDraftMaxContextBytes,
     aiDraftMaxOutputTokens,
+    mailTransport,
+    smtpHost,
+    smtpPort,
+    smtpSecure,
+    smtpUser,
+    smtpPass,
+    mailFrom,
   };
 }

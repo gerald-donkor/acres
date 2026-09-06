@@ -269,4 +269,32 @@ export class AcresConfigService {
   get aiDraftMaxOutputTokens(): number {
     return this.get('aiDraftMaxOutputTokens');
   }
+
+  get mailTransport(): AcresEnv['mailTransport'] {
+    return this.get('mailTransport');
+  }
+
+  get smtpHost(): string {
+    return this.get('smtpHost');
+  }
+
+  get smtpPort(): number {
+    return this.get('smtpPort');
+  }
+
+  get smtpSecure(): boolean {
+    return this.get('smtpSecure');
+  }
+
+  get smtpUser(): string | undefined {
+    return this.get('smtpUser');
+  }
+
+  get smtpPass(): string | undefined {
+    return this.get('smtpPass');
+  }
+
+  get mailFrom(): string {
+    return this.get('mailFrom');
+  }
 }

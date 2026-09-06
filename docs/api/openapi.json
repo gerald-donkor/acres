@@ -168,6 +168,20 @@
         "properties": {},
         "type": "object"
       },
+      "ForgotPasswordDto": {
+        "properties": {
+          "email": {
+            "example": "ada@example.com",
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
       "InitiateUploadDto": {
         "properties": {},
         "type": "object"
@@ -242,6 +256,29 @@
         },
         "required": [
           "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "ResetPasswordDto": {
+        "properties": {
+          "password": {
+            "example": "a-new-strong-password",
+            "format": "password",
+            "maxLength": 128,
+            "minLength": 12,
+            "type": "string",
+            "writeOnly": true
+          },
+          "token": {
+            "example": "aB3_...opaque_token",
+            "maxLength": 256,
+            "minLength": 16,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
           "password"
         ],
         "type": "object"
@@ -434,6 +471,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -503,6 +542,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -572,6 +613,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -641,6 +684,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -710,6 +755,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -779,6 +826,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -1037,6 +1086,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -1106,6 +1157,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -1175,6 +1228,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -1244,6 +1299,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -1313,6 +1370,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -1382,6 +1441,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -1864,6 +1925,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -1933,6 +1996,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2002,6 +2067,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2071,6 +2138,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2140,6 +2209,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2209,6 +2280,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2381,6 +2454,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2450,6 +2525,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2519,6 +2596,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2588,6 +2667,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2657,6 +2738,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2726,6 +2809,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2895,6 +2980,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -2964,6 +3051,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3033,6 +3122,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3102,6 +3193,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3171,6 +3264,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3240,6 +3335,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3526,6 +3623,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3595,6 +3694,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3664,6 +3765,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3733,6 +3836,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3802,6 +3907,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3871,6 +3978,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -3997,6 +4106,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4066,6 +4177,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4135,6 +4248,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4204,6 +4319,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4273,6 +4390,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4342,6 +4461,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4390,6 +4511,509 @@
           }
         },
         "summary": "Issue CSRF token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "operationId": "AuthController_forgotPassword_v1",
+        "parameters": [
+          {
+            "description": "Printable 16-128 character replay key for safe retries.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session-bound CSRF token from /api/v1/auth/csrf.",
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "accepted": {
+                          "enum": [
+                            true
+                          ],
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "accepted"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Issues a single-use password recovery token and dispatches an email if an account exists."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Request password reset",
         "tags": [
           "auth"
         ]
@@ -4528,6 +5152,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4597,6 +5223,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4666,6 +5294,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4735,6 +5365,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4804,6 +5436,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -4873,6 +5507,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5000,6 +5636,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5069,6 +5707,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5138,6 +5778,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5207,6 +5849,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5276,6 +5920,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5345,6 +5991,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5536,6 +6184,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5605,6 +6255,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5674,6 +6326,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5743,6 +6397,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5812,6 +6468,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5881,6 +6539,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -5929,6 +6589,509 @@
           }
         },
         "summary": "Register account",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword_v1",
+        "parameters": [
+          {
+            "description": "Printable 16-128 character replay key for safe retries.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Session-bound CSRF token from /api/v1/auth/csrf.",
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "reset": {
+                          "enum": [
+                            true
+                          ],
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "reset"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        true
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Consumes a single-use recovery token, updates the password, and revokes all active sessions."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Validation, CSRF, idempotency or query-limit failure."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Missing or invalid authenticated session."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Authenticated account lacks the required permission."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The requested resource was not found in this scope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Conflict, including idempotency key/body mismatch."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Reset password",
         "tags": [
           "auth"
         ]
@@ -6047,6 +7210,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6116,6 +7281,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6185,6 +7352,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6254,6 +7423,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6323,6 +7494,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6392,6 +7565,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6564,6 +7739,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6633,6 +7810,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6702,6 +7881,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6771,6 +7952,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6840,6 +8023,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -6909,6 +8094,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7109,6 +8296,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7178,6 +8367,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7247,6 +8438,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7316,6 +8509,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7385,6 +8580,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7454,6 +8651,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7603,6 +8802,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7672,6 +8873,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7741,6 +8944,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7810,6 +9015,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7879,6 +9086,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -7948,6 +9157,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8128,6 +9339,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8197,6 +9410,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8266,6 +9481,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8335,6 +9552,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8404,6 +9623,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8473,6 +9694,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8672,6 +9895,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8741,6 +9966,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8810,6 +10037,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8879,6 +10108,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -8948,6 +10179,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9017,6 +10250,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9218,6 +10453,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9287,6 +10524,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9356,6 +10595,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9425,6 +10666,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9494,6 +10737,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9563,6 +10808,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9788,6 +11035,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9857,6 +11106,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9926,6 +11177,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -9995,6 +11248,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10064,6 +11319,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10133,6 +11390,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10340,6 +11599,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10409,6 +11670,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10478,6 +11741,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10547,6 +11812,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10616,6 +11883,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10685,6 +11954,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10909,6 +12180,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -10978,6 +12251,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11047,6 +12322,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11116,6 +12393,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11185,6 +12464,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11254,6 +12535,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11509,6 +12792,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11578,6 +12863,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11647,6 +12934,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11716,6 +13005,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11785,6 +13076,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -11854,6 +13147,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12034,6 +13329,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12103,6 +13400,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12172,6 +13471,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12241,6 +13542,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12310,6 +13613,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12379,6 +13684,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12540,6 +13847,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12609,6 +13918,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12678,6 +13989,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12747,6 +14060,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12816,6 +14131,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -12885,6 +14202,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13124,6 +14443,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13193,6 +14514,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13262,6 +14585,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13331,6 +14656,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13400,6 +14727,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13469,6 +14798,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13739,6 +15070,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13808,6 +15141,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13877,6 +15212,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -13946,6 +15283,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14015,6 +15354,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14084,6 +15425,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14328,6 +15671,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14397,6 +15742,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14466,6 +15813,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14535,6 +15884,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14604,6 +15955,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14673,6 +16026,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14824,6 +16179,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14893,6 +16250,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -14962,6 +16321,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15031,6 +16392,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15100,6 +16463,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15169,6 +16534,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15350,6 +16717,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15419,6 +16788,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15488,6 +16859,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15557,6 +16930,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15626,6 +17001,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15695,6 +17072,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15926,6 +17305,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -15995,6 +17376,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16064,6 +17447,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16133,6 +17518,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16202,6 +17589,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16271,6 +17660,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16496,6 +17887,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16565,6 +17958,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16634,6 +18029,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16703,6 +18100,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16772,6 +18171,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -16841,6 +18242,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17013,6 +18416,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17082,6 +18487,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17151,6 +18558,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17220,6 +18629,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17289,6 +18700,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17358,6 +18771,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17512,6 +18927,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17581,6 +18998,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17650,6 +19069,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17719,6 +19140,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17788,6 +19211,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -17857,6 +19282,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18020,6 +19447,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18089,6 +19518,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18158,6 +19589,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18227,6 +19660,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18296,6 +19731,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18365,6 +19802,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18525,6 +19964,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18594,6 +20035,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18663,6 +20106,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18732,6 +20177,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18801,6 +20248,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -18870,6 +20319,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19054,6 +20505,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19123,6 +20576,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19192,6 +20647,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19261,6 +20718,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19330,6 +20789,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19399,6 +20860,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19566,6 +21029,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19635,6 +21100,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19704,6 +21171,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19773,6 +21242,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19842,6 +21313,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -19911,6 +21384,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20095,6 +21570,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20164,6 +21641,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20233,6 +21712,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20302,6 +21783,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20371,6 +21854,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20440,6 +21925,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20630,6 +22117,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20699,6 +22188,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20768,6 +22259,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20837,6 +22330,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20906,6 +22401,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -20975,6 +22472,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21192,6 +22691,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21261,6 +22762,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21330,6 +22833,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21399,6 +22904,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21468,6 +22975,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21537,6 +23046,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21686,6 +23197,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21755,6 +23268,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21824,6 +23339,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21893,6 +23410,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -21962,6 +23481,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22031,6 +23552,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22216,6 +23739,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22285,6 +23810,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22354,6 +23881,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22423,6 +23952,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22492,6 +24023,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22561,6 +24094,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22710,6 +24245,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22779,6 +24316,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22848,6 +24387,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22917,6 +24458,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -22986,6 +24529,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23055,6 +24600,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23262,6 +24809,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23331,6 +24880,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23400,6 +24951,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23469,6 +25022,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23538,6 +25093,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23607,6 +25164,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23767,6 +25326,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23836,6 +25397,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23905,6 +25468,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -23974,6 +25539,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24043,6 +25610,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24112,6 +25681,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24341,6 +25912,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24410,6 +25983,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24479,6 +26054,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24548,6 +26125,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24617,6 +26196,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24686,6 +26267,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24916,6 +26499,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -24985,6 +26570,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25054,6 +26641,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25123,6 +26712,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25192,6 +26783,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25261,6 +26854,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25683,6 +27278,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25752,6 +27349,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25821,6 +27420,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25890,6 +27491,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -25959,6 +27562,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -26028,6 +27633,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -26486,6 +28093,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -26555,6 +28164,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -26624,6 +28235,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -26693,6 +28306,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -26762,6 +28377,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -26831,6 +28448,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -27263,6 +28882,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -27332,6 +28953,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -27401,6 +29024,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -27470,6 +29095,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -27539,6 +29166,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -27608,6 +29237,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -28057,6 +29688,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -28126,6 +29759,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -28195,6 +29830,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -28264,6 +29901,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -28333,6 +29972,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -28402,6 +30043,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -28870,6 +30513,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -28939,6 +30584,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29008,6 +30655,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29077,6 +30726,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29146,6 +30797,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29215,6 +30868,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29674,6 +31329,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29743,6 +31400,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29812,6 +31471,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29881,6 +31542,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -29950,6 +31613,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30019,6 +31684,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30257,6 +31924,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30326,6 +31995,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30395,6 +32066,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30464,6 +32137,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30533,6 +32208,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30602,6 +32279,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30829,6 +32508,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30898,6 +32579,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -30967,6 +32650,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31036,6 +32721,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31105,6 +32792,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31174,6 +32863,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31640,6 +33331,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31709,6 +33402,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31778,6 +33473,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31847,6 +33544,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31916,6 +33615,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -31985,6 +33686,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -32451,6 +34154,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -32520,6 +34225,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -32589,6 +34296,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -32658,6 +34367,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -32727,6 +34438,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -32796,6 +34509,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -32935,6 +34650,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33004,6 +34721,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33073,6 +34792,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33142,6 +34863,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33211,6 +34934,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33280,6 +35005,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33429,6 +35156,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33498,6 +35227,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33567,6 +35298,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33636,6 +35369,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33705,6 +35440,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33774,6 +35511,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33912,6 +35651,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -33981,6 +35722,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34050,6 +35793,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34119,6 +35864,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34188,6 +35935,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34257,6 +36006,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34416,6 +36167,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34485,6 +36238,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34554,6 +36309,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34623,6 +36380,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34692,6 +36451,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34761,6 +36522,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34893,6 +36656,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -34962,6 +36727,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35031,6 +36798,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35100,6 +36869,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35169,6 +36940,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35238,6 +37011,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35407,6 +37182,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35476,6 +37253,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35545,6 +37324,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35614,6 +37395,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35683,6 +37466,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35752,6 +37537,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35883,6 +37670,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -35952,6 +37741,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -36021,6 +37812,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -36090,6 +37883,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -36159,6 +37954,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",
@@ -36228,6 +38025,8 @@
                             "IDEMPOTENCY_CONFLICT",
                             "NOT_READY",
                             "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
                             "AI_DISABLED",
                             "AI_UNAVAILABLE",
                             "AI_TIMEOUT",

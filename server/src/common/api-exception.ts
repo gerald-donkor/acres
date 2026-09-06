@@ -99,4 +99,12 @@ export class ApiException extends HttpException {
       HttpStatus.SERVICE_UNAVAILABLE,
     );
   }
+
+  static invalidOrExpiredToken(): ApiException {
+    return new ApiException(
+      'INVALID_TOKEN',
+      'This password reset link is invalid or has expired.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
 }

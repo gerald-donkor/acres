@@ -44,6 +44,8 @@ implementing session (2026-08-21), never recalled. Toolchain: **Node v26.7.0**,
 | `graphql-query-complexity`                                     | `2.0.0`                                   | cost guard for GraphQL abuse controls                                                                                                                                                                                   |
 | `dataloader`                                                   | `2.2.3`                                   | per-request GraphQL lookup caching                                                                                                                                                                                      |
 | `bcryptjs`                                                     | `^3.0.3`                                  | password hashing. Pure JavaScript and **ships no install script**, which matters here: this machine's npm blocks unapproved install scripts, so a native hashing binding would not have built                           |
+| `nodemailer`                                                   | `^10.0.0`                                 | provider-neutral mail delivery abstraction supporting SMTP (Mailpit in dev) and test memory transport (MIT)                                                                                                            |
+| `@types/nodemailer`                                            | `^8.0.1`                                  | TypeScript type definitions for Nodemailer                                                                                                                                                                              |
 | `prom-client`                                                  | `^15.1.3`                                 | Prometheus application metrics exposition client (Apache-2.0, pure JS, Node 24 compatible)                                                                                                                              |
 | `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7`            | from the verified Nest scaffold           |
 
@@ -222,6 +224,8 @@ validation or CSRF rule configured only in `main.ts` is a rule no test can see.
 | `POST` | `/auth/login` | public + CSRF | 200, sets the session cookie, returns `SessionProfile` |
 | `POST` | `/auth/logout` | session + CSRF | revokes the session server-side, clears the cookie |
 | `GET` | `/auth/session` | optional session | `SessionProfile`, or the shared `ANONYMOUS_SESSION` |
+| `POST` | `/auth/forgot-password` | public + CSRF | strictly throttled, anti-enumeration timing protected, generates single-use token and dispatches email, returns `{ accepted: true }` |
+| `POST` | `/auth/reset-password` | public + CSRF | strictly throttled, consumes single-use token, updates password hash (cost-12 bcrypt), revokes all active sessions for account, returns `{ reset: true }` |
 | `GET` | `/account` | session | `AccountProfile` |
 | `GET` | `/regions` | public | region summaries with their metrics, one query |
 | `GET` | `/regions/:slug` | public | one summary, or 404 `NOT_FOUND` |

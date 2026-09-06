@@ -68,6 +68,14 @@ export class SessionsService {
     });
   }
 
+  async revokeAllForAccount(accountId: string): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: { accountId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return result?.count ?? 0;
+  }
+
   /**
    * Deletes rows that can no longer authenticate anything: expired **or**
    * revoked. Leaving revoked-but-unexpired rows behind would keep dead

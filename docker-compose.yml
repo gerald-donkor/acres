@@ -75,6 +75,18 @@ services:
       timeout: 10s
       retries: 20
 
+  mailpit:
+    image: axllent/mailpit:v1.23
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:8025/api/v1/info || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   # Disposable local-development volume, intentionally unencrypted at rest —
   # docs/backend.md records the target production encryption/key-recovery

@@ -39,9 +39,32 @@ test("keeps stable API error codes and request IDs", async () => {
   });
 });
 
-test("maps API errors to actionable copy", () => {
+test("maps API errors to actionable copy", async () => {
+  const { ApiClientError } = await import("@/lib/api/envelope");
   expect(getApiErrorCopy(new Error("offline"))).toMatchObject({
     title: "Network Problem",
+  });
+  expect(
+    getApiErrorCopy(
+      new ApiClientError({
+        code: "INVALID_TOKEN",
+        message: "Invalid token",
+        status: 400,
+      }),
+    ),
+  ).toMatchObject({
+    title: "Reset Link Unavailable",
+  });
+  expect(
+    getApiErrorCopy(
+      new ApiClientError({
+        code: "TOKEN_EXPIRED",
+        message: "Token expired",
+        status: 400,
+      }),
+    ),
+  ).toMatchObject({
+    title: "Reset Link Unavailable",
   });
 });
 
@@ -320,6 +343,97 @@ test("browser API helpers attach organization headers and idempotency keys", asy
     expect(lastAiReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
     expect(lastAiReq?.headers["idempotency-key"]).toBeDefined();
     expect(lastAiReq?.method).toBe("POST");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("forgot password and reset password send commands with csrf and idempotency", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{
+    url: string;
+    init?: RequestInit;
+  }> = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    requests.push({ url, init });
+
+    if (url.endsWith("/auth/csrf")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            csrfToken: "csrf-recovery-test",
+            headerName: "x-csrf-token",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (url.endsWith("/auth/forgot-password")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            accepted: true,
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (url.endsWith("/auth/reset-password")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            reset: true,
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    return new Response(JSON.stringify({ ok: true, data: {} }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const { forgotPassword, resetPassword, refreshCsrfToken } = await import(
+      "@/lib/api/browser"
+    );
+    await refreshCsrfToken();
+
+    const forgotResult = await forgotPassword({ email: "user@example.com" });
+    expect(forgotResult).toEqual({ accepted: true });
+    const forgotReq = requests.find((r) =>
+      r.url.endsWith("/auth/forgot-password"),
+    );
+    expect(forgotReq?.url).toBe("/api/v1/auth/forgot-password");
+    expect(forgotReq?.init?.method).toBe("POST");
+    const forgotHeaders = new Headers(forgotReq?.init?.headers);
+    expect(forgotHeaders.get("x-csrf-token")).toBe("csrf-recovery-test");
+    expect(forgotHeaders.get("idempotency-key")).toBeDefined();
+    expect(forgotHeaders.has("x-acres-organization-id")).toBe(false);
+
+    const resetResult = await resetPassword({
+      token: "test-token-123456",
+      password: "NewStrongPassword123!",
+    });
+    expect(resetResult).toEqual({ reset: true });
+    const resetReq = requests.find((r) =>
+      r.url.endsWith("/auth/reset-password"),
+    );
+    expect(resetReq?.url).toBe("/api/v1/auth/reset-password");
+    expect(resetReq?.init?.method).toBe("POST");
+    const resetHeaders = new Headers(resetReq?.init?.headers);
+    expect(resetHeaders.get("x-csrf-token")).toBe("csrf-recovery-test");
+    expect(resetHeaders.get("idempotency-key")).toBeDefined();
+    expect(resetHeaders.has("x-acres-organization-id")).toBe(false);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -7,7 +8,8 @@ import { login } from "@/lib/api/browser";
 import { getApiErrorCopy, isApiClientError } from "@/lib/api/envelope";
 import { sanitizeReturnTo } from "@/lib/auth/return-to";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Field,
   FieldDescription,
@@ -113,6 +115,17 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
           <FieldDescription>Password managers and paste are supported.</FieldDescription>
           <FieldError />
         </Field>
+        <div className="flex items-center justify-end">
+          <Link
+            href="/forgot-password"
+            className={cn(
+              buttonVariants({ variant: "link" }),
+              "h-auto min-h-target px-0 inline-flex items-center text-ui text-brand",
+            )}
+          >
+            Forgot password?
+          </Link>
+        </div>
         <Button type="submit" size="lg" className="h-12" disabled={pending}>
           {pending && <Spinner aria-hidden="true" />}
           Sign In

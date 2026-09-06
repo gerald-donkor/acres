@@ -19,6 +19,7 @@ export interface PrismaDouble {
   account: {
     findUnique: jest.Mock;
     create: jest.Mock;
+    update: jest.Mock;
   };
   session: {
     create: jest.Mock;
@@ -203,7 +204,11 @@ export interface PrismaDouble {
 
 export function createPrismaDouble(): PrismaDouble {
   const prisma = {
-    account: { findUnique: jest.fn(), create: jest.fn() },
+    account: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
     session: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -365,7 +370,7 @@ export function createPrismaDouble(): PrismaDouble {
       create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
-      updateMany: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     aiGeneration: {
       create: jest.fn((input: { data: Record<string, unknown> }) =>
@@ -601,6 +606,32 @@ function configDouble(
     },
     get aiDraftMaxOutputTokens() {
       return positiveInt(envOverrides, 'AI_DRAFT_MAX_OUTPUT_TOKENS', 2048);
+    },
+    get mailTransport() {
+      return (
+        (envValue(envOverrides, 'MAIL_TRANSPORT') as 'smtp' | 'memory') ||
+        'memory'
+      );
+    },
+    get smtpHost() {
+      return envValue(envOverrides, 'SMTP_HOST') || 'localhost';
+    },
+    get smtpPort() {
+      return positiveInt(envOverrides, 'SMTP_PORT', 1025);
+    },
+    get smtpSecure() {
+      return envValue(envOverrides, 'SMTP_SECURE') === 'true';
+    },
+    get smtpUser() {
+      return envValue(envOverrides, 'SMTP_USER') || undefined;
+    },
+    get smtpPass() {
+      return envValue(envOverrides, 'SMTP_PASS') || undefined;
+    },
+    get mailFrom() {
+      return (
+        envValue(envOverrides, 'MAIL_FROM') || 'Acres <no-reply@acres.local>'
+      );
     },
   } as AcresConfigService;
 }
