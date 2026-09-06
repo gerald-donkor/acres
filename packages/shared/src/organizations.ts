@@ -1,8 +1,8 @@
 export const ORGANIZATION_ROLES = [
-  'owner',
-  'admin',
-  'analyst',
-  'viewer',
+  "owner",
+  "admin",
+  "analyst",
+  "viewer",
 ] as const;
 
 export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
@@ -33,7 +33,7 @@ export interface OrganizationInvitation {
   id: string;
   organizationId: string;
   email: string;
-  role: Exclude<OrganizationRole, 'owner'>;
+  role: Exclude<OrganizationRole, "owner">;
   invitedByAccountId: string;
   expiresAt: string;
   createdAt: string;
@@ -55,11 +55,11 @@ export interface UpdateOrganizationInput {
 
 export interface InviteMemberInput {
   email: string;
-  role: Exclude<OrganizationRole, 'owner'>;
+  role: Exclude<OrganizationRole, "owner">;
 }
 
 export interface ChangeMemberRoleInput {
-  role: Exclude<OrganizationRole, 'owner'>;
+  role: Exclude<OrganizationRole, "owner">;
 }
 
 export interface TransferOwnershipInput {
@@ -68,4 +68,9 @@ export interface TransferOwnershipInput {
 
 export interface AcceptInvitationInput {
   token: string;
+}
+
+export interface AcceptInvitationResult {
+  organizationId: string;
+  membershipId: string;
 }

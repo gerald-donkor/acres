@@ -256,6 +256,17 @@ simultaneous-request gate.
 - **Exit:** accessible authenticated journey against real API/DB at all three
   viewports, with server-side enforcement and no cross-org cache residue.
 
+**Phase 5B evidence — 2026-09-06:** Prompt 57 adds the server-session-protected
+`/accept-invitation` paste flow over the existing CSRF/idempotent REST command.
+The focused helper (`1/1`), complete helper file (`8/8`), real-browser
+invitation suite (`6/6`), and server lifecycle regression (`3/3`) pass; browser
+coverage proves the real inviter/invitee journey, generic unavailable state,
+CSRF refresh, focus/pending behavior, token non-persistence, and 375/800/1280
+layout. Contracts, formatting, lint, typecheck, build, and operations checks
+pass. This is not the Phase 5 exit: email delivery, recovery, richer route
+boundaries, production same-origin evidence, and 10 pre-existing failures in
+the 50-case full client suite remain open.
+
 ## 7. Phase 6 — storage, queues, worker, and secure uploads
 
 - **Depends on:** phase 4 commands/contracts and phase 3 tenant policy. Phase 5

@@ -10,18 +10,19 @@ new server contracts.
 
 ## 1. Routes
 
-| route | current behavior |
-| --- | --- |
-| `/` | unchanged marketing landing page. The page file now lives in the `(marketing)` route group so marketing chrome is not global. |
-| `/login` | accessible credential form. It issues CSRF, logs in through `POST /api/v1/auth/login`, refreshes CSRF after the session cookie changes, then redirects to a sanitized `returnTo` path. |
-| `/register` | accessible account form. It issues CSRF, registers through `POST /api/v1/auth/register`, refreshes CSRF after the session cookie changes, then redirects to a sanitized `returnTo` path. |
-| `/app` | server-protected workspace shell. Anonymous users redirect to `/login?returnTo=/app`; authenticated users see organization selection, overview metric cards, or create-organization empty state. |
-| `/app/dashboards` | saved views, summary metrics, and analytics exploration workspace. |
-| `/app/reports` | governed reports library, authoring drafts, and evidence binding. |
-| `/app/datasets` | organization datasets workspace, listing datasets, states, publication versions, and ingestion CTA. |
-| `/app/datasets/new` | new dataset creation form for authorized analysts/admins/owners. |
-| `/app/datasets/[datasetId]` | dataset detail, version history, direct file upload, column/metric mapping, live SSE ingestion progress, and validation issues reporting. |
-| `/api/v1/[...path]` | same-origin Route Handler bridge for browser calls to the Nest API. It forwards only the approved REST surface used by the client. |
+| route                       | current behavior                                                                                                                                                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                         | unchanged marketing landing page. The page file now lives in the `(marketing)` route group so marketing chrome is not global.                                                                                                                     |
+| `/login`                    | accessible credential form. It issues CSRF, logs in through `POST /api/v1/auth/login`, refreshes CSRF after the session cookie changes, then redirects to a sanitized `returnTo` path.                                                            |
+| `/register`                 | accessible account form. It issues CSRF, registers through `POST /api/v1/auth/register`, refreshes CSRF after the session cookie changes, then redirects to a sanitized `returnTo` path.                                                          |
+| `/accept-invitation`        | server-session-protected invitation form. Anonymous accounts return through `/login`; authenticated accounts paste a one-time bearer token, accept through the existing secured command, and enter `/app` with the invited organization selected. |
+| `/app`                      | server-protected workspace shell. Anonymous users redirect to `/login?returnTo=/app`; authenticated users see organization selection, overview metric cards, or create-organization empty state.                                                  |
+| `/app/dashboards`           | saved views, summary metrics, and analytics exploration workspace.                                                                                                                                                                                |
+| `/app/reports`              | governed reports library, authoring drafts, and evidence binding.                                                                                                                                                                                 |
+| `/app/datasets`             | organization datasets workspace, listing datasets, states, publication versions, and ingestion CTA.                                                                                                                                               |
+| `/app/datasets/new`         | new dataset creation form for authorized analysts/admins/owners.                                                                                                                                                                                  |
+| `/app/datasets/[datasetId]` | dataset detail, version history, direct file upload, column/metric mapping, live SSE ingestion progress, and validation issues reporting.                                                                                                         |
+| `/api/v1/[...path]`         | same-origin Route Handler bridge for browser calls to the Nest API. It forwards only the approved REST surface used by the client.                                                                                                                |
 
 The top-level root layout owns fonts, `<html>`, `<body>`, and the skip link.
 Marketing, auth, and app route surfaces each provide the `main-content`
@@ -77,10 +78,14 @@ members, invitations, uploads (`initiateUpload`, `completeUpload`, `getUpload`,
 `getDataset`, `listDatasets`, `listDatasetVersions`), mappings (`createMapping`),
 ingestion runs (`startIngestionRun`, `listIngestionIssues`, `cancelIngestionRun`),
 dashboard views, reports, revisions (`createReportRevision`, `updateReportRevision`, `submitReportRevisionForReview`, `publishReportRevision`), and exports.
+Invitation acceptance uses the same mutation pipeline with a fresh idempotency
+key and deliberately omits `x-acres-organization-id`: the invitation-scoped
+server transaction establishes the target organization.
 
 ### 3.1 Server-Sent Events (SSE) client
 
 `client/lib/api/sse.ts` implements fetch-based SSE stream consumption (`streamSse` and `parseSseLines`):
+
 - Standard browser `EventSource` cannot send custom headers. `streamSse` uses `fetch()` with `ReadableStream` to inject `x-acres-organization-id`, `accept: text/event-stream`, `credentials: "include"`, and `cache: "no-store"`.
 - The parser handles single and multiline `data:` frames, extracts `event` and `id` metadata, ignores heartbeat/comment lines starting with `:`, and cleans up listeners via `AbortSignal`.
 - Terminal predicates (`isTerminal`) cleanly close stream readers on terminal events (`succeeded`, `failed`, `cancelled`, `published`).
@@ -102,6 +107,16 @@ and expose `aria-busy`.
 
 Logout posts to `POST /api/v1/auth/logout`, clears the active organization
 preference cookie, redirects to `/login`, and refreshes the router.
+
+`/accept-invitation` resolves the session in its Server Component and passes
+only the signed-in email to the client form. The invitation token is accepted
+only through a password-style, paste-friendly input. It is trimmed at its
+edges, submitted in the same-origin JSON body, reset after every attempt, and
+never placed in a path, query, fragment, cookie, Web Storage, rendered status,
+log, screenshot, or trace. `NOT_FOUND` states share one non-enumerating
+“Invitation Unavailable” response; session, CSRF, rate-limit, validation,
+network, and unexpected errors retain actionable stable-code handling and safe
+request IDs. Failed async submission focuses one polite alert.
 
 ## 5. Organization selection
 
@@ -306,6 +321,7 @@ Running 12 tests using 2 workers
 ```
 
 Phase 12C expands browser testing with dedicated end-to-end suites:
+
 - `client/e2e/product-journeys.spec.ts`: full product journey coverage across dashboards, GraphQL queries, saved views, reports, and async exports.
 - `client/e2e/multi-tenant-isolation.spec.ts`: multi-tenant browser isolation, cross-tenant report denial, and header tampering defense.
 - `client/e2e/accessibility-responsive.spec.ts`: WCAG 2.2 AA audit across 375/800/1280px viewports, touch targets, and telemetry.
@@ -324,9 +340,36 @@ port-binding panic in this environment. Installed Next 16.3 documents
 client build script to that option so the required root `npm run build` can
 verify the route-group and authenticated shell code path.
 
+### Invitation acceptance evidence — 2026-09-06
+
+Prompt 57 adds one helper test and 6 real-browser cases. The focused helper
+case passes `1/1`; the complete helper file passes `8/8`; the invitation suite
+passes `6/6`; and the focused server invitation regression passes `3/3` with
+111 unrelated cases skipped by the requested name filter. Browser evidence
+covers the anonymous return path, CSRF/idempotency headers without organization
+context, the real inviter/invitee acceptance journey, active-organization
+selection, password masking, pending lockout, CSRF refresh, focused generic
+unavailable copy, token clearing/non-persistence, 44px core controls, and no
+horizontal overflow at 375/800/1280.
+
+The unchanged full 50-case client command does not currently provide a green
+repository-wide baseline. Its first run stopped 19 journeys at the production
+strict registration throttle. With test-process-only limits raised to 100
+strict / 1000 default, it reached `40 passed, 10 failed`; every invitation and
+helper case passed. The remaining failures are outside this slice and reproduce
+in existing dashboard, report, dataset, multi-tenant, and accessibility
+assertions (including an existing 32px report-title input against a 44px test
+and a missing evidence-table caption). Prompt 57 forbids changing those
+surfaces, so this record does not claim the full-suite exit gate is closed.
+
+All other required checks passed: contracts, targeted Prettier, lint,
+typecheck, production build, operations checks (0 critical production
+advisories; 7 moderate and 5 high advisories remain under the existing policy),
+token-safety search, and diff checks.
+
 ## 9. Open Phase 5 Work
 
 - Account recovery UI and mail delivery.
-- Invitation acceptance UI and email flow.
+- Invitation issuance/member administration UI and invitation email delivery.
 - Richer authenticated loading boundaries and route-level error files.
 - Production Caddy same-origin routing; current local/dev browser traffic routes via the Next Route Handler bridge.

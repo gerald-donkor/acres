@@ -62,6 +62,76 @@ test("generates unique idempotency keys", () => {
   expect(second).not.toBe(first);
 });
 
+test("accept invitation sends the secured command without organization context", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{
+    url: string;
+    init?: RequestInit;
+  }> = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    requests.push({ url, init });
+
+    if (url.endsWith("/auth/csrf")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            csrfToken: "csrf-invitation-test",
+            headerName: "x-csrf-token",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        data: {
+          organizationId: "018f0000-0000-7000-8000-000000000001",
+          membershipId: "018f0000-0000-7000-8000-000000000002",
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  let clearBrowserSessionState: (() => Promise<unknown>) | undefined;
+  try {
+    const { acceptInvitation, logout } = await import("@/lib/api/browser");
+    clearBrowserSessionState = logout;
+    const token = "synthetic-invitation-token-value-0001";
+    const result = await acceptInvitation({ token });
+    const request = requests.find(({ url }) =>
+      url.endsWith("/invitations/accept"),
+    );
+    const headers = new Headers(request?.init?.headers);
+
+    expect(result).toEqual({
+      organizationId: "018f0000-0000-7000-8000-000000000001",
+      membershipId: "018f0000-0000-7000-8000-000000000002",
+    });
+    expect(request?.url).toBe("/api/v1/invitations/accept");
+    expect(request?.init?.method).toBe("POST");
+    expect(request?.init?.credentials).toBe("include");
+    expect(request?.init?.cache).toBe("no-store");
+    expect(request?.init?.body).toBe(JSON.stringify({ token }));
+    expect(headers.get("x-csrf-token")).toBe("csrf-invitation-test");
+    expect(headers.get("idempotency-key")).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+    expect(headers.has("x-acres-organization-id")).toBe(false);
+  } finally {
+    try {
+      await clearBrowserSessionState?.();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+});
+
 test("calculateSha256 correctly computes SHA-256 hex digest using Web Crypto", async () => {
   const { calculateSha256 } = await import("@/lib/crypto/checksum");
   const encoder = new TextEncoder();
@@ -81,7 +151,12 @@ test("calculateSha256 correctly computes SHA-256 hex digest using Web Crypto", a
 
 test("browser API helpers attach organization headers and idempotency keys", async () => {
   const originalFetch = globalThis.fetch;
-  const requests: Array<{ url: string; method: string; headers: Record<string, string>; body?: unknown }> = [];
+  const requests: Array<{
+    url: string;
+    method: string;
+    headers: Record<string, string>;
+    body?: unknown;
+  }> = [];
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -110,20 +185,40 @@ test("browser API helpers attach organization headers and idempotency keys", asy
 
     if (url.includes("/auth/csrf")) {
       return new Response(
-        JSON.stringify({ ok: true, data: { csrfToken: "csrf-test-token", headerName: "x-csrf-token" } }),
+        JSON.stringify({
+          ok: true,
+          data: { csrfToken: "csrf-test-token", headerName: "x-csrf-token" },
+        }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
     }
 
-    if (url.includes("/uploads") && init?.method === "POST" && !url.includes("complete")) {
+    if (
+      url.includes("/uploads") &&
+      init?.method === "POST" &&
+      !url.includes("complete")
+    ) {
       return new Response(
         JSON.stringify({
           ok: true,
           data: {
             uploadId: "upl-123",
-            object: { key: "quarantine/123", bucket: "test", checksumAlgorithm: "sha256" },
-            upload: { url: "http://storage.local/upload", method: "PUT", headers: {}, expiresAt: "2026-12-31" },
-            complete: { method: "POST", url: "/api/v1/uploads/upl-123/complete", requiredHeaders: [] },
+            object: {
+              key: "quarantine/123",
+              bucket: "test",
+              checksumAlgorithm: "sha256",
+            },
+            upload: {
+              url: "http://storage.local/upload",
+              method: "PUT",
+              headers: {},
+              expiresAt: "2026-12-31",
+            },
+            complete: {
+              method: "POST",
+              url: "/api/v1/uploads/upl-123/complete",
+              requiredHeaders: [],
+            },
           },
         }),
         { status: 201, headers: { "content-type": "application/json" } },
@@ -148,10 +243,10 @@ test("browser API helpers attach organization headers and idempotency keys", asy
       );
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, data: {} }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ ok: true, data: {} }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
   }) as typeof fetch;
 
   try {
@@ -164,7 +259,9 @@ test("browser API helpers attach organization headers and idempotency keys", asy
     expect(dataset.id).toBe("ds-123");
 
     const lastDatasetReq = requests.find((r) => r.url.endsWith("/datasets"));
-    expect(lastDatasetReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
+    expect(lastDatasetReq?.headers["x-acres-organization-id"]).toBe(
+      "org-test-1",
+    );
     expect(lastDatasetReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
     expect(lastDatasetReq?.headers["idempotency-key"]).toBeDefined();
 
@@ -172,26 +269,41 @@ test("browser API helpers attach organization headers and idempotency keys", asy
       filename: "test.csv",
       mediaType: "text/csv",
       byteCount: 100,
-      checksumHex: "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+      checksumHex:
+        "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
     });
     expect(upload.uploadId).toBe("upl-123");
 
     const lastUploadReq = requests.find((r) => r.url.endsWith("/uploads"));
-    expect(lastUploadReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
+    expect(lastUploadReq?.headers["x-acres-organization-id"]).toBe(
+      "org-test-1",
+    );
     expect(lastUploadReq?.headers["idempotency-key"]).toBeDefined();
 
-    const { submitReportRevisionForReview, publishReportRevision, generateAiDrafts } = await import("@/lib/api/browser");
+    const {
+      submitReportRevisionForReview,
+      publishReportRevision,
+      generateAiDrafts,
+    } = await import("@/lib/api/browser");
 
     await submitReportRevisionForReview("org-test-1", "rep-1", "rev-1");
-    const lastSubmitReq = requests.find((r) => r.url.endsWith("/reports/rep-1/revisions/rev-1/submit-review"));
-    expect(lastSubmitReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
+    const lastSubmitReq = requests.find((r) =>
+      r.url.endsWith("/reports/rep-1/revisions/rev-1/submit-review"),
+    );
+    expect(lastSubmitReq?.headers["x-acres-organization-id"]).toBe(
+      "org-test-1",
+    );
     expect(lastSubmitReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
     expect(lastSubmitReq?.headers["idempotency-key"]).toBeDefined();
     expect(lastSubmitReq?.method).toBe("POST");
 
     await publishReportRevision("org-test-1", "rep-1", "rev-1");
-    const lastPublishReq = requests.find((r) => r.url.endsWith("/reports/rep-1/revisions/rev-1/publish"));
-    expect(lastPublishReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
+    const lastPublishReq = requests.find((r) =>
+      r.url.endsWith("/reports/rep-1/revisions/rev-1/publish"),
+    );
+    expect(lastPublishReq?.headers["x-acres-organization-id"]).toBe(
+      "org-test-1",
+    );
     expect(lastPublishReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
     expect(lastPublishReq?.headers["idempotency-key"]).toBeDefined();
     expect(lastPublishReq?.method).toBe("POST");
@@ -201,7 +313,9 @@ test("browser API helpers attach organization headers and idempotency keys", asy
       evidenceIds: ["ev-1"],
       acknowledgement: true,
     });
-    const lastAiReq = requests.find((r) => r.url.endsWith("/reports/rep-1/revisions/rev-1/ai-drafts"));
+    const lastAiReq = requests.find((r) =>
+      r.url.endsWith("/reports/rep-1/revisions/rev-1/ai-drafts"),
+    );
     expect(lastAiReq?.headers["x-acres-organization-id"]).toBe("org-test-1");
     expect(lastAiReq?.headers["x-csrf-token"]).toBe("csrf-test-token");
     expect(lastAiReq?.headers["idempotency-key"]).toBeDefined();

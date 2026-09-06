@@ -1,6 +1,8 @@
 "use client";
 
 import type {
+  AcceptInvitationInput,
+  AcceptInvitationResult,
   AiDraftProposalsResult,
   ColumnMappingSummary,
   CompleteUploadInput,
@@ -131,6 +133,14 @@ export async function createOrganization(
   input: CreateOrganizationInput,
 ): Promise<OrganizationSummary> {
   return apiMutation<OrganizationSummary>("/organizations", input, {
+    idempotencyKey: createIdempotencyKey(),
+  });
+}
+
+export async function acceptInvitation(
+  input: AcceptInvitationInput,
+): Promise<AcceptInvitationResult> {
+  return apiMutation<AcceptInvitationResult>("/invitations/accept", input, {
     idempotencyKey: createIdempotencyKey(),
   });
 }
