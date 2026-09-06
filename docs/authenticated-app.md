@@ -389,8 +389,35 @@ recovery.
    - Client API helper suite `client/tests/api-helpers.spec.ts` passes 9/9 tests (CSRF headers, idempotency keys, error mapping for `INVALID_TOKEN` and `TOKEN_EXPIRED`).
    - Browser Playwright suite `client/e2e/account-recovery.spec.ts` passes 7/7 tests (full recovery flow, URL token scrubbing, manual token fallback, expired token handling, min 44px touch targets and zero horizontal scroll at 375/800/1280px).
 
+### Member administration & invitation issuance evidence — 2026-09-06
+
+Prompt 59 implements Phase 5D: member administration, role updates, member revocation,
+and invitation issuance with email delivery.
+
+1. **Invitation Email Delivery (`server/src/mail/`)**:
+   - `MailService.sendInvitationEmail`: Dispatches branded HTML and plain-text invitation emails with organization name, assigned role, 24-hour validity, and direct acceptance link (`/accept-invitation?token=...`).
+   - `OrganizationsService.invite`: Queries organization metadata and asynchronously sends the invitation email upon token generation without blocking the HTTP response.
+2. **Client API Helpers (`client/lib/api/`)**:
+   - `listMembers`, `changeMemberRole`, `revokeMember`, `listInvitations`, `inviteMember`, `revokeInvitation` implemented in `client/lib/api/browser.ts` and `client/lib/api/server.ts`.
+   - All mutations attach `x-acres-organization-id`, CSRF tokens (`x-csrf-token`), and unique idempotency keys (`Idempotency-Key`).
+3. **App Shell Navigation & Route**:
+   - App shell navigation activates "Members" (`status: "Active"`, `href: "/app/members"`), filtered strictly to `owner` and `admin` roles.
+   - Protected route `/app/members` reads active organization context and verifies `members.read` permission via `client/lib/app/members-state.ts`.
+   - Polite permission boundary: Viewers and analysts attempting direct navigation to `/app/members` receive an accessible explanation and a "Return to Workspace" link rather than an abrupt redirect or unstyled error.
+4. **Member Administration Workspace (`client/components/acres/app/members-workspace.tsx`)**:
+   - Invitation issuance form: Email address input, role select (`viewer`, `analyst`, and `admin` if actor is owner), and submit button with spinner state. Stacked responsive layout on tablet/mobile prevents input squishing.
+   - Active members table (desktop/tablet) and stacked cards (mobile): Displays name, email, "You" badge for the current account, role badges, joined dates, role modification dropdown for non-owners, and destructive access revocation button.
+   - Pending invitations table (desktop/tablet) and stacked cards (mobile): Lists active invitations with expiration dates and one-click revocation.
+   - Live announcements (`aria-live="polite"`) for action outcomes (invitation issued, role updated, member revoked, invitation revoked).
+5. **Responsive & Touch Floor Compliance**:
+   - Minimum 44px touch targets on all inputs, selects, and action buttons via `NativeSelect` `size="target"` and `min-h-target`.
+   - Zero horizontal scroll verified across 375px, 800px, and 1280px viewports.
+6. **Verification Evidence**:
+   - `server/test/organizations.e2e-spec.ts`: 7/7 passed (CSRF defense, mail delivery via `MemoryMailAdapter`, listing members/invitations, role change, and revocations).
+   - `client/tests/api-helpers.spec.ts`: 10/10 passed (all member administration and invitation helper functions).
+   - `client/e2e/member-administration.spec.ts`: 4/4 passed (owner invite/view/revoke flow, full invitation cycle with token accept, role change, and member revocation, permission boundary for viewer, and responsive 375/800/1280px touch target audit).
+
 ## 9. Open Phase 5 Work
 
-- Invitation issuance/member administration UI and invitation email delivery.
 - Richer authenticated loading boundaries and route-level error files.
 - Production Caddy same-origin routing; current local/dev browser traffic routes via the Next Route Handler bridge.

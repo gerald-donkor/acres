@@ -1782,8 +1782,10 @@ Test Suites: 4 passed, 4 total
 Tests:       114 passed, 114 total
 ```
 
-SMTP delivery, public recovery flows, retention-policy choices, and distributed
-operator policy remain out of scope for this evidence increment.
+Prompt 59 integrates provider-neutral invitation email delivery via `MailService.sendInvitationEmail`,
+invoked asynchronously by `OrganizationsService.invite` with direct token links (`/accept-invitation?token=...`).
+Deterministic delivery is validated in `server/test/organizations.e2e-spec.ts` using `MemoryMailAdapter`.
+Remaining out of scope for this evidence increment: retention-policy choices and distributed operator policy.
 
 ---
 

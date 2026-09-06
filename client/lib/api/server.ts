@@ -6,6 +6,8 @@ import type {
   DatasetSummary,
   DatasetVersionSummary,
   ExportRequest,
+  OrganizationInvitation,
+  OrganizationMember,
   OrganizationSummary,
   Report,
   SessionProfile,
@@ -61,6 +63,23 @@ export function getOrganization(id: string): Promise<OrganizationSummary> {
   return apiGet<OrganizationSummary>(`/organizations/${id}`, {
     organizationId: id,
   });
+}
+
+export function listMembers(
+  organizationId: string,
+): Promise<OrganizationMember[]> {
+  return apiGet<OrganizationMember[]>(`/organizations/${organizationId}/members`, {
+    organizationId,
+  });
+}
+
+export function listInvitations(
+  organizationId: string,
+): Promise<OrganizationInvitation[]> {
+  return apiGet<OrganizationInvitation[]>(
+    `/organizations/${organizationId}/invitations`,
+    { organizationId },
+  );
 }
 
 type GraphqlResponse<TData> = {

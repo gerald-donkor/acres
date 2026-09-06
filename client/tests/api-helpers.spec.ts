@@ -438,3 +438,213 @@ test("forgot password and reset password send commands with csrf and idempotency
     globalThis.fetch = originalFetch;
   }
 });
+
+test("member administration helpers issue correct paths, methods, and headers", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{
+    url: string;
+    init?: RequestInit;
+  }> = [];
+
+  const orgId = "018f0000-0000-7000-8000-000000000010";
+  const membershipId = "018f0000-0000-7000-8000-000000000020";
+  const invitationId = "018f0000-0000-7000-8000-000000000030";
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    requests.push({ url, init });
+
+    if (url.endsWith("/auth/csrf")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            csrfToken: "csrf-members-test",
+            headerName: "x-csrf-token",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (url.endsWith(`/organizations/${orgId}/members`)) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: [
+            {
+              id: membershipId,
+              accountId: "acc-1",
+              email: "member@example.com",
+              displayName: "Member One",
+              role: "viewer",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+              revokedAt: null,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (url.endsWith(`/organizations/${orgId}/members/${membershipId}`) && init?.method === "PATCH") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            id: membershipId,
+            accountId: "acc-1",
+            email: "member@example.com",
+            displayName: "Member One",
+            role: "analyst",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            revokedAt: null,
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (url.endsWith(`/organizations/${orgId}/members/${membershipId}`) && init?.method === "DELETE") {
+      return new Response(
+        JSON.stringify({ ok: true, data: { revoked: true } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (url.endsWith(`/organizations/${orgId}/invitations`) && init?.method === "POST") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            id: invitationId,
+            organizationId: orgId,
+            email: "invited@example.com",
+            role: "viewer",
+            invitedByAccountId: "acc-admin",
+            expiresAt: "2026-01-02T00:00:00.000Z",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            acceptedAt: null,
+            revokedAt: null,
+            token: "invite-token-abc",
+          },
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (url.endsWith(`/organizations/${orgId}/invitations`) && (!init?.method || init.method === "GET")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: [
+            {
+              id: invitationId,
+              organizationId: orgId,
+              email: "invited@example.com",
+              role: "viewer",
+              invitedByAccountId: "acc-admin",
+              expiresAt: "2026-01-02T00:00:00.000Z",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              acceptedAt: null,
+              revokedAt: null,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (url.endsWith(`/organizations/${orgId}/invitations/${invitationId}`) && init?.method === "DELETE") {
+      return new Response(
+        JSON.stringify({ ok: true, data: { revoked: true } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    return new Response(JSON.stringify({ ok: true, data: {} }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const {
+      listMembers,
+      changeMemberRole,
+      revokeMember,
+      listInvitations,
+      inviteMember,
+      revokeInvitation,
+      refreshCsrfToken,
+    } = await import("@/lib/api/browser");
+
+    await refreshCsrfToken();
+
+    // 1. listMembers
+    const members = await listMembers(orgId);
+    expect(members).toHaveLength(1);
+    expect(members[0].email).toBe("member@example.com");
+    const listMemReq = requests.find((r) => r.url === `/api/v1/organizations/${orgId}/members`);
+    expect(listMemReq).toBeDefined();
+    expect(new Headers(listMemReq?.init?.headers).get("x-acres-organization-id")).toBe(orgId);
+
+    // 2. changeMemberRole
+    const changed = await changeMemberRole(orgId, membershipId, "analyst");
+    expect(changed.role).toBe("analyst");
+    const patchReq = requests.find((r) => r.url === `/api/v1/organizations/${orgId}/members/${membershipId}`);
+    expect(patchReq?.init?.method).toBe("PATCH");
+    expect(JSON.parse(patchReq?.init?.body as string)).toEqual({ role: "analyst" });
+    const patchHeaders = new Headers(patchReq?.init?.headers);
+    expect(patchHeaders.get("x-csrf-token")).toBe("csrf-members-test");
+    expect(patchHeaders.get("x-acres-organization-id")).toBe(orgId);
+
+    // 3. revokeMember
+    const revokedMem = await revokeMember(orgId, membershipId);
+    expect(revokedMem).toEqual({ revoked: true });
+    const delMemReq = requests.find(
+      (r) => r.url === `/api/v1/organizations/${orgId}/members/${membershipId}` && r.init?.method === "DELETE",
+    );
+    expect(delMemReq).toBeDefined();
+    expect(new Headers(delMemReq?.init?.headers).get("x-acres-organization-id")).toBe(orgId);
+
+    // 4. listInvitations
+    const invitations = await listInvitations(orgId);
+    expect(invitations).toHaveLength(1);
+    expect(invitations[0].email).toBe("invited@example.com");
+    const listInvReq = requests.find(
+      (r) => r.url === `/api/v1/organizations/${orgId}/invitations` && (!r.init?.method || r.init.method === "GET"),
+    );
+    expect(listInvReq).toBeDefined();
+    expect(new Headers(listInvReq?.init?.headers).get("x-acres-organization-id")).toBe(orgId);
+
+    // 5. inviteMember
+    const invitation = await inviteMember(orgId, { email: "invited@example.com", role: "viewer" });
+    expect(invitation.token).toBe("invite-token-abc");
+    const postInvReq = requests.find(
+      (r) => r.url === `/api/v1/organizations/${orgId}/invitations` && r.init?.method === "POST",
+    );
+    expect(postInvReq).toBeDefined();
+    expect(JSON.parse(postInvReq?.init?.body as string)).toEqual({
+      email: "invited@example.com",
+      role: "viewer",
+    });
+    const postInvHeaders = new Headers(postInvReq?.init?.headers);
+    expect(postInvHeaders.get("x-csrf-token")).toBe("csrf-members-test");
+    expect(postInvHeaders.get("x-acres-organization-id")).toBe(orgId);
+    expect(postInvHeaders.get("idempotency-key")).toBeDefined();
+
+    // 6. revokeInvitation
+    const revokedInv = await revokeInvitation(orgId, invitationId);
+    expect(revokedInv).toEqual({ revoked: true });
+    const delInvReq = requests.find(
+      (r) => r.url === `/api/v1/organizations/${orgId}/invitations/${invitationId}` && r.init?.method === "DELETE",
+    );
+    expect(delInvReq).toBeDefined();
+    expect(new Headers(delInvReq?.init?.headers).get("x-acres-organization-id")).toBe(orgId);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

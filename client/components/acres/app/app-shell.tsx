@@ -31,7 +31,7 @@ type AppShellProps = {
   account: AccountProfile;
   organizations: OrganizationSummary[];
   activeOrganization: OrganizationSummary | null;
-  activeSection?: "workspace" | "datasets" | "dashboards" | "reports";
+  activeSection?: "workspace" | "datasets" | "dashboards" | "reports" | "members";
   children?: ReactNode;
 };
 
@@ -79,8 +79,8 @@ const navItems: Array<{
   },
   {
     label: "Members",
-    status: "Unavailable",
-    href: null,
+    status: "Active",
+    href: "/app/members",
     icon: ShieldCheckIcon,
     roles: ["owner", "admin"],
   },
@@ -120,7 +120,7 @@ function WorkNavigation({
   activeSection,
 }: {
   role: OrganizationRole | null;
-  activeSection: "workspace" | "datasets" | "dashboards" | "reports";
+  activeSection?: "workspace" | "datasets" | "dashboards" | "reports" | "members";
 }) {
   const visible = navItems.filter((item) => role === null || item.roles.includes(role));
   return (
@@ -131,7 +131,8 @@ function WorkNavigation({
           (activeSection === "workspace" && item.href === "/app") ||
           (activeSection === "datasets" && item.href === "/app/datasets") ||
           (activeSection === "dashboards" && item.href === "/app/dashboards") ||
-          (activeSection === "reports" && item.href === "/app/reports");
+          (activeSection === "reports" && item.href === "/app/reports") ||
+          (activeSection === "members" && item.href === "/app/members");
         const enabled = item.status === "Active" && item.href !== null;
         const href = item.href;
         const content = (

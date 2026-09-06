@@ -282,6 +282,25 @@ tests (`9/9`), client helper tests (`9/9`), and browser recovery tests (`7/7`)
 pass. Open Phase 5 work: invitation issuance/admin UI with email delivery,
 richer loading/error boundaries, and production Caddy same-origin routing.
 
+**Phase 5D evidence — 2026-09-06:** Prompt 59 adds member administration and
+invitation issuance UI with email delivery. `MailService.sendInvitationEmail`
+delivers branded invitation emails with 24-hour expiration details and direct
+acceptance links (`/accept-invitation?token=...`). `OrganizationsService.invite`
+asynchronously dispatches the invitation email on issuance. Client API helpers
+(`listMembers`, `changeMemberRole`, `revokeMember`, `listInvitations`, `inviteMember`,
+`revokeInvitation`) in `server.ts` and `browser.ts` wire CSRF headers, idempotency
+keys, and organization scoping. The app shell activates the "Members" navigation
+item (`status: "Active"`, `href: "/app/members"`, visible to `owner` and `admin`).
+The `/app/members` route provides `MembersWorkspace`, featuring active member
+listing, role management, member revocation, invitation issuance with role assignment,
+and invitation revocation. Viewers and analysts navigating directly to `/app/members`
+receive a polite permission boundary with return-to-workspace navigation. Controls
+enforce minimum 44px touch targets and zero horizontal scroll at 375/800/1280px
+viewports. Backend organizations e2e tests (`7/7`), client API helper tests (`10/10`),
+and browser member administration tests (`4/4`) pass. Open Phase 5 work: richer
+authenticated loading boundaries and route-level error files, and production Caddy
+same-origin routing.
+
 ## 7. Phase 6 — storage, queues, worker, and secure uploads
 
 - **Depends on:** phase 4 commands/contracts and phase 3 tenant policy. Phase 5

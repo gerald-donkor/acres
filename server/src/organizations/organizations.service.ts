@@ -18,6 +18,7 @@ import {
 import { OrganizationPolicy, type OrganizationPermission } from './permissions';
 import type { OrganizationContext } from './organization-context';
 import { AuditService } from './audit.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -28,6 +29,7 @@ export class OrganizationsService {
     private readonly audit: AuditService,
     private readonly config: AcresConfigService,
     private readonly idempotency: IdempotencyService,
+    private readonly mail: MailService,
   ) {}
 
   private ensureEnabled(): void {
@@ -580,6 +582,26 @@ export class OrganizationsService {
               details: { role },
             });
             this.logger.log('Invitation issued');
+
+            const org = await tx.organization.findUnique({
+              where: { id: context.organizationId },
+              select: { name: true },
+            });
+            const organizationName = org?.name ?? 'Acres Organization';
+            const inviteUrl = `${this.config.clientOrigin}/accept-invitation?token=${encodeURIComponent(token)}`;
+            try {
+              await this.mail.sendInvitationEmail(
+                row.email,
+                inviteUrl,
+                organizationName,
+                row.role,
+              );
+            } catch (error) {
+              this.logger.error(
+                `Failed to dispatch invitation email: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            }
+
             return { ...this.invitationDto(row), token };
           },
         );

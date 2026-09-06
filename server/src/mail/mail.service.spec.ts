@@ -14,6 +14,7 @@ describe('MailService', () => {
     mockConfig = {
       mailFrom: 'Acres <no-reply@acres.local>',
       accountTokenTtlMinutes: 30,
+      invitationTtlHours: 24,
       clientOrigin: 'http://localhost:3000',
     };
 
@@ -75,6 +76,33 @@ describe('MailService', () => {
     expect(sent.html).toContain(resetUrl);
     expect(sent.html).toContain('Reset Password');
     expect(sent.html).toContain('30 minutes');
+  });
+
+  it('composes and sends invitation email with role and accept URL', async () => {
+    const inviteUrl =
+      'http://localhost:3000/accept-invitation?token=invite-token-456';
+    await mailService.sendInvitationEmail(
+      'invitee@example.com',
+      inviteUrl,
+      'Acme Forest Co',
+      'analyst',
+    );
+
+    expect(memoryTransport.sent).toHaveLength(1);
+    const sent = memoryTransport.sent[0];
+    expect(sent.to).toBe('invitee@example.com');
+    expect(sent.subject).toBe(
+      "You've been invited to join Acme Forest Co on Acres",
+    );
+    expect(sent.text).toContain(inviteUrl);
+    expect(sent.text).toContain('Acme Forest Co');
+    expect(sent.text).toContain('Analyst');
+    expect(sent.text).toContain('24 hours');
+    expect(sent.html).toContain(inviteUrl);
+    expect(sent.html).toContain('Accept Invitation');
+    expect(sent.html).toContain('Acme Forest Co');
+    expect(sent.html).toContain('Analyst');
+    expect(sent.html).toContain('24 hours');
   });
 
   it('memory adapter clears sent messages on clear()', async () => {

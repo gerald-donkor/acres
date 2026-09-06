@@ -67,4 +67,60 @@ export class MailService {
       html,
     });
   }
+
+  async sendInvitationEmail(
+    to: string,
+    inviteUrl: string,
+    organizationName: string,
+    role: string,
+  ): Promise<void> {
+    const formattedRole = role.charAt(0).toUpperCase() + role.slice(1);
+    const subject = `You've been invited to join ${organizationName} on Acres`;
+    const text = [
+      `You have been invited to join ${organizationName} on Acres as a ${formattedRole}.`,
+      '',
+      'Use the following link to accept the invitation and access the organization:',
+      inviteUrl,
+      '',
+      `This link will expire in ${this.config.invitationTtlHours} hours.`,
+      '',
+      'If you were not expecting this invitation, you can safely ignore this email.',
+    ].join('\n');
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${subject}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #000000; background-color: #FFFFFF; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; border: 1px solid #E9E9E9; border-radius: 14px; padding: 32px; background: #FFFFFF;">
+    <h1 style="font-size: 24px; font-weight: 600; color: #485C11; margin: 0 0 16px 0;">Acres</h1>
+    <h2 style="font-size: 20px; font-weight: 500; margin: 0 0 16px 0;">You've been invited to join ${organizationName}</h2>
+    <p style="color: #6F6F6F; margin: 0 0 24px 0; font-size: 15px;">
+      You have been invited to join <strong>${organizationName}</strong> on Acres with the role of <strong>${formattedRole}</strong>. Click the button below to accept your invitation:
+    </p>
+    <div style="margin: 0 0 24px 0;">
+      <a href="${inviteUrl}" style="display: inline-block; background-color: #485C11; color: #FFFFFF; text-decoration: none; padding: 12px 24px; border-radius: 24px; font-size: 15px; font-weight: 500;">
+        Accept Invitation
+      </a>
+    </div>
+    <p style="color: #6F6F6F; font-size: 13px; margin: 0 0 16px 0;">
+      If the button does not work, copy and paste this link into your browser:<br>
+      <a href="${inviteUrl}" style="color: #485C11; word-break: break-all;">${inviteUrl}</a>
+    </p>
+    <p style="color: #929292; font-size: 13px; margin: 0; border-top: 1px solid #E9E9E9; padding-top: 16px;">
+      This link will expire in ${this.config.invitationTtlHours} hours. If you did not expect this invitation, no action is needed.
+    </p>
+  </div>
+</body>
+</html>`;
+
+    await this.send({
+      to,
+      subject,
+      text,
+      html,
+    });
+  }
 }

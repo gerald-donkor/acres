@@ -24,7 +24,12 @@ import type {
   IngestionRunSummary,
   InitiateUploadInput,
   InitiateUploadResult,
+  InviteMemberInput,
+  IssuedInvitation,
   LoginInput,
+  OrganizationInvitation,
+  OrganizationMember,
+  OrganizationRole,
   OrganizationSummary,
   RegisterAccountInput,
   ResetPasswordInput,
@@ -163,6 +168,88 @@ export async function acceptInvitation(
   return apiMutation<AcceptInvitationResult>("/invitations/accept", input, {
     idempotencyKey: createIdempotencyKey(),
   });
+}
+
+export async function listMembers(
+  organizationId: string,
+): Promise<OrganizationMember[]> {
+  return apiFetch<OrganizationMember[]>(
+    `/organizations/${organizationId}/members`,
+    {
+      method: "GET",
+      organizationId,
+    },
+  );
+}
+
+export async function changeMemberRole(
+  organizationId: string,
+  membershipId: string,
+  role: Exclude<OrganizationRole, "owner">,
+): Promise<OrganizationMember> {
+  return apiMutation<OrganizationMember>(
+    `/organizations/${organizationId}/members/${membershipId}`,
+    { role },
+    {
+      method: "PATCH",
+      organizationId,
+    },
+  );
+}
+
+export async function revokeMember(
+  organizationId: string,
+  membershipId: string,
+): Promise<{ revoked: true }> {
+  return apiMutation<{ revoked: true }>(
+    `/organizations/${organizationId}/members/${membershipId}`,
+    undefined,
+    {
+      method: "DELETE",
+      organizationId,
+    },
+  );
+}
+
+export async function listInvitations(
+  organizationId: string,
+): Promise<OrganizationInvitation[]> {
+  return apiFetch<OrganizationInvitation[]>(
+    `/organizations/${organizationId}/invitations`,
+    {
+      method: "GET",
+      organizationId,
+    },
+  );
+}
+
+export async function inviteMember(
+  organizationId: string,
+  input: InviteMemberInput,
+): Promise<IssuedInvitation> {
+  return apiMutation<IssuedInvitation>(
+    `/organizations/${organizationId}/invitations`,
+    input,
+    {
+      method: "POST",
+      organizationId,
+      idempotencyKey: createIdempotencyKey(),
+    },
+  );
+}
+
+export async function revokeInvitation(
+  organizationId: string,
+  invitationId: string,
+): Promise<{ revoked: true }> {
+  return apiMutation<{ revoked: true }>(
+    `/organizations/${organizationId}/invitations/${invitationId}`,
+    undefined,
+    {
+      method: "DELETE",
+      organizationId,
+    },
+  );
 }
 
 export async function createDashboardView(
