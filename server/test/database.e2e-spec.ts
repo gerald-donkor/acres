@@ -79,6 +79,59 @@ describe('Acres API — real database', () => {
     };
   }
 
+  async function createOrganization(
+    actor: Awaited<ReturnType<typeof signedInAgent>>,
+    key: string,
+    name: string,
+  ): Promise<{ id: string; membership: { id: string; role: string } }> {
+    const response = await actor.agent
+      .post('/api/v1/organizations')
+      .set('Idempotency-Key', key)
+      .set('x-csrf-token', actor.token)
+      .send({ name })
+      .expect(201);
+    return (
+      response.body as {
+        data: { id: string; membership: { id: string; role: string } };
+      }
+    ).data;
+  }
+
+  async function issueInvitation(
+    actor: Awaited<ReturnType<typeof signedInAgent>>,
+    organizationId: string,
+    email: string,
+    role: 'admin' | 'analyst' | 'viewer',
+    key: string,
+  ): Promise<{ id: string; token: string }> {
+    const response = await actor.agent
+      .post(`/api/v1/organizations/${organizationId}/invitations`)
+      .set('x-acres-organization-id', organizationId)
+      .set('Idempotency-Key', key)
+      .set('x-csrf-token', actor.token)
+      .send({ email, role })
+      .expect(201);
+    return (response.body as { data: { id: string; token: string } }).data;
+  }
+
+  async function acceptInvitation(
+    actor: Awaited<ReturnType<typeof signedInAgent>>,
+    token: string,
+    key: string,
+  ): Promise<{ organizationId: string; membershipId: string }> {
+    const response = await actor.agent
+      .post('/api/v1/invitations/accept')
+      .set('Idempotency-Key', key)
+      .set('x-csrf-token', actor.token)
+      .send({ token })
+      .expect(200);
+    return (
+      response.body as {
+        data: { organizationId: string; membershipId: string };
+      }
+    ).data;
+  }
+
   async function expectConnectionDenied(connectionString: string) {
     const probe = new PrismaClient({
       adapter: new PrismaPg({
@@ -878,6 +931,825 @@ describe('Acres API — real database', () => {
         },
       });
     });
+
+    it('proves the membership lifecycle through revocation and reinvitation', async () => {
+      const owner = await signedInAgent('lifecycle-owner@example.com');
+      const admin = await signedInAgent('lifecycle-admin@example.com');
+      const viewer = await signedInAgent('lifecycle-viewer@example.com');
+      const organization = await createOrganization(
+        owner,
+        'membership-lifecycle-create-0001',
+        'Membership Lifecycle Org',
+      );
+
+      const adminInvite = await issueInvitation(
+        owner,
+        organization.id,
+        'lifecycle-admin@example.com',
+        'admin',
+        'membership-lifecycle-invite-admin-0001',
+      );
+      const acceptedAdmin = await acceptInvitation(
+        admin,
+        adminInvite.token,
+        'membership-lifecycle-accept-admin-0001',
+      );
+
+      await admin.agent
+        .post(`/api/v1/organizations/${organization.id}/invitations`)
+        .set('x-acres-organization-id', organization.id)
+        .set('Idempotency-Key', 'membership-lifecycle-deny-admin-0001')
+        .set('x-csrf-token', admin.token)
+        .send({ email: 'denied-admin@example.com', role: 'admin' })
+        .expect(403)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'FORBIDDEN' },
+          });
+        });
+      await admin.agent
+        .post(`/api/v1/organizations/${organization.id}/invitations`)
+        .set('x-acres-organization-id', organization.id)
+        .set('Idempotency-Key', 'membership-lifecycle-deny-owner-0001')
+        .set('x-csrf-token', admin.token)
+        .send({ email: 'denied-owner@example.com', role: 'owner' })
+        .expect(400)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'VALIDATION_FAILED' },
+          });
+        });
+
+      const viewerInvite = await issueInvitation(
+        admin,
+        organization.id,
+        'lifecycle-viewer@example.com',
+        'viewer',
+        'membership-lifecycle-invite-viewer-0001',
+      );
+      const acceptedViewer = await acceptInvitation(
+        viewer,
+        viewerInvite.token,
+        'membership-lifecycle-accept-viewer-0001',
+      );
+
+      await owner.agent
+        .patch(
+          `/api/v1/organizations/${organization.id}/members/${acceptedViewer.membershipId}`,
+        )
+        .set('x-acres-organization-id', organization.id)
+        .set('x-csrf-token', owner.token)
+        .send({ role: 'analyst' })
+        .expect(200)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: true,
+            data: { id: acceptedViewer.membershipId, role: 'analyst' },
+          });
+        });
+      await admin.agent
+        .patch(
+          `/api/v1/organizations/${organization.id}/members/${acceptedViewer.membershipId}`,
+        )
+        .set('x-acres-organization-id', organization.id)
+        .set('x-csrf-token', admin.token)
+        .send({ role: 'viewer' })
+        .expect(200)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: true,
+            data: { id: acceptedViewer.membershipId, role: 'viewer' },
+          });
+        });
+
+      await admin.agent
+        .patch(
+          `/api/v1/organizations/${organization.id}/members/${acceptedAdmin.membershipId}`,
+        )
+        .set('x-acres-organization-id', organization.id)
+        .set('x-csrf-token', admin.token)
+        .send({ role: 'viewer' })
+        .expect(409)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'CONFLICT' },
+          });
+        });
+      await owner.agent
+        .patch(
+          `/api/v1/organizations/${organization.id}/members/${organization.membership.id}`,
+        )
+        .set('x-acres-organization-id', organization.id)
+        .set('x-csrf-token', owner.token)
+        .send({ role: 'admin' })
+        .expect(409)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'CONFLICT' },
+          });
+        });
+
+      await admin.agent
+        .delete(
+          `/api/v1/organizations/${organization.id}/members/${acceptedViewer.membershipId}`,
+        )
+        .set('x-acres-organization-id', organization.id)
+        .set('x-csrf-token', admin.token)
+        .expect(200)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: true,
+            data: { revoked: true },
+          });
+        });
+
+      await viewer.agent
+        .get('/api/v1/auth/session')
+        .expect(200)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: true,
+            data: { authenticated: true },
+          });
+        });
+      await viewer.agent
+        .get('/api/v1/organizations')
+        .expect(200)
+        .expect((response) => {
+          expect(response.body).toMatchObject({ ok: true, data: [] });
+        });
+      await viewer.agent
+        .get(`/api/v1/organizations/${organization.id}`)
+        .set('x-acres-organization-id', organization.id)
+        .expect(404)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'NOT_FOUND' },
+          });
+        });
+
+      const revokedMembers = await owner.agent
+        .get(`/api/v1/organizations/${organization.id}/members`)
+        .set('x-acres-organization-id', organization.id)
+        .expect(200);
+      const revokedViewer = (
+        revokedMembers.body as {
+          data: Array<{ id: string; role: string; revokedAt: string | null }>;
+        }
+      ).data.find((member) => member.id === acceptedViewer.membershipId);
+      expect(revokedViewer?.role).toBe('viewer');
+      expect(typeof revokedViewer?.revokedAt).toBe('string');
+
+      const reactivationInvite = await issueInvitation(
+        owner,
+        organization.id,
+        'lifecycle-viewer@example.com',
+        'analyst',
+        'membership-lifecycle-reinvite-viewer-0001',
+      );
+      const reactivated = await acceptInvitation(
+        viewer,
+        reactivationInvite.token,
+        'membership-lifecycle-reactivate-viewer-0001',
+      );
+      expect(reactivated).toEqual({
+        organizationId: organization.id,
+        membershipId: acceptedViewer.membershipId,
+      });
+      await viewer.agent
+        .get(`/api/v1/organizations/${organization.id}`)
+        .set('x-acres-organization-id', organization.id)
+        .expect(200)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: true,
+            data: {
+              id: organization.id,
+              membership: {
+                id: acceptedViewer.membershipId,
+                role: 'analyst',
+              },
+            },
+          });
+        });
+
+      const ownerAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'lifecycle-owner@example.com' },
+      });
+      const adminAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'lifecycle-admin@example.com' },
+      });
+      const viewerAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'lifecycle-viewer@example.com' },
+      });
+      const evidence = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${ownerAccount.id}, true),
+            set_config('acres.organization_id', ${organization.id}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return {
+          viewerMemberships: await tx.membership.findMany({
+            where: {
+              organizationId: organization.id,
+              account: { email: 'lifecycle-viewer@example.com' },
+            },
+          }),
+          audits: await tx.auditEvent.findMany({
+            where: { organizationId: organization.id },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          }),
+          invitations: await tx.invitation.findMany({
+            where: { organizationId: organization.id },
+          }),
+        };
+      });
+      const adminIdempotency = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${adminAccount.id}, true),
+            set_config('acres.organization_id', ${organization.id}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return tx.idempotencyRecord.findMany({
+          where: {
+            accountId: adminAccount.id,
+            organizationId: organization.id,
+            operation: 'organizations.invite',
+          },
+        });
+      });
+
+      expect(evidence.viewerMemberships).toHaveLength(1);
+      expect(evidence.viewerMemberships[0]).toMatchObject({
+        id: acceptedViewer.membershipId,
+        role: 'analyst',
+        revokedAt: null,
+      });
+      const auditsByAction = (action: string) =>
+        evidence.audits.filter((audit) => audit.action === action);
+      const auditEvidence = (action: string) =>
+        auditsByAction(action).map((audit) => ({
+          actorAccountId: audit.actorAccountId,
+          targetType: audit.targetType,
+          targetId: audit.targetId,
+          details: audit.details,
+        }));
+      expect(auditEvidence('invitation_issued')).toEqual([
+        {
+          actorAccountId: ownerAccount.id,
+          targetType: 'invitation',
+          targetId: adminInvite.id,
+          details: { role: 'admin' },
+        },
+        {
+          actorAccountId: adminAccount.id,
+          targetType: 'invitation',
+          targetId: viewerInvite.id,
+          details: { role: 'viewer' },
+        },
+        {
+          actorAccountId: ownerAccount.id,
+          targetType: 'invitation',
+          targetId: reactivationInvite.id,
+          details: { role: 'analyst' },
+        },
+      ]);
+      expect(auditEvidence('invitation_accepted')).toEqual([
+        {
+          actorAccountId: adminAccount.id,
+          targetType: 'invitation',
+          targetId: adminInvite.id,
+          details: { membershipId: acceptedAdmin.membershipId },
+        },
+        {
+          actorAccountId: viewerAccount.id,
+          targetType: 'invitation',
+          targetId: viewerInvite.id,
+          details: { membershipId: acceptedViewer.membershipId },
+        },
+        {
+          actorAccountId: viewerAccount.id,
+          targetType: 'invitation',
+          targetId: reactivationInvite.id,
+          details: { membershipId: acceptedViewer.membershipId },
+        },
+      ]);
+      expect(auditEvidence('membership_role_changed')).toEqual([
+        {
+          actorAccountId: ownerAccount.id,
+          targetType: 'membership',
+          targetId: acceptedViewer.membershipId,
+          details: { oldRole: 'viewer', newRole: 'analyst' },
+        },
+        {
+          actorAccountId: adminAccount.id,
+          targetType: 'membership',
+          targetId: acceptedViewer.membershipId,
+          details: { oldRole: 'analyst', newRole: 'viewer' },
+        },
+      ]);
+      expect(auditEvidence('membership_revoked')).toEqual([
+        {
+          actorAccountId: adminAccount.id,
+          targetType: 'membership',
+          targetId: acceptedViewer.membershipId,
+          details: null,
+        },
+      ]);
+      expect(adminIdempotency).toHaveLength(1);
+      expect(adminIdempotency[0]).toMatchObject({ state: 'succeeded' });
+      const serializedAudit = JSON.stringify(evidence.audits);
+      for (const secret of [
+        adminInvite.token,
+        viewerInvite.token,
+        reactivationInvite.token,
+        owner.token,
+        admin.token,
+        viewer.token,
+      ]) {
+        expect(serializedAudit).not.toContain(secret);
+      }
+      expect(JSON.stringify(evidence.invitations)).not.toContain(
+        reactivationInvite.token,
+      );
+    }, 20_000);
+
+    it('enforces the invitation lifecycle for duplicates and revocation', async () => {
+      const owner = await signedInAgent('state-owner@example.com');
+      const recipient = await signedInAgent('state-recipient@example.com');
+      const organization = await createOrganization(
+        owner,
+        'invitation-lifecycle-create-0001',
+        'Invitation Lifecycle Org',
+      );
+      const first = await issueInvitation(
+        owner,
+        organization.id,
+        'state-recipient@example.com',
+        'viewer',
+        'invitation-lifecycle-issue-0001',
+      );
+
+      await owner.agent
+        .post(`/api/v1/organizations/${organization.id}/invitations`)
+        .set('x-acres-organization-id', organization.id)
+        .set('Idempotency-Key', 'invitation-lifecycle-duplicate-0001')
+        .set('x-csrf-token', owner.token)
+        .send({ email: '  STATE-RECIPIENT@example.com ', role: 'viewer' })
+        .expect(409)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'CONFLICT' },
+          });
+        });
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await owner.agent
+          .delete(
+            `/api/v1/organizations/${organization.id}/invitations/${first.id}`,
+          )
+          .set('x-acres-organization-id', organization.id)
+          .set('x-csrf-token', owner.token)
+          .expect(200)
+          .expect((response) => {
+            expect(response.body).toMatchObject({
+              ok: true,
+              data: { revoked: true },
+            });
+          });
+      }
+
+      await recipient.agent
+        .post('/api/v1/invitations/accept')
+        .set('Idempotency-Key', 'invitation-lifecycle-revoked-accept-0001')
+        .set('x-csrf-token', recipient.token)
+        .send({ token: first.token })
+        .expect(404)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'NOT_FOUND' },
+          });
+        });
+
+      const replacement = await issueInvitation(
+        owner,
+        organization.id,
+        'state-recipient@example.com',
+        'analyst',
+        'invitation-lifecycle-replacement-0001',
+      );
+      expect(replacement.id).not.toBe(first.id);
+      expect(replacement.token).not.toBe(first.token);
+
+      const ownerAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'state-owner@example.com' },
+      });
+      const recipientAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'state-recipient@example.com' },
+      });
+      const evidence = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${ownerAccount.id}, true),
+            set_config('acres.organization_id', ${organization.id}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return {
+          invitations: await tx.invitation.findMany({
+            where: { organizationId: organization.id },
+            orderBy: { createdAt: 'asc' },
+          }),
+          audits: await tx.auditEvent.findMany({
+            where: { organizationId: organization.id },
+          }),
+          idempotency: await tx.idempotencyRecord.findMany({
+            where: {
+              organizationId: organization.id,
+              operation: 'organizations.invite',
+            },
+          }),
+          recipientMemberships: await tx.membership.findMany({
+            where: {
+              organizationId: organization.id,
+              accountId: recipientAccount.id,
+            },
+          }),
+        };
+      });
+      const recipientIdempotency = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${recipientAccount.id}, true),
+            set_config('acres.organization_id', '', true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return tx.idempotencyRecord.findMany({
+          where: {
+            accountId: recipientAccount.id,
+            operation: 'invitations.accept',
+          },
+        });
+      });
+      expect(evidence.invitations).toHaveLength(2);
+      expect(evidence.invitations[0]).toMatchObject({
+        id: first.id,
+        acceptedAt: null,
+      });
+      expect(evidence.invitations[0]?.revokedAt).toBeInstanceOf(Date);
+      expect(evidence.invitations[1]).toMatchObject({
+        id: replacement.id,
+        role: 'analyst',
+        revokedAt: null,
+        acceptedAt: null,
+      });
+      expect(
+        evidence.audits.filter((audit) => audit.action === 'invitation_issued'),
+      ).toHaveLength(2);
+      expect(
+        evidence.audits.filter(
+          (audit) => audit.action === 'invitation_revoked',
+        ),
+      ).toHaveLength(1);
+      expect(
+        evidence.audits.filter(
+          (audit) => audit.action === 'invitation_accepted',
+        ),
+      ).toHaveLength(0);
+      expect(evidence.idempotency).toHaveLength(2);
+      expect(evidence.recipientMemberships).toHaveLength(0);
+      expect(recipientIdempotency).toHaveLength(0);
+      expect(JSON.stringify(evidence.invitations)).not.toContain(first.token);
+      expect(JSON.stringify(evidence.invitations)).not.toContain(
+        replacement.token,
+      );
+    }, 15_000);
+
+    it('binds the invitation lifecycle to recipient, expiry, and state', async () => {
+      const owner = await signedInAgent('binding-owner@example.com');
+      const recipient = await signedInAgent('binding-recipient@example.com');
+      const wrongRecipient = await signedInAgent('binding-wrong@example.com');
+      const expiredRecipient = await signedInAgent(
+        'binding-expired@example.com',
+      );
+      const organization = await createOrganization(
+        owner,
+        'invitation-binding-create-0001',
+        'Invitation Binding Org',
+      );
+      const live = await issueInvitation(
+        owner,
+        organization.id,
+        'binding-recipient@example.com',
+        'viewer',
+        'invitation-binding-live-0001',
+      );
+
+      await wrongRecipient.agent
+        .post('/api/v1/invitations/accept')
+        .set('Idempotency-Key', 'invitation-binding-wrong-0001')
+        .set('x-csrf-token', wrongRecipient.token)
+        .send({ token: live.token })
+        .expect(404)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'NOT_FOUND' },
+          });
+        });
+      const accepted = await acceptInvitation(
+        recipient,
+        live.token,
+        'invitation-binding-correct-0001',
+      );
+      const ownerAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'binding-owner@example.com' },
+      });
+      const acceptedBaseline = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${ownerAccount.id}, true),
+            set_config('acres.organization_id', ${organization.id}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return {
+          invitation: await tx.invitation.findUniqueOrThrow({
+            where: { id: live.id },
+          }),
+          membership: await tx.membership.findUniqueOrThrow({
+            where: { id: accepted.membershipId },
+          }),
+          acceptedAuditCount: await tx.auditEvent.count({
+            where: {
+              organizationId: organization.id,
+              action: 'invitation_accepted',
+            },
+          }),
+        };
+      });
+      await owner.agent
+        .delete(
+          `/api/v1/organizations/${organization.id}/invitations/${live.id}`,
+        )
+        .set('x-acres-organization-id', organization.id)
+        .set('x-csrf-token', owner.token)
+        .expect(409)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            ok: false,
+            error: { code: 'CONFLICT' },
+          });
+        });
+
+      const expired = await issueInvitation(
+        owner,
+        organization.id,
+        'binding-expired@example.com',
+        'analyst',
+        'invitation-binding-expired-issue-0001',
+      );
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${ownerAccount.id}, true),
+            set_config('acres.organization_id', ${organization.id}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        await tx.invitation.update({
+          where: { id: expired.id },
+          data: { expiresAt: new Date(Date.now() - 60_000) },
+        });
+      });
+      for (const key of [
+        'invitation-binding-expired-accept-0001',
+        'invitation-binding-expired-accept-0002',
+      ]) {
+        await expiredRecipient.agent
+          .post('/api/v1/invitations/accept')
+          .set('Idempotency-Key', key)
+          .set('x-csrf-token', expiredRecipient.token)
+          .send({ token: expired.token })
+          .expect(404)
+          .expect((response) => {
+            expect(response.body).toMatchObject({
+              ok: false,
+              error: { code: 'NOT_FOUND' },
+            });
+          });
+      }
+
+      const evidence = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${ownerAccount.id}, true),
+            set_config('acres.organization_id', ${organization.id}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return {
+          invitations: await tx.invitation.findMany({
+            where: { organizationId: organization.id },
+          }),
+          memberships: await tx.membership.findMany({
+            where: { organizationId: organization.id },
+          }),
+          acceptedAudits: await tx.auditEvent.findMany({
+            where: {
+              organizationId: organization.id,
+              action: 'invitation_accepted',
+            },
+          }),
+        };
+      });
+      const acceptedRow = evidence.invitations.find(
+        (invitation) => invitation.id === live.id,
+      );
+      expect(acceptedRow).toMatchObject({
+        revokedAt: null,
+      });
+      expect(acceptedBaseline.invitation.acceptedAt).toBeInstanceOf(Date);
+      expect(acceptedRow?.acceptedAt).toEqual(
+        acceptedBaseline.invitation.acceptedAt,
+      );
+      expect(
+        evidence.invitations.find((invitation) => invitation.id === expired.id),
+      ).toMatchObject({ acceptedAt: null, revokedAt: null });
+      expect(evidence.memberships).toHaveLength(2);
+      const acceptedMembership = evidence.memberships.find(
+        (membership) => membership.id === accepted.membershipId,
+      );
+      expect(acceptedBaseline.membership).toMatchObject({
+        id: accepted.membershipId,
+        role: 'viewer',
+        revokedAt: null,
+      });
+      expect(acceptedMembership).toMatchObject({
+        id: acceptedBaseline.membership.id,
+        role: acceptedBaseline.membership.role,
+        revokedAt: acceptedBaseline.membership.revokedAt,
+      });
+      expect(acceptedBaseline.acceptedAuditCount).toBe(1);
+      expect(evidence.acceptedAudits).toHaveLength(
+        acceptedBaseline.acceptedAuditCount,
+      );
+      expect(evidence.acceptedAudits[0]).toMatchObject({
+        targetId: live.id,
+        details: { membershipId: accepted.membershipId },
+      });
+
+      for (const email of [
+        'binding-wrong@example.com',
+        'binding-expired@example.com',
+      ]) {
+        const account = await prisma.account.findUniqueOrThrow({
+          where: { email },
+        });
+        const idempotency = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`
+            SELECT
+              set_config('acres.account_id', ${account.id}, true),
+              set_config('acres.organization_id', '', true),
+              set_config('acres.invitation_token_hash', '', true)
+          `;
+          return tx.idempotencyRecord.findMany({
+            where: {
+              accountId: account.id,
+              operation: 'invitations.accept',
+            },
+          });
+        });
+        expect(idempotency).toHaveLength(0);
+      }
+    }, 15_000);
+
+    it('enforces single-use invitation acceptance under concurrency', async () => {
+      const owner = await signedInAgent('single-use-owner@example.com');
+      const recipient = await signedInAgent('single-use-recipient@example.com');
+      const organization = await createOrganization(
+        owner,
+        'single-use-invitation-create-0001',
+        'Single Use Invitation Org',
+      );
+      const invitation = await issueInvitation(
+        owner,
+        organization.id,
+        'single-use-recipient@example.com',
+        'viewer',
+        'single-use-invitation-issue-0001',
+      );
+
+      const [first, second] = await Promise.all([
+        recipient.agent
+          .post('/api/v1/invitations/accept')
+          .set('Idempotency-Key', 'single-use-invitation-accept-0001')
+          .set('x-csrf-token', recipient.token)
+          .send({ token: invitation.token }),
+        recipient.agent
+          .post('/api/v1/invitations/accept')
+          .set('Idempotency-Key', 'single-use-invitation-accept-0002')
+          .set('x-csrf-token', recipient.token)
+          .send({ token: invitation.token }),
+      ]);
+      const responses = [first, second];
+      expect(
+        responses.filter((response) => response.status === 200),
+      ).toHaveLength(1);
+      expect(
+        responses.filter((response) => response.status === 404),
+      ).toHaveLength(1);
+      expect(
+        responses.find((response) => response.status === 200)?.body,
+      ).toMatchObject({
+        ok: true,
+        data: {
+          organizationId: organization.id,
+          membershipId: expect.any(String) as string,
+        },
+      });
+      expect(
+        responses.find((response) => response.status === 404)?.body,
+      ).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+
+      await recipient.agent
+        .post('/api/v1/invitations/accept')
+        .set('Idempotency-Key', 'single-use-invitation-replay-0001')
+        .set('x-csrf-token', recipient.token)
+        .send({ token: invitation.token })
+        .expect(404);
+
+      const ownerAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'single-use-owner@example.com' },
+      });
+      const recipientAccount = await prisma.account.findUniqueOrThrow({
+        where: { email: 'single-use-recipient@example.com' },
+      });
+      const organizationEvidence = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${ownerAccount.id}, true),
+            set_config('acres.organization_id', ${organization.id}, true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return {
+          invitations: await tx.invitation.findMany({
+            where: { organizationId: organization.id },
+          }),
+          memberships: await tx.membership.findMany({
+            where: {
+              organizationId: organization.id,
+              accountId: recipientAccount.id,
+            },
+          }),
+          acceptedAudits: await tx.auditEvent.findMany({
+            where: {
+              organizationId: organization.id,
+              action: 'invitation_accepted',
+            },
+          }),
+        };
+      });
+      const acceptanceRecords = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          SELECT
+            set_config('acres.account_id', ${recipientAccount.id}, true),
+            set_config('acres.organization_id', '', true),
+            set_config('acres.invitation_token_hash', '', true)
+        `;
+        return tx.idempotencyRecord.findMany({
+          where: {
+            accountId: recipientAccount.id,
+            operation: 'invitations.accept',
+          },
+        });
+      });
+      expect(organizationEvidence.invitations).toHaveLength(1);
+      expect(organizationEvidence.invitations[0]).toMatchObject({
+        id: invitation.id,
+        acceptedByAccountId: recipientAccount.id,
+        revokedAt: null,
+      });
+      expect(organizationEvidence.invitations[0]?.acceptedAt).toBeInstanceOf(
+        Date,
+      );
+      expect(organizationEvidence.memberships).toHaveLength(1);
+      expect(organizationEvidence.memberships[0]).toMatchObject({
+        role: 'viewer',
+        revokedAt: null,
+      });
+      expect(organizationEvidence.acceptedAudits).toHaveLength(1);
+      expect(acceptanceRecords).toHaveLength(1);
+      expect(acceptanceRecords[0]).toMatchObject({
+        state: 'succeeded',
+        responseStatus: 200,
+      });
+    }, 15_000);
 
     it('default-denies tenant reads when context settings are malformed', async () => {
       const { agent, token } = await signedInAgent('owner@example.com');

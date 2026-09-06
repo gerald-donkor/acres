@@ -115,7 +115,8 @@ input; implementation must not invent them.
 
 Status: implemented by `prompts/22-organizations-permissions-rls.md`; Prompt
 55 adds real PostgreSQL ownership-transfer concurrency and active last-owner
-trigger evidence.
+trigger evidence; Prompt 56 adds the complete membership-administration matrix
+and real PostgreSQL membership/invitation lifecycle evidence.
 
 - **Depends on:** phase 2 real database, roles, and migration harness.
 - **Outcome/behavior:** organizations, memberships, invitations, recovery
@@ -151,16 +152,21 @@ trigger evidence.
 - **Exit:** automated negative isolation proof, reviewed SQL policies, no
   controller-local role strings, and documented permission semantics.
 
-**Verification update — 2026-09-05:** `server/test/database.e2e-spec.ts`
+**Verification updates — 2026-09-05 through 2026-09-06:**
+`server/test/database.e2e-spec.ts`
 proves two simultaneous ownership-transfer commands serialize to one active
 owner/one audit row/one succeeded idempotency record, while the waiter is
 denied after the winning transition. It also proves the forced-RLS runtime role
 cannot demote the sole owner: PostgreSQL raises the last-owner trigger error and
-rolls the transaction back. `npm run test:e2e --workspace=@acres/server --
---runInBand` passed 4 suites / 110 tests; `npm run test --workspace=@acres/server
--- --runInBand` passed 31 suites / 305 tests. The broader lifecycle matrix
-(additional membership evolution, invitation delivery/recovery, and operator
-policy) remains separately scoped.
+rolls the transaction back. Prompt 56 adds owner/admin/analyst/viewer policy
+matrix coverage plus four real-database gates for role evolution, soft
+revocation with session survival and later tenant denial, same-membership
+reactivation, duplicate/revoked/replacement invitations, recipient/expiry/state
+binding, and concurrent single-use acceptance. The focused lifecycle command
+passed 4 tests / 114 total, and the full real-database suite passed 4 suites /
+114 tests. The final unit suite passed 31 suites / 315 tests after the required
+compiled parser artifact was built. Invitation delivery/recovery and
+distributed operator policy remain separately scoped.
 
 ## 5. Phase 4 — versioned REST and complementary GraphQL
 

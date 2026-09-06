@@ -1740,6 +1740,47 @@ Test Suites: 31 passed, 31 total
 Tests:       305 passed, 305 total
 ```
 
+### Membership and invitation lifecycle evidence
+
+Prompt 56 adds policy-level and real PostgreSQL evidence without changing the
+runtime contract. `permissions.spec.ts` now exhaustively evaluates every
+owner/admin/analyst/viewer administration permission and every source/target
+role-assignment pair. `database.e2e-spec.ts` adds four scoped lifecycle gates:
+
+- owners can assign non-owner roles; admins can assign analyst/viewer only;
+  analysts and viewers retain read-only organization access;
+- owner/admin role changes, self-change rejection, soft revocation, continued
+  account-session validity with subsequent tenant denial, and reinvitation all
+  preserve one membership row and restore that row with the invited role;
+- normalized duplicate invitations conflict, revocation is idempotent, revoked
+  tokens cannot be accepted, and a replacement invitation can be issued;
+- acceptance is bound to the invited email, live expiry, and unaccepted state;
+  two simultaneous distinct-key acceptance commands yield one `200` and one
+  `404`, with one membership, one acceptance audit, and one succeeded
+  idempotency record.
+
+The database assertions run through transaction-local owner/account context and
+verify the durable membership, invitation, audit, and idempotency outcomes.
+Failed recipient, expiry, replay, and authorization attempts do not leave a
+succeeded record. Raw invitation tokens do not appear in serialized audit or
+persisted invitation evidence. No service, controller, schema, migration, RLS
+policy, or public contract correction was required.
+
+Observed verification on 2026-09-06:
+
+```text
+npm run test:e2e --workspace=@acres/server -- --runInBand --testNamePattern='membership lifecycle|invitation lifecycle|single-use invitation'
+Test Suites: 3 skipped, 1 passed, 1 of 4 total
+Tests:       110 skipped, 4 passed, 114 total
+
+npm run test:server -- --runInBand
+Test Suites: 4 passed, 4 total
+Tests:       114 passed, 114 total
+```
+
+SMTP delivery, public recovery flows, retention-policy choices, and distributed
+operator policy remain out of scope for this evidence increment.
+
 ---
 
 ## 15. Versioned REST, GraphQL and checked contracts
