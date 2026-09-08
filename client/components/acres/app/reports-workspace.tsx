@@ -239,26 +239,31 @@ function EvidenceTable({ report }: { report: Report }) {
       <h2 id="evidence-table-title" className="mb-3 text-ui text-ink">
         Evidence
       </h2>
-      {evidence.length === 0 ? (
-        <p className="text-body text-ink-muted">
-          No evidence links attached to this revision.
-        </p>
-      ) : (
-        <Table>
-          <TableCaption>
-            Evidence links store identifiers and a frozen snapshot for
-            reproducible exports.
-          </TableCaption>
-          <TableHeader>
+      <Table>
+        <TableCaption>
+          Evidence links store identifiers and a frozen snapshot for
+          reproducible exports.
+        </TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Type</TableHead>
+            <TableHead>Source / Metric</TableHead>
+            <TableHead>Value / Summary</TableHead>
+            <TableHead>Dataset</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {evidence.length === 0 ? (
             <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Source / Metric</TableHead>
-              <TableHead>Value / Summary</TableHead>
-              <TableHead>Dataset</TableHead>
+              <TableCell
+                colSpan={4}
+                className="py-6 text-center text-body text-ink-muted"
+              >
+                No evidence links attached to this revision.
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {evidence.map((item) => {
+          ) : (
+            evidence.map((item) => {
               const details = getEvidenceDetails(item);
               return (
                 <TableRow key={item.id}>
@@ -286,10 +291,10 @@ function EvidenceTable({ report }: { report: Report }) {
                   </TableCell>
                 </TableRow>
               );
-            })}
-          </TableBody>
-        </Table>
-      )}
+            })
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

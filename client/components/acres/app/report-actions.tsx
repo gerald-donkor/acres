@@ -90,7 +90,13 @@ export function CreateReportForm({
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="report-title">Title</FieldLabel>
-          <Input id="report-title" name="title" required maxLength={160} />
+          <Input
+            id="report-title"
+            name="title"
+            required
+            maxLength={160}
+            className="h-target"
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="report-summary">Summary</FieldLabel>
@@ -106,6 +112,7 @@ export function CreateReportForm({
             name="insightHeading"
             required
             maxLength={160}
+            className="h-target"
           />
         </Field>
         <Field>
@@ -119,7 +126,7 @@ export function CreateReportForm({
         </Field>
         <Field data-invalid={false}>
           <FieldLabel htmlFor="aggregate-id">Aggregate evidence ID</FieldLabel>
-          <Input id="aggregate-id" name="aggregateId" />
+          <Input id="aggregate-id" name="aggregateId" className="h-target" />
           <FieldDescription>
             Use an aggregate ID from the dashboard evidence table.
           </FieldDescription>

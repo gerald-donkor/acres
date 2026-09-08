@@ -297,9 +297,23 @@ and invitation revocation. Viewers and analysts navigating directly to `/app/mem
 receive a polite permission boundary with return-to-workspace navigation. Controls
 enforce minimum 44px touch targets and zero horizontal scroll at 375/800/1280px
 viewports. Backend organizations e2e tests (`7/7`), client API helper tests (`10/10`),
-and browser member administration tests (`4/4`) pass. Open Phase 5 work: richer
-authenticated loading boundaries and route-level error files, and production Caddy
-same-origin routing.
+and browser member administration tests (`4/4`) pass.
+
+**Phase 5E evidence — 2026-09-08:** Prompt 60 implements Phase 5E: accessible route error
+boundaries, streaming loading skeletons, and localized error recovery. Reusable
+`RouteErrorBoundary` (`client/components/acres/app/route-error-boundary.tsx`) provides
+standardized error recovery with `role="alert"`, `aria-live="assertive"`, `data-slot="error-boundary"`,
+Crimson Text headings, DM Sans body copy, Roboto Mono digests, a 48px primary retry pill
+(`reset()`), and >=44px secondary links ("Return to Workspace", "Sign Out"). Route boundaries
+installed at `/app/error.tsx`, `/app/members/error.tsx`, `/app/dashboards/error.tsx`,
+`/app/datasets/error.tsx`, `/app/reports/error.tsx`, and `/(auth)/error.tsx`. Shared
+skeleton primitives in `workspace-skeleton.tsx` (`WorkspaceHeaderSkeleton`, responsive
+`TableSkeleton`, `CardGridSkeleton`, and `WorkspaceShellSkeleton`) deliver accessible
+loading states (`role="status"`, `aria-busy="true"`) with zero horizontal overflow down to
+375px and full `prefers-reduced-motion: reduce` compliance across `/app/loading.tsx`,
+`/app/members/loading.tsx`, `/app/dashboards/loading.tsx`, `/app/datasets/loading.tsx`,
+and `/app/reports/loading.tsx`. Unit tests (`4/4`) and browser Playwright tests (`6/6`)
+pass. Open Phase 5 work: production Caddy same-origin routing.
 
 ## 7. Phase 6 — storage, queues, worker, and secure uploads
 

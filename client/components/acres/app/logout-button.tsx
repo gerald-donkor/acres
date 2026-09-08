@@ -11,7 +11,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
-export function LogoutButton() {
+import { cn } from "@/lib/utils";
+
+interface LogoutButtonProps {
+  variant?: "outline" | "ghost" | "default" | "secondary";
+  className?: string;
+}
+
+export function LogoutButton({
+  variant = "outline",
+  className,
+}: LogoutButtonProps = {}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,9 +55,9 @@ export function LogoutButton() {
       )}
       <Button
         type="button"
-        variant="outline"
+        variant={variant}
         size="lg"
-        className="h-target justify-start"
+        className={cn("h-target justify-start", className)}
         onClick={onLogout}
         disabled={pending}
         aria-busy={pending}

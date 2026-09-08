@@ -417,7 +417,39 @@ and invitation issuance with email delivery.
    - `client/tests/api-helpers.spec.ts`: 10/10 passed (all member administration and invitation helper functions).
    - `client/e2e/member-administration.spec.ts`: 4/4 passed (owner invite/view/revoke flow, full invitation cycle with token accept, role change, and member revocation, permission boundary for viewer, and responsive 375/800/1280px touch target audit).
 
+### Authenticated loading skeletons & route error boundaries evidence — 2026-09-08
+
+Prompt 60 implements Phase 5E: accessible route error boundaries, streaming loading skeletons, and localized error recovery.
+
+1. **Shared Accessible Route Error Boundary (`client/components/acres/app/route-error-boundary.tsx`)**:
+   - Standardizes error recovery across the authenticated application with `role="alert"`, `aria-live="assertive"`, and `data-slot="error-boundary"`.
+   - Styled in brand tokens: Crimson Text display heading, DM Sans plain-language copy, and Roboto Mono error digest and request ID.
+   - Primary 48px pill action button invoking Next.js `reset()` for in-place re-render and retry.
+   - Secondary navigation affordances ("Return to Workspace" -> `/app` and "Sign Out" -> `/login`) meeting the >=44x44px touch target floor.
+   - Multiple rendering modes: `mode="workspace"` (retains persistent shell chrome for localized retries without destroying navigation), `mode="standalone"`, and `mode="auth"`.
+2. **Route-Level Error Boundaries (`error.tsx`)**:
+   - `client/app/app/error.tsx`: Root authenticated shell error boundary catching uncaught runtime exceptions in the workspace.
+   - `client/app/app/members/error.tsx`: Member administration error boundary providing localized retry without destroying the AppShell.
+   - `client/app/app/dashboards/error.tsx`: Dashboards error boundary for visualization/GraphQL fetch errors.
+   - `client/app/app/datasets/error.tsx`: Datasets error boundary for upload/table view errors.
+   - `client/app/app/reports/error.tsx`: Reports error boundary for document drafting/export errors.
+   - `client/app/(auth)/error.tsx`: Auth layout boundary catching token or form processing errors.
+3. **Shared Accessible Skeleton Components (`client/components/acres/app/workspace-skeleton.tsx`)**:
+   - `WorkspaceHeaderSkeleton`: eyebrow, heading, description, and action pill placeholders.
+   - `TableSkeleton`: responsive table view on desktop/tablet and stacked card view on mobile, preventing horizontal overflow down to 375px.
+   - `CardGridSkeleton`: responsive 2, 3, or 4 column card grid with header, stat value, and sparkline/trend placeholders.
+   - `WorkspaceShellSkeleton`: persistent AppShell skeleton matching loaded geometry to ensure zero layout shift.
+   - Accessibility & Reduced Motion: all skeleton containers declare `role="status"` and `aria-busy="true"`, with screen-reader announcements (`<span className="sr-only">`). Skeletons honor `prefers-reduced-motion: reduce` with static low-contrast styling.
+4. **Route-Level Loading Skeletons (`loading.tsx`)**:
+   - `client/app/app/loading.tsx`: Overview workspace skeleton with ledger, dl key details, and quick action cards.
+   - `client/app/app/members/loading.tsx`: Members workspace skeleton with invite card and member/invitation tables.
+   - `client/app/app/dashboards/loading.tsx`: Dashboards workspace skeleton with summary stats, chart card, and observations table.
+   - `client/app/app/datasets/loading.tsx`: Datasets workspace skeleton with registry table and action pill.
+   - `client/app/app/reports/loading.tsx`: Reports workspace skeleton with drafts/exports table and action pill.
+5. **Verification Evidence**:
+   - Unit tests `client/tests/loading-error-boundaries.spec.ts`: 4/4 passed (ApiClientError recognition, error copy mapping, digest preservation).
+   - Browser Playwright tests `client/e2e/loading-error-boundaries.spec.ts`: 6/6 passed (error boundary display on synthetic test route, reset retry recovery, min 44px touch targets, zero horizontal scroll across 375/800/1280px viewports, and reduced-motion handling).
+
 ## 9. Open Phase 5 Work
 
-- Richer authenticated loading boundaries and route-level error files.
-- Production Caddy same-origin routing; current local/dev browser traffic routes via the Next Route Handler bridge.
+- Production Caddy same-origin routing; current local/dev browser traffic routes via the Next Route Handler bridge (reserved for live host/operator deployment).
