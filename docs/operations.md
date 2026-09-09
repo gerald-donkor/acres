@@ -77,6 +77,8 @@ messages are strictly excluded from metric labels.
 | `client/e2e/accessibility-responsive.spec.ts` | WCAG 2.2 Level AA accessibility audit, responsive overflow at 375/800/1280px, touch targets, and telemetry check |
 | `scripts/ops/backup-postgres.sh` | Structured PostgreSQL `pg_dump` backup helper with fail-closed credentials and permission hardening |
 | `scripts/ops/restore-postgres.sh` | Structured PostgreSQL restore helper with connection verification and table count validation |
+| `scripts/ops/run-restore-drill.sh` | Automated disaster recovery restore drill runner validating backup integrity, isolated database restore, schema/migration parity, and RTO |
+| `scripts/ops/reconcile-storage-objects.js` | Object storage reconciliation utility comparing PostgreSQL stored objects against bucket keys, detecting leaks, missing objects, and mismatches |
 | `scripts/ops/audit-dependencies.sh` | Deterministic dependency security audit script for production dependencies |
 | `scripts/ops/check-production-templates.sh` | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, readiness schema, and env placeholder checks |
 | `scripts/ops/scan-secrets.sh` | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names |
@@ -96,6 +98,8 @@ npm run ops:docker-runtime
 npm run ops:audit
 npm run ops:backup
 npm run ops:restore
+npm run ops:restore-drill
+npm run ops:reconcile-storage
 npm run ops:check
 npm run ops:launch-readiness
 ```
@@ -218,11 +222,28 @@ Use immutable image tags and keep the previous Caddy/app configuration available
 
 ### Backup
 
-Run `scripts/ops/backup-postgres.sh` with `PGPASSWORD` and destination configured. Back up PostgreSQL, Garage object data and metadata, deployment config, certificate state, and recoverable signing/encryption material. Backups must be encrypted, access-controlled, off-host, and separate from live volume unlock material.
+Run `scripts/ops/backup-postgres.sh` with `PGPASSWORD` and destination configured. Back up PostgreSQL, Garage object data and metadata, deployment config, certificate state, and recoverable signing/encryption material. Backups must be encrypted, access-controlled, off-host, and separate from live volume unlock material. Role authentication falls back gracefully between `POSTGRES_PASSWORD`, `POSTGRES_SUPERUSER_PASSWORD`, and `ACRES_MIGRATOR_PASSWORD`. `acres_migrator` is provisioned with `BYPASSRLS` so that table dumps succeed completely across all tenant tables enforcing `FORCE ROW LEVEL SECURITY`.
 
-### Restore
+### Restore & Drill Execution
 
-Use `scripts/ops/restore-postgres.sh <backup-file.dump>` to restore to an isolated environment. Validate table counts, apply migration chain, then reconcile PostgreSQL object metadata against Garage objects and export artifacts.
+1. **Ad-hoc Restore**:
+   Use `scripts/ops/restore-postgres.sh <backup-file.dump>` to restore into a target database (`PGDATABASE=<target>`). Restores run using `pg_restore --clean --if-exists`, verify connection readiness, and assert public schema table counts.
+2. **Automated Restore Drill**:
+   Execute `npm run ops:restore-drill` (or `scripts/ops/run-restore-drill.sh [options]`). The runner:
+   - Takes a fresh timestamped PostgreSQL backup using `backup-postgres.sh`;
+   - Validates archive integrity with `pg_restore --list`;
+   - Recreates an isolated drill database (`acres_restore_drill`);
+   - Restores the archive using `restore-postgres.sh`;
+   - Asserts table count parity, applied migration parity (`_prisma_migrations`), PostGIS spatial extension presence, foreign key integrity (`pg_constraint`), and record count invariants (`Account`, `Organization`, `Dataset`);
+   - Measures elapsed time against the Recovery Time Objective (default 300s) and emits structured JSON evidence (`backups/restore-drill-evidence-<timestamp>.json`);
+   - Cleans up ephemeral drill databases and archives cleanly on exit.
+3. **PostgreSQL & Object Storage Reconciliation**:
+   Execute `npm run ops:reconcile-storage` (or `scripts/ops/reconcile-storage-objects.js [options]`). Compares active database records (`StoredObject`, `Upload`, `ExportArtifact`) against bucket storage (Garage / S3):
+   - Detects orphaned objects present in storage but absent from database metadata (storage leaks);
+   - Detects missing objects referenced by active database records (data loss);
+   - Asserts byte count and SHA-256 checksum alignment;
+   - Excludes pending uploads, soft-deleted objects, and quarantined objects within the retention window;
+   - Fails closed with exit code 1 if missing objects or corruption/checksum mismatches are found.
 
 ### Data Retention & Cleanup
 
@@ -261,3 +282,23 @@ Implemented in Prompt 61:
    - `npm run test:server`: 131/131 tests passed across 6 test suites in 41.0s.
    - `npm run ops:check`: 12/12 readiness tests passed, zero critical dependencies, template checks passed, secret scan passed.
    - Zero critical vulnerabilities in production dependencies (Next.js 16.3.4 patch applied).
+
+## Phase 12F Disaster Recovery Restore Drill & Storage Object Reconciliation
+
+Implemented in Prompt 62:
+1. **Automated Disaster Recovery Restore Drill Runner (`scripts/ops/run-restore-drill.sh`)**:
+   - Executes automated end-to-end backup, archive validation, target database recreation, restore, and parity verification against an isolated target database (`acres_restore_drill`).
+   - Verifies table counts (46 tables in `public` schema), applied migration counts (17 migrations), PostGIS spatial extension presence, foreign key integrity, and record invariants (`Account`, `Organization`, `Dataset`).
+   - Evaluates Recovery Time Objective (RTO): elapsed time 2098 ms (< 300s target threshold; `rto_compliant: true`).
+   - Automatically cleans up ephemeral drill databases and backup dumps on exit.
+   - Emits structured JSON evidence reports (`backups/restore-drill-evidence-<timestamp>.json`).
+2. **PostgreSQL & Object Storage Reconciliation Utility (`scripts/ops/reconcile-storage-objects.js` & `.ts`)**:
+   - Pure, deterministic reconciliation engine comparing active `StoredObject`, `Upload`, and `ExportArtifact` rows against object storage keys (Garage / S3).
+   - Detects orphaned objects in storage (storage leaks), missing objects referenced by database (data loss), and byte count/checksum mismatches.
+   - Excludes pending uploads, soft-deleted objects, and quarantined items within retention windows.
+   - Fails closed with exit code 1 on missing objects or corruption/checksum mismatches.
+3. **Automated Test Coverage**:
+   - `scripts/ops/reconcile-storage-objects.spec.js`: 9/9 unit tests passed in 76ms testing clean matches, orphan detection, missing detection, size/checksum corruption, upload state exclusions, quarantine retention windows, tenant/prefix filtering, and operational marker exclusions.
+4. **Operations & CI Integration**:
+   - Root package scripts: `npm run ops:restore-drill`, `npm run ops:reconcile-storage`, `npm run ops:reconcile-test`.
+   - Integrated into `npm run ops:check` and CI gate.

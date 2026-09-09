@@ -69,3 +69,8 @@ server/src/generated/
 # typescript
 *.tsbuildinfo
 client/next-env.d.ts
+
+# backups and restore drill artifacts
+/backups/
+*.dump
+reconciliation-report.json

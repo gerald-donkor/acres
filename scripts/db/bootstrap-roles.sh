@@ -23,10 +23,12 @@ psql -v ON_ERROR_STOP=1 --username "$PSQL_SUPERUSER" --dbname "$PSQL_MAINTENANCE
   --set=app_password="$ACRES_APP_PASSWORD" \
   --set=test_password="$ACRES_TEST_PASSWORD" <<'EOSQL'
 SELECT format(
-  'CREATE ROLE acres_migrator LOGIN PASSWORD %L CREATEDB',
+  'CREATE ROLE acres_migrator LOGIN PASSWORD %L CREATEDB BYPASSRLS',
   :'migrator_password'
 )
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'acres_migrator')\gexec
+
+ALTER ROLE acres_migrator CREATEDB BYPASSRLS;
 
 SELECT format(
   'CREATE ROLE acres_app LOGIN PASSWORD %L',

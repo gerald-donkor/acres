@@ -648,3 +648,33 @@ Records the complete Phase 12 launch and regression verification suite:
 - `npm run lint`: exit 0; 0 errors, 0 warnings across `@acres/shared`, `@acres/client`, `@acres/server`;
 - `npm run typecheck`: exit 0 across all workspaces; Prisma Client 7.9.1 generated in 627 ms;
 - `npm run build`: exit 0; Next.js 16.3.4 compiled cleanly in 13.1s with all dynamic and static routes optimized; server and shared builds completed cleanly.
+
+## 17. Phase 12F verification record — 2026-09-09
+
+Records the complete Phase 12 disaster recovery restore drill and object storage reconciliation suite:
+
+- **Automated Disaster Recovery Restore Drill**:
+  - `scripts/ops/run-restore-drill.sh`: exit 0;
+  - Created timestamped backup archive of `acres` (485,487 bytes);
+  - Verified archive integrity with `pg_restore --list`;
+  - Created isolated drill database `acres_restore_drill`;
+  - Restored backup archive into drill database with `restore-postgres.sh`;
+  - Verified table count parity: 46/46 tables in `public` schema;
+  - Verified applied migrations: 17/17 Prisma migrations matching;
+  - Verified PostGIS spatial extension presence;
+  - Verified 0 unvalidated foreign key constraints;
+  - Verified record invariants across `Account` (452), `Organization` (401), and `Dataset` (5);
+  - Measured Recovery Time Objective (RTO): elapsed 2098 ms (< 300s threshold; `rto_compliant: true`);
+  - Ephemeral drill database and backup archive cleaned up automatically;
+  - Structured evidence emitted to `backups/restore-drill-evidence-<timestamp>.json`.
+- **PostgreSQL & Object Storage Reconciliation**:
+  - `scripts/ops/reconcile-storage-objects.js`: pure deterministic reconciliation engine with CLI and module interfaces;
+  - `scripts/ops/reconcile-storage-objects.spec.js`: 9/9 unit tests passed in 76ms;
+  - Verifies clean matches, orphan object detection (storage leaks), missing object detection (data loss), size/checksum mismatches, upload state exclusions, quarantine retention windows, tenant/prefix filtering, and operational marker exclusions.
+- **Operations & CI Integration**:
+  - `npm run ops:restore-drill` and `npm run ops:reconcile-storage` added to root `package.json`;
+  - `npm run ops:check`: exit 0; runs templates, secret scan, docker runtime, production dependency audit, readiness validator tests, and storage reconciliation unit tests;
+  - `npm run lint`: exit 0 across all workspaces;
+  - `npm run typecheck`: exit 0 across all workspaces;
+  - `npm run build`: exit 0 across all workspaces;
+  - `git diff --check`: exit 0, zero whitespace errors.

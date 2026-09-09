@@ -20,8 +20,18 @@ fi
 
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-${POSTGRES_USER:-acres_migrator}}"
+PGUSER="${PGUSER:-${POSTGRES_USER:-postgres}}"
 PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-acres}}"
+
+if [ -z "${PGPASSWORD:-}" ]; then
+  if [ -n "${POSTGRES_PASSWORD:-}" ]; then
+    PGPASSWORD="$POSTGRES_PASSWORD"
+  elif [ -n "${POSTGRES_SUPERUSER_PASSWORD:-}" ]; then
+    PGPASSWORD="$POSTGRES_SUPERUSER_PASSWORD"
+  elif [ -n "${ACRES_MIGRATOR_PASSWORD:-}" ]; then
+    PGPASSWORD="$ACRES_MIGRATOR_PASSWORD"
+  fi
+fi
 
 if [ -z "${PGPASSWORD:-}" ]; then
   printf 'restore error: PGPASSWORD environment variable is required\n' >&2
