@@ -596,3 +596,26 @@ As of 2026-09-09, automated performance capacity evaluation, multi-layer DoS res
   - Added package scripts: `npm run ops:capacity-test`, `npm run ops:capacity-drill`, `npm run ops:alert-test`, `npm run ops:alert-drill`, `npm run ops:dos-drill`, `npm run ops:capacity-alerting-drill`.
   - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`.
   - Updated `scripts/ops/check-production-templates.sh` requiring all 7 alerts and alert/capacity verification.
+
+## Phase 12K launch exit gate — threat coverage
+
+Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.
+No new trust boundary is introduced: the unified orchestrator
+(`scripts/ops/run-launch-drills.sh`) only shells out to the already-reviewed
+Phase 12A–12J drill runners, writes one JSON dossier under the gitignored
+`backups/`, and never handles secret values (child drills receive only
+references; `scan-secrets.sh` remains a gating stage).
+
+- **TM-01 through TM-22 verification**: every threat with an automated drill
+  (supply-chain/SAST/container, ingress/deployment, volume/key separation,
+  rotation/compromise, capacity/DoS/alerts, restore/reconcile) is re-executed
+  by the 7 orchestrator stages; the dossier's per-stage `status` plus the
+  readiness validator's evidence cross-check (referenced `backups/*.json`
+  must exist, parse, and not report failure) closes the loop between a drill
+  passing and an approval claiming it passed.
+- **No-AI posture unchanged**: the dossier `summary` records
+  `noAiPosture: preview_excluded_from_launch`; the readiness validator's
+  fail-closed AI gates (TM-AI exclusion) are untouched.
+- **Runbooks**: `docs/launch-checklist.md` §5 gives each of the 7
+  `infra/prometheus/alerts.yml` rules a triage/containment/escalation/clearing
+  path, so a firing alert maps to an operator action rather than a dashboard.

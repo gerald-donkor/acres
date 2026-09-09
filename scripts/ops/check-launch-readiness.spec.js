@@ -313,6 +313,136 @@ test('validateReadiness rejects Gemini key in optional_ai_posture as a contradic
   );
 });
 
+test('validateReadiness passes evidence cross-validation when a referenced dossier exists and passed', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
+  try {
+    const dossierPath = path.join(tmpDir, 'launch-evidence-dossier-test.json');
+    fs.writeFileSync(
+      dossierPath,
+      JSON.stringify({ version: '1.0.0', overall_status: 'PASSED', total_stages: 7, stages: [] }),
+      'utf8'
+    );
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.evidence = [dossierPath];
+
+    const result = validateReadiness(record, 'test.json');
+    assert.strictEqual(Object.keys(result.categoryBlockers).length, 0);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when referenced evidence file is missing', () => {
+  const record = buildValidApprovedRecord();
+  record.sections.backup_and_disaster_recovery.evidence = ['backups/restore-drill-evidence-does-not-exist.json'];
+
+  const result = validateReadiness(record, 'test.json');
+  const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+  assert.ok(
+    blockers.some((b) => b.includes('no matching file exists on disk')),
+    `Expected missing-file blocker, got: ${JSON.stringify(blockers)}`
+  );
+});
+
+test('validateReadiness blocks approval when referenced evidence reports failure', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
+  try {
+    const dossierPath = path.join(tmpDir, 'launch-evidence-dossier-failed.json');
+    fs.writeFileSync(
+      dossierPath,
+      JSON.stringify({ version: '1.0.0', overall_status: 'FAILED', total_stages: 7 }),
+      'utf8'
+    );
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.evidence = [dossierPath];
+
+    const result = validateReadiness(record, 'test.json');
+    const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(
+      blockers.some((b) => b.includes('reports drill failure')),
+      `Expected failure-report blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when referenced evidence is not valid JSON', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
+  try {
+    const badPath = path.join(tmpDir, 'corrupt-evidence.json');
+    fs.writeFileSync(badPath, '{ not valid json', 'utf8');
+    const record = buildValidApprovedRecord();
+    record.sections.slo_and_alerting.evidence = [badPath];
+
+    const result = validateReadiness(record, 'test.json');
+    const blockers = result.categoryBlockers.slo_and_alerting || [];
+    assert.ok(
+      blockers.some((b) => b.includes('is not valid JSON')),
+      `Expected invalid-JSON blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness skips cross-validation for non-approved sections', () => {
+  const record = buildValidApprovedRecord();
+  record.sections.backup_and_disaster_recovery.status = 'unresolved';
+  record.sections.backup_and_disaster_recovery.evidence = ['backups/restore-drill-evidence-does-not-exist.json'];
+
+  const result = validateReadiness(record, 'test.json');
+  const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+  assert.ok(
+    blockers.every((b) => !b.includes('no matching file exists on disk')),
+    `Non-approved sections must not get evidence-file blockers, got: ${JSON.stringify(blockers)}`
+  );
+});
+test('validateReadiness resolves repo-relative evidence from a record kept in a subdir', () => {
+  const os = require('node:os');
+  const tmpRoot = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-basedir-'));
+  try {
+    // Evidence lives next to the readiness file, referenced relatively.
+    const subDir = path.join(tmpRoot, 'infra', 'launch');
+    fs.mkdirSync(subDir, { recursive: true });
+    const evidencePath = path.join(subDir, 'my-evidence.json');
+    fs.writeFileSync(evidencePath, JSON.stringify({ status: 'success' }), 'utf8');
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.evidence = ['my-evidence.json'];
+
+    const result = validateReadiness(record, path.join(subDir, 'operator.json'));
+    const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(
+      blockers.every((b) => !b.includes('no matching file exists on disk')),
+      `Subdir-relative evidence must resolve, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when evidence reports a non-zero exitCode', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
+  try {
+    const reportPath = path.join(tmpDir, 'reconciliation-report.json');
+    fs.writeFileSync(reportPath, JSON.stringify({ summary: { exitCode: 1 } }), 'utf8');
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.evidence = [reportPath];
+
+    const result = validateReadiness(record, 'test.json');
+    const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(
+      blockers.some((b) => b.includes('summary.exitCode: 1')),
+      `Expected exitCode blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
 test('the checked-in template readiness.example.json fails closed with unresolved blockers', () => {
   const templatePath = path.resolve(__dirname, '../../infra/launch/readiness.example.json');
   const raw = fs.readFileSync(templatePath, 'utf8');

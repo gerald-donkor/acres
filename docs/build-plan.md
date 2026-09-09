@@ -800,3 +800,35 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`;
   - Updated `scripts/ops/check-production-templates.sh` requiring all 7 alerts and alert/capacity checks;
   - Closes TM-05, TM-16, TM-20, and Category 5 launch readiness requirements.
+
+## 22. Phase 12K verification record — 2026-09-09
+
+Records the Phase 12 exit gate: unified launch drill runner, operator launch
+checklist with incident runbooks, and readiness evidence cross-validation.
+
+- **Unified Launch Drill Orchestrator**:
+  - `scripts/ops/run-launch-drills.sh` (bash): 7 stages (static templates, supply-chain
+    SAST, ingress/deployment, volume encryption, secret rotation pinned
+    `--dry-run`, capacity alerting, disaster recovery) with
+    `--dry-run/--json/--output/--evidence-dir/--verbose/--help`, per-stage logs
+    plus discovered child evidence in dossier `artifacts`, Unified Launch
+    Evidence Dossier (`backups/launch-evidence-dossier-<timestamp>.json`),
+    exit 0 only on 7/7 pass;
+  - `scripts/ops/run-launch-drills.spec.js`: exit 0; all 9 unit tests passed.
+- **Operator Launch Checklist & Runbooks (`docs/launch-checklist.md`)**:
+  - 11-category verification matrix, 7 Prometheus alert runbooks, rollback/DR
+    procedures, formal sign-off matrix; indexed in `AGENTS.md`.
+- **Readiness Evidence Cross-Validation**:
+  - `scripts/ops/check-launch-readiness.js`: approved sections referencing
+    `backups/*.json` evidence must resolve to files that exist, parse, and do
+    not report failure (cwd-first, then readiness-file-dir resolution);
+  - `scripts/ops/check-launch-readiness.spec.js`: exit 0; all 19 unit tests passed.
+- **Operations & CI Integration**:
+  - Root package scripts: `npm run ops:launch-drill`, `npm run ops:launch-drill-test`;
+  - Integrated `npm run ops:launch-drill-test` into `npm run ops:check`;
+  - `scripts/ops/launch-readiness.sh` supports `--with-drills` and `--help`.
+- **Exit**: operator-approved launch checklist; reproducible promotion and
+  rollback drill; restore drill within objectives (stage 7 fails closed without
+  PGPASSWORD + reachable Postgres/Garage); actionable alerts/runbooks; no
+  unresolved critical security/accessibility findings; all repository,
+  integration, E2E, isolation, and failure tests passing.

@@ -82,6 +82,85 @@ function checkPlaceholdersAndSecrets(obj, currentPath, blockers) {
   }
 }
 
+function isEvidenceFileReference(ev) {
+  if (typeof ev !== 'string') return false;
+  const trimmed = ev.trim();
+  return trimmed.endsWith('.json') || (trimmed.includes('*') && trimmed.includes('.json'));
+}
+
+function expandEvidenceGlob(ref, baseDirs) {
+  const matches = [];
+  for (const baseDir of baseDirs) {
+    if (!ref.includes('*')) {
+      const abs = path.resolve(baseDir, ref);
+      let isFile = false;
+      try {
+        isFile = fs.existsSync(abs) && fs.statSync(abs).isFile();
+      } catch {
+        isFile = false;
+      }
+      if (isFile && !matches.includes(abs)) matches.push(abs);
+      continue;
+    }
+    const abs = path.resolve(baseDir, ref);
+    const dir = path.dirname(abs);
+    const base = path.basename(abs);
+    // Only single-`*` basenames are supported; anything else cannot match.
+    if (base.split('*').length !== 2) continue;
+    const [prefix, suffix] = base.split('*');
+    let names = [];
+    try {
+      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
+      names = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const f of names) {
+      if (f.startsWith(prefix) && f.endsWith(suffix)) {
+        const full = path.join(dir, f);
+        if (!matches.includes(full)) matches.push(full);
+      }
+    }
+  }
+  return matches;
+}
+
+function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
+  const matches = expandEvidenceGlob(ref, baseDirs);
+  if (matches.length === 0) {
+    addBlocker(category, `Approved evidence references file '${ref}' but no matching file exists on disk`);
+    return;
+  }
+  for (const file of matches) {
+    let parsed;
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (err) {
+      addBlocker(category, `Approved evidence file '${ref}' is not valid JSON (${err.message})`);
+      continue;
+    }
+    const status = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : null;
+    const overall = typeof parsed.overall_status === 'string' ? parsed.overall_status.toLowerCase() : null;
+    if (status === 'failed' || status === 'failure' || status === 'error') {
+      addBlocker(category, `Approved evidence file '${ref}' reports drill failure (status: "${parsed.status}")`);
+    }
+    if (overall === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports drill failure (overall_status: "${parsed.overall_status}")`);
+    }
+    if (parsed.success === false) {
+      addBlocker(category, `Approved evidence file '${ref}' reports drill failure (success: false)`);
+    }
+    if (
+      parsed.summary &&
+      typeof parsed.summary === 'object' &&
+      typeof parsed.summary.exitCode === 'number' &&
+      parsed.summary.exitCode !== 0
+    ) {
+      addBlocker(category, `Approved evidence file '${ref}' reports drill failure (summary.exitCode: ${parsed.summary.exitCode})`);
+    }
+  }
+}
+
 function validateReadiness(record, _filePath) {
   const categoryBlockers = {};
   let totalApproved = 0;
@@ -140,6 +219,24 @@ function validateReadiness(record, _filePath) {
           addBlocker(sectionName, `Evidence item [${idx}] is empty or not a valid string`);
         }
       });
+      // Cross-validation: approved sections referencing evidence JSON files on
+      // disk must point at files that exist, parse as JSON, and do not report
+      // drill failure. Relative paths resolve against the current working
+      // directory first (the documented `backups/…` form) and then against
+      // the readiness file's own directory, so records kept next to the
+      // template (e.g. infra/launch/operator.json) still validate.
+      if (status === 'approved') {
+        const baseDirs = [process.cwd()];
+        if (typeof _filePath === 'string' && _filePath.length > 0) {
+          const fileDir = path.dirname(path.resolve(process.cwd(), _filePath));
+          if (!baseDirs.includes(fileDir)) baseDirs.push(fileDir);
+        }
+        evidence.forEach((ev) => {
+          if (isEvidenceFileReference(ev)) {
+            checkEvidenceFile(ev.trim(), sectionName, addBlocker, baseDirs);
+          }
+        });
+      }
     }
   }
 

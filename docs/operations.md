@@ -532,3 +532,59 @@ Implemented in Prompt 66:
    - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`.
    - Updated `scripts/ops/check-production-templates.sh` requiring all 7 alerts, alert rule verification, and capacity evaluation.
    - Closes TM-05, TM-16, TM-20, and Category 5 launch readiness requirements.
+
+## Phase 12K Unified Launch Drill, Checklist & Runbooks
+
+Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.
+This is the Phase 12 exit gate: one orchestrator, one dossier, one checklist.
+
+1. **Unified Launch Drill Orchestrator (`scripts/ops/run-launch-drills.sh`)**:
+   - Bash (matching the sibling drills). Executes 7 stages (`static_templates`,
+     `supply_chain_sast`, `ingress_deployment`, `volume_encryption`,
+     `secret_rotation`, `capacity_alerting`, `disaster_recovery`) and emits the
+     Unified Launch Evidence Dossier
+     (`backups/launch-evidence-dossier-<timestamp>.json`) with `version`,
+     extended-ISO `timestamp`, `environment`, `overall_status`,
+     `total/passed/failed_stages`, `duration_seconds`, per-stage
+     `stage_id`/`status`/`duration_ms`/`artifacts`/`error_message`, and a
+     `summary` across integrity, security, SLO, recovery, and no-AI posture.
+   - Each stage captures child output to
+     `launch-drill-stage-<stage_id>.log`; dossier `artifacts` list that log
+     plus discovered child evidence, closed by the dossier path.
+   - Flags: `--dry-run`, `--json`, `--output <path>`, `--evidence-dir <dir>`,
+     `--verbose`, `--help`. Without `--dry-run`, children run live against
+     drill infra — except secret rotation, which stays `--dry-run` by design.
+     Exit 0 only when every stage passes.
+   - Unit suite (`scripts/ops/run-launch-drills.spec.js`): 9/9 tests
+     (executable bit, help text, missing-value guards, unknown-option
+     rejection, schema-compliant dossier with offline stages 1–6 passing plus
+     real child-evidence/log artifact links, `--json` stdout identity,
+     `--evidence-dir` redirection, default `backups/` output, fail-closed via
+     deterministic `SOURCE_DB == DRILL_DB` rejection). Full runs pass
+     `--evidence-dir` to a temp dir so the repo `backups/` stays clean.
+   - Known constraint (judgement, verified): stages 1–6 run fully offline;
+     stage 7 `disaster_recovery` requires live drill infra even in `--dry-run`
+     (PGPASSWORD + reachable Postgres for the restore drill; authenticated
+     Postgres + reachable Garage/S3 for reconciliation) and fails closed
+     otherwise. `npm run ops:launch-drill` therefore exits 1 until drill infra
+     is present — that is the gate working, not a defect.
+2. **Operator Launch Checklist (`docs/launch-checklist.md`)**: 11-category
+   verification matrix (drill command, evidence artifact, acceptance criteria
+   per category), 7 Prometheus alert runbooks with PromQL, triage,
+   containment, escalation, and clearing conditions, rollback/DR procedures,
+   and the formal sign-off matrix.
+3. **Launch Readiness Evidence Cross-Validation
+   (`scripts/ops/check-launch-readiness.js`)**: approved sections referencing
+   `.json` evidence paths now require the file to exist, parse as JSON
+   (single-`*` globs supported), and not report drill failure
+   (`status`/`overall_status` failure, `success: false`, or non-zero
+   `summary.exitCode`). Relative paths resolve against the working directory
+   first (the documented `backups/…` form), then the readiness file's own
+   directory. Spec extended to 19/19 tests (pass, missing-file,
+   failure-report, invalid-JSON, non-approved-section skip, subdir-relative
+   resolution, and exitCode paths).
+4. **Operations & CI Integration**:
+   - Root package scripts: `npm run ops:launch-drill`, `npm run ops:launch-drill-test`;
+   - Integrated `npm run ops:launch-drill-test` into `npm run ops:check`;
+   - `scripts/ops/launch-readiness.sh` accepts `--with-drills` (runs the
+     unified orchestrator before the readiness check) and `--help`.
