@@ -4,9 +4,9 @@ import { FileTextIcon } from "lucide-react";
 
 import {
   CreateReportForm,
-  getEvidenceDetails,
   RevisionEditor,
 } from "@/components/acres/app/report-actions";
+import { formatDate, getEvidenceDetails } from "@/lib/app/evidence-details";
 import { ExportStatus } from "@/components/acres/app/export-status";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -297,12 +297,4 @@ function EvidenceTable({ report }: { report: Report }) {
       </Table>
     </div>
   );
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("en", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
 }

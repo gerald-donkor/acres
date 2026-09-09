@@ -137,7 +137,7 @@ test.describe("Authenticated Loading Skeletons & Error Boundaries", () => {
     await page.goto("/app/loading-test");
 
     // Verify loading skeleton renders accessible attributes
-    const skeleton = page.locator('[data-slot="workspace-skeleton"]');
+    const skeleton = page.locator('[data-slot="workspace-skeleton"]').first();
     await expect(skeleton).toBeVisible();
     await expect(skeleton).toHaveAttribute("role", "status");
     await expect(skeleton).toHaveAttribute("aria-busy", "true");

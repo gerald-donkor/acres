@@ -244,3 +244,20 @@ builds the server image and smoke-tests `/health` with `push: false`.
 ## No-AI Production Posture
 
 Phase 11A's assistive drafting preview is implemented in the application codebase behind a feature toggle (`AI_DRAFT_ENABLED=false`) and evaluated with synthetic fixtures. However, the unpaid Gemini Developer API is strictly excluded from the production launch profile. Launch evidence must demonstrate that regional browsing, dashboards, governed reports, exports, and operational runbooks work in a verified deterministic no-AI deployment. The production launch gate enforces `AI_DRAFT_ENABLED=false`, ensures no `GEMINI_API_KEY` is present in production environments or images, and requires explicit attestation of unpaid provider exclusion. Any future production AI service requires a separate decision regarding a paid, private, or local runtime and approved operational profile.
+
+## Phase 12E Verification & Full E2E Baseline
+
+Implemented in Prompt 61:
+1. **Server-Side Test Harness Bridge (`ENABLE_TEST_HARNESS`)**:
+   - `client/lib/api/test-harness-store.ts`: Session-isolated in-memory mock store for SSR Server Components.
+   - `client/app/api/test-harness/mock/route.ts`: Test harness route handler strictly guarded by `process.env.ENABLE_TEST_HARNESS === "true"`, returning 404 in production builds.
+   - `client/lib/api/server.ts`: Server-side SSR intercept resolving mock dashboard summaries, reports, and datasets when test session headers/cookies are supplied by Playwright.
+2. **Multi-Tenant Isolation Hardened**:
+   - `client/e2e/multi-tenant-isolation.spec.ts`: 3/3 passed. Verified that Tenant A's saved views and reports do not bleed to Tenant B across distinct browser contexts, and verified 404/rejection upon tampering with organization tenant headers.
+3. **Product Journeys Hardened**:
+   - `client/e2e/product-journeys.spec.ts`: 8/8 passed. Verified unseeded empty guidance, populated dashboard views, report authoring/drafting, review submission and publication panel, export queuing and CSV download, dataset lifecycle with SSE stream ingestion, and Gemini preview disclosure/proposal workflows.
+4. **Complete Test Suite Baseline**:
+   - `npm run test:client:e2e`: 74/74 tests passed across 11 test files in 52.8s.
+   - `npm run test:server`: 131/131 tests passed across 6 test suites in 41.0s.
+   - `npm run ops:check`: 12/12 readiness tests passed, zero critical dependencies, template checks passed, secret scan passed.
+   - Zero critical vulnerabilities in production dependencies (Next.js 16.3.4 patch applied).

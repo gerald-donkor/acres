@@ -632,3 +632,19 @@ This records only commands run for the architecture-foundation implementation:
 
 These checks validate the unchanged runtime and the repository structure. They
 do not prove any target architecture component has been implemented.
+
+## 16. Phase 12E verification record — 2026-09-09
+
+Records the complete Phase 12 launch and regression verification suite:
+
+- `npm run test:client:e2e`: exit 0; all 74 tests across 11 files passed in 52.8s;
+  - `multi-tenant-isolation.spec.ts`: 3/3 passed (cross-tenant isolation of saved views, reports, and tenant header tampering 404 rejection);
+  - `product-journeys.spec.ts`: 8/8 passed (unseeded empty state, populated dashboard, report draft authoring, review submission/publishing, export artifact queuing/download, dataset lifecycle with SSE stream ingestion, and Gemini preview disclosure/proposal workflows);
+  - `loading-error-boundaries.spec.ts`: 7/7 passed (error boundaries, retry reset, touch targets, reduced motion);
+  - All 8 other client suites passed cleanly.
+- `npm run test:server`: exit 0; 6/6 suites and 131/131 tests passed in 41.0s;
+- `npm run ops:check`: exit 0; 12/12 readiness tests passed, zero critical dependencies, template checks passed, secret scan passed;
+- `git diff --check`: exit 0, no trailing whitespace;
+- `npm run lint`: exit 0; 0 errors, 0 warnings across `@acres/shared`, `@acres/client`, `@acres/server`;
+- `npm run typecheck`: exit 0 across all workspaces; Prisma Client 7.9.1 generated in 627 ms;
+- `npm run build`: exit 0; Next.js 16.3.4 compiled cleanly in 13.1s with all dynamic and static routes optimized; server and shared builds completed cleanly.

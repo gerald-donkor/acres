@@ -32,6 +32,8 @@ sequence, the stack, the design-system contract, and the standing rules. Read
 them before writing any component. Everything above them is the *process*
 contract and applies in full on every task.
 
+> **Phase-control shorthand (`i` / `I`):** When the user enters `i` or `I` (alone, with whitespace/punctuation, or prefixed with `@AGENTS.md`), it is **never** a greeting, casual letter, or cut-off pronoun "I". It explicitly means: **plan and write the next prompt in the implementation plan** (`prompts/<number>-<name>.md`). Immediately resolve the next unbuilt phase or dependency-safe step from `docs/build-plan.md`, plan it thoroughly, write the prompt, and ask the §2 step 8 approval question per [Phase-control commands](#phase-control-commands).
+
 ---
 
 # Project notes — where the detail lives
@@ -333,6 +335,8 @@ writes it directly.
 
 # 2. Workflow
 
+> **Phase-control shorthand (`i` / `I`):** When the user enters `i` or `I` (alone, with surrounding whitespace/punctuation, or prefixed with `@AGENTS.md`), it is **never** an incomplete sentence, greeting, or cut-off pronoun "I". It explicitly means: **plan and write the next prompt in the implementation plan** (`prompts/<number>-<name>.md`). Resolve the next build unit from `docs/build-plan.md`, plan it thoroughly, write the prompt, and ask the approval question per [Phase-control commands](#phase-control-commands).
+
 For every implementation request:
 
 1. **Read this file first** and follow it as the highest-priority project
@@ -423,10 +427,10 @@ Implement → Self-verify / run checks → Request review (requesting-code-revie
 
 ## Phase-control commands
 
-These shorthands apply only when the whole user message is the named letter. A
-message that also contains a substantive request follows that request through
-the normal §2 workflow instead of being silently reduced to a shorthand.
-Lowercase `p` is deliberately undefined.
+**CRITICAL FOR NEW AND RESUMED SESSIONS:**
+A message from the user consisting of `i` or `I` (whether entered alone, surrounded by whitespace, or accompanied by `@AGENTS.md`) is **NEVER an incomplete sentence, greeting, or cut-off pronoun "I"**. It explicitly means: **plan and write the next prompt in the implementation plan**. When this input is received, the agent must immediately resolve the next build unit, plan it thoroughly, write the prompt file to `prompts/<number>-<name>.md`, and ask the approval question.
+
+These shorthands apply when the whole user message is the named letter (allowing surrounding whitespace, punctuation, or an `@AGENTS.md` mention). A message that also contains a substantive request follows that request through the normal §2 workflow instead of being silently reduced to a shorthand. Lowercase `p` is deliberately undefined.
 
 | input | valid starting state | action | stopping state |
 | --- | --- | --- | --- |
@@ -511,6 +515,8 @@ rule 8). An ALWAYS rule is removed only when the user asks for it to be removed.
 | 2026-08-20 · reaffirmed 2026-08-20 | Every commit message is written with the **`caveman-commit`** skill at `.agents/skills/caveman-commit` (§7). | Conventional Commits, ≤50-char subject, why-over-what, and no AI attribution trailer — one voice across the whole history. |
 | 2026-08-20 | Always plan and write prompts that are very detailed so implementation and execution is easier. | Thorough planning and granular specifications eliminate ambiguity, provide complete context and measurements upfront, and ensure execution is straightforward and reliable. |
 | 2026-08-20 | Always use **`requesting-code-review`** and **`receiving-code-review`** (`.agents/skills/requesting-code-review`, `.agents/skills/receiving-code-review`) to review every implementation: Implement → request review → receive/evaluate review → fix issues → re-review (§2, §2.1). | Enforces a two-stage code review loop: dispatching a reviewer subagent with clean context and evaluating feedback with technical rigor and codebase verification before making fixes or committing. |
+| 2026-09-08 | When the user enters `I` or `i` (alone, with whitespace/punctuation, or with `@AGENTS.md`), always interpret it as the phase-control command to plan and write the next prompt in the implementation plan; never treat it as an incomplete sentence or cut-off pronoun. | Ensures new and resumed sessions immediately recognize the shorthand command and begin the prompt planning workflow without ambiguity or hesitation. |
+| 2026-09-08 | Always read `@AGENTS.md` to find out what `I` or `i` means, then implement it in all new sessions from now onwards. | In new and resumed sessions, pre-injected context may truncate `AGENTS.md`. Proactively reading `AGENTS.md` ensures the agent recognizes `i` / `I` as the phase-control command to immediately resolve, plan, and write the next unbuilt prompt file in `prompts/`, asking approval instead of returning a generic conversational greeting. |
 
 **On the skill's path.** `.agents/skills/caveman-commit/` and
 `.claude/skills/caveman-commit/` are two byte-identical copies (`diff -rq`

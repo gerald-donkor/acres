@@ -448,8 +448,11 @@ Prompt 60 implements Phase 5E: accessible route error boundaries, streaming load
    - `client/app/app/reports/loading.tsx`: Reports workspace skeleton with drafts/exports table and action pill.
 5. **Verification Evidence**:
    - Unit tests `client/tests/loading-error-boundaries.spec.ts`: 4/4 passed (ApiClientError recognition, error copy mapping, digest preservation).
-   - Browser Playwright tests `client/e2e/loading-error-boundaries.spec.ts`: 6/6 passed (error boundary display on synthetic test route, reset retry recovery, min 44px touch targets, zero horizontal scroll across 375/800/1280px viewports, and reduced-motion handling).
+   - Browser Playwright tests `client/e2e/loading-error-boundaries.spec.ts`: 7/7 passed (error boundary display on synthetic test route, reset retry recovery, min 44px touch targets, zero horizontal scroll across 375/800/1280px viewports, and reduced-motion handling).
+   - Full Playwright E2E suite (`npm run test:client:e2e`): all 74 tests across 11 files passed cleanly with 0 failures, verified with server-side SSR test harness bridge (`ENABLE_TEST_HARNESS=true`).
 
-## 9. Open Phase 5 Work
+## 9. Phase 12E Verification & Test Harness Record
 
-- Production Caddy same-origin routing; current local/dev browser traffic routes via the Next Route Handler bridge (reserved for live host/operator deployment).
+- **Server-Side Test Harness**: `client/lib/api/test-harness-store.ts`, route handler `client/app/api/test-harness/mock`, and `client/lib/api/server.ts` provide session-scoped SSR mock resolution when `ENABLE_TEST_HARNESS=true` is enabled during Playwright runs. Strictly excluded in production without the explicit flag.
+- **Client E2E Suite Baseline**: 74/74 tests passing across all 11 suites including `multi-tenant-isolation.spec.ts`, `product-journeys.spec.ts`, `accessibility-responsive.spec.ts`, and `members-management.spec.ts`.
+- **Open Phase 5 Work**: Production Caddy same-origin routing; current local/dev browser traffic routes via the Next Route Handler bridge (reserved for live host/operator deployment).

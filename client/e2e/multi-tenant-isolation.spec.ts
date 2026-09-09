@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   createFirstOrganization,
   createMockDashboardSummary,
+  enableMockDashboard,
   registerAccount,
   unique,
 } from "./helpers";
@@ -15,17 +16,7 @@ test.describe("Multi-Tenant Isolation", () => {
     const pageA = await contextA.newPage();
 
     const summaryA = createMockDashboardSummary();
-    await pageA.route("**/graphql", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: {
-            dashboardSummary: summaryA,
-          },
-        }),
-      });
-    });
+    await enableMockDashboard(pageA, summaryA);
 
     await registerAccount(pageA);
     const orgAName = unique("Alpha Regional Corp");
@@ -88,7 +79,7 @@ test.describe("Multi-Tenant Isolation", () => {
 
     // Tenant B verifies dashboards: Alpha's saved view MUST NOT be visible
     await expect(pageB).toHaveURL(/\/app$/);
-    await expect(pageB.getByText(orgBName)).toBeVisible();
+    await expect(pageB.getByLabel("Current organization")).toHaveText(orgBName);
     await expect(pageB.getByRole("link", { name: viewNameA })).not.toBeVisible();
 
     // Tenant B verifies reports: Alpha's report MUST NOT appear in library

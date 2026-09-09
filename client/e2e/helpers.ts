@@ -283,3 +283,62 @@ export function createMockDataset(
     ...overrides,
   };
 }
+
+const pageHeaders = new WeakMap<Page, Record<string, string>>();
+
+export async function setPageHeader(page: Page, name: string, value: string) {
+  const current = pageHeaders.get(page) ?? {};
+  current[name] = value;
+  pageHeaders.set(page, current);
+  await page.setExtraHTTPHeaders(current);
+}
+
+const pageSessionMap = new WeakMap<Page, string>();
+
+export function getOrCreatePageSessionId(page: Page): string {
+  let sessionId = pageSessionMap.get(page);
+  if (!sessionId) {
+    sessionId = unique("test-session");
+    pageSessionMap.set(page, sessionId);
+  }
+  return sessionId;
+}
+
+export async function registerTestMock(
+  page: Page,
+  mocks: {
+    dashboardSummary?: DashboardSummary;
+    reports?: Report[];
+    report?: Report;
+    exports?: ExportRequest[];
+    datasets?: DatasetSummary[];
+    dataset?: DatasetSummary;
+    versions?: DatasetVersionSummary[];
+  },
+) {
+  const sessionId = getOrCreatePageSessionId(page);
+  await setPageHeader(page, "x-acres-test-session", sessionId);
+  await page.request.post("/api/test-harness/mock", {
+    data: { sessionId, mocks },
+  });
+  return sessionId;
+}
+
+export async function enableMockDashboard(
+  page: Page,
+  summary: DashboardSummary = createMockDashboardSummary(),
+) {
+  await setPageHeader(page, "x-playwright-mock-dashboard", "true");
+  await page.route("**/graphql", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          dashboardSummary: summary,
+        },
+      }),
+    });
+  });
+  await registerTestMock(page, { dashboardSummary: summary });
+}

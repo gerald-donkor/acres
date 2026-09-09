@@ -1,4 +1,10 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import {
+  getDefaultMockDashboardSummary,
+  getSessionMocks,
+  isTestHarnessActive,
+  type TestHarnessMocks,
+} from "@/lib/api/test-harness-store";
 import type {
   AccountProfile,
   DashboardSummary,
@@ -252,10 +258,51 @@ const DASHBOARD_SUMMARY_QUERY = /* GraphQL */ `
   }
 `;
 
+async function getTestHarnessState(): Promise<{
+  enabled: boolean;
+  mockDashboard: boolean;
+  mocks?: Partial<TestHarnessMocks>;
+}> {
+  if (!isTestHarnessActive()) {
+    return { enabled: false, mockDashboard: false };
+  }
+  try {
+    const [headerStore, cookieStore] = await Promise.all([
+      headers(),
+      cookies(),
+    ]);
+    const mockDashboardHeader = headerStore.get("x-playwright-mock-dashboard");
+    const mockDashboardCookie = cookieStore.get("x-playwright-mock-dashboard")?.value;
+    const mockDashboard =
+      mockDashboardHeader === "true" ||
+      mockDashboardHeader === "populated" ||
+      mockDashboardCookie === "true" ||
+      mockDashboardCookie === "populated";
+
+    const sessionId =
+      headerStore.get("x-acres-test-session") ??
+      cookieStore.get("x-acres-test-session")?.value;
+
+    const mocks = sessionId ? getSessionMocks(sessionId) : undefined;
+    return { enabled: true, mockDashboard, mocks };
+  } catch {
+    return { enabled: false, mockDashboard: false };
+  }
+}
+
 export async function getDashboardSummary(
   organizationId: string,
   filters: Record<string, string | undefined> = {},
 ): Promise<DashboardSummary> {
+  const harness = await getTestHarnessState();
+  if (harness.enabled) {
+    if (harness.mocks?.dashboardSummary) {
+      return harness.mocks.dashboardSummary;
+    }
+    if (harness.mockDashboard) {
+      return getDefaultMockDashboardSummary();
+    }
+  }
   const data = await graphqlPost<{ dashboardSummary: DashboardSummary }>(
     DASHBOARD_SUMMARY_QUERY,
     filters,
@@ -279,40 +326,76 @@ export function getDashboardView(
   });
 }
 
-export function listReports(organizationId: string): Promise<Report[]> {
+export async function listReports(organizationId: string): Promise<Report[]> {
+  const harness = await getTestHarnessState();
+  if (harness.enabled && harness.mocks?.reports) {
+    return harness.mocks.reports;
+  }
   return apiGet<Report[]>("/reports", { organizationId });
 }
 
-export function getReport(
+export async function getReport(
   organizationId: string,
   reportId: string,
 ): Promise<Report> {
+  const harness = await getTestHarnessState();
+  if (harness.enabled) {
+    if (harness.mocks?.report && (harness.mocks.report.id === reportId || !reportId)) {
+      return harness.mocks.report;
+    }
+    if (harness.mocks?.reports) {
+      const found = harness.mocks.reports.find((r) => r.id === reportId);
+      if (found) return found;
+    }
+  }
   return apiGet<Report>(`/reports/${reportId}`, { organizationId });
 }
 
-export function listExports(
+export async function listExports(
   organizationId: string,
 ): Promise<ExportRequest[]> {
+  const harness = await getTestHarnessState();
+  if (harness.enabled && harness.mocks?.exports) {
+    return harness.mocks.exports;
+  }
   return apiGet<ExportRequest[]>("/exports", { organizationId });
 }
 
-export function listDatasets(
+export async function listDatasets(
   organizationId: string,
 ): Promise<DatasetSummary[]> {
+  const harness = await getTestHarnessState();
+  if (harness.enabled && harness.mocks?.datasets) {
+    return harness.mocks.datasets;
+  }
   return apiGet<DatasetSummary[]>("/datasets", { organizationId });
 }
 
-export function getDataset(
+export async function getDataset(
   organizationId: string,
   datasetId: string,
 ): Promise<DatasetSummary> {
+  const harness = await getTestHarnessState();
+  if (harness.enabled) {
+    if (harness.mocks?.dataset && (harness.mocks.dataset.id === datasetId || !datasetId)) {
+      return harness.mocks.dataset;
+    }
+    if (harness.mocks?.datasets) {
+      const found = harness.mocks.datasets.find((d) => d.id === datasetId);
+      if (found) return found;
+    }
+  }
   return apiGet<DatasetSummary>(`/datasets/${datasetId}`, { organizationId });
 }
 
-export function listDatasetVersions(
+export async function listDatasetVersions(
   organizationId: string,
   datasetId: string,
 ): Promise<DatasetVersionSummary[]> {
+  const harness = await getTestHarnessState();
+  if (harness.enabled && harness.mocks?.versions) {
+    return harness.mocks.versions;
+  }
   return apiGet<DatasetVersionSummary[]>(`/datasets/${datasetId}/versions`, {
     organizationId,
   });

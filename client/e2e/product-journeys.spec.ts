@@ -6,7 +6,9 @@ import {
   createMockDataset,
   createMockExport,
   createMockReport,
+  enableMockDashboard,
   registerAccount,
+  registerTestMock,
   unique,
 } from "./helpers";
 
@@ -42,18 +44,7 @@ test.describe("Product Journeys", () => {
     page,
   }) => {
     const summary = createMockDashboardSummary();
-
-    await page.route("**/graphql", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: {
-            dashboardSummary: summary,
-          },
-        }),
-      });
-    });
+    await enableMockDashboard(page, summary);
 
     await registerAccount(page);
     const orgName = unique("Populated Analytics");
@@ -283,6 +274,10 @@ test.describe("Product Journeys", () => {
       `**/api/v1/reports/${reportId}/revisions/${revisionId}/submit-review`,
       async (route) => {
         currentReport = inReviewReport;
+        await registerTestMock(page, {
+          reports: [currentReport],
+          report: currentReport,
+        });
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -295,6 +290,10 @@ test.describe("Product Journeys", () => {
       `**/api/v1/reports/${reportId}/revisions/${revisionId}/publish`,
       async (route) => {
         currentReport = publishedReport;
+        await registerTestMock(page, {
+          reports: [currentReport],
+          report: currentReport,
+        });
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -302,6 +301,11 @@ test.describe("Product Journeys", () => {
         });
       },
     );
+
+    await registerTestMock(page, {
+      reports: [draftReport],
+      report: draftReport,
+    });
 
     await registerAccount(page);
     const orgName = unique("Verification Org");
@@ -445,6 +449,12 @@ test.describe("Product Journeys", () => {
       },
     );
 
+    await registerTestMock(page, {
+      reports: [report],
+      report,
+      exports: [queuedExport],
+    });
+
     await registerAccount(page);
     const orgName = unique("Governed Reports Org");
     await createFirstOrganization(page, orgName);
@@ -461,7 +471,7 @@ test.describe("Product Journeys", () => {
     await expect(page.getByRole("heading", { name: report.title })).toBeVisible();
 
     // Verify published state is immutable and displays published insights
-    await expect(page.getByText("Published", { exact: true })).toBeVisible();
+    await expect(page.locator('[data-slot="badge"]').filter({ hasText: "Published" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Published Insights (1)" })).toBeVisible();
 
     // Verify Evidence table
@@ -470,7 +480,7 @@ test.describe("Product Journeys", () => {
 
     // Verify Exports sidebar panel
     await expect(page.getByRole("heading", { name: "Exports" })).toBeVisible();
-    await expect(page.getByText("CSV")).toBeVisible();
+    await expect(page.getByText("csv", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
   });
 
@@ -500,7 +510,7 @@ test.describe("Product Journeys", () => {
     // Fill dataset form
     const datasetName = unique("Census Ingestion Test");
     const datasetDesc = "Provincial census statistics with demographic mappings.";
-    await page.getByLabel("Name").fill(datasetName);
+    await page.getByRole("textbox", { name: "Name" }).fill(datasetName);
     await page.getByLabel("Description").fill(datasetDesc);
 
     // Submit dataset
@@ -813,6 +823,12 @@ test.describe("Product Journeys", () => {
       });
     });
 
+    await registerTestMock(page, {
+      dataset,
+      datasets: [dataset],
+      versions: [],
+    });
+
     await registerAccount(page);
     const orgName = unique("Fail Test Org");
     await createFirstOrganization(page, orgName);
@@ -978,6 +994,11 @@ test.describe("Product Journeys", () => {
       },
     );
 
+    await registerTestMock(page, {
+      report: initialReport as unknown as Report,
+      reports: [initialReport as unknown as Report],
+    });
+
     await registerAccount(page);
     const orgName = unique("AI Draft Preview Org");
     await createFirstOrganization(page, orgName);
@@ -1008,7 +1029,7 @@ test.describe("Product Journeys", () => {
     await expect(generateBtn).toBeDisabled();
 
     // Check acknowledgement checkbox and fill purpose
-    await page.getByLabel(/I understand and agree that this request sends selected report evidence/i).click();
+    await page.getByRole("checkbox", { name: /I understand and agree that this request sends selected report evidence/i }).click();
     await page.getByLabel("Focus instruction / purpose").fill("Summarize corn yield trends");
 
     // Click generate proposals
