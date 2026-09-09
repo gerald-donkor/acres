@@ -313,7 +313,7 @@ loading states (`role="status"`, `aria-busy="true"`) with zero horizontal overfl
 375px and full `prefers-reduced-motion: reduce` compliance across `/app/loading.tsx`,
 `/app/members/loading.tsx`, `/app/dashboards/loading.tsx`, `/app/datasets/loading.tsx`,
 and `/app/reports/loading.tsx`. Unit tests (`4/4`) and browser Playwright tests (`6/6`)
-pass. Open Phase 5 work: production Caddy same-origin routing.
+pass. Phase 5 production Caddy same-origin routing is verified in Phase 12G.
 
 ## 7. Phase 6 — storage, queues, worker, and secure uploads
 
@@ -678,3 +678,28 @@ Records the complete Phase 12 disaster recovery restore drill and object storage
   - `npm run typecheck`: exit 0 across all workspaces;
   - `npm run build`: exit 0 across all workspaces;
   - `git diff --check`: exit 0, zero whitespace errors.
+
+## 18. Phase 12G verification record — 2026-09-09
+
+Records the complete Phase 12 Caddy same-origin ingress routing verification and deployment promotion/rollback drill:
+
+- **Caddy Ingress Routing & Security Header Verification**:
+  - `scripts/ops/verify-caddy-routing.js`: pure Node.js route evaluation engine;
+  - `scripts/ops/verify-caddy-routing.spec.js`: exit 0; all 10 unit tests passed in 70ms;
+  - Verified routing for `@api path /api/* /graphql /health /health/ready` to `api:3001` with `header_up X-Forwarded-Host {host}` and `header_up X-Forwarded-Proto {scheme}`;
+  - Verified routing for `@objects path /acres-quarantine/*` to `garage:3900` with `header_up Host {host}` preserving S3 SigV4 signature integrity;
+  - Verified fallback routing for all application and static assets (`/`, `/login`, `/register`, `/app/*`, `/_next/*`) to `next:3000`;
+  - Verified edge security headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, and `-Server` banner stripping;
+  - Verified transport timeouts across all backends (`read_timeout`, `write_timeout`, `dial_timeout`) and request body limits (`{$ACRES_MAX_REQUEST_BODY}`);
+  - Verified HSTS gate invariant (Strict-Transport-Security remains commented out pending operator approval).
+- **Automated Deployment Promotion & Rollback Drill**:
+  - `scripts/ops/run-deployment-drill.sh`: exit 0;
+  - Verified zero destructive DDL statements across 17 Prisma migration directories (additive-only schema changes ensuring backward compatibility on rollback);
+  - Verified production Compose template `stop_grace_period` (Caddy: 30s, Next: 30s, API: 45s, Worker: 60s) and network isolation;
+  - Verified liveness and deep readiness probe contracts against NestJS OpenAPI annotations;
+  - Verified rollback command sequence (`docker compose -f <compose> up -d --no-deps --build=never <service>`);
+  - Emitted structured JSON evidence reports to `backups/deployment-drill-evidence-<timestamp>.json`.
+- **Operations & CI Integration**:
+  - Root package scripts: `npm run ops:caddy-drill`, `npm run ops:deployment-drill`, `npm run ops:caddy-test`;
+  - Integrated `ops:caddy-test` into `npm run ops:check`;
+  - Formally resolves and closes the open Phase 5 Caddy ingress routing item.

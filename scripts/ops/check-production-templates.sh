@@ -24,6 +24,9 @@ require_file infra/grafana/dashboards/acres-operations.json
 require_file infra/launch/readiness.example.json
 require_file scripts/ops/check-launch-readiness.js
 require_file scripts/db/bootstrap-production-roles.sh
+require_file scripts/ops/verify-caddy-routing.js
+require_file scripts/ops/verify-caddy-routing.spec.js
+require_file scripts/ops/run-deployment-drill.sh
 
 node <<'NODE'
 const fs = require('fs');
@@ -252,5 +255,7 @@ fi
 if ! grep -q 'Strict-Transport-Security' infra/caddy/Caddyfile.example; then
   fail 'Caddy template must document the HSTS approval gate'
 fi
+
+node scripts/ops/verify-caddy-routing.js infra/caddy/Caddyfile.example >/dev/null || fail 'Caddy routing verification failed'
 
 printf 'ops template check passed\n'

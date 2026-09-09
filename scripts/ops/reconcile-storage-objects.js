@@ -362,11 +362,21 @@ Options:
 
   // 1. Connect to PostgreSQL
   const { Client } = require('pg');
+  const pgPassword =
+    process.env.PGPASSWORD ||
+    process.env.POSTGRES_PASSWORD ||
+    process.env.ACRES_MIGRATOR_PASSWORD;
+
+  if (!pgPassword) {
+    console.error('Error: PostgreSQL password is required (set PGPASSWORD, POSTGRES_PASSWORD, or ACRES_MIGRATOR_PASSWORD)');
+    process.exit(1);
+  }
+
   const pgClient = new Client({
     host: process.env.PGHOST || 'localhost',
     port: parseInt(process.env.PGPORT || '5432', 10),
     user: process.env.PGUSER || 'acres_migrator',
-    password: process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD || 'acres_migrator_dev_password',
+    password: pgPassword,
     database: process.env.PGDATABASE || 'acres',
   });
 

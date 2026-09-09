@@ -79,6 +79,9 @@ messages are strictly excluded from metric labels.
 | `scripts/ops/restore-postgres.sh` | Structured PostgreSQL restore helper with connection verification and table count validation |
 | `scripts/ops/run-restore-drill.sh` | Automated disaster recovery restore drill runner validating backup integrity, isolated database restore, schema/migration parity, and RTO |
 | `scripts/ops/reconcile-storage-objects.js` | Object storage reconciliation utility comparing PostgreSQL stored objects against bucket keys, detecting leaks, missing objects, and mismatches |
+| `scripts/ops/verify-caddy-routing.js` | Pure Node.js Caddyfile parser and route evaluator validating same-origin ingress dispatching, proxy headers, S3 SigV4 preservation, and security headers |
+| `scripts/ops/verify-caddy-routing.spec.js` | Unit test suite (10/10 tests) asserting Caddy routing rules, SigV4 host preservation, security headers, timeouts, and HSTS gate invariants |
+| `scripts/ops/run-deployment-drill.sh` | Automated deployment promotion preflight and rollback drill runner validating Caddy routing, additive migrations, readiness probes, graceful drain, and evidence emission |
 | `scripts/ops/audit-dependencies.sh` | Deterministic dependency security audit script for production dependencies |
 | `scripts/ops/check-production-templates.sh` | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, readiness schema, and env placeholder checks |
 | `scripts/ops/scan-secrets.sh` | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names |
@@ -100,6 +103,9 @@ npm run ops:backup
 npm run ops:restore
 npm run ops:restore-drill
 npm run ops:reconcile-storage
+npm run ops:caddy-test
+npm run ops:caddy-drill
+npm run ops:deployment-drill
 npm run ops:check
 npm run ops:launch-readiness
 ```
@@ -220,6 +226,28 @@ This repository intentionally fails closed until real operator decisions and liv
 
 Use immutable image tags and keep the previous Caddy/app configuration available. Application rollback may point Caddy back to the previous Next/API images. Schema rollback is not assumed: migrations must be backward-compatible for at least one release cycle, and irreversible data changes use forward fixes unless a reviewed undo migration exists.
 
+### Deployment & Caddy Ingress Drill
+
+1. **Caddy Ingress Routing Verification**:
+   Execute `npm run ops:caddy-drill` (or `node scripts/ops/verify-caddy-routing.js`). Validates:
+   - Route `@api path /api/* /graphql /health /health/ready` proxies to `api:3001` with `header_up X-Forwarded-Host {host}` and `header_up X-Forwarded-Proto {scheme}`;
+   - Route `@objects path /acres-quarantine/*` proxies to `garage:3900` with `header_up Host {host}`, strictly preserving browser-visible host for S3 SigV4 signature integrity;
+   - Fallback route proxies to `next:3000` for all marketing pages, authenticated `/app/*` routes, and static Next chunks;
+   - Edge security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, `-Server`);
+   - Request body limit and transport timeouts across API, Garage, and Next;
+   - HSTS gate invariant (Strict-Transport-Security remains commented out pending domain & TLS certificate approval).
+
+2. **Automated Promotion & Rollback Drill**:
+   Execute `npm run ops:deployment-drill` (or `scripts/ops/run-deployment-drill.sh [options]`). Validates:
+   - Ingress & Caddy routing verification;
+   - Migration backward compatibility (zero destructive DDL statements such as `DROP TABLE` or `DROP COLUMN` across migration files);
+   - Operational templates, Dockerfile runtime, and secret scans;
+   - Liveness (`/health`) and deep readiness (`/health/ready`) probe contracts;
+   - Graceful shutdown drain periods (`stop_grace_period`: Caddy 30s, Next 30s, API 45s, Worker 60s);
+   - Network isolation (only Caddy joins the public network; all backend services are private);
+   - Rollback command sequence (`docker compose -f <compose> up -d --no-deps --build=never <service>`);
+   - Emits structured JSON evidence reports (`backups/deployment-drill-evidence-<timestamp>.json`).
+
 ### Backup
 
 Run `scripts/ops/backup-postgres.sh` with `PGPASSWORD` and destination configured. Back up PostgreSQL, Garage object data and metadata, deployment config, certificate state, and recoverable signing/encryption material. Backups must be encrypted, access-controlled, off-host, and separate from live volume unlock material. Role authentication falls back gracefully between `POSTGRES_PASSWORD`, `POSTGRES_SUPERUSER_PASSWORD`, and `ACRES_MIGRATOR_PASSWORD`. `acres_migrator` is provisioned with `BYPASSRLS` so that table dumps succeed completely across all tenant tables enforcing `FORCE ROW LEVEL SECURITY`.
@@ -302,3 +330,25 @@ Implemented in Prompt 62:
 4. **Operations & CI Integration**:
    - Root package scripts: `npm run ops:restore-drill`, `npm run ops:reconcile-storage`, `npm run ops:reconcile-test`.
    - Integrated into `npm run ops:check` and CI gate.
+
+## Phase 12G Caddy Same-Origin Ingress & Deployment Promotion/Rollback Drill
+
+Implemented in Prompt 63:
+1. **Production Caddy Configuration & Same-Origin Routing Verification Engine (`scripts/ops/verify-caddy-routing.js` & `.spec.js`)**:
+   - Pure Node.js Caddyfile parser and route evaluation engine.
+   - Evaluates route dispatching: `@api path /api/* /graphql /health /health/ready` -> `api:3001` with `X-Forwarded-Host` and `X-Forwarded-Proto` proxy headers.
+   - Preserves S3 SigV4 signature integrity: `@objects path /acres-quarantine/*` -> `garage:3900` with `header_up Host {host}` preserving the client Host header.
+   - Directs all other traffic (`/`, `/login`, `/register`, `/app/*`, `/_next/*`) to Next.js fallback proxy (`next:3000`).
+   - Enforces edge security headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, and `-Server` banner removal.
+   - Enforces transport timeouts across API, Garage, and Next (`read_timeout`, `write_timeout`, `dial_timeout`) and request body limits (`{$ACRES_MAX_REQUEST_BODY}`).
+   - Enforces HSTS gate invariant (Strict-Transport-Security remains commented out pending operator domain/cert approval).
+   - Unit test suite (`verify-caddy-routing.spec.js`): 10/10 tests passing in 70ms.
+2. **Automated Deployment Promotion & Rollback Drill Runner (`scripts/ops/run-deployment-drill.sh`)**:
+   - Automated drill runner verifying Caddy ingress, database migration backward compatibility, operational templates, secret scans, readiness probes, and rollback procedures.
+   - Verifies zero destructive DDL statements across migrations (additive-only schema changes).
+   - Validates service `stop_grace_period` (Caddy: 30s, Next: 30s, API: 45s, Worker: 60s) and network isolation.
+   - Emits structured JSON evidence reports (`backups/deployment-drill-evidence-<timestamp>.json`).
+3. **Operations & CI Integration**:
+   - Added root package scripts `npm run ops:caddy-drill` and `npm run ops:deployment-drill`.
+   - Added `npm run ops:caddy-test` to `npm run ops:check` and CI verification pipeline.
+   - Closes the open Phase 5 Caddy ingress routing item in `docs/authenticated-app.md` and `docs/build-plan.md`.
