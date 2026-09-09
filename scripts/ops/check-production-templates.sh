@@ -27,6 +27,9 @@ require_file scripts/db/bootstrap-production-roles.sh
 require_file scripts/ops/verify-caddy-routing.js
 require_file scripts/ops/verify-caddy-routing.spec.js
 require_file scripts/ops/run-deployment-drill.sh
+require_file scripts/ops/verify-volume-encryption.js
+require_file scripts/ops/verify-volume-encryption.spec.js
+require_file scripts/ops/run-secret-rotation-drill.sh
 
 node <<'NODE'
 const fs = require('fs');
@@ -257,5 +260,6 @@ if ! grep -q 'Strict-Transport-Security' infra/caddy/Caddyfile.example; then
 fi
 
 node scripts/ops/verify-caddy-routing.js infra/caddy/Caddyfile.example >/dev/null || fail 'Caddy routing verification failed'
+node scripts/ops/verify-volume-encryption.js >/dev/null || fail 'Volume encryption verification failed'
 
 printf 'ops template check passed\n'

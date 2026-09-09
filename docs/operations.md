@@ -282,6 +282,50 @@ Data retention jobs run automatically on the worker process (`SCHEDULER_ENABLED=
 - `tokens.purge-expired`: cleans expired password recovery and invitation tokens.
 All runs are logged to the `JobRun` audit table.
 
+### Volume Encryption, Key Separation & Recovery Inspection Runbook
+
+1. **Volume Encryption Inspection**:
+   Execute `npm run ops:volume-drill` (or `node scripts/ops/verify-volume-encryption.js`). Validates:
+   - Evaluates all 9 stateful container mounts across `infra/compose/docker-compose.production.example.yml` and `infra/env/production.env.example`:
+     - `postgres`: `/var/lib/postgresql` -> `${ACRES_POSTGRES_ENCRYPTED_MOUNT}`
+     - `valkey`: `/data` -> `${ACRES_VALKEY_ENCRYPTED_MOUNT}`
+     - `garage`: `/var/lib/garage/meta` -> `${ACRES_GARAGE_META_ENCRYPTED_MOUNT}`
+     - `garage`: `/var/lib/garage/data` -> `${ACRES_GARAGE_DATA_ENCRYPTED_MOUNT}`
+     - `clamav`: `/var/lib/clamav` -> `${ACRES_CLAMAV_ENCRYPTED_MOUNT}`
+     - `caddy`: `/data` -> `${ACRES_CADDY_DATA_MOUNT}`
+     - `caddy`: `/config` -> `${ACRES_CADDY_CONFIG_MOUNT}`
+     - `prometheus`: `/prometheus` -> `${ACRES_PROMETHEUS_ENCRYPTED_MOUNT}`
+     - `grafana`: `/var/lib/grafana` -> `${ACRES_GRAFANA_ENCRYPTED_MOUNT}`
+   - Asserts approved host volume encryption mechanisms: `LUKS2/dm-crypt`, `aws:kms`, `gcp:cmek`, `azure:keyvault`.
+   - Fails closed on any direct unencrypted host binds for stateful services or missing mount variables.
+
+2. **Key Separation Invariant Verification**:
+   - Strictly enforces that volume unlock keys, passphrases, or cloud KMS credentials are never stored within stateful volume mounts, backup archives (`backups/`), or tracked in Git.
+   - Automatically scans mount paths and backup directories against forbidden key patterns (`*.key`, `*.keyfile`, `*.passphrase`, `id_rsa`, `*luks*key*`, `*kms*creds*`).
+   - Asserts volume unlock material is managed strictly out-of-band by host init or approved secret store.
+
+3. **Key Recovery Governance**:
+   - Requires designated key recovery owner (`PRODUCTION_KEY_RECOVERY_OWNER`).
+   - Enforces split-key / dual-custody parameters and documented recovery runbook references for disaster recovery without CI credential exposure.
+
+### Secret Rotation & Emergency Compromise Response Runbook
+
+1. **Automated Secret Rotation Drill**:
+   Execute `npm run ops:rotation-drill` (or `scripts/ops/run-secret-rotation-drill.sh [options]`). Validates zero-downtime rotation procedures across all 7 production secret classes:
+   - **Session Secret Rollover (`SESSION_SECRET`)**: Evaluates dual-key rollover window. Primary Key A signs session tokens; Key B rotated to Primary with Key A retained as Secondary during grace window. Verifies 0 dropped active sessions, and asserts that expired/retired Key A tokens are rejected after grace window.
+   - **CSRF Secret Rollover (`CSRF_SECRET`)**: Evaluates token re-issuance and cookie synchronization. Stale CSRF tokens rejected fail-closed with `CSRF_INVALID`.
+   - **Database Passwords (`ACRES_APP_PASSWORD`, `ACRES_MIGRATOR_PASSWORD`)**: Validates zero-downtime PostgreSQL role password rotation. Connection pool drains idle connections; in-flight queries complete safely; new connections authenticate with rotated credentials; stale passwords rejected with `28P01`.
+   - **Valkey Authentication (`VALKEY_PASSWORD`)**: Evaluates dynamic runtime reload via `CONFIG SET requirepass`. Ingestion queues maintain zero message drops; stale connections rejected with `-WRONGPASS`.
+   - **Storage Access Keys (`STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`)**: Evaluates S3 SigV4 signature derivation and dual-key overlap window for Garage / S3 presigned operations.
+   - **SMTP Credentials & Grafana Admin Password**: Validates indirect references and secret masking.
+
+2. **Emergency Compromise Response Drill**:
+   - Simulates compromised credential scenario: triggers targeted mass session revocation (`revokeAllForAccount`) and token purge.
+   - Asserts that all sessions belonging to the compromised account are instantly invalidated (`SessionsService.resolve` returns `null`), while uncompromised tenant sessions remain uninterrupted.
+   - Runs `purgeExpired()` to clean revoked rows from database storage.
+   - Performs secret redaction audit asserting zero raw credentials or dev passwords logged in console output, environment dumps, or drill reports.
+   - Emits structured JSON audit evidence to `backups/secret-rotation-evidence-<timestamp>.json`.
+
 ## CI State
 
 CI has `permissions: contents: read` and pins all actions to immutable
@@ -352,3 +396,36 @@ Implemented in Prompt 63:
    - Added root package scripts `npm run ops:caddy-drill` and `npm run ops:deployment-drill`.
    - Added `npm run ops:caddy-test` to `npm run ops:check` and CI verification pipeline.
    - Closes the open Phase 5 Caddy ingress routing item in `docs/authenticated-app.md` and `docs/build-plan.md`.
+
+## Phase 12H Production Volume Encryption Key Separation & Secret Rotation Drill
+
+Implemented in Prompt 64:
+1. **Production Volume Encryption & Key Separation Engine (`scripts/ops/verify-volume-encryption.js` & `.spec.js`)**:
+   - Deterministic Node.js validator evaluating stateful volume encryption, key separation, and recovery governance (TM-21).
+   - Validates all 9 stateful container mounts across `infra/compose/docker-compose.production.example.yml` and `infra/env/production.env.example`:
+     - `postgres`: `/var/lib/postgresql` -> `${ACRES_POSTGRES_ENCRYPTED_MOUNT}`
+     - `valkey`: `/data` -> `${ACRES_VALKEY_ENCRYPTED_MOUNT}`
+     - `garage`: `/var/lib/garage/meta` -> `${ACRES_GARAGE_META_ENCRYPTED_MOUNT}`
+     - `garage`: `/var/lib/garage/data` -> `${ACRES_GARAGE_DATA_ENCRYPTED_MOUNT}`
+     - `clamav`: `/var/lib/clamav` -> `${ACRES_CLAMAV_ENCRYPTED_MOUNT}`
+     - `caddy`: `/data` -> `${ACRES_CADDY_DATA_MOUNT}`
+     - `caddy`: `/config` -> `${ACRES_CADDY_CONFIG_MOUNT}`
+     - `prometheus`: `/prometheus` -> `${ACRES_PROMETHEUS_ENCRYPTED_MOUNT}`
+     - `grafana`: `/var/lib/grafana` -> `${ACRES_GRAFANA_ENCRYPTED_MOUNT}`
+   - Asserts approved host volume encryption mechanisms (`LUKS2/dm-crypt`, `aws:kms`, `gcp:cmek`, `azure:keyvault`).
+   - Strictly enforces Key Separation Invariant: automatically scans mount paths, backup directories (`backups/`), and Git tracking for keyfiles (`*.key`, `*.keyfile`, `*.passphrase`, `id_rsa`, `*luks*key*`, `*kms*creds*`), failing closed upon detection.
+   - Unit test suite (`verify-volume-encryption.spec.js`): 12/12 unit tests passing in 90ms.
+2. **Automated Secret Rotation & Compromise Drill Runner (`scripts/ops/run-secret-rotation-drill.sh`)**:
+   - Automated drill runner executing zero-downtime secret rotation and emergency compromise response (TM-15).
+   - Verifies dual-key session rollover (`SESSION_SECRET`) with zero dropped active sessions during the rollover window, and immediate rejection of expired/retired keys.
+   - Verifies CSRF secret rollover with fail-closed rejection of stale tokens (`CSRF_INVALID`).
+   - Verifies PostgreSQL database password rotation (`ACRES_APP_PASSWORD`, `ACRES_MIGRATOR_PASSWORD`) with connection pool drain verification and preservation of in-flight queries.
+   - Verifies Valkey runtime credential update (`CONFIG SET requirepass`) with zero dropped queue messages.
+   - Verifies S3 / Garage access key pair rotation with dual-key overlap window and SigV4 signature derivation.
+   - Verifies emergency compromise response: targeted mass revocation (`revokeAllForAccount`) and dead row purge (`purgeExpired`).
+   - Audits secret redaction: verifies zero raw secret strings or local dev passwords in console logs, environment dumps, or drill reports.
+   - Emits structured JSON audit evidence reports (`backups/secret-rotation-evidence-<timestamp>.json`).
+3. **Operations & CI Integration**:
+   - Added root package scripts: `npm run ops:volume-test`, `npm run ops:volume-drill`, and `npm run ops:rotation-drill`.
+   - Integrated `npm run ops:volume-test` and template verification into `npm run ops:check` and `scripts/ops/check-production-templates.sh`.
+   - Closes TM-15 and TM-21 operational verification gates.

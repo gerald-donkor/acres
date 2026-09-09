@@ -703,3 +703,38 @@ Records the complete Phase 12 Caddy same-origin ingress routing verification and
   - Root package scripts: `npm run ops:caddy-drill`, `npm run ops:deployment-drill`, `npm run ops:caddy-test`;
   - Integrated `ops:caddy-test` into `npm run ops:check`;
   - Formally resolves and closes the open Phase 5 Caddy ingress routing item.
+
+## 19. Phase 12H verification record — 2026-09-09
+
+Records the complete Phase 12 production volume encryption key separation verification and zero-downtime secret rotation drill:
+
+- **Volume Encryption & Key Separation Engine**:
+  - `scripts/ops/verify-volume-encryption.js`: pure Node.js validator and evaluation engine;
+  - `scripts/ops/verify-volume-encryption.spec.js`: exit 0; all 12 unit tests passed in 90ms;
+  - Evaluated and verified all 9 stateful container volume mounts in `infra/compose/docker-compose.production.example.yml` and `infra/env/production.env.example`:
+    - `postgres`: `/var/lib/postgresql` -> `${ACRES_POSTGRES_ENCRYPTED_MOUNT}`
+    - `valkey`: `/data` -> `${ACRES_VALKEY_ENCRYPTED_MOUNT}`
+    - `garage`: `/var/lib/garage/meta` -> `${ACRES_GARAGE_META_ENCRYPTED_MOUNT}`
+    - `garage`: `/var/lib/garage/data` -> `${ACRES_GARAGE_DATA_ENCRYPTED_MOUNT}`
+    - `clamav`: `/var/lib/clamav` -> `${ACRES_CLAMAV_ENCRYPTED_MOUNT}`
+    - `caddy`: `/data` -> `${ACRES_CADDY_DATA_MOUNT}`
+    - `caddy`: `/config` -> `${ACRES_CADDY_CONFIG_MOUNT}`
+    - `prometheus`: `/prometheus` -> `${ACRES_PROMETHEUS_ENCRYPTED_MOUNT}`
+    - `grafana`: `/var/lib/grafana` -> `${ACRES_GRAFANA_ENCRYPTED_MOUNT}`
+  - Verified approved host encryption mechanisms (`LUKS2/dm-crypt`, `aws:kms`, `gcp:cmek`, `azure:keyvault`);
+  - Verified Key Separation Invariant: prohibits unlock keys, passphrases, or credentials inside volume mounts, backup directories (`backups/`), or Git tracking;
+  - Verified recovery governance: requires designated owner (`PRODUCTION_KEY_RECOVERY_OWNER`), split-key / dual-custody verification, and runbook reference.
+- **Automated Secret Rotation & Compromise Response Drill**:
+  - `scripts/ops/run-secret-rotation-drill.sh`: exit 0;
+  - Verified dual-secret session rollover (`SESSION_SECRET`) with zero dropped active sessions during the rollover window, and immediate rejection of expired/retired keys;
+  - Verified CSRF secret rollover with fail-closed rejection of stale tokens (`CSRF_INVALID`);
+  - Verified PostgreSQL database role password rotation (`ACRES_APP_PASSWORD`, `ACRES_MIGRATOR_PASSWORD`) with connection pool drain verification and in-flight query preservation;
+  - Verified Valkey runtime credential update (`CONFIG SET requirepass`) with zero dropped queue messages;
+  - Verified S3 / Garage access key pair rotation with dual-key overlap window and SigV4 signature derivation;
+  - Verified emergency compromise response: targeted mass revocation (`revokeAllForAccount`) and dead row purge (`purgeExpired`);
+  - Audited secret redaction: verified zero raw secret strings or dev passwords in console logs, environment dumps, or drill reports;
+  - Emitted structured JSON audit evidence reports to `backups/secret-rotation-evidence-<timestamp>.json`.
+- **Operations & CI Integration**:
+  - Root package scripts: `npm run ops:volume-test`, `npm run ops:volume-drill`, `npm run ops:rotation-drill`;
+  - Integrated `npm run ops:volume-test` and template verification into `npm run ops:check` and `scripts/ops/check-production-templates.sh`;
+  - Closes TM-15 and TM-21 operational verification requirements.
