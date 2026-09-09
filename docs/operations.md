@@ -67,7 +67,7 @@ messages are strictly excluded from metric labels.
 | `infra/compose/docker-compose.production.example.yml` | Inert single-host Compose reference for Caddy, Next, API, worker, Postgres/PostGIS, Valkey, Garage, ClamAV, and optional observability |
 | `infra/docker/client.Dockerfile.example` and `infra/docker/client.Dockerfile.example.dockerignore` | Example Node 24 production image for the Next client, with a Dockerfile-specific context ignore because the root `.dockerignore` intentionally excludes client source for the server image |
 | `infra/env/production.env.example` and `infra/env/garage.production.env.example` | Production environment inventory with `__REQUIRED_*__` sentinels for operator-provided values and every Compose interpolation variable; Garage admin/metrics secrets stay service-scoped |
-| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `HighHttp5xxRate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`) |
+| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `DatabaseConnectionPoolSaturation`) |
 | `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json` | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, and scheduled job health |
 | `server/src/metrics/*` | `MetricsModule`, `MetricsService`, `MetricsController`, `MetricsMiddleware`, and `route-normalizer` |
 | `server/src/jobs/retention-maintenance.job.ts` | Cron-driven retention maintenance for expired uploads, idempotency records, and authentication/recovery tokens |
@@ -87,6 +87,10 @@ messages are strictly excluded from metric labels.
 | `scripts/ops/run-sast-scan.js` & `.spec.js` | Pure Node.js static application security testing (SAST) engine evaluating SAST-01 through SAST-08 across source trees with triage policy enforcement |
 | `infra/security/sast-triage.json` & `.schema.json` | Actionable SAST triage policy registry with schema, rationale, approved owners, and fail-closed expiration gating |
 | `scripts/ops/verify-container-security.js` & `.spec.js` | Static multi-stage build validator verifying non-root `USER node`, pinned `node:24-alpine`, bounded healthchecks, direct exec CMD, and Compose network/credential isolation |
+| `scripts/ops/verify-alert-rules.js` & `.spec.js` | Prometheus alert rule validator and time-series simulation engine verifying 7 golden signal and threat alerts (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `DatabaseConnectionPoolSaturation`) |
+| `scripts/ops/verify-capacity-load.js` & `.spec.js` | Pure Node.js performance, capacity, and latency evaluation engine evaluating Category 5 SLOs (availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS) |
+| `scripts/ops/run-dos-resilience-drill.sh` | Automated multi-layer DoS resilience and rate limiting drill runner asserting edge bounds, in-process throttles, GraphQL resource caps, upload bounds, and constant-time bcrypt |
+| `scripts/ops/run-capacity-alerting-drill.sh` | Automated top-level drill orchestrator executing alert simulation, capacity evaluation, and DoS resilience checks with unified JSON evidence emission |
 | `scripts/ops/check-production-templates.sh` | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, readiness schema, and env placeholder checks |
 | `scripts/ops/scan-secrets.sh` | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names |
 | `scripts/ops/check-docker-runtime.sh` | Static server Dockerfile check for Node 24, non-root runtime, healthcheck, and direct Node startup |
@@ -119,6 +123,12 @@ npm run ops:sast
 npm run ops:sast-test
 npm run ops:container-test
 npm run ops:container-security
+npm run ops:capacity-test
+npm run ops:capacity-drill
+npm run ops:alert-test
+npm run ops:alert-drill
+npm run ops:dos-drill
+npm run ops:capacity-alerting-drill
 npm run ops:check
 npm run ops:launch-readiness
 ```
@@ -467,7 +477,7 @@ Implemented in Prompt 65:
      - Fail-closed expiration gating: any expired suppression is treated as an active blocking finding.
    - Unit test suite (`run-sast-scan.spec.js`): 11/11 unit tests passing in 150ms.
 3. **Container Security & Multi-Stage Build Hardening Validator (`scripts/ops/verify-container-security.js` & `.spec.js`)**:
-   - Statically evaluates `server/Dockerfile`, `infra/docker/client.Dockerfile.example`, and `infra/compose/docker-compose.production.example.yml`.
+- Statically evaluates `server/Dockerfile`, `infra/docker/client.Dockerfile.example`, and `infra/compose/docker-compose.production.example.yml`.
    - Validates Node 24 Alpine pinned base, multi-stage separation (`deps`, `build`, `prod-deps`, `runtime`), `USER node` non-root runtime enforcement, bounded healthchecks (`--interval=30s --timeout=5s`), direct exec JSON array CMD for POSIX signal propagation, and layer hygiene (zero inclusion of `.env`, `*.pem`, `*.key`).
    - Validates Compose network isolation (`networks.private.internal: true`), datastore network binding (`postgres`, `valkey`, `garage`, `clamav`, `prometheus` isolated to private network), mandatory `${VAR:?msg}` credential injection syntax, and service healthchecks.
    - Unit test suite (`verify-container-security.spec.js`): 8/8 unit tests passing in 80ms.
@@ -475,3 +485,50 @@ Implemented in Prompt 65:
    - Root package scripts: `npm run ops:sbom`, `npm run ops:sbom-test`, `npm run ops:sast`, `npm run ops:sast-test`, `npm run ops:container-test`, `npm run ops:container-security`.
    - Integrated `ops:sbom-test`, `ops:sast-test`, `ops:container-test`, `ops:sast`, and `ops:container-security` into `npm run ops:check`.
    - Closes TM-18 supply-chain and container security requirements.
+
+## Phase 12J Capacity, Load Resilience & Alert Simulation Drill
+
+Implemented in Prompt 66:
+1. **Performance, Capacity, and Latency Evaluation Engine (`scripts/ops/verify-capacity-load.js` & `.spec.js`)**:
+   - Pure Node.js statistical performance benchmark evaluation engine (TM-20, Category 5 SLOs).
+   - Evaluates performance against Category 5 SLO requirements (`infra/launch/readiness.example.json`):
+     - Availability Target: `>= 99.9%` (error rate `< 0.1%` under normal operating conditions);
+     - Max p95 Latency Ceiling: `<= 500 ms` for standard API and read requests;
+     - Capacity Target: `>= 100 RPS` throughput under concurrent load without connection starvation.
+   - Computes exact statistical distributions: request count, successful/failed requests, availability percentage, throughput (RPS), min, p50, p90, p95, p99, max, mean, and standard deviation.
+   - Enforces mathematical monotonicity invariant: `min <= p50 <= p90 <= p95 <= p99 <= max`.
+   - Supports deterministic synthetic workload simulation for reproducible CI/offline execution, as well as live HTTP benchmarking (`--target-url`, `--concurrency`, `--duration-sec`).
+   - Emits structured JSON audit evidence reports (`backups/capacity-load-report-<timestamp>.json`).
+   - Unit test suite (`verify-capacity-load.spec.js`): 9/9 unit tests passing in 90ms.
+2. **Automated Multi-Layer DoS & Rate Limiting Drill Runner (`scripts/ops/run-dos-resilience-drill.sh`)**:
+   - Automated drill runner asserting defense-in-depth DoS resilience across all 5 protection boundaries (TM-05, TM-20):
+     - **Layer 1: Edge Ingress Bounds (Caddy)**: Request body limit (`$ACRES_MAX_REQUEST_BODY`) and transport timeouts (`read_timeout`, `write_timeout`, `dial_timeout`);
+     - **Layer 2: In-Process Rate Limiting & Throttling (NestJS)**: RateLimitGuard enforcing `RATE_LIMIT_DEFAULT_LIMIT` (120 req/min) and `RATE_LIMIT_STRICT_LIMIT` (10 req/min). `@StrictThrottle` decorator verified on sensitive endpoints (`POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/forms/contact`) asserting fail-closed HTTP 429 `RATE_LIMITED`. `@SkipThrottle` verified on `/health` and `/metrics` preventing DoS starvation of liveness/readiness probes;
+     - **Layer 3: GraphQL Resource Bounds**: Pre-parse 12KB ceiling (`GRAPHQL_MAX_BYTES`), max depth 8 (`GRAPHQL_MAX_DEPTH`), max aliases (`GRAPHQL_MAX_ALIASES`), complexity ceiling 250 (`GRAPHQL_MAX_COST`), and node ceiling 250 (`GRAPHQL_MAX_NODES`), with strict single-operation enforcement;
+     - **Layer 4: Storage & Upload Bounds**: 50MB streaming ceiling (`UPLOAD_MAX_BYTES`) and ClamAV quarantine scanning isolation prior to S3 bucket publication;
+     - **Layer 5: Anti-Enumeration Timing Defense**: Constant-time bcrypt execution via dummy password verification on missing accounts (`accounts.verifyPassword(null, 'dummy-password-check')`).
+   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
+3. **Prometheus Alerting Rule Expansion & Synthetic Simulation Engine (`scripts/ops/verify-alert-rules.js` & `.spec.js`)**:
+   - Expands `infra/prometheus/alerts.yml` to 7 golden signal and threat detection rules:
+     1. `AcresApiDown` (Availability: `up{job="acres-api"} == 0`, for 1m, critical);
+     2. `HighHttp5xxRate` (Errors: > 5% 5xx over 5m, for 5m, critical);
+     3. `P95LatencyThresholdExceeded` (Latency: p95 latency > 500ms over 5m, for 5m, warning);
+     4. `High429Rate` (Security: HTTP 429 rate > 10% over 5m, for 5m, warning);
+     5. `QueueDeadLettersDetected` (Queue Health: failed jobs > 0, for 1m, warning);
+     6. `OutboxDeliveryLag` (Outbox Health: > 50 pending events for > 10m, for 10m, warning);
+     7. `DatabaseConnectionPoolSaturation` (Resources: active requests > 40, for 2m, warning).
+   - Statically validates PromQL expressions, durations, severities, and annotations.
+   - Evaluates synthetic time-series metric data verifying that each alert fires when thresholds are breached and clears when healthy.
+   - Unit test suite (`verify-alert-rules.spec.js`): 9/9 unit tests passing in 100ms.
+4. **Top-Level Capacity & Alerting Drill Runner (`scripts/ops/run-capacity-alerting-drill.sh`)**:
+   - Unified drill orchestrator executing alert verification, capacity evaluation, and DoS resilience checks.
+   - Emits consolidated JSON audit evidence reports (`backups/capacity-alerting-drill-evidence-<timestamp>.json`).
+5. **Capacity, Load & Alerting Drill Runbook**:
+   - Command: `npm run ops:capacity-alerting-drill` (or `npm run ops:capacity-drill`, `npm run ops:alert-drill`, `npm run ops:dos-drill`).
+   - Criteria: All 7 alert rules valid and simulated, Availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS, and all 5 DoS defense layers verified.
+   - Evidence: Inspect generated report in `backups/capacity-alerting-drill-evidence-<timestamp>.json`.
+6. **Operations & CI Integration**:
+   - Added root package scripts: `npm run ops:capacity-test`, `npm run ops:capacity-drill`, `npm run ops:alert-test`, `npm run ops:alert-drill`, `npm run ops:dos-drill`, `npm run ops:capacity-alerting-drill`.
+   - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`.
+   - Updated `scripts/ops/check-production-templates.sh` requiring all 7 alerts, alert rule verification, and capacity evaluation.
+   - Closes TM-05, TM-16, TM-20, and Category 5 launch readiness requirements.

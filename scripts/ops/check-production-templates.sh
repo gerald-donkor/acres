@@ -30,6 +30,12 @@ require_file scripts/ops/run-deployment-drill.sh
 require_file scripts/ops/verify-volume-encryption.js
 require_file scripts/ops/verify-volume-encryption.spec.js
 require_file scripts/ops/run-secret-rotation-drill.sh
+require_file scripts/ops/verify-alert-rules.js
+require_file scripts/ops/verify-alert-rules.spec.js
+require_file scripts/ops/verify-capacity-load.js
+require_file scripts/ops/verify-capacity-load.spec.js
+require_file scripts/ops/run-dos-resilience-drill.sh
+require_file scripts/ops/run-capacity-alerting-drill.sh
 
 node <<'NODE'
 const fs = require('fs');
@@ -218,7 +224,15 @@ if (!scrapeJobs.includes('acres-api')) {
 
 const alerts = readYaml('infra/prometheus/alerts.yml');
 const alertNames = (alerts.groups || []).flatMap((g) => (g.rules || []).map((r) => r.alert));
-const requiredAlerts = ['AcresApiDown', 'HighHttp5xxRate', 'QueueDeadLettersDetected', 'OutboxDeliveryLag'];
+const requiredAlerts = [
+  'AcresApiDown',
+  'HighHttp5xxRate',
+  'P95LatencyThresholdExceeded',
+  'High429Rate',
+  'QueueDeadLettersDetected',
+  'OutboxDeliveryLag',
+  'DatabaseConnectionPoolSaturation',
+];
 for (const reqAlert of requiredAlerts) {
   if (!alertNames.includes(reqAlert)) {
     console.error(`ops template check failed: Prometheus alerts missing required rule ${reqAlert}`);
@@ -261,5 +275,7 @@ fi
 
 node scripts/ops/verify-caddy-routing.js infra/caddy/Caddyfile.example >/dev/null || fail 'Caddy routing verification failed'
 node scripts/ops/verify-volume-encryption.js >/dev/null || fail 'Volume encryption verification failed'
+node scripts/ops/verify-alert-rules.js >/dev/null || fail 'Alert rules verification failed'
+node scripts/ops/verify-capacity-load.js --no-save >/dev/null || fail 'Capacity load verification failed'
 
 printf 'ops template check passed\n'

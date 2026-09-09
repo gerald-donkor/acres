@@ -19,6 +19,24 @@ groups:
           summary: High HTTP 5xx error rate detected
           description: HTTP 5xx response rate has exceeded 5% of total requests over a 5-minute window.
 
+      - alert: P95LatencyThresholdExceeded
+        expr: histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API p95 latency exceeded SLO threshold
+          description: API p95 latency has exceeded 500ms for more than 5 minutes.
+
+      - alert: High429Rate
+        expr: (sum(rate(acres_http_requests_total{status_class="4xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High HTTP 429 rate or rate-limiting spike detected
+          description: Rate of HTTP 429 responses exceeds 10% of total requests, indicating potential credential stuffing or DoS attempt.
+
       - alert: QueueDeadLettersDetected
         expr: sum(acres_queue_jobs_total{status="failed"}) > 0
         for: 1m
@@ -36,3 +54,12 @@ groups:
         annotations:
           summary: Outbox event publication lag
           description: More than 50 outbox events have remained pending delivery for over 10 minutes.
+
+      - alert: DatabaseConnectionPoolSaturation
+        expr: acres_http_active_requests > 40
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Active HTTP concurrency approaching database connection pool limit
+          description: Concurrent active HTTP requests have exceeded 40, approaching the configured database pool capacity.

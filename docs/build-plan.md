@@ -773,3 +773,30 @@ Records the complete Phase 12 supply-chain security, SAST scanning, and containe
 - **Operations & CI Integration**:
   - Root package scripts: `npm run ops:sbom`, `npm run ops:sbom-test`, `npm run ops:sast`, `npm run ops:sast-test`, `npm run ops:container-test`, `npm run ops:container-security`;
   - Integrated into `npm run ops:check`.
+
+## 21. Phase 12J verification record — 2026-09-09
+
+Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Prometheus alert simulation drill:
+
+- **Performance, Capacity, and Latency Evaluation Engine (TM-20, Category 5 SLOs)**:
+  - `scripts/ops/verify-capacity-load.js`: pure Node.js statistical benchmarking engine calculating min, p50, p90, p95, p99, max, mean, stddev, throughput (RPS), and availability percentage;
+  - `scripts/ops/verify-capacity-load.spec.js`: exit 0; all 9 unit tests passed in 90ms;
+  - Validates Category 5 SLO requirements: availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS;
+  - Enforces mathematical monotonicity: `min <= p50 <= p90 <= p95 <= p99 <= max`;
+  - Supports deterministic synthetic workload simulation for CI and live HTTP benchmarking mode;
+  - Emits structured JSON audit reports (`backups/capacity-load-report-<timestamp>.json`).
+- **Prometheus Alert Rule Expansion & Synthetic Simulation Engine (TM-16, TM-20)**:
+  - `scripts/ops/verify-alert-rules.js`: static parser, PromQL validator, and time-series simulation engine;
+  - `scripts/ops/verify-alert-rules.spec.js`: exit 0; all 9 unit tests passed in 100ms;
+  - Expands `infra/prometheus/alerts.yml` to 7 operational golden signals and security threat alerts (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `DatabaseConnectionPoolSaturation`);
+  - Simulates time-series metric data verifying each alert fires on threshold breach and clears on normal traffic.
+- **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
+  - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
+  - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
+- **Top-Level Capacity & Alerting Drill Runner**:
+  - `scripts/ops/run-capacity-alerting-drill.sh`: executes alert simulation, capacity evaluation, and DoS drill, emitting unified JSON evidence (`backups/capacity-alerting-drill-evidence-<timestamp>.json`).
+- **Operations & CI Integration**:
+  - Root package scripts: `npm run ops:capacity-test`, `npm run ops:capacity-drill`, `npm run ops:alert-test`, `npm run ops:alert-drill`, `npm run ops:dos-drill`, `npm run ops:capacity-alerting-drill`;
+  - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`;
+  - Updated `scripts/ops/check-production-templates.sh` requiring all 7 alerts and alert/capacity checks;
+  - Closes TM-05, TM-16, TM-20, and Category 5 launch readiness requirements.
