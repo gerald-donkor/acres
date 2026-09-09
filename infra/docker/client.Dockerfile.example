@@ -35,4 +35,6 @@ COPY --from=build /app/client/.next client/.next
 COPY --from=build /app/client/public client/public
 USER node
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:${PORT:-3000}/" || exit 1
 CMD ["node_modules/.bin/next", "start", "client", "--port", "3000"]

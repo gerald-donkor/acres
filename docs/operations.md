@@ -83,6 +83,10 @@ messages are strictly excluded from metric labels.
 | `scripts/ops/verify-caddy-routing.spec.js` | Unit test suite (10/10 tests) asserting Caddy routing rules, SigV4 host preservation, security headers, timeouts, and HSTS gate invariants |
 | `scripts/ops/run-deployment-drill.sh` | Automated deployment promotion preflight and rollback drill runner validating Caddy routing, additive migrations, readiness probes, graceful drain, and evidence emission |
 | `scripts/ops/audit-dependencies.sh` | Deterministic dependency security audit script for production dependencies |
+| `scripts/ops/generate-sbom.js` & `.spec.js` | Deterministic CycloneDX v1.5 JSON SBOM generator and license compliance validator (purls, hashes, permissive allowlist, copyleft rejection) |
+| `scripts/ops/run-sast-scan.js` & `.spec.js` | Pure Node.js static application security testing (SAST) engine evaluating SAST-01 through SAST-08 across source trees with triage policy enforcement |
+| `infra/security/sast-triage.json` & `.schema.json` | Actionable SAST triage policy registry with schema, rationale, approved owners, and fail-closed expiration gating |
+| `scripts/ops/verify-container-security.js` & `.spec.js` | Static multi-stage build validator verifying non-root `USER node`, pinned `node:24-alpine`, bounded healthchecks, direct exec CMD, and Compose network/credential isolation |
 | `scripts/ops/check-production-templates.sh` | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, readiness schema, and env placeholder checks |
 | `scripts/ops/scan-secrets.sh` | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names |
 | `scripts/ops/check-docker-runtime.sh` | Static server Dockerfile check for Node 24, non-root runtime, healthcheck, and direct Node startup |
@@ -106,6 +110,15 @@ npm run ops:reconcile-storage
 npm run ops:caddy-test
 npm run ops:caddy-drill
 npm run ops:deployment-drill
+npm run ops:volume-test
+npm run ops:volume-drill
+npm run ops:rotation-drill
+npm run ops:sbom
+npm run ops:sbom-test
+npm run ops:sast
+npm run ops:sast-test
+npm run ops:container-test
+npm run ops:container-security
 npm run ops:check
 npm run ops:launch-readiness
 ```
@@ -429,3 +442,36 @@ Implemented in Prompt 64:
    - Added root package scripts: `npm run ops:volume-test`, `npm run ops:volume-drill`, and `npm run ops:rotation-drill`.
    - Integrated `npm run ops:volume-test` and template verification into `npm run ops:check` and `scripts/ops/check-production-templates.sh`.
    - Closes TM-15 and TM-21 operational verification gates.
+
+## Phase 12I Supply-Chain Security, Deterministic SAST & Container Build Hardening
+
+Implemented in Prompt 65:
+1. **Deterministic Software Bill of Materials (SBOM) Generator & License Validator (`scripts/ops/generate-sbom.js` & `.spec.js`)**:
+   - Generates CycloneDX v1.5 JSON Software Bill of Materials covering all production dependencies across root, server, client, and shared workspaces (TM-18).
+   - Computes package URLs (`purl`), version strings, SHA-512 integrity hashes, and license expressions.
+   - Enforces license compliance: asserts all production packages comply with approved permissive licenses (`MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `0BSD`, `CC0-1.0`, `Unlicense`, `BlueOak-1.0.0`, `Python-2.0`, `CC-BY-4.0`, project-approved GSAP, and dynamically linked Sharp LGPL binary), rejecting unapproved copyleft or viral licenses (`AGPL-1.0`, `AGPL-3.0`, `GPL-1.0`, `GPL-2.0`, `GPL-3.0`, `SSPL`, `CommonsClause`).
+   - Strictly excludes build/dev dependencies (`@types/*`, `typescript`, `playwright`, `jest`, `eslint`).
+   - Unit test suite (`generate-sbom.spec.js`): 7/7 unit tests passing in 100ms.
+2. **Deterministic Static Application Security Testing (SAST) Scanner & Triage Engine (`scripts/ops/run-sast-scan.js` & `.spec.js`)**:
+   - Pure Node.js static analysis engine scanning source trees (`client/`, `server/`, `packages/shared/`, `scripts/`) across 8 core security rules:
+     - `SAST-01`: SQL Injection (`$queryRawUnsafe`, `$executeRawUnsafe`, direct string concatenation in queries);
+     - `SAST-02`: Command Injection (`child_process.exec/execSync` interpolation, `shell: true`);
+     - `SAST-03`: Path Traversal (unvalidated `../` in filesystem calls);
+     - `SAST-04`: Hardcoded Secrets (private keys, API tokens, JWT secrets, database connection passwords);
+     - `SAST-05`: ReDoS (catastrophic backtracking regular expression patterns with nested quantifiers);
+     - `SAST-06`: Multi-Tenant Isolation Bypass (unfiltered `findMany` queries on tenant-scoped Prisma models);
+     - `SAST-07`: Stored XSS / Dangerous HTML (`dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`);
+     - `SAST-08`: Insecure Cryptography (`createHash('md5')`, `createHash('sha1')`, deprecated cipher APIs).
+   - Triage Policy Registry (`infra/security/sast-triage.json` & `.schema.json`):
+     - Structured JSON schema recording approved suppressions, rule ID, path, line, severity, rationale, owner, and expiration date.
+     - Fail-closed expiration gating: any expired suppression is treated as an active blocking finding.
+   - Unit test suite (`run-sast-scan.spec.js`): 11/11 unit tests passing in 150ms.
+3. **Container Security & Multi-Stage Build Hardening Validator (`scripts/ops/verify-container-security.js` & `.spec.js`)**:
+   - Statically evaluates `server/Dockerfile`, `infra/docker/client.Dockerfile.example`, and `infra/compose/docker-compose.production.example.yml`.
+   - Validates Node 24 Alpine pinned base, multi-stage separation (`deps`, `build`, `prod-deps`, `runtime`), `USER node` non-root runtime enforcement, bounded healthchecks (`--interval=30s --timeout=5s`), direct exec JSON array CMD for POSIX signal propagation, and layer hygiene (zero inclusion of `.env`, `*.pem`, `*.key`).
+   - Validates Compose network isolation (`networks.private.internal: true`), datastore network binding (`postgres`, `valkey`, `garage`, `clamav`, `prometheus` isolated to private network), mandatory `${VAR:?msg}` credential injection syntax, and service healthchecks.
+   - Unit test suite (`verify-container-security.spec.js`): 8/8 unit tests passing in 80ms.
+4. **Operations & CI Integration**:
+   - Root package scripts: `npm run ops:sbom`, `npm run ops:sbom-test`, `npm run ops:sast`, `npm run ops:sast-test`, `npm run ops:container-test`, `npm run ops:container-security`.
+   - Integrated `ops:sbom-test`, `ops:sast-test`, `ops:container-test`, `ops:sast`, and `ops:container-security` into `npm run ops:check`.
+   - Closes TM-18 supply-chain and container security requirements.

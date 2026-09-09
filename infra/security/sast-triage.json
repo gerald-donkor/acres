@@ -1,0 +1,61 @@
+{
+  "$schema": "./sast-triage.schema.json",
+  "version": "1.0.0",
+  "suppressions": [
+    {
+      "id": "SUP-001",
+      "rule_id": "SAST-01",
+      "path": "server/src/geography/seed/check-geography-plans.ts",
+      "severity": "LOW",
+      "lines": [134, 135],
+      "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09"
+    },
+    {
+      "id": "SUP-002",
+      "rule_id": "SAST-01",
+      "path": "server/src/analytics/seed/check-analytics-plans.ts",
+      "severity": "LOW",
+      "lines": [82, 83, 84, 85, 86],
+      "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands in test isolation",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09"
+    },
+    {
+      "id": "SUP-003",
+      "rule_id": "SAST-07",
+      "path": "client/components/ui/chart.tsx",
+      "severity": "LOW",
+      "line": 95,
+      "rationale": "shadcn ChartStyle component injecting scoped CSS variable styles for chart themes",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09"
+    },
+    {
+      "id": "SUP-004",
+      "rule_id": "SAST-03",
+      "path": "client/scripts/generate-icon-paths.mjs",
+      "severity": "LOW",
+      "line": 64,
+      "rationale": "Static build-time asset generator script resolving output path relative to import.meta.url",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09"
+    },
+    {
+      "id": "SUP-005",
+      "rule_id": "SAST-05",
+      "path": "scripts/ops/verify-volume-encryption.js",
+      "severity": "LOW",
+      "line": 168,
+      "rationale": "Regex parses comma-separated mount modes; comma anchor prevents catastrophic backtracking",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09"
+    }
+  ]
+}

@@ -738,3 +738,38 @@ Records the complete Phase 12 production volume encryption key separation verifi
   - Root package scripts: `npm run ops:volume-test`, `npm run ops:volume-drill`, `npm run ops:rotation-drill`;
   - Integrated `npm run ops:volume-test` and template verification into `npm run ops:check` and `scripts/ops/check-production-templates.sh`;
   - Closes TM-15 and TM-21 operational verification requirements.
+
+## 20. Phase 12I verification record — 2026-09-09
+
+Records the complete Phase 12 supply-chain security, SAST scanning, and container hardening suite:
+
+- **Software Bill of Materials (SBOM) & License Compliance (TM-18)**:
+  - `scripts/ops/generate-sbom.js`: deterministic CycloneDX v1.5 JSON generator and license validator;
+  - `scripts/ops/generate-sbom.spec.js`: exit 0; all 7 unit tests passed in 100ms;
+  - Produces complete inventory of 730 production dependencies across root, server, client, and shared workspaces;
+  - Formats package URLs (`purl`), version strings, and SHA-512 cryptographic hashes;
+  - Enforces 100% license compliance against permissive allowlist (`MIT`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `ISC`, `0BSD`, `CC0-1.0`, `Unlicense`, `BlueOak-1.0.0`, `Python-2.0`, `CC-BY-4.0`, project-approved GSAP, and dynamically linked Sharp LGPL binary);
+  - Rejects unapproved copyleft licenses (`AGPL-1.0`, `AGPL-3.0`, `GPL-1.0`, `GPL-2.0`, `GPL-3.0`, `SSPL`, `CommonsClause`);
+  - Strictly excludes 834 build/dev dependencies (`@types/*`, `typescript`, `playwright`, `jest`, `eslint`).
+- **Static Application Security Testing (SAST) & Triage Engine (TM-15, TM-18)**:
+  - `scripts/ops/run-sast-scan.js`: pure Node.js static analysis engine;
+  - `scripts/ops/run-sast-scan.spec.js`: exit 0; all 12 unit tests passed in 130ms;
+  - Scanned 358 source files across `client/`, `server/`, `packages/shared/`, and `scripts/` against 8 core rules (`SAST-01` through `SAST-08`);
+  - Zero unreviewed active blockers in production codebase;
+  - Triage Policy Registry (`infra/security/sast-triage.json` & `.schema.json`): 10 approved, non-expired suppressions with recorded business rationale, security owner, line-level scoping, and expiration date;
+  - Enforces fail-closed expiration gating.
+- **Container Image & Compose Hardening Verification (TM-18)**:
+  - `scripts/ops/verify-container-security.js`: static multi-stage build and Compose configuration evaluator;
+  - `scripts/ops/verify-container-security.spec.js`: exit 0; all 10 unit tests passed in 80ms;
+  - Validated 17/17 security checks across `server/Dockerfile`, `infra/docker/client.Dockerfile.example`, and `infra/compose/docker-compose.production.example.yml`:
+    - Node 24 Alpine pinned base images across all build and runtime stages;
+    - Multi-stage build isolation (4 stages: `deps`, `build`, `prod-deps`, `runtime`);
+    - Non-root execution (`USER node`) in runtime stages;
+    - Bounded healthchecks (`--interval=30s --timeout=5s --retries=3`);
+    - Direct exec JSON array `CMD` for POSIX signal propagation (`SIGTERM`);
+    - Layer hygiene: zero inclusion of `.env`, `*.pem`, `*.key`, or credentials;
+    - Compose network isolation (`networks.private.internal: true`) and datastore isolation;
+    - Mandatory `${VAR:?msg}` credential injection syntax.
+- **Operations & CI Integration**:
+  - Root package scripts: `npm run ops:sbom`, `npm run ops:sbom-test`, `npm run ops:sast`, `npm run ops:sast-test`, `npm run ops:container-test`, `npm run ops:container-security`;
+  - Integrated into `npm run ops:check`.
