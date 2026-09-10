@@ -31,7 +31,7 @@ interface StoredRun {
     readonly mapping: {
       readonly regionColumn?: string;
       readonly regionCodeColumn?: string;
-      readonly metrics: Array<{ sourceColumn: string; metricKey: string }>;
+      readonly metrics: Array<Record<string, unknown>>;
     };
   };
 }
@@ -72,7 +72,15 @@ describe('IngestionProcessorService - Parser Failure Outcomes', () => {
         id: 'map-1',
         mapping: {
           regionColumn: 'region',
-          metrics: [{ sourceColumn: 'val', metricKey: 'crop_yield' }],
+          metrics: [
+            {
+              column: 'val',
+              key: 'crop_yield',
+              valueType: 'numeric',
+              unit: 'people',
+              aggregation: 'sum',
+            },
+          ],
         },
       },
     };
@@ -171,6 +179,7 @@ describe('IngestionProcessorService - Parser Failure Outcomes', () => {
 
     fakeAnalytics = {
       validateMapping: jest.fn().mockReturnValue([]),
+      validateRemappingCompatibility: jest.fn().mockResolvedValue([]),
       publish: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -265,6 +274,66 @@ describe('IngestionProcessorService - Parser Failure Outcomes', () => {
     expect(fakeAnalytics.publish).not.toHaveBeenCalled();
   });
 
+  it('ends incompatible metric remaps as validation_failed without publishing', async () => {
+    (fakeParsers.inspect as jest.Mock).mockResolvedValue(validSummary());
+    (
+      fakeAnalytics.validateRemappingCompatibility as jest.Mock
+    ).mockResolvedValue([
+      {
+        severity: 'error',
+        code: 'metric_definition_incompatible',
+        message:
+          'Metric key is already defined with a different type, unit, or aggregation.',
+        columnKey: 'val',
+        details: { key: 'crop_yield' },
+      },
+    ]);
+
+    await processor.processRun('run-123');
+
+    expect(validationIssuesCreated).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'metric_definition_incompatible',
+          severity: 'error',
+          columnKey: 'val',
+        }),
+      ]),
+    );
+    expect(mappingUpdated).toEqual({ validationStatus: 'invalid' });
+    expect(runUpdated).toMatchObject({
+      state: 'validation_failed',
+      stage: 'validate',
+      failureCode: 'validation_failed',
+    });
+    expect(publishedVersion).toBeNull();
+    expect(fakeAnalytics.publish).not.toHaveBeenCalled();
+  });
+
+  it('maps the remapping race guard to failed without a new failure code', async () => {
+    (fakeParsers.inspect as jest.Mock).mockResolvedValue(validSummary());
+    (
+      fakeAnalytics.validateRemappingCompatibility as jest.Mock
+    ).mockResolvedValue([]);
+    (fakeAnalytics.publish as jest.Mock).mockRejectedValue(
+      new Error(
+        'Metric mapping is incompatible with an existing metric definition.',
+      ),
+    );
+
+    await processor.processRun('run-123');
+
+    expect(runUpdated).toMatchObject({
+      state: 'failed',
+      failureCode: 'analytics_publication_failed',
+      failureMessage:
+        'Metric mapping is incompatible with an existing metric definition.',
+    });
+    expect(
+      (runUpdated as { failureMessage: string }).failureMessage,
+    ).not.toContain('crop_yield');
+  });
+
   it('leaves storage failure on operational failed path without creating validation issues', async () => {
     (fakeStorage.getBuffer as jest.Mock).mockResolvedValue(null);
 
@@ -280,3 +349,16 @@ describe('IngestionProcessorService - Parser Failure Outcomes', () => {
     expect(fakeAnalytics.publish).not.toHaveBeenCalled();
   });
 });
+
+function validSummary(): ParsedSourceSummary {
+  return {
+    sourceKind: 'csv',
+    rowCount: 1,
+    columnCount: 2,
+    columnKeys: ['region', 'val'],
+    sampleRows: [],
+    validationRows: [{ rowNumber: 1, values: { region: 'US-CA', val: '10' } }],
+    issues: [],
+    metadata: {},
+  };
+}

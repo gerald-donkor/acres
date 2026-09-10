@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
+import type { ParserIssue } from '../ingestion/parsers/parser.types';
 import {
   ANALYTICS_CALCULATION_VERSION,
   type AnalyticsPublicationInput,
@@ -108,6 +109,38 @@ export class AnalyticsPublicationService {
           message: 'Text and boolean metrics only support count or latest.',
           columnKey: metric.column,
           details: { key: metric.key, aggregation: metric.aggregation },
+        });
+      }
+    }
+    return issues;
+  }
+
+  async validateRemappingCompatibility(
+    tx: AnalyticsTx,
+    organizationId: string,
+    metrics: readonly MetricMapping[],
+  ): Promise<ParserIssue[]> {
+    const issues: ParserIssue[] = [];
+    const checked = new Set<string>();
+    for (const metric of metrics) {
+      if (checked.has(metric.key)) continue;
+      checked.add(metric.key);
+      const existing = await tx.metricDefinition.findFirst({
+        where: { organizationId, key: metric.key },
+      });
+      if (
+        existing !== null &&
+        (existing.valueType !== metric.valueType ||
+          existing.canonicalUnit !== metric.unit.trim() ||
+          existing.allowedAggregation !== metric.aggregation)
+      ) {
+        issues.push({
+          severity: 'error',
+          code: 'metric_definition_incompatible',
+          message:
+            'Metric key is already defined with a different type, unit, or aggregation.',
+          columnKey: metric.column,
+          details: { key: metric.key },
         });
       }
     }
@@ -247,7 +280,9 @@ export class AnalyticsPublicationService {
           existing.canonicalUnit !== metric.unit.trim() ||
           existing.allowedAggregation !== metric.aggregation)
       ) {
-        throw new Error(`Metric mapping is incompatible with ${metric.key}.`);
+        throw new Error(
+          'Metric mapping is incompatible with an existing metric definition.',
+        );
       }
       const stored = await tx.metricDefinition.upsert({
         where: {

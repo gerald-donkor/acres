@@ -87,11 +87,23 @@ export class IngestionProcessorService {
         summaryColumns: summary.columnKeys,
         mapping,
       });
+      const remappingIssues: ParserIssue[] =
+        await this.tenants.organizationScoped(
+          reserved.actorAccountId,
+          reserved.organizationId,
+          (tx) =>
+            this.analytics.validateRemappingCompatibility(
+              tx,
+              reserved.organizationId,
+              mapping.metrics,
+            ),
+        );
       const issues: ParserIssue[] = [
         ...summary.issues,
         ...validationIssues,
         ...malformedMetricIssues,
         ...analyticsIssues,
+        ...remappingIssues,
       ];
       const hasErrors = issues.some((issue) => issue.severity === 'error');
 

@@ -46,6 +46,181 @@ describe('AnalyticsPublicationService', () => {
     );
   });
 
+  describe('validateRemappingCompatibility', () => {
+    const baseMetric = {
+      column: 'population',
+      key: 'population',
+      valueType: 'numeric' as const,
+      unit: 'people',
+      aggregation: 'sum' as const,
+    };
+
+    function compatibilityTx(
+      definitions: Record<
+        string,
+        {
+          valueType: string;
+          canonicalUnit: string;
+          allowedAggregation: string;
+        } | null
+      >,
+    ) {
+      return {
+        metricDefinition: {
+          findFirst: jest.fn(
+            ({ where }: { where: { key: string } }) =>
+              Promise.resolve(definitions[where.key] ?? null) as Promise<Record<
+                string,
+                string
+              > | null>,
+          ),
+        },
+      } as unknown as AnalyticsTx;
+    }
+
+    it('flags an incompatible valueType as a blocking issue on the mapped column', async () => {
+      const tx = compatibilityTx({
+        population: {
+          valueType: 'text',
+          canonicalUnit: 'people',
+          allowedAggregation: 'count',
+        },
+      });
+
+      const issues = await service.validateRemappingCompatibility(
+        tx,
+        'organization-1',
+        [baseMetric],
+      );
+
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toMatchObject({
+        severity: 'error',
+        code: 'metric_definition_incompatible',
+        columnKey: 'population',
+      });
+    });
+
+    it('flags an incompatible unit but accepts whitespace-trimmed equality', async () => {
+      const mismatched = compatibilityTx({
+        population: {
+          valueType: 'numeric',
+          canonicalUnit: 'thousands',
+          allowedAggregation: 'sum',
+        },
+      });
+      const mismatchedIssues = await service.validateRemappingCompatibility(
+        mismatched,
+        'organization-1',
+        [baseMetric],
+      );
+      expect(mismatchedIssues.map((issue) => issue.code)).toEqual([
+        'metric_definition_incompatible',
+      ]);
+
+      const trimmed = compatibilityTx({
+        population: {
+          valueType: 'numeric',
+          canonicalUnit: 'people',
+          allowedAggregation: 'sum',
+        },
+      });
+      const trimmedIssues = await service.validateRemappingCompatibility(
+        trimmed,
+        'organization-1',
+        [{ ...baseMetric, unit: ' people ' }],
+      );
+      expect(trimmedIssues).toHaveLength(0);
+    });
+
+    it('flags an incompatible aggregation', async () => {
+      const tx = compatibilityTx({
+        population: {
+          valueType: 'numeric',
+          canonicalUnit: 'people',
+          allowedAggregation: 'avg',
+        },
+      });
+
+      const issues = await service.validateRemappingCompatibility(
+        tx,
+        'organization-1',
+        [baseMetric],
+      );
+
+      expect(issues.map((issue) => issue.code)).toEqual([
+        'metric_definition_incompatible',
+      ]);
+    });
+
+    it('passes a compatible remap that only changes the label', async () => {
+      const tx = compatibilityTx({
+        population: {
+          valueType: 'numeric',
+          canonicalUnit: 'people',
+          allowedAggregation: 'sum',
+        },
+      });
+
+      const issues = await service.validateRemappingCompatibility(
+        tx,
+        'organization-1',
+        [{ ...baseMetric, label: 'Resident population' }],
+      );
+
+      expect(issues).toHaveLength(0);
+    });
+
+    it('scopes definition lookups to the requesting organization', async () => {
+      const findFirst = jest.fn().mockResolvedValue(null);
+      const tx = {
+        metricDefinition: { findFirst },
+      } as unknown as AnalyticsTx;
+
+      await service.validateRemappingCompatibility(tx, 'organization-1', [
+        baseMetric,
+      ]);
+
+      expect(findFirst).toHaveBeenCalledWith({
+        where: { organizationId: 'organization-1', key: 'population' },
+      });
+    });
+
+    it('passes an unknown key with no stored definition', async () => {
+      const tx = compatibilityTx({});
+
+      const issues = await service.validateRemappingCompatibility(
+        tx,
+        'organization-1',
+        [baseMetric],
+      );
+
+      expect(issues).toHaveLength(0);
+    });
+  });
+
+  it('keeps the publication race guard as a sanitized fixed message', async () => {
+    const { tx } = createAnalyticsTx();
+    (tx.metricDefinition.findFirst as unknown as jest.Mock).mockResolvedValue({
+      valueType: 'numeric',
+      canonicalUnit: 'thousands',
+      allowedAggregation: 'sum',
+    });
+
+    let thrown: unknown;
+    try {
+      await service.publish(tx, publicationInput('dataset-version-1', '10'));
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe(
+      'Metric mapping is incompatible with an existing metric definition.',
+    );
+    expect((thrown as Error).message).not.toContain('population');
+  });
+
   it('keys aggregate snapshots by dataset version', async () => {
     const { tx, metricAggregateUpsert } = createAnalyticsTx();
 

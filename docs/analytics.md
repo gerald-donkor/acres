@@ -65,7 +65,15 @@ precision. Periods accept only `YYYY`, `YYYY-MM-DD`, or UTC `...Z`
 datetimes with exact date round-tripping. Blank or unparsable values produce
 quality rows and remain visible as observations, but they are excluded from
 aggregate math and lineage. Incompatible remapping of an existing metric key to
-another value type, unit, or aggregation fails publication.
+another value type, unit, or aggregation is reported pre-publication as a
+blocking `metric_definition_incompatible` validation issue (naming the mapped
+source column, with the key in issue details), so the run ends
+`validation_failed` and no `DatasetVersion` is created. A key listed twice in
+one mapping yields at most one incompatibility issue; duplicate keys are
+reported separately by `metric_key_duplicate`. The mid-transaction
+throw in `upsertMetricDefinitions` remains only as a non-enumerated race guard
+for a definition that changes between validation and publication; its message
+is fixed and carries no key material.
 Numeric values are returned from the REST API as decimal strings rather than
 JSON numbers for the same reason.
 

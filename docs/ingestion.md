@@ -224,6 +224,14 @@ opens a Valkey connection; enqueue/readiness create the client when needed.
    immutable `DatasetVersion`;
 8. marks the mapping valid/invalid and links the published version to the run.
 
+Incompatible metric remaps (an existing metric key reused with a different
+value type, unit, or aggregation) end `validation_failed` with a persisted
+blocking `metric_definition_incompatible` issue naming the offending source
+column, instead of the former `failed` / `analytics_publication_failed` run
+outcome. The `failed` / `analytics_publication_failed` outcome remains
+reachable only via the genuine validation-to-publication race or an unexpected
+publication error.
+
 Publication is idempotent for the same organization/dataset/upload/mapping
 tuple. Failed and cancelled runs do not expose a published version.
 
