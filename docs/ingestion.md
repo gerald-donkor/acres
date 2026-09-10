@@ -236,6 +236,18 @@ unexpected publication error ends with the fixed safe message
 (`PUBLICATION_UNEXPECTED_FAILURE_MESSAGE`), with the original error logged
 server-side only and never stored in the tenant-visible `failureMessage`.
 
+Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
+any escape from a source parser to a `parser_exception` issue carrying the
+single fixed message (`PARSER_EXCEPTION_MESSAGE`,
+`'Parser failed unexpectedly.'`), never the raw exception text in the persisted
+`ValidationIssue.message` tenant-visible through
+`GET /ingestion-runs/:runId/issues`. Per-parser validation issues keep their
+structured fixed messages. The original error (message + stack) is written to
+server stderr on the in-process execution path; inside the forked parser child
+it is discarded by design (the child executor spawns with stdio ignored for
+isolation), where the original input remains recoverable from the accepted
+upload bytes.
+
 Publication is idempotent for the same organization/dataset/upload/mapping
 tuple. Failed and cancelled runs do not expose a published version.
 

@@ -10,11 +10,13 @@ import {
   IngestionProcessorService,
   PUBLICATION_UNEXPECTED_FAILURE_MESSAGE,
 } from '../src/ingestion/ingestion-processor.service';
-import type { SourceParserService } from '../src/ingestion/parsers/source-parser.service';
+import { SourceParserService } from '../src/ingestion/parsers/source-parser.service';
+import { InProcessParserExecutor } from '../src/ingestion/parsers/in-process-parser.executor';
+import { PARSER_EXCEPTION_MESSAGE } from '../src/ingestion/parsers/parse-source-buffer';
 import { RetentionMaintenanceJob } from '../src/jobs/retention-maintenance.job';
 import { TenantTransactionService } from '../src/prisma/tenant-transaction.service';
 import { JobRunsService } from '../src/jobs/job-runs.service';
-import type { AcresConfigService } from '../src/config/acres-config.service';
+import { AcresConfigService } from '../src/config/acres-config.service';
 import { OBJECT_STORAGE } from '../src/storage/storage.port';
 import type { ObjectStoragePort } from '../src/storage/storage.port';
 
@@ -2811,6 +2813,137 @@ describe('Acres API — real database', () => {
         }),
       );
       expect(versions).toHaveLength(0);
+    });
+  });
+
+  describe('ingestion parser_exception message sanitization', () => {
+    it('persists a fixed safe message when a source parser throws unexpectedly', async () => {
+      const owner = await signedInAgent(
+        'ingestion-parser-exception@example.com',
+      );
+      const org = await createOrganization(
+        owner,
+        'ingestion-parser-exception-org',
+        'Parser Exception Org',
+      );
+      const account = await prisma.account.findUniqueOrThrow({
+        where: { email: 'ingestion-parser-exception@example.com' },
+        select: { id: true },
+      });
+      const tenants = app.get(TenantTransactionService);
+      const seeded = await tenants.workerScoped(async (tx) => {
+        const object = await tx.storedObject.create({
+          data: {
+            organizationId: org.id,
+            bucket: 'acres-quarantine-test',
+            objectKey: 'ingestion-parser-exception.csv',
+            originalFilename: 'ingestion-parser-exception.csv',
+            mediaType: 'text/csv',
+            checksumAlgorithm: 'sha256',
+            state: 'accepted',
+          },
+        });
+        const upload = await tx.upload.create({
+          data: {
+            organizationId: org.id,
+            actorAccountId: account.id,
+            storedObjectId: object.id,
+            state: 'accepted',
+            declaredFilename: 'ingestion-parser-exception.csv',
+            declaredMediaType: 'text/csv',
+            declaredByteCount: BigInt(20),
+            checksumAlgorithm: 'sha256',
+            presignedUploadExpiresAt: new Date(Date.now() + 3600_000),
+            expiresAt: new Date(Date.now() + 86_400_000),
+          },
+        });
+        const dataset = await tx.dataset.create({
+          data: {
+            organizationId: org.id,
+            ownerAccountId: account.id,
+            name: 'Parser Exception Dataset',
+          },
+        });
+        const mapping = await tx.columnMapping.create({
+          data: {
+            organizationId: org.id,
+            datasetId: dataset.id,
+            uploadId: upload.id,
+            createdByAccountId: account.id,
+            versionNumber: 1,
+            mapping: { regionColumn: 'region', metrics: [] },
+          },
+        });
+        const run = await tx.ingestionRun.create({
+          data: {
+            organizationId: org.id,
+            datasetId: dataset.id,
+            uploadId: upload.id,
+            mappingId: mapping.id,
+            actorAccountId: account.id,
+            deterministicKey: 'ingestion-parser-exception-key-1',
+          },
+        });
+        return { runId: run.id };
+      });
+
+      // Real parser stack in-process: the ragged CSV row makes csv-parse
+      // throw inside parseSourceBuffer, exercising the fixed catch.
+      const parsers = new SourceParserService(
+        app.get(AcresConfigService),
+        new InProcessParserExecutor(),
+      );
+      const processor = new IngestionProcessorService(
+        tenants,
+        parsers,
+        app.get(AnalyticsPublicationService),
+        {
+          getBuffer: () =>
+            Promise.resolve(Buffer.from('region,value\nUS-CA\n')),
+        } as unknown as ObjectStoragePort,
+      );
+      await processor.processRun(seeded.runId);
+
+      const stored = await tenants.workerScoped((tx) =>
+        tx.ingestionRun.findUnique({ where: { id: seeded.runId } }),
+      );
+      expect(stored?.state).toBe('validation_failed');
+      expect(stored?.failureCode).toBe('validation_failed');
+
+      const issues = await tenants.workerScoped((tx) =>
+        tx.validationIssue.findMany({
+          where: {
+            organizationId: org.id,
+            ingestionRunId: seeded.runId,
+          },
+        }),
+      );
+      // The failed parse yields no columns, so mapping validation adds its
+      // own structured error alongside the sanitized parser issue.
+      const parserIssue = issues.find(
+        (issue) => issue.code === 'parser_exception',
+      );
+      expect(parserIssue?.severity).toBe('error');
+      expect(parserIssue?.message).toBe(PARSER_EXCEPTION_MESSAGE);
+      for (const issue of issues) {
+        expect(issue.message).not.toContain('Invalid Record Length');
+      }
+
+      // The tenant-visible bounded issues read carries the fixed message
+      // under forced RLS.
+      const response = await owner.agent
+        .get(`/api/v1/ingestion-runs/${seeded.runId}/issues`)
+        .set('x-acres-organization-id', org.id)
+        .expect(200);
+      const body = response.body as {
+        ok: boolean;
+        data: Array<{ code: string; message: string }>;
+      };
+      expect(body.ok).toBe(true);
+      const readParserIssue = body.data.find(
+        (issue) => issue.code === 'parser_exception',
+      );
+      expect(readParserIssue?.message).toBe(PARSER_EXCEPTION_MESSAGE);
     });
   });
 
