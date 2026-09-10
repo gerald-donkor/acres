@@ -174,4 +174,13 @@ migrator role after the new migration was added.
 
 - Generated PDFs are intentionally simple deterministic documents, not
   comp-designed presentation exports.
-- Sharing, collaboration, public links, scheduled exports, and retention/deletion policy are still future phases or open decisions (Phase 11A covers grounded AI-assisted drafting).
+- Expired export download bytes are reclaimed by the hourly
+  `exports.purge-expired` retention job (prompt 70: deletes the `ExportArtifact`
+  row and marks its `StoredObject` deleted for `succeeded` requests past
+  `expiresAt`; request audit rows and published revisions are retained).
+  Note the enforcement boundary: the download read path serves while the
+  artifact row exists and does not itself compare `expiresAt`, so an expired
+  artifact remains downloadable until the next hourly tick purges it.
+  Sharing, collaboration, public links, scheduled exports, and
+  operator-decided retention windows remain future phases or open decisions
+  (Phase 11A covers grounded AI-assisted drafting).

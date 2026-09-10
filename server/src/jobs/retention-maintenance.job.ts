@@ -8,6 +8,13 @@ import { JobRunsService } from './job-runs.service';
 export const UPLOADS_RETENTION_JOB = 'uploads.purge-expired';
 export const IDEMPOTENCY_RETENTION_JOB = 'idempotency.purge-expired';
 export const TOKENS_RETENTION_JOB = 'tokens.purge-expired';
+export const EXPORTS_RETENTION_JOB = 'exports.purge-expired';
+
+/**
+ * Maximum expired export requests reclaimed per hourly tick. The next tick
+ * repeats the bounded scan, so a backlog drains without an unbounded query.
+ */
+export const EXPORTS_PURGE_BATCH_LIMIT = 500;
 
 /**
  * Scheduled maintenance jobs for data retention and garbage collection.
@@ -148,6 +155,142 @@ export class RetentionMaintenanceJob {
     } catch (error) {
       const message = describe(error);
       this.logger.error(`Token purge failed: ${message}`);
+      await this.runs
+        .finish(runId, 'failed', message)
+        .catch(() => this.logger.error('Could not record failed job run'));
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR, { name: EXPORTS_RETENTION_JOB })
+  async purgeExpiredExports(): Promise<void> {
+    if (!this.config.schedulerEnabled) return;
+
+    let runId: string;
+    try {
+      runId = await this.runs.start(EXPORTS_RETENTION_JOB);
+    } catch (error) {
+      this.logger.error(
+        `Could not record job run for ${EXPORTS_RETENTION_JOB}: ${describe(error)}`,
+      );
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const count = await this.tenants.workerScoped(async (tx) => {
+        // Oldest expiry first so a backlog drains in order, and only rows
+        // that still hold an artifact: already-purged requests keep their
+        // audit row forever and must fall out of every future scan.
+        const expired = await tx.exportRequest.findMany({
+          where: {
+            status: 'succeeded',
+            expiresAt: { lte: now },
+            artifact: { isNot: null },
+          },
+          select: { id: true },
+          orderBy: { expiresAt: 'asc' },
+          take: EXPORTS_PURGE_BATCH_LIMIT,
+        });
+        if (expired.length === 0) return 0;
+        const requestIds = expired.map((request) => request.id);
+        const artifacts = await tx.exportArtifact.findMany({
+          where: { exportRequestId: { in: requestIds } },
+          select: { exportRequestId: true, storedObjectId: true },
+        });
+        // Export objects are created fresh per render
+        // (reports.service worker completion writes one StoredObject per
+        // ExportArtifact with no dedup or refcount), so a shared
+        // storedObjectId is unexpected. Fail closed for that ID — skip it
+        // and warn — rather than orphan a live download. The within-batch
+        // count below catches collisions inside this tick; the follow-up
+        // lookup catches an object still referenced by any artifact row
+        // outside this batch (e.g. a live future-expiry download), so the
+        // "never orphans" guarantee does not depend on batch boundaries.
+        const objectUseCount = new Map<string, number>();
+        for (const artifact of artifacts) {
+          objectUseCount.set(
+            artifact.storedObjectId,
+            (objectUseCount.get(artifact.storedObjectId) ?? 0) + 1,
+          );
+        }
+        const sharedObjectIds = new Set(
+          [...objectUseCount]
+            .filter(([, uses]) => uses > 1)
+            .map(([objectId]) => objectId),
+        );
+        if (sharedObjectIds.size > 0) {
+          this.logger.warn(
+            `Skipping ${sharedObjectIds.size} shared export object(s): unexpected shared storedObjectId`,
+          );
+        }
+        const reclaimable = artifacts.filter(
+          (artifact) => !sharedObjectIds.has(artifact.storedObjectId),
+        );
+        const candidateRequestIds = [
+          ...new Set(reclaimable.map((artifact) => artifact.exportRequestId)),
+        ];
+        const candidateObjectIds = [
+          ...new Set(reclaimable.map((artifact) => artifact.storedObjectId)),
+        ];
+        let liveObjectIds = new Set<string>();
+        if (candidateObjectIds.length > 0) {
+          const liveReferences = await tx.exportArtifact.findMany({
+            where: {
+              storedObjectId: { in: candidateObjectIds },
+              exportRequestId: { notIn: candidateRequestIds },
+            },
+            select: { storedObjectId: true },
+          });
+          liveObjectIds = new Set(
+            liveReferences.map((reference) => reference.storedObjectId),
+          );
+          if (liveObjectIds.size > 0) {
+            this.logger.warn(
+              `Skipping ${liveObjectIds.size} export object(s) still referenced outside this purge batch`,
+            );
+          }
+        }
+        const finalReclaimable = reclaimable.filter(
+          (artifact) => !liveObjectIds.has(artifact.storedObjectId),
+        );
+        // exportRequestId is @unique on ExportArtifact, so reclaimed request
+        // count and reclaimed artifact count are the same number.
+        const reclaimableRequestIds = [
+          ...new Set(
+            finalReclaimable.map((artifact) => artifact.exportRequestId),
+          ),
+        ];
+        const objectIds = [
+          ...new Set(
+            finalReclaimable.map((artifact) => artifact.storedObjectId),
+          ),
+        ];
+        if (reclaimableRequestIds.length > 0) {
+          await tx.exportArtifact.deleteMany({
+            where: { exportRequestId: { in: reclaimableRequestIds } },
+          });
+        }
+        if (objectIds.length > 0) {
+          await tx.storedObject.updateMany({
+            where: { id: { in: objectIds }, state: 'accepted' },
+            data: { state: 'deleted', deletedAt: now },
+          });
+        }
+        // The ExportRequest audit rows are deliberately retained; only the
+        // derived download bytes expire. A purged download fails closed on
+        // the existing read path (artifact null -> NOT_FOUND).
+        return reclaimableRequestIds.length;
+      });
+
+      await this.runs.finish(
+        runId,
+        'succeeded',
+        `purged ${count} expired export artifact(s)`,
+      );
+      this.logger.log(`Purged ${count} expired export artifact(s)`);
+    } catch (error) {
+      const message = describe(error);
+      this.logger.error(`Export purge failed: ${message}`);
       await this.runs
         .finish(runId, 'failed', message)
         .catch(() => this.logger.error('Could not record failed job run'));

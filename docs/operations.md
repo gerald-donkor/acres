@@ -303,6 +303,16 @@ Data retention jobs run automatically on the worker process (`SCHEDULER_ENABLED=
 - `uploads.purge-expired`: cleans uncompleted uploads and pending quarantine objects older than configured TTL.
 - `idempotency.purge-expired`: cleans idempotency records past retention window.
 - `tokens.purge-expired`: cleans expired password recovery and invitation tokens.
+- `exports.purge-expired` (prompt 70): reclaims `ExportArtifact` rows and marks
+  their `StoredObject` rows `deleted` for `succeeded` export requests past
+  `expiresAt`, oldest expiry first, 500 requests per hourly tick. The tick runs
+  globally across organizations under the worker bypass, like its siblings —
+  never scoped to a calling tenant. Already-purged requests keep their audit
+  rows but carry no artifact, so the artifact-bearing scan skips them on later
+  ticks. `ExportRequest` audit rows are retained, published report revisions
+  are untouched, and a purged download fails closed on the pre-existing
+  `NOT_FOUND` read path. Unexpectedly shared stored objects are skipped with a
+  warning rather than orphaned.
 All runs are logged to the `JobRun` audit table.
 
 ### Volume Encryption, Key Separation & Recovery Inspection Runbook

@@ -5,6 +5,12 @@ import type { App } from 'supertest/types';
 import { createRealDbTestApp, truncateAll } from './helpers/real-db-test-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PrismaClient } from '../src/generated/prisma/client';
+import { RetentionMaintenanceJob } from '../src/jobs/retention-maintenance.job';
+import { TenantTransactionService } from '../src/prisma/tenant-transaction.service';
+import { JobRunsService } from '../src/jobs/job-runs.service';
+import type { AcresConfigService } from '../src/config/acres-config.service';
+import { OBJECT_STORAGE } from '../src/storage/storage.port';
+import type { ObjectStoragePort } from '../src/storage/storage.port';
 
 function redactedDatabaseTarget(): string {
   try {
@@ -2321,6 +2327,339 @@ describe('Acres API — real database', () => {
         ok: false,
         error: { code: 'NOT_FOUND' },
       });
+    });
+  });
+
+  describe('export artifact retention purge', () => {
+    async function seedExport(input: {
+      organizationId: string;
+      accountId: string;
+      reportId: string;
+      key: string;
+      status: 'succeeded' | 'failed' | 'cancelled' | 'queued';
+      expiresAt: Date | null;
+      objectKey: string;
+      withArtifact: boolean;
+    }): Promise<{ requestId: string; objectId: string }> {
+      const tenants = app.get(TenantTransactionService);
+      return tenants.workerScoped(async (tx) => {
+        const object = await tx.storedObject.create({
+          data: {
+            organizationId: input.organizationId,
+            bucket: 'acres-quarantine-test',
+            objectKey: input.objectKey,
+            originalFilename: 'report.csv',
+            mediaType: 'text/csv',
+            checksumAlgorithm: 'sha256',
+            checksumHex:
+              '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+            state: 'accepted',
+          },
+        });
+        // ExportRequest_target_check requires a report or revision target.
+        const req = await tx.exportRequest.create({
+          data: {
+            organizationId: input.organizationId,
+            requestedByAccountId: input.accountId,
+            reportId: input.reportId,
+            format: 'csv',
+            deterministicKey: input.key,
+            status: input.status,
+            ...(input.expiresAt === null ? {} : { expiresAt: input.expiresAt }),
+          },
+        });
+        if (input.withArtifact) {
+          await tx.exportArtifact.create({
+            data: {
+              organizationId: input.organizationId,
+              exportRequestId: req.id,
+              storedObjectId: object.id,
+              filename: 'report.csv',
+              mediaType: 'text/csv',
+              byteCount: BigInt(12),
+              checksumHex:
+                '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+            },
+          });
+        }
+        return { requestId: req.id, objectId: object.id };
+      });
+    }
+
+    it('purges expired artifacts in every org, preserves audit rows and live downloads', async () => {
+      const first = await signedInAgent('export-purge-a@example.com');
+      const orgA = await createOrganization(
+        first,
+        'export-purge-org-a',
+        'Export Purge A',
+      );
+      const second = await signedInAgent('export-purge-b@example.com');
+      const orgB = await createOrganization(
+        second,
+        'export-purge-org-b',
+        'Export Purge B',
+      );
+      const accountA = await prisma.account.findUniqueOrThrow({
+        where: { email: 'export-purge-a@example.com' },
+      });
+      const accountB = await prisma.account.findUniqueOrThrow({
+        where: { email: 'export-purge-b@example.com' },
+      });
+
+      const tenants = app.get(TenantTransactionService);
+      async function seedReport(
+        organizationId: string,
+        accountId: string,
+      ): Promise<{ id: string; updatedAt: Date }> {
+        return tenants.workerScoped(async (tx) => {
+          const report = await tx.report.create({
+            data: {
+              organizationId,
+              ownerAccountId: accountId,
+              createdByAccountId: accountId,
+              title: 'Purge probe report',
+            },
+            select: { id: true, updatedAt: true },
+          });
+          await tx.reportRevision.create({
+            data: {
+              organizationId,
+              reportId: report.id,
+              revisionNumber: 1,
+              title: 'Purge probe revision',
+              authorAccountId: accountId,
+            },
+          });
+          return report;
+        });
+      }
+      const reportA = await seedReport(orgA.id, accountA.id);
+      const reportB = await seedReport(orgB.id, accountB.id);
+
+      const past = new Date(Date.now() - 60_000);
+      const future = new Date(Date.now() + 3_600_000);
+      const expiredA = await seedExport({
+        organizationId: orgA.id,
+        accountId: accountA.id,
+        reportId: reportA.id,
+        key: 'purge-expired-a',
+        status: 'succeeded',
+        expiresAt: past,
+        objectKey: 'purge/obj-expired-a',
+        withArtifact: true,
+      });
+      const freshA = await seedExport({
+        organizationId: orgA.id,
+        accountId: accountA.id,
+        reportId: reportA.id,
+        key: 'purge-fresh-a',
+        status: 'succeeded',
+        expiresAt: future,
+        objectKey: 'purge/obj-fresh-a',
+        withArtifact: true,
+      });
+      const failedA = await seedExport({
+        organizationId: orgA.id,
+        accountId: accountA.id,
+        reportId: reportA.id,
+        key: 'purge-failed-a',
+        status: 'failed',
+        expiresAt: null,
+        objectKey: 'purge/obj-failed-a',
+        withArtifact: false,
+      });
+      const cancelledA = await seedExport({
+        organizationId: orgA.id,
+        accountId: accountA.id,
+        reportId: reportA.id,
+        key: 'purge-cancelled-a',
+        status: 'cancelled',
+        expiresAt: null,
+        objectKey: 'purge/obj-cancelled-a',
+        withArtifact: false,
+      });
+      const queuedA = await seedExport({
+        organizationId: orgA.id,
+        accountId: accountA.id,
+        reportId: reportA.id,
+        key: 'purge-queued-a',
+        status: 'queued',
+        expiresAt: null,
+        objectKey: 'purge/obj-queued-a',
+        withArtifact: false,
+      });
+      const nullExpiryA = await seedExport({
+        organizationId: orgA.id,
+        accountId: accountA.id,
+        reportId: reportA.id,
+        key: 'purge-null-expiry-a',
+        status: 'succeeded',
+        expiresAt: null,
+        objectKey: 'purge/obj-null-expiry-a',
+        withArtifact: true,
+      });
+      const expiredB = await seedExport({
+        organizationId: orgB.id,
+        accountId: accountB.id,
+        reportId: reportB.id,
+        key: 'purge-expired-b',
+        status: 'succeeded',
+        expiresAt: past,
+        objectKey: 'purge/obj-expired-b',
+        withArtifact: true,
+      });
+
+      const storage = app.get<ObjectStoragePort>(OBJECT_STORAGE) as unknown as {
+        presignGet: jest.Mock;
+      };
+      storage.presignGet.mockResolvedValue({
+        url: 'http://storage.local/download',
+        method: 'GET',
+        headers: {},
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      // Sanity: while the artifact row exists the download is served, and
+      // cross-organization metadata reads stay denied under forced RLS.
+      await first.agent
+        .get(`/api/v1/exports/${expiredA.requestId}/download`)
+        .set('x-acres-organization-id', orgA.id)
+        .expect(200);
+      const foreignMeta = await second.agent
+        .get(`/api/v1/exports/${expiredA.requestId}`)
+        .set('x-acres-organization-id', orgB.id)
+        .expect(404);
+      expect(foreignMeta.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+
+      // SCHEDULER_ENABLED is false in this suite, so invoke the purge with an
+      // enabled stub config while keeping the real transaction/run services.
+      const job = new RetentionMaintenanceJob(
+        prisma,
+        tenants,
+        app.get(JobRunsService),
+        { schedulerEnabled: true } as AcresConfigService,
+      );
+      await job.purgeExpiredExports();
+
+      const read = <T>(
+        callback: (
+          tx: Parameters<Parameters<typeof tenants.workerScoped>[0]>[0],
+        ) => Promise<T>,
+      ): Promise<T> => tenants.workerScoped(callback);
+
+      // Expired artifacts are reclaimed in both orgs: the worker job is
+      // global, not scoped to the calling tenant.
+      for (const expired of [expiredA, expiredB]) {
+        const artifact = await read((tx) =>
+          tx.exportArtifact.findFirst({
+            where: { exportRequestId: expired.requestId },
+          }),
+        );
+        expect(artifact).toBeNull();
+        const object = await read((tx) =>
+          tx.storedObject.findFirstOrThrow({
+            where: { id: expired.objectId },
+          }),
+        );
+        expect(object.state).toBe('deleted');
+        expect(object.deletedAt).toBeInstanceOf(Date);
+        // The ExportRequest audit row is retained, never hard-deleted.
+        const req = await read((tx) =>
+          tx.exportRequest.findFirstOrThrow({
+            where: { id: expired.requestId },
+          }),
+        );
+        expect(req.status).toBe('succeeded');
+      }
+
+      // Live rows are untouched: future-expiry success, failed, cancelled,
+      // queued, and succeeded-without-expiry requests.
+      const freshArtifact = await read((tx) =>
+        tx.exportArtifact.findFirstOrThrow({
+          where: { exportRequestId: freshA.requestId },
+        }),
+      );
+      expect(freshArtifact.storedObjectId).toBe(freshA.objectId);
+      const nullExpiryArtifact = await read((tx) =>
+        tx.exportArtifact.findFirstOrThrow({
+          where: { exportRequestId: nullExpiryA.requestId },
+        }),
+      );
+      expect(nullExpiryArtifact.storedObjectId).toBe(nullExpiryA.objectId);
+      for (const live of [failedA, cancelledA, queuedA]) {
+        const liveReq = await read((tx) =>
+          tx.exportRequest.findFirstOrThrow({
+            where: { id: live.requestId },
+          }),
+        );
+        expect(liveReq.expiresAt).toBeNull();
+      }
+      const failedReq = await read((tx) =>
+        tx.exportRequest.findFirstOrThrow({
+          where: { id: failedA.requestId },
+        }),
+      );
+      expect(failedReq.status).toBe('failed');
+
+      // Report and revision rows are never touched by the purge.
+      const report = await read((tx) =>
+        tx.report.findFirstOrThrow({ where: { id: reportA.id } }),
+      );
+      expect(report.updatedAt).toEqual(reportA.updatedAt);
+      const revision = await read((tx) =>
+        tx.reportRevision.findFirstOrThrow({
+          where: { organizationId: orgA.id, reportId: reportA.id },
+        }),
+      );
+      expect(revision.status).toBe('draft');
+
+      // The purge is audited like its siblings.
+      const run = await read((tx) =>
+        tx.jobRun.findFirstOrThrow({
+          where: {
+            jobName: 'exports.purge-expired',
+            status: 'succeeded',
+          },
+          orderBy: { startedAt: 'desc' },
+        }),
+      );
+      expect(run.message).toContain('purged 2 expired export artifact(s)');
+
+      // A purged download fails closed on the pre-existing read path
+      // (artifact null -> NOT_FOUND 'Completed export artifact not found.'),
+      // while the intact download keeps working.
+      const purgedDownload = await first.agent
+        .get(`/api/v1/exports/${expiredA.requestId}/download`)
+        .set('x-acres-organization-id', orgA.id)
+        .expect(404);
+      expect(purgedDownload.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+      await first.agent
+        .get(`/api/v1/exports/${freshA.requestId}/download`)
+        .set('x-acres-organization-id', orgA.id)
+        .expect(200);
+
+      // A second tick finds nothing left to do: already-purged requests keep
+      // their audit rows but no longer match the artifact-bearing scan.
+      await job.purgeExpiredExports();
+      const runs = await read((tx) =>
+        tx.jobRun.findMany({
+          where: {
+            jobName: 'exports.purge-expired',
+            status: 'succeeded',
+          },
+          orderBy: { startedAt: 'asc' },
+        }),
+      );
+      expect(runs.map((run) => run.message)).toEqual([
+        'purged 2 expired export artifact(s)',
+        'purged 0 expired export artifact(s)',
+      ]);
     });
   });
 
