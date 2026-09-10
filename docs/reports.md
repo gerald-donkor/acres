@@ -27,6 +27,27 @@ Evidence currently supports two references:
 - `dashboard_view`: stores the saved view name, filters, presentation, status,
   owner, and update timestamp.
 
+## Dashboard evidence schema version (prompt 69)
+
+New `dashboard_view` evidence snapshots carry `schemaVersion`, normalized from
+the live row at freeze time via the single source
+`CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION` in
+`server/src/dashboards/dashboards.service.ts` (1 = the Phase 9
+filters/presentation shape). Rows written before prompt 68 carry no marker and
+freeze as 1; a live row with an unknown future, non-integer, or below-range
+marker fails closed with the stable `INTERNAL_ERROR` envelope before any
+snapshot is built, so this build can never mint uninterpretable evidence.
+
+Pre-marker frozen snapshots stay byte-identical in storage — published evidence
+is immutable and is never rewritten. Consumers MUST interpret a missing marker
+as version 1, the only shape ever frozen before this prompt; no runtime
+remapping occurs (stored bytes are unchanged, and no code rewrites
+`snapshot.schemaVersion` on read). Export bytes are unaffected: `renderCsv`
+selects `name`/`value`/`datasetVersionId` only and `renderPdf` renders no
+evidence fields, so the additive key cannot alter CSV/PDF output (proved by a
+byte-equality unit test running the real worker render path with and without
+the marker).
+
 The organization permission map now includes `reports.read`, `reports.create`,
 `reports.update`, `reports.publish`, `exports.create`, and `exports.read`.
 Owners inherit all permissions. Admins can publish. Analysts can draft, update,

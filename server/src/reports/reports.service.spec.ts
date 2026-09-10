@@ -206,6 +206,7 @@ describe('ReportsService', () => {
     name: 'Executive Regional Overview',
     filters: { regionId: 'reg-west', year: 2026 },
     presentation: { chartType: 'bar', layout: 'grid' },
+    schemaVersion: 1,
     status: 'active',
   };
 
@@ -1314,8 +1315,142 @@ describe('ReportsService', () => {
             name: sampleDashboardViewRow.name,
             filters: sampleDashboardViewRow.filters,
             presentation: sampleDashboardViewRow.presentation,
+            schemaVersion: 1,
           },
         }) as unknown,
+      });
+    });
+
+    describe('dashboard view evidence schemaVersion', () => {
+      it('freezes pre-versioning rows without a marker as version 1', async () => {
+        const preVersioningRow = { ...sampleDashboardViewRow };
+        delete (preVersioningRow as { schemaVersion?: unknown }).schemaVersion;
+        mockTx.dashboardView.findFirst.mockResolvedValueOnce(preVersioningRow);
+
+        await service.createReport(orgContext, {
+          title: 'Report with legacy view',
+          evidence: [{ dashboardViewId: sampleDashboardViewRow.id }],
+        });
+
+        expect(mockTx.reportEvidence.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            evidenceType: 'dashboard_view',
+            snapshot: expect.objectContaining({
+              schemaVersion: 1,
+            }) as unknown,
+          }) as unknown,
+        });
+      });
+
+      it('freezes null markers as version 1', async () => {
+        mockTx.dashboardView.findFirst.mockResolvedValueOnce({
+          ...sampleDashboardViewRow,
+          schemaVersion: null,
+        });
+
+        await service.createReport(orgContext, {
+          title: 'Report with null-version view',
+          evidence: [{ dashboardViewId: sampleDashboardViewRow.id }],
+        });
+
+        expect(mockTx.reportEvidence.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            evidenceType: 'dashboard_view',
+            snapshot: expect.objectContaining({
+              schemaVersion: 1,
+            }) as unknown,
+          }) as unknown,
+        });
+      });
+
+      it.each([2, 99])(
+        'fails closed on future versions (%i) without writing evidence',
+        async (schemaVersion) => {
+          mockTx.dashboardView.findFirst.mockResolvedValueOnce({
+            ...sampleDashboardViewRow,
+            schemaVersion,
+          });
+
+          await expect(
+            service.createReport(orgContext, {
+              title: 'Report with future view',
+              evidence: [{ dashboardViewId: sampleDashboardViewRow.id }],
+            }),
+          ).rejects.toMatchObject({
+            response: { code: 'INTERNAL_ERROR' },
+          });
+
+          expect(mockTx.reportEvidence.create).not.toHaveBeenCalled();
+        },
+      );
+
+      it.each([0, -1, 1.5, '1'])(
+        'fails closed on out-of-range markers (%p) without writing evidence',
+        async (schemaVersion) => {
+          mockTx.dashboardView.findFirst.mockResolvedValueOnce({
+            ...sampleDashboardViewRow,
+            schemaVersion,
+          });
+
+          await expect(
+            service.createReport(orgContext, {
+              title: 'Report with unreadable view',
+              evidence: [{ dashboardViewId: sampleDashboardViewRow.id }],
+            }),
+          ).rejects.toMatchObject({
+            response: { code: 'INTERNAL_ERROR' },
+          });
+
+          expect(mockTx.reportEvidence.create).not.toHaveBeenCalled();
+        },
+      );
+
+      it('renders identical CSV bytes with and without the snapshot marker', async () => {
+        const baseSnapshot = {
+          dashboardViewId: sampleDashboardViewRow.id,
+          name: sampleDashboardViewRow.name,
+          filters: sampleDashboardViewRow.filters,
+          presentation: sampleDashboardViewRow.presentation,
+        };
+        const dashboardEvidence = (snapshot: object) => ({
+          id: '018f7611-89ab-7abc-9234-dddd1111dddd',
+          evidenceType: 'dashboard_view',
+          aggregateId: null,
+          dashboardViewId: sampleDashboardViewRow.id,
+          metricDefinitionId: null,
+          datasetVersionId: null,
+          observationId: null,
+          snapshot,
+          position: 0,
+          createdAt: now,
+        });
+        const csvRevision = (snapshot: object) => ({
+          ...samplePublishedReportRow.revisions[0],
+          evidence: [dashboardEvidence(snapshot)],
+        });
+        const queuedCsvRequest = {
+          ...sampleExportRow,
+          status: 'queued',
+          format: 'csv',
+          revisionId: samplePublishedReportRow.revisions[0].id,
+        };
+
+        mockTx.exportRequest.findUnique.mockResolvedValueOnce(queuedCsvRequest);
+        mockTx.reportRevision.findFirst.mockResolvedValueOnce(
+          csvRevision(baseSnapshot),
+        );
+        await service.processExport(sampleExportRow.id);
+
+        mockTx.exportRequest.findUnique.mockResolvedValueOnce(queuedCsvRequest);
+        mockTx.reportRevision.findFirst.mockResolvedValueOnce(
+          csvRevision({ ...baseSnapshot, schemaVersion: 1 }),
+        );
+        await service.processExport(sampleExportRow.id);
+
+        const putCalls = fakeStorage.putBuffer.mock.calls as Array<
+          [{ body: Buffer }]
+        >;
+        expect(putCalls[0][0].body.equals(putCalls[1][0].body)).toBe(true);
       });
     });
 

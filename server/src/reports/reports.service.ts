@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import type {
   CreateExportInput,
   CreateRevisionInput,
@@ -12,6 +12,7 @@ import type {
 } from '@acres/shared';
 import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
+import { CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION } from '../dashboards/dashboards.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { OrganizationContext } from '../organizations/organization-context';
 import { OutboxService } from '../outbox/outbox.service';
@@ -26,6 +27,33 @@ import {
 } from './reports.repository';
 
 const RENDERING_VERSION = 'reports-v1';
+
+/**
+ * Freeze-boundary normalizer for the live dashboard view version marker.
+ * Missing markers (rows written before prompt 68) read as the current
+ * version. A newer, non-integer, or below-range marker means this build
+ * cannot interpret the stored shape, so the freeze fails closed with the
+ * stable `INTERNAL_ERROR` envelope rather than minting uninterpretable
+ * evidence. Delegates the bound to `CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION`
+ * (single source in `dashboards.service`); the narrow check is local only
+ * because `resolveSchemaVersion` there is module-private.
+ */
+function normalizeEvidenceViewSchemaVersion(value: unknown): number {
+  if (value === null || value === undefined)
+    return CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION;
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < 1 ||
+    value > CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION
+  )
+    throw new ApiException(
+      'INTERNAL_ERROR',
+      'Report evidence references an unsupported dashboard view schema version.',
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  return value;
+}
 
 @Injectable()
 export class ReportsService {
@@ -786,6 +814,11 @@ export class ReportsService {
       });
       if (view === null)
         throw ApiException.notFound('Evidence dashboard view not found.');
+      // The cast tolerates pre-versioning runtime rows without the column;
+      // narrowing the Prisma type would silently drop the missing→1 path.
+      const schemaVersion = normalizeEvidenceViewSchemaVersion(
+        (view as { schemaVersion?: unknown }).schemaVersion,
+      );
       return {
         evidenceType: 'dashboard_view' as const,
         aggregateId: null,
@@ -797,6 +830,7 @@ export class ReportsService {
           name: view.name,
           filters: view.filters,
           presentation: view.presentation,
+          schemaVersion,
         },
       };
     }

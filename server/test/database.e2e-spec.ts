@@ -2201,6 +2201,129 @@ describe('Acres API — real database', () => {
     });
   });
 
+  describe('report dashboard-view evidence versioning', () => {
+    async function createView(
+      actor: Awaited<ReturnType<typeof signedInAgent>>,
+      organizationId: string,
+      key: string,
+      name: string,
+    ): Promise<{ id: string; schemaVersion: number }> {
+      const response = await actor.agent
+        .post('/api/v1/dashboard-views')
+        .set('x-csrf-token', actor.token)
+        .set('x-acres-organization-id', organizationId)
+        .set('Idempotency-Key', key)
+        .send({
+          name,
+          filters: {},
+          presentation: { chart: 'bar', compareBy: 'region' },
+        })
+        .expect(201);
+      return (response.body as { data: { id: string; schemaVersion: number } })
+        .data;
+    }
+
+    async function createReportWithViewEvidence(
+      actor: Awaited<ReturnType<typeof signedInAgent>>,
+      organizationId: string,
+      key: string,
+      viewId: string,
+    ) {
+      const response = await actor.agent
+        .post('/api/v1/reports')
+        .set('x-csrf-token', actor.token)
+        .set('x-acres-organization-id', organizationId)
+        .set('Idempotency-Key', key)
+        .send({
+          title: 'Evidence version report',
+          evidence: [{ dashboardViewId: viewId }],
+        });
+      return response;
+    }
+
+    it('freezes schemaVersion 1 into dashboard evidence on the create→read round trip', async () => {
+      const actor = await signedInAgent('evidence-views@example.com');
+      const organization = await createOrganization(
+        actor,
+        'evidence-views-org-1',
+        'Evidence Views Org',
+      );
+      const created = await createView(
+        actor,
+        organization.id,
+        'evidence-view-key-1',
+        'Evidence View',
+      );
+
+      const createdReport = await createReportWithViewEvidence(
+        actor,
+        organization.id,
+        'evidence-report-key-1',
+        created.id,
+      ).then((response) => {
+        expect(response.status).toBe(201);
+        return (response.body as { data: { id: string } }).data;
+      });
+
+      const fetched = await actor.agent
+        .get(`/api/v1/reports/${createdReport.id}`)
+        .set('x-acres-organization-id', organization.id)
+        .expect(200);
+      expect(fetched.body).toMatchObject({
+        ok: true,
+        data: {
+          id: createdReport.id,
+          latestRevision: {
+            evidence: [
+              {
+                evidenceType: 'dashboard_view',
+                dashboardViewId: created.id,
+                snapshot: {
+                  dashboardViewId: created.id,
+                  schemaVersion: 1,
+                },
+              },
+            ],
+          },
+        },
+      });
+    });
+
+    it('denies cross-organization evidence freezing with NOT_FOUND', async () => {
+      const first = await signedInAgent('evidence-tenant-a@example.com');
+      const orgA = await createOrganization(
+        first,
+        'evidence-tenant-org-a',
+        'Evidence Tenant A',
+      );
+      const created = await createView(
+        first,
+        orgA.id,
+        'evidence-tenant-view-a',
+        'Tenant A View',
+      );
+
+      const second = await signedInAgent('evidence-tenant-b@example.com');
+      const orgB = await createOrganization(
+        second,
+        'evidence-tenant-org-b',
+        'Evidence Tenant B',
+      );
+
+      const foreign = await createReportWithViewEvidence(
+        second,
+        orgB.id,
+        'evidence-tenant-report-b',
+        created.id,
+      );
+      expect(foreign.status).toBe(404);
+      expect(foreign.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+    });
+  });
+
   describe('GET /health/ready', () => {
     it('reports ok while the database is reachable', async () => {
       const response = await request(server).get('/health/ready').expect(200);
