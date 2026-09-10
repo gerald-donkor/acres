@@ -24,6 +24,59 @@ dimension hash, and period window. `presentation` stores chart intent:
 `chart` and `compareBy`. A saved view stores query and presentation state, not
 copied metric values.
 
+## Saved-view schema versioning (prompt 68)
+
+Migration `20260909000000_dashboard_view_schema_version` adds an additive
+`schemaVersion integer NOT NULL DEFAULT 1` column with
+`CHECK ("schemaVersion" >= 1)`, restating the Phase 9 table grants and leaving
+the RLS policy untouched. Version 1 is the Phase 9 `filters`/`presentation`
+shape; existing rows backfill to 1 via the column default. The ADD COLUMN is
+the exact DDL Prisma's diff engine generates for the schema change; the CHECK
+follows the reviewed-CHECK precedent (Prisma cannot express CHECKs), matching
+`AiGeneration_inputHash_check`.
+
+Read/write semantics (`server/src/dashboards/dashboards.service.ts`,
+`CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION = 1`):
+
+- Writes stamp the current version server-side. `createView` keeps the
+  caller-supplied normalized body as the idempotency replay key; the version
+  is metadata, not part of the key. `updateView` never restamps: it patches
+  `filters`/`presentation` against the current-version DTO and preserves the
+  stored version.
+- Reads normalize missing markers to 1 (pre-versioning rows). A newer,
+  non-integer, or below-range marker fails closed with the stable
+  `INTERNAL_ERROR` envelope — never guessed or coerced. `listViews`
+  propagates the throw (deterministic error, no silent row drops), so list,
+  read, and `dashboardSummary` stay consistent. Rollout implication: one
+  unexpected row aborts the whole list and `dashboardSummary` for the org, so
+  any future v2 introduction must migrate all rows atomically (or ship the
+  reader first) — there is no degraded-mode list.
+- REST responses and `DashboardViewGql` carry additive `schemaVersion`
+  (OpenAPI `integer`, `minimum: 1`; GraphQL `Int!`). No route, permission,
+  CSRF, idempotency-header, pagination, or complexity change.
+- `updateView` version-gates before writing: a row the build cannot interpret
+  is rejected without executing the Prisma update. `archiveView` is
+  deliberately version-agnostic — flipping `status` needs no shape
+  interpretation.
+
+Verification (2026-09-09): deployed forward as migrator to `acres` and
+`acres_test` (18/18 migrations, `migrate status` clean both), hardening
+re-run, grants confirmed (`acres_app` DML without `TRUNCATE`, `acres_test`
+DML plus `TRUNCATE`), forced RLS intact, zero destructive DDL in the
+migration. Fresh-apply proof on an isolated scratch database: 17-migration
+baseline applied from zero, a pre-versioning view row inserted, then the new
+migration applied — the row backfills to `schemaVersion = 1`. Unit suite
+`dashboards.service.spec.ts` passes 29/29 (stamp, normalize, fail-closed,
+preserve, replay-key cases); real-database suite proves CHECK rejection of
+version 0, two-org 404 isolation of versioned rows, and the version-1
+create/read/list round trip; `analytics:plans` passes 6/6 with unchanged
+query plans. Generation note: `prisma migrate dev` cannot run in this
+environment (its shadow database lacks the superuser-owned PostGIS extension
+the geography migration requires) and the live dev database carries
+out-of-band DBA drift, so the migration was composed from Prisma's own
+generated fragment plus the reviewed CHECK, with equivalence proved by the
+scratch-database checks above.
+
 The permission map now includes `dashboards.manage`. Owners have it through the
 owner wildcard; admins and analysts receive it explicitly; viewers retain
 `analytics.read` but cannot create, update, or archive views.
@@ -141,8 +194,10 @@ missing `_prisma_migrations` privileges.
 ## Residual gaps
 
 - Dashboard sharing, publishing, collaboration, and AI remain future phases.
-- Saved views do not yet have versioned schema migration for future presentation
-  shapes; the JSON shape is intentionally small and validated at the DTO layer.
+- Saved views carry an explicit `schemaVersion` (prompt 68) with fail-closed
+  reads, so future presentation shapes have a durable marker. Versioned
+  *migration logic* for a hypothetical v2 shape does not exist yet — no v2
+  exists — and the JSON shape stays intentionally small and DTO-validated.
 - Saved dashboard views (`listViews`) and summary aggregate queries (`dashboardSummary`)
   are benchmarked and regression-guarded under the deterministic scale seed harness via
   `npm run analytics:plans` (see [`analytics.md`](analytics.md)).

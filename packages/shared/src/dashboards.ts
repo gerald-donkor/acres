@@ -55,6 +55,11 @@ export type DashboardView = {
   description: string | null;
   filters: DashboardFilters;
   presentation: DashboardPresentation;
+  /**
+   * Stored shape version. 1 is the Phase 9 filters/presentation shape.
+   * Server-stamped on write; callers never choose it.
+   */
+  schemaVersion: number;
   ownerAccountId: string;
   status: 'active' | 'archived';
   createdAt: string;

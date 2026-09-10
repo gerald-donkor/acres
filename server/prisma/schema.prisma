@@ -882,6 +882,9 @@ model DashboardView {
   description    String?
   filters        Json
   presentation   Json
+  /// Saved-view shape version. 1 is the Phase 9 filters/presentation shape;
+  /// readers fail closed on any version newer than the running build knows.
+  schemaVersion  Int               @default(1)
   status         DashboardViewStatus @default(active)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt

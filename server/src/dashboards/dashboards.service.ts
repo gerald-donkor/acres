@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import type {
   CreateDashboardViewInput,
   DashboardFilters,
@@ -13,6 +13,13 @@ import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { OrganizationContext } from '../organizations/organization-context';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { DashboardsRepository } from './dashboards.repository';
+
+/**
+ * The only saved-view shape this build reads and writes: the Phase 9
+ * filters/presentation shape. Rows written before versioning carry no
+ * marker and read as 1. Any other stored value fails closed in `toView`.
+ */
+export const CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION = 1;
 
 @Injectable()
 export class DashboardsService {
@@ -74,6 +81,7 @@ export class DashboardsService {
               description: body.description,
               filters: body.filters,
               presentation: body.presentation,
+              schemaVersion: CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION,
             },
           });
           return toView(row);
@@ -95,6 +103,11 @@ export class DashboardsService {
       );
       if (existing === null)
         throw ApiException.notFound('Dashboard view not found.');
+
+      // Version-gate before writing: a row this build cannot interpret must
+      // not be overwritten under current-shape assumptions. The read-back
+      // below stays as defense in depth.
+      resolveSchemaVersion(existing.schemaVersion);
 
       const row = await tx.dashboardView.update({
         where: { id: existing.id },
@@ -185,6 +198,7 @@ function toView(row: {
   description: string | null;
   filters: unknown;
   presentation: unknown;
+  schemaVersion: unknown;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -196,8 +210,34 @@ function toView(row: {
     description: row.description,
     filters: (row.filters ?? {}) as DashboardFilters,
     presentation: (row.presentation ?? {}) as DashboardPresentation,
+    schemaVersion: resolveSchemaVersion(row.schemaVersion),
     status: row.status as 'active' | 'archived',
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Missing markers (rows written before versioning) read as the current
+ * version. A newer, non-integer, or below-range marker means this build
+ * cannot interpret the stored shape, so reads fail closed with the stable
+ * `INTERNAL_ERROR` envelope rather than guessing. `listViews` propagates
+ * the same throw instead of silently dropping rows, keeping list and read
+ * behavior consistent.
+ */
+function resolveSchemaVersion(value: unknown): number {
+  if (value === null || value === undefined)
+    return CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION;
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < 1 ||
+    value > CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION
+  )
+    throw new ApiException(
+      'INTERNAL_ERROR',
+      'Saved dashboard view uses an unsupported schema version.',
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  return value;
 }

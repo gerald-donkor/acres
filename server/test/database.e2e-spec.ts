@@ -2050,6 +2050,157 @@ describe('Acres API — real database', () => {
     });
   });
 
+  describe('dashboard saved-view schema versioning', () => {
+    async function createView(
+      actor: Awaited<ReturnType<typeof signedInAgent>>,
+      organizationId: string,
+      key: string,
+      name: string,
+    ): Promise<{ id: string; schemaVersion: number }> {
+      const response = await actor.agent
+        .post('/api/v1/dashboard-views')
+        .set('x-csrf-token', actor.token)
+        .set('x-acres-organization-id', organizationId)
+        .set('Idempotency-Key', key)
+        .send({
+          name,
+          filters: {},
+          presentation: { chart: 'bar', compareBy: 'region' },
+        })
+        .expect(201);
+      return (response.body as { data: { id: string; schemaVersion: number } })
+        .data;
+    }
+
+    it('stamps version 1 on create and serves it on read, list, and storage', async () => {
+      const actor = await signedInAgent('versioned-views@example.com');
+      const organization = await createOrganization(
+        actor,
+        'versioned-views-org-1',
+        'Versioned Views Org',
+      );
+
+      const created = await createView(
+        actor,
+        organization.id,
+        'versioned-view-key-1',
+        'Versioned View',
+      );
+      expect(created.schemaVersion).toBe(1);
+
+      const single = await actor.agent
+        .get(`/api/v1/dashboard-views/${created.id}`)
+        .set('x-acres-organization-id', organization.id)
+        .expect(200);
+      expect(single.body).toMatchObject({
+        ok: true,
+        data: { id: created.id, schemaVersion: 1 },
+      });
+
+      const listed = await actor.agent
+        .get('/api/v1/dashboard-views')
+        .set('x-acres-organization-id', organization.id)
+        .expect(200);
+      expect(listed.body).toMatchObject({
+        ok: true,
+        data: [{ id: created.id, schemaVersion: 1 }],
+      });
+
+      const account = await prisma.account.findUniqueOrThrow({
+        where: { email: 'versioned-views@example.com' },
+      });
+      const stored = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+            SELECT
+              set_config('acres.account_id', ${account.id}, true),
+              set_config('acres.organization_id', ${organization.id}, true),
+              set_config('acres.invitation_token_hash', '', true)
+          `;
+        return tx.dashboardView.findFirstOrThrow({
+          where: { id: created.id, organizationId: organization.id },
+        });
+      });
+      expect(stored.schemaVersion).toBe(1);
+    });
+
+    it('rejects out-of-range versions at the database CHECK constraint', async () => {
+      const actor = await signedInAgent('version-check@example.com');
+      const organization = await createOrganization(
+        actor,
+        'version-check-org-1',
+        'Version Check Org',
+      );
+      const account = await prisma.account.findUniqueOrThrow({
+        where: { email: 'version-check@example.com' },
+      });
+
+      await expect(
+        prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`
+              SELECT
+                set_config('acres.account_id', ${account.id}, true),
+                set_config('acres.organization_id', ${organization.id}, true),
+                set_config('acres.invitation_token_hash', '', true)
+            `;
+          await tx.$executeRaw`
+              INSERT INTO "DashboardView"
+                ("id", "organizationId", "ownerAccountId", "name",
+                 "filters", "presentation", "schemaVersion")
+              VALUES
+                (gen_random_uuid(), ${organization.id}, ${account.id},
+                 'Bad Version Probe', '{}'::jsonb, '{}'::jsonb, 0)
+            `;
+        }),
+      ).rejects.toThrow(/DashboardView_schemaVersion_check/);
+    });
+
+    it('keeps versioned rows isolated across organizations under forced RLS', async () => {
+      const first = await signedInAgent('version-tenant-a@example.com');
+      const orgA = await createOrganization(
+        first,
+        'version-tenant-org-a',
+        'Version Tenant A',
+      );
+      const created = await createView(
+        first,
+        orgA.id,
+        'version-tenant-view-a',
+        'Tenant A View',
+      );
+
+      const second = await signedInAgent('version-tenant-b@example.com');
+      const orgB = await createOrganization(
+        second,
+        'version-tenant-org-b',
+        'Version Tenant B',
+      );
+
+      const foreign = await second.agent
+        .get(`/api/v1/dashboard-views/${created.id}`)
+        .set('x-acres-organization-id', orgB.id)
+        .expect(404);
+      expect(foreign.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+
+      const foreignList = await second.agent
+        .get('/api/v1/dashboard-views')
+        .set('x-acres-organization-id', orgB.id)
+        .expect(200);
+      expect(foreignList.body).toMatchObject({ ok: true, data: [] });
+
+      const own = await first.agent
+        .get(`/api/v1/dashboard-views/${created.id}`)
+        .set('x-acres-organization-id', orgA.id)
+        .expect(200);
+      expect(own.body).toMatchObject({
+        ok: true,
+        data: { id: created.id, schemaVersion: 1 },
+      });
+    });
+  });
+
   describe('GET /health/ready', () => {
     it('reports ok while the database is reachable', async () => {
       const response = await request(server).get('/health/ready').expect(200);

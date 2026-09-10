@@ -7676,6 +7676,10 @@
                             "additionalProperties": true,
                             "type": "object"
                           },
+                          "schemaVersion": {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
                           "status": {
                             "type": "string"
                           },
@@ -7690,6 +7694,7 @@
                           "description",
                           "filters",
                           "presentation",
+                          "schemaVersion",
                           "ownerAccountId",
                           "status",
                           "createdAt",
@@ -8235,6 +8240,10 @@
                           "additionalProperties": true,
                           "type": "object"
                         },
+                        "schemaVersion": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
                         "status": {
                           "type": "string"
                         },
@@ -8249,6 +8258,7 @@
                         "description",
                         "filters",
                         "presentation",
+                        "schemaVersion",
                         "ownerAccountId",
                         "status",
                         "createdAt",
@@ -9278,6 +9288,10 @@
                           "additionalProperties": true,
                           "type": "object"
                         },
+                        "schemaVersion": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
                         "status": {
                           "type": "string"
                         },
@@ -9292,6 +9306,7 @@
                         "description",
                         "filters",
                         "presentation",
+                        "schemaVersion",
                         "ownerAccountId",
                         "status",
                         "createdAt",
@@ -9834,6 +9849,10 @@
                           "additionalProperties": true,
                           "type": "object"
                         },
+                        "schemaVersion": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
                         "status": {
                           "type": "string"
                         },
@@ -9848,6 +9867,7 @@
                         "description",
                         "filters",
                         "presentation",
+                        "schemaVersion",
                         "ownerAccountId",
                         "status",
                         "createdAt",

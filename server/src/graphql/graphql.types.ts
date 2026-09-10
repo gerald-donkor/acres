@@ -435,6 +435,9 @@ export class DashboardViewGql {
   @Field(() => DashboardPresentationGql)
   presentation!: DashboardPresentationGql;
 
+  @Field(() => Int, { description: 'Stored shape version of the saved view.' })
+  schemaVersion!: number;
+
   @Field(() => ID)
   ownerAccountId!: string;
 

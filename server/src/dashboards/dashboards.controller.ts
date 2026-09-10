@@ -43,6 +43,7 @@ const dashboardViewSchema = objectSchema({
   description: nullableStringSchema(),
   filters: jsonObjectSchema,
   presentation: jsonObjectSchema,
+  schemaVersion: { type: 'integer', minimum: 1 },
   ownerAccountId: stringSchema('uuid'),
   status: stringSchema(),
   createdAt: stringSchema('date-time'),

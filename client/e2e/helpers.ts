@@ -143,6 +143,7 @@ export function createMockDashboardSummary(
     description: "Standard Q1-Q2 northern regional coverage",
     filters: { metricId: metric1.id },
     presentation: { chart: "bar", compareBy: "period" },
+    schemaVersion: 1,
     ownerAccountId: "acc-test-owner",
     status: "active",
     createdAt: "2026-08-10T10:00:00.000Z",

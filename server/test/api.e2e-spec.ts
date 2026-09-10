@@ -773,6 +773,8 @@ describe('Acres API', () => {
 
   describe('dashboard views', () => {
     const now = new Date('2026-01-01T00:00:00.000Z');
+    // Deliberately no `schemaVersion`: this mock simulates a row written
+    // before versioning, proving reads normalize it to 1 end to end.
     const viewRow = {
       id: '018f7611-89ab-7abc-9234-121212121212',
       organizationId: ORG_CONTEXT.organizationId,
@@ -817,13 +819,18 @@ describe('Acres API', () => {
 
       expect(created.body).toMatchObject({
         ok: true,
-        data: { id: viewRow.id, name: 'Population comparison' },
+        data: {
+          id: viewRow.id,
+          name: 'Population comparison',
+          schemaVersion: 1,
+        },
       });
       expect(prisma.dashboardView.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             organizationId: ORG_CONTEXT.organizationId,
             ownerAccountId: ACCOUNT_ROW.id,
+            schemaVersion: 1,
           }) as unknown,
         }),
       );
@@ -835,7 +842,7 @@ describe('Acres API', () => {
 
       expect(reopened.body).toMatchObject({
         ok: true,
-        data: { id: viewRow.id, filters: viewRow.filters },
+        data: { id: viewRow.id, filters: viewRow.filters, schemaVersion: 1 },
       });
     });
 

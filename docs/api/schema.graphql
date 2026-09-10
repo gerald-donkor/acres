@@ -129,6 +129,9 @@ type DashboardViewGql {
   name: String!
   ownerAccountId: ID!
   presentation: DashboardPresentationGql!
+
+  """Stored shape version of the saved view."""
+  schemaVersion: Int!
   status: String!
   updatedAt: String!
 }

@@ -60,6 +60,7 @@ describe('DashboardsService', () => {
       chart: 'bar',
       compareBy: 'region',
     },
+    schemaVersion: 1,
     status: 'active',
     createdAt: now,
     updatedAt: now,
@@ -190,6 +191,7 @@ describe('DashboardsService', () => {
         description: 'Quarterly regional indicators and performance trends.',
         filters: sampleViewRow.filters,
         presentation: sampleViewRow.presentation,
+        schemaVersion: 1,
         status: 'active',
         createdAt: '2026-02-01T12:00:00.000Z',
         updatedAt: '2026-02-01T12:00:00.000Z',
@@ -240,6 +242,7 @@ describe('DashboardsService', () => {
         description: sampleViewRow.description,
         filters: sampleViewRow.filters,
         presentation: sampleViewRow.presentation,
+        schemaVersion: 1,
         status: 'active',
         createdAt: '2026-02-01T12:00:00.000Z',
         updatedAt: '2026-02-01T12:00:00.000Z',
@@ -305,11 +308,45 @@ describe('DashboardsService', () => {
           description: 'Detailed yield and harvest benchmarks.',
           filters: { regionId: 'reg-west' },
           presentation: { chart: 'bar', compareBy: 'region' },
+          schemaVersion: 1,
         },
       });
       expect(result.name).toBe('Regional Production Summary');
       expect(result.description).toBe('Detailed yield and harvest benchmarks.');
+      expect(result.schemaVersion).toBe(1);
       expect(result.status).toBe('active');
+    });
+
+    it('keeps the server-stamped version out of the idempotency replay key', async () => {
+      const input: CreateDashboardViewInput = {
+        name: 'Replay Key View',
+        filters: { regionId: 'reg-west' },
+      };
+
+      const first = await service.createView(orgContext, input, 'replay-key-1');
+      const second = await service.createView(
+        orgContext,
+        input,
+        'replay-key-1',
+      );
+
+      // Exact requestBody match: an extra `schemaVersion` key would fail
+      // deep equality, proving the server-stamped version stays out of the
+      // replay key.
+      expect(mockIdempotencyService.run).toHaveBeenCalledWith(
+        mockTx,
+        expect.objectContaining({
+          requestBody: {
+            name: 'Replay Key View',
+            description: null,
+            filters: { regionId: 'reg-west' },
+            presentation: { chart: 'bar', compareBy: 'region' },
+          },
+        }),
+        expect.any(Function),
+      );
+      expect(first.schemaVersion).toBe(1);
+      expect(second).toEqual(first);
     });
 
     it('applies default presentation fallback when presentation is omitted', async () => {
@@ -328,6 +365,7 @@ describe('DashboardsService', () => {
           description: null,
           filters: {},
           presentation: { chart: 'bar', compareBy: 'region' },
+          schemaVersion: 1,
         },
       });
     });
@@ -349,8 +387,125 @@ describe('DashboardsService', () => {
           description: null,
           filters: {},
           presentation: { chart: 'bar', compareBy: 'region' },
+          schemaVersion: 1,
         },
       });
+    });
+  });
+
+  describe('schemaVersion', () => {
+    it('reads rows without a version marker as version 1', async () => {
+      // No `schemaVersion` key at all: simulates rows written before
+      // versioning (the mocked-Prisma api.e2e viewRow covers the same path
+      // end to end).
+      const { schemaVersion: fixtureVersion, ...preVersioningRow } =
+        sampleViewRow;
+      expect(fixtureVersion).toBe(1);
+      (mockDashboardsRepo.findView as jest.Mock).mockResolvedValueOnce(
+        preVersioningRow,
+      );
+      (mockDashboardsRepo.listViews as jest.Mock).mockResolvedValueOnce([
+        preVersioningRow,
+      ]);
+
+      const single = await service.getView(orgContext, sampleViewRow.id);
+      const listed = await service.listViews(orgContext);
+
+      expect(single.schemaVersion).toBe(1);
+      expect(listed).toHaveLength(1);
+      expect(listed[0].schemaVersion).toBe(1);
+    });
+
+    it('reads null version markers as version 1', async () => {
+      (mockDashboardsRepo.findView as jest.Mock).mockResolvedValueOnce({
+        ...sampleViewRow,
+        schemaVersion: null,
+      });
+
+      const view = await service.getView(orgContext, sampleViewRow.id);
+
+      expect(view.schemaVersion).toBe(1);
+    });
+
+    it.each([2, 99])(
+      'fails closed with INTERNAL_ERROR when getView meets version %i',
+      async (schemaVersion) => {
+        (mockDashboardsRepo.findView as jest.Mock).mockResolvedValueOnce({
+          ...sampleViewRow,
+          schemaVersion,
+        });
+
+        await expect(
+          service.getView(orgContext, sampleViewRow.id),
+        ).rejects.toMatchObject({
+          response: {
+            code: 'INTERNAL_ERROR',
+            message: 'Saved dashboard view uses an unsupported schema version.',
+          },
+        });
+      },
+    );
+
+    it.each([0, -1, 1.5, '1'])(
+      'fails closed when getView meets out-of-range value %p',
+      async (schemaVersion) => {
+        (mockDashboardsRepo.findView as jest.Mock).mockResolvedValueOnce({
+          ...sampleViewRow,
+          schemaVersion,
+        });
+
+        await expect(
+          service.getView(orgContext, sampleViewRow.id),
+        ).rejects.toMatchObject({
+          response: { code: 'INTERNAL_ERROR' },
+        });
+      },
+    );
+
+    it('rejects listViews deterministically instead of dropping unknown versions', async () => {
+      (mockDashboardsRepo.listViews as jest.Mock).mockResolvedValueOnce([
+        sampleViewRow,
+        { ...sampleViewRow, id: 'future-view', schemaVersion: 2 },
+      ]);
+
+      await expect(service.listViews(orgContext)).rejects.toMatchObject({
+        response: { code: 'INTERNAL_ERROR' },
+      });
+    });
+
+    it('preserves the stored version on update without restamping it', async () => {
+      const result = await service.updateView(orgContext, sampleViewRow.id, {
+        name: 'Version Preserved',
+      });
+
+      // Exact data match: a restamped `schemaVersion` key would fail deep
+      // equality, proving update preserves the stored version untouched.
+      expect(mockTx.dashboardView.update).toHaveBeenCalledWith({
+        where: { id: sampleViewRow.id },
+        data: {
+          name: 'Version Preserved',
+          description: undefined,
+          filters: undefined,
+          presentation: undefined,
+        },
+      });
+      expect(result.schemaVersion).toBe(1);
+    });
+
+    it('fails closed before writing when updating a future-version row', async () => {
+      (mockDashboardsRepo.findView as jest.Mock).mockResolvedValueOnce({
+        ...sampleViewRow,
+        schemaVersion: 2,
+      });
+
+      await expect(
+        service.updateView(orgContext, sampleViewRow.id, {
+          name: 'Must Not Write',
+        }),
+      ).rejects.toMatchObject({
+        response: { code: 'INTERNAL_ERROR' },
+      });
+      expect(mockTx.dashboardView.update).not.toHaveBeenCalled();
     });
   });
 
