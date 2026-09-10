@@ -24,6 +24,15 @@ interface UploadJobData {
   readonly outboxEventId?: string;
 }
 
+/**
+ * Stored on the durable `worker_exception` rows when upload processing throws
+ * unexpectedly. The original error is logged server-side only; durable message
+ * columns must never carry raw exception text (storage keys, endpoint URLs,
+ * or library internals).
+ */
+export const WORKER_EXCEPTION_MESSAGE =
+  'Upload processing failed unexpectedly.';
+
 @Injectable()
 export class UploadWorkerService {
   private readonly logger = new Logger(UploadWorkerService.name);
@@ -324,7 +333,13 @@ export class UploadWorkerService {
     uploadId: string,
     error: unknown,
   ): Promise<void> {
-    const message = error instanceof Error ? error.message : String(error);
+    // Operator diagnostics only. Never persisted to any column, metric label,
+    // or returned payload.
+    const detail =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    this.logger.error(
+      `Upload worker exception for durableJob ${durableJobId} upload ${uploadId} org ${organizationId}: ${detail}`,
+    );
     await this.tenants.workerScoped(async (tx) => {
       await tx.durableJob.update({
         where: { id: durableJobId },
@@ -332,7 +347,7 @@ export class UploadWorkerService {
           state: 'failed',
           finishedAt: new Date(),
           lastErrorCode: 'worker_exception',
-          lastErrorMessage: message.slice(0, 500),
+          lastErrorMessage: WORKER_EXCEPTION_MESSAGE,
         },
       });
       await tx.jobDeadLetter.create({
@@ -340,7 +355,7 @@ export class UploadWorkerService {
           organizationId,
           durableJobId,
           reasonCode: 'worker_exception',
-          reasonMessage: message.slice(0, 500),
+          reasonMessage: WORKER_EXCEPTION_MESSAGE,
           payload: { uploadId },
         },
       });

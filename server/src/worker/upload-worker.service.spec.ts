@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { AcresConfigService } from '../config/acres-config.service';
 import type { IngestionProcessorService } from '../ingestion/ingestion-processor.service';
 import type { MetricsService } from '../metrics/metrics.service';
@@ -13,7 +14,10 @@ import type { QueuePort } from '../queue/work-queue.port';
 import type { ReportsService } from '../reports/reports.service';
 import type { MalwareScannerPort } from '../scanner/scanner.port';
 import type { ObjectStoragePort } from '../storage/storage.port';
-import { UploadWorkerService } from './upload-worker.service';
+import {
+  UploadWorkerService,
+  WORKER_EXCEPTION_MESSAGE,
+} from './upload-worker.service';
 
 describe('UploadWorkerService', () => {
   let service: UploadWorkerService;
@@ -579,28 +583,107 @@ describe('UploadWorkerService', () => {
       mockOrgTx.upload.findFirst.mockResolvedValueOnce(mockUpload);
 
       (fakeStorage.getBuffer as jest.Mock).mockRejectedValueOnce(
-        new Error('S3 connection reset'),
+        new Error(
+          'S3 connection reset for key organizations/org-1/quarantine/secret',
+        ),
       );
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
 
-      await expect(service.process({ uploadId: 'upload-1' })).rejects.toThrow(
-        'S3 connection reset',
-      );
+      try {
+        await expect(service.process({ uploadId: 'upload-1' })).rejects.toThrow(
+          'S3 connection reset for key organizations/org-1/quarantine/secret',
+        );
 
-      expect(mockWorkerTx.durableJob.update).toHaveBeenCalledWith({
-        where: { id: 'dj-1' },
-        data: expect.objectContaining({
-          state: 'failed',
-          lastErrorCode: 'worker_exception',
-        }) as unknown,
-      });
-      expect(mockWorkerTx.jobDeadLetter.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          organizationId: 'org-1',
-          durableJobId: 'dj-1',
-          reasonCode: 'worker_exception',
-          payload: { uploadId: 'upload-1' },
-        }) as unknown,
-      });
+        expect(mockWorkerTx.durableJob.update).toHaveBeenCalledWith({
+          where: { id: 'dj-1' },
+          data: expect.objectContaining({
+            state: 'failed',
+            lastErrorCode: 'worker_exception',
+            lastErrorMessage: WORKER_EXCEPTION_MESSAGE,
+          }) as unknown,
+        });
+        const durableUpdate = (
+          mockWorkerTx.durableJob.update.mock.calls as unknown as [
+            [{ data: { lastErrorMessage: string } }],
+          ]
+        )[0][0];
+        expect(durableUpdate.data.lastErrorMessage).toBe(
+          WORKER_EXCEPTION_MESSAGE,
+        );
+        expect(durableUpdate.data.lastErrorMessage).not.toContain(
+          'S3 connection reset',
+        );
+        expect(durableUpdate.data.lastErrorMessage).not.toContain(
+          'quarantine/secret',
+        );
+        expect(mockWorkerTx.jobDeadLetter.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            organizationId: 'org-1',
+            durableJobId: 'dj-1',
+            reasonCode: 'worker_exception',
+            reasonMessage: WORKER_EXCEPTION_MESSAGE,
+            payload: { uploadId: 'upload-1' },
+          }) as unknown,
+        });
+        const deadLetter = (
+          mockWorkerTx.jobDeadLetter.create.mock.calls as unknown as [
+            [{ data: { reasonMessage: string } }],
+          ]
+        )[0][0];
+        expect(deadLetter.data.reasonMessage).toBe(WORKER_EXCEPTION_MESSAGE);
+        expect(deadLetter.data.reasonMessage).not.toContain(
+          'S3 connection reset',
+        );
+        expect(deadLetter.data.reasonMessage).not.toContain(
+          'quarantine/secret',
+        );
+        expect(loggerError).toHaveBeenCalled();
+        expect(String(loggerError.mock.calls[0][0])).toContain(
+          'S3 connection reset',
+        );
+      } finally {
+        loggerError.mockRestore();
+      }
+    });
+
+    it('stores the same fixed message for non-Error worker throws', async () => {
+      mockWorkerTx.upload.findUnique.mockResolvedValueOnce(mockUpload);
+      mockOrgTx.upload.findFirst.mockResolvedValueOnce(mockUpload);
+
+      (fakeStorage.getBuffer as jest.Mock).mockRejectedValueOnce('boom');
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      try {
+        await expect(service.process({ uploadId: 'upload-1' })).rejects.toBe(
+          'boom',
+        );
+
+        expect(mockWorkerTx.durableJob.update).toHaveBeenCalledWith({
+          where: { id: 'dj-1' },
+          data: expect.objectContaining({
+            state: 'failed',
+            lastErrorCode: 'worker_exception',
+            lastErrorMessage: WORKER_EXCEPTION_MESSAGE,
+          }) as unknown,
+        });
+        expect(mockWorkerTx.jobDeadLetter.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            organizationId: 'org-1',
+            durableJobId: 'dj-1',
+            reasonCode: 'worker_exception',
+            reasonMessage: WORKER_EXCEPTION_MESSAGE,
+            payload: { uploadId: 'upload-1' },
+          }) as unknown,
+        });
+        expect(loggerError).toHaveBeenCalled();
+        expect(String(loggerError.mock.calls[0][0])).toContain('boom');
+      } finally {
+        loggerError.mockRestore();
+      }
     });
   });
 

@@ -2094,7 +2094,11 @@ the storage port, scans before acceptance, writes succeeded/failed durable job
 state, writes dead-letter rows for failed scans or worker exceptions, marks
 cancelled work as cancelled instead of failed, rejects scanner/object failures
 fail-closed, observes cancellation before final state, and drains on
-`SIGTERM`/`SIGINT`. Outbox dispatch attempts that exhaust their configured
+`SIGTERM`/`SIGINT`. Unexpected worker exceptions (`worker_exception`) persist
+the fixed `WORKER_EXCEPTION_MESSAGE` in both `DurableJob.lastErrorMessage` and
+`JobDeadLetter.reasonMessage` with the original error in server logs only
+(prompts 72/73/74 rule: raw storage/endpoint/library detail never sits in a
+durable message column). Outbox dispatch attempts that exhaust their configured
 maximum are marked `dead_lettered` with visible `JobDeadLetter` evidence instead
 of remaining stuck in `retrying`. Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant
