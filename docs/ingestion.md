@@ -230,7 +230,11 @@ blocking `metric_definition_incompatible` issue naming the offending source
 column, instead of the former `failed` / `analytics_publication_failed` run
 outcome. The `failed` / `analytics_publication_failed` outcome remains
 reachable only via the genuine validation-to-publication race or an unexpected
-publication error.
+publication error. The race guard keeps its specific sanitized message
+(`PUBLICATION_INCOMPATIBLE_REMAPPING_MESSAGE`, no key material); any other
+unexpected publication error ends with the fixed safe message
+(`PUBLICATION_UNEXPECTED_FAILURE_MESSAGE`), with the original error logged
+server-side only and never stored in the tenant-visible `failureMessage`.
 
 Publication is idempotent for the same organization/dataset/upload/mapping
 tuple. Failed and cancelled runs do not expose a published version.

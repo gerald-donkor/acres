@@ -5,6 +5,12 @@ import type { App } from 'supertest/types';
 import { createRealDbTestApp, truncateAll } from './helpers/real-db-test-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PrismaClient } from '../src/generated/prisma/client';
+import { AnalyticsPublicationService } from '../src/analytics/analytics-publication.service';
+import {
+  IngestionProcessorService,
+  PUBLICATION_UNEXPECTED_FAILURE_MESSAGE,
+} from '../src/ingestion/ingestion-processor.service';
+import type { SourceParserService } from '../src/ingestion/parsers/source-parser.service';
 import { RetentionMaintenanceJob } from '../src/jobs/retention-maintenance.job';
 import { TenantTransactionService } from '../src/prisma/tenant-transaction.service';
 import { JobRunsService } from '../src/jobs/job-runs.service';
@@ -2678,6 +2684,133 @@ describe('Acres API — real database', () => {
         'purged 2 expired export artifact(s)',
         'purged 0 expired export artifact(s)',
       ]);
+    });
+  });
+
+  describe('ingestion unexpected publication failure sanitization', () => {
+    it('stores a fixed safe message when publication fails unexpectedly', async () => {
+      const owner = await signedInAgent('ingestion-sanitize@example.com');
+      const org = await createOrganization(
+        owner,
+        'ingestion-sanitize-org',
+        'Sanitize Org',
+      );
+      const account = await prisma.account.findUniqueOrThrow({
+        where: { email: 'ingestion-sanitize@example.com' },
+        select: { id: true },
+      });
+      const tenants = app.get(TenantTransactionService);
+      const seeded = await tenants.workerScoped(async (tx) => {
+        const object = await tx.storedObject.create({
+          data: {
+            organizationId: org.id,
+            bucket: 'acres-quarantine-test',
+            objectKey: 'ingestion-sanitize.csv',
+            originalFilename: 'ingestion-sanitize.csv',
+            mediaType: 'text/csv',
+            checksumAlgorithm: 'sha256',
+            state: 'accepted',
+          },
+        });
+        const upload = await tx.upload.create({
+          data: {
+            organizationId: org.id,
+            actorAccountId: account.id,
+            storedObjectId: object.id,
+            state: 'accepted',
+            declaredFilename: 'ingestion-sanitize.csv',
+            declaredMediaType: 'text/csv',
+            declaredByteCount: BigInt(14),
+            checksumAlgorithm: 'sha256',
+            presignedUploadExpiresAt: new Date(Date.now() + 3600_000),
+            expiresAt: new Date(Date.now() + 86_400_000),
+          },
+        });
+        const dataset = await tx.dataset.create({
+          data: {
+            organizationId: org.id,
+            ownerAccountId: account.id,
+            name: 'Sanitize Dataset',
+          },
+        });
+        const mapping = await tx.columnMapping.create({
+          data: {
+            organizationId: org.id,
+            datasetId: dataset.id,
+            uploadId: upload.id,
+            createdByAccountId: account.id,
+            versionNumber: 1,
+            mapping: { regionColumn: 'region', metrics: [] },
+          },
+        });
+        const run = await tx.ingestionRun.create({
+          data: {
+            organizationId: org.id,
+            datasetId: dataset.id,
+            uploadId: upload.id,
+            mappingId: mapping.id,
+            actorAccountId: account.id,
+            deterministicKey: 'ingestion-sanitize-key-1',
+          },
+        });
+        return { runId: run.id };
+      });
+
+      const analytics = app.get(AnalyticsPublicationService);
+      const publishSpy = jest
+        .spyOn(analytics, 'publish')
+        .mockRejectedValue(
+          new Error(
+            'duplicate key value violates constraint "MetricObservation_org_key" for key crop_yield',
+          ),
+        );
+      try {
+        const processor = new IngestionProcessorService(
+          tenants,
+          {
+            inspect: () =>
+              Promise.resolve({
+                sourceKind: 'csv',
+                rowCount: 1,
+                columnCount: 1,
+                columnKeys: ['region'],
+                sampleRows: [],
+                validationRows: [],
+                issues: [],
+                metadata: {},
+              }),
+          } as unknown as SourceParserService,
+          analytics,
+          {
+            getBuffer: () => Promise.resolve(Buffer.from('region\nUS-CA\n')),
+          } as unknown as ObjectStoragePort,
+        );
+        await processor.processRun(seeded.runId);
+      } finally {
+        publishSpy.mockRestore();
+      }
+
+      const stored = await tenants.workerScoped((tx) =>
+        tx.ingestionRun.findUnique({ where: { id: seeded.runId } }),
+      );
+      expect(stored?.state).toBe('failed');
+      expect(stored?.failureCode).toBe('analytics_publication_failed');
+      expect(stored?.failureMessage).toBe(
+        PUBLICATION_UNEXPECTED_FAILURE_MESSAGE,
+      );
+      expect(stored?.failureMessage ?? '').not.toContain('crop_yield');
+      expect(stored?.failureMessage ?? '').not.toContain('duplicate key');
+
+      // The publication transaction rolled back: no partial version leaked
+      // and the run links to no version.
+      expect(stored?.datasetVersionId).toBeNull();
+      const versions = await tenants.workerScoped((tx) =>
+        tx.datasetVersion.findMany({
+          where: { organizationId: org.id },
+          select: { id: true },
+        }),
+      );
+      expect(versions).toHaveLength(0);
     });
   });
 

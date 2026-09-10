@@ -39,6 +39,9 @@ interface ParsedObservation {
   }>;
 }
 
+export const PUBLICATION_INCOMPATIBLE_REMAPPING_MESSAGE =
+  'Metric mapping is incompatible with an existing metric definition.';
+
 @Injectable()
 export class AnalyticsPublicationService {
   validateMapping(input: {
@@ -280,9 +283,7 @@ export class AnalyticsPublicationService {
           existing.canonicalUnit !== metric.unit.trim() ||
           existing.allowedAggregation !== metric.aggregation)
       ) {
-        throw new Error(
-          'Metric mapping is incompatible with an existing metric definition.',
-        );
+        throw new Error(PUBLICATION_INCOMPATIBLE_REMAPPING_MESSAGE);
       }
       const stored = await tx.metricDefinition.upsert({
         where: {

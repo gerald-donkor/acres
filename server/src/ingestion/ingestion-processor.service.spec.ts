@@ -334,6 +334,48 @@ describe('IngestionProcessorService - Parser Failure Outcomes', () => {
     ).not.toContain('crop_yield');
   });
 
+  it('maps unexpected publication errors to a fixed safe message', async () => {
+    (fakeParsers.inspect as jest.Mock).mockResolvedValue(validSummary());
+    (
+      fakeAnalytics.validateRemappingCompatibility as jest.Mock
+    ).mockResolvedValue([]);
+    (fakeAnalytics.publish as jest.Mock).mockRejectedValue(
+      new Error(
+        'duplicate key value violates constraint "MetricObservation_org_key" for key crop_yield',
+      ),
+    );
+
+    await processor.processRun('run-123');
+
+    expect(runUpdated).toMatchObject({
+      state: 'failed',
+      failureCode: 'analytics_publication_failed',
+      failureMessage: 'Analytics publication failed unexpectedly.',
+    });
+    expect(
+      (runUpdated as { failureMessage: string }).failureMessage,
+    ).not.toContain('crop_yield');
+    expect(
+      (runUpdated as { failureMessage: string }).failureMessage,
+    ).not.toContain('duplicate key');
+  });
+
+  it('maps non-Error publication rejections to the same fixed message', async () => {
+    (fakeParsers.inspect as jest.Mock).mockResolvedValue(validSummary());
+    (
+      fakeAnalytics.validateRemappingCompatibility as jest.Mock
+    ).mockResolvedValue([]);
+    (fakeAnalytics.publish as jest.Mock).mockRejectedValue('boom');
+
+    await processor.processRun('run-123');
+
+    expect(runUpdated).toMatchObject({
+      state: 'failed',
+      failureCode: 'analytics_publication_failed',
+      failureMessage: 'Analytics publication failed unexpectedly.',
+    });
+  });
+
   it('leaves storage failure on operational failed path without creating validation issues', async () => {
     (fakeStorage.getBuffer as jest.Mock).mockResolvedValue(null);
 

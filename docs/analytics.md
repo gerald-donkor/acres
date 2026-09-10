@@ -73,7 +73,11 @@ one mapping yields at most one incompatibility issue; duplicate keys are
 reported separately by `metric_key_duplicate`. The mid-transaction
 throw in `upsertMetricDefinitions` remains only as a non-enumerated race guard
 for a definition that changes between validation and publication; its message
-is fixed and carries no key material.
+is the exported `PUBLICATION_INCOMPATIBLE_REMAPPING_MESSAGE` constant, fixed
+and carrying no key material. Any other unexpected publication error is stored
+as `failed` / `analytics_publication_failed` with the fixed safe
+`PUBLICATION_UNEXPECTED_FAILURE_MESSAGE` (see `docs/ingestion.md` § Worker
+publication flow); the original error is logged server-side only.
 Numeric values are returned from the REST API as decimal strings rather than
 JSON numbers for the same reason.
 

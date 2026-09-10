@@ -1,5 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { AnalyticsPublicationService } from '../analytics/analytics-publication.service';
+import {
+  AnalyticsPublicationService,
+  PUBLICATION_INCOMPATIBLE_REMAPPING_MESSAGE,
+} from '../analytics/analytics-publication.service';
 import {
   malformedMetricMappingIssues,
   parseAnalyticsMapping,
@@ -12,6 +15,14 @@ import {
 } from '../storage/storage.port';
 import type { ParserIssue, ParsedSourceSummary } from './parsers/parser.types';
 import { SourceParserService } from './parsers/source-parser.service';
+
+/**
+ * Stored when publication fails for an unexpected reason. The original error
+ * is logged server-side only; tenant-visible run status must never carry raw
+ * exception text (constraint names, keys, paths, or file excerpts).
+ */
+export const PUBLICATION_UNEXPECTED_FAILURE_MESSAGE =
+  'Analytics publication failed unexpectedly.';
 
 @Injectable()
 export class IngestionProcessorService {
@@ -213,13 +224,22 @@ export class IngestionProcessorService {
         },
       );
     } catch (error) {
-      await this.fail(
-        reserved,
-        'analytics_publication_failed',
-        error instanceof Error
-          ? error.message
-          : 'Analytics publication failed.',
-      );
+      const raw = error instanceof Error ? error.message : null;
+      if (raw === PUBLICATION_INCOMPATIBLE_REMAPPING_MESSAGE) {
+        await this.fail(reserved, 'analytics_publication_failed', raw);
+      } else {
+        this.logger.warn(
+          `Ingestion run ${reserved.id} publication failed unexpectedly: ` +
+            (error instanceof Error
+              ? (error.stack ?? error.message)
+              : String(error)),
+        );
+        await this.fail(
+          reserved,
+          'analytics_publication_failed',
+          PUBLICATION_UNEXPECTED_FAILURE_MESSAGE,
+        );
+      }
     }
   }
 
