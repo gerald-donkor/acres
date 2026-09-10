@@ -598,6 +598,12 @@ export class ReportsService {
       if (row === null || row.status !== 'succeeded' || row.artifact === null) {
         throw ApiException.notFound('Completed export artifact not found.');
       }
+      // Request-level TTL is enforced here; the hourly job only reclaims
+      // bytes. `<=` matches the purge selection; `NULL` serves
+      // (legacy-tolerant, purge-consistent).
+      if (row.expiresAt !== null && row.expiresAt <= new Date()) {
+        throw ApiException.notFound('Completed export artifact not found.');
+      }
       const signed = await this.storage.presignGet({
         key: row.artifact.storedObject.objectKey,
         filename: row.artifact.filename,

@@ -2519,12 +2519,30 @@ describe('Acres API — real database', () => {
         expiresAt: new Date(Date.now() + 60_000),
       });
 
-      // Sanity: while the artifact row exists the download is served, and
-      // cross-organization metadata reads stay denied under forced RLS.
-      await first.agent
+      // Read-path enforcement: an expired download fails closed with
+      // NOT_FOUND before any purge tick, before any presigned URL is minted,
+      // while the unexpired download still serves. Cross-organization reads stay denied under
+      // forced RLS.
+      const expiredDownload = await first.agent
         .get(`/api/v1/exports/${expiredA.requestId}/download`)
         .set('x-acres-organization-id', orgA.id)
+        .expect(404);
+      expect(expiredDownload.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+      await first.agent
+        .get(`/api/v1/exports/${freshA.requestId}/download`)
+        .set('x-acres-organization-id', orgA.id)
         .expect(200);
+      const foreignDownload = await second.agent
+        .get(`/api/v1/exports/${freshA.requestId}/download`)
+        .set('x-acres-organization-id', orgB.id)
+        .expect(404);
+      expect(foreignDownload.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
       const foreignMeta = await second.agent
         .get(`/api/v1/exports/${expiredA.requestId}`)
         .set('x-acres-organization-id', orgB.id)

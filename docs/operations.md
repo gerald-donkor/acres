@@ -311,7 +311,9 @@ Data retention jobs run automatically on the worker process (`SCHEDULER_ENABLED=
   rows but carry no artifact, so the artifact-bearing scan skips them on later
   ticks. `ExportRequest` audit rows are retained, published report revisions
   are untouched, and a purged download fails closed on the pre-existing
-  `NOT_FOUND` read path. Unexpectedly shared stored objects are skipped with a
+  `NOT_FOUND` read path (prompt 71: the download read path also enforces
+  `expiresAt <= now` with the same `NOT_FOUND` before any presigned URL is
+  minted, so the tick remains byte reclamation only). Unexpectedly shared stored objects are skipped with a
   warning rather than orphaned.
 All runs are logged to the `JobRun` audit table.
 

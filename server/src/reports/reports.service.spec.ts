@@ -224,7 +224,7 @@ describe('ReportsService', () => {
     failureMessage: null,
     startedAt: now,
     finishedAt: now,
-    expiresAt: new Date('2026-01-01T01:00:00.000Z'),
+    expiresAt: new Date('2027-01-01T01:00:00.000Z'),
     createdAt: now,
     updatedAt: now,
     artifact: {
@@ -1702,6 +1702,74 @@ describe('ReportsService', () => {
       ).rejects.toThrow(
         ApiException.notFound('Completed export artifact not found.'),
       );
+    });
+
+    it('throws not found for an expired succeeded export without minting a URL', async () => {
+      mockTx.exportRequest.findFirst.mockResolvedValueOnce({
+        ...sampleExportRow,
+        status: 'succeeded',
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      await expect(
+        service.downloadExport(orgContext, sampleExportRow.id),
+      ).rejects.toThrow(
+        ApiException.notFound('Completed export artifact not found.'),
+      );
+      expect(fakeStorage.presignGet).not.toHaveBeenCalled();
+    });
+
+    it('serves an unexpired succeeded export', async () => {
+      mockTx.exportRequest.findFirst.mockResolvedValueOnce({
+        ...sampleExportRow,
+        status: 'succeeded',
+        expiresAt: new Date(Date.now() + 3_600_000),
+      });
+
+      const result = await service.downloadExport(
+        orgContext,
+        sampleExportRow.id,
+      );
+
+      expect(fakeStorage.presignGet).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({
+        url: 'https://storage.local/download/report.csv?signature=abc',
+        method: 'GET',
+      });
+    });
+
+    it('serves a succeeded export with null expiry (legacy-tolerant)', async () => {
+      mockTx.exportRequest.findFirst.mockResolvedValueOnce({
+        ...sampleExportRow,
+        status: 'succeeded',
+        expiresAt: null,
+      });
+
+      const result = await service.downloadExport(
+        orgContext,
+        sampleExportRow.id,
+      );
+
+      expect(fakeStorage.presignGet).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({
+        url: 'https://storage.local/download/report.csv?signature=abc',
+        method: 'GET',
+      });
+    });
+
+    it('fails closed when expiry is at or just before now', async () => {
+      mockTx.exportRequest.findFirst.mockResolvedValueOnce({
+        ...sampleExportRow,
+        status: 'succeeded',
+        expiresAt: new Date(Date.now() - 1_000),
+      });
+
+      await expect(
+        service.downloadExport(orgContext, sampleExportRow.id),
+      ).rejects.toThrow(
+        ApiException.notFound('Completed export artifact not found.'),
+      );
+      expect(fakeStorage.presignGet).not.toHaveBeenCalled();
     });
   });
 

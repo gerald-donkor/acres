@@ -178,9 +178,9 @@ migrator role after the new migration was added.
   `exports.purge-expired` retention job (prompt 70: deletes the `ExportArtifact`
   row and marks its `StoredObject` deleted for `succeeded` requests past
   `expiresAt`; request audit rows and published revisions are retained).
-  Note the enforcement boundary: the download read path serves while the
-  artifact row exists and does not itself compare `expiresAt`, so an expired
-  artifact remains downloadable until the next hourly tick purges it.
+  The download read path now enforces `expiresAt <= now` with the pre-existing
+  `NOT_FOUND` failure before any presigned URL is minted (`NULL` serves,
+  purge-consistent); the hourly job remains byte reclamation only.
   Sharing, collaboration, public links, scheduled exports, and
   operator-decided retention windows remain future phases or open decisions
   (Phase 11A covers grounded AI-assisted drafting).
