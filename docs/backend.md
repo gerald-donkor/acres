@@ -457,6 +457,12 @@ All five scheduled-maintenance failure paths (`sessions`, `uploads`,
 `JobRun.message` with the original error in server logs only (prompts 72–76
 rule).
 
+Each of the five hourly purges reclaims at most `RETENTION_PURGE_BATCH_LIMIT`
+(500) rows per purge path per tick — 500 tokens plus 500 invitations on the
+tokens tick — oldest `expiresAt` first via bounded id-scoped writes, so
+a backlog drains across ticks instead of in one statement (prompt 79
+generalizes the prompt-70 exports bound to all purges).
+
 ---
 
 ## 8. Prisma
@@ -488,7 +494,10 @@ The hourly purge (§7) matches on `expiresAt < now` **OR** `revokedAt IS NOT
 NULL`, and Postgres cannot use a single index across an `OR` — so that job is a
 sequential scan of `Session` by design. At the scale this table reaches before
 the next backend prompt that is cheaper than maintaining two partial indexes for
-an hourly job; it is a recorded decision, not an oversight.
+an hourly job; it is a recorded decision, not an oversight. The scan is bounded
+to `RETENTION_PURGE_BATCH_LIMIT` (500) ids per tick, oldest `expiresAt` first;
+revoked-but-unexpired rows sort after expired rows under that key — still
+bounded, still drains, same predicate.
 
 **IDs are `@default(uuid(7))`.** UUIDv7 is time-ordered, so inserts land at the
 end of the B-tree instead of scattering across it the way UUIDv4 does — the

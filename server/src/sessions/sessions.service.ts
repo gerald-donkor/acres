@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcresConfigService } from '../config/acres-config.service';
+import { RETENTION_PURGE_BATCH_LIMIT } from '../jobs/retention-maintenance.job';
 import { toAccountProfile } from '../accounts/account-profile';
 import type { SessionContext } from './authenticated-request';
 import { hashToken, issueRawToken } from '../common/tokens';
@@ -85,12 +86,25 @@ export class SessionsService {
    * it is revoked, whatever cutoff is passed. Postgres cannot index across the
    * `OR`, so this is a sequential scan; at the scale this table will reach
    * before the next backend prompt, that is cheaper than the alternatives.
+   *
+   * Each tick reclaims at most `RETENTION_PURGE_BATCH_LIMIT` rows,
+   * oldest `expiresAt` first, so a backlog drains across ticks instead of in
+   * one statement. Revoked-but-unexpired rows sort after expired rows under
+   * that key — still bounded, still drains, same predicate, no row left
+   * behind forever.
    */
   async purgeExpired(before: Date = new Date()): Promise<number> {
-    const { count } = await this.prisma.session.deleteMany({
+    const expired = await this.prisma.session.findMany({
       where: {
         OR: [{ expiresAt: { lt: before } }, { revokedAt: { not: null } }],
       },
+      select: { id: true },
+      orderBy: { expiresAt: 'asc' },
+      take: RETENTION_PURGE_BATCH_LIMIT,
+    });
+    if (expired.length === 0) return 0;
+    const { count } = await this.prisma.session.deleteMany({
+      where: { id: { in: expired.map((row) => row.id) } },
     });
     return count;
   }

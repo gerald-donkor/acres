@@ -299,6 +299,10 @@ Run `scripts/ops/backup-postgres.sh` with `PGPASSWORD` and destination configure
 ### Data Retention & Cleanup
 
 Data retention jobs run automatically on the worker process (`SCHEDULER_ENABLED=true`):
+Each purge reclaims at most `RETENTION_PURGE_BATCH_LIMIT` (500) rows per purge
+path per hourly tick — 500 tokens plus 500 invitations on the tokens tick —
+oldest `expiresAt` first via bounded id-scoped writes, so backlogs drain
+across ticks (prompt 79 generalizes the prompt-70 exports bound to all purges).
 - `sessions.purge-expired`: cleans expired session tokens.
 - `uploads.purge-expired`: cleans uncompleted uploads and pending quarantine objects older than configured TTL.
 - `idempotency.purge-expired`: cleans idempotency records past retention window.

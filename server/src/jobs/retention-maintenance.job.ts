@@ -26,10 +26,12 @@ export const EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE =
   'Export purge failed unexpectedly.';
 
 /**
- * Maximum expired export requests reclaimed per hourly tick. The next tick
- * repeats the bounded scan, so a backlog drains without an unbounded query.
+ * Maximum rows reclaimed per hourly tick, shared by all five retention purges
+ * (sessions via SessionsService, uploads, idempotency, tokens, exports). The
+ * next tick repeats the bounded oldest-expiry-first scan, so a backlog drains
+ * without an unbounded query.
  */
-export const EXPORTS_PURGE_BATCH_LIMIT = 500;
+export const RETENTION_PURGE_BATCH_LIMIT = 500;
 
 /**
  * Scheduled maintenance jobs for data retention and garbage collection.
@@ -69,6 +71,8 @@ export class RetentionMaintenanceJob {
             expiresAt: { lte: now },
           },
           select: { id: true, storedObjectId: true },
+          orderBy: { expiresAt: 'asc' },
+          take: RETENTION_PURGE_BATCH_LIMIT,
         });
         if (expired.length === 0) return 0;
         const uploadIds = expired.map((u) => u.id);
@@ -116,10 +120,19 @@ export class RetentionMaintenanceJob {
 
     try {
       const now = new Date();
-      const result = await this.prisma.idempotencyRecord.deleteMany({
+      const expired = await this.prisma.idempotencyRecord.findMany({
         where: { expiresAt: { lte: now } },
+        select: { id: true },
+        orderBy: { expiresAt: 'asc' },
+        take: RETENTION_PURGE_BATCH_LIMIT,
       });
-      const count = result.count;
+      let count = 0;
+      if (expired.length > 0) {
+        const result = await this.prisma.idempotencyRecord.deleteMany({
+          where: { id: { in: expired.map((row) => row.id) } },
+        });
+        count = result.count;
+      }
       await this.runs.finish(
         runId,
         'succeeded',
@@ -151,14 +164,52 @@ export class RetentionMaintenanceJob {
 
     try {
       const now = new Date();
-      const [tokenResult, invitationResult] = await this.prisma.$transaction([
-        this.prisma.accountToken.deleteMany({
+      const [expiredTokens, expiredInvitations] = await Promise.all([
+        this.prisma.accountToken.findMany({
           where: { expiresAt: { lte: now } },
+          select: { id: true },
+          orderBy: { expiresAt: 'asc' },
+          take: RETENTION_PURGE_BATCH_LIMIT,
         }),
-        this.prisma.invitation.deleteMany({
+        this.prisma.invitation.findMany({
           where: { expiresAt: { lte: now } },
+          select: { id: true },
+          orderBy: { expiresAt: 'asc' },
+          take: RETENTION_PURGE_BATCH_LIMIT,
         }),
       ]);
+      const tokenIds = expiredTokens.map((row) => row.id);
+      const invitationIds = expiredInvitations.map((row) => row.id);
+      let tokenCount = 0;
+      let invitationCount = 0;
+      if (tokenIds.length > 0 && invitationIds.length > 0) {
+        const [tokenResult, invitationResult] = await this.prisma.$transaction([
+          this.prisma.accountToken.deleteMany({
+            where: { id: { in: tokenIds } },
+          }),
+          this.prisma.invitation.deleteMany({
+            where: { id: { in: invitationIds } },
+          }),
+        ]);
+        tokenCount = tokenResult.count;
+        invitationCount = invitationResult.count;
+      } else if (tokenIds.length > 0) {
+        const [tokenResult] = await this.prisma.$transaction([
+          this.prisma.accountToken.deleteMany({
+            where: { id: { in: tokenIds } },
+          }),
+        ]);
+        tokenCount = tokenResult.count;
+      } else if (invitationIds.length > 0) {
+        const [invitationResult] = await this.prisma.$transaction([
+          this.prisma.invitation.deleteMany({
+            where: { id: { in: invitationIds } },
+          }),
+        ]);
+        invitationCount = invitationResult.count;
+      }
+      const tokenResult = { count: tokenCount };
+      const invitationResult = { count: invitationCount };
       await this.runs.finish(
         runId,
         'succeeded',
@@ -204,7 +255,7 @@ export class RetentionMaintenanceJob {
           },
           select: { id: true },
           orderBy: { expiresAt: 'asc' },
-          take: EXPORTS_PURGE_BATCH_LIMIT,
+          take: RETENTION_PURGE_BATCH_LIMIT,
         });
         if (expired.length === 0) return 0;
         const requestIds = expired.map((request) => request.id);
