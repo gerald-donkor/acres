@@ -2128,7 +2128,11 @@ accepts only the fixed `object_missing` / `scanner_unavailable` /
 union plus the `'infected'` / `'failed'` status fallbacks (compile-time
 guard; runtime values unchanged). Outbox dispatch attempts that exhaust their configured
 maximum are marked `dead_lettered` with visible `JobDeadLetter` evidence instead
-of remaining stuck in `retrying`. Worker/outbox reads use a transaction-local
+of remaining stuck in `retrying`. `OutboxService.markRetry` accepts only the
+fixed `queue_unavailable` code and `markDeadLetter` accepts only the fixed
+`queue_unavailable` / `'Outbox dispatch attempts exhausted.'` pair
+(compile-time guard; runtime values unchanged; raw queue text stays
+server-log-only). Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant
 transactions clear it. Parser budgets are left for the ingestion phase.
 

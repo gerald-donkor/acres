@@ -16,6 +16,12 @@ export interface ClaimedOutboxEvent {
   readonly maxAttempts: number;
 }
 
+export const OUTBOX_DISPATCH_EXHAUSTED_CODE = 'queue_unavailable' as const;
+export const OUTBOX_DISPATCH_EXHAUSTED_MESSAGE =
+  'Outbox dispatch attempts exhausted.' as const;
+export type OutboxFailureCode = typeof OUTBOX_DISPATCH_EXHAUSTED_CODE;
+export type OutboxFailureMessage = typeof OUTBOX_DISPATCH_EXHAUSTED_MESSAGE;
+
 @Injectable()
 export class OutboxService {
   private readonly workerId = `worker-${randomUUID()}`;
@@ -100,7 +106,7 @@ export class OutboxService {
     });
   }
 
-  async markRetry(id: string, code: string): Promise<void> {
+  async markRetry(id: string, code: OutboxFailureCode): Promise<void> {
     await this.tenants.workerScoped(async (tx) => {
       await tx.outboxEvent.update({
         where: { id },
@@ -119,8 +125,8 @@ export class OutboxService {
     id: string,
     input: {
       organizationId: string | null;
-      reasonCode: string;
-      reasonMessage: string;
+      reasonCode: OutboxFailureCode;
+      reasonMessage: OutboxFailureMessage;
       payload?: unknown;
     },
   ): Promise<void> {

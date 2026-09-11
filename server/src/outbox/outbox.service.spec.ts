@@ -231,16 +231,16 @@ describe('OutboxService', () => {
     it('handles nullable organizationId when recording dead letter', async () => {
       await service.markDeadLetter('evt-2', {
         organizationId: null,
-        reasonCode: 'payload_malformed',
-        reasonMessage: 'Event payload was corrupted.',
+        reasonCode: 'queue_unavailable',
+        reasonMessage: 'Outbox dispatch attempts exhausted.',
       });
 
       expect(mockTx.jobDeadLetter.create).toHaveBeenCalledWith({
         data: {
           organizationId: null,
           outboxEventId: 'evt-2',
-          reasonCode: 'payload_malformed',
-          reasonMessage: 'Event payload was corrupted.',
+          reasonCode: 'queue_unavailable',
+          reasonMessage: 'Outbox dispatch attempts exhausted.',
           payload: undefined,
         },
       });
