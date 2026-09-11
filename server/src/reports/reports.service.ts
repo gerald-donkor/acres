@@ -879,10 +879,21 @@ export class ReportsService {
   }
 }
 
+export const EXPORT_MISSING_REVISION_CODE = 'missing_revision' as const;
+export const EXPORT_MISSING_REVISION_MESSAGE =
+  'Published revision not found.' as const;
+export const EXPORT_RENDER_FAILED_CODE = 'render_failed' as const;
+export const EXPORT_RENDER_FAILED_MESSAGE = 'Export rendering failed.' as const;
+
+type ExportFailureCode =
+  typeof EXPORT_MISSING_REVISION_CODE | typeof EXPORT_RENDER_FAILED_CODE;
+type ExportFailureMessage =
+  typeof EXPORT_MISSING_REVISION_MESSAGE | typeof EXPORT_RENDER_FAILED_MESSAGE;
+
 class ExportFailure extends Error {
   constructor(
-    readonly code: string,
-    message: string,
+    readonly code: ExportFailureCode,
+    message: ExportFailureMessage,
   ) {
     super(message);
   }

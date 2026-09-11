@@ -94,7 +94,9 @@ output is generated from deterministic text content with escaped PDF strings,
 a minimal xref table, and `startxref`; no HTML, SVG, script, or
 user-controlled object path is executed. Object storage upload checksums are
 sent to S3-compatible storage as base64 SHA-256 while the Acres metadata rows
-retain the hex digest used elsewhere in the product.
+retain the hex digest used elsewhere in the product. `ExportFailure` accepts
+only the fixed `missing_revision` / `render_failed` code/message union
+(compile-time guard; runtime values unchanged).
 
 ## Client UI
 
