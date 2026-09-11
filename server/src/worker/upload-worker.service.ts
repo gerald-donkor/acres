@@ -250,12 +250,20 @@ export class UploadWorkerService {
               data: { state: 'accepted' },
             });
           } else {
+            // Server logs only. The raw scanner signature must never sit in
+            // a durable column (same rule as prompts 72-75).
+            this.logger.warn(
+              `Upload rejected by malware scan for upload ${upload.id} org ${upload.organizationId} job ${durableJob.id}: ${scan.status}/${scan.signature ?? scan.errorCode ?? scan.status}`,
+            );
             await tx.upload.update({
               where: { id: upload.id },
               data: {
                 state: 'rejected',
                 scanStatus: scan.status,
-                scanResult: scan.signature ?? scan.errorCode ?? scan.status,
+                scanResult:
+                  scan.status === 'infected'
+                    ? 'infected'
+                    : (scan.errorCode ?? scan.status),
                 failureCode: scan.errorCode ?? scan.status,
                 failureMessage: 'Upload did not pass malware scanning.',
                 progressStage: 'rejected',

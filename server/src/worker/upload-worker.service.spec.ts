@@ -468,44 +468,70 @@ describe('UploadWorkerService', () => {
       );
       (fakeScanner.scanBuffer as jest.Mock).mockResolvedValueOnce({
         status: 'infected',
-        signature: 'Win.Test.EICAR_HDB-1',
+        signature: 'Win.Test.EICAR_HDB-1 organizations/org-1/quarantine/secret',
       });
+      const loggerWarn = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
 
-      await service.process({ uploadId: 'upload-1' });
+      try {
+        await service.process({ uploadId: 'upload-1' });
 
-      expect(mockOrgTx.upload.update).toHaveBeenNthCalledWith(2, {
-        where: { id: 'upload-1' },
-        data: {
-          state: 'rejected',
-          scanStatus: 'infected',
-          scanResult: 'Win.Test.EICAR_HDB-1',
-          failureCode: 'infected',
-          failureMessage: 'Upload did not pass malware scanning.',
-          progressStage: 'rejected',
-          progressPercent: 100,
-        },
-      });
-      expect(mockOrgTx.storedObject.update).toHaveBeenCalledWith({
-        where: { id: 'obj-1' },
-        data: { state: 'rejected' },
-      });
-      expect(mockWorkerTx.durableJob.update).toHaveBeenCalledWith({
-        where: { id: 'dj-1' },
-        data: expect.objectContaining({
-          state: 'failed',
-          lastErrorCode: 'infected',
-          lastErrorMessage: 'Upload did not pass malware scanning.',
-        }) as unknown,
-      });
-      expect(mockWorkerTx.jobDeadLetter.create).toHaveBeenCalledWith({
-        data: {
-          organizationId: 'org-1',
-          durableJobId: 'dj-1',
-          reasonCode: 'infected',
-          reasonMessage: 'Upload did not pass malware scanning.',
-          payload: { uploadId: 'upload-1' },
-        },
-      });
+        expect(mockOrgTx.upload.update).toHaveBeenNthCalledWith(2, {
+          where: { id: 'upload-1' },
+          data: {
+            state: 'rejected',
+            scanStatus: 'infected',
+            scanResult: 'infected',
+            failureCode: 'infected',
+            failureMessage: 'Upload did not pass malware scanning.',
+            progressStage: 'rejected',
+            progressPercent: 100,
+          },
+        });
+        const rejectedUpdate = (
+          mockOrgTx.upload.update.mock.calls as unknown as Array<
+            [{ where: { id: string }; data: { scanResult: string } }]
+          >
+        )[1][0];
+        expect(rejectedUpdate.data.scanResult).toBe('infected');
+        expect(rejectedUpdate.data.scanResult).not.toContain(
+          'Win.Test.EICAR_HDB-1',
+        );
+        expect(rejectedUpdate.data.scanResult).not.toContain(
+          'quarantine/secret',
+        );
+        expect(mockOrgTx.storedObject.update).toHaveBeenCalledWith({
+          where: { id: 'obj-1' },
+          data: { state: 'rejected' },
+        });
+        expect(mockWorkerTx.durableJob.update).toHaveBeenCalledWith({
+          where: { id: 'dj-1' },
+          data: expect.objectContaining({
+            state: 'failed',
+            lastErrorCode: 'infected',
+            lastErrorMessage: 'Upload did not pass malware scanning.',
+          }) as unknown,
+        });
+        expect(mockWorkerTx.jobDeadLetter.create).toHaveBeenCalledWith({
+          data: {
+            organizationId: 'org-1',
+            durableJobId: 'dj-1',
+            reasonCode: 'infected',
+            reasonMessage: 'Upload did not pass malware scanning.',
+            payload: { uploadId: 'upload-1' },
+          },
+        });
+        expect(loggerWarn).toHaveBeenCalled();
+        expect(String(loggerWarn.mock.calls[0][0])).toContain(
+          'Win.Test.EICAR_HDB-1',
+        );
+        expect(String(loggerWarn.mock.calls[0][0])).toContain(
+          'quarantine/secret',
+        );
+      } finally {
+        loggerWarn.mockRestore();
+      }
     });
 
     it('fails closed when object is missing from storage', async () => {

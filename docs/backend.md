@@ -2098,7 +2098,9 @@ fail-closed, observes cancellation before final state, and drains on
 the fixed `WORKER_EXCEPTION_MESSAGE` in both `DurableJob.lastErrorMessage` and
 `JobDeadLetter.reasonMessage` with the original error in server logs only
 (prompts 72/73/74 rule: raw storage/endpoint/library detail never sits in a
-durable message column). Outbox dispatch attempts that exhaust their configured
+durable message column). The infected-scan `Upload.scanResult` persists the
+bounded `'infected'` status (failed-scan values were already bounded codes)
+with the raw ClamAV signature in server logs only. Outbox dispatch attempts that exhaust their configured
 maximum are marked `dead_lettered` with visible `JobDeadLetter` evidence instead
 of remaining stuck in `retrying`. Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant
