@@ -7,6 +7,15 @@ import { JobRunsService } from './job-runs.service';
 export const SESSION_MAINTENANCE_JOB = 'sessions.purge-expired';
 
 /**
+ * Stored on the durable `JobRun.message` row when the session purge throws
+ * unexpectedly. The original error is logged server-side only; durable message
+ * columns must never carry raw exception text (database connection or
+ * transaction internals).
+ */
+export const SESSION_PURGE_UNEXPECTED_FAILURE_MESSAGE =
+  'Session purge failed unexpectedly.';
+
+/**
  * The one scheduled job this step ships. It does real bookkeeping — expired
  * session rows can never authenticate anything again — and it proves the
  * scheduler, the `JobRun` table and the failure path are wired.
@@ -53,7 +62,7 @@ export class SessionMaintenanceJob {
       const message = describe(error);
       this.logger.error(`Session purge failed: ${message}`);
       await this.runs
-        .finish(runId, 'failed', message)
+        .finish(runId, 'failed', SESSION_PURGE_UNEXPECTED_FAILURE_MESSAGE)
         .catch(() => this.logger.error('Could not record the failed job run'));
     }
   }

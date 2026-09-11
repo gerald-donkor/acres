@@ -446,6 +446,11 @@ one and deliberately does not exist: no data provider has been chosen, and
 stubbing one would put fake regional intelligence in the database. The comps'
 figures are illustration (`AGENTS.md` §8); nothing here fabricates them.
 
+All five scheduled-maintenance failure paths (`sessions`, `uploads`,
+`idempotency`, `tokens`, `exports` purges) persist a fixed safe
+`JobRun.message` with the original error in server logs only (prompts 72–76
+rule).
+
 ---
 
 ## 8. Prisma

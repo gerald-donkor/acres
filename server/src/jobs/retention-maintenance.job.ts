@@ -11,6 +11,21 @@ export const TOKENS_RETENTION_JOB = 'tokens.purge-expired';
 export const EXPORTS_RETENTION_JOB = 'exports.purge-expired';
 
 /**
+ * Stored on the durable `JobRun.message` row when a retention purge throws
+ * unexpectedly. The original error is logged server-side only; durable message
+ * columns must never carry raw exception text (database connection or
+ * transaction internals).
+ */
+export const UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE =
+  'Upload purge failed unexpectedly.';
+export const IDEMPOTENCY_PURGE_UNEXPECTED_FAILURE_MESSAGE =
+  'Idempotency purge failed unexpectedly.';
+export const TOKEN_PURGE_UNEXPECTED_FAILURE_MESSAGE =
+  'Token purge failed unexpectedly.';
+export const EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE =
+  'Export purge failed unexpectedly.';
+
+/**
  * Maximum expired export requests reclaimed per hourly tick. The next tick
  * repeats the bounded scan, so a backlog drains without an unbounded query.
  */
@@ -80,7 +95,7 @@ export class RetentionMaintenanceJob {
       const message = describe(error);
       this.logger.error(`Upload purge failed: ${message}`);
       await this.runs
-        .finish(runId, 'failed', message)
+        .finish(runId, 'failed', UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE)
         .catch(() => this.logger.error('Could not record failed job run'));
     }
   }
@@ -115,7 +130,7 @@ export class RetentionMaintenanceJob {
       const message = describe(error);
       this.logger.error(`Idempotency purge failed: ${message}`);
       await this.runs
-        .finish(runId, 'failed', message)
+        .finish(runId, 'failed', IDEMPOTENCY_PURGE_UNEXPECTED_FAILURE_MESSAGE)
         .catch(() => this.logger.error('Could not record failed job run'));
     }
   }
@@ -156,7 +171,7 @@ export class RetentionMaintenanceJob {
       const message = describe(error);
       this.logger.error(`Token purge failed: ${message}`);
       await this.runs
-        .finish(runId, 'failed', message)
+        .finish(runId, 'failed', TOKEN_PURGE_UNEXPECTED_FAILURE_MESSAGE)
         .catch(() => this.logger.error('Could not record failed job run'));
     }
   }
@@ -292,7 +307,7 @@ export class RetentionMaintenanceJob {
       const message = describe(error);
       this.logger.error(`Export purge failed: ${message}`);
       await this.runs
-        .finish(runId, 'failed', message)
+        .finish(runId, 'failed', EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE)
         .catch(() => this.logger.error('Could not record failed job run'));
     }
   }

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   RetentionMaintenanceJob,
   UPLOADS_RETENTION_JOB,
@@ -5,6 +6,10 @@ import {
   TOKENS_RETENTION_JOB,
   EXPORTS_RETENTION_JOB,
   EXPORTS_PURGE_BATCH_LIMIT,
+  UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+  IDEMPOTENCY_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+  TOKEN_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+  EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE,
 } from './retention-maintenance.job';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { TenantTransactionService } from '../prisma/tenant-transaction.service';
@@ -150,10 +155,42 @@ describe('RetentionMaintenanceJob', () => {
       );
     });
 
-    it('records failed job run when database transaction throws', async () => {
+    it('records a fixed message when the database transaction throws', async () => {
       (fakeTenants.workerScoped as jest.Mock).mockRejectedValueOnce(
-        new Error('DB deadlock'),
+        new Error(
+          'DB deadlock on connection postgres://acres:secret@db:5432/acres for key uploads/upload-1',
+        ),
       );
+      const prisma = {} as unknown as PrismaService;
+      const job = new RetentionMaintenanceJob(
+        prisma,
+        fakeTenants as TenantTransactionService,
+        runs as unknown as JobRunsService,
+        config as unknown as AcresConfigService,
+      );
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      try {
+        await job.purgeExpiredUploads();
+        expect(runs.finish).toHaveBeenCalledWith(
+          'run-123',
+          'failed',
+          UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+        );
+        const stored = runs.finish.mock.calls[0][2] as string;
+        expect(stored).not.toContain('postgres://');
+        expect(stored).not.toContain('uploads/upload-1');
+        expect(loggerError).toHaveBeenCalled();
+        expect(String(loggerError.mock.calls[0][0])).toContain('DB deadlock');
+      } finally {
+        loggerError.mockRestore();
+      }
+    });
+
+    it('records the same fixed message for a non-Error upload throw', async () => {
+      (fakeTenants.workerScoped as jest.Mock).mockRejectedValueOnce('boom');
       const prisma = {} as unknown as PrismaService;
       const job = new RetentionMaintenanceJob(
         prisma,
@@ -166,7 +203,7 @@ describe('RetentionMaintenanceJob', () => {
       expect(runs.finish).toHaveBeenCalledWith(
         'run-123',
         'failed',
-        'DB deadlock',
+        UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE,
       );
     });
   });
@@ -198,12 +235,51 @@ describe('RetentionMaintenanceJob', () => {
       );
     });
 
-    it('records failed job run when idempotency delete throws', async () => {
+    it('records a fixed message when idempotency delete throws', async () => {
       const prisma = {
         idempotencyRecord: {
           deleteMany: jest
             .fn()
-            .mockRejectedValueOnce(new Error('Connection lost')),
+            .mockRejectedValueOnce(
+              new Error(
+                'Connection lost to postgres://acres:secret@db:5432/acres for key idempotency/req-1',
+              ),
+            ),
+        },
+      };
+      const job = new RetentionMaintenanceJob(
+        prisma as unknown as PrismaService,
+        fakeTenants as TenantTransactionService,
+        runs as unknown as JobRunsService,
+        config as unknown as AcresConfigService,
+      );
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      try {
+        await job.purgeExpiredIdempotency();
+        expect(runs.finish).toHaveBeenCalledWith(
+          'run-123',
+          'failed',
+          IDEMPOTENCY_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+        );
+        const stored = runs.finish.mock.calls[0][2] as string;
+        expect(stored).not.toContain('postgres://');
+        expect(stored).not.toContain('idempotency/req-1');
+        expect(loggerError).toHaveBeenCalled();
+        expect(String(loggerError.mock.calls[0][0])).toContain(
+          'Connection lost',
+        );
+      } finally {
+        loggerError.mockRestore();
+      }
+    });
+
+    it('records the same fixed message for a non-Error idempotency throw', async () => {
+      const prisma = {
+        idempotencyRecord: {
+          deleteMany: jest.fn().mockRejectedValueOnce('boom'),
         },
       };
       const job = new RetentionMaintenanceJob(
@@ -217,7 +293,7 @@ describe('RetentionMaintenanceJob', () => {
       expect(runs.finish).toHaveBeenCalledWith(
         'run-123',
         'failed',
-        'Connection lost',
+        IDEMPOTENCY_PURGE_UNEXPECTED_FAILURE_MESSAGE,
       );
     });
   });
@@ -254,7 +330,7 @@ describe('RetentionMaintenanceJob', () => {
       );
     });
 
-    it('records failed job run when token delete transaction throws', async () => {
+    it('records a fixed message when the token delete transaction throws', async () => {
       const prisma = {
         accountToken: {
           deleteMany: jest.fn().mockReturnValue(Promise.resolve({ count: 2 })),
@@ -262,7 +338,50 @@ describe('RetentionMaintenanceJob', () => {
         invitation: {
           deleteMany: jest.fn().mockReturnValue(Promise.resolve({ count: 3 })),
         },
-        $transaction: jest.fn().mockRejectedValueOnce(new Error('Tx rollback')),
+        $transaction: jest
+          .fn()
+          .mockRejectedValueOnce(
+            new Error(
+              'Tx rollback on postgres://acres:secret@db:5432/acres for key tokens/tok-1',
+            ),
+          ),
+      };
+      const job = new RetentionMaintenanceJob(
+        prisma as unknown as PrismaService,
+        fakeTenants as TenantTransactionService,
+        runs as unknown as JobRunsService,
+        config as unknown as AcresConfigService,
+      );
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      try {
+        await job.purgeExpiredTokens();
+        expect(runs.finish).toHaveBeenCalledWith(
+          'run-123',
+          'failed',
+          TOKEN_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+        );
+        const stored = runs.finish.mock.calls[0][2] as string;
+        expect(stored).not.toContain('postgres://');
+        expect(stored).not.toContain('tokens/tok-1');
+        expect(loggerError).toHaveBeenCalled();
+        expect(String(loggerError.mock.calls[0][0])).toContain('Tx rollback');
+      } finally {
+        loggerError.mockRestore();
+      }
+    });
+
+    it('records the same fixed message for a non-Error token throw', async () => {
+      const prisma = {
+        accountToken: {
+          deleteMany: jest.fn().mockReturnValue(Promise.resolve({ count: 2 })),
+        },
+        invitation: {
+          deleteMany: jest.fn().mockReturnValue(Promise.resolve({ count: 3 })),
+        },
+        $transaction: jest.fn().mockRejectedValueOnce('boom'),
       };
       const job = new RetentionMaintenanceJob(
         prisma as unknown as PrismaService,
@@ -275,7 +394,7 @@ describe('RetentionMaintenanceJob', () => {
       expect(runs.finish).toHaveBeenCalledWith(
         'run-123',
         'failed',
-        'Tx rollback',
+        TOKEN_PURGE_UNEXPECTED_FAILURE_MESSAGE,
       );
     });
   });
@@ -454,10 +573,43 @@ describe('RetentionMaintenanceJob', () => {
       );
     });
 
-    it('records failed job run when the export transaction throws', async () => {
+    it('records a fixed message when the export transaction throws', async () => {
       (fakeTenants.workerScoped as jest.Mock).mockRejectedValueOnce(
-        new Error('DB deadlock'),
+        new Error(
+          'DB deadlock on connection postgres://acres:secret@db:5432/acres for key exports/exp-1',
+        ),
       );
+      const prisma = {} as unknown as PrismaService;
+      const job = new RetentionMaintenanceJob(
+        prisma,
+        fakeTenants as TenantTransactionService,
+        runs as unknown as JobRunsService,
+        config as unknown as AcresConfigService,
+      );
+      const loggerError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      try {
+        await job.purgeExpiredExports();
+
+        expect(runs.finish).toHaveBeenCalledWith(
+          'run-123',
+          'failed',
+          EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+        );
+        const stored = runs.finish.mock.calls[0][2] as string;
+        expect(stored).not.toContain('postgres://');
+        expect(stored).not.toContain('exports/exp-1');
+        expect(loggerError).toHaveBeenCalled();
+        expect(String(loggerError.mock.calls[0][0])).toContain('DB deadlock');
+      } finally {
+        loggerError.mockRestore();
+      }
+    });
+
+    it('records the same fixed message for a non-Error export throw', async () => {
+      (fakeTenants.workerScoped as jest.Mock).mockRejectedValueOnce('boom');
       const prisma = {} as unknown as PrismaService;
       const job = new RetentionMaintenanceJob(
         prisma,
@@ -471,7 +623,7 @@ describe('RetentionMaintenanceJob', () => {
       expect(runs.finish).toHaveBeenCalledWith(
         'run-123',
         'failed',
-        'DB deadlock',
+        EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE,
       );
     });
   });
