@@ -11,6 +11,7 @@ const administrationPermissions = [
   'invitations.read',
   'invitations.revoke',
   'audit.read',
+  'jobs.read',
 ] as const satisfies readonly OrganizationPermission[];
 
 const assignmentMatrix = {

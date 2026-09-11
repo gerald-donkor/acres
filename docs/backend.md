@@ -230,7 +230,7 @@ validation or CSRF rule configured only in `main.ts` is a rule no test can see.
 | `GET` | `/regions` | public | region summaries with their metrics, one query |
 | `GET` | `/regions/:slug` | public | one summary, or 404 `NOT_FOUND` |
 | `POST` | `/forms/contact` | public + CSRF | 201, stores the submission, returns `{ id, receivedAt }` only — echoing the message back would make the endpoint a reflector |
-| `GET` | `/jobs/runs` | session | the 50 most recent runs |
+| `GET` | `/jobs/runs` | session + organization (`jobs.read`) | the 50 most recent runs; owner/admin of the active org, 403 otherwise, 404 without an active-organization header |
 
 ### Envelopes
 
@@ -253,9 +253,15 @@ frequency, completing automatically when terminal states are reached.
 Setup errors (404, 403) thrown before stream initiation are formatted through `ApiExceptionFilter`
 as standard JSON error envelopes.
 
-`/jobs/runs` sits behind the session guard only. **Role-based authorization
-does not exist**; "any signed-in account" is the floor, not the intended final
-rule, and it is a later prompt.
+`/jobs/runs` requires session plus the active-organization `jobs.read`
+permission (prompt 78): owner/admin of the selected organization read the 50
+most recent runs; analysts and viewers receive `FORBIDDEN`, and callers
+without an active-organization header (or membership) receive the standard
+organization-context `NOT_FOUND`. `JobRun` rows remain global scheduled-
+maintenance telemetry (no `organization_id`, no RLS); gating is at the
+controller via the caller's active-organization role. Operator scripts that
+polled this endpoint session-only must now send `x-acres-organization-id`
+for an org where the account is owner/admin.
 
 ---
 
@@ -1557,7 +1563,7 @@ No output.
 | `@acres/shared` in `client/`                                                         | nothing consumes it yet                                                                                                                                                    |
 | any landing-page form UI                                                             | the endpoint exists; the form is a later prompt                                                                                                                            |
 | login / register screens                                                             | same                                                                                                                                                                       |
-| product authorization beyond organizations                                           | `/jobs/runs` is still session-gated only; tenant routes use the organization policy in §14                                                                                 |
+| product authorization beyond organizations                                           | `/jobs/runs` requires `jobs.read` (owner/admin of the active org) since prompt 78; tenant routes use the organization policy in §14                                                                                 |
 | email delivery                                                                       | which is why registration returns a generic failure; §4                                                                                                                    |
 | Terraform / IaC, an actual registry + push, choosing a host to run the container     | §10.1 built the Dockerfile and CI; no hosting provider has been chosen                                                                                                     |
 | OAuth / social login, analytics, billing, CMS, admin                                 | out of scope for step 8                                                                                                                                                    |

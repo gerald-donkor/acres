@@ -30,6 +30,7 @@ export const ORGANIZATION_PERMISSIONS = [
   'reports.publish',
   'exports.create',
   'exports.read',
+  'jobs.read',
 ] as const;
 
 export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
@@ -62,6 +63,7 @@ const rolePermissions = {
     'reports.publish',
     'exports.create',
     'exports.read',
+    'jobs.read',
   ]),
   analyst: new Set<OrganizationPermission>([
     'organization.read',

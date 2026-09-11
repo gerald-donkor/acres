@@ -8,15 +8,21 @@ import {
   jobRunSchema,
 } from '../contracts/openapi';
 import { SessionGuard } from '../sessions/session.guard';
+import { OrganizationContextGuard } from '../organizations/organization-context.guard';
+import { PermissionGuard } from '../organizations/permission.guard';
+import { RequiresOrganizationPermission } from '../organizations/permissions';
 import { JobRunsService } from './job-runs.service';
 
 /**
- * Behind the session guard because job names and failure messages describe
- * internals. Role-based authorization is a later prompt; until it exists,
- * "any signed-in account" is the floor, not the intended final rule.
+ * Job names and failure messages describe internals, so listing recent runs
+ * requires the `jobs.read` permission: owner or admin of the active
+ * organization. Analysts and viewers are denied, and callers without an
+ * active-organization header (or membership) receive the standard
+ * organization-context 404 rather than the runs.
  */
 @Controller({ path: 'jobs', version: '1' })
-@UseGuards(SessionGuard)
+@UseGuards(SessionGuard, OrganizationContextGuard, PermissionGuard)
+@RequiresOrganizationPermission('jobs.read')
 @ApiTags('jobs')
 @ApiSessionAuth()
 export class JobsController {

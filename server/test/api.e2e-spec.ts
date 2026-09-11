@@ -1661,14 +1661,62 @@ describe('Acres API', () => {
       );
     });
 
-    it('admits the session to GET /jobs/runs', async () => {
-      prisma.jobRun.findMany.mockResolvedValue([]);
+    it.each(['owner', 'admin'] as const)(
+      'admits %s members to GET /jobs/runs with an organization header',
+      async (role) => {
+        prisma.jobRun.findMany.mockResolvedValue([]);
+        prisma.membership.findFirst.mockResolvedValue({
+          ...ORG_CONTEXT,
+          role,
+        });
+        const { agent } = await signedInAgent();
+
+        const response = await agent
+          .get('/api/v1/jobs/runs')
+          .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+          .expect(200);
+
+        expect(response.body).toMatchObject({ ok: true, data: [] });
+        expect(prisma.jobRun.findMany).toHaveBeenCalled();
+      },
+    );
+
+    it.each(['analyst', 'viewer'] as const)(
+      'denies %s members on GET /jobs/runs without touching job runs',
+      async (role) => {
+        prisma.membership.findFirst.mockResolvedValue({
+          ...ORG_CONTEXT,
+          role,
+        });
+        const { agent } = await signedInAgent();
+
+        const forbidden = await agent
+          .get('/api/v1/jobs/runs')
+          .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+          .expect(403);
+
+        expect(forbidden.body).toMatchObject({
+          ok: false,
+          error: { code: 'FORBIDDEN' },
+        });
+        expect(prisma.jobRun.findMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects GET /jobs/runs without an organization header', async () => {
+      prisma.membership.findFirst.mockResolvedValue({
+        ...ORG_CONTEXT,
+        role: 'owner',
+      });
       const { agent } = await signedInAgent();
 
-      const response = await agent.get('/api/v1/jobs/runs').expect(200);
+      const response = await agent.get('/api/v1/jobs/runs').expect(404);
 
-      expect(response.body).toMatchObject({ ok: true, data: [] });
-      expect(prisma.jobRun.findMany).toHaveBeenCalled();
+      expect(response.body).toMatchObject({
+        ok: false,
+        error: { code: 'NOT_FOUND' },
+      });
+      expect(prisma.jobRun.findMany).not.toHaveBeenCalled();
     });
 
     it('revokes the session and clears the cookie on logout', async () => {

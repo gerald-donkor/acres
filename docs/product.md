@@ -58,13 +58,14 @@ Current implemented permissions are `organization.read`,
 `uploads.create`, `datasets.read`, `datasets.create`, `datasets.update`,
 `ingestion.read`, `ingestion.run`, `ingestion.cancel`, `analytics.read`,
 `dashboards.manage`, `reports.read`, `reports.create`, `reports.update`,
-`reports.publish`, `exports.create`, and `exports.read`.
+`reports.publish`, `exports.create`, `exports.read`, and `jobs.read`.
 `owner` has all of them; `admin` can manage organization administration,
 uploads, datasets, ingestion, analytics reads, dashboards, reports, publishing,
-and exports; `analyst` can upload, create/update datasets, run/cancel
+exports, and scheduled-job run reads; `analyst` can upload, create/update datasets, run/cancel
 ingestion, read analytics, manage dashboards, draft/update reports, and request
-exports, but cannot publish reports; `viewer` can read organizations, uploads,
-datasets, ingestion status, analytics, reports, and export metadata/downloads.
+exports, but cannot publish reports or read scheduled-job runs; `viewer` can read organizations, uploads,
+datasets, ingestion status, analytics, reports, and export metadata/downloads,
+but not scheduled-job runs.
 Generic role updates and invitations cannot assign `owner`.
 
 Organization ownership has these invariants:
