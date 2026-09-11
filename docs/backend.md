@@ -2120,7 +2120,13 @@ the fixed `WORKER_EXCEPTION_MESSAGE` in both `DurableJob.lastErrorMessage` and
 (prompts 72/73/74 rule: raw storage/endpoint/library detail never sits in a
 durable message column). The infected-scan `Upload.scanResult` persists the
 bounded `'infected'` status (failed-scan values were already bounded codes)
-with the raw ClamAV signature in server logs only. Outbox dispatch attempts that exhaust their configured
+with the raw ClamAV signature in server logs only. `ScanResult.errorCode`
+accepts only the fixed `object_missing` / `scanner_unavailable` /
+`scanner_timeout` / `scanner_error` union, and the four rejected-path writes
+(`Upload.scanResult` non-`infected` arm, `Upload.failureCode`,
+`DurableJob.lastErrorCode`, `JobDeadLetter.reasonCode`) accept only that
+union plus the `'infected'` / `'failed'` status fallbacks (compile-time
+guard; runtime values unchanged). Outbox dispatch attempts that exhaust their configured
 maximum are marked `dead_lettered` with visible `JobDeadLetter` evidence instead
 of remaining stuck in `retrying`. Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant

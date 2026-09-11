@@ -9,6 +9,7 @@ import { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import {
   MALWARE_SCANNER,
   type MalwareScannerPort,
+  type ScanErrorCode,
 } from '../scanner/scanner.port';
 import {
   OBJECT_STORAGE,
@@ -32,6 +33,8 @@ interface UploadJobData {
  */
 export const WORKER_EXCEPTION_MESSAGE =
   'Upload processing failed unexpectedly.';
+
+type RejectedScanCode = ScanErrorCode | 'infected' | 'failed';
 
 @Injectable()
 export class UploadWorkerService {
@@ -255,16 +258,19 @@ export class UploadWorkerService {
             this.logger.warn(
               `Upload rejected by malware scan for upload ${upload.id} org ${upload.organizationId} job ${durableJob.id}: ${scan.status}/${scan.signature ?? scan.errorCode ?? scan.status}`,
             );
+            const rejectedScanResult: RejectedScanCode =
+              scan.status === 'infected'
+                ? 'infected'
+                : (scan.errorCode ?? scan.status);
+            const rejectedFailureCode: RejectedScanCode =
+              scan.errorCode ?? scan.status;
             await tx.upload.update({
               where: { id: upload.id },
               data: {
                 state: 'rejected',
                 scanStatus: scan.status,
-                scanResult:
-                  scan.status === 'infected'
-                    ? 'infected'
-                    : (scan.errorCode ?? scan.status),
-                failureCode: scan.errorCode ?? scan.status,
+                scanResult: rejectedScanResult,
+                failureCode: rejectedFailureCode,
                 failureMessage: 'Upload did not pass malware scanning.',
                 progressStage: 'rejected',
                 progressPercent: 100,
@@ -290,6 +296,12 @@ export class UploadWorkerService {
         },
       );
       await this.tenants.workerScoped(async (tx) => {
+        const rejectedLastErrorCode: RejectedScanCode | null =
+          terminalState === 'cancelled'
+            ? null
+            : scan.status === 'clean'
+              ? null
+              : (scan.errorCode ?? scan.status);
         await tx.durableJob.update({
           where: { id: durableJob.id },
           data: {
@@ -300,12 +312,7 @@ export class UploadWorkerService {
                   ? 'succeeded'
                   : 'failed',
             finishedAt: new Date(),
-            lastErrorCode:
-              terminalState === 'cancelled'
-                ? null
-                : scan.status === 'clean'
-                  ? null
-                  : (scan.errorCode ?? scan.status),
+            lastErrorCode: rejectedLastErrorCode,
             lastErrorMessage:
               terminalState === 'cancelled' || scan.status === 'clean'
                 ? null
@@ -313,11 +320,13 @@ export class UploadWorkerService {
           },
         });
         if (terminalState !== 'cancelled' && scan.status !== 'clean') {
+          const rejectedReasonCode: RejectedScanCode =
+            scan.errorCode ?? scan.status;
           await tx.jobDeadLetter.create({
             data: {
               organizationId: upload.organizationId,
               durableJobId: durableJob.id,
-              reasonCode: scan.errorCode ?? scan.status,
+              reasonCode: rejectedReasonCode,
               reasonMessage: 'Upload did not pass malware scanning.',
               payload: { uploadId: upload.id },
             },

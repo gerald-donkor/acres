@@ -1,7 +1,13 @@
+export type ScanErrorCode =
+  | 'object_missing'
+  | 'scanner_unavailable'
+  | 'scanner_timeout'
+  | 'scanner_error';
+
 export interface ScanResult {
   readonly status: 'clean' | 'infected' | 'failed';
   readonly signature?: string;
-  readonly errorCode?: string;
+  readonly errorCode?: ScanErrorCode;
 }
 
 export interface MalwareScannerPort {
