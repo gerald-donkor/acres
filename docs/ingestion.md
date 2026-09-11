@@ -235,6 +235,10 @@ publication error. The race guard keeps its specific sanitized message
 unexpected publication error ends with the fixed safe message
 (`PUBLICATION_UNEXPECTED_FAILURE_MESSAGE`), with the original error logged
 server-side only and never stored in the tenant-visible `failureMessage`.
+`IngestionProcessorService.fail()` accepts only the fixed failure code/message
+union (`analytics_publication_failed` with either publication message, plus
+`object_missing` with `'Accepted upload object is missing.'`) as a
+compile-time guard; runtime values are unchanged.
 
 Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
 any escape from a source parser to a `parser_exception` issue carrying the

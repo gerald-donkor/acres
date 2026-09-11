@@ -40,7 +40,7 @@ interface ParsedObservation {
 }
 
 export const PUBLICATION_INCOMPATIBLE_REMAPPING_MESSAGE =
-  'Metric mapping is incompatible with an existing metric definition.';
+  'Metric mapping is incompatible with an existing metric definition.' as const;
 
 @Injectable()
 export class AnalyticsPublicationService {

@@ -22,7 +22,13 @@ import { SourceParserService } from './parsers/source-parser.service';
  * exception text (constraint names, keys, paths, or file excerpts).
  */
 export const PUBLICATION_UNEXPECTED_FAILURE_MESSAGE =
-  'Analytics publication failed unexpectedly.';
+  'Analytics publication failed unexpectedly.' as const;
+
+type PublicationFailureCode = 'analytics_publication_failed' | 'object_missing';
+type PublicationFailureMessage =
+  | typeof PUBLICATION_INCOMPATIBLE_REMAPPING_MESSAGE
+  | typeof PUBLICATION_UNEXPECTED_FAILURE_MESSAGE
+  | 'Accepted upload object is missing.';
 
 @Injectable()
 export class IngestionProcessorService {
@@ -378,8 +384,8 @@ export class IngestionProcessorService {
 
   private async fail(
     run: { id: string; actorAccountId: string; organizationId: string },
-    code: string,
-    message: string,
+    code: PublicationFailureCode,
+    message: PublicationFailureMessage,
   ): Promise<void> {
     this.logger.warn(`Ingestion run ${run.id} failed: ${code}`);
     await this.tenants.organizationScoped(
