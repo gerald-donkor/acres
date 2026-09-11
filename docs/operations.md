@@ -319,7 +319,10 @@ across ticks (prompt 79 generalizes the prompt-70 exports bound to all purges).
   `expiresAt <= now` with the same `NOT_FOUND` before any presigned URL is
   minted, so the tick remains byte reclamation only). Unexpectedly shared stored objects are skipped with a
   warning rather than orphaned.
-All runs are logged to the `JobRun` audit table.
+All runs are logged to the `JobRun` audit table. `JobRunsService.finish()`
+accepts only the five `` `purged ${number} …` `` count templates plus the five
+fixed failure literals (compile-time guard; runtime values unchanged; raw
+error text stays server-log-only).
 
 ### Volume Encryption, Key Separation & Recovery Inspection Runbook
 

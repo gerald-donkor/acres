@@ -2,18 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AcresConfigService } from '../config/acres-config.service';
 import { SessionsService } from '../sessions/sessions.service';
-import { JobRunsService } from './job-runs.service';
+import {
+  JobRunsService,
+  SESSION_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+} from './job-runs.service';
 
 export const SESSION_MAINTENANCE_JOB = 'sessions.purge-expired';
-
-/**
- * Stored on the durable `JobRun.message` row when the session purge throws
- * unexpectedly. The original error is logged server-side only; durable message
- * columns must never carry raw exception text (database connection or
- * transaction internals).
- */
-export const SESSION_PURGE_UNEXPECTED_FAILURE_MESSAGE =
-  'Session purge failed unexpectedly.';
 
 /**
  * The one scheduled job this step ships. It does real bookkeeping — expired

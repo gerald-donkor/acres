@@ -6,11 +6,13 @@ import {
   TOKENS_RETENTION_JOB,
   EXPORTS_RETENTION_JOB,
   RETENTION_PURGE_BATCH_LIMIT,
+} from './retention-maintenance.job';
+import {
   UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE,
   IDEMPOTENCY_PURGE_UNEXPECTED_FAILURE_MESSAGE,
   TOKEN_PURGE_UNEXPECTED_FAILURE_MESSAGE,
   EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE,
-} from './retention-maintenance.job';
+} from './job-runs.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import type { JobRunsService } from './job-runs.service';

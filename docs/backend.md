@@ -455,7 +455,9 @@ figures are illustration (`AGENTS.md` §8); nothing here fabricates them.
 All five scheduled-maintenance failure paths (`sessions`, `uploads`,
 `idempotency`, `tokens`, `exports` purges) persist a fixed safe
 `JobRun.message` with the original error in server logs only (prompts 72–76
-rule).
+rule). `JobRunsService.finish()` accepts only the five `` `purged ${number} …` ``
+count templates plus the five fixed failure literals (compile-time guard;
+runtime values unchanged; raw error text stays server-log-only).
 
 Each of the five hourly purges reclaims at most `RETENTION_PURGE_BATCH_LIMIT`
 (500) rows per purge path per tick — 500 tokens plus 500 invitations on the

@@ -4,9 +4,9 @@ import type { SessionsService } from '../sessions/sessions.service';
 import type { JobRunsService } from './job-runs.service';
 import {
   SESSION_MAINTENANCE_JOB,
-  SESSION_PURGE_UNEXPECTED_FAILURE_MESSAGE,
   SessionMaintenanceJob,
 } from './session-maintenance.job';
+import { SESSION_PURGE_UNEXPECTED_FAILURE_MESSAGE } from './job-runs.service';
 
 describe('SessionMaintenanceJob', () => {
   let runs: {

@@ -3,27 +3,18 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AcresConfigService } from '../config/acres-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
-import { JobRunsService } from './job-runs.service';
+import {
+  EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+  IDEMPOTENCY_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+  JobRunsService,
+  TOKEN_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+  UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE,
+} from './job-runs.service';
 
 export const UPLOADS_RETENTION_JOB = 'uploads.purge-expired';
 export const IDEMPOTENCY_RETENTION_JOB = 'idempotency.purge-expired';
 export const TOKENS_RETENTION_JOB = 'tokens.purge-expired';
 export const EXPORTS_RETENTION_JOB = 'exports.purge-expired';
-
-/**
- * Stored on the durable `JobRun.message` row when a retention purge throws
- * unexpectedly. The original error is logged server-side only; durable message
- * columns must never carry raw exception text (database connection or
- * transaction internals).
- */
-export const UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE =
-  'Upload purge failed unexpectedly.';
-export const IDEMPOTENCY_PURGE_UNEXPECTED_FAILURE_MESSAGE =
-  'Idempotency purge failed unexpectedly.';
-export const TOKEN_PURGE_UNEXPECTED_FAILURE_MESSAGE =
-  'Token purge failed unexpectedly.';
-export const EXPORT_PURGE_UNEXPECTED_FAILURE_MESSAGE =
-  'Export purge failed unexpectedly.';
 
 /**
  * Maximum rows reclaimed per hourly tick, shared by all five retention purges
