@@ -238,7 +238,11 @@ server-side only and never stored in the tenant-visible `failureMessage`.
 `IngestionProcessorService.fail()` accepts only the fixed failure code/message
 union (`analytics_publication_failed` with either publication message, plus
 `object_missing` with `'Accepted upload object is missing.'`) as a
-compile-time guard; runtime values are unchanged.
+compile-time guard; runtime values are unchanged. The inline
+`validation_failed` write accepts only the fixed code/message literals
+(`VALIDATION_FAILURE_CODE` / `VALIDATION_FAILURE_MESSAGE`,
+compile-time guard; runtime values unchanged; deliberately not routed
+through `fail()` to preserve the publication-transaction boundary).
 
 Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
 any escape from a source parser to a `parser_exception` issue carrying the

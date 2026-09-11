@@ -30,6 +30,13 @@ type PublicationFailureMessage =
   | typeof PUBLICATION_UNEXPECTED_FAILURE_MESSAGE
   | 'Accepted upload object is missing.';
 
+export const VALIDATION_FAILURE_CODE = 'validation_failed' as const;
+export const VALIDATION_FAILURE_MESSAGE =
+  'Ingestion validation produced blocking issues.' as const;
+
+type ValidationFailureCode = typeof VALIDATION_FAILURE_CODE;
+type ValidationFailureMessage = typeof VALIDATION_FAILURE_MESSAGE;
+
 @Injectable()
 export class IngestionProcessorService {
   private readonly logger = new Logger(IngestionProcessorService.name);
@@ -182,17 +189,24 @@ export class IngestionProcessorService {
               where: { id: reserved.mappingId },
               data: { validationStatus: 'invalid' },
             });
+            const validationFailureUpdate: {
+              state: 'validation_failed';
+              stage: 'validate';
+              progressPercent: 100;
+              failureCode: ValidationFailureCode;
+              failureMessage: ValidationFailureMessage;
+              finishedAt: Date;
+            } = {
+              state: 'validation_failed',
+              stage: 'validate',
+              progressPercent: 100,
+              failureCode: VALIDATION_FAILURE_CODE,
+              failureMessage: VALIDATION_FAILURE_MESSAGE,
+              finishedAt: new Date(),
+            };
             await tx.ingestionRun.update({
               where: { id: runId },
-              data: {
-                state: 'validation_failed',
-                stage: 'validate',
-                progressPercent: 100,
-                failureCode: 'validation_failed',
-                failureMessage:
-                  'Ingestion validation produced blocking issues.',
-                finishedAt: new Date(),
-              },
+              data: validationFailureUpdate,
             });
             return;
           }
