@@ -37,6 +37,21 @@ export const VALIDATION_FAILURE_MESSAGE =
 type ValidationFailureCode = typeof VALIDATION_FAILURE_CODE;
 type ValidationFailureMessage = typeof VALIDATION_FAILURE_MESSAGE;
 
+const REGION_MAPPING_REGION_MISSING_MESSAGE =
+  'Mapping must include a regionColumn or regionCodeColumn.' as const;
+const REGION_MAPPING_COLUMN_MISSING_MESSAGE =
+  'Mapped region column is not present in the source.' as const;
+const REGION_MAPPING_UNMATCHED_MESSAGE =
+  'Mapped region value did not match a known region.' as const;
+const REGION_MAPPING_AMBIGUOUS_MESSAGE =
+  'Mapped region value matches more than one known region.' as const;
+
+type RegionMappingMessage =
+  | typeof REGION_MAPPING_REGION_MISSING_MESSAGE
+  | typeof REGION_MAPPING_COLUMN_MISSING_MESSAGE
+  | typeof REGION_MAPPING_UNMATCHED_MESSAGE
+  | typeof REGION_MAPPING_AMBIGUOUS_MESSAGE;
+
 @Injectable()
 export class IngestionProcessorService {
   private readonly logger = new Logger(IngestionProcessorService.name);
@@ -270,14 +285,30 @@ export class IngestionProcessorService {
       readonly regionColumn?: string;
       readonly regionCodeColumn?: string;
     },
-  ): Promise<ParserIssue[]> {
-    const issues: ParserIssue[] = [];
+  ): Promise<
+    Array<{
+      readonly severity: 'warning' | 'error';
+      readonly code: string;
+      readonly message: RegionMappingMessage;
+      readonly rowNumber?: number;
+      readonly columnKey?: string;
+      readonly details?: Record<string, unknown>;
+    }>
+  > {
+    const issues: Array<{
+      readonly severity: 'warning' | 'error';
+      readonly code: string;
+      readonly message: RegionMappingMessage;
+      readonly rowNumber?: number;
+      readonly columnKey?: string;
+      readonly details?: Record<string, unknown>;
+    }> = [];
     const regionColumn = mapping.regionCodeColumn ?? mapping.regionColumn;
     if (!regionColumn) {
       issues.push({
         severity: 'error',
         code: 'mapping_region_missing',
-        message: 'Mapping must include a regionColumn or regionCodeColumn.',
+        message: REGION_MAPPING_REGION_MISSING_MESSAGE,
       });
       return issues;
     }
@@ -285,7 +316,7 @@ export class IngestionProcessorService {
       issues.push({
         severity: 'error',
         code: 'mapping_column_missing',
-        message: 'Mapped region column is not present in the source.',
+        message: REGION_MAPPING_COLUMN_MISSING_MESSAGE,
         columnKey: regionColumn,
       });
       return issues;
@@ -306,7 +337,7 @@ export class IngestionProcessorService {
         issues.push({
           severity: 'error',
           code: 'region_unmatched',
-          message: 'Mapped region value did not match a known region.',
+          message: REGION_MAPPING_UNMATCHED_MESSAGE,
           rowNumber: sample.rowNumber,
           columnKey: regionColumn,
           details: { regionRef: sample.value },
@@ -315,7 +346,7 @@ export class IngestionProcessorService {
         issues.push({
           severity: 'error',
           code: 'region_ambiguous',
-          message: 'Mapped region value matches more than one known region.',
+          message: REGION_MAPPING_AMBIGUOUS_MESSAGE,
           rowNumber: sample.rowNumber,
           columnKey: regionColumn,
           details: { regionRef: sample.value, matches },

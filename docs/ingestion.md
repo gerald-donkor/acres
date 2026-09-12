@@ -246,8 +246,14 @@ union (`analytics_publication_failed` with either publication message, plus
 compile-time guard; runtime values are unchanged. The inline
 `validation_failed` write accepts only the fixed code/message literals
 (`VALIDATION_FAILURE_CODE` / `VALIDATION_FAILURE_MESSAGE`,
-compile-time guard; runtime values unchanged; deliberately not routed
-through `fail()` to preserve the publication-transaction boundary).
+ compile-time guard; runtime values unchanged; deliberately not routed
+ through `fail()` to preserve the publication-transaction boundary). The
+ private `validateMapping()` region-mapping producer accepts only its four
+ fixed literals (missing region column, missing source column, unmatched
+ region value, ambiguous region value) as a compile-time guard — runtime
+ values unchanged and raw source/exception text never reaches
+ `ValidationIssue.message` via this producer; raw region cell text in
+ `details.regionRef` JSON is unchanged governed behavior. No new semantics.
 
 Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
 any escape from a source parser to a `parser_exception` issue carrying the
