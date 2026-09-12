@@ -26,6 +26,14 @@ const ISSUE_CODE_REGEX = /^[a-z0-9_]{1,64}$/;
 const MAX_ISSUES_COUNT = 500;
 const MAX_STRING_LENGTH = 200;
 
+const PARSER_EXECUTION_FAILED_MESSAGE = 'Parser execution failed.' as const;
+const PARSER_EXECUTION_TIMED_OUT_MESSAGE =
+  'Parser execution timed out.' as const;
+
+type ParserExecutorFailureMessage =
+  | typeof PARSER_EXECUTION_FAILED_MESSAGE
+  | typeof PARSER_EXECUTION_TIMED_OUT_MESSAGE;
+
 @Injectable()
 export class ChildProcessParserExecutor
   implements ParserExecutorPort, OnApplicationShutdown
@@ -74,7 +82,7 @@ export class ChildProcessParserExecutor
           createSafeErrorSummary(
             sourceKind,
             'parser_execution_failed',
-            'Parser execution failed.',
+            PARSER_EXECUTION_FAILED_MESSAGE,
           ),
         );
         return;
@@ -114,7 +122,7 @@ export class ChildProcessParserExecutor
           createSafeErrorSummary(
             sourceKind,
             'parser_execution_timed_out',
-            'Parser execution timed out.',
+            PARSER_EXECUTION_TIMED_OUT_MESSAGE,
           ),
         );
       }, this.timeoutMs);
@@ -125,7 +133,7 @@ export class ChildProcessParserExecutor
           createSafeErrorSummary(
             sourceKind,
             'parser_execution_failed',
-            'Parser execution failed.',
+            PARSER_EXECUTION_FAILED_MESSAGE,
           ),
         );
       });
@@ -135,7 +143,7 @@ export class ChildProcessParserExecutor
           createSafeErrorSummary(
             sourceKind,
             'parser_execution_failed',
-            'Parser execution failed.',
+            PARSER_EXECUTION_FAILED_MESSAGE,
           ),
         );
       });
@@ -146,7 +154,7 @@ export class ChildProcessParserExecutor
             createSafeErrorSummary(
               sourceKind,
               'parser_execution_failed',
-              'Parser execution failed.',
+              PARSER_EXECUTION_FAILED_MESSAGE,
             ),
           );
           return;
@@ -157,7 +165,7 @@ export class ChildProcessParserExecutor
             createSafeErrorSummary(
               sourceKind,
               rawMessage.code || 'parser_execution_failed',
-              'Parser execution failed.',
+              PARSER_EXECUTION_FAILED_MESSAGE,
             ),
           );
           return;
@@ -173,7 +181,7 @@ export class ChildProcessParserExecutor
             createSafeErrorSummary(
               sourceKind,
               'parser_execution_failed',
-              'Parser execution failed.',
+              PARSER_EXECUTION_FAILED_MESSAGE,
             ),
           );
           return;
@@ -197,7 +205,7 @@ export class ChildProcessParserExecutor
               createSafeErrorSummary(
                 sourceKind,
                 'parser_execution_failed',
-                'Parser execution failed.',
+                PARSER_EXECUTION_FAILED_MESSAGE,
               ),
             );
           }
@@ -207,7 +215,7 @@ export class ChildProcessParserExecutor
           createSafeErrorSummary(
             sourceKind,
             'parser_execution_failed',
-            'Parser execution failed.',
+            PARSER_EXECUTION_FAILED_MESSAGE,
           ),
         );
       }
@@ -251,7 +259,7 @@ function getExpectedSourceKind(mediaType: string): SourceKind {
 function createSafeErrorSummary(
   sourceKind: SourceKind,
   code: string,
-  message: string,
+  message: ParserExecutorFailureMessage,
 ): ParsedSourceSummary {
   return {
     sourceKind,
