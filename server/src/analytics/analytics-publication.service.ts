@@ -442,7 +442,18 @@ function requiredColumns(metric: MetricMapping): string[] {
 function parsePeriod(
   row: Record<string, string | number | boolean | null>,
   metric: MetricMapping,
-) {
+): {
+  readonly start: Date;
+  readonly end: Date;
+  readonly label: string;
+  readonly quality: Array<{
+    readonly severity: 'error';
+    readonly state: 'invalid';
+    readonly code: string;
+    readonly message: PeriodInvalidMessage;
+    readonly details: { readonly value: string };
+  }>;
+} {
   const startRaw =
     metric.staticPeriodStart ??
     (metric.periodStartColumn ? row[metric.periodStartColumn] : undefined) ??
@@ -471,12 +482,17 @@ function parsePeriod(
         severity: 'error' as const,
         state: 'invalid' as const,
         code: 'period_invalid',
-        message: 'Mapped period could not be parsed deterministically.',
+        message: PERIOD_INVALID_MESSAGE,
         details: { value: String(startRaw ?? '') },
       },
     ],
   };
 }
+
+const PERIOD_INVALID_MESSAGE =
+  'Mapped period could not be parsed deterministically.' as const;
+
+type PeriodInvalidMessage = typeof PERIOD_INVALID_MESSAGE;
 
 const INVALID_VALUE_BLANK_MESSAGE = 'Metric value is blank.' as const;
 const INVALID_VALUE_NUMERIC_MESSAGE =
