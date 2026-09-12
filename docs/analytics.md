@@ -71,8 +71,12 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
  text never reaches `ObservationQuality.message` via this helper. `parsePeriod()`
  accepts only the fixed `period_invalid` literal (`Mapped period could not be
  parsed deterministically.`) as a compile-time guard — runtime value unchanged
- and raw source/exception text never reaches `ObservationQuality.message` via
- this producer. No new semantics. Incompatible remapping of an existing metric key to
+  and raw source/exception text never reaches `ObservationQuality.message` via
+  this producer. `validateMapping()` accepts only its five fixed literals
+  (duplicate key, missing column, invalid key, missing unit, incompatible
+  aggregation) as a compile-time guard — runtime values unchanged and raw
+  source/exception text never reaches `ValidationIssue.message` via this
+  producer. No new semantics. Incompatible remapping of an existing metric key to
 another value type, unit, or aggregation is reported pre-publication as a
 blocking `metric_definition_incompatible` validation issue (naming the mapped
 source column, with the key in issue details), so the run ends

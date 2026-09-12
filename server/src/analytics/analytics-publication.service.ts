@@ -50,14 +50,14 @@ export class AnalyticsPublicationService {
   }): Array<{
     readonly severity: 'warning' | 'error';
     readonly code: string;
-    readonly message: string;
+    readonly message: ValidateMappingMessage;
     readonly columnKey?: string;
     readonly details?: Record<string, unknown>;
   }> {
     const issues: Array<{
       readonly severity: 'warning' | 'error';
       readonly code: string;
-      readonly message: string;
+      readonly message: ValidateMappingMessage;
       readonly columnKey?: string;
       readonly details?: Record<string, unknown>;
     }> = [];
@@ -68,7 +68,7 @@ export class AnalyticsPublicationService {
         issues.push({
           severity: 'error',
           code: 'metric_key_duplicate',
-          message: 'Metric keys must be unique within one mapping.',
+          message: MAPPING_KEY_DUPLICATE_MESSAGE,
           columnKey: metric.column,
           details: { key: metric.key },
         });
@@ -79,7 +79,7 @@ export class AnalyticsPublicationService {
           issues.push({
             severity: 'error',
             code: 'metric_column_missing',
-            message: 'Mapped metric column is not present in the source.',
+            message: MAPPING_COLUMN_MISSING_MESSAGE,
             columnKey: column,
             details: { key: metric.key },
           });
@@ -89,7 +89,7 @@ export class AnalyticsPublicationService {
         issues.push({
           severity: 'error',
           code: 'metric_key_invalid',
-          message: 'Metric keys must be lower-case snake identifiers.',
+          message: MAPPING_KEY_INVALID_MESSAGE,
           columnKey: metric.column,
           details: { key: metric.key },
         });
@@ -98,7 +98,7 @@ export class AnalyticsPublicationService {
         issues.push({
           severity: 'error',
           code: 'metric_unit_missing',
-          message: 'Mapped metrics must define an explicit unit.',
+          message: MAPPING_UNIT_MISSING_MESSAGE,
           columnKey: metric.column,
         });
       }
@@ -109,7 +109,7 @@ export class AnalyticsPublicationService {
         issues.push({
           severity: 'error',
           code: 'metric_aggregation_incompatible',
-          message: 'Text and boolean metrics only support count or latest.',
+          message: MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE,
           columnKey: metric.column,
           details: { key: metric.key, aggregation: metric.aggregation },
         });
@@ -504,6 +504,24 @@ type InvalidValueMessage =
   | typeof INVALID_VALUE_BLANK_MESSAGE
   | typeof INVALID_VALUE_NUMERIC_MESSAGE
   | typeof INVALID_VALUE_BOOLEAN_MESSAGE;
+
+const MAPPING_KEY_DUPLICATE_MESSAGE =
+  'Metric keys must be unique within one mapping.' as const;
+const MAPPING_COLUMN_MISSING_MESSAGE =
+  'Mapped metric column is not present in the source.' as const;
+const MAPPING_KEY_INVALID_MESSAGE =
+  'Metric keys must be lower-case snake identifiers.' as const;
+const MAPPING_UNIT_MISSING_MESSAGE =
+  'Mapped metrics must define an explicit unit.' as const;
+const MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE =
+  'Text and boolean metrics only support count or latest.' as const;
+
+type ValidateMappingMessage =
+  | typeof MAPPING_KEY_DUPLICATE_MESSAGE
+  | typeof MAPPING_COLUMN_MISSING_MESSAGE
+  | typeof MAPPING_KEY_INVALID_MESSAGE
+  | typeof MAPPING_UNIT_MISSING_MESSAGE
+  | typeof MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE;
 
 function parseValue(
   raw: string | number | boolean | null,
