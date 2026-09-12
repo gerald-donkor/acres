@@ -478,21 +478,28 @@ function parsePeriod(
   };
 }
 
+const INVALID_VALUE_BLANK_MESSAGE = 'Metric value is blank.' as const;
+const INVALID_VALUE_NUMERIC_MESSAGE =
+  'Numeric metric value could not be parsed.' as const;
+const INVALID_VALUE_BOOLEAN_MESSAGE =
+  'Boolean metric value could not be parsed.' as const;
+
+type InvalidValueMessage =
+  | typeof INVALID_VALUE_BLANK_MESSAGE
+  | typeof INVALID_VALUE_NUMERIC_MESSAGE
+  | typeof INVALID_VALUE_BOOLEAN_MESSAGE;
+
 function parseValue(
   raw: string | number | boolean | null,
   metric: MetricMapping,
 ): Pick<ParsedObservation, 'value' | 'quality'> {
   if (raw === null || raw === undefined || String(raw).trim() === '') {
-    return invalidValue(metric, 'missing', 'Metric value is blank.');
+    return invalidValue(metric, 'missing', INVALID_VALUE_BLANK_MESSAGE);
   }
   if (metric.valueType === 'numeric') {
     const value = parseDecimal(raw);
     if (value === null) {
-      return invalidValue(
-        metric,
-        'invalid',
-        'Numeric metric value could not be parsed.',
-      );
+      return invalidValue(metric, 'invalid', INVALID_VALUE_NUMERIC_MESSAGE);
     }
     return {
       value: { numericValue: value },
@@ -507,11 +514,7 @@ function parseValue(
     if (['false', '0', 'no', 'n'].includes(normalized)) {
       return { value: { booleanValue: false }, quality: [] };
     }
-    return invalidValue(
-      metric,
-      'invalid',
-      'Boolean metric value could not be parsed.',
-    );
+    return invalidValue(metric, 'invalid', INVALID_VALUE_BOOLEAN_MESSAGE);
   }
   return { value: { textValue: String(raw).trim() }, quality: [] };
 }
@@ -519,7 +522,7 @@ function parseValue(
 function invalidValue(
   metric: MetricMapping,
   state: 'missing' | 'invalid',
-  message: string,
+  message: InvalidValueMessage,
 ): Pick<ParsedObservation, 'value' | 'quality'> {
   if (metric.valueType === 'numeric') {
     return {
