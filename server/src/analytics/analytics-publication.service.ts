@@ -463,7 +463,7 @@ function parsePeriod(
   readonly quality: Array<{
     readonly severity: 'error';
     readonly state: 'invalid';
-    readonly code: string;
+    readonly code: PeriodInvalidCode;
     readonly message: PeriodInvalidMessage;
     readonly details: { readonly value: string };
   }>;
@@ -495,7 +495,7 @@ function parsePeriod(
       {
         severity: 'error' as const,
         state: 'invalid' as const,
-        code: 'period_invalid',
+        code: PERIOD_INVALID_CODE,
         message: PERIOD_INVALID_MESSAGE,
         details: { value: String(startRaw ?? '') },
       },
@@ -507,6 +507,10 @@ const PERIOD_INVALID_MESSAGE =
   'Mapped period could not be parsed deterministically.' as const;
 
 type PeriodInvalidMessage = typeof PERIOD_INVALID_MESSAGE;
+
+const PERIOD_INVALID_CODE = 'period_invalid' as const;
+
+type PeriodInvalidCode = typeof PERIOD_INVALID_CODE;
 
 const INVALID_VALUE_BLANK_MESSAGE = 'Metric value is blank.' as const;
 const INVALID_VALUE_NUMERIC_MESSAGE =
