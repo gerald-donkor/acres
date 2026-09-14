@@ -70,9 +70,13 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
  compile-time guard — runtime values are unchanged and raw cell or exception
  text never reaches `ObservationQuality.message` via this helper. `parsePeriod()`
  accepts only the fixed `period_invalid` literal (`Mapped period could not be
- parsed deterministically.`) as a compile-time guard — runtime value unchanged
+  parsed deterministically.`) as a compile-time guard — runtime value unchanged
   and raw source/exception text never reaches `ObservationQuality.message` via
-  this producer. `validateMapping()` accepts only its five fixed literals
+  this producer. The `ParsedObservation` quality carrier accepts only those
+  four fixed literals (the three `invalidValue()` literals plus the
+  `parsePeriod()` literal) as the `ObservationQualityMessage` compile-time
+  guard — runtime values unchanged and raw cell/exception text never reaches
+  `ObservationQuality.message` via this carrier. `validateMapping()` accepts only its five fixed literals
   (duplicate key, missing column, invalid key, missing unit, incompatible
   aggregation) as a compile-time guard — runtime values unchanged and raw
   source/exception text never reaches `ValidationIssue.message` via this

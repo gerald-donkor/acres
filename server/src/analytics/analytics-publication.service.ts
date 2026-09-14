@@ -33,7 +33,7 @@ interface ParsedObservation {
       | 'duplicate'
       | 'low_confidence';
     readonly code: string;
-    readonly message: string;
+    readonly message: ObservationQualityMessage;
     readonly details?: Prisma.InputJsonValue;
   }>;
 }
@@ -518,6 +518,8 @@ type InvalidValueMessage =
   | typeof INVALID_VALUE_BLANK_MESSAGE
   | typeof INVALID_VALUE_NUMERIC_MESSAGE
   | typeof INVALID_VALUE_BOOLEAN_MESSAGE;
+
+type ObservationQualityMessage = PeriodInvalidMessage | InvalidValueMessage;
 
 const MAPPING_KEY_DUPLICATE_MESSAGE =
   'Metric keys must be unique within one mapping.' as const;
