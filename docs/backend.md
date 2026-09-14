@@ -2128,7 +2128,14 @@ accepts only the fixed `object_missing` / `scanner_unavailable` /
 (`Upload.scanResult` non-`infected` arm, `Upload.failureCode`,
 `DurableJob.lastErrorCode`, `JobDeadLetter.reasonCode`) accept only that
 union plus the `'infected'` / `'failed'` status fallbacks (compile-time
-guard; runtime values unchanged). Outbox dispatch attempts that exhaust their configured
+guard; runtime values unchanged). The three rejected-scan message writes
+(`Upload.failureMessage`, `DurableJob.lastErrorMessage`,
+`JobDeadLetter.reasonMessage`) accept only the single fixed
+`'Upload did not pass malware scanning.'` literal (`REJECTED_SCAN_MESSAGE`,
+compile-time guard via the narrowed intermediate; runtime values unchanged;
+raw scanner signature/exception text never reaches the durable message
+columns via this producer; server-log line unchanged). No new semantics.
+Outbox dispatch attempts that exhaust their configured
 maximum are marked `dead_lettered` with visible `JobDeadLetter` evidence instead
 of remaining stuck in `retrying`. `OutboxService.markRetry` accepts only the
 fixed `queue_unavailable` code and `markDeadLetter` accepts only the fixed
