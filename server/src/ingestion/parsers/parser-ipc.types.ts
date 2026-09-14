@@ -14,11 +14,20 @@ export interface ParserChildSuccessResponse {
   readonly summary: ParsedSourceSummary;
 }
 
+export const PARSER_CHILD_MALFORMED_REQUEST_MESSAGE =
+  'Malformed parser child request.' as const;
+export const PARSER_CHILD_EXECUTION_FAILED_MESSAGE =
+  'Parser execution failed.' as const;
+
+export type ParserChildErrorMessage =
+  | typeof PARSER_CHILD_MALFORMED_REQUEST_MESSAGE
+  | typeof PARSER_CHILD_EXECUTION_FAILED_MESSAGE;
+
 export interface ParserChildErrorResponse {
   readonly type: 'error';
   readonly id: string;
   readonly code: string;
-  readonly message: string;
+  readonly message: ParserChildErrorMessage;
 }
 
 export type ParserChildResponse =

@@ -199,7 +199,12 @@ short-lived Node child processes:
   fixed code literals (`'parser_execution_failed'`, `'parser_execution_timed_out'`)
   as compile-time guards (runtime values unchanged; raw child/exception text never
   reaches `ValidationIssue.code` or `ValidationIssue.message` via this helper).
-  No new semantics.
+  In addition, `ParserChildErrorResponse.message` across the child process IPC
+  boundary is compile-time guarded to the 2 fixed child error message literals
+  (`'Malformed parser child request.'`, `'Parser execution failed.'`) via
+  `ParserChildErrorMessage` (`PARSER_CHILD_MALFORMED_REQUEST_MESSAGE`,
+  `PARSER_CHILD_EXECUTION_FAILED_MESSAGE`), preventing unvetted exception text
+  from being emitted by the child process. No new semantics.
 - **Lifecycle Cleanup**: In-flight child processes are tracked and killed (`SIGKILL`)
   on job completion, error, timeout, or Nest `onApplicationShutdown` worker shutdown.
 - **Telemetry**: Low-cardinality parser execution metrics are recorded via
