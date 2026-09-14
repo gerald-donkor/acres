@@ -26,6 +26,13 @@ const ISSUE_CODE_REGEX = /^[a-z0-9_]{1,64}$/;
 const MAX_ISSUES_COUNT = 500;
 const MAX_STRING_LENGTH = 200;
 
+export const PARSER_EXECUTION_FAILED_CODE = 'parser_execution_failed' as const;
+export const PARSER_EXECUTION_TIMED_OUT_CODE =
+  'parser_execution_timed_out' as const;
+
+export type ParserExecutorFailureCode =
+  typeof PARSER_EXECUTION_FAILED_CODE | typeof PARSER_EXECUTION_TIMED_OUT_CODE;
+
 const PARSER_EXECUTION_FAILED_MESSAGE = 'Parser execution failed.' as const;
 const PARSER_EXECUTION_TIMED_OUT_MESSAGE =
   'Parser execution timed out.' as const;
@@ -81,7 +88,7 @@ export class ChildProcessParserExecutor
         resolve(
           createSafeErrorSummary(
             sourceKind,
-            'parser_execution_failed',
+            PARSER_EXECUTION_FAILED_CODE,
             PARSER_EXECUTION_FAILED_MESSAGE,
           ),
         );
@@ -121,7 +128,7 @@ export class ChildProcessParserExecutor
         settle(
           createSafeErrorSummary(
             sourceKind,
-            'parser_execution_timed_out',
+            PARSER_EXECUTION_TIMED_OUT_CODE,
             PARSER_EXECUTION_TIMED_OUT_MESSAGE,
           ),
         );
@@ -132,7 +139,7 @@ export class ChildProcessParserExecutor
         settle(
           createSafeErrorSummary(
             sourceKind,
-            'parser_execution_failed',
+            PARSER_EXECUTION_FAILED_CODE,
             PARSER_EXECUTION_FAILED_MESSAGE,
           ),
         );
@@ -142,7 +149,7 @@ export class ChildProcessParserExecutor
         settle(
           createSafeErrorSummary(
             sourceKind,
-            'parser_execution_failed',
+            PARSER_EXECUTION_FAILED_CODE,
             PARSER_EXECUTION_FAILED_MESSAGE,
           ),
         );
@@ -153,7 +160,7 @@ export class ChildProcessParserExecutor
           settle(
             createSafeErrorSummary(
               sourceKind,
-              'parser_execution_failed',
+              PARSER_EXECUTION_FAILED_CODE,
               PARSER_EXECUTION_FAILED_MESSAGE,
             ),
           );
@@ -161,10 +168,14 @@ export class ChildProcessParserExecutor
         }
 
         if (rawMessage.type === 'error') {
+          const failureCode: ParserExecutorFailureCode =
+            rawMessage.code === PARSER_EXECUTION_TIMED_OUT_CODE
+              ? PARSER_EXECUTION_TIMED_OUT_CODE
+              : PARSER_EXECUTION_FAILED_CODE;
           settle(
             createSafeErrorSummary(
               sourceKind,
-              rawMessage.code || 'parser_execution_failed',
+              failureCode,
               PARSER_EXECUTION_FAILED_MESSAGE,
             ),
           );
@@ -180,7 +191,7 @@ export class ChildProcessParserExecutor
           settle(
             createSafeErrorSummary(
               sourceKind,
-              'parser_execution_failed',
+              PARSER_EXECUTION_FAILED_CODE,
               PARSER_EXECUTION_FAILED_MESSAGE,
             ),
           );
@@ -204,7 +215,7 @@ export class ChildProcessParserExecutor
             settle(
               createSafeErrorSummary(
                 sourceKind,
-                'parser_execution_failed',
+                PARSER_EXECUTION_FAILED_CODE,
                 PARSER_EXECUTION_FAILED_MESSAGE,
               ),
             );
@@ -214,7 +225,7 @@ export class ChildProcessParserExecutor
         settle(
           createSafeErrorSummary(
             sourceKind,
-            'parser_execution_failed',
+            PARSER_EXECUTION_FAILED_CODE,
             PARSER_EXECUTION_FAILED_MESSAGE,
           ),
         );
@@ -258,7 +269,7 @@ function getExpectedSourceKind(mediaType: string): SourceKind {
 
 function createSafeErrorSummary(
   sourceKind: SourceKind,
-  code: string,
+  code: ParserExecutorFailureCode,
   message: ParserExecutorFailureMessage,
 ): ParsedSourceSummary {
   return {
@@ -271,7 +282,7 @@ function createSafeErrorSummary(
     issues: [
       {
         severity: 'error',
-        code: ISSUE_CODE_REGEX.test(code) ? code : 'parser_execution_failed',
+        code,
         message: message.slice(0, MAX_STRING_LENGTH),
       },
     ],

@@ -194,11 +194,12 @@ short-lived Node child processes:
   mismatched, or unhandled failures return deterministic safe blocking issues
   (`parser_execution_failed` or `parser_execution_timed_out`) and never leak exception
   stacks, process IDs, or system paths to database tables or logs.
-  `createSafeErrorSummary()` accepts only the 2 fixed literals
-  (`'Parser execution failed.'`, `'Parser execution timed out.'`) as a
-  compile-time guard (runtime values unchanged; raw child/exception text never
-  reaches `ValidationIssue.message` via this helper; the `code` regex fallback
-  and length bound are unchanged). No new semantics.
+  `createSafeErrorSummary()` accepts only the 2 fixed message literals
+  (`'Parser execution failed.'`, `'Parser execution timed out.'`) and the 2
+  fixed code literals (`'parser_execution_failed'`, `'parser_execution_timed_out'`)
+  as compile-time guards (runtime values unchanged; raw child/exception text never
+  reaches `ValidationIssue.code` or `ValidationIssue.message` via this helper).
+  No new semantics.
 - **Lifecycle Cleanup**: In-flight child processes are tracked and killed (`SIGKILL`)
   on job completion, error, timeout, or Nest `onApplicationShutdown` worker shutdown.
 - **Telemetry**: Low-cardinality parser execution metrics are recorded via
