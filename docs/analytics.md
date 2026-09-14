@@ -75,8 +75,11 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
    this producer. `parsePeriod()` accepts only the single fixed code
    `period_invalid` as a compile-time guard — runtime value unchanged and
    unbounded code text never reaches `ObservationQuality.code` via this
-   producer; `invalidValue()` codes and the `ParsedObservation` carrier code
-   remain separately scoped follow-ups. No new semantics. The `ParsedObservation` quality carrier accepts only those
+   producer; `invalidValue()` accepts only the two fixed codes
+   `value_missing` / `value_invalid` as a compile-time guard — runtime values
+   unchanged and unbounded code text never reaches `ObservationQuality.code`
+   via this producer; the `ParsedObservation` carrier code remains the
+   separately scoped follow-up. No new semantics. The `ParsedObservation` quality carrier accepts only those
   four fixed literals (the three `invalidValue()` literals plus the
   `parsePeriod()` literal) as the `ObservationQualityMessage` compile-time
   guard — runtime values unchanged and raw cell/exception text never reaches

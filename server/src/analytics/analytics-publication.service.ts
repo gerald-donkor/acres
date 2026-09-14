@@ -518,10 +518,15 @@ const INVALID_VALUE_NUMERIC_MESSAGE =
 const INVALID_VALUE_BOOLEAN_MESSAGE =
   'Boolean metric value could not be parsed.' as const;
 
+const VALUE_MISSING_CODE = 'value_missing' as const;
+const VALUE_INVALID_CODE = 'value_invalid' as const;
+
 type InvalidValueMessage =
   | typeof INVALID_VALUE_BLANK_MESSAGE
   | typeof INVALID_VALUE_NUMERIC_MESSAGE
   | typeof INVALID_VALUE_BOOLEAN_MESSAGE;
+
+type InvalidValueCode = typeof VALUE_MISSING_CODE | typeof VALUE_INVALID_CODE;
 
 type ObservationQualityMessage = PeriodInvalidMessage | InvalidValueMessage;
 
@@ -600,22 +605,31 @@ function invalidValue(
   metric: MetricMapping,
   state: 'missing' | 'invalid',
   message: InvalidValueMessage,
-): Pick<ParsedObservation, 'value' | 'quality'> {
+): {
+  readonly value: Pick<ParsedObservation, 'value'>['value'];
+  readonly quality: Array<{
+    readonly severity: 'error';
+    readonly state: 'missing' | 'invalid';
+    readonly code: InvalidValueCode;
+    readonly message: InvalidValueMessage;
+  }>;
+} {
+  const code = state === 'missing' ? VALUE_MISSING_CODE : VALUE_INVALID_CODE;
   if (metric.valueType === 'numeric') {
     return {
       value: { numericValue: new Prisma.Decimal(0) },
-      quality: [{ severity: 'error', state, code: `value_${state}`, message }],
+      quality: [{ severity: 'error' as const, state, code, message }],
     };
   }
   if (metric.valueType === 'boolean') {
     return {
       value: { booleanValue: false },
-      quality: [{ severity: 'error', state, code: `value_${state}`, message }],
+      quality: [{ severity: 'error' as const, state, code, message }],
     };
   }
   return {
     value: { textValue: '' },
-    quality: [{ severity: 'error', state, code: `value_${state}`, message }],
+    quality: [{ severity: 'error' as const, state, code, message }],
   };
 }
 
