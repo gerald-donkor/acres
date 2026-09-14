@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
-import type { ParserIssue } from '../ingestion/parsers/parser.types';
 import {
   ANALYTICS_CALCULATION_VERSION,
   type AnalyticsPublicationInput,
@@ -122,8 +121,24 @@ export class AnalyticsPublicationService {
     tx: AnalyticsTx,
     organizationId: string,
     metrics: readonly MetricMapping[],
-  ): Promise<ParserIssue[]> {
-    const issues: ParserIssue[] = [];
+  ): Promise<
+    Array<{
+      readonly severity: 'warning' | 'error';
+      readonly code: string;
+      readonly message: RemappingIncompatibleMessage;
+      readonly rowNumber?: number;
+      readonly columnKey?: string;
+      readonly details?: Record<string, unknown>;
+    }>
+  > {
+    const issues: Array<{
+      readonly severity: 'warning' | 'error';
+      readonly code: string;
+      readonly message: RemappingIncompatibleMessage;
+      readonly rowNumber?: number;
+      readonly columnKey?: string;
+      readonly details?: Record<string, unknown>;
+    }> = [];
     const checked = new Set<string>();
     for (const metric of metrics) {
       if (checked.has(metric.key)) continue;
@@ -140,8 +155,7 @@ export class AnalyticsPublicationService {
         issues.push({
           severity: 'error',
           code: 'metric_definition_incompatible',
-          message:
-            'Metric key is already defined with a different type, unit, or aggregation.',
+          message: REMAPPING_INCOMPATIBLE_MESSAGE,
           columnKey: metric.column,
           details: { key: metric.key },
         });
@@ -515,6 +529,11 @@ const MAPPING_UNIT_MISSING_MESSAGE =
   'Mapped metrics must define an explicit unit.' as const;
 const MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE =
   'Text and boolean metrics only support count or latest.' as const;
+
+const REMAPPING_INCOMPATIBLE_MESSAGE =
+  'Metric key is already defined with a different type, unit, or aggregation.' as const;
+
+type RemappingIncompatibleMessage = typeof REMAPPING_INCOMPATIBLE_MESSAGE;
 
 type ValidateMappingMessage =
   | typeof MAPPING_KEY_DUPLICATE_MESSAGE
