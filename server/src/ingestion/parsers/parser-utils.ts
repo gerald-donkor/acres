@@ -2,6 +2,11 @@ import type { ParserIssue } from './parser.types';
 
 export const PARSER_MAX_BUFFER_BYTES = 25 * 1024 * 1024;
 
+const FORMULA_AS_DATA_MESSAGE =
+  'Formula-looking cell was treated as text.' as const;
+
+type FormulaAsDataMessage = typeof FORMULA_AS_DATA_MESSAGE;
+
 export function normalizeKey(value: string): string {
   return value
     .trim()
@@ -31,11 +36,13 @@ export function scalarText(value: unknown): string {
 export function formulaIssue(
   rowNumber: number,
   columnKey: string,
-): ParserIssue {
+): Omit<ParserIssue, 'message'> & {
+  readonly message: FormulaAsDataMessage;
+} {
   return {
     severity: 'warning',
     code: 'formula_as_data',
-    message: 'Formula-looking cell was treated as text.',
+    message: FORMULA_AS_DATA_MESSAGE,
     rowNumber,
     columnKey,
   };

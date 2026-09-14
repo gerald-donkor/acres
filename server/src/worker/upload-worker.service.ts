@@ -34,6 +34,11 @@ interface UploadJobData {
 export const WORKER_EXCEPTION_MESSAGE =
   'Upload processing failed unexpectedly.';
 
+export const REJECTED_SCAN_MESSAGE =
+  'Upload did not pass malware scanning.' as const;
+
+type RejectedScanMessage = typeof REJECTED_SCAN_MESSAGE;
+
 type RejectedScanCode = ScanErrorCode | 'infected' | 'failed';
 
 @Injectable()
@@ -264,6 +269,7 @@ export class UploadWorkerService {
                 : (scan.errorCode ?? scan.status);
             const rejectedFailureCode: RejectedScanCode =
               scan.errorCode ?? scan.status;
+            const rejectedMessage: RejectedScanMessage = REJECTED_SCAN_MESSAGE;
             await tx.upload.update({
               where: { id: upload.id },
               data: {
@@ -271,7 +277,7 @@ export class UploadWorkerService {
                 scanStatus: scan.status,
                 scanResult: rejectedScanResult,
                 failureCode: rejectedFailureCode,
-                failureMessage: 'Upload did not pass malware scanning.',
+                failureMessage: rejectedMessage,
                 progressStage: 'rejected',
                 progressPercent: 100,
               },
@@ -302,6 +308,7 @@ export class UploadWorkerService {
             : scan.status === 'clean'
               ? null
               : (scan.errorCode ?? scan.status);
+        const rejectedMessage: RejectedScanMessage = REJECTED_SCAN_MESSAGE;
         await tx.durableJob.update({
           where: { id: durableJob.id },
           data: {
@@ -316,7 +323,7 @@ export class UploadWorkerService {
             lastErrorMessage:
               terminalState === 'cancelled' || scan.status === 'clean'
                 ? null
-                : 'Upload did not pass malware scanning.',
+                : rejectedMessage,
           },
         });
         if (terminalState !== 'cancelled' && scan.status !== 'clean') {
@@ -327,7 +334,7 @@ export class UploadWorkerService {
               organizationId: upload.organizationId,
               durableJobId: durableJob.id,
               reasonCode: rejectedReasonCode,
-              reasonMessage: 'Upload did not pass malware scanning.',
+              reasonMessage: rejectedMessage,
               payload: { uploadId: upload.id },
             },
           });

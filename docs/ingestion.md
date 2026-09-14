@@ -253,7 +253,12 @@ compile-time guard; runtime values are unchanged. The inline
  region value, ambiguous region value) as a compile-time guard — runtime
  values unchanged and raw source/exception text never reaches
  `ValidationIssue.message` via this producer; raw region cell text in
- `details.regionRef` JSON is unchanged governed behavior. No new semantics.
+ `details.regionRef` JSON is unchanged governed behavior. `formulaIssue()`
+ accepts only the single fixed literal
+ (`'Formula-looking cell was treated as text.'`) as a compile-time guard —
+ runtime value unchanged and raw source/exception text never reaches
+ `ValidationIssue.message` via this producer; `code` / `rowNumber` /
+ `columnKey` unchanged. No new semantics.
 
 Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
 any escape from a source parser to a `parser_exception` issue carrying the
