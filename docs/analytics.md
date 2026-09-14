@@ -80,7 +80,7 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
   (duplicate key, missing column, invalid key, missing unit, incompatible
   aggregation) as a compile-time guard — runtime values unchanged and raw
   source/exception text never reaches `ValidationIssue.message` via this
-  producer. `malformedMetricMappingIssues()` accepts only its three fixed
+  producer. `validateMapping()` accepts only the five fixed codes (`metric_key_duplicate`, `metric_column_missing`, `metric_key_invalid`, `metric_unit_missing`, `metric_aggregation_incompatible`) as a compile-time guard — runtime values unchanged and unbounded code text never reaches `ValidationIssue.code` via this producer. No new semantics. `malformedMetricMappingIssues()` accepts only its three fixed
   literals (non-array mappings, non-object entry, missing or invalid field)
   as a compile-time guard — runtime values unchanged and raw source/exception
   text never reaches `ValidationIssue.message` via this producer.

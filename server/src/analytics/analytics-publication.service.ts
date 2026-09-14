@@ -48,14 +48,14 @@ export class AnalyticsPublicationService {
     readonly mapping: { readonly metrics: readonly MetricMapping[] };
   }): Array<{
     readonly severity: 'warning' | 'error';
-    readonly code: string;
+    readonly code: ValidateMappingCode;
     readonly message: ValidateMappingMessage;
     readonly columnKey?: string;
     readonly details?: Record<string, unknown>;
   }> {
     const issues: Array<{
       readonly severity: 'warning' | 'error';
-      readonly code: string;
+      readonly code: ValidateMappingCode;
       readonly message: ValidateMappingMessage;
       readonly columnKey?: string;
       readonly details?: Record<string, unknown>;
@@ -66,7 +66,7 @@ export class AnalyticsPublicationService {
       if (keys.has(metric.key)) {
         issues.push({
           severity: 'error',
-          code: 'metric_key_duplicate',
+          code: MAPPING_KEY_DUPLICATE_CODE,
           message: MAPPING_KEY_DUPLICATE_MESSAGE,
           columnKey: metric.column,
           details: { key: metric.key },
@@ -77,7 +77,7 @@ export class AnalyticsPublicationService {
         if (!columns.has(column)) {
           issues.push({
             severity: 'error',
-            code: 'metric_column_missing',
+            code: MAPPING_COLUMN_MISSING_CODE,
             message: MAPPING_COLUMN_MISSING_MESSAGE,
             columnKey: column,
             details: { key: metric.key },
@@ -87,7 +87,7 @@ export class AnalyticsPublicationService {
       if (!/^[a-z][a-z0-9_]{1,63}$/.test(metric.key)) {
         issues.push({
           severity: 'error',
-          code: 'metric_key_invalid',
+          code: MAPPING_KEY_INVALID_CODE,
           message: MAPPING_KEY_INVALID_MESSAGE,
           columnKey: metric.column,
           details: { key: metric.key },
@@ -96,7 +96,7 @@ export class AnalyticsPublicationService {
       if (!metric.unit.trim()) {
         issues.push({
           severity: 'error',
-          code: 'metric_unit_missing',
+          code: MAPPING_UNIT_MISSING_CODE,
           message: MAPPING_UNIT_MISSING_MESSAGE,
           columnKey: metric.column,
         });
@@ -107,7 +107,7 @@ export class AnalyticsPublicationService {
       ) {
         issues.push({
           severity: 'error',
-          code: 'metric_aggregation_incompatible',
+          code: MAPPING_AGGREGATION_INCOMPATIBLE_CODE,
           message: MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE,
           columnKey: metric.column,
           details: { key: metric.key, aggregation: metric.aggregation },
@@ -532,6 +532,13 @@ const MAPPING_UNIT_MISSING_MESSAGE =
 const MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE =
   'Text and boolean metrics only support count or latest.' as const;
 
+const MAPPING_KEY_DUPLICATE_CODE = 'metric_key_duplicate' as const;
+const MAPPING_COLUMN_MISSING_CODE = 'metric_column_missing' as const;
+const MAPPING_KEY_INVALID_CODE = 'metric_key_invalid' as const;
+const MAPPING_UNIT_MISSING_CODE = 'metric_unit_missing' as const;
+const MAPPING_AGGREGATION_INCOMPATIBLE_CODE =
+  'metric_aggregation_incompatible' as const;
+
 const REMAPPING_INCOMPATIBLE_MESSAGE =
   'Metric key is already defined with a different type, unit, or aggregation.' as const;
 
@@ -547,6 +554,13 @@ type ValidateMappingMessage =
   | typeof MAPPING_KEY_INVALID_MESSAGE
   | typeof MAPPING_UNIT_MISSING_MESSAGE
   | typeof MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE;
+
+type ValidateMappingCode =
+  | typeof MAPPING_KEY_DUPLICATE_CODE
+  | typeof MAPPING_COLUMN_MISSING_CODE
+  | typeof MAPPING_KEY_INVALID_CODE
+  | typeof MAPPING_UNIT_MISSING_CODE
+  | typeof MAPPING_AGGREGATION_INCOMPATIBLE_CODE;
 
 function parseValue(
   raw: string | number | boolean | null,
