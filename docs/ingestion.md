@@ -258,7 +258,13 @@ compile-time guard; runtime values are unchanged. The inline
  (`'Formula-looking cell was treated as text.'`) as a compile-time guard —
  runtime value unchanged and raw source/exception text never reaches
  `ValidationIssue.message` via this producer; `code` / `rowNumber` /
- `columnKey` unchanged. No new semantics.
+ `columnKey` unchanged. The private `validateMapping()` accepts only the four
+ fixed codes
+ (`mapping_region_missing`, `mapping_column_missing`, `region_unmatched`,
+ `region_ambiguous`) as a compile-time guard — runtime values unchanged and
+ unbounded code text never reaches `ValidationIssue.code` via this producer;
+ this closes the `ValidationIssue.code` column — all four producers narrowed.
+ No new semantics.
 
 Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
 any escape from a source parser to a `parser_exception` issue carrying the

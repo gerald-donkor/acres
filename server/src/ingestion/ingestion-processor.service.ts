@@ -46,11 +46,22 @@ const REGION_MAPPING_UNMATCHED_MESSAGE =
 const REGION_MAPPING_AMBIGUOUS_MESSAGE =
   'Mapped region value matches more than one known region.' as const;
 
+const REGION_MAPPING_REGION_MISSING_CODE = 'mapping_region_missing' as const;
+const REGION_MAPPING_COLUMN_MISSING_CODE = 'mapping_column_missing' as const;
+const REGION_MAPPING_UNMATCHED_CODE = 'region_unmatched' as const;
+const REGION_MAPPING_AMBIGUOUS_CODE = 'region_ambiguous' as const;
+
 type RegionMappingMessage =
   | typeof REGION_MAPPING_REGION_MISSING_MESSAGE
   | typeof REGION_MAPPING_COLUMN_MISSING_MESSAGE
   | typeof REGION_MAPPING_UNMATCHED_MESSAGE
   | typeof REGION_MAPPING_AMBIGUOUS_MESSAGE;
+
+type RegionMappingCode =
+  | typeof REGION_MAPPING_REGION_MISSING_CODE
+  | typeof REGION_MAPPING_COLUMN_MISSING_CODE
+  | typeof REGION_MAPPING_UNMATCHED_CODE
+  | typeof REGION_MAPPING_AMBIGUOUS_CODE;
 
 @Injectable()
 export class IngestionProcessorService {
@@ -288,7 +299,7 @@ export class IngestionProcessorService {
   ): Promise<
     Array<{
       readonly severity: 'warning' | 'error';
-      readonly code: string;
+      readonly code: RegionMappingCode;
       readonly message: RegionMappingMessage;
       readonly rowNumber?: number;
       readonly columnKey?: string;
@@ -297,7 +308,7 @@ export class IngestionProcessorService {
   > {
     const issues: Array<{
       readonly severity: 'warning' | 'error';
-      readonly code: string;
+      readonly code: RegionMappingCode;
       readonly message: RegionMappingMessage;
       readonly rowNumber?: number;
       readonly columnKey?: string;
@@ -307,7 +318,7 @@ export class IngestionProcessorService {
     if (!regionColumn) {
       issues.push({
         severity: 'error',
-        code: 'mapping_region_missing',
+        code: REGION_MAPPING_REGION_MISSING_CODE,
         message: REGION_MAPPING_REGION_MISSING_MESSAGE,
       });
       return issues;
@@ -315,7 +326,7 @@ export class IngestionProcessorService {
     if (!summary.columnKeys.includes(regionColumn)) {
       issues.push({
         severity: 'error',
-        code: 'mapping_column_missing',
+        code: REGION_MAPPING_COLUMN_MISSING_CODE,
         message: REGION_MAPPING_COLUMN_MISSING_MESSAGE,
         columnKey: regionColumn,
       });
@@ -336,7 +347,7 @@ export class IngestionProcessorService {
       if (matches === 0) {
         issues.push({
           severity: 'error',
-          code: 'region_unmatched',
+          code: REGION_MAPPING_UNMATCHED_CODE,
           message: REGION_MAPPING_UNMATCHED_MESSAGE,
           rowNumber: sample.rowNumber,
           columnKey: regionColumn,
@@ -345,7 +356,7 @@ export class IngestionProcessorService {
       } else if (matches > 1) {
         issues.push({
           severity: 'error',
-          code: 'region_ambiguous',
+          code: REGION_MAPPING_AMBIGUOUS_CODE,
           message: REGION_MAPPING_AMBIGUOUS_MESSAGE,
           rowNumber: sample.rowNumber,
           columnKey: regionColumn,
