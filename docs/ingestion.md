@@ -203,8 +203,11 @@ short-lived Node child processes:
   boundary is compile-time guarded to the 2 fixed child error message literals
   (`'Malformed parser child request.'`, `'Parser execution failed.'`) via
   `ParserChildErrorMessage` (`PARSER_CHILD_MALFORMED_REQUEST_MESSAGE`,
-  `PARSER_CHILD_EXECUTION_FAILED_MESSAGE`), preventing unvetted exception text
-  from being emitted by the child process. No new semantics.
+  `PARSER_CHILD_EXECUTION_FAILED_MESSAGE`), and `ParserChildErrorResponse.code`
+  is compile-time guarded to the single fixed child error code literal
+  (`'parser_execution_failed'`) via `ParserChildErrorCode`
+  (`PARSER_CHILD_EXECUTION_FAILED_CODE`), preventing unvetted exception text
+  or codes from being emitted across the process boundary. No new semantics.
 - **Lifecycle Cleanup**: In-flight child processes are tracked and killed (`SIGKILL`)
   on job completion, error, timeout, or Nest `onApplicationShutdown` worker shutdown.
 - **Telemetry**: Low-cardinality parser execution metrics are recorded via

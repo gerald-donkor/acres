@@ -197,6 +197,39 @@ describe('ChildProcessParserExecutor', () => {
     ]);
   });
 
+  it('handles child error IPC response by returning parser_execution_failed', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    const errorResponse: ParserChildResponse = {
+      type: 'error',
+      id: sent.id,
+      code: 'parser_execution_failed',
+      message: 'Parser execution failed.',
+    };
+    fakeChild.emit('message', errorResponse);
+
+    const result = await executePromise;
+    expect(result.issues).toEqual([
+      {
+        severity: 'error',
+        code: 'parser_execution_failed',
+        message: 'Parser execution failed.',
+      },
+    ]);
+  });
+
   it('rejects malformed and mismatched IPC responses from child', async () => {
     const executor = new ChildProcessParserExecutor({
       timeoutMs: 5000,

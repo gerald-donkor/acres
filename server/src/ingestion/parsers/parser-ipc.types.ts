@@ -23,10 +23,15 @@ export type ParserChildErrorMessage =
   | typeof PARSER_CHILD_MALFORMED_REQUEST_MESSAGE
   | typeof PARSER_CHILD_EXECUTION_FAILED_MESSAGE;
 
+export const PARSER_CHILD_EXECUTION_FAILED_CODE =
+  'parser_execution_failed' as const;
+
+export type ParserChildErrorCode = typeof PARSER_CHILD_EXECUTION_FAILED_CODE;
+
 export interface ParserChildErrorResponse {
   readonly type: 'error';
   readonly id: string;
-  readonly code: string;
+  readonly code: ParserChildErrorCode;
   readonly message: ParserChildErrorMessage;
 }
 

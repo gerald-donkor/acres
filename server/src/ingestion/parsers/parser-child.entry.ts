@@ -1,5 +1,6 @@
 import { parseSourceBuffer } from './parse-source-buffer';
 import {
+  PARSER_CHILD_EXECUTION_FAILED_CODE,
   PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
   PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
   type ParserChildRequest,
@@ -38,7 +39,7 @@ export function runParserChild(): void {
             typeof (rawMessage as { id?: unknown })?.id === 'string'
               ? (rawMessage as { id: string }).id
               : '',
-          code: 'parser_execution_failed',
+          code: PARSER_CHILD_EXECUTION_FAILED_CODE,
           message: PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
         };
         process.send!(response, () => {
@@ -68,7 +69,7 @@ export function runParserChild(): void {
         const response: ParserChildResponse = {
           type: 'error',
           id: rawMessage.id,
-          code: 'parser_execution_failed',
+          code: PARSER_CHILD_EXECUTION_FAILED_CODE,
           message: PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
         };
         process.send!(response, () => {

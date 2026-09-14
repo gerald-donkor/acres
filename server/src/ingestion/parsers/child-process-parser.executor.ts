@@ -169,7 +169,7 @@ export class ChildProcessParserExecutor
 
         if (rawMessage.type === 'error') {
           const failureCode: ParserExecutorFailureCode =
-            rawMessage.code === PARSER_EXECUTION_TIMED_OUT_CODE
+            (rawMessage.code as string) === PARSER_EXECUTION_TIMED_OUT_CODE
               ? PARSER_EXECUTION_TIMED_OUT_CODE
               : PARSER_EXECUTION_FAILED_CODE;
           settle(
