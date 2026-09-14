@@ -23,6 +23,10 @@ const MALFORMED_MAPPING_ENTRY_MESSAGE =
 const MALFORMED_MAPPING_FIELD_MESSAGE =
   'Metric mapping entry is missing a required valid field.' as const;
 
+const MALFORMED_MAPPING_CODE = 'metric_mapping_invalid' as const;
+
+type MalformedMetricMappingCode = typeof MALFORMED_MAPPING_CODE;
+
 type MalformedMetricMappingMessage =
   | typeof MALFORMED_MAPPING_ARRAY_MESSAGE
   | typeof MALFORMED_MAPPING_ENTRY_MESSAGE
@@ -47,7 +51,7 @@ export function parseAnalyticsMapping(value: unknown): AnalyticsMapping {
 
 export function malformedMetricMappingIssues(value: unknown): Array<{
   readonly severity: 'error';
-  readonly code: string;
+  readonly code: MalformedMetricMappingCode;
   readonly message: MalformedMetricMappingMessage;
   readonly columnKey?: string;
   readonly details?: Record<string, unknown>;
@@ -59,7 +63,7 @@ export function malformedMetricMappingIssues(value: unknown): Array<{
     return [
       {
         severity: 'error',
-        code: 'metric_mapping_invalid',
+        code: MALFORMED_MAPPING_CODE,
         message: MALFORMED_MAPPING_ARRAY_MESSAGE,
       },
     ];
@@ -69,7 +73,7 @@ export function malformedMetricMappingIssues(value: unknown): Array<{
       return [
         {
           severity: 'error' as const,
-          code: 'metric_mapping_invalid',
+          code: MALFORMED_MAPPING_CODE,
           message: MALFORMED_MAPPING_ENTRY_MESSAGE,
           details: { index },
         },
@@ -78,7 +82,7 @@ export function malformedMetricMappingIssues(value: unknown): Array<{
     const metric = entry as Record<string, unknown>;
     const issues: Array<{
       readonly severity: 'error';
-      readonly code: string;
+      readonly code: MalformedMetricMappingCode;
       readonly message: MalformedMetricMappingMessage;
       readonly columnKey?: string;
       readonly details?: Record<string, unknown>;
@@ -195,10 +199,18 @@ function parseMetricMapping(value: unknown): MetricMapping | null {
   };
 }
 
-function invalidMetricIssue(index: number, field: string) {
+function invalidMetricIssue(
+  index: number,
+  field: string,
+): {
+  readonly severity: 'error';
+  readonly code: MalformedMetricMappingCode;
+  readonly message: MalformedMetricMappingMessage;
+  readonly details: { readonly index: number; readonly field: string };
+} {
   return {
     severity: 'error' as const,
-    code: 'metric_mapping_invalid',
+    code: MALFORMED_MAPPING_CODE,
     message: MALFORMED_MAPPING_FIELD_MESSAGE,
     details: { index, field },
   };

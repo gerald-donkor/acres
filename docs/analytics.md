@@ -84,6 +84,10 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
   literals (non-array mappings, non-object entry, missing or invalid field)
   as a compile-time guard — runtime values unchanged and raw source/exception
   text never reaches `ValidationIssue.message` via this producer.
+  `malformedMetricMappingIssues()` accepts only the single fixed code
+  `metric_mapping_invalid` as a compile-time guard — runtime value unchanged
+  and unbounded code text never reaches `ValidationIssue.code` via this
+  producer. No new semantics.
   `validateRemappingCompatibility()` accepts only the single fixed literal
   (`Metric key is already defined with a different type, unit, or
   aggregation.`) as a compile-time guard — runtime value unchanged and raw
