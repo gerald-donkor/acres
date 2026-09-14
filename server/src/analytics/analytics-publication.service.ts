@@ -32,7 +32,7 @@ interface ParsedObservation {
       | 'invalid'
       | 'duplicate'
       | 'low_confidence';
-    readonly code: string;
+    readonly code: ObservationQualityCode;
     readonly message: ObservationQualityMessage;
     readonly details?: Prisma.InputJsonValue;
   }>;
@@ -528,6 +528,7 @@ type InvalidValueMessage =
 
 type InvalidValueCode = typeof VALUE_MISSING_CODE | typeof VALUE_INVALID_CODE;
 
+type ObservationQualityCode = PeriodInvalidCode | InvalidValueCode;
 type ObservationQualityMessage = PeriodInvalidMessage | InvalidValueMessage;
 
 const MAPPING_KEY_DUPLICATE_MESSAGE =
