@@ -124,7 +124,7 @@ export class AnalyticsPublicationService {
   ): Promise<
     Array<{
       readonly severity: 'warning' | 'error';
-      readonly code: string;
+      readonly code: RemappingIncompatibleCode;
       readonly message: RemappingIncompatibleMessage;
       readonly rowNumber?: number;
       readonly columnKey?: string;
@@ -133,7 +133,7 @@ export class AnalyticsPublicationService {
   > {
     const issues: Array<{
       readonly severity: 'warning' | 'error';
-      readonly code: string;
+      readonly code: RemappingIncompatibleCode;
       readonly message: RemappingIncompatibleMessage;
       readonly rowNumber?: number;
       readonly columnKey?: string;
@@ -154,7 +154,7 @@ export class AnalyticsPublicationService {
       ) {
         issues.push({
           severity: 'error',
-          code: 'metric_definition_incompatible',
+          code: REMAPPING_INCOMPATIBLE_CODE,
           message: REMAPPING_INCOMPATIBLE_MESSAGE,
           columnKey: metric.column,
           details: { key: metric.key },
@@ -535,7 +535,11 @@ const MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE =
 const REMAPPING_INCOMPATIBLE_MESSAGE =
   'Metric key is already defined with a different type, unit, or aggregation.' as const;
 
+const REMAPPING_INCOMPATIBLE_CODE = 'metric_definition_incompatible' as const;
+
 type RemappingIncompatibleMessage = typeof REMAPPING_INCOMPATIBLE_MESSAGE;
+
+type RemappingIncompatibleCode = typeof REMAPPING_INCOMPATIBLE_CODE;
 
 type ValidateMappingMessage =
   | typeof MAPPING_KEY_DUPLICATE_MESSAGE

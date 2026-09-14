@@ -83,7 +83,17 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
   producer. `malformedMetricMappingIssues()` accepts only its three fixed
   literals (non-array mappings, non-object entry, missing or invalid field)
   as a compile-time guard — runtime values unchanged and raw source/exception
-  text never reaches `ValidationIssue.message` via this producer. `validateRemappingCompatibility()` accepts only the single fixed literal (`Metric key is already defined with a different type, unit, or aggregation.`) as a compile-time guard — runtime value unchanged and raw source/exception text never reaches `ValidationIssue.message` via this producer; `columnKey` / `details.key` JSON remains unchanged governed behavior. No new
+  text never reaches `ValidationIssue.message` via this producer.
+  `validateRemappingCompatibility()` accepts only the single fixed literal
+  (`Metric key is already defined with a different type, unit, or
+  aggregation.`) as a compile-time guard — runtime value unchanged and raw
+  source/exception text never reaches `ValidationIssue.message` via this
+  producer; `columnKey` / `details.key` JSON remains unchanged governed
+  behavior.
+  `validateRemappingCompatibility()` accepts only the single fixed code
+  `metric_definition_incompatible` as a compile-time guard — runtime value
+  unchanged and unbounded code text never reaches `ValidationIssue.code` via
+  this producer. No new
   semantics. Incompatible remapping of an existing metric key to
 another value type, unit, or aggregation is reported pre-publication as a
 blocking `metric_definition_incompatible` validation issue (naming the mapped
