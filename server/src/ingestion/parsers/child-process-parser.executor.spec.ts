@@ -2,11 +2,15 @@ import { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
 import {
   ChildProcessParserExecutor,
+  isParserChildResponse,
   validateUntrustedSummary,
 } from './child-process-parser.executor';
-import type {
-  ParserChildRequest,
-  ParserChildResponse,
+import {
+  PARSER_CHILD_EXECUTION_FAILED_CODE,
+  PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
+  PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
+  type ParserChildRequest,
+  type ParserChildResponse,
 } from './parser-ipc.types';
 import type { ParsedSourceSummary, ParserLimits } from './parser.types';
 
@@ -230,6 +234,164 @@ describe('ChildProcessParserExecutor', () => {
     ]);
   });
 
+  it('handles child error IPC response with malformed request message by returning parser_execution_failed', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    const errorResponse: ParserChildResponse = {
+      type: 'error',
+      id: sent.id,
+      code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+      message: PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
+    };
+    fakeChild.emit('message', errorResponse);
+
+    const result = await executePromise;
+    expect(result.issues).toEqual([
+      {
+        severity: 'error',
+        code: 'parser_execution_failed',
+        message: 'Parser execution failed.',
+      },
+    ]);
+  });
+
+  it('rejects child error response with invalid code', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    fakeChild.emit('message', {
+      type: 'error',
+      id: sent.id,
+      code: 'unknown_code',
+      message: PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
+    });
+
+    const result = await executePromise;
+    expect(result.issues).toEqual([
+      {
+        severity: 'error',
+        code: 'parser_execution_failed',
+        message: 'Parser execution failed.',
+      },
+    ]);
+  });
+
+  it('rejects child error response with invalid message', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    fakeChild.emit('message', {
+      type: 'error',
+      id: sent.id,
+      code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+      message: 'arbitrary error message',
+    });
+
+    const result = await executePromise;
+    expect(result.issues).toEqual([
+      {
+        severity: 'error',
+        code: 'parser_execution_failed',
+        message: 'Parser execution failed.',
+      },
+    ]);
+  });
+
+  it('rejects child error response with missing code or message', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    fakeChild.emit('message', {
+      type: 'error',
+      id: sent.id,
+    });
+
+    const result = await executePromise;
+    expect(result.issues).toEqual([
+      {
+        severity: 'error',
+        code: 'parser_execution_failed',
+        message: 'Parser execution failed.',
+      },
+    ]);
+  });
+
+  it('rejects child success response with missing or non-object summary', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    fakeChild.emit('message', {
+      type: 'success',
+      id: sent.id,
+      summary: null,
+    });
+
+    const result = await executePromise;
+    expect(result.issues).toEqual([
+      {
+        severity: 'error',
+        code: 'parser_execution_failed',
+        message: 'Parser execution failed.',
+      },
+    ]);
+  });
+
   it('rejects malformed and mismatched IPC responses from child', async () => {
     const executor = new ChildProcessParserExecutor({
       timeoutMs: 5000,
@@ -379,5 +541,118 @@ describe('validateUntrustedSummary', () => {
       metadata: {},
     };
     expect(validateUntrustedSummary(raw, 'csv', defaultLimits)).toBeNull();
+  });
+});
+
+describe('isParserChildResponse', () => {
+  it('accepts valid success response', () => {
+    expect(
+      isParserChildResponse({
+        type: 'success',
+        id: 'req-1',
+        summary: { sourceKind: 'csv', rowCount: 1 },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts valid error response with execution failed message', () => {
+    expect(
+      isParserChildResponse({
+        type: 'error',
+        id: 'req-1',
+        code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+        message: PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts valid error response with malformed request message', () => {
+    expect(
+      isParserChildResponse({
+        type: 'error',
+        id: 'req-1',
+        code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+        message: PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects error response with unknown code', () => {
+    expect(
+      isParserChildResponse({
+        type: 'error',
+        id: 'req-1',
+        code: 'unknown_code',
+        message: PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects error response with arbitrary message', () => {
+    expect(
+      isParserChildResponse({
+        type: 'error',
+        id: 'req-1',
+        code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+        message: 'arbitrary error message',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects error response with missing code or message', () => {
+    expect(
+      isParserChildResponse({
+        type: 'error',
+        id: 'req-1',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects error response with non-string id', () => {
+    expect(
+      isParserChildResponse({
+        type: 'error',
+        id: 123,
+        code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+        message: PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects success response with missing or non-object summary', () => {
+    expect(
+      isParserChildResponse({
+        type: 'success',
+        id: 'req-1',
+        summary: null,
+      }),
+    ).toBe(false);
+    expect(
+      isParserChildResponse({
+        type: 'success',
+        id: 'req-1',
+        summary: 'not an object',
+      }),
+    ).toBe(false);
+    expect(
+      isParserChildResponse({
+        type: 'success',
+        id: 'req-1',
+        summary: [],
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects non-object, null, array, or unexpected type payloads', () => {
+    expect(isParserChildResponse(null)).toBe(false);
+    expect(isParserChildResponse(undefined)).toBe(false);
+    expect(isParserChildResponse('string')).toBe(false);
+    expect(isParserChildResponse([])).toBe(false);
+    expect(
+      isParserChildResponse({
+        type: 'other',
+        id: 'req-1',
+      }),
+    ).toBe(false);
   });
 });

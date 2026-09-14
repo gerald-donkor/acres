@@ -3,9 +3,12 @@ import { fork, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import type { ParserExecutorPort } from './parser-executor.port';
-import type {
-  ParserChildRequest,
-  ParserChildResponse,
+import {
+  PARSER_CHILD_EXECUTION_FAILED_CODE,
+  PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
+  PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
+  type ParserChildRequest,
+  type ParserChildResponse,
 } from './parser-ipc.types';
 import type {
   ParsedSourceSummary,
@@ -168,14 +171,10 @@ export class ChildProcessParserExecutor
         }
 
         if (rawMessage.type === 'error') {
-          const failureCode: ParserExecutorFailureCode =
-            (rawMessage.code as string) === PARSER_EXECUTION_TIMED_OUT_CODE
-              ? PARSER_EXECUTION_TIMED_OUT_CODE
-              : PARSER_EXECUTION_FAILED_CODE;
           settle(
             createSafeErrorSummary(
               sourceKind,
-              failureCode,
+              PARSER_EXECUTION_FAILED_CODE,
               PARSER_EXECUTION_FAILED_MESSAGE,
             ),
           );
@@ -290,13 +289,27 @@ function createSafeErrorSummary(
   };
 }
 
-function isParserChildResponse(value: unknown): value is ParserChildResponse {
-  if (!value || typeof value !== 'object') return false;
+export function isParserChildResponse(
+  value: unknown,
+): value is ParserChildResponse {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const res = value as Partial<ParserChildResponse>;
-  return (
-    (res.type === 'success' || res.type === 'error') &&
-    typeof res.id === 'string'
-  );
+  if (typeof res.id !== 'string') return false;
+  if (res.type === 'success') {
+    return (
+      typeof res.summary === 'object' &&
+      res.summary !== null &&
+      !Array.isArray(res.summary)
+    );
+  }
+  if (res.type === 'error') {
+    return (
+      res.code === PARSER_CHILD_EXECUTION_FAILED_CODE &&
+      (res.message === PARSER_CHILD_EXECUTION_FAILED_MESSAGE ||
+        res.message === PARSER_CHILD_MALFORMED_REQUEST_MESSAGE)
+    );
+  }
+  return false;
 }
 
 export function validateUntrustedSummary(
