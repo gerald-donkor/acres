@@ -21,6 +21,7 @@ class FakeChildProcess extends EventEmitter {
   public sentMessages: unknown[] = [];
   public killed = false;
   public killSignal: string | null = null;
+  public killCalls = 0;
 
   send(message: unknown, callback?: (err?: Error) => void): boolean {
     this.sentMessages.push(message);
@@ -33,6 +34,7 @@ class FakeChildProcess extends EventEmitter {
   }
 
   kill(signal?: NodeJS.Signals | number): boolean {
+    this.killCalls += 1;
     this.killed = true;
     this.killSignal = typeof signal === 'string' ? signal : 'SIGKILL';
     this.exitCode = 1;
@@ -70,6 +72,15 @@ function createNumberMetadata(entryCount: number): Record<string, unknown> {
     metadata[`key_${index}`] = index;
   }
   return metadata;
+}
+
+function createScalarRow(entryCount: number): Record<string, string> {
+  return Object.fromEntries(
+    Array.from({ length: entryCount }, (_, index) => [
+      `column_${index}`,
+      `value_${index}`,
+    ]),
+  );
 }
 
 describe('ChildProcessParserExecutor', () => {
@@ -504,6 +515,58 @@ describe('ChildProcessParserExecutor', () => {
     expect(fakeChild.eventNames()).toEqual([]);
   });
 
+  it('rejects a child success summary with an over-width row map and cleans up the child', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    const oversizedRow = createScalarRow(defaultLimits.maxColumns + 2);
+    fakeChild.emit('message', {
+      type: 'success',
+      id: sent.id,
+      summary: {
+        ...createValidSummary(),
+        sampleRows: [oversizedRow],
+      },
+    });
+
+    await expect(executePromise).resolves.toEqual({
+      sourceKind: 'csv',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+      issues: [
+        {
+          severity: 'error',
+          code: 'parser_execution_failed',
+          message: 'Parser execution failed.',
+        },
+      ],
+      metadata: {},
+    });
+    expect(JSON.stringify(await executePromise)).not.toContain('column_6');
+    expect(fakeChild.connected).toBe(false);
+    expect(fakeChild.killed).toBe(true);
+    expect(fakeChild.eventNames()).toEqual([]);
+    expect(fakeChild.killCalls).toBe(1);
+
+    fakeChild.exitCode = null;
+    fakeChild.signalCode = null;
+    executor.onApplicationShutdown();
+    expect(fakeChild.killCalls).toBe(1);
+  });
+
   it('rejects malformed and mismatched IPC responses from child', async () => {
     const executor = new ChildProcessParserExecutor({
       timeoutMs: 5000,
@@ -663,6 +726,55 @@ describe('validateUntrustedSummary', () => {
     expect(validated?.issues[0]?.details?.value).toBe(-12.5);
     expect(Object.is(validated?.metadata.value, -0)).toBe(true);
   });
+
+  it.each(['sampleRows', 'validationRows'] as const)(
+    'rejects an over-width row map in %s',
+    (location) => {
+      const oversizedRow = createScalarRow(defaultLimits.maxColumns + 2);
+      const base = createValidSummary();
+      const raw =
+        location === 'sampleRows'
+          ? { ...base, sampleRows: [oversizedRow] }
+          : {
+              ...base,
+              validationRows: [{ rowNumber: 2, values: oversizedRow }],
+            };
+
+      expect(validateUntrustedSummary(raw, 'csv', defaultLimits)).toBeNull();
+    },
+  );
+
+  it.each(['sampleRows', 'validationRows'] as const)(
+    'accepts and preserves an exact-boundary row map in %s',
+    (location) => {
+      const boundaryRow = createScalarRow(defaultLimits.maxColumns + 1);
+      const columnKeys = Object.keys(boundaryRow);
+      const base: ParsedSourceSummary = {
+        ...createValidSummary(),
+        columnCount: columnKeys.length,
+        columnKeys,
+      };
+      const raw: ParsedSourceSummary =
+        location === 'sampleRows'
+          ? { ...base, sampleRows: [boundaryRow] }
+          : {
+              ...base,
+              validationRows: [{ rowNumber: 2, values: boundaryRow }],
+            };
+
+      const validated = validateUntrustedSummary(raw, 'csv', defaultLimits);
+      const validatedRow =
+        location === 'sampleRows'
+          ? validated?.sampleRows[0]
+          : validated?.validationRows[0]?.values;
+
+      expect(validated).not.toBeNull();
+      expect(validatedRow).toEqual(boundaryRow);
+      expect(Object.keys(validatedRow ?? {})).toHaveLength(
+        defaultLimits.maxColumns + 1,
+      );
+    },
+  );
 
   it('rejects a missing metadata container', () => {
     const raw = {

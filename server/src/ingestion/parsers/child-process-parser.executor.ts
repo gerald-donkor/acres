@@ -369,7 +369,9 @@ export function validateUntrustedSummary(
   for (const row of summary.sampleRows) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
     const sanitizedRow: Record<string, string | number | boolean | null> = {};
-    for (const [k, v] of Object.entries(row)) {
+    const entries = Object.entries(row);
+    if (entries.length > maxColumnsAllowed) return null;
+    for (const [k, v] of entries) {
       if (k.length > MAX_STRING_LENGTH) return null;
       if (
         v !== null &&
@@ -416,7 +418,9 @@ export function validateUntrustedSummary(
     }
     const sanitizedValues: Record<string, string | number | boolean | null> =
       {};
-    for (const [k, v] of Object.entries(row.values)) {
+    const valueEntries = Object.entries(row.values);
+    if (valueEntries.length > maxColumnsAllowed) return null;
+    for (const [k, v] of valueEntries) {
       if (k.length > MAX_STRING_LENGTH) return null;
       if (
         v !== null &&
