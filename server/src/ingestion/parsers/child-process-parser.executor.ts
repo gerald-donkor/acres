@@ -294,7 +294,7 @@ export function isParserChildResponse(
 ): value is ParserChildResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const res = value as Partial<ParserChildResponse>;
-  if (typeof res.id !== 'string') return false;
+  if (typeof res.id !== 'string' || res.id.trim().length === 0) return false;
   if (res.type === 'success') {
     return (
       typeof res.summary === 'object' &&

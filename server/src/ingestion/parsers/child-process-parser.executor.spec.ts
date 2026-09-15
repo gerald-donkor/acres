@@ -619,6 +619,48 @@ describe('isParserChildResponse', () => {
     ).toBe(false);
   });
 
+  it('rejects success response with empty id', () => {
+    expect(
+      isParserChildResponse({
+        type: 'success',
+        id: '',
+        summary: { sourceKind: 'csv', rowCount: 1 },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects success response with whitespace-only id', () => {
+    expect(
+      isParserChildResponse({
+        type: 'success',
+        id: '   ',
+        summary: { sourceKind: 'csv', rowCount: 1 },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects error response with empty id', () => {
+    expect(
+      isParserChildResponse({
+        type: 'error',
+        id: '',
+        code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+        message: PARSER_CHILD_EXECUTION_FAILED_MESSAGE,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects error response with whitespace-only id', () => {
+    expect(
+      isParserChildResponse({
+        type: 'error',
+        id: '   ',
+        code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+        message: PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
+      }),
+    ).toBe(false);
+  });
+
   it('rejects success response with missing or non-object summary', () => {
     expect(
       isParserChildResponse({

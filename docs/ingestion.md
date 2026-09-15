@@ -209,7 +209,10 @@ short-lived Node child processes:
   (`PARSER_CHILD_EXECUTION_FAILED_CODE`), preventing unvetted exception text
   or codes from being emitted across the process boundary. Runtime response
   discrimination via `isParserChildResponse()` strictly enforces this IPC
-  contract in the parent process, validating the message discriminator,
+  contract in the parent process, validating non-empty response ids
+  (empty/whitespace-only ids rejected, mirroring the child-side non-empty
+  `id` rule; defense-in-depth with valid UUID-id flows unchanged and the
+  mismatch-branch outcome identical), the message discriminator,
   success summary object presence, and exact error code/message literals, while
   eliminating dead child-timeout branches and runtime casts. In counterpart,
   the child process entrypoint strictly validates incoming IPC parse requests
