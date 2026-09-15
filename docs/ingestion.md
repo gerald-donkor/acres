@@ -211,7 +211,14 @@ short-lived Node child processes:
   discrimination via `isParserChildResponse()` strictly enforces this IPC
   contract in the parent process, validating the message discriminator,
   success summary object presence, and exact error code/message literals, while
-  eliminating dead child-timeout branches and runtime casts. No new semantics.
+  eliminating dead child-timeout branches and runtime casts. In counterpart,
+  the child process entrypoint strictly validates incoming IPC parse requests
+  via `isParserChildRequest()` and `isParserLimits()`, asserting positive integer
+  bounds on all 6 resource limits (`maxRows`, `maxColumns`, `maxCellChars`,
+  `maxSampleRows >= 0`, `maxGeojsonFeatures`, `maxGeojsonCoordinates`), valid
+  buffer/Uint8Array payloads, and non-empty request IDs/media types before
+  parsing begins, deterministically rejecting malformed requests with
+  `PARSER_CHILD_MALFORMED_REQUEST_MESSAGE` and exit code 1. No new semantics.
 - **Lifecycle Cleanup**: In-flight child processes are tracked and killed (`SIGKILL`)
   on job completion, error, timeout, or Nest `onApplicationShutdown` worker shutdown.
 - **Telemetry**: Low-cardinality parser execution metrics are recorded via

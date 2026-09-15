@@ -1,7 +1,12 @@
+import { fork } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { strToU8, zipSync } from 'fflate';
 import { ChildProcessParserExecutor } from './child-process-parser.executor';
+import {
+  PARSER_CHILD_EXECUTION_FAILED_CODE,
+  PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
+} from './parser-ipc.types';
 import type { ParserLimits } from './parser.types';
 
 const limits: ParserLimits = {
@@ -154,5 +159,67 @@ describe('Compiled Child Process Parser Boundary', () => {
         severity: 'error',
       }),
     ]);
+  });
+
+  it('rejects malformed request and exits with error code 1', async () => {
+    const child = fork(entrypointPath, [], {
+      execPath: process.execPath,
+      execArgv: ['--max-old-space-size=192'],
+      env: {
+        NODE_ENV: 'test',
+      },
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      serialization: 'advanced',
+    });
+
+    const exitPromise = new Promise<{
+      code: number | null;
+      signal: NodeJS.Signals | null;
+    }>((resolve) => {
+      child.once('exit', (code, signal) => resolve({ code, signal }));
+    });
+
+    const messagePromise = new Promise<unknown>((resolve, reject) => {
+      child.once('message', (msg) => resolve(msg));
+      child.once('error', (err) => reject(err));
+    });
+
+    try {
+      // Send malformed request (missing limits, invalid buffer)
+      child.send({
+        type: 'parse',
+        id: 'req-malformed-1',
+        buffer: 'not-a-buffer',
+        mediaType: 'text/csv',
+      });
+
+      const [message, { code }] = await Promise.all([
+        messagePromise,
+        exitPromise,
+      ]);
+
+      expect(message).toEqual({
+        type: 'error',
+        id: 'req-malformed-1',
+        code: PARSER_CHILD_EXECUTION_FAILED_CODE,
+        message: PARSER_CHILD_MALFORMED_REQUEST_MESSAGE,
+      });
+      expect(code).toBe(1);
+    } finally {
+      if (child.connected) {
+        try {
+          child.disconnect();
+        } catch {
+          // Ignore disconnect error
+        }
+      }
+      if (child.exitCode === null && child.signalCode === null) {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // Ignore kill error
+        }
+      }
+    }
   });
 });
