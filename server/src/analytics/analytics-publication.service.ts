@@ -556,7 +556,7 @@ const REMAPPING_INCOMPATIBLE_CODE = 'metric_definition_incompatible' as const;
 
 type RemappingIncompatibleMessage = typeof REMAPPING_INCOMPATIBLE_MESSAGE;
 
-type RemappingIncompatibleCode = typeof REMAPPING_INCOMPATIBLE_CODE;
+export type RemappingIncompatibleCode = typeof REMAPPING_INCOMPATIBLE_CODE;
 
 type ValidateMappingMessage =
   | typeof MAPPING_KEY_DUPLICATE_MESSAGE
@@ -565,7 +565,7 @@ type ValidateMappingMessage =
   | typeof MAPPING_UNIT_MISSING_MESSAGE
   | typeof MAPPING_AGGREGATION_INCOMPATIBLE_MESSAGE;
 
-type ValidateMappingCode =
+export type ValidateMappingCode =
   | typeof MAPPING_KEY_DUPLICATE_CODE
   | typeof MAPPING_COLUMN_MISSING_CODE
   | typeof MAPPING_KEY_INVALID_CODE

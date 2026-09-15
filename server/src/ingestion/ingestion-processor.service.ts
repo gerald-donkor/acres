@@ -57,7 +57,7 @@ type RegionMappingMessage =
   | typeof REGION_MAPPING_UNMATCHED_MESSAGE
   | typeof REGION_MAPPING_AMBIGUOUS_MESSAGE;
 
-type RegionMappingCode =
+export type RegionMappingCode =
   | typeof REGION_MAPPING_REGION_MISSING_CODE
   | typeof REGION_MAPPING_COLUMN_MISSING_CODE
   | typeof REGION_MAPPING_UNMATCHED_CODE

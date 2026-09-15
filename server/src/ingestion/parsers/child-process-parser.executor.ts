@@ -13,6 +13,7 @@ import {
 import type {
   ParsedSourceSummary,
   ParserIssue,
+  ParserIssueCode,
   ParserLimits,
   SourceKind,
 } from './parser.types';
@@ -508,7 +509,10 @@ export function validateUntrustedSummary(
 
     issues.push({
       severity: issue.severity,
-      code: issue.code,
+      // The regex gate above remains the runtime control for untrusted bytes
+      // while the union constrains trusted construction.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- documents the unsound trust-boundary edge: issue arrives via the raw-as-Partial cast.
+      code: issue.code as ParserIssueCode,
       message: issue.message,
       rowNumber: issue.rowNumber,
       columnKey: issue.columnKey,

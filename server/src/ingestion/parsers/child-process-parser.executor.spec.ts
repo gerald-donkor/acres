@@ -12,7 +12,11 @@ import {
   type ParserChildRequest,
   type ParserChildResponse,
 } from './parser-ipc.types';
-import type { ParsedSourceSummary, ParserLimits } from './parser.types';
+import type {
+  ParsedSourceSummary,
+  ParserIssue,
+  ParserLimits,
+} from './parser.types';
 
 class FakeChildProcess extends EventEmitter {
   public connected = true;
@@ -637,6 +641,29 @@ describe('validateUntrustedSummary', () => {
     expect(validated?.metadata).toEqual({ delimiter: ',' });
   });
 
+  it.each([
+    ['parser producer', 'file_size_limit_exceeded'],
+    ['executor failure', 'parser_execution_failed'],
+    ['region mapping', 'mapping_region_missing'],
+    ['malformed mapping', 'metric_mapping_invalid'],
+    ['analytics mapping', 'metric_key_duplicate'],
+    ['remapping', 'metric_definition_incompatible'],
+  ] as const)('accepts trusted %s code %s into ParserIssue', (_label, code) => {
+    // The ParserIssue annotation is the assertion: a non-member code fails compilation.
+    const issue: ParserIssue = {
+      severity: 'error',
+      code,
+      message: 'Trusted test issue.',
+    };
+    expect(issue.code).toBe(code);
+    const validated = validateUntrustedSummary(
+      { ...createValidSummary(), issues: [issue] },
+      'csv',
+      defaultLimits,
+    );
+    expect(validated?.issues[0]?.code).toBe(code);
+  });
+
   it('accepts and preserves metadata at the entry and string boundaries', () => {
     const boundaryKey = 'k'.repeat(200);
     const boundaryValue = 'v'.repeat(200);
@@ -692,7 +719,7 @@ describe('validateUntrustedSummary', () => {
                   issues: [
                     {
                       severity: 'warning' as const,
-                      code: 'invalid_value',
+                      code: 'formula_as_data',
                       message: 'Invalid value.',
                       details: { value },
                     },
@@ -712,7 +739,7 @@ describe('validateUntrustedSummary', () => {
       issues: [
         {
           severity: 'warning',
-          code: 'finite_number',
+          code: 'formula_as_data',
           message: 'Finite number.',
           details: { value: -12.5 },
         },

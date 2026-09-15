@@ -299,8 +299,17 @@ compile-time guard; runtime values are unchanged. The inline
  fixed codes
  (`mapping_region_missing`, `mapping_column_missing`, `region_unmatched`,
  `region_ambiguous`) as a compile-time guard — runtime values unchanged and
- unbounded code text never reaches `ValidationIssue.code` via this producer;
- this closes the `ValidationIssue.code` column — all four producers narrowed.
+ unbounded code text never reaches `ValidationIssue.code` via this producer.
+ `ParserIssue.code` accepts only the fixed producer literal union
+ (`ParserProducerCode` — the 18 parser-producer literals — plus
+ `ParserExecutorFailureCode` and the four already-narrowed mapping validator
+ code types) as a compile-time guard; the earlier note that the four region
+ codes alone closed the `ValidationIssue.code` column is corrected here, since
+ the ingestion merge site also carries parser-side codes that were never part
+ of that closure. The validator's runtime regex gate is unchanged and remains
+ the control for untrusted child bytes, with a single documented assertion at
+ the validator push site; runtime values, wire formats, and persisted shapes
+ are unchanged. `ParserIssue.message` remains open and separately scoped.
  No new semantics.
 
 Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
