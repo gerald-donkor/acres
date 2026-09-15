@@ -509,30 +509,35 @@ export function validateUntrustedSummary(
     });
   }
 
-  const metadata: Record<string, unknown> = {};
   if (
-    summary.metadata !== undefined &&
-    summary.metadata !== null &&
-    typeof summary.metadata === 'object' &&
-    !Array.isArray(summary.metadata)
+    summary.metadata === undefined ||
+    summary.metadata === null ||
+    typeof summary.metadata !== 'object' ||
+    Array.isArray(summary.metadata)
   ) {
-    const metaEntries = Object.entries(summary.metadata);
-    if (metaEntries.length <= 20) {
-      for (const [mk, mv] of metaEntries) {
-        if (mk.length <= MAX_STRING_LENGTH) {
-          if (
-            mv === null ||
-            typeof mv === 'string' ||
-            typeof mv === 'number' ||
-            typeof mv === 'boolean'
-          ) {
-            if (typeof mv !== 'string' || mv.length <= MAX_STRING_LENGTH) {
-              metadata[mk] = mv;
-            }
-          }
-        }
-      }
+    return null;
+  }
+
+  const metadata: Record<string, unknown> = {};
+  const metaEntries = Object.entries(summary.metadata);
+  if (metaEntries.length > 20) return null;
+  for (const [mk, mv] of metaEntries) {
+    if (mk.length > MAX_STRING_LENGTH) return null;
+    if (
+      mv !== null &&
+      typeof mv !== 'string' &&
+      typeof mv !== 'number' &&
+      typeof mv !== 'boolean'
+    ) {
+      return null;
     }
+    if (typeof mv === 'string' && mv.length > MAX_STRING_LENGTH) return null;
+    Object.defineProperty(metadata, mk, {
+      value: mv,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
 
   return {

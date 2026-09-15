@@ -214,7 +214,13 @@ short-lived Node child processes:
   `id` rule; defense-in-depth with valid UUID-id flows unchanged and the
   mismatch-branch outcome identical), the message discriminator,
   success summary object presence, and exact error code/message literals, while
-  eliminating dead child-timeout branches and runtime casts. In counterpart,
+  eliminating dead child-timeout branches and runtime casts.
+  Summary metadata must be a non-null, non-array object containing at most 20
+  scalar (`null`, string, number, or boolean) entries; keys and string values
+  are limited to 200 characters. Any metadata-container or entry violation
+  rejects the entire untrusted summary instead of silently dropping invalid
+  entries. Valid parser metadata and the existing deterministic safe-error
+  contract are unchanged. In counterpart,
   the child process entrypoint strictly validates incoming IPC parse requests
   via `isParserChildRequest()` and `isParserLimits()`, asserting positive integer
   bounds on all 6 resource limits (`maxRows`, `maxColumns`, `maxCellChars`,

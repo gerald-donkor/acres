@@ -49,6 +49,29 @@ const defaultLimits: ParserLimits = {
   maxGeojsonCoordinates: 50,
 };
 
+function createValidSummary(
+  metadata: Record<string, unknown> = {},
+): ParsedSourceSummary {
+  return {
+    sourceKind: 'csv',
+    rowCount: 1,
+    columnCount: 1,
+    columnKeys: ['region'],
+    sampleRows: [{ region: 'A1' }],
+    validationRows: [{ rowNumber: 2, values: { region: 'A1' } }],
+    issues: [],
+    metadata,
+  };
+}
+
+function createNumberMetadata(entryCount: number): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {};
+  for (let index = 0; index < entryCount; index += 1) {
+    metadata[`key_${index}`] = index;
+  }
+  return metadata;
+}
+
 describe('ChildProcessParserExecutor', () => {
   let fakeChild: FakeChildProcess;
   let lastForkCall: {
@@ -392,6 +415,51 @@ describe('ChildProcessParserExecutor', () => {
     ]);
   });
 
+  it('rejects invalid child metadata without leaking it and cleans up the child', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    fakeChild.emit('message', {
+      type: 'success',
+      id: sent.id,
+      summary: createValidSummary({
+        encoding: 'utf8',
+        rejected: { secret: 'do-not-leak' },
+      }),
+    });
+
+    const result = await executePromise;
+    expect(result).toEqual({
+      sourceKind: 'csv',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+      issues: [
+        {
+          severity: 'error',
+          code: 'parser_execution_failed',
+          message: 'Parser execution failed.',
+        },
+      ],
+      metadata: {},
+    });
+    expect(JSON.stringify(result)).not.toContain('do-not-leak');
+    expect(fakeChild.connected).toBe(false);
+    expect(fakeChild.killed).toBe(true);
+  });
+
   it('rejects malformed and mismatched IPC responses from child', async () => {
     const executor = new ChildProcessParserExecutor({
       timeoutMs: 5000,
@@ -459,6 +527,76 @@ describe('validateUntrustedSummary', () => {
     expect(validated).not.toBeNull();
     expect(validated?.rowCount).toBe(2);
     expect(validated?.columnKeys).toEqual(['region', 'value']);
+    expect(validated?.metadata).toEqual({ delimiter: ',' });
+  });
+
+  it('accepts and preserves metadata at the entry and string boundaries', () => {
+    const boundaryKey = 'k'.repeat(200);
+    const boundaryValue = 'v'.repeat(200);
+    const metadata = createNumberMetadata(18);
+    metadata[boundaryKey] = boundaryValue;
+    Object.defineProperty(metadata, '__proto__', {
+      value: 'literal metadata key',
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+
+    const validated = validateUntrustedSummary(
+      createValidSummary(metadata),
+      'csv',
+      defaultLimits,
+    );
+
+    expect(validated?.metadata).toEqual(metadata);
+    expect(Object.keys(validated?.metadata ?? {})).toHaveLength(20);
+    expect(Object.hasOwn(validated?.metadata ?? {}, '__proto__')).toBe(true);
+    expect(validated?.metadata.__proto__).toBe('literal metadata key');
+  });
+
+  it('rejects a missing metadata container', () => {
+    const raw = {
+      sourceKind: 'csv',
+      rowCount: 1,
+      columnCount: 1,
+      columnKeys: ['region'],
+      sampleRows: [{ region: 'A1' }],
+      validationRows: [{ rowNumber: 2, values: { region: 'A1' } }],
+      issues: [],
+    };
+
+    expect(validateUntrustedSummary(raw, 'csv', defaultLimits)).toBeNull();
+  });
+
+  it.each([
+    ['undefined', { metadata: undefined }],
+    ['null', { metadata: null }],
+    ['primitive', { metadata: 'utf8' }],
+    ['array', { metadata: ['utf8'] }],
+  ])('rejects a %s metadata container', (_label, override) => {
+    const raw = { ...createValidSummary(), ...override };
+
+    expect(validateUntrustedSummary(raw, 'csv', defaultLimits)).toBeNull();
+  });
+
+  it.each([
+    ['more than 20 entries', createNumberMetadata(21)],
+    ['a 201-character key', { ['k'.repeat(201)]: 'value' }],
+    ['a 201-character string value', { key: 'v'.repeat(201) }],
+    ['a nested object value', { key: { nested: true } }],
+    ['an array value', { key: ['value'] }],
+    [
+      'one invalid entry mixed with valid entries',
+      { encoding: 'utf8', header: true, invalid: { nested: true } },
+    ],
+  ])('rejects metadata with %s', (_label, metadata) => {
+    expect(
+      validateUntrustedSummary(
+        createValidSummary(metadata),
+        'csv',
+        defaultLimits,
+      ),
+    ).toBeNull();
   });
 
   it('rejects summary with mismatched sourceKind', () => {
