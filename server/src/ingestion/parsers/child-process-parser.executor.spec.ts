@@ -571,6 +571,62 @@ describe('ChildProcessParserExecutor', () => {
     expect(fakeChild.killCalls).toBe(1);
   });
 
+  it('rejects a child success summary with an over-cap row number and cleans up the child', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    const overCapRowNumber = defaultLimits.maxRows + 2;
+    fakeChild.emit('message', {
+      type: 'success',
+      id: sent.id,
+      summary: {
+        ...createValidSummary(),
+        validationRows: [
+          { rowNumber: overCapRowNumber, values: { region: 'A1' } },
+        ],
+      },
+    });
+
+    const result = await executePromise;
+    expect(result).toEqual({
+      sourceKind: 'csv',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+      issues: [
+        {
+          severity: 'error',
+          code: 'parser_execution_failed',
+          message: 'Parser execution failed.',
+        },
+      ],
+      metadata: {},
+    });
+    expect(JSON.stringify(result)).not.toContain(String(overCapRowNumber));
+    expect(result.validationRows).toEqual([]);
+    expect(fakeChild.connected).toBe(false);
+    expect(fakeChild.killed).toBe(true);
+    expect(fakeChild.eventNames()).toEqual([]);
+    expect(fakeChild.killCalls).toBe(1);
+
+    fakeChild.exitCode = null;
+    fakeChild.signalCode = null;
+    executor.onApplicationShutdown();
+    expect(fakeChild.killCalls).toBe(1);
+  });
+
   it('rejects malformed and mismatched IPC responses from child', async () => {
     const executor = new ChildProcessParserExecutor({
       timeoutMs: 5000,
@@ -832,6 +888,89 @@ describe('validateUntrustedSummary', () => {
       expect(Object.keys(validatedRow ?? {})).toHaveLength(
         defaultLimits.maxColumns + 1,
       );
+    },
+  );
+
+  it.each([
+    ['csv validation-row', 'csv', defaultLimits.maxRows + 2, 'validationRows'],
+    ['csv issue', 'csv', defaultLimits.maxRows + 2, 'issues'],
+    [
+      'geojson validation-row',
+      'geojson',
+      defaultLimits.maxGeojsonFeatures + 2,
+      'validationRows',
+    ],
+  ] as const)(
+    'rejects an over-cap row number in %s',
+    (_label, sourceKind, rowNumber, location) => {
+      const base = { ...createValidSummary(), sourceKind };
+      const raw =
+        location === 'validationRows'
+          ? {
+              ...base,
+              validationRows: [{ rowNumber, values: { region: 'A1' } }],
+            }
+          : {
+              ...base,
+              issues: [
+                {
+                  severity: 'warning' as const,
+                  code: 'formula_as_data' as const,
+                  message: 'Formula-looking cell was treated as text.' as const,
+                  rowNumber,
+                },
+              ],
+            };
+
+      expect(
+        validateUntrustedSummary(raw, sourceKind, defaultLimits),
+      ).toBeNull();
+    },
+  );
+
+  it.each([
+    ['csv validation-row', 'csv', defaultLimits.maxRows + 1, 'validationRows'],
+    ['csv issue', 'csv', defaultLimits.maxRows + 1, 'issues'],
+    [
+      'geojson validation-row',
+      'geojson',
+      defaultLimits.maxGeojsonFeatures + 1,
+      'validationRows',
+    ],
+  ] as const)(
+    'accepts and preserves an exact-boundary row number in %s',
+    (_label, sourceKind, rowNumber, location) => {
+      const base = { ...createValidSummary(), sourceKind };
+      const raw =
+        location === 'validationRows'
+          ? {
+              ...base,
+              validationRows: [{ rowNumber, values: { region: 'A1' } }],
+            }
+          : {
+              ...base,
+              issues: [
+                {
+                  severity: 'warning' as const,
+                  code: 'formula_as_data' as const,
+                  message: 'Formula-looking cell was treated as text.' as const,
+                  rowNumber,
+                },
+              ],
+            };
+
+      const validated = validateUntrustedSummary(
+        raw,
+        sourceKind,
+        defaultLimits,
+      );
+
+      expect(validated).not.toBeNull();
+      if (location === 'validationRows') {
+        expect(validated?.validationRows[0]?.rowNumber).toBe(rowNumber);
+      } else {
+        expect(validated?.issues[0]?.rowNumber).toBe(rowNumber);
+      }
     },
   );
 

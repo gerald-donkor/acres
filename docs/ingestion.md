@@ -227,7 +227,15 @@ short-lived Node child processes:
   sample rows, validation-row values, issue details, and metadata must be finite;
   `NaN`, `Infinity`, or `-Infinity` in any of those containers rejects the entire
   summary through the existing deterministic safe failure. Integer count and
-  row-number fields already use stricter integer validation. The existing
+  row-number fields already use stricter integer validation. Every
+  validation-row and issue row number is additionally bounded above to the
+  already-established `maxRowsAllowed` ceiling (`maxRows + 1`, or
+  `maxGeojsonFeatures + 1` for GeoJSON); an over-cap row number rejects the
+  whole summary through the existing safe failure, while exact-boundary and
+  valid parser outputs remain unchanged. This tighter cap sits far below the
+  PostgreSQL `Int` range, so no out-of-range integer can reach
+  `ValidationIssue.rowNumber` or `MetricObservation.sourceRowNumber` from the
+  child path, and it introduces no new configured limit. The existing
   safe-error contract remains unchanged. In counterpart,
   the child process entrypoint strictly validates incoming IPC parse requests
   via `isParserChildRequest()` and `isParserLimits()`, asserting positive integer

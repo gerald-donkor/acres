@@ -411,7 +411,8 @@ export function validateUntrustedSummary(
     if (
       typeof row.rowNumber !== 'number' ||
       !Number.isInteger(row.rowNumber) ||
-      row.rowNumber < 1
+      row.rowNumber < 1 ||
+      row.rowNumber > maxRowsAllowed
     ) {
       return null;
     }
@@ -471,7 +472,8 @@ export function validateUntrustedSummary(
       issue.rowNumber !== undefined &&
       (typeof issue.rowNumber !== 'number' ||
         !Number.isInteger(issue.rowNumber) ||
-        issue.rowNumber < 1)
+        issue.rowNumber < 1 ||
+        issue.rowNumber > maxRowsAllowed)
     ) {
       return null;
     }
