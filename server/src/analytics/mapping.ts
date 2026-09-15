@@ -54,7 +54,7 @@ export function malformedMetricMappingIssues(value: unknown): Array<{
   readonly code: MalformedMetricMappingCode;
   readonly message: MalformedMetricMappingMessage;
   readonly columnKey?: string;
-  readonly details?: Record<string, unknown>;
+  readonly details?: Record<string, string | number | boolean | null>;
 }> {
   if (!value || typeof value !== 'object') return [];
   const raw = value as Record<string, unknown>;
@@ -85,7 +85,7 @@ export function malformedMetricMappingIssues(value: unknown): Array<{
       readonly code: MalformedMetricMappingCode;
       readonly message: MalformedMetricMappingMessage;
       readonly columnKey?: string;
-      readonly details?: Record<string, unknown>;
+      readonly details?: Record<string, string | number | boolean | null>;
     }> = [];
     if (typeof metric.column !== 'string') {
       issues.push(invalidMetricIssue(index, 'column'));

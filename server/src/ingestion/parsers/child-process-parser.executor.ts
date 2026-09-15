@@ -495,7 +495,8 @@ export function validateUntrustedSummary(
       return null;
     }
 
-    let sanitizedDetails: Record<string, unknown> | undefined;
+    let sanitizedDetails:
+      Record<string, string | number | boolean | null> | undefined;
     if (issue.details !== undefined) {
       if (
         typeof issue.details !== 'object' ||
@@ -552,7 +553,7 @@ export function validateUntrustedSummary(
     return null;
   }
 
-  const metadata: Record<string, unknown> = {};
+  const metadata: Record<string, string | number | boolean | null> = {};
   const metaEntries = Object.entries(summary.metadata);
   if (metaEntries.length > 20) return null;
   for (const [mk, mv] of metaEntries) {

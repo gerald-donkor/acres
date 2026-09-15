@@ -51,14 +51,14 @@ export class AnalyticsPublicationService {
     readonly code: ValidateMappingCode;
     readonly message: ValidateMappingMessage;
     readonly columnKey?: string;
-    readonly details?: Record<string, unknown>;
+    readonly details?: Record<string, string | number | boolean | null>;
   }> {
     const issues: Array<{
       readonly severity: 'warning' | 'error';
       readonly code: ValidateMappingCode;
       readonly message: ValidateMappingMessage;
       readonly columnKey?: string;
-      readonly details?: Record<string, unknown>;
+      readonly details?: Record<string, string | number | boolean | null>;
     }> = [];
     const columns = new Set(input.summaryColumns);
     const keys = new Set<string>();
@@ -128,7 +128,7 @@ export class AnalyticsPublicationService {
       readonly message: RemappingIncompatibleMessage;
       readonly rowNumber?: number;
       readonly columnKey?: string;
-      readonly details?: Record<string, unknown>;
+      readonly details?: Record<string, string | number | boolean | null>;
     }>
   > {
     const issues: Array<{
@@ -137,7 +137,7 @@ export class AnalyticsPublicationService {
       readonly message: RemappingIncompatibleMessage;
       readonly rowNumber?: number;
       readonly columnKey?: string;
-      readonly details?: Record<string, unknown>;
+      readonly details?: Record<string, string | number | boolean | null>;
     }> = [];
     const checked = new Set<string>();
     for (const metric of metrics) {

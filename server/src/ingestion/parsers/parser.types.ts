@@ -114,7 +114,7 @@ export interface ParserIssue {
   readonly message: ParserIssueMessage;
   readonly rowNumber?: number;
   readonly columnKey?: string;
-  readonly details?: Record<string, unknown>;
+  readonly details?: Record<string, string | number | boolean | null>;
 }
 
 export interface ParsedSourceSummary {
@@ -128,7 +128,7 @@ export interface ParsedSourceSummary {
     readonly values: Record<string, string | number | boolean | null>;
   }>;
   readonly issues: ParserIssue[];
-  readonly metadata: Record<string, unknown>;
+  readonly metadata: Record<string, string | number | boolean | null>;
 }
 
 export interface SourceParser {

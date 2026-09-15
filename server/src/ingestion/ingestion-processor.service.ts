@@ -204,9 +204,7 @@ export class IngestionProcessorService {
                     ? issue.details.regionRef
                     : undefined,
                 details:
-                  issue.details === undefined
-                    ? undefined
-                    : (issue.details as Prisma.InputJsonValue),
+                  issue.details === undefined ? undefined : issue.details,
               })),
             });
           }
@@ -303,7 +301,7 @@ export class IngestionProcessorService {
       readonly message: RegionMappingMessage;
       readonly rowNumber?: number;
       readonly columnKey?: string;
-      readonly details?: Record<string, unknown>;
+      readonly details?: Record<string, string | number | boolean | null>;
     }>
   > {
     const issues: Array<{
@@ -312,7 +310,7 @@ export class IngestionProcessorService {
       readonly message: RegionMappingMessage;
       readonly rowNumber?: number;
       readonly columnKey?: string;
-      readonly details?: Record<string, unknown>;
+      readonly details?: Record<string, string | number | boolean | null>;
     }> = [];
     const regionColumn = mapping.regionCodeColumn ?? mapping.regionColumn;
     if (!regionColumn) {
@@ -433,7 +431,7 @@ export class IngestionProcessorService {
           columnCount: summary.columnCount,
           columnKeys: summary.columnKeys,
           metadata: summary.metadata,
-        } as Prisma.InputJsonObject,
+        },
       },
     });
   }

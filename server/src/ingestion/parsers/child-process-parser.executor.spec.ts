@@ -56,7 +56,7 @@ const defaultLimits: ParserLimits = {
 };
 
 function createValidSummary(
-  metadata: Record<string, unknown> = {},
+  metadata: Record<string, string | number | boolean | null> = {},
 ): ParsedSourceSummary {
   return {
     sourceKind: 'csv',
@@ -70,8 +70,10 @@ function createValidSummary(
   };
 }
 
-function createNumberMetadata(entryCount: number): Record<string, unknown> {
-  const metadata: Record<string, unknown> = {};
+function createNumberMetadata(
+  entryCount: number,
+): Record<string, string | number | boolean | null> {
+  const metadata: Record<string, string | number | boolean | null> = {};
   for (let index = 0; index < entryCount; index += 1) {
     metadata[`key_${index}`] = index;
   }
@@ -447,10 +449,13 @@ describe('ChildProcessParserExecutor', () => {
     fakeChild.emit('message', {
       type: 'success',
       id: sent.id,
-      summary: createValidSummary({
-        encoding: 'utf8',
-        rejected: { secret: 'do-not-leak' },
-      }),
+      summary: {
+        ...createValidSummary(),
+        metadata: {
+          encoding: 'utf8',
+          rejected: { secret: 'do-not-leak' },
+        },
+      },
     });
 
     const result = await executePromise;
@@ -834,7 +839,7 @@ describe('validateUntrustedSummary', () => {
   });
 
   it('preserves a __proto__ key in issue details', () => {
-    const details: Record<string, unknown> = {};
+    const details: Record<string, string | number | boolean | null> = {};
     Object.defineProperty(details, '__proto__', {
       value: 'literal detail key',
       enumerable: true,
@@ -862,9 +867,7 @@ describe('validateUntrustedSummary', () => {
     expect(
       Object.hasOwn(validated?.issues[0]?.details ?? {}, '__proto__'),
     ).toBe(true);
-    expect(
-      (validated?.issues[0]?.details as Record<string, unknown>)?.__proto__,
-    ).toBe('literal detail key');
+    expect(validated?.issues[0]?.details?.__proto__).toBe('literal detail key');
     expect(Object.keys(validated?.issues[0]?.details ?? {})).toContain(
       '__proto__',
     );
@@ -1106,7 +1109,7 @@ describe('validateUntrustedSummary', () => {
   ])('rejects metadata with %s', (_label, metadata) => {
     expect(
       validateUntrustedSummary(
-        createValidSummary(metadata),
+        { ...createValidSummary(), metadata },
         'csv',
         defaultLimits,
       ),

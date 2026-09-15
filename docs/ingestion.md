@@ -243,7 +243,14 @@ true`); a `__proto__` key is preserved as an own enumerable property instead
   of silently dropped, every other key copies observably identically to direct
   assignment, and no new rejection, limit, or type was introduced.
   `constructor` and `prototype` needed no handling because direct assignment
-  already creates safe own properties for them. In counterpart,
+  already creates safe own properties for them. In addition,
+  `ParserIssue.details` and `ParsedSourceSummary.metadata` (as well as the
+  associated mapping issue tributaries) are typed as scalar records
+  (`string | number | boolean | null` values), matching the long-standing
+  row-value types and the runtime gates; untrusted non-scalar bytes still arrive
+  as `unknown` and fail closed; no new rejection, limit, or runtime behavior was
+  introduced; and `ParsedObservation` quality details remain a separate carrier.
+  In counterpart,
   the child process entrypoint strictly validates incoming IPC parse requests
   via `isParserChildRequest()` and `isParserLimits()`, asserting positive integer
   bounds on all 6 resource limits (`maxRows`, `maxColumns`, `maxCellChars`,
@@ -298,44 +305,44 @@ union (`analytics_publication_failed` with either publication message, plus
 compile-time guard; runtime values are unchanged. The inline
 `validation_failed` write accepts only the fixed code/message literals
 (`VALIDATION_FAILURE_CODE` / `VALIDATION_FAILURE_MESSAGE`,
- compile-time guard; runtime values unchanged; deliberately not routed
- through `fail()` to preserve the publication-transaction boundary). The
- private `validateMapping()` region-mapping producer accepts only its four
- fixed literals (missing region column, missing source column, unmatched
- region value, ambiguous region value) as a compile-time guard — runtime
- values unchanged and raw source/exception text never reaches
- `ValidationIssue.message` via this producer; raw region cell text in
- `details.regionRef` JSON is unchanged governed behavior. `formulaIssue()`
- accepts only the single fixed literal
- (`'Formula-looking cell was treated as text.'`) as a compile-time guard —
- runtime value unchanged and raw source/exception text never reaches
- `ValidationIssue.message` via this producer; `code` / `rowNumber` /
- `columnKey` unchanged. The private `validateMapping()` accepts only the four
- fixed codes
- (`mapping_region_missing`, `mapping_column_missing`, `region_unmatched`,
- `region_ambiguous`) as a compile-time guard — runtime values unchanged and
- unbounded code text never reaches `ValidationIssue.code` via this producer.
- `ParserIssue.code` accepts only the fixed producer literal union
- (`ParserProducerCode` — the 18 parser-producer literals — plus
- `ParserExecutorFailureCode` and the four already-narrowed mapping validator
- code types) as a compile-time guard; the earlier note that the four region
- codes alone closed the `ValidationIssue.code` column is corrected here, since
- the ingestion merge site also carries parser-side codes that were never part
- of that closure. The validator's runtime regex gate is unchanged and remains
- the control for untrusted child bytes, with a single documented assertion at
- the validator push site; runtime values, wire formats, and persisted shapes
- are unchanged. `ParserIssue.message` accepts only the fixed producer literal
- union (`ParserProducerMessage` — the 24 parser-producer literals — plus
- `ParserExecutorFailureMessage` and the four already-narrowed mapping
- validator message types) as a compile-time guard. The five message types are
- composed by erased `import type` reference after adding the `export` keyword
- only. The validator's runtime length gate is unchanged and remains the
- control for untrusted child bytes, with two documented assertions (the
- validator push site and the slice-identity site in `createSafeErrorSummary`,
- where both executor failure literals are far shorter than 200 chars so the
- slice is identity); runtime values, wire formats, and persisted shapes are
- unchanged. Both `ParserIssue` string carriers are now closed, completing the
- prompts 80–111 writer-narrowing lineage. No new semantics.
+compile-time guard; runtime values unchanged; deliberately not routed
+through `fail()` to preserve the publication-transaction boundary). The
+private `validateMapping()` region-mapping producer accepts only its four
+fixed literals (missing region column, missing source column, unmatched
+region value, ambiguous region value) as a compile-time guard — runtime
+values unchanged and raw source/exception text never reaches
+`ValidationIssue.message` via this producer; raw region cell text in
+`details.regionRef` JSON is unchanged governed behavior. `formulaIssue()`
+accepts only the single fixed literal
+(`'Formula-looking cell was treated as text.'`) as a compile-time guard —
+runtime value unchanged and raw source/exception text never reaches
+`ValidationIssue.message` via this producer; `code` / `rowNumber` /
+`columnKey` unchanged. The private `validateMapping()` accepts only the four
+fixed codes
+(`mapping_region_missing`, `mapping_column_missing`, `region_unmatched`,
+`region_ambiguous`) as a compile-time guard — runtime values unchanged and
+unbounded code text never reaches `ValidationIssue.code` via this producer.
+`ParserIssue.code` accepts only the fixed producer literal union
+(`ParserProducerCode` — the 18 parser-producer literals — plus
+`ParserExecutorFailureCode` and the four already-narrowed mapping validator
+code types) as a compile-time guard; the earlier note that the four region
+codes alone closed the `ValidationIssue.code` column is corrected here, since
+the ingestion merge site also carries parser-side codes that were never part
+of that closure. The validator's runtime regex gate is unchanged and remains
+the control for untrusted child bytes, with a single documented assertion at
+the validator push site; runtime values, wire formats, and persisted shapes
+are unchanged. `ParserIssue.message` accepts only the fixed producer literal
+union (`ParserProducerMessage` — the 24 parser-producer literals — plus
+`ParserExecutorFailureMessage` and the four already-narrowed mapping
+validator message types) as a compile-time guard. The five message types are
+composed by erased `import type` reference after adding the `export` keyword
+only. The validator's runtime length gate is unchanged and remains the
+control for untrusted child bytes, with two documented assertions (the
+validator push site and the slice-identity site in `createSafeErrorSummary`,
+where both executor failure literals are far shorter than 200 chars so the
+slice is identity); runtime values, wire formats, and persisted shapes are
+unchanged. Both `ParserIssue` string carriers are now closed, completing the
+prompts 80–111 writer-narrowing lineage. No new semantics.
 
 Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
 any escape from a source parser to a `parser_exception` issue carrying the
