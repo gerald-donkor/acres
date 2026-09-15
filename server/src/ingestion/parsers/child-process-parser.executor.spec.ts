@@ -653,7 +653,7 @@ describe('validateUntrustedSummary', () => {
     const issue: ParserIssue = {
       severity: 'error',
       code,
-      message: 'Trusted test issue.',
+      message: 'CSV size exceeds the temporary parser limit.',
     };
     expect(issue.code).toBe(code);
     const validated = validateUntrustedSummary(
@@ -663,6 +663,38 @@ describe('validateUntrustedSummary', () => {
     );
     expect(validated?.issues[0]?.code).toBe(code);
   });
+
+  it.each([
+    ['parser producer', 'CSV size exceeds the temporary parser limit.'],
+    ['executor failure', 'Parser execution failed.'],
+    [
+      'region mapping',
+      'Mapping must include a regionColumn or regionCodeColumn.',
+    ],
+    ['malformed mapping', 'Metric mappings must be provided as an array.'],
+    ['analytics mapping', 'Metric keys must be unique within one mapping.'],
+    [
+      'remapping',
+      'Metric key is already defined with a different type, unit, or aggregation.',
+    ],
+  ] as const)(
+    'accepts trusted %s message into ParserIssue',
+    (_label, message) => {
+      // The ParserIssue annotation is the assertion: a non-member message fails compilation.
+      const issue: ParserIssue = {
+        severity: 'error',
+        code: 'file_size_limit_exceeded',
+        message,
+      };
+      expect(issue.message).toBe(message);
+      const validated = validateUntrustedSummary(
+        { ...createValidSummary(), issues: [issue] },
+        'csv',
+        defaultLimits,
+      );
+      expect(validated?.issues[0]?.message).toBe(message);
+    },
+  );
 
   it('accepts and preserves metadata at the entry and string boundaries', () => {
     const boundaryKey = 'k'.repeat(200);
@@ -740,7 +772,7 @@ describe('validateUntrustedSummary', () => {
         {
           severity: 'warning',
           code: 'formula_as_data',
-          message: 'Finite number.',
+          message: 'Formula-looking cell was treated as text.',
           details: { value: -12.5 },
         },
       ],

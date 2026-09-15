@@ -14,6 +14,7 @@ import type {
   ParsedSourceSummary,
   ParserIssue,
   ParserIssueCode,
+  ParserIssueMessage,
   ParserLimits,
   SourceKind,
 } from './parser.types';
@@ -41,7 +42,7 @@ const PARSER_EXECUTION_FAILED_MESSAGE = 'Parser execution failed.' as const;
 const PARSER_EXECUTION_TIMED_OUT_MESSAGE =
   'Parser execution timed out.' as const;
 
-type ParserExecutorFailureMessage =
+export type ParserExecutorFailureMessage =
   | typeof PARSER_EXECUTION_FAILED_MESSAGE
   | typeof PARSER_EXECUTION_TIMED_OUT_MESSAGE;
 
@@ -283,7 +284,11 @@ function createSafeErrorSummary(
       {
         severity: 'error',
         code,
-        message: message.slice(0, MAX_STRING_LENGTH),
+        // Both executor failure literals are far shorter than 200 chars
+        // ('Parser execution failed.' is 24, 'Parser execution timed out.'
+        // is 27), so the slice is a runtime identity; the assertion bridges
+        // the widened `string` to the trusted union with zero runtime change.
+        message: message.slice(0, MAX_STRING_LENGTH) as ParserIssueMessage,
       },
     ],
     metadata: {},
@@ -509,11 +514,12 @@ export function validateUntrustedSummary(
 
     issues.push({
       severity: issue.severity,
-      // The regex gate above remains the runtime control for untrusted bytes
-      // while the union constrains trusted construction.
+      // The regex and length gates above remain the runtime controls for
+      // untrusted bytes while the unions constrain trusted construction.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- documents the unsound trust-boundary edge: issue arrives via the raw-as-Partial cast.
       code: issue.code as ParserIssueCode,
-      message: issue.message,
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- documents the unsound trust-boundary edge: issue arrives via the raw-as-Partial cast.
+      message: issue.message as ParserIssueMessage,
       rowNumber: issue.rowNumber,
       columnKey: issue.columnKey,
       details: sanitizedDetails,

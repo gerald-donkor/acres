@@ -309,8 +309,18 @@ compile-time guard; runtime values are unchanged. The inline
  of that closure. The validator's runtime regex gate is unchanged and remains
  the control for untrusted child bytes, with a single documented assertion at
  the validator push site; runtime values, wire formats, and persisted shapes
- are unchanged. `ParserIssue.message` remains open and separately scoped.
- No new semantics.
+ are unchanged. `ParserIssue.message` accepts only the fixed producer literal
+ union (`ParserProducerMessage` — the 24 parser-producer literals — plus
+ `ParserExecutorFailureMessage` and the four already-narrowed mapping
+ validator message types) as a compile-time guard. The five message types are
+ composed by erased `import type` reference after adding the `export` keyword
+ only. The validator's runtime length gate is unchanged and remains the
+ control for untrusted child bytes, with two documented assertions (the
+ validator push site and the slice-identity site in `createSafeErrorSummary`,
+ where both executor failure literals are far shorter than 200 chars so the
+ slice is identity); runtime values, wire formats, and persisted shapes are
+ unchanged. Both `ParserIssue` string carriers are now closed, completing the
+ prompts 80–111 writer-narrowing lineage. No new semantics.
 
 Unexpected parser throws are sanitized the same way: `parseSourceBuffer` maps
 any escape from a source parser to a `parser_exception` issue carrying the

@@ -51,7 +51,7 @@ const REGION_MAPPING_COLUMN_MISSING_CODE = 'mapping_column_missing' as const;
 const REGION_MAPPING_UNMATCHED_CODE = 'region_unmatched' as const;
 const REGION_MAPPING_AMBIGUOUS_CODE = 'region_ambiguous' as const;
 
-type RegionMappingMessage =
+export type RegionMappingMessage =
   | typeof REGION_MAPPING_REGION_MISSING_MESSAGE
   | typeof REGION_MAPPING_COLUMN_MISSING_MESSAGE
   | typeof REGION_MAPPING_UNMATCHED_MESSAGE

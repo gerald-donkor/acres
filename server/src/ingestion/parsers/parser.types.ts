@@ -1,10 +1,21 @@
-import type { MalformedMetricMappingCode } from '../../analytics/mapping';
+import type {
+  MalformedMetricMappingCode,
+  MalformedMetricMappingMessage,
+} from '../../analytics/mapping';
 import type {
   RemappingIncompatibleCode,
+  RemappingIncompatibleMessage,
   ValidateMappingCode,
+  ValidateMappingMessage,
 } from '../../analytics/analytics-publication.service';
-import type { RegionMappingCode } from '../ingestion-processor.service';
-import type { ParserExecutorFailureCode } from './child-process-parser.executor';
+import type {
+  RegionMappingCode,
+  RegionMappingMessage,
+} from '../ingestion-processor.service';
+import type {
+  ParserExecutorFailureCode,
+  ParserExecutorFailureMessage,
+} from './child-process-parser.executor';
 
 export type SourceKind = 'csv' | 'xlsx' | 'geojson';
 
@@ -49,10 +60,58 @@ export type ParserIssueCode =
   | ValidateMappingCode
   | RemappingIncompatibleCode;
 
+/**
+ * Fixed parser-producer issue messages (24 distinct literals verified by grep
+ * excluding `*.spec.ts` at implementation time). Each literal cites one
+ * producing file; `Workbook container is invalid or unreadable.` is shared
+ * between the xlsx parser and the container inspector.
+ */
+export type ParserProducerMessage =
+  | 'CSV size exceeds the temporary parser limit.' // csv-source.parser.ts
+  | 'CSV row count exceeds the temporary development limit.' // csv-source.parser.ts
+  | 'CSV column count exceeds the temporary development limit.' // csv-source.parser.ts
+  | 'CSV cell exceeds the temporary development limit.' // csv-source.parser.ts
+  | 'Workbook size exceeds the temporary parser limit.' // xlsx-source.parser.ts
+  | 'Workbook container is invalid or unreadable.' // xlsx-source.parser.ts, xlsx-container-inspector.ts
+  | 'Workbook has no rows.' // xlsx-source.parser.ts
+  | 'Workbook row count exceeds the temporary development limit.' // xlsx-source.parser.ts
+  | 'Workbook column count exceeds the temporary development limit.' // xlsx-source.parser.ts
+  | 'Workbook cell exceeds the temporary development limit.' // xlsx-source.parser.ts
+  | 'GeoJSON size exceeds the temporary parser limit.' // geojson-source.parser.ts
+  | 'GeoJSON could not be parsed as JSON.' // geojson-source.parser.ts
+  | 'GeoJSON feature count exceeds the temporary development limit.' // geojson-source.parser.ts
+  | 'GeoJSON feature is missing geometry.' // geojson-source.parser.ts
+  | 'GeoJSON coordinate count exceeds the temporary development limit.' // geojson-source.parser.ts
+  | 'GeoJSON root must be an object.' // geojson-source.parser.ts
+  | 'GeoJSON must be a Feature or FeatureCollection.' // geojson-source.parser.ts
+  | 'Encrypted or password-protected workbooks are not supported.' // xlsx-container-inspector.ts
+  | 'Workbook archive entry count exceeds the parser safety limit.' // xlsx-container-inspector.ts
+  | 'Macro-enabled workbooks are not supported.' // xlsx-container-inspector.ts
+  | 'Media type is not accepted.' // parse-source-buffer.ts
+  | 'Parser failed unexpectedly.' // parse-source-buffer.ts
+  | 'Source file size exceeds the temporary parser limit.' // source-parser.service.ts
+  | 'Formula-looking cell was treated as text.'; // parser-utils.ts
+
+/**
+ * Compile-time guard for every trusted `ParserIssue.message` producer: parser
+ * producers, executor failures, and the four already-narrowed mapping
+ * validators merged in `IngestionProcessorService`. Composed by reference
+ * with erased `import type` edges only; no runtime import cycle is
+ * introduced. The validator's runtime length gate remains the control for
+ * untrusted child bytes.
+ */
+export type ParserIssueMessage =
+  | ParserProducerMessage
+  | ParserExecutorFailureMessage
+  | RegionMappingMessage
+  | MalformedMetricMappingMessage
+  | ValidateMappingMessage
+  | RemappingIncompatibleMessage;
+
 export interface ParserIssue {
   readonly severity: 'warning' | 'error';
   readonly code: ParserIssueCode;
-  readonly message: string;
+  readonly message: ParserIssueMessage;
   readonly rowNumber?: number;
   readonly columnKey?: string;
   readonly details?: Record<string, unknown>;

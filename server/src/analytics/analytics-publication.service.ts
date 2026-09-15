@@ -554,11 +554,12 @@ const REMAPPING_INCOMPATIBLE_MESSAGE =
 
 const REMAPPING_INCOMPATIBLE_CODE = 'metric_definition_incompatible' as const;
 
-type RemappingIncompatibleMessage = typeof REMAPPING_INCOMPATIBLE_MESSAGE;
+export type RemappingIncompatibleMessage =
+  typeof REMAPPING_INCOMPATIBLE_MESSAGE;
 
 export type RemappingIncompatibleCode = typeof REMAPPING_INCOMPATIBLE_CODE;
 
-type ValidateMappingMessage =
+export type ValidateMappingMessage =
   | typeof MAPPING_KEY_DUPLICATE_MESSAGE
   | typeof MAPPING_COLUMN_MISSING_MESSAGE
   | typeof MAPPING_KEY_INVALID_MESSAGE

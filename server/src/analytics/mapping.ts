@@ -27,7 +27,7 @@ const MALFORMED_MAPPING_CODE = 'metric_mapping_invalid' as const;
 
 export type MalformedMetricMappingCode = typeof MALFORMED_MAPPING_CODE;
 
-type MalformedMetricMappingMessage =
+export type MalformedMetricMappingMessage =
   | typeof MALFORMED_MAPPING_ARRAY_MESSAGE
   | typeof MALFORMED_MAPPING_ENTRY_MESSAGE
   | typeof MALFORMED_MAPPING_FIELD_MESSAGE;
