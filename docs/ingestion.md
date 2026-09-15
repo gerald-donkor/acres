@@ -236,7 +236,14 @@ short-lived Node child processes:
   PostgreSQL `Int` range, so no out-of-range integer can reach
   `ValidationIssue.rowNumber` or `MetricObservation.sourceRowNumber` from the
   child path, and it introduces no new configured limit. The existing
-  safe-error contract remains unchanged. In counterpart,
+  safe-error contract remains unchanged. Sample-row, validation-row-value, and
+  issue-detail copies store via `Object.defineProperty` with the same descriptor
+  as metadata since prompt 107 (`enumerable: true, configurable: true, writable:
+true`); a `__proto__` key is preserved as an own enumerable property instead
+  of silently dropped, every other key copies observably identically to direct
+  assignment, and no new rejection, limit, or type was introduced.
+  `constructor` and `prototype` needed no handling because direct assignment
+  already creates safe own properties for them. In counterpart,
   the child process entrypoint strictly validates incoming IPC parse requests
   via `isParserChildRequest()` and `isParserLimits()`, asserting positive integer
   bounds on all 6 resource limits (`maxRows`, `maxColumns`, `maxCellChars`,

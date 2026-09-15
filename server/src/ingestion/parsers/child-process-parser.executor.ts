@@ -391,7 +391,12 @@ export function validateUntrustedSummary(
       if (typeof v === 'string' && v.length > limits.maxCellChars) {
         return null;
       }
-      sanitizedRow[k] = v;
+      Object.defineProperty(sanitizedRow, k, {
+        value: v,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
     sampleRows.push(sanitizedRow);
   }
@@ -441,7 +446,12 @@ export function validateUntrustedSummary(
       if (typeof v === 'string' && v.length > limits.maxCellChars) {
         return null;
       }
-      sanitizedValues[k] = v;
+      Object.defineProperty(sanitizedValues, k, {
+        value: v,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
     validationRows.push({
       rowNumber: row.rowNumber,
@@ -510,7 +520,12 @@ export function validateUntrustedSummary(
         if (typeof dv === 'number' && !Number.isFinite(dv)) return null;
         if (typeof dv === 'string' && dv.length > MAX_STRING_LENGTH)
           return null;
-        sanitizedDetails[dk] = dv;
+        Object.defineProperty(sanitizedDetails, dk, {
+          value: dv,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
     }
 

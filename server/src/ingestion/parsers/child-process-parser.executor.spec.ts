@@ -776,6 +776,100 @@ describe('validateUntrustedSummary', () => {
     expect(validated?.metadata.__proto__).toBe('literal metadata key');
   });
 
+  it('preserves a __proto__ key in sampleRows', () => {
+    const row: Record<string, string | number | boolean | null> = {
+      region: 'A1',
+    };
+    Object.defineProperty(row, '__proto__', {
+      value: 'literal row key',
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+
+    const validated = validateUntrustedSummary(
+      { ...createValidSummary(), sampleRows: [row] },
+      'csv',
+      defaultLimits,
+    );
+
+    expect(validated).not.toBeNull();
+    expect(Object.hasOwn(validated?.sampleRows[0] ?? {}, '__proto__')).toBe(
+      true,
+    );
+    expect(validated?.sampleRows[0]?.__proto__).toBe('literal row key');
+    expect(Object.keys(validated?.sampleRows[0] ?? {})).toContain('__proto__');
+  });
+
+  it('preserves a __proto__ key in validationRows values', () => {
+    const values: Record<string, string | number | boolean | null> = {
+      region: 'A1',
+    };
+    Object.defineProperty(values, '__proto__', {
+      value: 'literal values key',
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+
+    const validated = validateUntrustedSummary(
+      {
+        ...createValidSummary(),
+        validationRows: [{ rowNumber: 2, values }],
+      },
+      'csv',
+      defaultLimits,
+    );
+
+    expect(validated).not.toBeNull();
+    expect(
+      Object.hasOwn(validated?.validationRows[0]?.values ?? {}, '__proto__'),
+    ).toBe(true);
+    expect(validated?.validationRows[0]?.values.__proto__).toBe(
+      'literal values key',
+    );
+    expect(Object.keys(validated?.validationRows[0]?.values ?? {})).toContain(
+      '__proto__',
+    );
+  });
+
+  it('preserves a __proto__ key in issue details', () => {
+    const details: Record<string, unknown> = {};
+    Object.defineProperty(details, '__proto__', {
+      value: 'literal detail key',
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+
+    const validated = validateUntrustedSummary(
+      {
+        ...createValidSummary(),
+        issues: [
+          {
+            severity: 'warning' as const,
+            code: 'formula_as_data' as const,
+            message: 'Formula-looking cell was treated as text.' as const,
+            details,
+          },
+        ],
+      },
+      'csv',
+      defaultLimits,
+    );
+
+    expect(validated).not.toBeNull();
+    expect(
+      Object.hasOwn(validated?.issues[0]?.details ?? {}, '__proto__'),
+    ).toBe(true);
+    expect(
+      (validated?.issues[0]?.details as Record<string, unknown>)?.__proto__,
+    ).toBe('literal detail key');
+    expect(Object.keys(validated?.issues[0]?.details ?? {})).toContain(
+      '__proto__',
+    );
+  });
+
   it.each([
     ['sampleRows / NaN', Number.NaN, 'sampleRows'],
     ['sampleRows / Infinity', Number.POSITIVE_INFINITY, 'sampleRows'],
