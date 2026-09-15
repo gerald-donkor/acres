@@ -379,6 +379,7 @@ export function validateUntrustedSummary(
       ) {
         return null;
       }
+      if (typeof v === 'number' && !Number.isFinite(v)) return null;
       if (typeof v === 'string' && v.length > limits.maxCellChars) {
         return null;
       }
@@ -425,6 +426,7 @@ export function validateUntrustedSummary(
       ) {
         return null;
       }
+      if (typeof v === 'number' && !Number.isFinite(v)) return null;
       if (typeof v === 'string' && v.length > limits.maxCellChars) {
         return null;
       }
@@ -493,6 +495,7 @@ export function validateUntrustedSummary(
         ) {
           return null;
         }
+        if (typeof dv === 'number' && !Number.isFinite(dv)) return null;
         if (typeof dv === 'string' && dv.length > MAX_STRING_LENGTH)
           return null;
         sanitizedDetails[dk] = dv;
@@ -531,6 +534,7 @@ export function validateUntrustedSummary(
     ) {
       return null;
     }
+    if (typeof mv === 'number' && !Number.isFinite(mv)) return null;
     if (typeof mv === 'string' && mv.length > MAX_STRING_LENGTH) return null;
     Object.defineProperty(metadata, mk, {
       value: mv,

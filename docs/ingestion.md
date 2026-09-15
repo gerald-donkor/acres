@@ -219,8 +219,12 @@ short-lived Node child processes:
   scalar (`null`, string, number, or boolean) entries; keys and string values
   are limited to 200 characters. Any metadata-container or entry violation
   rejects the entire untrusted summary instead of silently dropping invalid
-  entries. Valid parser metadata and the existing deterministic safe-error
-  contract are unchanged. In counterpart,
+  entries. Numeric scalars in sample rows, validation-row values, issue details,
+  and metadata must be finite; `NaN`, `Infinity`, or `-Infinity` in any of those
+  containers rejects the entire summary through the existing deterministic safe
+  failure. Integer count and row-number fields already use stricter integer
+  validation. Valid parser output and the existing safe-error contract remain
+  unchanged. In counterpart,
   the child process entrypoint strictly validates incoming IPC parse requests
   via `isParserChildRequest()` and `isParserLimits()`, asserting positive integer
   bounds on all 6 resource limits (`maxRows`, `maxColumns`, `maxCellChars`,

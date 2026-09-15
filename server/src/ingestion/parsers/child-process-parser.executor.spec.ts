@@ -460,6 +460,50 @@ describe('ChildProcessParserExecutor', () => {
     expect(fakeChild.killed).toBe(true);
   });
 
+  it('rejects a child success summary with a non-finite scalar and cleans up the child', async () => {
+    const executor = new ChildProcessParserExecutor({
+      timeoutMs: 5000,
+      maxOldSpaceMb: 128,
+      nodeEnv: 'test',
+      forkFn: fakeFork as unknown as typeof import('node:child_process').fork,
+    });
+
+    const executePromise = executor.execute(
+      Buffer.from('data'),
+      'text/csv',
+      defaultLimits,
+    );
+    const sent = fakeChild.sentMessages[0] as ParserChildRequest;
+    fakeChild.emit('message', {
+      type: 'success',
+      id: sent.id,
+      summary: {
+        ...createValidSummary(),
+        sampleRows: [{ region: Number.NaN }],
+      },
+    });
+
+    await expect(executePromise).resolves.toEqual({
+      sourceKind: 'csv',
+      rowCount: 0,
+      columnCount: 0,
+      columnKeys: [],
+      sampleRows: [],
+      validationRows: [],
+      issues: [
+        {
+          severity: 'error',
+          code: 'parser_execution_failed',
+          message: 'Parser execution failed.',
+        },
+      ],
+      metadata: {},
+    });
+    expect(fakeChild.connected).toBe(false);
+    expect(fakeChild.killed).toBe(true);
+    expect(fakeChild.eventNames()).toEqual([]);
+  });
+
   it('rejects malformed and mismatched IPC responses from child', async () => {
     const executor = new ChildProcessParserExecutor({
       timeoutMs: 5000,
@@ -552,6 +596,72 @@ describe('validateUntrustedSummary', () => {
     expect(Object.keys(validated?.metadata ?? {})).toHaveLength(20);
     expect(Object.hasOwn(validated?.metadata ?? {}, '__proto__')).toBe(true);
     expect(validated?.metadata.__proto__).toBe('literal metadata key');
+  });
+
+  it.each([
+    ['sampleRows / NaN', Number.NaN, 'sampleRows'],
+    ['sampleRows / Infinity', Number.POSITIVE_INFINITY, 'sampleRows'],
+    ['sampleRows / -Infinity', Number.NEGATIVE_INFINITY, 'sampleRows'],
+    ['validationRows / NaN', Number.NaN, 'validationRows'],
+    ['validationRows / Infinity', Number.POSITIVE_INFINITY, 'validationRows'],
+    ['validationRows / -Infinity', Number.NEGATIVE_INFINITY, 'validationRows'],
+    ['issue details / NaN', Number.NaN, 'issueDetails'],
+    ['issue details / Infinity', Number.POSITIVE_INFINITY, 'issueDetails'],
+    ['issue details / -Infinity', Number.NEGATIVE_INFINITY, 'issueDetails'],
+    ['metadata / NaN', Number.NaN, 'metadata'],
+    ['metadata / Infinity', Number.POSITIVE_INFINITY, 'metadata'],
+    ['metadata / -Infinity', Number.NEGATIVE_INFINITY, 'metadata'],
+  ] as const)(
+    'rejects a non-finite scalar in %s',
+    (_label, value, location) => {
+      const base = createValidSummary();
+      const raw =
+        location === 'sampleRows'
+          ? { ...base, sampleRows: [{ region: value }] }
+          : location === 'validationRows'
+            ? {
+                ...base,
+                validationRows: [{ rowNumber: 2, values: { region: value } }],
+              }
+            : location === 'issueDetails'
+              ? {
+                  ...base,
+                  issues: [
+                    {
+                      severity: 'warning' as const,
+                      code: 'invalid_value',
+                      message: 'Invalid value.',
+                      details: { value },
+                    },
+                  ],
+                }
+              : { ...base, metadata: { value } };
+
+      expect(validateUntrustedSummary(raw, 'csv', defaultLimits)).toBeNull();
+    },
+  );
+
+  it('accepts and preserves finite scalar numbers across all containers', () => {
+    const raw: ParsedSourceSummary = {
+      ...createValidSummary({ value: -0 }),
+      sampleRows: [{ region: Number.MAX_VALUE }],
+      validationRows: [{ rowNumber: 2, values: { region: Number.MIN_VALUE } }],
+      issues: [
+        {
+          severity: 'warning',
+          code: 'finite_number',
+          message: 'Finite number.',
+          details: { value: -12.5 },
+        },
+      ],
+    };
+
+    const validated = validateUntrustedSummary(raw, 'csv', defaultLimits);
+
+    expect(validated?.sampleRows[0]?.region).toBe(Number.MAX_VALUE);
+    expect(validated?.validationRows[0]?.values.region).toBe(Number.MIN_VALUE);
+    expect(validated?.issues[0]?.details?.value).toBe(-12.5);
+    expect(Object.is(validated?.metadata.value, -0)).toBe(true);
   });
 
   it('rejects a missing metadata container', () => {
