@@ -36,7 +36,18 @@ compiler proof, so `type` flows through as `aggregate.value.type` and the
 now-unused import is removed. The `datasetVersionIds` guard+cast and the
 `filters`/`presentation` casts are unchanged (Json-backed carriers owned by
 separate decisions); the `String(...)` coercion and every response shape are
-unchanged.
+unchanged. Shared `DashboardMetric.valueType` / `allowedAggregation` /
+`status` and `DashboardAggregate.aggregateType` (prompt 119) are typed as the
+closed Prisma-enum unions (`numeric | text | boolean`,
+`sum | avg | min | max | count | latest`, `active | archived`), matching the
+schema enums, generated enums, narrowed server mappers, mapping-validator
+sets, and dataset-action selects; `canonicalUnit` / `calculationVersion`
+deliberately stay `string`. The nine stale `"mean"` / metric-`"published"`
+mock literals in `client/e2e/helpers.ts` and
+`client/lib/api/test-harness-store.ts` were corrected to `"avg"` / `"active"`
+(report/ingestion `"published"` untouched as a different domain). GraphQL
+`DashboardMetricGql` / `DashboardAggregateGql` stay structurally `string` by
+design, and no runtime server mapping, rejection, or response shape changed.
 
 ## Saved-view schema versioning (prompt 68)
 

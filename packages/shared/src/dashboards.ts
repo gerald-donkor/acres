@@ -10,11 +10,11 @@ export type DashboardMetric = {
   key: string;
   label: string;
   description: string | null;
-  valueType: string;
+  valueType: 'numeric' | 'text' | 'boolean';
   canonicalUnit: string;
-  allowedAggregation: string;
+  allowedAggregation: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'latest';
   calculationVersion: string;
-  status: string;
+  status: 'active' | 'archived';
   createdAt: string;
   updatedAt: string;
 };
@@ -24,7 +24,7 @@ export type DashboardAggregate = {
   datasetVersionId: string;
   regionId: string;
   metric: DashboardMetric;
-  aggregateType: string;
+  aggregateType: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'latest';
   periodStart: string;
   periodEnd: string;
   value: MetricValue;
