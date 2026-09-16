@@ -86,7 +86,15 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
   four fixed literals (the three `invalidValue()` literals plus the
   `parsePeriod()` literal) as the `ObservationQualityMessage` compile-time
   guard — runtime values unchanged and raw cell/exception text never reaches
-  `ObservationQuality.message` via this carrier. `validateMapping()` accepts only its five fixed literals
+  `ObservationQuality.message` via this carrier. The read-side `toObservation()`
+  quality `severity` / `state` are typed as the closed Prisma-enum unions
+  (`info` / `warning` / `error`; `valid` / `coerced` / `missing` / `invalid` /
+  `duplicate` / `low_confidence`), matching `ParsedObservation`,
+  `SeedObservationQuality`, and the `ObservationQuality` enum columns;
+  `code` / `message` deliberately stay `string` because the schema leaves them
+  open (`String`) and committed seed/spec fixtures carry synthetic values
+  (`synthetic_quality_flag`, `verified_source`); no runtime mapping, rejection,
+  or response shape changed. `validateMapping()` accepts only its five fixed literals
   (duplicate key, missing column, invalid key, missing unit, incompatible
   aggregation) as a compile-time guard — runtime values unchanged and raw
   source/exception text never reaches `ValidationIssue.message` via this

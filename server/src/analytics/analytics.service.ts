@@ -107,8 +107,14 @@ function toObservation(observation: {
   dimensions: unknown;
   sourceRowNumber: number | null;
   qualities: Array<{
-    severity: string;
-    state: string;
+    severity: 'info' | 'warning' | 'error';
+    state:
+      | 'valid'
+      | 'coerced'
+      | 'missing'
+      | 'invalid'
+      | 'duplicate'
+      | 'low_confidence';
     code: string;
     message: string;
   }>;
