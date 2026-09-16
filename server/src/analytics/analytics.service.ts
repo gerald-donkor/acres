@@ -148,7 +148,7 @@ function toAggregate(aggregate: {
   datasetVersionId: string;
   regionId: string;
   metricDefinition: Parameters<typeof toMetric>[0];
-  aggregateType: string;
+  aggregateType: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'latest';
   periodStart: Date;
   periodEnd: Date;
   numericValue: unknown;
@@ -186,11 +186,11 @@ function toMetric(metric: {
   key: string;
   label: string;
   description: string | null;
-  valueType: string;
+  valueType: 'numeric' | 'text' | 'boolean';
   canonicalUnit: string;
-  allowedAggregation: string;
+  allowedAggregation: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'latest';
   calculationVersion: string;
-  status: string;
+  status: 'active' | 'archived';
   createdAt: Date;
   updatedAt: Date;
 }) {

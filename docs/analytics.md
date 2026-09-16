@@ -94,7 +94,17 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
   `code` / `message` deliberately stay `string` because the schema leaves them
   open (`String`) and committed seed/spec fixtures carry synthetic values
   (`synthetic_quality_flag`, `verified_source`); no runtime mapping, rejection,
-  or response shape changed. `validateMapping()` accepts only its five fixed literals
+  or response shape changed. The read-side `toMetric()` `valueType` /
+  `allowedAggregation` / `status` and `toAggregate()` `aggregateType` are typed
+  as the closed Prisma-enum unions (`numeric` / `text` / `boolean`;
+  `sum` / `avg` / `min` / `max` / `count` / `latest`;
+  `active` / `archived`), matching `MetricValueType` /
+  `MetricAggregationType` / `MetricDefinitionStatus` in domain types, generated
+  enums, and schema enums; `calculationVersion` (and units, keys, labels, ids)
+  deliberately stay `string` because the schema leaves them open (`String`) and
+  only the `analytics-v1` version constant exists; the seed's narrower
+  five-member aggregation and single-member status ranges are admitted subsets;
+  no runtime mapping, rejection, or response shape changed. `validateMapping()` accepts only its five fixed literals
   (duplicate key, missing column, invalid key, missing unit, incompatible
   aggregation) as a compile-time guard — runtime values unchanged and raw
   source/exception text never reaches `ValidationIssue.message` via this
