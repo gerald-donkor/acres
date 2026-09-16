@@ -55,6 +55,19 @@ read, and request exports but cannot publish. Viewers can read published report
 state and export status/download metadata only; draft reports and draft
 revisions are filtered out for viewer reads.
 
+The private read mappers state the closed Prisma-enum unions inline
+(prompt 122): `toReport()` `status` accepts only
+`draft | published | archived`, `toRevision()` `status` accepts only
+`draft | in_review | published | superseded` and its nested `evidenceType`
+accepts only `aggregate | dashboard_view`, and `toExport()` `format` accepts
+only `csv | pdf` with `status` accepting only the five `ExportStatus`
+literals — matching the schema enums, the generated Prisma enums, and the
+already-closed shared `reports.ts`, with the five now-redundant `as` casts
+removed in favour of direct assignment. `renderingVersion`,
+`failureCode` / `failureMessage`, the controller OpenAPI response schemas
+(`{ type: 'string' }` by design), and all shared carriers are deliberately
+unchanged; no runtime mapping, rejection, or response shape changed.
+
 ## REST API
 
 All routes are `/api/v1`, session-authenticated, selected-organization scoped,

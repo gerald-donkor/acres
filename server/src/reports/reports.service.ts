@@ -927,7 +927,7 @@ function toReport(
     id: string;
     title: string;
     summary: string | null;
-    status: string;
+    status: 'draft' | 'published' | 'archived';
     version: number;
     ownerAccountId: string;
     createdByAccountId: string;
@@ -941,7 +941,7 @@ function toReport(
     id: row.id,
     title: row.title,
     summary: row.summary,
-    status: row.status as Report['status'],
+    status: row.status,
     version: row.version,
     ownerAccountId: row.ownerAccountId,
     createdByAccountId: row.createdByAccountId,
@@ -956,7 +956,7 @@ function toRevision(row: {
   id: string;
   reportId: string;
   revisionNumber: number;
-  status: string;
+  status: 'draft' | 'in_review' | 'published' | 'superseded';
   title: string;
   summary: string | null;
   sections: unknown;
@@ -977,7 +977,7 @@ function toRevision(row: {
   }>;
   evidence: Array<{
     id: string;
-    evidenceType: string;
+    evidenceType: 'aggregate' | 'dashboard_view';
     aggregateId: string | null;
     dashboardViewId: string | null;
     metricDefinitionId: string | null;
@@ -992,11 +992,7 @@ function toRevision(row: {
     id: row.id,
     reportId: row.reportId,
     revisionNumber: row.revisionNumber,
-    status: row.status as Report['latestRevision'] extends infer R
-      ? R extends { status: infer S }
-        ? S
-        : never
-      : never,
+    status: row.status,
     title: row.title,
     summary: row.summary,
     sections: Array.isArray(row.sections) ? row.sections : [],
@@ -1017,7 +1013,7 @@ function toRevision(row: {
     })),
     evidence: row.evidence.map((evidence) => ({
       id: evidence.id,
-      evidenceType: evidence.evidenceType as 'aggregate' | 'dashboard_view',
+      evidenceType: evidence.evidenceType,
       aggregateId: evidence.aggregateId,
       dashboardViewId: evidence.dashboardViewId,
       metricDefinitionId: evidence.metricDefinitionId,
@@ -1034,8 +1030,8 @@ function toExport(row: {
   id: string;
   reportId: string | null;
   revisionId: string | null;
-  format: string;
-  status: string;
+  format: 'csv' | 'pdf';
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
   renderingVersion: string;
   failureCode: string | null;
   failureMessage: string | null;
@@ -1057,8 +1053,8 @@ function toExport(row: {
     id: row.id,
     reportId: row.reportId,
     revisionId: row.revisionId,
-    format: row.format as ExportRequest['format'],
-    status: row.status as ExportRequest['status'],
+    format: row.format,
+    status: row.status,
     renderingVersion: row.renderingVersion,
     failure:
       row.failureCode === null
