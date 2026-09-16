@@ -28,6 +28,7 @@ import {
 } from '../contracts/openapi';
 import { CurrentOrganization } from '../organizations/current-organization.decorator';
 import type { OrganizationContext } from '../organizations/organization-context';
+import type { IngestionRunSummary } from '@acres/shared';
 import { OrganizationContextGuard } from '../organizations/organization-context.guard';
 import { PermissionGuard } from '../organizations/permission.guard';
 import { RequiresOrganizationPermission } from '../organizations/permissions';
@@ -307,6 +308,6 @@ export class IngestionController {
   }
 }
 
-function isIngestionTerminal(state: string): boolean {
+function isIngestionTerminal(state: IngestionRunSummary['state']): boolean {
   return ['published', 'failed', 'cancelled'].includes(state);
 }

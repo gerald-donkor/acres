@@ -391,6 +391,13 @@ only.
 - Emits `ingestion.progress` events at 1500ms intervals until reaching a terminal state (`published`, `failed`, `cancelled`).
 - Event IDs use low-risk composite identifiers (`${runId}:${state}:${stage}:${progressPercent}`).
 - Client helper `streamIngestionRunProgress` connects via `fetch()` + `ReadableStream` and falls back to `getIngestionRun` polling if the stream fails to establish.
+- The server completion predicate `isIngestionTerminal()` (prompt 124)
+  admits only `IngestionRunSummary['state']` — the seven Prisma
+  `IngestionRunState` literals — via one new type-only
+  `import type { IngestionRunSummary } from '@acres/shared'` with an
+  unchanged predicate body. Controller `runSchema` response shapes
+  deliberately stay `{ type: 'string' }`; no terminal boolean, event id, or
+  frame sequence changed.
 
 ### Browser dataset upload, mapping, and ingestion workflow
 

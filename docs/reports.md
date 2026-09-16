@@ -146,6 +146,12 @@ Export status progress is delivered via Server-Sent Events (SSE) at
   the `x-acres-organization-id` header), updating the `ExportStatus` component live,
   announcing terminal states via `aria-live="polite"`, and falling back to direct GET
   polling if stream connection fails.
+- The server completion predicate `isExportTerminal()` (prompt 124) admits
+  only `ExportRequest['status']` — the five Prisma `ExportStatus` literals —
+  via one new type-only `import type { ExportRequest } from '@acres/shared'`
+  with an unchanged predicate body. Controller `exportSchema` response shapes
+  deliberately stay `{ type: 'string' }`; no terminal boolean, event id, or
+  frame sequence changed.
 
 ## Verification
 
