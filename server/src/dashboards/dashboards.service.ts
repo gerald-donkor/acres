@@ -5,7 +5,6 @@ import type {
   DashboardPresentation,
   DashboardSummary,
   DashboardView,
-  MetricValueKind,
   UpdateDashboardViewInput,
 } from '@acres/shared';
 import { ApiException } from '../common/api-exception';
@@ -165,7 +164,7 @@ export class DashboardsService {
           ? (aggregate.datasetVersionIds as string[])
           : [],
         value: {
-          type: aggregate.value.type as MetricValueKind,
+          type: aggregate.value.type,
           value:
             aggregate.value.value === null
               ? null

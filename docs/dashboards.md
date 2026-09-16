@@ -30,6 +30,13 @@ enums, and the shared `DashboardView` DTO. The `as 'active' | 'archived'`
 cast is removed because Prisma repository rows already carry the enum type;
 `filters`/`presentation`/`schemaVersion` carriers are unchanged (prompt 68
 owns versioning). No runtime mapping, rejection, or response shape changed.
+`summary()` (prompt 118) no longer launders the aggregate value kind through
+`as MetricValueKind`: `AnalyticsService.valueOf()` now carries the kind with
+compiler proof, so `type` flows through as `aggregate.value.type` and the
+now-unused import is removed. The `datasetVersionIds` guard+cast and the
+`filters`/`presentation` casts are unchanged (Json-backed carriers owned by
+separate decisions); the `String(...)` coercion and every response shape are
+unchanged.
 
 ## Saved-view schema versioning (prompt 68)
 

@@ -213,7 +213,10 @@ function valueOf(row: {
   numericValue: unknown;
   textValue: string | null;
   booleanValue: boolean | null;
-}) {
+}):
+  | { type: 'numeric'; value: string }
+  | { type: 'text'; value: string }
+  | { type: 'boolean'; value: boolean | null } {
   if (row.numericValue !== null && row.numericValue !== undefined) {
     return { type: 'numeric', value: decimalValueToString(row.numericValue) };
   }

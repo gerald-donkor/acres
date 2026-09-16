@@ -104,7 +104,14 @@ not be parsed.`, `Boolean metric value could not be parsed.`) as a
   deliberately stay `string` because the schema leaves them open (`String`) and
   only the `analytics-v1` version constant exists; the seed's narrower
   five-member aggregation and single-member status ranges are admitted subsets;
-  no runtime mapping, rejection, or response shape changed. `validateMapping()` accepts only its five fixed literals
+  no runtime mapping, rejection, or response shape changed. The shared
+  `valueOf()` helper (prompt 118) returns the closed discriminated union
+  (`{ type: 'numeric'; value: string } | { type: 'text'; value: string } |
+  { type: 'boolean'; value: boolean | null }`, `boolean | null` only on the
+  boolean variant), matching `MetricValueType` and shared `MetricValueKind`;
+  the missing annotation had widened `type` to `string` through
+  `toObservation()` / `toAggregate()`; no runtime mapping, rejection, or
+  response shape changed. `validateMapping()` accepts only its five fixed literals
   (duplicate key, missing column, invalid key, missing unit, incompatible
   aggregation) as a compile-time guard — runtime values unchanged and raw
   source/exception text never reaches `ValidationIssue.message` via this
