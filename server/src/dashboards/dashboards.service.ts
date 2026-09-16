@@ -199,7 +199,7 @@ function toView(row: {
   filters: unknown;
   presentation: unknown;
   schemaVersion: unknown;
-  status: string;
+  status: 'active' | 'archived';
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -211,7 +211,7 @@ function toView(row: {
     filters: (row.filters ?? {}) as DashboardFilters,
     presentation: (row.presentation ?? {}) as DashboardPresentation,
     schemaVersion: resolveSchemaVersion(row.schemaVersion),
-    status: row.status as 'active' | 'archived',
+    status: row.status,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

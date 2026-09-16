@@ -24,6 +24,13 @@ dimension hash, and period window. `presentation` stores chart intent:
 `chart` and `compareBy`. A saved view stores query and presentation state, not
 copied metric values.
 
+`toView()` `status` (prompt 117) is typed as the closed `active | archived`
+union, matching the `DashboardViewStatus` schema enum, the generated Prisma
+enums, and the shared `DashboardView` DTO. The `as 'active' | 'archived'`
+cast is removed because Prisma repository rows already carry the enum type;
+`filters`/`presentation`/`schemaVersion` carriers are unchanged (prompt 68
+owns versioning). No runtime mapping, rejection, or response shape changed.
+
 ## Saved-view schema versioning (prompt 68)
 
 Migration `20260909000000_dashboard_view_schema_version` adds an additive
