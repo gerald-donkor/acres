@@ -1,8 +1,10 @@
 export type IngestionRunState =
   | 'queued'
   | 'running'
+  | 'validation_failed'
   | 'published'
   | 'failed'
+  | 'cancelling'
   | 'cancelled';
 
 export interface IngestionRunSummary {
@@ -11,8 +13,9 @@ export interface IngestionRunSummary {
   readonly uploadId: string;
   readonly mappingId: string;
   readonly datasetVersionId: string | null;
-  readonly state: string;
-  readonly stage: string;
+  readonly state: IngestionRunState;
+  readonly stage:
+    'inspect' | 'parse' | 'map' | 'validate' | 'publish' | 'complete';
   readonly progressPercent: number;
   readonly failure: { code: string; message: string | null } | null;
   readonly createdAt: string;
@@ -25,7 +28,7 @@ export type DatasetState = 'draft' | 'active' | 'archived';
 export interface DatasetVersionSummary {
   readonly id: string;
   readonly versionNumber: number;
-  readonly publicationStatus: string;
+  readonly publicationStatus: 'published';
   readonly publishedAt: string;
   readonly checksumHex: string | null;
   readonly sourceSummary: unknown;
@@ -35,7 +38,7 @@ export interface DatasetSummary {
   readonly id: string;
   readonly name: string;
   readonly description: string | null;
-  readonly state: string;
+  readonly state: DatasetState;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly latestVersion: DatasetVersionSummary | null;
@@ -46,7 +49,7 @@ export interface ColumnMappingSummary {
   readonly datasetId: string;
   readonly uploadId: string;
   readonly versionNumber: number;
-  readonly validationStatus: string;
+  readonly validationStatus: 'pending' | 'valid' | 'invalid';
   readonly createdAt: string;
 }
 
@@ -54,7 +57,7 @@ export type MappingSummary = ColumnMappingSummary;
 
 export interface ValidationIssueSummary {
   readonly id: string;
-  readonly severity: string;
+  readonly severity: 'info' | 'warning' | 'error';
   readonly code: string;
   readonly message: string;
   readonly rowNumber?: number | null;

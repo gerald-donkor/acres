@@ -512,11 +512,17 @@ Overall result: ALL PLANS PASSED (2/2 passed)
   `published`; `pending | valid | invalid`; the seven `IngestionRunState`
   literals; the six `IngestionRunStage` literals), matching the schema enums
   and generated enums; repository rows already carry the enum types so no
-  import, alias, cast, or validator was added. `failureCode` /
+  import, alias, cast, or validator was added. The shared summary DTOs
+  (prompt 121) admit exactly the same vocabularies: shared
+  `IngestionRunSummary.state` reuses the in-file `IngestionRunState` (widened
+  from five to the seven Prisma members, closing the recorded five-vs-seven
+  mismatch), `DatasetSummary.state` reuses the in-file `DatasetState`, and
+  `IngestionRunSummary.stage`, `DatasetVersionSummary.publicationStatus`,
+  `ColumnMappingSummary.validationStatus`, and `ValidationIssueSummary.severity`
+  are the matching inline unions — no Prisma generated-client import into the
+  shared contract and no new exported alias. `failureCode` /
   `failureMessage`, `listIssues` `code` / `message`, controller `stringSchema()`
-  query inputs, the processor-spec `StoredRun` mock, and all shared
-  `ingestion.ts` carriers deliberately stay `string`. The shared
-  five-member `IngestionRunState` (missing `validation_failed` and
-  `cancelling`) mismatch is recorded and owned by the separate
-  shared-contract decision. No runtime mapping, rejection, or response shape
+  query inputs, the processor-spec `StoredRun` mock,
+  `MetricMappingInput` value/aggregation carriers, and all ids/timestamps
+  deliberately stay `string`. No runtime mapping, rejection, or response shape
   changed.
