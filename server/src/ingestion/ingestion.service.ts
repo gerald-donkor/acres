@@ -425,13 +425,13 @@ export class IngestionService {
     id: string;
     name: string;
     description: string | null;
-    state: string;
+    state: 'draft' | 'active' | 'archived';
     createdAt: Date;
     updatedAt: Date;
     versions?: Array<{
       id: string;
       versionNumber: number;
-      publicationStatus: string;
+      publicationStatus: 'published';
       publishedAt: Date;
       checksumHex: string | null;
       sourceSummary: unknown;
@@ -453,7 +453,7 @@ export class IngestionService {
   private toVersionSummary(version: {
     id: string;
     versionNumber: number;
-    publicationStatus: string;
+    publicationStatus: 'published';
     publishedAt: Date;
     checksumHex: string | null;
     sourceSummary: unknown;
@@ -473,7 +473,7 @@ export class IngestionService {
     datasetId: string;
     uploadId: string;
     versionNumber: number;
-    validationStatus: string;
+    validationStatus: 'pending' | 'valid' | 'invalid';
     createdAt: Date;
   }): MappingSummary {
     return {
@@ -492,8 +492,15 @@ export class IngestionService {
     uploadId: string;
     mappingId: string;
     datasetVersionId: string | null;
-    state: string;
-    stage: string;
+    state:
+      | 'queued'
+      | 'running'
+      | 'validation_failed'
+      | 'published'
+      | 'failed'
+      | 'cancelling'
+      | 'cancelled';
+    stage: 'inspect' | 'parse' | 'map' | 'validate' | 'publish' | 'complete';
     progressPercent: number;
     failureCode: string | null;
     failureMessage: string | null;

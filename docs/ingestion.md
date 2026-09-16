@@ -505,3 +505,18 @@ Overall result: ALL PLANS PASSED (2/2 passed)
   implemented. Other providers, source precedence, refresh/retirement/dispute
   policy, legal authority, live provider publication, and real
   Garage/Valkey/ClamAV failure drills remain future operational work.
+- The read-side `toDatasetSummary()` `state`, `toVersionSummary()`
+  `publicationStatus` (nested and standalone), `toMappingSummary()`
+  `validationStatus`, and `toRunSummary()` `state` / `stage` (prompt 120) are
+  typed as the closed Prisma-enum unions (`draft | active | archived`;
+  `published`; `pending | valid | invalid`; the seven `IngestionRunState`
+  literals; the six `IngestionRunStage` literals), matching the schema enums
+  and generated enums; repository rows already carry the enum types so no
+  import, alias, cast, or validator was added. `failureCode` /
+  `failureMessage`, `listIssues` `code` / `message`, controller `stringSchema()`
+  query inputs, the processor-spec `StoredRun` mock, and all shared
+  `ingestion.ts` carriers deliberately stay `string`. The shared
+  five-member `IngestionRunState` (missing `validation_failed` and
+  `cancelling`) mismatch is recorded and owned by the separate
+  shared-contract decision. No runtime mapping, rejection, or response shape
+  changed.
