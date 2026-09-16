@@ -59,6 +59,16 @@ fixed parameterized route templates (e.g. `/api/v1/auth`, `/api/v1/organizations
 Raw UUIDs, user IDs, organization IDs, tokens, query parameters, and error
 messages are strictly excluded from metric labels.
 
+`MetricsService.recordParserExecution()` (prompt 125) admits only
+`SourceKind` (`csv | xlsx | geojson`) via one new type-only
+`import type { SourceKind } from '../ingestion/parsers/parser.types'`,
+erased at compile time with no runtime module edge to the ingestion parser
+tree. The `safeKind` → `'unknown'` guard stays byte-for-byte unchanged as
+defense-in-depth for untyped callers and preserves the bounded `source_kind`
+label cardinality invariant. No label value, exposition line, or
+counter/histogram behavior changed (`acres_parser_executions_total`,
+`acres_parser_execution_duration_seconds`).
+
 ## Artifacts
 
 | file | purpose |
