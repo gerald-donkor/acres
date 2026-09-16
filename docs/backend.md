@@ -2232,6 +2232,20 @@ That means the real Garage/Valkey/ClamAV integration, real migration apply from
 empty DB, migration status, drift rebuild, and production-profile volume
 inspection still require a machine with Docker available.
 
+The upload read path states the closed `UploadState` vocabulary (prompt 123):
+shared `UploadState` is reconciled to the seven Prisma literals (`pending`
+renamed to `pending_upload`, `completed` added, Prisma order
+`pending_upload, completed, scanning, accepted, rejected, cancelled, expired`),
+matching `schema.prisma` and the generated Prisma enum; shared
+`UploadStatus.state`, server `toStatus()` `state` (seven-member inline union),
+and controller `terminal()` (`UploadStatus['state']`, no new import) admit
+only those literals with direct narrow-to-narrow assignment and an unchanged
+predicate body. `progressStage` / `progress.stage` stay `string` by decision —
+the column is free-form `String` with default `created`, not an enum — as do
+`failure.code` / `failure.message` and the controller OpenAPI response schemas
+(`{ type: 'string' }` by design). No runtime mapping, rejection, terminal
+boolean, or response shape changed.
+
 ## 15. Phase 7A geography and ingestion foundation
 
 Implemented from `prompts/28-geography-ingestion-foundation.md`; the detailed

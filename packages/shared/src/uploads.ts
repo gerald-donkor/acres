@@ -1,5 +1,6 @@
 export type UploadState =
-  | 'pending'
+  | 'pending_upload'
+  | 'completed'
   | 'scanning'
   | 'accepted'
   | 'rejected'
@@ -8,7 +9,7 @@ export type UploadState =
 
 export interface UploadStatus {
   readonly id: string;
-  readonly state: string;
+  readonly state: UploadState;
   readonly filename: string;
   readonly mediaType: string;
   readonly byteCount: number;

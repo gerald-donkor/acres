@@ -342,7 +342,14 @@ export class UploadsService {
 
   private toStatus(upload: {
     id: string;
-    state: string;
+    state:
+      | 'pending_upload'
+      | 'completed'
+      | 'scanning'
+      | 'accepted'
+      | 'rejected'
+      | 'cancelled'
+      | 'expired';
     declaredFilename: string;
     declaredMediaType: string;
     declaredByteCount: bigint;

@@ -150,6 +150,6 @@ export class UploadsController {
   }
 }
 
-function terminal(state: string): boolean {
+function terminal(state: UploadStatus['state']): boolean {
   return ['accepted', 'rejected', 'cancelled', 'expired'].includes(state);
 }
