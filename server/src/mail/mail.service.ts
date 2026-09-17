@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { OrganizationRole } from '@acres/shared';
 import { AcresConfigService } from '../config/acres-config.service';
 import {
   MAIL_TRANSPORT,
@@ -72,7 +73,7 @@ export class MailService {
     to: string,
     inviteUrl: string,
     organizationName: string,
-    role: string,
+    role: OrganizationRole,
   ): Promise<void> {
     const formattedRole = role.charAt(0).toUpperCase() + role.slice(1);
     const subject = `You've been invited to join ${organizationName} on Acres`;

@@ -44,7 +44,7 @@ implementing session (2026-08-21), never recalled. Toolchain: **Node v26.7.0**,
 | `graphql-query-complexity`                                     | `2.0.0`                                   | cost guard for GraphQL abuse controls                                                                                                                                                                                   |
 | `dataloader`                                                   | `2.2.3`                                   | per-request GraphQL lookup caching                                                                                                                                                                                      |
 | `bcryptjs`                                                     | `^3.0.3`                                  | password hashing. Pure JavaScript and **ships no install script**, which matters here: this machine's npm blocks unapproved install scripts, so a native hashing binding would not have built                           |
-| `nodemailer`                                                   | `^10.0.0`                                 | provider-neutral mail delivery abstraction supporting SMTP (Mailpit in dev) and test memory transport (MIT)                                                                                                            |
+| `nodemailer`                                                   | `^10.0.0`                                 | provider-neutral mail delivery abstraction supporting SMTP (Mailpit in dev) and test memory transport (MIT)                                                                                                             |
 | `@types/nodemailer`                                            | `^8.0.1`                                  | TypeScript type definitions for Nodemailer                                                                                                                                                                              |
 | `prom-client`                                                  | `^15.1.3`                                 | Prometheus application metrics exposition client (Apache-2.0, pure JS, Node 24 compatible)                                                                                                                              |
 | `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7`            | from the verified Nest scaffold           |
@@ -532,7 +532,7 @@ migration/owner, non-owner runtime, and test roles" exactly:
 
 | role             | privilege                                                                                                                                                                                                                                                                       | used by                                                               |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `acres_migrator` | `LOGIN`, `CREATEDB` (for `prisma migrate dev`'s shadow database), `BYPASSRLS` (for `pg_dump` of tables with `FORCE ROW LEVEL SECURITY`), owns both databases                                                                                                                  | `prisma migrate` / `validate` / `status` only — never the running API |
+| `acres_migrator` | `LOGIN`, `CREATEDB` (for `prisma migrate dev`'s shadow database), `BYPASSRLS` (for `pg_dump` of tables with `FORCE ROW LEVEL SECURITY`), owns both databases                                                                                                                    | `prisma migrate` / `validate` / `status` only — never the running API |
 | `acres_app`      | `LOGIN` only; `CONNECT` on `acres`, DML (`SELECT`/`INSERT`/`UPDATE`/`DELETE`) via default privileges, **no DDL, no `TRUNCATE`, no `_prisma_migrations`, no `acres_test` or `postgres` connect**                                                                                 | the running Nest API (`DATABASE_URL`)                                 |
 | `acres_test`     | same DML, **plus `TRUNCATE`** (the integration suite's `truncateAll` helper needs it — DML alone is not sufficient in PostgreSQL, discovered this session), scoped to the separate `acres_test` database, with **no `_prisma_migrations` and no `acres` or `postgres` connect** | the real-database integration suite                                   |
 
@@ -1574,7 +1574,7 @@ No output.
 | `@acres/shared` in `client/`                                                         | nothing consumes it yet                                                                                                                                                    |
 | any landing-page form UI                                                             | the endpoint exists; the form is a later prompt                                                                                                                            |
 | login / register screens                                                             | same                                                                                                                                                                       |
-| product authorization beyond organizations                                           | `/jobs/runs` requires `jobs.read` (owner/admin of the active org) since prompt 78; tenant routes use the organization policy in §14                                                                                 |
+| product authorization beyond organizations                                           | `/jobs/runs` requires `jobs.read` (owner/admin of the active org) since prompt 78; tenant routes use the organization policy in §14                                        |
 | email delivery                                                                       | which is why registration returns a generic failure; §4                                                                                                                    |
 | Terraform / IaC, an actual registry + push, choosing a host to run the container     | §10.1 built the Dockerfile and CI; no hosting provider has been chosen                                                                                                     |
 | OAuth / social login, analytics, billing, CMS, admin                                 | out of scope for step 8                                                                                                                                                    |
@@ -1808,6 +1808,20 @@ Prompt 59 integrates provider-neutral invitation email delivery via `MailService
 invoked asynchronously by `OrganizationsService.invite` with direct token links (`/accept-invitation?token=...`).
 Deterministic delivery is validated in `server/test/organizations.e2e-spec.ts` using `MemoryMailAdapter`.
 Remaining out of scope for this evidence increment: retention-policy choices and distributed operator policy.
+
+The invitation-mail `role` carrier is closed at compile time (prompt 127):
+`sendInvitationEmail` admits only `OrganizationRole` (`owner | admin |
+analyst | viewer`, imported from `@acres/shared` via an erased `import
+type` with no new runtime edge) instead of `string`, with the
+`formattedRole` capitalization, subject/text/html templates, and `send()`
+call byte-for-byte unchanged. The full union — not
+`Exclude<OrganizationRole, 'owner'>` — is deliberate because the sole
+production caller passes Prisma `row.role` (`OrganizationRole` including
+`owner`) and compiles unchanged with no cast; invite-time owner exclusion
+stays enforced by `InviteMemberDto` `@IsIn(assignableRoles)`,
+`canAssignRole`, and the `Exclude` `invite` signature, all untouched. `to`,
+`inviteUrl`, and `organizationName` deliberately stay open — addresses, URLs,
+and display names have no closed authority. No rendered byte changed.
 
 ---
 
