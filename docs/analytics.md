@@ -207,6 +207,22 @@ To make `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` plans measurable without popul
   - Primary organization: 6 regions, 4 metric definitions (`synthetic_metric_01` sum, `synthetic_metric_02` avg, `synthetic_metric_03` count, `synthetic_metric_04` max), 2 dataset versions, 12 monthly periods, 3 dimension segments (`urban`, `suburban`, `rural`), generating **1,728 observations**, **1,728 aggregates**, **1,728 lineage evidence links**, and ~86 quality flags.
   - Secondary organization: 2 regions, 1 dataset version, 3 periods, 1 dimension, generating 6 observations, 6 aggregates, and 6 lineages to verify tenant isolation under RLS.
   - Neutral synthetic naming conventions (`Synthetic Scale Region 001`, `synthetic_metric_01`); no real regional intelligence is invented.
+  - Seed checksum typing (prompt 130): `SeedStoredObject.checksumAlgorithm` and
+    `SeedUpload.checksumAlgorithm` (`analytics-scale-seed.types.ts`) admit only
+    `'sha256'` — each the single literal already emitted by its writers (the
+    four builder push sites in `analytics-scale-seed.ts`: primary loop ×2,
+    secondary ×2), with the typed accumulators, plan assembly, and Prisma
+    `create({ data })` persistence passthroughs byte-for-byte unchanged.
+    Narrowing both carriers in the one seed types file is deliberate adjacency,
+    not interface merging. This discharges the prompt 129 deferral, making the
+    seed scaffolding consistent with the `'sha256'` product precedent in
+    `packages/shared/src/uploads.ts` (unchanged). `mediaType` /
+    `declaredMediaType` / filenames / buckets / keys / hex digests / ids /
+    timestamps deliberately stay open (operator allowlist or free-form, no
+    closed authority); `progressStage` and quality `code` / `message` stay owned
+    by prompts 86/100/115/123; Prisma `String` columns are untouched (no
+    migration — the narrowing claims only what the builder's produced plans
+    carry). No built plan byte changed.
 
 ### Measured Read Shapes and Local Regression Guards
 

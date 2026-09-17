@@ -48,7 +48,7 @@ export interface SeedStoredObject {
   readonly originalFilename: string;
   readonly mediaType: string;
   readonly byteCount: bigint;
-  readonly checksumAlgorithm: string;
+  readonly checksumAlgorithm: 'sha256';
   readonly checksumHex: string;
   readonly state: 'accepted';
 }
@@ -61,7 +61,7 @@ export interface SeedUpload {
   readonly declaredFilename: string;
   readonly declaredMediaType: string;
   readonly declaredByteCount: bigint;
-  readonly checksumAlgorithm: string;
+  readonly checksumAlgorithm: 'sha256';
   readonly checksumHex: string;
   readonly state: 'accepted';
   readonly progressStage: string;
