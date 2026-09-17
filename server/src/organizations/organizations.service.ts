@@ -5,7 +5,7 @@ import type {
   OrganizationMember,
   OrganizationSummary,
 } from '@acres/shared';
-import type { OrganizationRole } from '../generated/prisma/enums';
+import type { AuditAction, OrganizationRole } from '../generated/prisma/enums';
 import { ApiException } from '../common/api-exception';
 import { uuidV7 } from '../common/ids';
 import { hashToken, issueRawToken } from '../common/tokens';
@@ -434,7 +434,7 @@ export class OrganizationsService {
   async auditEvents(context: OrganizationContext): Promise<
     Array<{
       id: string;
-      action: string;
+      action: AuditAction;
       targetType: string;
       targetId: string | null;
       actorAccountId: string | null;
@@ -472,7 +472,7 @@ export class OrganizationsService {
   ): Promise<
     Array<{
       id: string;
-      action: string;
+      action: AuditAction;
       targetType: string;
       targetId: string | null;
       actorAccountId: string | null;

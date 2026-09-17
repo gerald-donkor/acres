@@ -1823,6 +1823,21 @@ stays enforced by `InviteMemberDto` `@IsIn(assignableRoles)`,
 `inviteUrl`, and `organizationName` deliberately stay open — addresses, URLs,
 and display names have no closed authority. No rendered byte changed.
 
+The audit-read `action` carriers are closed at compile time (prompt 128):
+`OrganizationsService.auditEvents` and `auditEventsPage` admit only
+`AuditAction` (the ten schema-enum members, joined into the existing erased
+`import type` from `../generated/prisma/enums` with no new runtime edge)
+instead of `string`, with the Prisma queries, `row.action` mappings,
+`audit.read` gates, and the resolver call byte-for-byte unchanged.
+Narrowing the currently-uncalled `auditEvents` alongside the
+resolver-consumed `auditEventsPage` is deliberate consistency over the
+identical row shape, not dead-code cleanup — the method stays in place.
+`targetType`, `targetId`, ids, and timestamps deliberately stay open — the
+`targetType` column is free-form `String` with production literals spanning
+two modules and no enum authority — and the GraphQL `String` fields and SDL
+snapshots are untouched (`contracts:check` reports no drift). No returned
+byte changed.
+
 ---
 
 ## 15. Versioned REST, GraphQL and checked contracts
