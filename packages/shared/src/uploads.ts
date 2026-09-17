@@ -31,16 +31,16 @@ export type InitiateUploadResult = {
   object: {
     key: string;
     bucket: string;
-    checksumAlgorithm: string;
+    checksumAlgorithm: 'sha256';
   };
   upload: {
     url: string;
-    method: string;
+    method: 'PUT';
     headers: Record<string, string>;
     expiresAt: string;
   };
   complete: {
-    method: string;
+    method: 'POST';
     url: string;
     requiredHeaders: string[];
   };
@@ -53,7 +53,7 @@ export type CompleteUploadInput = {
 
 export type UploadDownload = {
   url: string;
-  method: string;
+  method: 'GET';
   headers: Record<string, string>;
   expiresAt: string;
 };

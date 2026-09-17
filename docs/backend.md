@@ -2286,6 +2286,23 @@ the column is free-form `String` with default `created`, not an enum — as do
 (`{ type: 'string' }` by design). No runtime mapping, rejection, terminal
 boolean, or response shape changed.
 
+The signed-transport result carriers are closed at compile time (prompt 129):
+shared `InitiateUploadResult.object.checksumAlgorithm` admits only `'sha256'`,
+`upload.method` only `'PUT'`, `complete.method` only `'POST'`, and shared
+`UploadDownload.method` only `'GET'` — each the single literal already emitted
+by its producer (`UploadsService` sha256 writes at three sites, the
+`PresignedPut` / `PresignedGet` port literals via the S3 adapter, and the
+`'POST'` complete-route literal), with the service, port, adapter, fakes, and
+client pass-through consumers (`browser.ts` generics, `dataset-actions.tsx`
+fetch call) byte-for-byte unchanged. Narrowing all four in the one shared
+file is deliberate adjacency over the identical no-runtime-change proof, not
+domain merging. `mediaType`/names/URLs/keys/headers/checksums/ids/timestamps
+deliberately stay open (operator allowlist or free-form, no closed authority);
+`progress.stage`/failure carriers stay owned by prompts 80–85 and 121–123;
+controller `stringSchema()` envelopes, Prisma `String` columns, and
+analytics seed types are untouched; consistent with the `reports.ts:174`
+`method: 'GET'` precedent. No returned byte changed.
+
 ## 15. Phase 7A geography and ingestion foundation
 
 Implemented from `prompts/28-geography-ingestion-foundation.md`; the detailed
