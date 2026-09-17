@@ -1859,6 +1859,17 @@ unbounded in-memory array. A request-scoped DataLoader batches `region(slug)`
 through one set-based lookup per request batch and preserves per-key
 missing-region errors. Current queries are listed in `docs/api/contracts.md`.
 
+Cursor connection kinds are closed at compile time (prompt 126):
+`CursorPayload.kind`, the `decode` `expected.kind`, and both pagination
+`kind` options admit only `CursorKind` (`organizationMembers |
+organizationInvitations | organizationAuditEvents | regions`, exported from
+`server/src/graphql/cursor-codec.ts`, consumed in `pagination.ts` via an
+erased `import type` with no new runtime edge). The opaque `after`/`endCursor`
+wire strings, `sort`, and `organizationId` deliberately stay open — cursors
+arriving over HTTP are untyped by construction — so the `decode`
+kind-mismatch rejection stays as defense-in-depth for foreign and cross-kind
+cursors. No cursor byte, edge sequence, or contract artifact changed.
+
 GraphQL abuse controls are split between the HTTP parser and
 `server/src/graphql/graphql-limits.ts`: the configured byte limit is enforced
 before GraphQL parsing/context work, production requires `operationName`, only

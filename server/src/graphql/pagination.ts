@@ -1,6 +1,7 @@
 import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
 import { CursorCodec } from './cursor-codec';
+import type { CursorKind } from './cursor-codec';
 
 export interface ConnectionResult<T> {
   edges: Array<{ cursor: string; node: T }>;
@@ -16,7 +17,7 @@ export interface ConnectionWindow {
 export function connectionWindow(options: {
   first: number | undefined;
   after: string | undefined;
-  kind: string;
+  kind: CursorKind;
   organizationId: string | null;
   codec: CursorCodec;
   config: AcresConfigService;
@@ -48,7 +49,7 @@ export function connectionFromWindow<
   rows: T[],
   options: {
     first: number;
-    kind: string;
+    kind: CursorKind;
     organizationId: string | null;
     codec: CursorCodec;
   },

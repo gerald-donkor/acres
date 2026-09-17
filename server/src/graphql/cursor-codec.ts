@@ -3,9 +3,15 @@ import { Injectable } from '@nestjs/common';
 import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
 
+export type CursorKind =
+  | 'organizationMembers'
+  | 'organizationInvitations'
+  | 'organizationAuditEvents'
+  | 'regions';
+
 interface CursorPayload {
   v: 1;
-  kind: string;
+  kind: CursorKind;
   organizationId: string | null;
   sort: readonly [string, string];
 }
@@ -22,7 +28,7 @@ export class CursorCodec {
 
   decode(
     cursor: string | null | undefined,
-    expected: { kind: string; organizationId: string | null },
+    expected: { kind: CursorKind; organizationId: string | null },
   ): CursorPayload | null {
     if (!cursor) return null;
     try {
