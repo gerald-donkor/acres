@@ -1,3 +1,5 @@
+import type { ReportEvidenceType } from '@acres/shared';
+
 export interface AiEvalTestCase {
   id: string;
   name: string;
@@ -10,7 +12,7 @@ export interface AiEvalTestCase {
   purpose: string;
   evidence: Array<{
     id: string;
-    evidenceType: string;
+    evidenceType: ReportEvidenceType;
     label: string;
     value: string | number;
     unit?: string;

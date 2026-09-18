@@ -1,3 +1,4 @@
+import type { NormalizedEvidenceItem } from '../ai.port';
 import {
   buildDraftPrompt,
   computeCanonicalInputHash,
@@ -5,7 +6,7 @@ import {
 } from './draft-prompt.builder';
 
 describe('draft-prompt.builder', () => {
-  const mockEvidence = [
+  const mockEvidence: NormalizedEvidenceItem[] = [
     {
       id: '11111111-1111-7111-8111-111111111111',
       evidenceType: 'aggregate',

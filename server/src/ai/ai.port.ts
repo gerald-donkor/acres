@@ -1,10 +1,10 @@
-import type { AiDraftProposal } from '@acres/shared';
+import type { AiDraftProposal, ReportEvidenceType } from '@acres/shared';
 
 export const AI_DRAFT_PROVIDER = Symbol('AI_DRAFT_PROVIDER');
 
 export interface NormalizedEvidenceItem {
   id: string;
-  evidenceType: string;
+  evidenceType: ReportEvidenceType;
   label?: string;
   value?: string | number | boolean | null;
   unit?: string | null;

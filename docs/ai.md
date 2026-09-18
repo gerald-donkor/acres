@@ -43,6 +43,7 @@ The AI subsystem is structured according to the Ports and Adapters (Hexagonal) a
 - **Symbol**: `AI_DRAFT_PROVIDER = Symbol('AI_DRAFT_PROVIDER')`
 - **Interface**: `AiDraftProvider`
   - `generateDraftProposals(request: GenerateDraftsRequest): Promise<GenerateDraftsResponse>`
+- **Evidence Type Typing (Prompt 132)**: `NormalizedEvidenceItem.evidenceType` (`server/src/ai/ai.port.ts`) and `AiEvalTestCase.evidence[number].evidenceType` (`server/src/ai/evaluation/ai-evaluation-fixtures.ts`) admit strictly `ReportEvidenceType` (`'aggregate' | 'dashboard_view'`) imported from `@acres/shared`. Aligns provider port inputs and evaluation fixtures with PostgreSQL schema enums and Prisma models (`row.evidenceType`) without casts or runtime changes.
 
 ### 2.2 Gemini Adapter (`server/src/ai/adapters/gemini-draft.adapter.ts`)
 - The sole consumer of `@google/genai` in the codebase.
