@@ -468,6 +468,13 @@ validity enforcement, and spatial query plan proof:
   through the production repository, evaluates
   `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, and verifies both named spatial and
   hierarchy indexes, cleaning up only captured source and region IDs.
+- **Geometry Type Typing (Prompt 131)**: `RegionGeometryRecord.geometryType`
+  and `RegionGeometryRow.geometryType` (`server/src/geography/`) admit strictly
+  `SupportedGeometryType` (`'Point' | 'MultiPoint' | 'LineString' | 'MultiLineString' | 'Polygon' | 'MultiPolygon'`).
+  Writes already enforce this via `validateGeometryInput()`
+  (`ValidatedGeometry.geometryType: SupportedGeometryType`) and PostGIS CTE
+  validation (`UPPER(e.geom_type) = UPPER(...)`). Zero casts, zero database schema
+  changes, and zero runtime changes.
 
 ## Verification state
 

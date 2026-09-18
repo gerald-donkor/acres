@@ -7,6 +7,7 @@ import {
   MAX_SPATIAL_SEARCH_LIMIT,
   type PointIntersectionQuery,
   type RegionGeometryRecord,
+  type SupportedGeometryType,
   type WriteRegionGeometryInput,
 } from './geography.types';
 import { GeometryError } from './geometry.errors';
@@ -17,7 +18,7 @@ interface RegionGeometryRow {
   regionId: string;
   sourceId: string;
   srid: number;
-  geometryType: string;
+  geometryType: SupportedGeometryType;
   isValid: boolean;
   sourcePrecision: string | null;
   metadata: unknown;

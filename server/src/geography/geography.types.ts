@@ -81,7 +81,7 @@ export interface RegionGeometryRecord {
   readonly regionId: string;
   readonly sourceId: string;
   readonly srid: number;
-  readonly geometryType: string;
+  readonly geometryType: SupportedGeometryType;
   readonly isValid: boolean;
   readonly sourcePrecision: string | null;
   readonly metadata: Record<string, unknown> | null;
