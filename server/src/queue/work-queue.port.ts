@@ -1,3 +1,6 @@
+export type QueueJobName =
+  'upload.completed' | 'export.requested' | 'ingestion.run';
+
 export interface QueueJobPayload {
   readonly uploadId?: string;
   readonly ingestionRunId?: string;
@@ -8,7 +11,7 @@ export interface QueueJobPayload {
 export interface QueuePort {
   enqueue(input: {
     deterministicKey: string;
-    jobName: string;
+    jobName: QueueJobName;
     payload: QueueJobPayload;
     delayMs?: number;
   }): Promise<void>;

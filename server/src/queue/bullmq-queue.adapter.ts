@@ -2,7 +2,11 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { AcresConfigService } from '../config/acres-config.service';
-import type { QueuePort, QueueJobPayload } from './work-queue.port';
+import type {
+  QueueJobName,
+  QueueJobPayload,
+  QueuePort,
+} from './work-queue.port';
 
 @Injectable()
 export class BullmqQueueAdapter implements QueuePort, OnModuleDestroy {
@@ -13,7 +17,7 @@ export class BullmqQueueAdapter implements QueuePort, OnModuleDestroy {
 
   async enqueue(input: {
     deterministicKey: string;
-    jobName: string;
+    jobName: QueueJobName;
     payload: QueueJobPayload;
     delayMs?: number;
   }): Promise<void> {

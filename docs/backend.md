@@ -2185,6 +2185,10 @@ server-log-only). `ClaimedOutboxEvent.eventType` accepts only the closed
 `OutboxEventType` union (`'upload.completed' | 'export.requested'`), matching
 the concrete producer contracts (`appendUploadCompleted`, `appendExportRequested`)
 and worker dispatch branches (prompt 133 compile-time guard; runtime values unchanged).
+`QueuePort.enqueue` and `BullmqQueueAdapter.enqueue` accept only the closed
+`QueueJobName` union (`'upload.completed' | 'export.requested' | 'ingestion.run'`), matching
+the outbox event dispatch (`UploadWorkerService`) and ingestion run (`IngestionService`)
+call sites (prompt 134 compile-time guard; runtime values unchanged).
 Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant
 transactions clear it. Parser budgets are left for the ingestion phase.
