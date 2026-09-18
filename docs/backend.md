@@ -2181,7 +2181,11 @@ of remaining stuck in `retrying`. `OutboxService.markRetry` accepts only the
 fixed `queue_unavailable` code and `markDeadLetter` accepts only the fixed
 `queue_unavailable` / `'Outbox dispatch attempts exhausted.'` pair
 (compile-time guard; runtime values unchanged; raw queue text stays
-server-log-only). Worker/outbox reads use a transaction-local
+server-log-only). `ClaimedOutboxEvent.eventType` accepts only the closed
+`OutboxEventType` union (`'upload.completed' | 'export.requested'`), matching
+the concrete producer contracts (`appendUploadCompleted`, `appendExportRequested`)
+and worker dispatch branches (prompt 133 compile-time guard; runtime values unchanged).
+Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant
 transactions clear it. Parser budgets are left for the ingestion phase.
 

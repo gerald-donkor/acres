@@ -6,10 +6,12 @@ import {
   type TenantTransactionClient,
 } from '../prisma/tenant-transaction.service';
 
+export type OutboxEventType = 'upload.completed' | 'export.requested';
+
 export interface ClaimedOutboxEvent {
   readonly id: string;
   readonly organizationId: string | null;
-  readonly eventType: string;
+  readonly eventType: OutboxEventType;
   readonly aggregateId: string;
   readonly payload: unknown;
   readonly attempts: number;
