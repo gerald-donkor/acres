@@ -540,3 +540,12 @@ Overall result: ALL PLANS PASSED (2/2 passed)
   `MetricMappingInput` value/aggregation carriers, and all ids/timestamps
   deliberately stay `string`. No runtime mapping, rejection, or response shape
   changed.
+- Canonical runtime const tuples `SOURCE_KINDS` and `PARSER_EXECUTION_STATUSES`
+  (prompt 141) are exported from `server/src/ingestion/parsers/parser.types.ts`
+  with derived types `SourceKind` and `ParserExecutionStatus`.
+  `MetricsService.recordParserExecution()` status is narrowed to
+  `ParserExecutionStatus`, and `SourceParserService` status is explicitly
+  annotated. `InProcessParserExecutor` and `SourceParserService` have dedicated,
+  isolated unit test suites (`in-process-parser.executor.spec.ts` and
+  `source-parser.service.spec.ts`).
+

@@ -9,6 +9,7 @@ import {
 import { PARSER_MAX_BUFFER_BYTES } from './parser-utils';
 import type {
   ParsedSourceSummary,
+  ParserExecutionStatus,
   ParserLimits,
   SourceKind,
 } from './parser.types';
@@ -85,7 +86,7 @@ export class SourceParserService {
       (i) => i.code === 'parser_execution_failed',
     );
 
-    const status = isTimeout
+    const status: ParserExecutionStatus = isTimeout
       ? 'timeout'
       : isFailure
         ? 'failed'

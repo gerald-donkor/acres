@@ -17,7 +17,18 @@ import type {
   ParserExecutorFailureMessage,
 } from './child-process-parser.executor';
 
-export type SourceKind = 'csv' | 'xlsx' | 'geojson';
+export const SOURCE_KINDS = ['csv', 'xlsx', 'geojson'] as const;
+
+export type SourceKind = (typeof SOURCE_KINDS)[number];
+
+export const PARSER_EXECUTION_STATUSES = [
+  'success',
+  'validation_issue',
+  'failed',
+  'timeout',
+] as const;
+
+export type ParserExecutionStatus = (typeof PARSER_EXECUTION_STATUSES)[number];
 
 /**
  * Fixed parser-producer issue codes (18 distinct literals verified by grep

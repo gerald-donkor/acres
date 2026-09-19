@@ -7,7 +7,10 @@ import {
   Registry,
 } from 'prom-client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { SourceKind } from '../ingestion/parsers/parser.types';
+import type {
+  ParserExecutionStatus,
+  SourceKind,
+} from '../ingestion/parsers/parser.types';
 import {
   normalizeRouteGroup,
   type RouteGroup,
@@ -187,7 +190,7 @@ export class MetricsService implements OnModuleDestroy {
 
   recordParserExecution(
     sourceKind: SourceKind,
-    status: 'success' | 'validation_issue' | 'failed' | 'timeout',
+    status: ParserExecutionStatus,
     durationSeconds: number,
   ): void {
     const safeKind =
