@@ -2204,6 +2204,13 @@ tuples in `scanner.port.ts`; `RejectedScanCode` composes `ScanErrorCode | ScanFa
 directly from port types without duplicate string literals, `UploadWorkerService` consumes
 the canonical `QueueJobPayload` interface from `work-queue.port.ts`, and `ClamavScannerAdapter`
 is covered by a dedicated unit test suite in `clamav-scanner.adapter.spec.ts` (prompt 136 compile-time guard and unit test suite; runtime values unchanged).
+`PresignedPut.method` and `PresignedGet.method` are backed by the canonical
+`STORAGE_PRESIGNED_METHODS` tuple (`['PUT', 'GET'] as const`) and `StoragePresignedMethod` union
+in `storage.port.ts`; `S3ObjectStorageAdapter` exports its protocol and sanitization helpers
+(`safeFilename`, `sha256HexToBase64`, `isNotFound`) and is covered by a dedicated, isolated unit
+test suite in `s3-object-storage.adapter.spec.ts` testing client configuration, presigned URL generation,
+buffer I/O, stat mapping, 404 detection, readiness probing, and header injection defense (prompt 138
+compile-time guard and unit test suite; runtime values unchanged).
 Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant
 transactions clear it. Parser budgets are left for the ingestion phase.

@@ -1,3 +1,7 @@
+export const STORAGE_PRESIGNED_METHODS = ['PUT', 'GET'] as const;
+
+export type StoragePresignedMethod = (typeof STORAGE_PRESIGNED_METHODS)[number];
+
 export interface PresignedPut {
   readonly url: string;
   readonly method: 'PUT';

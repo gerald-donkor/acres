@@ -167,7 +167,7 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
   }
 }
 
-function isNotFound(error: unknown): boolean {
+export function isNotFound(error: unknown): boolean {
   return (
     typeof error === 'object' &&
     error !== null &&
@@ -178,10 +178,10 @@ function isNotFound(error: unknown): boolean {
   );
 }
 
-function sha256HexToBase64(checksumHex: string): string {
+export function sha256HexToBase64(checksumHex: string): string {
   return Buffer.from(checksumHex, 'hex').toString('base64');
 }
 
-function safeFilename(filename: string): string {
+export function safeFilename(filename: string): string {
   return filename.replace(/["\r\n\\]/g, '_').slice(0, 180);
 }
