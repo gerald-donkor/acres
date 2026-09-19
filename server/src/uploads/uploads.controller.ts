@@ -30,7 +30,11 @@ import { PermissionGuard } from '../organizations/permission.guard';
 import { SessionGuard } from '../sessions/session.guard';
 import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { InitiateUploadDto } from './dto/initiate-upload.dto';
-import { UploadsService, type UploadStatus } from './uploads.service';
+import {
+  UploadsService,
+  type UploadState,
+  type UploadStatus,
+} from './uploads.service';
 
 const uploadStatusSchema = objectSchema({
   id: stringSchema(),
@@ -150,6 +154,6 @@ export class UploadsController {
   }
 }
 
-function terminal(state: UploadStatus['state']): boolean {
+function terminal(state: UploadState): boolean {
   return ['accepted', 'rejected', 'cancelled', 'expired'].includes(state);
 }

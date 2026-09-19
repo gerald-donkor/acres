@@ -4,6 +4,8 @@
  * TypeScript types and re-export for the storage reconciliation utility.
  */
 
+import type { StoredObjectState } from '@acres/shared';
+
 export interface DbStoredObjectRecord {
   id: string;
   organizationId: string;
@@ -12,7 +14,7 @@ export interface DbStoredObjectRecord {
   byteCount: bigint | number | string | null;
   checksumAlgorithm?: string | null;
   checksumHex?: string | null;
-  state: 'pending_upload' | 'quarantined' | 'accepted' | 'rejected' | 'deleted';
+  state: StoredObjectState;
   deletedAt?: Date | string | null;
   createdAt?: Date | string;
   uploadState?: string | null;

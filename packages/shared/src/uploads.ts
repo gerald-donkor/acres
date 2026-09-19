@@ -1,11 +1,24 @@
-export type UploadState =
-  | 'pending_upload'
-  | 'completed'
-  | 'scanning'
-  | 'accepted'
-  | 'rejected'
-  | 'cancelled'
-  | 'expired';
+export const STORED_OBJECT_STATES = [
+  'pending_upload',
+  'quarantined',
+  'accepted',
+  'rejected',
+  'deleted',
+] as const;
+
+export type StoredObjectState = (typeof STORED_OBJECT_STATES)[number];
+
+export const UPLOAD_STATES = [
+  'pending_upload',
+  'completed',
+  'scanning',
+  'accepted',
+  'rejected',
+  'cancelled',
+  'expired',
+] as const;
+
+export type UploadState = (typeof UPLOAD_STATES)[number];
 
 export interface UploadStatus {
   readonly id: string;

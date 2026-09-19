@@ -9,14 +9,19 @@ import {
   OBJECT_STORAGE,
   type ObjectStoragePort,
 } from '../storage/storage.port';
-import type { UploadStatus } from '@acres/shared';
+import type {
+  InitiateUploadResult,
+  UploadDownload,
+  UploadState,
+  UploadStatus,
+} from '@acres/shared';
 import type { OrganizationContext } from '../organizations/organization-context';
 import type { CompleteUploadDto } from './dto/complete-upload.dto';
 import type { InitiateUploadDto } from './dto/initiate-upload.dto';
 
 const IDEMPOTENCY_KEY_RE = /^[\x21-\x7e]{16,128}$/;
 
-export type { UploadStatus };
+export type { InitiateUploadResult, UploadDownload, UploadState, UploadStatus };
 
 @Injectable()
 export class UploadsService {
@@ -32,7 +37,7 @@ export class UploadsService {
     organization: OrganizationContext,
     idempotencyKey: string | undefined,
     body: InitiateUploadDto,
-  ) {
+  ): Promise<InitiateUploadResult> {
     this.validateMediaType(body.mediaType);
     this.validateByteCount(body.byteCount);
     const key = this.objectKey(organization.organizationId);
@@ -112,7 +117,7 @@ export class UploadsService {
     uploadId: string,
     idempotencyKey: string | undefined,
     body: CompleteUploadDto,
-  ) {
+  ): Promise<UploadStatus> {
     this.validateByteCount(body.byteCount);
     if (!idempotencyKey || !IDEMPOTENCY_KEY_RE.test(idempotencyKey)) {
       throw ApiException.idempotencyKeyRequired();
@@ -295,7 +300,10 @@ export class UploadsService {
     );
   }
 
-  async download(organization: OrganizationContext, uploadId: string) {
+  async download(
+    organization: OrganizationContext,
+    uploadId: string,
+  ): Promise<UploadDownload> {
     return this.tenants.organizationScoped(
       organization.accountId,
       organization.organizationId,
@@ -342,14 +350,7 @@ export class UploadsService {
 
   private toStatus(upload: {
     id: string;
-    state:
-      | 'pending_upload'
-      | 'completed'
-      | 'scanning'
-      | 'accepted'
-      | 'rejected'
-      | 'cancelled'
-      | 'expired';
+    state: UploadState;
     declaredFilename: string;
     declaredMediaType: string;
     declaredByteCount: bigint;

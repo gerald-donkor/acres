@@ -2344,6 +2344,16 @@ controller `stringSchema()` envelopes, Prisma `String` columns, and
 analytics seed types are untouched; consistent with the `reports.ts:174`
 `method: 'GET'` precedent. No returned byte changed.
 
+The upload and stored object lifecycle states export canonical runtime const tuples and isolated unit tests (prompt 142):
+`packages/shared/src/uploads.ts` exports `UPLOAD_STATES` (`['pending_upload', 'completed', 'scanning', 'accepted', 'rejected', 'cancelled', 'expired'] as const`)
+and `STORED_OBJECT_STATES` (`['pending_upload', 'quarantined', 'accepted', 'rejected', 'deleted'] as const`), deriving `UploadState` and `StoredObjectState`.
+`server/src/uploads/uploads.service.ts` imports and re-exports `UploadState`, typing `toStatus()` `state: UploadState` and providing explicit return type
+signatures (`Promise<InitiateUploadResult>`, `Promise<UploadStatus>`, `Promise<UploadDownload>`). `uploads.controller.ts` types `terminal(state: UploadState): boolean`.
+`scripts/ops/reconcile-storage-objects.ts` adopts `StoredObjectState`.
+Dedicated isolated unit testing in `server/src/uploads/uploads.service.spec.ts` (24 tests) covers media-type and byte-count boundaries, PUT presigning,
+tenant-scoped and idempotent operations, storage stat and SHA-256 buffer checksum validation, state machine progression and conflict guards, cancellation handling,
+and GET presigning for accepted objects.
+
 ## 15. Phase 7A geography and ingestion foundation
 
 Implemented from `prompts/28-geography-ingestion-foundation.md`; the detailed
