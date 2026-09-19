@@ -2196,6 +2196,12 @@ call sites (prompt 134 compile-time guard; runtime values unchanged).
 `JobRunsService.start()` accepts only the closed `ScheduledJobName` union
 (`'sessions.purge-expired' | 'uploads.purge-expired' | 'idempotency.purge-expired' | 'tokens.purge-expired' | 'exports.purge-expired'`), matching
 all five scheduled maintenance job producers (prompt 135 compile-time guard; runtime values unchanged).
+`ScanResult.status` accepts only the closed `ScanStatus` union
+(`'clean' | 'infected' | 'failed'`), backed by canonical `SCAN_STATUSES` and `SCAN_ERROR_CODES`
+tuples in `scanner.port.ts`; `RejectedScanCode` composes `ScanErrorCode | ScanFailureStatus`
+directly from port types without duplicate string literals, `UploadWorkerService` consumes
+the canonical `QueueJobPayload` interface from `work-queue.port.ts`, and `ClamavScannerAdapter`
+is covered by a dedicated unit test suite in `clamav-scanner.adapter.spec.ts` (prompt 136 compile-time guard and unit test suite; runtime values unchanged).
 Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant
 transactions clear it. Parser budgets are left for the ingestion phase.

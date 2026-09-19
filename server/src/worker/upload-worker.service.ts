@@ -10,20 +10,20 @@ import {
   MALWARE_SCANNER,
   type MalwareScannerPort,
   type ScanErrorCode,
+  type ScanFailureStatus,
 } from '../scanner/scanner.port';
 import {
   OBJECT_STORAGE,
   type ObjectStoragePort,
 } from '../storage/storage.port';
-import { WORK_QUEUE, type QueuePort } from '../queue/work-queue.port';
+import {
+  WORK_QUEUE,
+  type QueueJobPayload,
+  type QueuePort,
+} from '../queue/work-queue.port';
 import { ReportsService } from '../reports/reports.service';
 
-interface UploadJobData {
-  readonly uploadId?: string;
-  readonly ingestionRunId?: string;
-  readonly exportRequestId?: string;
-  readonly outboxEventId?: string;
-}
+type UploadJobData = QueueJobPayload;
 
 /**
  * Stored on the durable `worker_exception` rows when upload processing throws
@@ -39,7 +39,7 @@ export const REJECTED_SCAN_MESSAGE =
 
 type RejectedScanMessage = typeof REJECTED_SCAN_MESSAGE;
 
-type RejectedScanCode = ScanErrorCode | 'infected' | 'failed';
+type RejectedScanCode = ScanErrorCode | ScanFailureStatus;
 
 @Injectable()
 export class UploadWorkerService {
