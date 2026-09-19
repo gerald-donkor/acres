@@ -41,20 +41,25 @@ The AI subsystem is structured according to the Ports and Adapters (Hexagonal) a
 
 ### 2.1 Provider Port (`server/src/ai/ai.port.ts`)
 - **Symbol**: `AI_DRAFT_PROVIDER = Symbol('AI_DRAFT_PROVIDER')`
+- **Canonical Providers Tuple (Prompt 140)**: `AI_DRAFT_PROVIDERS = ['gemini', 'fake-gemini'] as const` runtime const array and `AiDraftProviderKind = (typeof AI_DRAFT_PROVIDERS)[number]` union type.
 - **Interface**: `AiDraftProvider`
   - `generateDraftProposals(request: GenerateDraftsRequest): Promise<GenerateDraftsResponse>`
+  - `GenerateDraftsResponse.provider` narrowed to `AiDraftProviderKind`.
 - **Evidence Type Typing (Prompt 132)**: `NormalizedEvidenceItem.evidenceType` (`server/src/ai/ai.port.ts`) and `AiEvalTestCase.evidence[number].evidenceType` (`server/src/ai/evaluation/ai-evaluation-fixtures.ts`) admit strictly `ReportEvidenceType` (`'aggregate' | 'dashboard_view'`) imported from `@acres/shared`. Aligns provider port inputs and evaluation fixtures with PostgreSQL schema enums and Prisma models (`row.evidenceType`) without casts or runtime changes.
 
 ### 2.2 Gemini Adapter (`server/src/ai/adapters/gemini-draft.adapter.ts`)
 - The sole consumer of `@google/genai` in the codebase.
+- **Client Injection (Prompt 140)**: Exports `GEMINI_CLIENT = Symbol('GEMINI_CLIENT')` injection token and accepts optional `@Optional() @Inject(GEMINI_CLIENT) client?: GoogleGenAI` parameter in constructor. Allows clean dependency injection and isolated unit testing without monkey-patching private adapter properties.
 - Enforces structured JSON output schema via `responseSchema`.
 - Applies temperature 0.2 and `maxOutputTokens`.
 - Wraps API calls in an abortable timeout race (`AI_DRAFT_TIMEOUT_MS`).
 - Maps upstream status codes to typed domain exceptions (`AiRateLimitedException`, `AiUnavailableException`, `AiTimeoutException`) without leaking API keys or raw error payloads.
+- **Unit Tests (`server/src/ai/adapters/gemini-draft.adapter.spec.ts`)**: 8 tests verifying `GEMINI_CLIENT` symbol export, disabled posture (with and without injected client), unconfigured key checks, injected SDK client handling, rate-limit error mapping, 503 network error mapping, and grounding rejection.
 
 ### 2.3 Fake Adapter (`server/src/ai/adapters/fake-draft.adapter.ts`)
 - In-memory deterministic fake used for automated test suites (`api.e2e-spec.ts`, unit tests).
 - Supports configuring mocked proposals and injectable errors.
+- **Unit Tests (`server/src/ai/adapters/fake-draft.adapter.spec.ts`) (Prompt 140)**: 9 tests covering grounded default proposal generation from explicit evidence properties, snapshot fallback hierarchy for label/value/unit, default fallbacks on missing/malformed snapshot values, `maxProposals` bounding, empty evidence handling, `setCustomProposals` configuration and reset, and `setErrorToThrow` injection and reset.
 
 ---
 

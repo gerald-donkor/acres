@@ -2,6 +2,10 @@ import type { AiDraftProposal, ReportEvidenceType } from '@acres/shared';
 
 export const AI_DRAFT_PROVIDER = Symbol('AI_DRAFT_PROVIDER');
 
+export const AI_DRAFT_PROVIDERS = ['gemini', 'fake-gemini'] as const;
+
+export type AiDraftProviderKind = (typeof AI_DRAFT_PROVIDERS)[number];
+
 export interface NormalizedEvidenceItem {
   id: string;
   evidenceType: ReportEvidenceType;
@@ -22,7 +26,7 @@ export interface GenerateDraftsRequest {
 
 export interface GenerateDraftsResponse {
   proposals: AiDraftProposal[];
-  provider: string;
+  provider: AiDraftProviderKind;
   model: string;
   promptTemplateVersion: string;
   rawTokensUsed?: number;

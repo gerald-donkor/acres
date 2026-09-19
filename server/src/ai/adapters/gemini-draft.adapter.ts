@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { AcresConfigService } from '../../config/acres-config.service';
 import type {
   AiDraftProvider,
@@ -55,21 +55,30 @@ const proposalJsonSchema = {
   required: ['proposals'],
 };
 
+export const GEMINI_CLIENT = Symbol('GEMINI_CLIENT');
+
 @Injectable()
 export class GeminiDraftAdapter implements AiDraftProvider {
   private readonly logger = new Logger(GeminiDraftAdapter.name);
   private client: GoogleGenAI | null = null;
 
-  constructor(private readonly config: AcresConfigService) {}
+  constructor(
+    private readonly config: AcresConfigService,
+    @Optional()
+    @Inject(GEMINI_CLIENT)
+    client?: GoogleGenAI,
+  ) {
+    this.client = client ?? null;
+  }
 
   private getClient(): GoogleGenAI {
     if (!this.config.aiDraftEnabled) {
       throw new AiDisabledException();
     }
-    if (!this.config.geminiApiKey) {
-      throw new AiDisabledException('GEMINI_API_KEY is not configured.');
-    }
     if (!this.client) {
+      if (!this.config.geminiApiKey) {
+        throw new AiDisabledException('GEMINI_API_KEY is not configured.');
+      }
       this.client = new GoogleGenAI({ apiKey: this.config.geminiApiKey });
     }
     return this.client;

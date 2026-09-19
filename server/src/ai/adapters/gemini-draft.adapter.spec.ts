@@ -1,3 +1,4 @@
+import type { GoogleGenAI } from '@google/genai';
 import { AcresConfigService } from '../../config/acres-config.service';
 import {
   AiDisabledException,
@@ -5,7 +6,7 @@ import {
   AiRateLimitedException,
   AiUnavailableException,
 } from '../ai.errors';
-import { GeminiDraftAdapter } from './gemini-draft.adapter';
+import { GEMINI_CLIENT, GeminiDraftAdapter } from './gemini-draft.adapter';
 
 interface MockClient {
   models: {
@@ -38,6 +39,10 @@ describe('GeminiDraftAdapter', () => {
     );
   });
 
+  it('exports GEMINI_CLIENT injection token', () => {
+    expect(typeof GEMINI_CLIENT).toBe('symbol');
+  });
+
   it('throws AiDisabledException if aiDraftEnabled is false', async () => {
     mockConfig.aiDraftEnabled = false;
     await expect(
@@ -49,7 +54,29 @@ describe('GeminiDraftAdapter', () => {
     ).rejects.toThrow(AiDisabledException);
   });
 
-  it('throws AiDisabledException if geminiApiKey is not set', async () => {
+  it('throws AiDisabledException even when an SDK client is injected if aiDraftEnabled is false', async () => {
+    mockConfig.aiDraftEnabled = false;
+    const mockClient: MockClient = {
+      models: {
+        generateContent: jest.fn(),
+      },
+    };
+    const adapterWithClient = new GeminiDraftAdapter(
+      mockConfig as unknown as AcresConfigService,
+      mockClient as unknown as GoogleGenAI,
+    );
+
+    await expect(
+      adapterWithClient.generateDraftProposals({
+        purpose: 'Test purpose',
+        evidence: [],
+        maxProposals: 2,
+      }),
+    ).rejects.toThrow(AiDisabledException);
+    expect(mockClient.models.generateContent).not.toHaveBeenCalled();
+  });
+
+  it('throws AiDisabledException if geminiApiKey is not set and no client is injected', async () => {
     mockConfig.geminiApiKey = undefined;
     await expect(
       adapter.generateDraftProposals({
@@ -60,7 +87,7 @@ describe('GeminiDraftAdapter', () => {
     ).rejects.toThrow(AiDisabledException);
   });
 
-  it('successfully generates and parses structured output using mocked SDK client', async () => {
+  it('successfully generates and parses structured output using injected SDK client', async () => {
     const mockResponse = {
       text: JSON.stringify({
         proposals: [
@@ -74,12 +101,15 @@ describe('GeminiDraftAdapter', () => {
       usageMetadata: { totalTokenCount: 150 },
     };
 
-    // Inject mock client directly
-    (adapter as unknown as { client: MockClient }).client = {
+    const mockClient: MockClient = {
       models: {
         generateContent: jest.fn().mockResolvedValue(mockResponse),
       },
     };
+    adapter = new GeminiDraftAdapter(
+      mockConfig as unknown as AcresConfigService,
+      mockClient as unknown as GoogleGenAI,
+    );
 
     const res = await adapter.generateDraftProposals({
       purpose: 'Summarize yield',
@@ -102,7 +132,7 @@ describe('GeminiDraftAdapter', () => {
   });
 
   it('maps SDK rate-limit errors to AiRateLimitedException', async () => {
-    (adapter as unknown as { client: MockClient }).client = {
+    const mockClient: MockClient = {
       models: {
         generateContent: jest.fn().mockRejectedValue({
           status: 429,
@@ -110,6 +140,10 @@ describe('GeminiDraftAdapter', () => {
         }),
       },
     };
+    adapter = new GeminiDraftAdapter(
+      mockConfig as unknown as AcresConfigService,
+      mockClient as unknown as GoogleGenAI,
+    );
 
     await expect(
       adapter.generateDraftProposals({
@@ -121,7 +155,7 @@ describe('GeminiDraftAdapter', () => {
   });
 
   it('maps SDK 503 / network errors to AiUnavailableException', async () => {
-    (adapter as unknown as { client: MockClient }).client = {
+    const mockClient: MockClient = {
       models: {
         generateContent: jest.fn().mockRejectedValue({
           status: 503,
@@ -129,6 +163,10 @@ describe('GeminiDraftAdapter', () => {
         }),
       },
     };
+    adapter = new GeminiDraftAdapter(
+      mockConfig as unknown as AcresConfigService,
+      mockClient as unknown as GoogleGenAI,
+    );
 
     await expect(
       adapter.generateDraftProposals({
@@ -140,7 +178,7 @@ describe('GeminiDraftAdapter', () => {
   });
 
   it('maps grounding rejection to AiGroundingRejectedException', async () => {
-    (adapter as unknown as { client: MockClient }).client = {
+    const mockClient: MockClient = {
       models: {
         generateContent: jest.fn().mockResolvedValue({
           text: JSON.stringify({
@@ -155,6 +193,10 @@ describe('GeminiDraftAdapter', () => {
         }),
       },
     };
+    adapter = new GeminiDraftAdapter(
+      mockConfig as unknown as AcresConfigService,
+      mockClient as unknown as GoogleGenAI,
+    );
 
     await expect(
       adapter.generateDraftProposals({
