@@ -1,4 +1,8 @@
 import { Logger } from '@nestjs/common';
+import {
+  MAIL_TRANSPORTS,
+  type MailTransportKind,
+} from '../mail/mail.interface';
 
 /**
  * The environment the API needs. Every value is resolved once, at boot, and a
@@ -70,7 +74,7 @@ export interface AcresEnv {
   aiDraftMaxProposals: number;
   aiDraftMaxContextBytes: number;
   aiDraftMaxOutputTokens: number;
-  mailTransport: 'smtp' | 'memory';
+  mailTransport: MailTransportKind;
   smtpHost: string;
   smtpPort: number;
   smtpSecure: boolean;
@@ -274,12 +278,12 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
   const rawTransport =
     env.MAIL_TRANSPORT ??
     (nodeEnv === 'test' ? 'memory' : DEFAULTS.MAIL_TRANSPORT);
-  if (rawTransport !== 'smtp' && rawTransport !== 'memory') {
+  if (!(MAIL_TRANSPORTS as readonly string[]).includes(rawTransport)) {
     throw new Error(
       `MAIL_TRANSPORT must be "smtp" or "memory", received "${rawTransport}"`,
     );
   }
-  const mailTransport = rawTransport;
+  const mailTransport: MailTransportKind = rawTransport as MailTransportKind;
   const smtpHost = env.SMTP_HOST ?? DEFAULTS.SMTP_HOST;
   const smtpPort = positiveInt(
     'SMTP_PORT',

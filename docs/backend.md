@@ -1827,6 +1827,17 @@ stays enforced by `InviteMemberDto` `@IsIn(assignableRoles)`,
 `inviteUrl`, and `organizationName` deliberately stay open — addresses, URLs,
 and display names have no closed authority. No rendered byte changed.
 
+The mail transport subsystem is backed by the canonical `MAIL_TRANSPORTS`
+runtime tuple (`['smtp', 'memory'] as const`) and `MailTransportKind` type union
+in `mail.interface.ts` (prompt 139), consumed by `AcresEnv.mailTransport` in
+`env.validation.ts` and validated at boot time. `SmtpMailAdapter` supports optional
+transporter injection via `SMTP_TRANSPORTER` (`@Optional() @Inject(SMTP_TRANSPORTER)`)
+while maintaining 100% backward compatibility with NestJS DI, and both `SmtpMailAdapter`
+and `MemoryMailAdapter` are covered by dedicated, isolated unit test suites
+(`smtp-mail.adapter.spec.ts` and `memory-mail.adapter.spec.ts`) testing transport initialization,
+message dispatching, custom and fallback `from` addresses, structured error logging,
+payload immutability, and FIFO delivery ordering.
+
 The audit-read `action` carriers are closed at compile time (prompt 128):
 `OrganizationsService.auditEvents` and `auditEventsPage` admit only
 `AuditAction` (the ten schema-enum members, joined into the existing erased

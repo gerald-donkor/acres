@@ -8,6 +8,7 @@ import { WORK_QUEUE } from '../../src/queue/work-queue.port';
 import { OBJECT_STORAGE } from '../../src/storage/storage.port';
 import { AI_DRAFT_PROVIDER } from '../../src/ai/ai.port';
 import { FakeDraftAdapter } from '../../src/ai/adapters/fake-draft.adapter';
+import type { MailTransportKind } from '../../src/mail/mail.interface';
 
 /**
  * No database is provisioned for this repository, so the tests replace
@@ -607,9 +608,9 @@ function configDouble(
     get aiDraftMaxOutputTokens() {
       return positiveInt(envOverrides, 'AI_DRAFT_MAX_OUTPUT_TOKENS', 2048);
     },
-    get mailTransport() {
+    get mailTransport(): MailTransportKind {
       return (
-        (envValue(envOverrides, 'MAIL_TRANSPORT') as 'smtp' | 'memory') ||
+        (envValue(envOverrides, 'MAIL_TRANSPORT') as MailTransportKind) ||
         'memory'
       );
     },
