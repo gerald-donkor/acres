@@ -1,5 +1,10 @@
-export type QueueJobName =
-  'upload.completed' | 'export.requested' | 'ingestion.run';
+export const QUEUE_JOB_NAMES = [
+  'upload.completed',
+  'export.requested',
+  'ingestion.run',
+] as const;
+
+export type QueueJobName = (typeof QUEUE_JOB_NAMES)[number];
 
 export interface QueueJobPayload {
   readonly uploadId?: string;

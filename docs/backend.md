@@ -2190,9 +2190,11 @@ server-log-only). `ClaimedOutboxEvent.eventType` accepts only the closed
 the concrete producer contracts (`appendUploadCompleted`, `appendExportRequested`)
 and worker dispatch branches (prompt 133 compile-time guard; runtime values unchanged).
 `QueuePort.enqueue` and `BullmqQueueAdapter.enqueue` accept only the closed
-`QueueJobName` union (`'upload.completed' | 'export.requested' | 'ingestion.run'`), matching
-the outbox event dispatch (`UploadWorkerService`) and ingestion run (`IngestionService`)
-call sites (prompt 134 compile-time guard; runtime values unchanged).
+`QueueJobName` union (`'upload.completed' | 'export.requested' | 'ingestion.run'`), backed by
+the canonical `QUEUE_JOB_NAMES` tuple in `work-queue.port.ts` and covered by a dedicated unit test
+suite in `bullmq-queue.adapter.spec.ts`, matching the outbox event dispatch (`UploadWorkerService`)
+and ingestion run (`IngestionService`) call sites (prompts 134 and 137 compile-time guard and unit
+test suite; runtime values unchanged).
 `JobRunsService.start()` accepts only the closed `ScheduledJobName` union
 (`'sessions.purge-expired' | 'uploads.purge-expired' | 'idempotency.purge-expired' | 'tokens.purge-expired' | 'exports.purge-expired'`), matching
 all five scheduled maintenance job producers (prompt 135 compile-time guard; runtime values unchanged).
