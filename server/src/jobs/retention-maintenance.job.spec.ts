@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import type { ScheduledJobName } from '@acres/shared';
 import {
   RetentionMaintenanceJob,
   UPLOADS_RETENTION_JOB,
@@ -20,7 +21,7 @@ import type { AcresConfigService } from '../config/acres-config.service';
 
 describe('RetentionMaintenanceJob', () => {
   let runs: {
-    start: jest.Mock<Promise<string>, [string]>;
+    start: jest.Mock<Promise<string>, [ScheduledJobName]>;
     finish: jest.Mock<
       Promise<void>,
       [string, 'succeeded' | 'failed', string | undefined]
@@ -32,7 +33,9 @@ describe('RetentionMaintenanceJob', () => {
   beforeEach(() => {
     config = { schedulerEnabled: true };
     runs = {
-      start: jest.fn<Promise<string>, [string]>().mockResolvedValue('run-123'),
+      start: jest
+        .fn<Promise<string>, [ScheduledJobName]>()
+        .mockResolvedValue('run-123'),
       finish: jest
         .fn<
           Promise<void>,

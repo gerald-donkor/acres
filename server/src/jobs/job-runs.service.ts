@@ -1,5 +1,9 @@
 import { Injectable, Optional } from '@nestjs/common';
-import type { JobRunStatus, JobRunSummary } from '@acres/shared';
+import type {
+  JobRunStatus,
+  JobRunSummary,
+  ScheduledJobName,
+} from '@acres/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../metrics/metrics.service';
 
@@ -41,7 +45,7 @@ export class JobRunsService {
     @Optional() private readonly metrics?: MetricsService,
   ) {}
 
-  async start(jobName: string): Promise<string> {
+  async start(jobName: ScheduledJobName): Promise<string> {
     const run = await this.prisma.jobRun.create({
       data: { jobName, status: 'running' },
       select: { id: true },

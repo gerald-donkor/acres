@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import type { ScheduledJobName } from '@acres/shared';
 import type { AcresConfigService } from '../config/acres-config.service';
 import type { SessionsService } from '../sessions/sessions.service';
 import type { JobRunsService } from './job-runs.service';
@@ -10,7 +11,7 @@ import { SESSION_PURGE_UNEXPECTED_FAILURE_MESSAGE } from './job-runs.service';
 
 describe('SessionMaintenanceJob', () => {
   let runs: {
-    start: jest.Mock<Promise<string>, [string]>;
+    start: jest.Mock<Promise<string>, [ScheduledJobName]>;
     finish: jest.Mock<
       Promise<void>,
       [string, 'succeeded' | 'failed', string | undefined]
@@ -22,7 +23,9 @@ describe('SessionMaintenanceJob', () => {
   beforeEach(() => {
     config = { schedulerEnabled: true };
     runs = {
-      start: jest.fn<Promise<string>, [string]>().mockResolvedValue('run-123'),
+      start: jest
+        .fn<Promise<string>, [ScheduledJobName]>()
+        .mockResolvedValue('run-123'),
       finish: jest
         .fn<
           Promise<void>,

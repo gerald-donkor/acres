@@ -8,6 +8,16 @@ export const JOB_RUN_STATUSES = [
 
 export type JobRunStatus = (typeof JOB_RUN_STATUSES)[number];
 
+export const SCHEDULED_JOB_NAMES = [
+  'sessions.purge-expired',
+  'uploads.purge-expired',
+  'idempotency.purge-expired',
+  'tokens.purge-expired',
+  'exports.purge-expired',
+] as const;
+
+export type ScheduledJobName = (typeof SCHEDULED_JOB_NAMES)[number];
+
 export interface JobRunSummary {
   id: string;
   jobName: string;

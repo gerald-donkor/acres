@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import type { ScheduledJobName } from '@acres/shared';
 import { AcresConfigService } from '../config/acres-config.service';
 import { SessionsService } from '../sessions/sessions.service';
 import {
@@ -7,7 +8,8 @@ import {
   SESSION_PURGE_UNEXPECTED_FAILURE_MESSAGE,
 } from './job-runs.service';
 
-export const SESSION_MAINTENANCE_JOB = 'sessions.purge-expired';
+export const SESSION_MAINTENANCE_JOB: ScheduledJobName =
+  'sessions.purge-expired';
 
 /**
  * The one scheduled job this step ships. It does real bookkeeping — expired

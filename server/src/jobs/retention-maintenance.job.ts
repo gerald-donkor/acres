@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import type { ScheduledJobName } from '@acres/shared';
 import { AcresConfigService } from '../config/acres-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
@@ -11,10 +12,11 @@ import {
   UPLOAD_PURGE_UNEXPECTED_FAILURE_MESSAGE,
 } from './job-runs.service';
 
-export const UPLOADS_RETENTION_JOB = 'uploads.purge-expired';
-export const IDEMPOTENCY_RETENTION_JOB = 'idempotency.purge-expired';
-export const TOKENS_RETENTION_JOB = 'tokens.purge-expired';
-export const EXPORTS_RETENTION_JOB = 'exports.purge-expired';
+export const UPLOADS_RETENTION_JOB: ScheduledJobName = 'uploads.purge-expired';
+export const IDEMPOTENCY_RETENTION_JOB: ScheduledJobName =
+  'idempotency.purge-expired';
+export const TOKENS_RETENTION_JOB: ScheduledJobName = 'tokens.purge-expired';
+export const EXPORTS_RETENTION_JOB: ScheduledJobName = 'exports.purge-expired';
 
 /**
  * Maximum rows reclaimed per hourly tick, shared by all five retention purges

@@ -458,6 +458,10 @@ All five scheduled-maintenance failure paths (`sessions`, `uploads`,
 rule). `JobRunsService.finish()` accepts only the five `` `purged ${number} …` ``
 count templates plus the five fixed failure literals (compile-time guard;
 runtime values unchanged; raw error text stays server-log-only).
+`JobRunsService.start()` accepts only the closed `ScheduledJobName` union
+(`'sessions.purge-expired' | 'uploads.purge-expired' | 'idempotency.purge-expired' | 'tokens.purge-expired' | 'exports.purge-expired'`)
+exported from `@acres/shared`, matching all five scheduled maintenance job producers
+(prompt 135 compile-time guard; runtime values unchanged).
 
 Each of the five hourly purges reclaims at most `RETENTION_PURGE_BATCH_LIMIT`
 (500) rows per purge path per tick — 500 tokens plus 500 invitations on the
@@ -2189,6 +2193,9 @@ and worker dispatch branches (prompt 133 compile-time guard; runtime values unch
 `QueueJobName` union (`'upload.completed' | 'export.requested' | 'ingestion.run'`), matching
 the outbox event dispatch (`UploadWorkerService`) and ingestion run (`IngestionService`)
 call sites (prompt 134 compile-time guard; runtime values unchanged).
+`JobRunsService.start()` accepts only the closed `ScheduledJobName` union
+(`'sessions.purge-expired' | 'uploads.purge-expired' | 'idempotency.purge-expired' | 'tokens.purge-expired' | 'exports.purge-expired'`), matching
+all five scheduled maintenance job producers (prompt 135 compile-time guard; runtime values unchanged).
 Worker/outbox reads use a transaction-local
 `acres.worker_access` context reflected in the new RLS policies; ordinary tenant
 transactions clear it. Parser budgets are left for the ingestion phase.
