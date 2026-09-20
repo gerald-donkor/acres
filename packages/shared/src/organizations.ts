@@ -7,6 +7,21 @@ export const ORGANIZATION_ROLES = [
 
 export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
+export const AUDIT_ACTIONS = [
+  "organization_created",
+  "organization_updated",
+  "invitation_issued",
+  "invitation_revoked",
+  "invitation_accepted",
+  "membership_role_changed",
+  "membership_revoked",
+  "ownership_transferred",
+  "report_published",
+  "export_requested",
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
 export interface OrganizationSummary {
   id: string;
   name: string;
@@ -39,6 +54,15 @@ export interface OrganizationInvitation {
   createdAt: string;
   acceptedAt: string | null;
   revokedAt: string | null;
+}
+
+export interface OrganizationAuditEvent {
+  id: string;
+  action: AuditAction;
+  targetType: string;
+  targetId: string | null;
+  actorAccountId: string | null;
+  createdAt: string;
 }
 
 export interface IssuedInvitation extends OrganizationInvitation {

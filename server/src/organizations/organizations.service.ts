@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type {
   IssuedInvitation,
+  OrganizationAuditEvent,
   OrganizationInvitation,
   OrganizationMember,
+  OrganizationRole,
   OrganizationSummary,
 } from '@acres/shared';
-import type { AuditAction, OrganizationRole } from '../generated/prisma/enums';
 import { ApiException } from '../common/api-exception';
 import { uuidV7 } from '../common/ids';
 import { hashToken, issueRawToken } from '../common/tokens';
@@ -431,16 +432,9 @@ export class OrganizationsService {
     );
   }
 
-  async auditEvents(context: OrganizationContext): Promise<
-    Array<{
-      id: string;
-      action: AuditAction;
-      targetType: string;
-      targetId: string | null;
-      actorAccountId: string | null;
-      createdAt: string;
-    }>
-  > {
+  async auditEvents(
+    context: OrganizationContext,
+  ): Promise<OrganizationAuditEvent[]> {
     this.ensureEnabled();
     return this.tenants.organizationScoped(
       context.accountId,
@@ -469,16 +463,7 @@ export class OrganizationsService {
     context: OrganizationContext,
     take: number,
     afterId?: string,
-  ): Promise<
-    Array<{
-      id: string;
-      action: AuditAction;
-      targetType: string;
-      targetId: string | null;
-      actorAccountId: string | null;
-      createdAt: string;
-    }>
-  > {
+  ): Promise<OrganizationAuditEvent[]> {
     this.ensureEnabled();
     return this.tenants.organizationScoped(
       context.accountId,

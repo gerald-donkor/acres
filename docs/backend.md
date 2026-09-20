@@ -1853,6 +1853,12 @@ two modules and no enum authority — and the GraphQL `String` fields and SDL
 snapshots are untouched (`contracts:check` reports no drift). No returned
 byte changed.
 
+The audit action domain model and organizations services export canonical runtime const tuples and isolated unit tests (prompt 143):
+`packages/shared/src/organizations.ts` exports `AUDIT_ACTIONS` (`['organization_created', 'organization_updated', 'invitation_issued', 'invitation_revoked', 'invitation_accepted', 'membership_role_changed', 'membership_revoked', 'ownership_transferred', 'report_published', 'export_requested'] as const`), deriving `AuditAction` as `(typeof AUDIT_ACTIONS)[number]`, as well as `OrganizationAuditEvent`.
+`server/src/organizations/audit.service.ts` imports `AuditAction` from `@acres/shared`, while `server/src/organizations/organizations.service.ts` imports `OrganizationRole` and `OrganizationAuditEvent` directly from `@acres/shared`.
+`server/src/organizations/audit.service.spec.ts` (14 tests) validates `AuditService.append` audit trail persistence, fallback for optional targets, and strict metadata detail sanitization across all 10 `AuditAction` variants, verifying whitelist enforcement and filtering of sensitive attributes.
+`server/src/organizations/organizations.service.spec.ts` (40 tests) provides comprehensive unit test coverage for `OrganizationsService`, asserting tenancy guards (`ensureEnabled`), organization CRUD, role assignment and permission verification, membership revocation, invitation lifecycle (SHA-256 token hashing, 24h expiration, non-blocking email notification, idempotent revocation, cursor pagination with invalid cursor error handling, and atomic acceptance with membership reactivation), and concurrent-safe ownership transfer with row locking (`SELECT ... FOR UPDATE`).
+
 ---
 
 ## 15. Versioned REST, GraphQL and checked contracts

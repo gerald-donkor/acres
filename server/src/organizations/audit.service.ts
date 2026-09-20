@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AuditAction } from '../generated/prisma/enums';
+import type { AuditAction } from '@acres/shared';
 import type { TenantTransactionClient } from '../prisma/tenant-transaction.service';
 
 const allowedDetailsByAction = {
