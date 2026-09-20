@@ -14,6 +14,7 @@ import type {
   CreateOrganizationInput,
   CreateReportInput,
   CreateRevisionInput,
+  CsrfTokenReceipt,
   DashboardView,
   DatasetSummary,
   DatasetVersionSummary,
@@ -48,10 +49,7 @@ import { isApiClientError, parseApiResponse } from "@/lib/api/envelope";
 import { createIdempotencyKey } from "@/lib/api/idempotency";
 import { streamSse } from "@/lib/api/sse";
 
-type CsrfToken = {
-  csrfToken: string;
-  headerName: "x-csrf-token";
-};
+type CsrfToken = CsrfTokenReceipt;
 
 let csrfToken: CsrfToken | null = null;
 

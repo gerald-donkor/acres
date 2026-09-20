@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   ANONYMOUS_SESSION,
+  type AccountTokenPurpose,
   type ForgotPasswordInput,
   type ForgotPasswordResult,
   type LoginInput,
@@ -9,7 +10,6 @@ import {
   type ResetPasswordResult,
   type SessionProfile,
 } from '@acres/shared';
-import { AccountTokenPurpose } from '../generated/prisma/enums';
 import { AccountsService } from '../accounts/accounts.service';
 import { ApiException } from '../common/api-exception';
 import { SessionsService } from '../sessions/sessions.service';
@@ -23,6 +23,8 @@ export interface StartedSession {
   token: string;
   expiresAt: Date;
 }
+
+const RECOVERY_PURPOSE: AccountTokenPurpose = 'password_recovery';
 
 @Injectable()
 export class AuthService {
@@ -82,7 +84,7 @@ export class AuthService {
 
     const { token } = await this.accountTokens.issue(
       account.id,
-      AccountTokenPurpose.password_recovery,
+      RECOVERY_PURPOSE,
     );
 
     const resetUrl = `${this.config.clientOrigin}/reset-password?token=${encodeURIComponent(token)}`;
@@ -104,7 +106,7 @@ export class AuthService {
   async resetPassword(input: ResetPasswordInput): Promise<ResetPasswordResult> {
     const consumed = await this.accountTokens.consume(
       input.token,
-      AccountTokenPurpose.password_recovery,
+      RECOVERY_PURPOSE,
     );
     if (consumed === null) {
       throw ApiException.invalidOrExpiredToken();
@@ -112,10 +114,7 @@ export class AuthService {
 
     await this.accounts.updatePassword(consumed.accountId, input.password);
     await this.sessions.revokeAllForAccount(consumed.accountId);
-    await this.accountTokens.revoke(
-      consumed.accountId,
-      AccountTokenPurpose.password_recovery,
-    );
+    await this.accountTokens.revoke(consumed.accountId, RECOVERY_PURPOSE);
 
     return { reset: true };
   }

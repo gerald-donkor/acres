@@ -7,6 +7,7 @@ import {
 } from "@/lib/api/test-harness-store";
 import type {
   AccountProfile,
+  CsrfTokenReceipt,
   DashboardSummary,
   DashboardView,
   DatasetSummary,
@@ -96,10 +97,7 @@ type GraphqlResponse<TData> = {
   }>;
 };
 
-type CsrfToken = {
-  csrfToken: string;
-  headerName: "x-csrf-token";
-};
+type CsrfToken = CsrfTokenReceipt;
 
 export async function graphqlPost<TData>(
   query: string,

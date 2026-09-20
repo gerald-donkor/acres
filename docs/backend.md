@@ -308,6 +308,13 @@ catches Prisma's **`P2002`** unique-constraint violation and converts it to the
 same `INVALID_CREDENTIALS` response, so the race cannot answer 500 and reveal by
 its status code that the account is there.
 
+The authentication, account token, and CSRF contracts export canonical runtime const tuples and isolated unit tests (prompt 144):
+`packages/shared/src/auth.ts` exports `ACCOUNT_TOKEN_PURPOSES` (`['password_recovery', 'email_verification'] as const`), deriving `AccountTokenPurpose = (typeof ACCOUNT_TOKEN_PURPOSES)[number]`, as well as `CSRF_HEADER_NAME` and `CsrfTokenReceipt`.
+`server/src/auth/auth.service.ts` and `server/src/identity/account-tokens.service.ts` import `AccountTokenPurpose` directly from `@acres/shared` instead of generated Prisma client enums.
+`server/src/auth/auth.controller.ts`, `client/lib/api/browser.ts`, and `client/lib/api/server.ts` consume `CsrfTokenReceipt` directly from `@acres/shared`.
+`server/src/accounts/accounts.service.spec.ts` (19 tests) verifies email normalization (lowercase, trim), account lookup by email and ID, password hashing at `BCRYPT_COST` (12), `P2002` unique constraint translation into `ApiException.invalidCredentials()`, timing-attack-safe dummy hash comparison for non-existent accounts, and password updates.
+`server/src/auth/auth.service.spec.ts` (16 tests) verifies account registration with collision prevention, credential-based login, session revocation upon logout, timing-safe forgot-password flow with resilient mailer error handling, single-use token consumption and session invalidation during password reset, and session description.
+
 ---
 
 ## 5. CSRF — what protects what

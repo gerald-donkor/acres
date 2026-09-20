@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { AccountTokenPurpose } from '../generated/prisma/enums';
+import type { AccountTokenPurpose } from '@acres/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcresConfigService } from '../config/acres-config.service';
 import { hashToken, issueRawToken } from '../common/tokens';

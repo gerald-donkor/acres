@@ -12,10 +12,12 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import type {
-  ForgotPasswordResult,
-  ResetPasswordResult,
-  SessionProfile,
+import {
+  CSRF_HEADER_NAME,
+  type CsrfTokenReceipt,
+  type ForgotPasswordResult,
+  type ResetPasswordResult,
+  type SessionProfile,
 } from '@acres/shared';
 import {
   ApiCsrfHeader,
@@ -66,10 +68,10 @@ export class AuthController {
   csrfToken(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): { csrfToken: string; headerName: 'x-csrf-token' } {
+  ): CsrfTokenReceipt {
     return {
       csrfToken: this.csrf.issueToken(request, response),
-      headerName: 'x-csrf-token',
+      headerName: CSRF_HEADER_NAME,
     };
   }
 
