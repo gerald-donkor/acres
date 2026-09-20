@@ -385,7 +385,14 @@ One `@nestjs/throttler` v6 API detail is local and deliberate: registering both
 metadata skips one. `StrictThrottle()` applies the public
 `@Throttle({ strict: {} })` decorator plus Acres-owned metadata, and
 `AcresThrottlerGuard` subclasses `ThrottlerGuard` so the `strict` named
-throttler is opt-in. The ordinary `default` tier remains global.
+throttler is opt-in. The ordinary `default` tier remains global. The canonical
+tier names are exported as `THROTTLER_TIERS = ['default', 'strict'] as const`,
+`DEFAULT_THROTTLER_NAME`, and `STRICT_THROTTLER_NAME` from `rate-limit.guard.ts`,
+with routing and multi-transport unwrapping verified in `rate-limit.guard.spec.ts`.
+Similarly, canonical `CSRF_ERROR_CODE` (`'CSRF_INVALID'`) and `CSRF_ERROR_MESSAGE`
+(`'CSRF token missing or invalid.'`) are exported from `@acres/shared`, with token
+issuance, production cookie prefixing, and Express envelope middleware verified
+in `csrf.service.spec.ts`.
 
 The default tracker is Express's `req.ip`, and the effective storage key also
 includes the controller, handler and throttler name. That makes the budget

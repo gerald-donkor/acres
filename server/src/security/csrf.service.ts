@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { doubleCsrf, type DoubleCsrfUtilities } from 'csrf-csrf';
-import type { ApiError } from '@acres/shared';
+import {
+  CSRF_ERROR_CODE,
+  CSRF_ERROR_MESSAGE,
+  CSRF_HEADER_NAME,
+  type ApiError,
+} from '@acres/shared';
 import { AcresConfigService } from '../config/acres-config.service';
 
 /**
@@ -38,11 +43,11 @@ export class CsrfService {
         httpOnly: true,
       },
       getCsrfTokenFromRequest: (request: Request) =>
-        request.headers['x-csrf-token'],
+        request.headers[CSRF_HEADER_NAME],
       errorConfig: {
         statusCode: 403,
-        message: 'CSRF token missing or invalid.',
-        code: 'CSRF_INVALID',
+        message: CSRF_ERROR_MESSAGE,
+        code: CSRF_ERROR_CODE,
       },
     });
   }
@@ -78,8 +83,8 @@ export class CsrfService {
         response.status(403).json({
           ok: false,
           error: {
-            code: 'CSRF_INVALID',
-            message: 'CSRF token missing or invalid.',
+            code: CSRF_ERROR_CODE,
+            message: CSRF_ERROR_MESSAGE,
           },
         } satisfies ApiError);
       });
@@ -98,6 +103,9 @@ export class CsrfService {
    * invalidate a second tab's in-flight token for no gain.
    */
   issueToken(request: Request, response: Response): string {
+    if (!request.cookies) {
+      Object.assign(request, { cookies: {} });
+    }
     return this.utilities.generateCsrfToken(request, response);
   }
 }
@@ -108,6 +116,6 @@ export class CsrfService {
  * `Secure` cookie, so it can only be applied where the cookie is secure —
  * local http development keeps the plain name.
  */
-function csrfCookieName(configured: string, secure: boolean): string {
+export function csrfCookieName(configured: string, secure: boolean): string {
   return secure ? `__Host-${configured}` : configured;
 }

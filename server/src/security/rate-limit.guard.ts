@@ -6,7 +6,11 @@ import type { Request, Response } from 'express';
 import type { AcresGraphqlContext } from '../graphql/graphql.context';
 import { STRICT_THROTTLE_KEY } from './strict-throttle.decorator';
 
-const STRICT_THROTTLER_NAME = 'strict';
+export const THROTTLER_TIERS = ['default', 'strict'] as const;
+export type ThrottlerTier = (typeof THROTTLER_TIERS)[number];
+
+export const DEFAULT_THROTTLER_NAME: ThrottlerTier = 'default';
+export const STRICT_THROTTLER_NAME: ThrottlerTier = 'strict';
 
 /**
  * `@nestjs/throttler` applies every named throttler globally. Acres keeps the

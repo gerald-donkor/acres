@@ -10,6 +10,12 @@ export type AccountTokenPurpose = (typeof ACCOUNT_TOKEN_PURPOSES)[number];
 export const CSRF_HEADER_NAME = 'x-csrf-token' as const;
 export type CsrfHeaderName = typeof CSRF_HEADER_NAME;
 
+export const CSRF_ERROR_CODE = 'CSRF_INVALID' as const;
+export type CsrfErrorCode = typeof CSRF_ERROR_CODE;
+
+export const CSRF_ERROR_MESSAGE = 'CSRF token missing or invalid.' as const;
+export type CsrfErrorMessage = typeof CSRF_ERROR_MESSAGE;
+
 export interface CsrfTokenReceipt {
   csrfToken: string;
   headerName: CsrfHeaderName;
