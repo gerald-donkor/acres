@@ -5,6 +5,7 @@ import {
   isTestHarnessActive,
   type TestHarnessMocks,
 } from "@/lib/api/test-harness-store";
+import { ORGANIZATION_HEADER_NAME } from "@acres/shared";
 import type {
   AccountProfile,
   CsrfTokenReceipt,
@@ -36,7 +37,7 @@ async function authenticatedHeaders(
     headers.set("cookie", cookieHeader);
   }
   if (organizationId !== undefined) {
-    headers.set("x-acres-organization-id", organizationId);
+    headers.set(ORGANIZATION_HEADER_NAME, organizationId);
   }
   headers.set("accept", "application/json");
   return headers;

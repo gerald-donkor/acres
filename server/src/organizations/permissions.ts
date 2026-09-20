@@ -1,39 +1,13 @@
+import {
+  ORGANIZATION_PERMISSIONS,
+  type OrganizationPermission,
+} from '@acres/shared';
 import { SetMetadata } from '@nestjs/common';
 import type { OrganizationRole } from '../generated/prisma/enums';
 
+export { ORGANIZATION_PERMISSIONS, type OrganizationPermission };
+
 export const ORGANIZATION_PERMISSION_KEY = Symbol('organizationPermission');
-
-export const ORGANIZATION_PERMISSIONS = [
-  'organization.read',
-  'organization.update',
-  'members.read',
-  'members.invite',
-  'members.change_role',
-  'members.revoke',
-  'ownership.transfer',
-  'invitations.read',
-  'invitations.revoke',
-  'audit.read',
-  'uploads.read',
-  'uploads.create',
-  'datasets.read',
-  'datasets.create',
-  'datasets.update',
-  'ingestion.read',
-  'ingestion.run',
-  'ingestion.cancel',
-  'analytics.read',
-  'dashboards.manage',
-  'reports.read',
-  'reports.create',
-  'reports.update',
-  'reports.publish',
-  'exports.create',
-  'exports.read',
-  'jobs.read',
-] as const;
-
-export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
 
 const rolePermissions = {
   owner: new Set<OrganizationPermission>(ORGANIZATION_PERMISSIONS),

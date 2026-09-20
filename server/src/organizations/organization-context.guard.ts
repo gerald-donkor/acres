@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { ORGANIZATION_HEADER_NAME } from '@acres/shared';
 import { ApiException } from '../common/api-exception';
 import type { AuthenticatedRequest } from '../sessions/authenticated-request';
 import { AcresConfigService } from '../config/acres-config.service';
@@ -61,7 +62,7 @@ export class OrganizationContextGuard implements CanActivate {
   private organizationIdFrom(request: Request): string | null {
     const paramValue = request.params.organizationId;
     const param = Array.isArray(paramValue) ? undefined : paramValue;
-    const header = request.header('x-acres-organization-id');
+    const header = request.header(ORGANIZATION_HEADER_NAME);
     const fromHeader = header?.trim();
 
     if (

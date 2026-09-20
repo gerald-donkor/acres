@@ -1,3 +1,5 @@
+import { ORGANIZATION_HEADER_NAME } from "@acres/shared";
+
 export type SseMessage<T> = {
   event?: string;
   id?: string;
@@ -99,7 +101,7 @@ export function streamSse<T>(
       const headers = new Headers();
       headers.set("accept", "text/event-stream");
       if (options.organizationId !== undefined) {
-        headers.set("x-acres-organization-id", options.organizationId);
+        headers.set(ORGANIZATION_HEADER_NAME, options.organizationId);
       }
 
       const response = await fetch(`/api/v1${path}`, {

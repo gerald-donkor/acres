@@ -315,6 +315,16 @@ The authentication, account token, and CSRF contracts export canonical runtime c
 `server/src/accounts/accounts.service.spec.ts` (19 tests) verifies email normalization (lowercase, trim), account lookup by email and ID, password hashing at `BCRYPT_COST` (12), `P2002` unique constraint translation into `ApiException.invalidCredentials()`, timing-attack-safe dummy hash comparison for non-existent accounts, and password updates.
 `server/src/auth/auth.service.spec.ts` (16 tests) verifies account registration with collision prevention, credential-based login, session revocation upon logout, timing-safe forgot-password flow with resilient mailer error handling, single-use token consumption and session invalidation during password reset, and session description.
 
+### Organization context and permission enforcement
+
+The session, tenancy context, and permission enforcement layer exports canonical runtime constants, permission tuples, and isolated unit test suites (prompt 146):
+- `packages/shared/src/organizations.ts` exports canonical `ORGANIZATION_HEADER_NAME` (`'x-acres-organization-id' as const`), `OrganizationHeaderName`, `ORGANIZATION_PERMISSIONS` (27 permissions spanning organizations, members, invitations, audit, uploads, datasets, ingestion, analytics, dashboards, reports, exports, and jobs), and `OrganizationPermission`.
+- `server/src/organizations/permissions.ts` re-exports `ORGANIZATION_PERMISSIONS` and `OrganizationPermission` from `@acres/shared`, preserving existing server import paths while ensuring single-source-of-truth domain contracts.
+- `client/lib/api/browser.ts`, `client/lib/api/server.ts`, `client/lib/api/sse.ts`, `client/app/api/v1/[...path]/route.ts`, and `server/src/organizations/organization-context.guard.ts` consume `ORGANIZATION_HEADER_NAME` directly from `@acres/shared`.
+- `server/src/sessions/session.guard.spec.ts` (12 tests) verifies `SessionGuard` cookie extraction, empty/non-string validation, token resolution rejection with `ApiException.unauthenticated()`, context attachment (`request.sessionContext`), custom cookie name configuration, `OptionalSessionGuard` passthrough behavior, and `@CurrentAccount()` parameter extraction.
+- `server/src/organizations/organization-context.guard.spec.ts` (12 tests) verifies `OrganizationContextGuard` tenancy readiness check (`config.tenancyEnabled`), route param vs header resolution, whitespace trimming, conflict rejection, UUID format validation, `tenants.accountScoped` active membership resolution, context attachment (`request.organizationContext`), and `@CurrentOrganization()` extraction.
+- `server/src/organizations/permission.guard.spec.ts` (7 tests) verifies `PermissionGuard` handler and class metadata evaluation via `Reflector`, missing organization context rejection, and RBAC matrix verification across `owner`, `admin`, `analyst`, and `viewer` roles.
+
 ---
 
 ## 5. CSRF — what protects what

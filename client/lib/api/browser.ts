@@ -1,5 +1,6 @@
 "use client";
 
+import { ORGANIZATION_HEADER_NAME } from "@acres/shared";
 import type {
   AcceptInvitationInput,
   AcceptInvitationResult,
@@ -63,7 +64,7 @@ async function apiFetch<TData>(
     headers.set("content-type", "application/json");
   }
   if (init.organizationId !== undefined) {
-    headers.set("x-acres-organization-id", init.organizationId);
+    headers.set(ORGANIZATION_HEADER_NAME, init.organizationId);
   }
 
   const response = await fetch(`/api/v1${path}`, {

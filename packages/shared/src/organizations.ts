@@ -7,6 +7,41 @@ export const ORGANIZATION_ROLES = [
 
 export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
+export const ORGANIZATION_HEADER_NAME = "x-acres-organization-id" as const;
+export type OrganizationHeaderName = typeof ORGANIZATION_HEADER_NAME;
+
+export const ORGANIZATION_PERMISSIONS = [
+  "organization.read",
+  "organization.update",
+  "members.read",
+  "members.invite",
+  "members.change_role",
+  "members.revoke",
+  "ownership.transfer",
+  "invitations.read",
+  "invitations.revoke",
+  "audit.read",
+  "uploads.read",
+  "uploads.create",
+  "datasets.read",
+  "datasets.create",
+  "datasets.update",
+  "ingestion.read",
+  "ingestion.run",
+  "ingestion.cancel",
+  "analytics.read",
+  "dashboards.manage",
+  "reports.read",
+  "reports.create",
+  "reports.update",
+  "reports.publish",
+  "exports.create",
+  "exports.read",
+  "jobs.read",
+] as const;
+
+export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
+
 export const AUDIT_ACTIONS = [
   "organization_created",
   "organization_updated",

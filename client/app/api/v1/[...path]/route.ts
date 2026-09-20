@@ -1,3 +1,7 @@
+import {
+  CSRF_HEADER_NAME,
+  ORGANIZATION_HEADER_NAME,
+} from "@acres/shared";
 import type { NextRequest } from "next/server";
 
 const API_ORIGIN = process.env.ACRES_API_ORIGIN?.trim() || "http://localhost:3001";
@@ -6,8 +10,8 @@ const SAFE_REQUEST_HEADERS = [
   "content-type",
   "cookie",
   "idempotency-key",
-  "x-acres-organization-id",
-  "x-csrf-token",
+  ORGANIZATION_HEADER_NAME,
+  CSRF_HEADER_NAME,
 ] as const;
 const SAFE_RESPONSE_HEADERS = ["content-type", "x-request-id"] as const;
 
