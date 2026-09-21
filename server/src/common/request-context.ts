@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
+import { REQUEST_ID_HEADER_NAME } from '@acres/shared';
 
 export interface RequestContext {
   requestId: string;
@@ -17,11 +18,11 @@ export function requestContextMiddleware(
   response: Response,
   next: NextFunction,
 ): void {
-  const header = request.header('x-request-id')?.trim();
+  const header = request.header(REQUEST_ID_HEADER_NAME)?.trim();
   const requestId =
     header && REQUEST_ID_RE.test(header) ? header : randomUUID();
   (request as RequestWithContext).requestContext = { requestId };
-  response.setHeader('x-request-id', requestId);
+  response.setHeader(REQUEST_ID_HEADER_NAME, requestId);
   next();
 }
 

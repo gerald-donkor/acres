@@ -1,6 +1,8 @@
 import {
   CSRF_HEADER_NAME,
+  IDEMPOTENCY_HEADER_NAME,
   ORGANIZATION_HEADER_NAME,
+  REQUEST_ID_HEADER_NAME,
 } from "@acres/shared";
 import type { NextRequest } from "next/server";
 
@@ -9,11 +11,11 @@ const SAFE_REQUEST_HEADERS = [
   "accept",
   "content-type",
   "cookie",
-  "idempotency-key",
+  IDEMPOTENCY_HEADER_NAME,
   ORGANIZATION_HEADER_NAME,
   CSRF_HEADER_NAME,
 ] as const;
-const SAFE_RESPONSE_HEADERS = ["content-type", "x-request-id"] as const;
+const SAFE_RESPONSE_HEADERS = ["content-type", REQUEST_ID_HEADER_NAME] as const;
 
 type RouteContext = {
   params: Promise<{

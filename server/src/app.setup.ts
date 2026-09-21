@@ -8,6 +8,12 @@ import type { NextFunction, Request, Response } from 'express';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import {
+  CSRF_HEADER_NAME,
+  IDEMPOTENCY_HEADER_NAME,
+  ORGANIZATION_HEADER_NAME,
+  REQUEST_ID_HEADER_NAME,
+} from '@acres/shared';
 import { ApiException } from './common/api-exception';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import {
@@ -47,13 +53,14 @@ export function configureApp(app: INestApplication): void {
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
+      IDEMPOTENCY_HEADER_NAME,
       'Idempotency-Key',
-      'x-acres-organization-id',
-      'x-csrf-token',
+      ORGANIZATION_HEADER_NAME,
+      CSRF_HEADER_NAME,
       'x-organization-id',
-      'x-request-id',
+      REQUEST_ID_HEADER_NAME,
     ],
-    exposedHeaders: ['x-request-id'],
+    exposedHeaders: [REQUEST_ID_HEADER_NAME],
   });
   app.use(
     '/graphql',
@@ -65,7 +72,7 @@ export function configureApp(app: INestApplication): void {
               message: 'GraphQL operations require POST.',
               extensions: {
                 code: 'METHOD_NOT_ALLOWED',
-                requestId: response.getHeader('x-request-id'),
+                requestId: response.getHeader(REQUEST_ID_HEADER_NAME),
               },
             },
           ],

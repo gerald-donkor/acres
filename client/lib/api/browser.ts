@@ -1,6 +1,9 @@
 "use client";
 
-import { ORGANIZATION_HEADER_NAME } from "@acres/shared";
+import {
+  IDEMPOTENCY_HEADER_NAME,
+  ORGANIZATION_HEADER_NAME,
+} from "@acres/shared";
 import type {
   AcceptInvitationInput,
   AcceptInvitationResult,
@@ -99,7 +102,7 @@ async function apiMutation<TData>(
 ): Promise<TData> {
   const headers = await csrfHeaders();
   if (init.idempotencyKey !== undefined) {
-    headers.set("Idempotency-Key", init.idempotencyKey);
+    headers.set(IDEMPOTENCY_HEADER_NAME, init.idempotencyKey);
   }
 
   try {

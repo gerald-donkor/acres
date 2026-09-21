@@ -55,3 +55,9 @@ export function isApiError<TData>(
 ): response is ApiError {
   return response.ok === false;
 }
+
+export const REQUEST_ID_HEADER_NAME = 'x-request-id' as const;
+export type RequestIdHeaderName = typeof REQUEST_ID_HEADER_NAME;
+
+export const IDEMPOTENCY_HEADER_NAME = 'idempotency-key' as const;
+export type IdempotencyHeaderName = typeof IDEMPOTENCY_HEADER_NAME;

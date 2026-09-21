@@ -1,4 +1,8 @@
-import type { ApiErrorCode, ApiResponse } from "@acres/shared";
+import {
+  REQUEST_ID_HEADER_NAME,
+  type ApiErrorCode,
+  type ApiResponse,
+} from "@acres/shared";
 
 export class ApiClientError extends Error {
   readonly code: ApiErrorCode;
@@ -39,7 +43,7 @@ export async function parseApiResponse<TData>(
       code: "INTERNAL_ERROR",
       message: "The API returned a response the client could not read.",
       status: response.status,
-      requestId: response.headers.get("x-request-id") ?? undefined,
+      requestId: response.headers.get(REQUEST_ID_HEADER_NAME) ?? undefined,
     });
   }
 
@@ -51,7 +55,7 @@ export async function parseApiResponse<TData>(
     code: payload.error.code,
     message: payload.error.message,
     details: payload.error.details,
-    requestId: payload.error.requestId ?? response.headers.get("x-request-id") ?? undefined,
+    requestId: payload.error.requestId ?? response.headers.get(REQUEST_ID_HEADER_NAME) ?? undefined,
     status: response.status,
   });
 }

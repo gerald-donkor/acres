@@ -325,6 +325,19 @@ The session, tenancy context, and permission enforcement layer exports canonical
 - `server/src/organizations/organization-context.guard.spec.ts` (12 tests) verifies `OrganizationContextGuard` tenancy readiness check (`config.tenancyEnabled`), route param vs header resolution, whitespace trimming, conflict rejection, UUID format validation, `tenants.accountScoped` active membership resolution, context attachment (`request.organizationContext`), and `@CurrentOrganization()` extraction.
 - `server/src/organizations/permission.guard.spec.ts` (7 tests) verifies `PermissionGuard` handler and class metadata evaluation via `Reflector`, missing organization context rejection, and RBAC matrix verification across `owner`, `admin`, `analyst`, and `viewer` roles.
 
+### Request correlation, idempotency, and common server foundation
+
+The HTTP request correlation, mutation idempotency, exception mapping, response envelopment, and foundational utilities export canonical runtime constants and isolated unit test suites (prompt 147):
+- `packages/shared/src/api.ts` exports canonical `REQUEST_ID_HEADER_NAME` (`'x-request-id' as const`), `RequestIdHeaderName`, `IDEMPOTENCY_HEADER_NAME` (`'idempotency-key' as const`), and `IdempotencyHeaderName`.
+- `server/src/common/request-context.ts`, `server/src/app.setup.ts`, `client/lib/api/envelope.ts`, `client/lib/api/browser.ts`, and `client/app/api/v1/[...path]/route.ts` consume `REQUEST_ID_HEADER_NAME` and `IDEMPOTENCY_HEADER_NAME` directly from `@acres/shared`.
+- `server/src/common/api-exception.spec.ts` (15 tests) verifies typed instantiation of `ApiException` with code, status, message, and details, and covers all static factory methods (`validationFailed`, `invalidCredentials`, `unauthenticated`, `forbidden`, `conflict`, `idempotencyKeyRequired`, `idempotencyConflict`, `cursorInvalid`, `queryLimitExceeded`, `notFound`, `notReady`, and `invalidOrExpiredToken`).
+- `server/src/common/api-exception.filter.spec.ts` (9 tests) verifies `ApiExceptionFilter` non-HTTP context passthrough, `ApiException` structured envelope mapping with `requestId` correlation, fallback API error codes across standard HTTP statuses (400, 401, 403, 404, 429, 503), payload sanitization, unhandled exception stack logging, and safe `INTERNAL_ERROR` 500 masking.
+- `server/src/common/response-envelope.interceptor.spec.ts` (5 tests) verifies `ResponseEnvelopeInterceptor` `{ ok: true, data }` wrapping, non-HTTP context passthrough, SSE metadata bypass, `/metrics` telemetry bypass, and `/events` streaming bypass.
+- `server/src/common/request-context.spec.ts` (7 tests) verifies `requestContextMiddleware` UUID validation, whitespace trimming, missing/malformed fallback to freshly generated UUID, header setting, and `requestIdFrom` extraction.
+- `server/src/common/ids.spec.ts` (3 tests) verifies `uuidV7()` RFC 9562 compliance (36 characters, version 7 nibble, variant bits), uniqueness, and monotonic millisecond timestamp progression.
+- `server/src/common/tokens.spec.ts` (6 tests) verifies `issueRawToken()` 32-byte base64url URL-safety and entropy, and `hashToken()` deterministic 64-character lowercase hexadecimal SHA-256 digests.
+- `server/src/common/transform.spec.ts` (5 tests) verifies `trimValue()` string whitespace trimming and non-string passthrough, and `normaliseEmailValue()` email normalization (lowercase, trim) and non-string passthrough.
+
 ---
 
 ## 5. CSRF — what protects what
