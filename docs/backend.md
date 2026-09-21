@@ -405,6 +405,19 @@ The presentation-tier GraphQL subsystem and regional shared types export canonic
 - `server/src/graphql/acres.resolver.spec.ts` (44 tests) verifies `AcresResolver`: authenticated context guards (`unauthenticated` / `notFound`), `viewer` account and membership resolution, `organization` retrieval with timeout, permission checks across `organizationMembers`, `organizationInvitations`, `organizationAuditEvents`, and `dashboardSummary` queries (forbidden 403 on missing permissions), `regions` and `region` queries, and `withTimeout` execution timeout enforcement (`ApiException.queryLimitExceeded('GraphQL execution timed out.')`).
 - `server/src/regions/regions.service.spec.ts` verifies `isInsightReportStatus` predicate coverage (canonical statuses, invalid values, casing, primitives).
 
+### Ingestion service, geoBoundaries provider, import service, and geometry errors
+
+The ingestion and geography domain services, acquisition providers, and error models export canonical lifecycle states, error categories, and isolated unit test suites (prompt 153):
+- `packages/shared/src/ingestion.ts` exports canonical const tuples `DATASET_STATES`, `INGESTION_RUN_STAGES`, `MAPPING_VALIDATION_STATUSES`, `VALIDATION_ISSUE_SEVERITIES`, derived union types, and type predicates `isDatasetState`, `isIngestionRunStage`, `isMappingValidationStatus`, and `isValidationIssueSeverity`.
+- `server/src/geography/geometry.errors.ts` exports canonical const tuple `GEOMETRY_ERROR_CODES`, derived union type `GeometryErrorCode`, and type predicate `isGeometryErrorCode`.
+- `server/src/geography/geometry.errors.spec.ts` (10 tests) verifies `GeometryError` constructor, static factory methods (`invalid`, `referenceNotFound`, `persistenceFailed`), and `isGeometryErrorCode` predicate.
+- `server/src/geography/geoboundaries-provider.ts` exports canonical const tuple `GEOBOUNDARIES_ACQUISITION_CATEGORIES`, derived type `GeoBoundariesAcquisitionCategory`, and type predicate `isGeoBoundariesAcquisitionCategory`.
+- `server/src/geography/geoboundaries-provider.spec.ts` (32 tests) verifies `GeoBoundariesProvider` and acquisition helpers: URL formatting and selection validation, `safeFetch` protocol/host/credential checks, redirect rejection, status error wrapping, metadata schema validation, `writeResponseToFile` content-type/streaming size enforcement (`GEOBOUNDARIES_MAX_ARTIFACT_BYTES`), SHA-256 calculation, `acquire` temporary staging and failure cleanup, and deterministic manifest creation.
+- `server/src/geography/geoboundaries-import.service.ts` exports canonical const tuple `GEOBOUNDARIES_IMPORT_ERROR_CATEGORIES`, derived type `GeoBoundariesImportErrorCategory`, and type predicate `isGeoBoundariesImportErrorCategory`.
+- `server/src/geography/geoboundaries-import.service.spec.ts` (16 tests) verifies `GeoBoundariesImportService`: layer count validation, ADM2+ hierarchy governance, unresolved parent detection, existing region hierarchy conflict rejection, dry-run mode, transactional layer persistence, parent resolution, unchanged detection, and database error mapping.
+- `server/src/ingestion/ingestion.service.ts` imports and uses canonical shared types (`DatasetState`, `MappingValidationStatus`, `IngestionRunState`, `IngestionRunStage`) across internal summary mappers.
+- `server/src/ingestion/ingestion.service.spec.ts` (30 tests) verifies `IngestionService`: dataset listing, creation via idempotency, fetch, update, version listing, column mapping creation with version incrementing and upload state verification, ingestion run start with deterministic keys and queue dispatch, run lookup, validation issue listing with ISO timestamps, run cancellation, and shared ingestion predicate coverage.
+
 ---
 
 ## 5. CSRF — what protects what

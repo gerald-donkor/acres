@@ -14,7 +14,7 @@ const ARTIFACT_HOST = 'raw.githubusercontent.com';
 const TIMEOUT_MS = 15_000;
 const USER_AGENT = 'Acres-geoBoundaries-import/1.0 (+https://github.com/acres)';
 
-interface ProviderMetadata {
+export interface ProviderMetadata {
   boundaryID: unknown;
   boundaryISO: unknown;
   boundaryType: unknown;
@@ -29,14 +29,28 @@ interface ProviderMetadata {
   admUnitCount: unknown;
 }
 
+export const GEOBOUNDARIES_ACQUISITION_CATEGORIES = [
+  'selection',
+  'discovery',
+  'acquisition',
+  'checksum',
+  'provider-schema',
+] as const;
+
+export type GeoBoundariesAcquisitionCategory =
+  (typeof GEOBOUNDARIES_ACQUISITION_CATEGORIES)[number];
+
+export function isGeoBoundariesAcquisitionCategory(
+  category: string,
+): category is GeoBoundariesAcquisitionCategory {
+  return (GEOBOUNDARIES_ACQUISITION_CATEGORIES as readonly string[]).includes(
+    category,
+  );
+}
+
 export class GeoBoundariesAcquisitionError extends Error {
   constructor(
-    readonly category:
-      | 'selection'
-      | 'discovery'
-      | 'acquisition'
-      | 'checksum'
-      | 'provider-schema',
+    readonly category: GeoBoundariesAcquisitionCategory,
     message: string,
   ) {
     super(message);
@@ -44,7 +58,7 @@ export class GeoBoundariesAcquisitionError extends Error {
   }
 }
 
-function selectionPath(selection: GeoBoundariesSelection): URL {
+export function selectionPath(selection: GeoBoundariesSelection): URL {
   if (
     !/^[A-Z]{3}$/.test(selection.countryCode) ||
     !/^ADM[0-5]$/.test(selection.level)
@@ -59,7 +73,10 @@ function selectionPath(selection: GeoBoundariesSelection): URL {
   );
 }
 
-async function safeFetch(url: URL, expectedHost: string): Promise<Response> {
+export async function safeFetch(
+  url: URL,
+  expectedHost: string,
+): Promise<Response> {
   if (
     url.protocol !== 'https:' ||
     url.hostname !== expectedHost ||
@@ -118,7 +135,7 @@ function string(value: unknown, key: string, allowEmpty = false): string {
   return value;
 }
 
-function metadataToLayer(
+export function metadataToLayer(
   metadata: ProviderMetadata,
   selection: GeoBoundariesSelection,
   checksum: string,
@@ -185,7 +202,7 @@ function metadataToLayer(
   };
 }
 
-async function writeResponseToFile(
+export async function writeResponseToFile(
   response: Response,
   target: string,
 ): Promise<{ sha256: string; byteLength: number }> {

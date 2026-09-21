@@ -1,9 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  DatasetState,
   DatasetSummary,
   DatasetVersionSummary,
+  IngestionRunStage,
+  IngestionRunState,
   IngestionRunSummary,
   MappingSummary,
+  MappingValidationStatus,
   ValidationIssueSummary,
 } from '@acres/shared';
 import type { Prisma } from '../generated/prisma/client';
@@ -425,7 +429,7 @@ export class IngestionService {
     id: string;
     name: string;
     description: string | null;
-    state: 'draft' | 'active' | 'archived';
+    state: DatasetState;
     createdAt: Date;
     updatedAt: Date;
     versions?: Array<{
@@ -473,7 +477,7 @@ export class IngestionService {
     datasetId: string;
     uploadId: string;
     versionNumber: number;
-    validationStatus: 'pending' | 'valid' | 'invalid';
+    validationStatus: MappingValidationStatus;
     createdAt: Date;
   }): MappingSummary {
     return {
@@ -492,15 +496,8 @@ export class IngestionService {
     uploadId: string;
     mappingId: string;
     datasetVersionId: string | null;
-    state:
-      | 'queued'
-      | 'running'
-      | 'validation_failed'
-      | 'published'
-      | 'failed'
-      | 'cancelling'
-      | 'cancelled';
-    stage: 'inspect' | 'parse' | 'map' | 'validate' | 'publish' | 'complete';
+    state: IngestionRunState;
+    stage: IngestionRunStage;
     progressPercent: number;
     failureCode: string | null;
     failureMessage: string | null;

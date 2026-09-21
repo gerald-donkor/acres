@@ -5,8 +5,17 @@
  * PostGIS notices, coordinate arrays, connection strings, credentials, or internal stacks.
  */
 
-export type GeometryErrorCode =
-  'INVALID_GEOMETRY' | 'REFERENCE_NOT_FOUND' | 'PERSISTENCE_FAILED';
+export const GEOMETRY_ERROR_CODES = [
+  'INVALID_GEOMETRY',
+  'REFERENCE_NOT_FOUND',
+  'PERSISTENCE_FAILED',
+] as const;
+
+export type GeometryErrorCode = (typeof GEOMETRY_ERROR_CODES)[number];
+
+export function isGeometryErrorCode(code: string): code is GeometryErrorCode {
+  return (GEOMETRY_ERROR_CODES as readonly string[]).includes(code);
+}
 
 export class GeometryError extends Error {
   readonly code: GeometryErrorCode;

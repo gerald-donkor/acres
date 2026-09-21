@@ -7,9 +7,26 @@ import type { NormalizedGeoBoundariesLayer } from './geoboundaries.types';
 
 type Tx = Prisma.TransactionClient;
 
+export const GEOBOUNDARIES_IMPORT_ERROR_CATEGORIES = [
+  'hierarchy',
+  'checksum',
+  'database',
+] as const;
+
+export type GeoBoundariesImportErrorCategory =
+  (typeof GEOBOUNDARIES_IMPORT_ERROR_CATEGORIES)[number];
+
+export function isGeoBoundariesImportErrorCategory(
+  category: string,
+): category is GeoBoundariesImportErrorCategory {
+  return (GEOBOUNDARIES_IMPORT_ERROR_CATEGORIES as readonly string[]).includes(
+    category,
+  );
+}
+
 export class GeoBoundariesImportError extends Error {
   constructor(
-    readonly category: 'hierarchy' | 'checksum' | 'database',
+    readonly category: GeoBoundariesImportErrorCategory,
     message: string,
   ) {
     super(message);
@@ -24,7 +41,7 @@ export interface GeoBoundariesImportResult {
   readonly unchanged: boolean;
 }
 
-function slug(feature: {
+export function slug(feature: {
   shapeId: string;
   shapeGroup: string;
   shapeType: string;
@@ -36,7 +53,7 @@ function slug(feature: {
   return `gb-${feature.shapeGroup.toLowerCase()}-${feature.shapeType.toLowerCase()}-${digest}`;
 }
 
-function providerIdentity(
+export function providerIdentity(
   layer: { countryCode: string; level: string },
   shapeId: string,
 ): string {

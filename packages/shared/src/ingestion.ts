@@ -25,6 +25,23 @@ export function isTerminalIngestionRunState(
   return (TERMINAL_INGESTION_RUN_STATES as readonly string[]).includes(state);
 }
 
+export const INGESTION_RUN_STAGES = [
+  'inspect',
+  'parse',
+  'map',
+  'validate',
+  'publish',
+  'complete',
+] as const;
+
+export type IngestionRunStage = (typeof INGESTION_RUN_STAGES)[number];
+
+export function isIngestionRunStage(
+  stage: string,
+): stage is IngestionRunStage {
+  return (INGESTION_RUN_STAGES as readonly string[]).includes(stage);
+}
+
 export interface IngestionRunSummary {
   readonly id: string;
   readonly datasetId: string;
@@ -32,8 +49,7 @@ export interface IngestionRunSummary {
   readonly mappingId: string;
   readonly datasetVersionId: string | null;
   readonly state: IngestionRunState;
-  readonly stage:
-    'inspect' | 'parse' | 'map' | 'validate' | 'publish' | 'complete';
+  readonly stage: IngestionRunStage;
   readonly progressPercent: number;
   readonly failure: { code: string; message: string | null } | null;
   readonly createdAt: string;
@@ -41,7 +57,13 @@ export interface IngestionRunSummary {
   readonly finishedAt: string | null;
 }
 
-export type DatasetState = 'draft' | 'active' | 'archived';
+export const DATASET_STATES = ['draft', 'active', 'archived'] as const;
+
+export type DatasetState = (typeof DATASET_STATES)[number];
+
+export function isDatasetState(state: string): state is DatasetState {
+  return (DATASET_STATES as readonly string[]).includes(state);
+}
 
 export interface DatasetVersionSummary {
   readonly id: string;
@@ -62,20 +84,50 @@ export interface DatasetSummary {
   readonly latestVersion: DatasetVersionSummary | null;
 }
 
+export const MAPPING_VALIDATION_STATUSES = [
+  'pending',
+  'valid',
+  'invalid',
+] as const;
+
+export type MappingValidationStatus =
+  (typeof MAPPING_VALIDATION_STATUSES)[number];
+
+export function isMappingValidationStatus(
+  status: string,
+): status is MappingValidationStatus {
+  return (MAPPING_VALIDATION_STATUSES as readonly string[]).includes(status);
+}
+
 export interface ColumnMappingSummary {
   readonly id: string;
   readonly datasetId: string;
   readonly uploadId: string;
   readonly versionNumber: number;
-  readonly validationStatus: 'pending' | 'valid' | 'invalid';
+  readonly validationStatus: MappingValidationStatus;
   readonly createdAt: string;
 }
 
 export type MappingSummary = ColumnMappingSummary;
 
+export const VALIDATION_ISSUE_SEVERITIES = [
+  'info',
+  'warning',
+  'error',
+] as const;
+
+export type ValidationIssueSeverity =
+  (typeof VALIDATION_ISSUE_SEVERITIES)[number];
+
+export function isValidationIssueSeverity(
+  severity: string,
+): severity is ValidationIssueSeverity {
+  return (VALIDATION_ISSUE_SEVERITIES as readonly string[]).includes(severity);
+}
+
 export interface ValidationIssueSummary {
   readonly id: string;
-  readonly severity: 'info' | 'warning' | 'error';
+  readonly severity: ValidationIssueSeverity;
   readonly code: string;
   readonly message: string;
   readonly rowNumber?: number | null;
