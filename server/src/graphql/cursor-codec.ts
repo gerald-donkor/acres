@@ -3,11 +3,18 @@ import { Injectable } from '@nestjs/common';
 import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
 
-export type CursorKind =
-  | 'organizationMembers'
-  | 'organizationInvitations'
-  | 'organizationAuditEvents'
-  | 'regions';
+export const CURSOR_KINDS = [
+  'organizationMembers',
+  'organizationInvitations',
+  'organizationAuditEvents',
+  'regions',
+] as const;
+
+export type CursorKind = (typeof CURSOR_KINDS)[number];
+
+export const isCursorKind = (value: unknown): value is CursorKind =>
+  typeof value === 'string' &&
+  (CURSOR_KINDS as readonly string[]).includes(value);
 
 interface CursorPayload {
   v: 1;

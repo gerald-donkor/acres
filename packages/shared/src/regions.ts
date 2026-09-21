@@ -34,6 +34,12 @@ export const INSIGHT_REPORT_STATUSES = [
 
 export type InsightReportStatus = (typeof INSIGHT_REPORT_STATUSES)[number];
 
+export const isInsightReportStatus = (
+  value: unknown,
+): value is InsightReportStatus =>
+  typeof value === 'string' &&
+  (INSIGHT_REPORT_STATUSES as readonly string[]).includes(value);
+
 export interface InsightReportSummary {
   id: string;
   regionId: string | null;

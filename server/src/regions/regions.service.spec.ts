@@ -1,6 +1,10 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { HttpStatus } from '@nestjs/common';
-import type { RegionSummary } from '@acres/shared';
+import {
+  INSIGHT_REPORT_STATUSES,
+  isInsightReportStatus,
+  type RegionSummary,
+} from '@acres/shared';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiException } from '../common/api-exception';
@@ -579,6 +583,25 @@ describe('RegionsService', () => {
         'Database pool exhausted',
       );
       expect(mockPrisma.region.findMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('isInsightReportStatus', () => {
+    it('returns true for all canonical INSIGHT_REPORT_STATUSES', () => {
+      for (const status of INSIGHT_REPORT_STATUSES) {
+        expect(isInsightReportStatus(status)).toBe(true);
+      }
+    });
+
+    it('returns false for invalid values, casing, and primitives', () => {
+      expect(isInsightReportStatus('')).toBe(false);
+      expect(isInsightReportStatus(' ')).toBe(false);
+      expect(isInsightReportStatus('DRAFT')).toBe(false);
+      expect(isInsightReportStatus('pending')).toBe(false);
+      expect(isInsightReportStatus(null)).toBe(false);
+      expect(isInsightReportStatus(undefined)).toBe(false);
+      expect(isInsightReportStatus(123)).toBe(false);
+      expect(isInsightReportStatus({})).toBe(false);
     });
   });
 });
