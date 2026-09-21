@@ -1,4 +1,10 @@
 import { HttpStatus } from '@nestjs/common';
+import {
+  API_ERROR_CODES,
+  NODE_ENVS,
+  isApiErrorCode,
+  isNodeEnv,
+} from '@acres/shared';
 import { ApiException } from './api-exception';
 
 describe('ApiException', () => {
@@ -129,6 +135,36 @@ describe('ApiException', () => {
       expect(error.message).toBe(
         'This password reset link is invalid or has expired.',
       );
+    });
+  });
+
+  describe('isApiErrorCode', () => {
+    it('returns true for all API_ERROR_CODES', () => {
+      for (const code of API_ERROR_CODES) {
+        expect(isApiErrorCode(code)).toBe(true);
+      }
+    });
+
+    it('returns false for unknown codes or invalid types', () => {
+      expect(isApiErrorCode('UNKNOWN_CODE')).toBe(false);
+      expect(isApiErrorCode('validation_failed')).toBe(false);
+      expect(isApiErrorCode('')).toBe(false);
+      expect(isApiErrorCode(123 as unknown as string)).toBe(false);
+    });
+  });
+
+  describe('isNodeEnv', () => {
+    it('returns true for all NODE_ENVS', () => {
+      for (const env of NODE_ENVS) {
+        expect(isNodeEnv(env)).toBe(true);
+      }
+    });
+
+    it('returns false for unknown environments or invalid types', () => {
+      expect(isNodeEnv('staging')).toBe(false);
+      expect(isNodeEnv('TEST')).toBe(false);
+      expect(isNodeEnv('')).toBe(false);
+      expect(isNodeEnv(undefined as unknown as string)).toBe(false);
     });
   });
 });

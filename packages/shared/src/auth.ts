@@ -7,6 +7,12 @@ export const ACCOUNT_TOKEN_PURPOSES = [
 
 export type AccountTokenPurpose = (typeof ACCOUNT_TOKEN_PURPOSES)[number];
 
+export function isAccountTokenPurpose(
+  purpose: string,
+): purpose is AccountTokenPurpose {
+  return (ACCOUNT_TOKEN_PURPOSES as readonly string[]).includes(purpose);
+}
+
 export const CSRF_HEADER_NAME = 'x-csrf-token' as const;
 export type CsrfHeaderName = typeof CSRF_HEADER_NAME;
 

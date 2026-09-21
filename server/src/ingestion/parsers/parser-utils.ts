@@ -2,10 +2,16 @@ import type { ParserIssue } from './parser.types';
 
 export const PARSER_MAX_BUFFER_BYTES = 25 * 1024 * 1024;
 
-const FORMULA_AS_DATA_MESSAGE =
+export const FORMULA_AS_DATA_MESSAGE =
   'Formula-looking cell was treated as text.' as const;
 
-type FormulaAsDataMessage = typeof FORMULA_AS_DATA_MESSAGE;
+export type FormulaAsDataMessage = typeof FORMULA_AS_DATA_MESSAGE;
+
+export function isFormulaAsDataMessage(
+  msg: string,
+): msg is FormulaAsDataMessage {
+  return msg === FORMULA_AS_DATA_MESSAGE;
+}
 
 export function normalizeKey(value: string): string {
   return value

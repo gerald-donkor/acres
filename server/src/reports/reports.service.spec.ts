@@ -1,11 +1,17 @@
 import { createHash } from 'node:crypto';
 import { Test, type TestingModule } from '@nestjs/testing';
-import type {
-  CreateExportInput,
-  CreateReportInput,
-  CreateRevisionInput,
-  UpdateReportInput,
-  UpdateRevisionInput,
+import {
+  EXPORT_FORMATS,
+  EXPORT_STATUSES,
+  REPORT_EVIDENCE_TYPES,
+  isExportFormat,
+  isExportStatus,
+  isReportEvidenceType,
+  type CreateExportInput,
+  type CreateReportInput,
+  type CreateRevisionInput,
+  type UpdateReportInput,
+  type UpdateRevisionInput,
 } from '@acres/shared';
 import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
@@ -1992,6 +1998,53 @@ describe('ReportsService', () => {
 
         const hash = createHash('sha256').update(rendered.body).digest('hex');
         expect(hash).toHaveLength(64);
+      });
+    });
+  });
+
+  describe('shared report and export predicates', () => {
+    describe('isReportEvidenceType', () => {
+      it('returns true for all REPORT_EVIDENCE_TYPES', () => {
+        for (const type of REPORT_EVIDENCE_TYPES) {
+          expect(isReportEvidenceType(type)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid evidence types or non-strings', () => {
+        expect(isReportEvidenceType('metric')).toBe(false);
+        expect(isReportEvidenceType('AGGREGATE')).toBe(false);
+        expect(isReportEvidenceType('')).toBe(false);
+        expect(isReportEvidenceType(null as unknown as string)).toBe(false);
+      });
+    });
+
+    describe('isExportFormat', () => {
+      it('returns true for all EXPORT_FORMATS', () => {
+        for (const format of EXPORT_FORMATS) {
+          expect(isExportFormat(format)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid export formats or non-strings', () => {
+        expect(isExportFormat('xlsx')).toBe(false);
+        expect(isExportFormat('CSV')).toBe(false);
+        expect(isExportFormat('')).toBe(false);
+        expect(isExportFormat(123 as unknown as string)).toBe(false);
+      });
+    });
+
+    describe('isExportStatus', () => {
+      it('returns true for all EXPORT_STATUSES', () => {
+        for (const status of EXPORT_STATUSES) {
+          expect(isExportStatus(status)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid export statuses or non-strings', () => {
+        expect(isExportStatus('completed')).toBe(false);
+        expect(isExportStatus('QUEUED')).toBe(false);
+        expect(isExportStatus('')).toBe(false);
+        expect(isExportStatus(undefined as unknown as string)).toBe(false);
       });
     });
   });

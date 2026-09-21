@@ -1,8 +1,18 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import type {
-  CreateDashboardViewInput,
-  DashboardFilters,
-  UpdateDashboardViewInput,
+import {
+  DASHBOARD_COMPARE_BY_OPTIONS,
+  DASHBOARD_PRESENTATION_CHARTS,
+  METRIC_AGGREGATION_TYPES,
+  METRIC_DEFINITION_STATUSES,
+  METRIC_VALUE_KINDS,
+  isDashboardCompareBy,
+  isDashboardPresentationChart,
+  isMetricAggregationType,
+  isMetricDefinitionStatus,
+  isMetricValueKind,
+  type CreateDashboardViewInput,
+  type DashboardFilters,
+  type UpdateDashboardViewInput,
 } from '@acres/shared';
 import { ApiException } from '../common/api-exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
@@ -712,6 +722,85 @@ describe('DashboardsService', () => {
       await expect(service.summary(orgContext, {})).rejects.toThrow(
         'Database connectivity failure',
       );
+    });
+  });
+
+  describe('shared dashboard predicates', () => {
+    describe('isMetricValueKind', () => {
+      it('returns true for all METRIC_VALUE_KINDS', () => {
+        for (const kind of METRIC_VALUE_KINDS) {
+          expect(isMetricValueKind(kind)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid value kinds or non-strings', () => {
+        expect(isMetricValueKind('NUMERIC')).toBe(false);
+        expect(isMetricValueKind('decimal')).toBe(false);
+        expect(isMetricValueKind('')).toBe(false);
+        expect(isMetricValueKind(null as unknown as string)).toBe(false);
+      });
+    });
+
+    describe('isMetricAggregationType', () => {
+      it('returns true for all METRIC_AGGREGATION_TYPES', () => {
+        for (const type of METRIC_AGGREGATION_TYPES) {
+          expect(isMetricAggregationType(type)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid aggregation types or non-strings', () => {
+        expect(isMetricAggregationType('SUM')).toBe(false);
+        expect(isMetricAggregationType('median')).toBe(false);
+        expect(isMetricAggregationType('')).toBe(false);
+        expect(isMetricAggregationType(123 as unknown as string)).toBe(false);
+      });
+    });
+
+    describe('isDashboardPresentationChart', () => {
+      it('returns true for all DASHBOARD_PRESENTATION_CHARTS', () => {
+        for (const chart of DASHBOARD_PRESENTATION_CHARTS) {
+          expect(isDashboardPresentationChart(chart)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid chart types or non-strings', () => {
+        expect(isDashboardPresentationChart('pie')).toBe(false);
+        expect(isDashboardPresentationChart('BAR')).toBe(false);
+        expect(isDashboardPresentationChart('')).toBe(false);
+        expect(
+          isDashboardPresentationChart(undefined as unknown as string),
+        ).toBe(false);
+      });
+    });
+
+    describe('isDashboardCompareBy', () => {
+      it('returns true for all DASHBOARD_COMPARE_BY_OPTIONS', () => {
+        for (const option of DASHBOARD_COMPARE_BY_OPTIONS) {
+          expect(isDashboardCompareBy(option)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid compare-by options or non-strings', () => {
+        expect(isDashboardCompareBy('year')).toBe(false);
+        expect(isDashboardCompareBy('REGION')).toBe(false);
+        expect(isDashboardCompareBy('')).toBe(false);
+        expect(isDashboardCompareBy(null as unknown as string)).toBe(false);
+      });
+    });
+
+    describe('isMetricDefinitionStatus', () => {
+      it('returns true for all METRIC_DEFINITION_STATUSES', () => {
+        for (const status of METRIC_DEFINITION_STATUSES) {
+          expect(isMetricDefinitionStatus(status)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid definition statuses or non-strings', () => {
+        expect(isMetricDefinitionStatus('ACTIVE')).toBe(false);
+        expect(isMetricDefinitionStatus('draft')).toBe(false);
+        expect(isMetricDefinitionStatus('')).toBe(false);
+        expect(isMetricDefinitionStatus(123 as unknown as string)).toBe(false);
+      });
     });
   });
 });

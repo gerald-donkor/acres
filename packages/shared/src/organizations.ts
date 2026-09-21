@@ -7,6 +7,22 @@ export const ORGANIZATION_ROLES = [
 
 export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number];
 
+export function isOrganizationRole(role: string): role is OrganizationRole {
+  return (ORGANIZATION_ROLES as readonly string[]).includes(role);
+}
+
+export const INVITATION_ROLES = [
+  "admin",
+  "analyst",
+  "viewer",
+] as const;
+
+export type InvitationRole = (typeof INVITATION_ROLES)[number];
+
+export function isInvitationRole(role: string): role is InvitationRole {
+  return (INVITATION_ROLES as readonly string[]).includes(role);
+}
+
 export const ORGANIZATION_HEADER_NAME = "x-acres-organization-id" as const;
 export type OrganizationHeaderName = typeof ORGANIZATION_HEADER_NAME;
 
@@ -83,7 +99,7 @@ export interface OrganizationInvitation {
   id: string;
   organizationId: string;
   email: string;
-  role: Exclude<OrganizationRole, "owner">;
+  role: InvitationRole;
   invitedByAccountId: string;
   expiresAt: string;
   createdAt: string;
@@ -114,11 +130,11 @@ export interface UpdateOrganizationInput {
 
 export interface InviteMemberInput {
   email: string;
-  role: Exclude<OrganizationRole, "owner">;
+  role: InvitationRole;
 }
 
 export interface ChangeMemberRoleInput {
-  role: Exclude<OrganizationRole, "owner">;
+  role: InvitationRole;
 }
 
 export interface TransferOwnershipInput {

@@ -30,6 +30,12 @@ export const PARSER_EXECUTION_STATUSES = [
 
 export type ParserExecutionStatus = (typeof PARSER_EXECUTION_STATUSES)[number];
 
+export function isParserExecutionStatus(
+  status: string,
+): status is ParserExecutionStatus {
+  return (PARSER_EXECUTION_STATUSES as readonly string[]).includes(status);
+}
+
 /**
  * Fixed parser-producer issue codes (18 distinct literals verified by grep
  * excluding `*.spec.ts` at implementation time). Each literal cites one

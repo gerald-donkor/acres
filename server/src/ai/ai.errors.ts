@@ -1,6 +1,21 @@
 import { HttpStatus } from '@nestjs/common';
 import { ApiException } from '../common/api-exception';
 
+export const AI_ERROR_CODES = [
+  'AI_DISABLED',
+  'AI_UNAVAILABLE',
+  'AI_TIMEOUT',
+  'AI_RATE_LIMITED',
+  'AI_OUTPUT_INVALID',
+  'AI_GROUNDING_REJECTED',
+] as const;
+
+export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
+
+export function isAiErrorCode(code: string): code is AiErrorCode {
+  return (AI_ERROR_CODES as readonly string[]).includes(code);
+}
+
 export class AiDisabledException extends ApiException {
   constructor(message = 'AI draft preview is disabled on this server.') {
     super('AI_DISABLED', message, HttpStatus.FORBIDDEN);

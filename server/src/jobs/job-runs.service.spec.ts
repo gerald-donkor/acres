@@ -1,4 +1,10 @@
-import type { ScheduledJobName } from '@acres/shared';
+import {
+  JOB_RUN_STATUSES,
+  SCHEDULED_JOB_NAMES,
+  isJobRunStatus,
+  isScheduledJobName,
+  type ScheduledJobName,
+} from '@acres/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { MetricsService } from '../metrics/metrics.service';
 import {
@@ -236,6 +242,36 @@ describe('JobRunsService', () => {
           message: null,
         },
       ]);
+    });
+  });
+
+  describe('isJobRunStatus', () => {
+    it('returns true for all JOB_RUN_STATUSES', () => {
+      for (const status of JOB_RUN_STATUSES) {
+        expect(isJobRunStatus(status)).toBe(true);
+      }
+    });
+
+    it('returns false for unknown statuses or non-strings', () => {
+      expect(isJobRunStatus('RUNNING')).toBe(false);
+      expect(isJobRunStatus('pending')).toBe(false);
+      expect(isJobRunStatus('')).toBe(false);
+      expect(isJobRunStatus(null as unknown as string)).toBe(false);
+    });
+  });
+
+  describe('isScheduledJobName', () => {
+    it('returns true for all SCHEDULED_JOB_NAMES', () => {
+      for (const name of SCHEDULED_JOB_NAMES) {
+        expect(isScheduledJobName(name)).toBe(true);
+      }
+    });
+
+    it('returns false for unknown job names or non-strings', () => {
+      expect(isScheduledJobName('sessions.purge')).toBe(false);
+      expect(isScheduledJobName('unknown.job')).toBe(false);
+      expect(isScheduledJobName('')).toBe(false);
+      expect(isScheduledJobName(undefined as unknown as string)).toBe(false);
     });
   });
 });

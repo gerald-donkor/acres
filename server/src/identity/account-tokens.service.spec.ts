@@ -1,3 +1,4 @@
+import { ACCOUNT_TOKEN_PURPOSES, isAccountTokenPurpose } from '@acres/shared';
 import { AccountTokensService } from './account-tokens.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { AcresConfigService } from '../config/acres-config.service';
@@ -92,5 +93,20 @@ describe('AccountTokensService', () => {
     ).resolves.toBeNull();
     expect(tx.accountToken.updateMany).toHaveBeenCalledTimes(2);
     expect(tx.accountToken.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  describe('isAccountTokenPurpose', () => {
+    it('returns true for all ACCOUNT_TOKEN_PURPOSES', () => {
+      for (const purpose of ACCOUNT_TOKEN_PURPOSES) {
+        expect(isAccountTokenPurpose(purpose)).toBe(true);
+      }
+    });
+
+    it('returns false for unknown or invalid purposes', () => {
+      expect(isAccountTokenPurpose('session_refresh')).toBe(false);
+      expect(isAccountTokenPurpose('PASSWORD_RECOVERY')).toBe(false);
+      expect(isAccountTokenPurpose('')).toBe(false);
+      expect(isAccountTokenPurpose(null as unknown as string)).toBe(false);
+    });
   });
 });

@@ -8,6 +8,10 @@ export const JOB_RUN_STATUSES = [
 
 export type JobRunStatus = (typeof JOB_RUN_STATUSES)[number];
 
+export function isJobRunStatus(status: string): status is JobRunStatus {
+  return (JOB_RUN_STATUSES as readonly string[]).includes(status);
+}
+
 export const SCHEDULED_JOB_NAMES = [
   'sessions.purge-expired',
   'uploads.purge-expired',
@@ -17,6 +21,10 @@ export const SCHEDULED_JOB_NAMES = [
 ] as const;
 
 export type ScheduledJobName = (typeof SCHEDULED_JOB_NAMES)[number];
+
+export function isScheduledJobName(name: string): name is ScheduledJobName {
+  return (SCHEDULED_JOB_NAMES as readonly string[]).includes(name);
+}
 
 export interface JobRunSummary {
   id: string;

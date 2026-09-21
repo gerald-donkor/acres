@@ -22,8 +22,18 @@ export function isReportRevisionStatus(
 export const REPORT_EVIDENCE_TYPES = ['aggregate', 'dashboard_view'] as const;
 export type ReportEvidenceType = (typeof REPORT_EVIDENCE_TYPES)[number];
 
+export function isReportEvidenceType(
+  type: string,
+): type is ReportEvidenceType {
+  return (REPORT_EVIDENCE_TYPES as readonly string[]).includes(type);
+}
+
 export const EXPORT_FORMATS = ['csv', 'pdf'] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
+export function isExportFormat(format: string): format is ExportFormat {
+  return (EXPORT_FORMATS as readonly string[]).includes(format);
+}
 
 export const EXPORT_STATUSES = [
   'queued',
@@ -34,6 +44,10 @@ export const EXPORT_STATUSES = [
 ] as const;
 
 export type ExportStatus = (typeof EXPORT_STATUSES)[number];
+
+export function isExportStatus(status: string): status is ExportStatus {
+  return (EXPORT_STATUSES as readonly string[]).includes(status);
+}
 
 export const TERMINAL_EXPORT_STATUSES = [
   'succeeded',

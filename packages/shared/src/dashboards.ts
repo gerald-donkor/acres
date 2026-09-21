@@ -1,6 +1,10 @@
 export const METRIC_VALUE_KINDS = ['numeric', 'text', 'boolean'] as const;
 export type MetricValueKind = (typeof METRIC_VALUE_KINDS)[number];
 
+export function isMetricValueKind(kind: string): kind is MetricValueKind {
+  return (METRIC_VALUE_KINDS as readonly string[]).includes(kind);
+}
+
 export const METRIC_AGGREGATION_TYPES = [
   'sum',
   'avg',
@@ -11,12 +15,30 @@ export const METRIC_AGGREGATION_TYPES = [
 ] as const;
 export type MetricAggregationType = (typeof METRIC_AGGREGATION_TYPES)[number];
 
+export function isMetricAggregationType(
+  type: string,
+): type is MetricAggregationType {
+  return (METRIC_AGGREGATION_TYPES as readonly string[]).includes(type);
+}
+
 export const DASHBOARD_PRESENTATION_CHARTS = ['bar', 'line', 'table'] as const;
 export type DashboardPresentationChart =
   (typeof DASHBOARD_PRESENTATION_CHARTS)[number];
 
+export function isDashboardPresentationChart(
+  chart: string,
+): chart is DashboardPresentationChart {
+  return (DASHBOARD_PRESENTATION_CHARTS as readonly string[]).includes(chart);
+}
+
 export const DASHBOARD_COMPARE_BY_OPTIONS = ['region', 'period'] as const;
 export type DashboardCompareBy = (typeof DASHBOARD_COMPARE_BY_OPTIONS)[number];
+
+export function isDashboardCompareBy(
+  compareBy: string,
+): compareBy is DashboardCompareBy {
+  return (DASHBOARD_COMPARE_BY_OPTIONS as readonly string[]).includes(compareBy);
+}
 
 export const DASHBOARD_VIEW_STATUSES = ['active', 'archived'] as const;
 export type DashboardViewStatus = (typeof DASHBOARD_VIEW_STATUSES)[number];
@@ -30,6 +52,12 @@ export function isDashboardViewStatus(
 export const METRIC_DEFINITION_STATUSES = ['active', 'archived'] as const;
 export type MetricDefinitionStatus =
   (typeof METRIC_DEFINITION_STATUSES)[number];
+
+export function isMetricDefinitionStatus(
+  status: string,
+): status is MetricDefinitionStatus {
+  return (METRIC_DEFINITION_STATUSES as readonly string[]).includes(status);
+}
 
 export type MetricValue = {
   type: MetricValueKind;

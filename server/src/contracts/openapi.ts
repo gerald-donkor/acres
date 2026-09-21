@@ -12,7 +12,12 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { API_ERROR_CODES } from '@acres/shared';
+import {
+  API_ERROR_CODES,
+  INVITATION_ROLES,
+  JOB_RUN_STATUSES,
+  ORGANIZATION_ROLES,
+} from '@acres/shared';
 
 type Schema = Record<string, unknown>;
 
@@ -154,7 +159,7 @@ export const organizationSummarySchema = objectSchema({
   updatedAt: stringSchema('date-time'),
   membership: objectSchema({
     id: stringSchema('uuid'),
-    role: { type: 'string', enum: ['owner', 'admin', 'analyst', 'viewer'] },
+    role: { type: 'string', enum: ORGANIZATION_ROLES },
   }),
 });
 
@@ -163,7 +168,7 @@ export const organizationMemberSchema = objectSchema({
   accountId: stringSchema(),
   email: stringSchema('email'),
   displayName: nullableStringSchema(),
-  role: { type: 'string', enum: ['owner', 'admin', 'analyst', 'viewer'] },
+  role: { type: 'string', enum: ORGANIZATION_ROLES },
   createdAt: stringSchema('date-time'),
   updatedAt: stringSchema('date-time'),
   revokedAt: nullableStringSchema('date-time'),
@@ -173,7 +178,7 @@ export const organizationInvitationSchema = objectSchema({
   id: stringSchema('uuid'),
   organizationId: stringSchema('uuid'),
   email: stringSchema('email'),
-  role: { type: 'string', enum: ['admin', 'analyst', 'viewer'] },
+  role: { type: 'string', enum: INVITATION_ROLES },
   invitedByAccountId: stringSchema(),
   expiresAt: stringSchema('date-time'),
   createdAt: stringSchema('date-time'),
@@ -216,7 +221,7 @@ export const contactReceiptSchema = objectSchema({
 export const jobRunSchema = objectSchema({
   id: stringSchema(),
   jobName: stringSchema(),
-  status: { type: 'string', enum: ['running', 'succeeded', 'failed'] },
+  status: { type: 'string', enum: JOB_RUN_STATUSES },
   startedAt: stringSchema('date-time'),
   finishedAt: nullableStringSchema('date-time'),
   message: nullableStringSchema(),

@@ -1,4 +1,10 @@
 import { Test, type TestingModule } from '@nestjs/testing';
+import {
+  INVITATION_ROLES,
+  ORGANIZATION_ROLES,
+  isInvitationRole,
+  isOrganizationRole,
+} from '@acres/shared';
 import { AcresConfigService } from '../config/acres-config.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { MailService } from '../mail/mail.service';
@@ -1186,6 +1192,38 @@ describe('OrganizationsService', () => {
       ).rejects.toMatchObject({
         status: 400,
         message: 'The cursor is not valid for this connection.',
+      });
+    });
+  });
+
+  describe('shared organization role predicates', () => {
+    describe('isOrganizationRole', () => {
+      it('returns true for all ORGANIZATION_ROLES', () => {
+        for (const role of ORGANIZATION_ROLES) {
+          expect(isOrganizationRole(role)).toBe(true);
+        }
+      });
+
+      it('returns false for invalid roles or non-strings', () => {
+        expect(isOrganizationRole('superadmin')).toBe(false);
+        expect(isOrganizationRole('OWNER')).toBe(false);
+        expect(isOrganizationRole('')).toBe(false);
+        expect(isOrganizationRole(null as unknown as string)).toBe(false);
+      });
+    });
+
+    describe('isInvitationRole', () => {
+      it('returns true for all INVITATION_ROLES', () => {
+        for (const role of INVITATION_ROLES) {
+          expect(isInvitationRole(role)).toBe(true);
+        }
+      });
+
+      it('returns false for owner or invalid roles or non-strings', () => {
+        expect(isInvitationRole('owner')).toBe(false);
+        expect(isInvitationRole('ADMIN')).toBe(false);
+        expect(isInvitationRole('')).toBe(false);
+        expect(isInvitationRole(123 as unknown as string)).toBe(false);
       });
     });
   });

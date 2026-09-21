@@ -418,6 +418,24 @@ The ingestion and geography domain services, acquisition providers, and error mo
 - `server/src/ingestion/ingestion.service.ts` imports and uses canonical shared types (`DatasetState`, `MappingValidationStatus`, `IngestionRunState`, `IngestionRunStage`) across internal summary mappers.
 - `server/src/ingestion/ingestion.service.spec.ts` (30 tests) verifies `IngestionService`: dataset listing, creation via idempotency, fetch, update, version listing, column mapping creation with version incrementing and upload state verification, ingestion run start with deterministic keys and queue dispatch, run lookup, validation issue listing with ISO timestamps, run cancellation, and shared ingestion predicate coverage.
 
+### OpenAPI contracts, AI errors, parser utilities, application setup, and shared predicates
+
+The OpenAPI specifications, domain error models, parser string/cell utilities, application-level HTTP initialization, and remaining shared contracts export canonical tuples, predicates, and isolated unit test suites (prompt 154):
+- `packages/shared/src/api.ts` exports type predicates `isApiErrorCode` and `isNodeEnv`.
+- `packages/shared/src/auth.ts` exports type predicate `isAccountTokenPurpose`.
+- `packages/shared/src/jobs.ts` exports type predicates `isJobRunStatus` and `isScheduledJobName`.
+- `packages/shared/src/reports.ts` exports type predicates `isReportEvidenceType`, `isExportFormat`, and `isExportStatus`.
+- `packages/shared/src/dashboards.ts` exports type predicates `isMetricValueKind`, `isMetricAggregationType`, `isDashboardPresentationChart`, `isDashboardCompareBy`, and `isMetricDefinitionStatus`.
+- `packages/shared/src/organizations.ts` exports canonical tuple `INVITATION_ROLES = ['admin', 'analyst', 'viewer'] as const`, derived union type `InvitationRole`, and type predicates `isOrganizationRole` and `isInvitationRole`.
+- `server/src/ai/ai.errors.ts` exports canonical const tuple `AI_ERROR_CODES`, derived union type `AiErrorCode`, and type predicate `isAiErrorCode`.
+- `server/src/ai/ai.errors.spec.ts` (15 tests) verifies all 6 AI exception classes (`AiDisabledException`, `AiUnavailableException`, `AiTimeoutException`, `AiRateLimitedException`, `AiOutputInvalidException`, `AiGroundingRejectedException`), status codes, default messages, custom messages, details array preservation, and `isAiErrorCode` type predicate coverage.
+- `server/src/ingestion/parsers/parser-utils.ts` exports `FORMULA_AS_DATA_MESSAGE`, `FormulaAsDataMessage`, and type predicate `isFormulaAsDataMessage`.
+- `server/src/ingestion/parsers/parser.types.ts` exports type predicate `isParserExecutionStatus`.
+- `server/src/ingestion/parsers/parser-utils.spec.ts` (26 tests) verifies `normalizeKey` trimming and lowercase character normalization, `safeCell` primitive/truncation/serialization handling, `scalarText` string conversion, `formulaIssue` structure creation, `isFormulaLike` prefix scanning (`=`, `+`, `-`, `@`), `isFormulaAsDataMessage`, and `isParserExecutionStatus`.
+- `server/src/contracts/openapi.ts` refactors `jobRunSchema`, `organizationSummarySchema`, `organizationMemberSchema`, and `organizationInvitationSchema` to bind directly to canonical shared enums (`JOB_RUN_STATUSES`, `ORGANIZATION_ROLES`, `INVITATION_ROLES`).
+- `server/src/contracts/openapi.spec.ts` (21 tests) verifies schema builder utilities (`stringSchema`, `nullableStringSchema`, `booleanLiteralSchema`, `arraySchema`, `objectSchema`), envelopes (`successEnvelope`, `errorEnvelope` with canonical `API_ERROR_CODES`), Swagger decorator factories (`ApiEnvelope`, `ApiSessionAuth`, `ApiCsrfHeader`, `ApiIdempotencyHeader`, `ApiOrganizationHeader`), and model schema structure fidelity.
+- `server/src/app.setup.spec.ts` (12 tests) verifies `configureApp`: global prefix `api` with exclusions (`health`, `metrics`, `graphql`), URI versioning, helmet, CORS allowed origins and headers, cookie parser, request context and CSRF middleware registration, body parser limits (configured from `config.graphqlMaxBytes`), global error envelope interceptor, exception filter, and `ValidationPipe` exception mapping.
+
 ---
 
 ## 5. CSRF — what protects what
