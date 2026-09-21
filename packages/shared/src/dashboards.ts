@@ -1,4 +1,35 @@
-export type MetricValueKind = 'numeric' | 'text' | 'boolean';
+export const METRIC_VALUE_KINDS = ['numeric', 'text', 'boolean'] as const;
+export type MetricValueKind = (typeof METRIC_VALUE_KINDS)[number];
+
+export const METRIC_AGGREGATION_TYPES = [
+  'sum',
+  'avg',
+  'min',
+  'max',
+  'count',
+  'latest',
+] as const;
+export type MetricAggregationType = (typeof METRIC_AGGREGATION_TYPES)[number];
+
+export const DASHBOARD_PRESENTATION_CHARTS = ['bar', 'line', 'table'] as const;
+export type DashboardPresentationChart =
+  (typeof DASHBOARD_PRESENTATION_CHARTS)[number];
+
+export const DASHBOARD_COMPARE_BY_OPTIONS = ['region', 'period'] as const;
+export type DashboardCompareBy = (typeof DASHBOARD_COMPARE_BY_OPTIONS)[number];
+
+export const DASHBOARD_VIEW_STATUSES = ['active', 'archived'] as const;
+export type DashboardViewStatus = (typeof DASHBOARD_VIEW_STATUSES)[number];
+
+export function isDashboardViewStatus(
+  status: string,
+): status is DashboardViewStatus {
+  return (DASHBOARD_VIEW_STATUSES as readonly string[]).includes(status);
+}
+
+export const METRIC_DEFINITION_STATUSES = ['active', 'archived'] as const;
+export type MetricDefinitionStatus =
+  (typeof METRIC_DEFINITION_STATUSES)[number];
 
 export type MetricValue = {
   type: MetricValueKind;
@@ -10,11 +41,11 @@ export type DashboardMetric = {
   key: string;
   label: string;
   description: string | null;
-  valueType: 'numeric' | 'text' | 'boolean';
+  valueType: MetricValueKind;
   canonicalUnit: string;
-  allowedAggregation: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'latest';
+  allowedAggregation: MetricAggregationType;
   calculationVersion: string;
-  status: 'active' | 'archived';
+  status: MetricDefinitionStatus;
   createdAt: string;
   updatedAt: string;
 };
@@ -24,7 +55,7 @@ export type DashboardAggregate = {
   datasetVersionId: string;
   regionId: string;
   metric: DashboardMetric;
-  aggregateType: 'sum' | 'avg' | 'min' | 'max' | 'count' | 'latest';
+  aggregateType: MetricAggregationType;
   periodStart: string;
   periodEnd: string;
   value: MetricValue;
@@ -45,8 +76,8 @@ export type DashboardFilters = {
 };
 
 export type DashboardPresentation = {
-  chart?: 'bar' | 'line' | 'table';
-  compareBy?: 'region' | 'period';
+  chart?: DashboardPresentationChart;
+  compareBy?: DashboardCompareBy;
 };
 
 export type DashboardView = {
@@ -61,7 +92,7 @@ export type DashboardView = {
    */
   schemaVersion: number;
   ownerAccountId: string;
-  status: 'active' | 'archived';
+  status: DashboardViewStatus;
   createdAt: string;
   updatedAt: string;
 };

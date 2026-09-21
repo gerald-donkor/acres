@@ -1,11 +1,30 @@
-export type ReportStatus = 'draft' | 'published' | 'archived';
-export type ReportRevisionStatus =
-  | 'draft'
-  | 'in_review'
-  | 'published'
-  | 'superseded';
-export type ReportEvidenceType = 'aggregate' | 'dashboard_view';
-export type ExportFormat = 'csv' | 'pdf';
+export const REPORT_STATUSES = ['draft', 'published', 'archived'] as const;
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+
+export function isReportStatus(status: string): status is ReportStatus {
+  return (REPORT_STATUSES as readonly string[]).includes(status);
+}
+
+export const REPORT_REVISION_STATUSES = [
+  'draft',
+  'in_review',
+  'published',
+  'superseded',
+] as const;
+export type ReportRevisionStatus = (typeof REPORT_REVISION_STATUSES)[number];
+
+export function isReportRevisionStatus(
+  status: string,
+): status is ReportRevisionStatus {
+  return (REPORT_REVISION_STATUSES as readonly string[]).includes(status);
+}
+
+export const REPORT_EVIDENCE_TYPES = ['aggregate', 'dashboard_view'] as const;
+export type ReportEvidenceType = (typeof REPORT_EVIDENCE_TYPES)[number];
+
+export const EXPORT_FORMATS = ['csv', 'pdf'] as const;
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
 export const EXPORT_STATUSES = [
   'queued',
   'running',

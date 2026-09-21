@@ -381,6 +381,18 @@ The remaining presentation tier REST controllers export canonical lifecycle stat
 - `server/src/reports/reports.controller.spec.ts` (45 tests) verifies `ReportsController`: report and revision lifecycle, review submission, publishing, frozen evidence links, export requests, export status lookup, signed attachment download URLs, and real-time SSE progress observable emission and termination upon terminal export status.
 - `server/src/ingestion/ingestion.controller.spec.ts` (35 tests) verifies `IngestionController`: dataset listing, creation, fetch, update, version listing, column mapping creation, ingestion run start, run status lookup, issue listing, run cancellation, and real-time SSE progress observable emission and termination upon terminal ingestion state.
 
+### Repositories, regions public service, metrics middleware, and canonical shared contracts
+
+The data-access repository tier, the public regions service, and the Prometheus HTTP middleware export canonical shared lifecycle constants, projection helpers, and isolated unit test suites (prompt 151):
+- `packages/shared/src/dashboards.ts` exports canonical const tuples `METRIC_VALUE_KINDS`, `METRIC_AGGREGATION_TYPES`, `DASHBOARD_PRESENTATION_CHARTS`, `DASHBOARD_COMPARE_BY_OPTIONS`, `DASHBOARD_VIEW_STATUSES`, `METRIC_DEFINITION_STATUSES`, derived union types, and the `isDashboardViewStatus` type predicate.
+- `packages/shared/src/reports.ts` exports canonical const tuples `REPORT_STATUSES`, `REPORT_REVISION_STATUSES`, `REPORT_EVIDENCE_TYPES`, `EXPORT_FORMATS`, derived union types, and predicates `isReportStatus` and `isReportRevisionStatus`.
+- `server/src/reports/reports.repository.ts` exports `latestRevisionInclude` helper projection for direct isolated test consumption.
+- `server/src/regions/regions.service.spec.ts` (24 tests) verifies `RegionsService`: public `list()` with `WITH_METRICS` mapping, `listPage` cursor pagination (with/without `afterId`), Prisma error `P2025` mapping to `ApiException.cursorInvalid()`, statement timeout wrapping via raw SQL `set_config('statement_timeout', ..., true)`, `findBySlug(slug)` with not-found 404 mapping, `findBySlugs(slugs)` deduplication and map return.
+- `server/src/dashboards/dashboards.repository.spec.ts` (9 tests) verifies `DashboardsRepository`: `organizationScoped` delegation with 5000ms statement timeout, `listViews` active status filtering and ordering, `findView` lookup and error propagation.
+- `server/src/analytics/analytics.repository.spec.ts` (37 tests) verifies `AnalyticsRepository`: `organizationScoped` delegation with 5000ms statement timeout, `findMetrics` active status filtering and key ordering, `findMetric`, `findObservations` filter permutations (`metricId`, `regionId`, `datasetVersionId`, `dimensionHash`, `periodStart` Date gte, `periodEnd` Date lte, limit defaults), `findAggregates` filter permutations, `findAggregate`, and `findAggregateEvidence` lineage lookups.
+- `server/src/reports/reports.repository.spec.ts` (17 tests) verifies `ReportsRepository`: `organizationScoped` delegation with 5000ms statement timeout, `workerScoped` delegation with 10000ms statement timeout, `listReports` across `all` and `published` visibility modes, `findReport` lookup, `findRevision` with `revisionInclude`, `listExports`, `findExport`, and helper projection functions.
+- `server/src/metrics/metrics.middleware.spec.ts` (16 tests) verifies `MetricsMiddleware`: `/metrics` exact and subpath bypasses without metric recording, active request counter incrementing, duration tracking with `process.hrtime.bigint()`, `finish` and `close` event listeners, idempotent recording on race conditions, and fallback HTTP status code `499` on aborted requests.
+
 ---
 
 ## 5. CSRF — what protects what

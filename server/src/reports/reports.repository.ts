@@ -88,7 +88,7 @@ export function revisionInclude() {
   };
 }
 
-function latestRevisionInclude(visibility: 'all' | 'published' = 'all') {
+export function latestRevisionInclude(visibility: 'all' | 'published' = 'all') {
   return {
     revisions: {
       where:
