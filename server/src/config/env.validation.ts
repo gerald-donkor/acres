@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { NODE_ENVS, type NodeEnv } from '@acres/shared';
 import {
   MAIL_TRANSPORTS,
   type MailTransportKind,
@@ -10,7 +11,7 @@ import {
  * on the first request is harder to diagnose than one that never starts.
  */
 export interface AcresEnv {
-  nodeEnv: 'development' | 'test' | 'production';
+  nodeEnv: NodeEnv;
   isProduction: boolean;
   port: number;
   clientOrigin: string;
@@ -187,11 +188,7 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
   }
 
   const nodeEnv = env.NODE_ENV ?? 'development';
-  if (
-    nodeEnv !== 'development' &&
-    nodeEnv !== 'test' &&
-    nodeEnv !== 'production'
-  ) {
+  if (!NODE_ENVS.includes(nodeEnv as NodeEnv)) {
     throw new Error(
       `NODE_ENV must be development, test or production, received "${nodeEnv}"`,
     );
@@ -202,6 +199,11 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
     throw new Error(
       'SESSION_SECRET is still the placeholder from server/.env.example. ' +
         'Generate one per environment before running in production.',
+    );
+  }
+  if (nodeEnv === 'production' && sessionSecret.length < 32) {
+    throw new Error(
+      'SESSION_SECRET must be at least 32 characters in production.',
     );
   }
   if (sessionSecret.length < 32) {
@@ -298,7 +300,7 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
   const mailFrom = env.MAIL_FROM?.trim() || DEFAULTS.MAIL_FROM;
 
   return {
-    nodeEnv,
+    nodeEnv: nodeEnv as NodeEnv,
     isProduction: nodeEnv === 'production',
     port: positiveInt('PORT', env.PORT ?? DEFAULTS.PORT),
     clientOrigin: env.CLIENT_ORIGIN as string,

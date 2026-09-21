@@ -338,6 +338,24 @@ The HTTP request correlation, mutation idempotency, exception mapping, response 
 - `server/src/common/tokens.spec.ts` (6 tests) verifies `issueRawToken()` 32-byte base64url URL-safety and entropy, and `hashToken()` deterministic 64-character lowercase hexadecimal SHA-256 digests.
 - `server/src/common/transform.spec.ts` (5 tests) verifies `trimValue()` string whitespace trimming and non-string passthrough, and `normaliseEmailValue()` email normalization (lowercase, trim) and non-string passthrough.
 
+### Database transactions, environment configuration, health, forms, and job run foundation
+
+The core persistence, environment parsing, health probing, contact form submission, and scheduled job run tracking subsystems export canonical runtime constants and isolated unit test suites (prompt 148):
+- `packages/shared/src/api.ts` exports canonical `NODE_ENVS` (`['development', 'test', 'production'] as const`) and `NodeEnv`.
+- `server/src/config/env.validation.ts` imports and validates against `NODE_ENVS`, enforcing strict Node environment selection.
+- `server/src/prisma/tenant-transaction.service.ts` exports canonical `TENANT_SESSION_CONFIGS` (`['acres.account_id', 'acres.organization_id', 'acres.invitation_token_hash', 'acres.worker_access'] as const`), `TenantSessionConfig`, `STATEMENT_TIMEOUT_SETTING` (`'statement_timeout' as const`), and `StatementTimeoutSetting`.
+- `server/src/health/health.service.ts` exports canonical `HEALTH_STATUS_OK` (`'ok' as const`), `HealthStatusOk`, `HEALTH_SERVICE_NAME` (`'acres-api' as const`), and `HealthServiceName`.
+- `server/src/prisma/prisma.service.spec.ts` (3 tests) verifies `PrismaService` initialization with Postgres driver adapter, clean lifecycle termination (`onModuleDestroy`, `onApplicationShutdown`), and disconnect error containment.
+- `server/src/prisma/tenant-transaction.service.spec.ts` (18 tests) verifies `TenantTransactionService` transactional isolation across `accountScoped`, `organizationScoped`, `invitationScoped`, and `workerScoped` boundaries, RLS session configuration injection (`set_config`), statement timeout enforcement, and callback error propagation.
+- `server/src/config/env.validation.spec.ts` (43 tests) verifies `validateEnv` required variable presence, default assignment, `NODE_ENV` validation, production session secret length enforcement, integer parsing bounds, boolean conversion, CSV parsing, AI draft configurations, and mail transport selection.
+- `server/src/config/acres-config.service.spec.ts` (80 tests) verifies `AcresConfigService` type-safe delegate reads for all environment properties against NestJS `ConfigService`.
+- `server/src/health/health.service.spec.ts` (5 tests) verifies `HealthService.check()` process liveness and `HealthService.readiness()` dependency probing across Prisma and object storage.
+- `server/src/health/health.controller.spec.ts` (4 tests) verifies `HealthController` liveness delegation and readiness translation into `ApiException.notReady()` upon dependency failure.
+- `server/src/forms/forms.service.spec.ts` (5 tests) verifies `FormsService.recordContact()` persistence, default contact source fallback, optional field handling, and receipt generation.
+- `server/src/forms/forms.controller.spec.ts` (1 test) verifies `FormsController.contact()` DTO delegation and receipt return.
+- `server/src/jobs/job-runs.service.spec.ts` (9 tests) verifies `JobRunsService` run creation (`start`), metric recording, run completion (`finish`), and paginated history retrieval (`listRecent`).
+- `server/src/jobs/jobs.controller.spec.ts` (2 tests) verifies `JobsController.listRuns()` service delegation and summary formatting.
+
 ---
 
 ## 5. CSRF — what protects what
@@ -443,7 +461,7 @@ through a package script, so a container whose entrypoint is
 | `DATABASE_URL`             | **yes**  | —                            | the running API's non-owner `acres_app` connection (§8.1); read by `AcresConfigService`/`PrismaService`                                                                                                        |
 | `DATABASE_MIGRATION_URL`   | no       | falls back to `DATABASE_URL` | owner `acres_migrator` connection. CLI-only — read directly by `server/prisma.config.ts`, never by `AcresConfigService`, so `prisma migrate`/`validate`/`status` never share a connection with the running app |
 | `CLIENT_ORIGIN`            | **yes**  | —                            | CORS origin, credentials enabled                                                                                                                                                                               |
-| `SESSION_SECRET`           | **yes**  | —                            | CSRF HMAC secret. Boot **fails** in production if it is still the `change-me…` placeholder; warns below 32 characters                                                                                          |
+| `SESSION_SECRET`           | **yes**  | —                            | CSRF HMAC secret. Boot **fails** in production if it is still the `change-me…` placeholder or shorter than 32 characters; warns below 32 characters in development/test                                      |
 | `PORT`                     | no       | `3001`                       | never 3000, so it cannot collide with the client                                                                                                                                                               |
 | `SESSION_COOKIE_NAME`      | no       | `acres_session`              |                                                                                                                                                                                                                |
 | `SESSION_TTL_DAYS`         | no       | `30`                         | positive integer                                                                                                                                                                                               |

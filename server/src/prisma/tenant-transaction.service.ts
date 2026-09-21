@@ -2,6 +2,17 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from './prisma.service';
 
+export const TENANT_SESSION_CONFIGS = [
+  'acres.account_id',
+  'acres.organization_id',
+  'acres.invitation_token_hash',
+  'acres.worker_access',
+] as const;
+export type TenantSessionConfig = (typeof TENANT_SESSION_CONFIGS)[number];
+
+export const STATEMENT_TIMEOUT_SETTING = 'statement_timeout' as const;
+export type StatementTimeoutSetting = typeof STATEMENT_TIMEOUT_SETTING;
+
 export type TenantTransactionClient = Prisma.TransactionClient;
 
 export interface TenantTransactionOptions {

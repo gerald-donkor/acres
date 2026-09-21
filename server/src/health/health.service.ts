@@ -5,9 +5,15 @@ import {
   type ObjectStoragePort,
 } from '../storage/storage.port';
 
+export const HEALTH_STATUS_OK = 'ok' as const;
+export type HealthStatusOk = typeof HEALTH_STATUS_OK;
+
+export const HEALTH_SERVICE_NAME = 'acres-api' as const;
+export type HealthServiceName = typeof HEALTH_SERVICE_NAME;
+
 export interface HealthStatus {
-  status: 'ok';
-  service: 'acres-api';
+  status: HealthStatusOk;
+  service: HealthServiceName;
   /** npm sets this when the process is started through a package script. */
   version: string | null;
   uptimeSeconds: number;
@@ -22,8 +28,8 @@ export class HealthService {
 
   check(): HealthStatus {
     return {
-      status: 'ok',
-      service: 'acres-api',
+      status: HEALTH_STATUS_OK,
+      service: HEALTH_SERVICE_NAME,
       version: process.env.npm_package_version ?? null,
       uptimeSeconds: Math.round(process.uptime()),
     };

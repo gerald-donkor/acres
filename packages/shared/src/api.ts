@@ -61,3 +61,6 @@ export type RequestIdHeaderName = typeof REQUEST_ID_HEADER_NAME;
 
 export const IDEMPOTENCY_HEADER_NAME = 'idempotency-key' as const;
 export type IdempotencyHeaderName = typeof IDEMPOTENCY_HEADER_NAME;
+
+export const NODE_ENVS = ['development', 'test', 'production'] as const;
+export type NodeEnv = (typeof NODE_ENVS)[number];
