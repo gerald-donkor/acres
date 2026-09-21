@@ -28,9 +28,9 @@ import {
   stringSchema,
 } from '../contracts/openapi';
 import { CurrentOrganization } from '../organizations/current-organization.decorator';
-import { OrganizationContextGuard } from '../organizations/organization-context.guard';
 import type { OrganizationContext } from '../organizations/organization-context';
-import type { ExportRequest } from '@acres/shared';
+import { OrganizationContextGuard } from '../organizations/organization-context.guard';
+import { isTerminalExportStatus, type ExportRequest } from '@acres/shared';
 import { PermissionGuard } from '../organizations/permission.guard';
 import { RequiresOrganizationPermission } from '../organizations/permissions';
 import { SessionGuard } from '../sessions/session.guard';
@@ -390,5 +390,5 @@ export class ReportsController {
 }
 
 function isExportTerminal(status: ExportRequest['status']): boolean {
-  return ['succeeded', 'failed', 'cancelled'].includes(status);
+  return isTerminalExportStatus(status);
 }

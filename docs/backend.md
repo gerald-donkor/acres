@@ -367,6 +367,20 @@ The presentation tier REST controllers export canonical upload terminal state co
 - `server/src/uploads/uploads.controller.spec.ts` (20 tests) verifies `UploadsController`: upload initiation, completion, status lookup, cancellation, attachment download URL generation, and real-time SSE progress observable emission and termination upon terminal upload states.
 - `server/src/ai/ai-draft.controller.spec.ts` (11 tests) verifies `AiDraftController`: `generateDrafts` parameter forwarding to `AiService`, idempotency key extraction, proposal payload return, and domain/system exception propagation.
 
+### Remaining REST presentation controllers, ingestion terminal states, and export terminal states
+
+The remaining presentation tier REST controllers export canonical lifecycle state constants and comprehensive isolated controller unit test suites (prompt 150), completing 100% unit test coverage across all REST controllers in `@acres/server`:
+- `packages/shared/src/ingestion.ts` exports canonical `INGESTION_RUN_STATES` (`['queued', 'running', 'validation_failed', 'published', 'failed', 'cancelling', 'cancelled'] as const`), `TERMINAL_INGESTION_RUN_STATES` (`['published', 'failed', 'cancelled'] as const`), `TerminalIngestionRunState`, and `isTerminalIngestionRunState` predicate.
+- `server/src/ingestion/ingestion.controller.ts` consumes `isTerminalIngestionRunState` to determine SSE progress stream termination.
+- `packages/shared/src/reports.ts` exports canonical `EXPORT_STATUSES` (`['queued', 'running', 'succeeded', 'failed', 'cancelled'] as const`), `TERMINAL_EXPORT_STATUSES` (`['succeeded', 'failed', 'cancelled'] as const`), `TerminalExportStatus`, and `isTerminalExportStatus` predicate.
+- `server/src/reports/reports.controller.ts` consumes `isTerminalExportStatus` to determine SSE progress stream termination.
+- `server/src/regions/regions.controller.spec.ts` (14 tests) verifies `RegionsController`: public `list()` and `findOne(slug)` endpoints, parameter handling, empty array handling, and exception propagation.
+- `server/src/metrics/metrics.controller.spec.ts` (8 tests) verifies `MetricsController`: version-neutral Prometheus metrics exposition endpoint `GET /metrics`, header setting with `metrics.contentType`, output body streaming, and error handling.
+- `server/src/dashboards/dashboards.controller.spec.ts` (13 tests) verifies `DashboardsController`: list, get, create, update, and soft-archive endpoints, organization context forwarding, optional idempotency key propagation, and exception propagation.
+- `server/src/analytics/analytics.controller.spec.ts` (29 tests) verifies `AnalyticsController`: metric definitions, metric lookup, observation queries, aggregate queries, aggregate lineage evidence queries, query parameter propagation, and error handling.
+- `server/src/reports/reports.controller.spec.ts` (45 tests) verifies `ReportsController`: report and revision lifecycle, review submission, publishing, frozen evidence links, export requests, export status lookup, signed attachment download URLs, and real-time SSE progress observable emission and termination upon terminal export status.
+- `server/src/ingestion/ingestion.controller.spec.ts` (35 tests) verifies `IngestionController`: dataset listing, creation, fetch, update, version listing, column mapping creation, ingestion run start, run status lookup, issue listing, run cancellation, and real-time SSE progress observable emission and termination upon terminal ingestion state.
+
 ---
 
 ## 5. CSRF — what protects what

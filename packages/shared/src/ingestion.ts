@@ -1,11 +1,29 @@
-export type IngestionRunState =
-  | 'queued'
-  | 'running'
-  | 'validation_failed'
-  | 'published'
-  | 'failed'
-  | 'cancelling'
-  | 'cancelled';
+export const INGESTION_RUN_STATES = [
+  'queued',
+  'running',
+  'validation_failed',
+  'published',
+  'failed',
+  'cancelling',
+  'cancelled',
+] as const;
+
+export type IngestionRunState = (typeof INGESTION_RUN_STATES)[number];
+
+export const TERMINAL_INGESTION_RUN_STATES = [
+  'published',
+  'failed',
+  'cancelled',
+] as const;
+
+export type TerminalIngestionRunState =
+  (typeof TERMINAL_INGESTION_RUN_STATES)[number];
+
+export function isTerminalIngestionRunState(
+  state: string,
+): state is TerminalIngestionRunState {
+  return (TERMINAL_INGESTION_RUN_STATES as readonly string[]).includes(state);
+}
 
 export interface IngestionRunSummary {
   readonly id: string;

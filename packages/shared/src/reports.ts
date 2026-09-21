@@ -6,12 +6,30 @@ export type ReportRevisionStatus =
   | 'superseded';
 export type ReportEvidenceType = 'aggregate' | 'dashboard_view';
 export type ExportFormat = 'csv' | 'pdf';
-export type ExportStatus =
-  | 'queued'
-  | 'running'
-  | 'succeeded'
-  | 'failed'
-  | 'cancelled';
+export const EXPORT_STATUSES = [
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+] as const;
+
+export type ExportStatus = (typeof EXPORT_STATUSES)[number];
+
+export const TERMINAL_EXPORT_STATUSES = [
+  'succeeded',
+  'failed',
+  'cancelled',
+] as const;
+
+export type TerminalExportStatus =
+  (typeof TERMINAL_EXPORT_STATUSES)[number];
+
+export function isTerminalExportStatus(
+  status: string,
+): status is TerminalExportStatus {
+  return (TERMINAL_EXPORT_STATUSES as readonly string[]).includes(status);
+}
 
 export type ReportInsightInput = {
   heading: string;
