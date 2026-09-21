@@ -15,6 +15,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { interval, from, type Observable } from 'rxjs';
 import { switchMap, takeWhile } from 'rxjs/operators';
+import { isTerminalUploadState } from '@acres/shared';
 import {
   ApiCsrfHeader,
   ApiEnvelope,
@@ -155,5 +156,5 @@ export class UploadsController {
 }
 
 function terminal(state: UploadState): boolean {
-  return ['accepted', 'rejected', 'cancelled', 'expired'].includes(state);
+  return isTerminalUploadState(state);
 }

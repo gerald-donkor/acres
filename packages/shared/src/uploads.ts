@@ -20,6 +20,21 @@ export const UPLOAD_STATES = [
 
 export type UploadState = (typeof UPLOAD_STATES)[number];
 
+export const TERMINAL_UPLOAD_STATES = [
+  'accepted',
+  'rejected',
+  'cancelled',
+  'expired',
+] as const;
+
+export type TerminalUploadState = (typeof TERMINAL_UPLOAD_STATES)[number];
+
+export function isTerminalUploadState(
+  state: string,
+): state is TerminalUploadState {
+  return (TERMINAL_UPLOAD_STATES as readonly string[]).includes(state);
+}
+
 export interface UploadStatus {
   readonly id: string;
   readonly state: UploadState;

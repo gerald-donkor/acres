@@ -356,6 +356,17 @@ The core persistence, environment parsing, health probing, contact form submissi
 - `server/src/jobs/job-runs.service.spec.ts` (9 tests) verifies `JobRunsService` run creation (`start`), metric recording, run completion (`finish`), and paginated history retrieval (`listRecent`).
 - `server/src/jobs/jobs.controller.spec.ts` (2 tests) verifies `JobsController.listRuns()` service delegation and summary formatting.
 
+### Core REST domain controllers and terminal upload states
+
+The presentation tier REST controllers export canonical upload terminal state constants and isolated controller unit test suites (prompt 149):
+- `packages/shared/src/uploads.ts` exports canonical `TERMINAL_UPLOAD_STATES` (`['accepted', 'rejected', 'cancelled', 'expired'] as const`), `TerminalUploadState`, and `isTerminalUploadState` predicate.
+- `server/src/uploads/uploads.controller.ts` consumes `isTerminalUploadState` to determine SSE progress stream termination.
+- `server/src/auth/auth.controller.spec.ts` (12 tests) verifies `AuthController`: CSRF token issuance with `CSRF_HEADER_NAME`, account registration and login session cookie issuance, password recovery and reset receipts, session revocation (logout) with cookie clearing, and defensive orphan cookie clearing in `session()` when `sessionContext` is absent.
+- `server/src/accounts/accounts.controller.spec.ts` (13 tests) verifies `AccountsController`: `profile` presentation endpoint returning authenticated `AccountProfile` directly without mutation across diverse account fixtures, null display names, and roles.
+- `server/src/organizations/organizations.controller.spec.ts` (28 tests) verifies `OrganizationsController` across all 12 endpoints: organization listing, creation, single lookup, renaming, membership listing, role change, member revocation, ownership transfer, invitation listing, issuance, revocation, and acceptance, including optional idempotency key propagation.
+- `server/src/uploads/uploads.controller.spec.ts` (20 tests) verifies `UploadsController`: upload initiation, completion, status lookup, cancellation, attachment download URL generation, and real-time SSE progress observable emission and termination upon terminal upload states.
+- `server/src/ai/ai-draft.controller.spec.ts` (11 tests) verifies `AiDraftController`: `generateDrafts` parameter forwarding to `AiService`, idempotency key extraction, proposal payload return, and domain/system exception propagation.
+
 ---
 
 ## 5. CSRF — what protects what
@@ -2409,7 +2420,7 @@ The upload and stored object lifecycle states export canonical runtime const tup
 `packages/shared/src/uploads.ts` exports `UPLOAD_STATES` (`['pending_upload', 'completed', 'scanning', 'accepted', 'rejected', 'cancelled', 'expired'] as const`)
 and `STORED_OBJECT_STATES` (`['pending_upload', 'quarantined', 'accepted', 'rejected', 'deleted'] as const`), deriving `UploadState` and `StoredObjectState`.
 `server/src/uploads/uploads.service.ts` imports and re-exports `UploadState`, typing `toStatus()` `state: UploadState` and providing explicit return type
-signatures (`Promise<InitiateUploadResult>`, `Promise<UploadStatus>`, `Promise<UploadDownload>`). `uploads.controller.ts` types `terminal(state: UploadState): boolean`.
+signatures (`Promise<InitiateUploadResult>`, `Promise<UploadStatus>`, `Promise<UploadDownload>`). `packages/shared/src/uploads.ts` further exports `TERMINAL_UPLOAD_STATES` (`['accepted', 'rejected', 'cancelled', 'expired'] as const`), `TerminalUploadState`, and `isTerminalUploadState`, which `uploads.controller.ts` consumes for SSE polling termination (prompt 149).
 `scripts/ops/reconcile-storage-objects.ts` adopts `StoredObjectState`.
 Dedicated isolated unit testing in `server/src/uploads/uploads.service.spec.ts` (24 tests) covers media-type and byte-count boundaries, PUT presigning,
 tenant-scoped and idempotent operations, storage stat and SHA-256 buffer checksum validation, state machine progression and conflict guards, cancellation handling,
