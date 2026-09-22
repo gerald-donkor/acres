@@ -77,6 +77,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://acres_test:acres_test_dev_password@localhost:5432/acres_test?schema=public
         run: npm run analytics:plans
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run client browser acceptance suite
+        run: npm run test:client:e2e
 
   docker:
     name: Build and smoke-test the API image

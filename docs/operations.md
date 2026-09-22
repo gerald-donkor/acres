@@ -384,15 +384,28 @@ CI has `permissions: contents: read` and pins all actions to immutable
 40-character commit SHAs. The `checks` job runs the full lint, typecheck, build,
 contract drift, database role/migration, fail-closed server E2E,
 `npm run geography:plans`, and then the six-query `npm run analytics:plans`
-gate, plus `npm run ops:check`. Both plan steps use the migrated `acres_test`
-database through its non-owner test role; an analytics seed, database, or plan
-failure fails `checks` and prevents the dependent Docker job. The Docker job
-builds the server image and smoke-tests `/health` with `push: false`.
+gate, plus `npm run ops:check`. After the database and plan gates, it installs
+Chromium and its Ubuntu dependencies with the installed Playwright CLI, then
+runs the full `npm run test:client:e2e` suite with one CI worker. Both plan
+steps use the migrated `acres_test` database through its non-owner test role;
+the browser suite uses the migrated `acres` database through `acres_app` and
+starts local Nest and production-built Next servers on 3101 and 3100. Its Next
+web server alone gets `ENABLE_TEST_HARNESS=true`; the route guard remains off
+by default outside that test process. Any plan or browser failure fails
+`checks` and prevents the dependent Docker job. The Docker job builds the
+server image and smoke-tests `/health` with `push: false`.
 
 The local sequence on 2026-09-22 passed server E2E (6 suites, 143 tests),
 geography plans (2/2), and analytics plans (6/6). YAML parsing and step-order
 verification passed. A GitHub-hosted run of the added step is pending; local
 timings do not establish hosted-run performance.
+
+The client browser gate was verified locally on 2026-09-22 against a production
+build and disposable PostGIS: direct Playwright discovery listed 74 tests in
+11 files, and `CI=true npm run test:client:e2e` passed 74/74 with one worker
+in 1.6 minutes. The workflow YAML parsed, the required step order and Docker
+dependency were checked, and lint, typecheck, build, and contract drift checks
+passed. This is local evidence; the new browser gate has not yet run on GitHub.
 
 ## No-AI Production Posture
 
