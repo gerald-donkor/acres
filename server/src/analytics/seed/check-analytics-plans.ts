@@ -16,6 +16,7 @@ import {
 } from './plan-evaluator';
 
 export interface PlanCheckOptions {
+  readonly prisma?: PrismaClient;
   readonly connectionString?: string;
   readonly plan?: DeterministicSeedPlan;
   readonly thresholds?: Partial<PlanEvaluationThresholds>;
@@ -116,12 +117,14 @@ export async function runAnalyticsPlanChecks(
   const connectionString =
     options.connectionString ?? process.env.DATABASE_URL ?? '';
 
-  const prisma = new PrismaClient({
-    adapter: new PrismaPg({
-      connectionString,
-      connectionTimeoutMillis: 5000,
-    }),
-  });
+  const prisma =
+    options.prisma ??
+    new PrismaClient({
+      adapter: new PrismaPg({
+        connectionString,
+        connectionTimeoutMillis: 5000,
+      }),
+    });
 
   try {
     // 1. Probe database reachability
@@ -215,7 +218,11 @@ Seeded Rows: ${summary.observationCount} observations, ${summary.aggregateCount}
   }
 }
 
-async function main() {
+export const analyticsPlanRunner = {
+  run: runAnalyticsPlanChecks,
+};
+
+export async function main(): Promise<void> {
   const isTestEnv =
     process.env.NODE_ENV === 'test' ||
     process.env.ACRES_ALLOW_TEST_SEED === '1';
@@ -234,7 +241,7 @@ async function main() {
 
   console.log('Running deterministic analytics scale seed & plan check...');
   try {
-    const outcome = await runAnalyticsPlanChecks();
+    const outcome = await analyticsPlanRunner.run();
     console.log(outcome.report);
 
     if (!outcome.passed) {

@@ -97,11 +97,13 @@ describe('Dashboards DTOs validation', () => {
     it('accepts partial update in UpdateDashboardViewDto', async () => {
       const result = await transformDto(UpdateDashboardViewDto, {
         name: 'Updated Name',
+        filters: { metricId: validUuid },
         presentation: { chart: 'table' },
       });
       expect(result).toBeInstanceOf(UpdateDashboardViewDto);
       expect(result.name).toBe('Updated Name');
-      expect(result.filters).toBeUndefined();
+      expect(result.filters).toBeInstanceOf(DashboardFiltersDto);
+      expect(result.presentation).toBeInstanceOf(DashboardPresentationDto);
       expect(result.presentation?.chart).toBe('table');
     });
 

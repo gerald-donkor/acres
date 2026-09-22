@@ -256,7 +256,7 @@ describe('JobRunsService', () => {
       expect(isJobRunStatus('RUNNING')).toBe(false);
       expect(isJobRunStatus('pending')).toBe(false);
       expect(isJobRunStatus('')).toBe(false);
-      expect(isJobRunStatus(null as unknown as string)).toBe(false);
+      expect(isJobRunStatus(null)).toBe(false);
     });
   });
 

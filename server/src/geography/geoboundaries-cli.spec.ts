@@ -39,6 +39,10 @@ describe('geoBoundaries CLI', () => {
   let errorSpy: jest.SpyInstance;
   const originalArgv = process.argv;
   const originalExitCode = process.exitCode;
+  const logged = (): string => {
+    const calls = logSpy.mock.calls as unknown[][];
+    return String(calls[0]?.[0]);
+  };
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'acres-geoboundaries-cli-'));
@@ -271,7 +275,7 @@ describe('geoBoundaries CLI', () => {
       '--dry-run',
     ]);
     expect(providerSpy).not.toHaveBeenCalled();
-    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toEqual({
+    expect(JSON.parse(logged())).toEqual({
       outcome: 'dry-run',
       selections: [{ countryCode: 'GHA', level: 'ADM0' }],
       workdir: directory,
@@ -285,7 +289,7 @@ describe('geoBoundaries CLI', () => {
       artifactPath: join(directory, 'GHA-ADM0.geojson'),
     });
     await acquire(['--workdir', directory, '--select', 'GHA/ADM0']);
-    const output = JSON.parse(String(logSpy.mock.calls[0][0])) as {
+    const output = JSON.parse(logged()) as {
       outcome: string;
       manifest: string;
     };
@@ -333,7 +337,7 @@ describe('geoBoundaries CLI', () => {
       outputPath,
     ];
     await reviewHierarchy([...args, '--dry-run']);
-    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+    expect(JSON.parse(logged())).toMatchObject({
       outcome: 'dry-run',
       assignmentCount: 1,
     });
@@ -341,7 +345,7 @@ describe('geoBoundaries CLI', () => {
 
     logSpy.mockClear();
     await reviewHierarchy(args);
-    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+    expect(JSON.parse(logged())).toMatchObject({
       outcome: 'reviewed',
       reviewedLayers: [{ country: 'GHA', level: 'ADM2', assignments: 1 }],
     });
@@ -445,13 +449,13 @@ describe('geoBoundaries CLI', () => {
     });
     expect(importLayers).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ features: expect.any(Array) }),
+        expect.objectContaining({ features: expect.any(Array) as unknown }),
       ]),
       expect.any(String),
       true,
     );
     expect(close).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+    expect(JSON.parse(logged())).toMatchObject({
       outcome: 'dry-run',
       sourceVersion: 'gbOpen-test',
       regions: 1,
@@ -497,7 +501,7 @@ describe('geoBoundaries CLI', () => {
       '--dry-run',
     ];
     await main();
-    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+    expect(JSON.parse(logged())).toMatchObject({
       outcome: 'dry-run',
     });
     process.exitCode = undefined;
@@ -545,7 +549,7 @@ describe('geoBoundaries CLI', () => {
       '--dry-run',
     ];
     await main();
-    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toMatchObject({
+    expect(JSON.parse(logged())).toMatchObject({
       outcome: 'dry-run',
       assignmentCount: 1,
     });
@@ -572,7 +576,7 @@ describe('geoBoundaries CLI', () => {
       manifestPath,
     ];
     await main();
-    expect(JSON.parse(String(logSpy.mock.calls[0][0]))).toEqual({
+    expect(JSON.parse(logged())).toEqual({
       outcome: 'imported',
       sourceVersion: 'gbOpen-live',
       regions: 3,
@@ -628,6 +632,8 @@ describe('geoBoundaries CLI', () => {
         ...actual,
         GeoBoundariesProvider: class {
           acquire(): Promise<never> {
+            // A non-Error rejection exercises the CLI entrypoint sanitizer.
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
             return Promise.reject('provider unavailable');
           }
         },

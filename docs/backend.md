@@ -2861,3 +2861,62 @@ detached-`tsc --showConfig` output-capture limitation, while standalone
 initial sandboxed E2E attempt likewise could not bind a Supertest port or reach
 local PostgreSQL/PostGIS; the host rerun passed all six suites. Neither
 environmental retry changed code.
+
+## 22. Contract, plan-check, GraphQL, and seed unit-test hardening
+
+Prompt 158 exposes the contract generator's output directory, writer, and CLI
+entrypoint for isolated tests. `assertNoDrift` now reports absent generated or
+checked-in files as named contract drift; other filesystem errors still propagate.
+The tests cover matching, changed, and missing files, OpenAPI and GraphQL file
+generation, both CLI modes, and temporary-directory cleanup on success and
+failure.
+
+The geography and analytics plan-check runners accept an injected Prisma client
+for isolated tests, and their CLI entrypoints are callable from tests. Coverage
+includes connection and migration failures, password redaction, seed and cleanup
+calls, the `ANALYZE` statements, tenant session context, `EXPLAIN` SQL and
+parameters, report outcomes, and exit behavior. The deterministic analytics
+seed tests pin all 15 cleanup model groups in dependency order, tenant session
+configuration, and all created entity groups.
+
+GraphQL type tests exercise every exported object type and pin the resolved field
+type, list shape, item nullability, and list nullability in a reviewed snapshot.
+The prompt's initial inventory named report, export, AI, and generic analytics
+connection classes that this file does not export; the prompt was corrected to
+the actual exports. Additional isolated tests cover account token revocation,
+AI draft malformed output, XLSX inspection, and nested DTO transformation.
+Three previously committed test files received type-safe lint fixes needed for
+the root lint gate; their test behavior is unchanged.
+
+Verification on 2026-09-22:
+
+```text
+npm run contracts:check
+exit 0
+
+npm run lint
+exit 0
+
+npm run typecheck
+exit 0
+
+npm run build
+shared, Next production, and Nest production builds passed (host run)
+
+npm run test --workspace=@acres/server -- --runInBand
+Test Suites: 119 passed, 119 total
+Tests:       1831 passed, 1831 total
+
+npm run test:server
+Test Suites: 6 passed, 6 total
+Tests:       143 passed, 143 total
+
+Targeted coverage (seven server files): 97.78% statements, 97.36% functions;
+graphql.types.ts: 100% statements, branches, functions, and lines.
+```
+
+The first host E2E attempt ran while the existing PostgreSQL container was
+starting and failed its database suites. After the container reported healthy,
+the unchanged suite passed. A concurrent contract build briefly removed the
+compiled parser child artifact during a unit run; the final unit verification
+was rerun after build completion.

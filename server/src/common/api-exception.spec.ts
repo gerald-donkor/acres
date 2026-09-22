@@ -149,7 +149,7 @@ describe('ApiException', () => {
       expect(isApiErrorCode('UNKNOWN_CODE')).toBe(false);
       expect(isApiErrorCode('validation_failed')).toBe(false);
       expect(isApiErrorCode('')).toBe(false);
-      expect(isApiErrorCode(123 as unknown as string)).toBe(false);
+      expect(isApiErrorCode(123)).toBe(false);
     });
   });
 

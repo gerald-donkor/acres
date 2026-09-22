@@ -1,34 +1,69 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { GraphQLSchemaHost } from '@nestjs/graphql';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { lexicographicSortSchema, printSchema } from 'graphql';
 
 const REPO_ROOT = resolve(__dirname, '../../..');
-const CONTRACT_DIR = resolve(REPO_ROOT, 'docs/api');
+export const CONTRACT_DIR = resolve(REPO_ROOT, 'docs/api');
 
-async function main(): Promise<void> {
+export interface GenerateContractsOptions {
+  readonly outDir?: string;
+  readonly check?: boolean;
+  readonly writer?: (outDir: string) => Promise<void>;
+  readonly asserter?: (tempDir: string) => Promise<void>;
+}
+
+export async function runContractGeneration(
+  options: GenerateContractsOptions = {},
+): Promise<void> {
   ensureContractEnv();
-  const check = process.argv.includes('--check');
-  const outDir = check
-    ? await mkdtemp(join(tmpdir(), 'acres-contracts-'))
-    : CONTRACT_DIR;
+  const check = options.check ?? process.argv.includes('--check');
+  const writer = options.writer ?? writeContracts;
+  const asserter = options.asserter ?? assertNoDrift;
+  const outDir =
+    options.outDir ??
+    (check ? await mkdtemp(join(tmpdir(), 'acres-contracts-')) : CONTRACT_DIR);
   try {
     await mkdir(outDir, { recursive: true });
-    await writeContracts(outDir);
-    if (check) await assertNoDrift(outDir);
+    await writer(outDir);
+    if (check) await asserter(outDir);
   } finally {
-    if (check) await rm(outDir, { recursive: true, force: true });
+    if (check && !options.outDir) {
+      await rm(outDir, { recursive: true, force: true });
+    }
   }
 }
 
-async function writeContracts(outDir: string): Promise<void> {
+export const contractRunner = {
+  run: runContractGeneration,
+};
+
+export async function main(): Promise<void> {
+  await contractRunner.run();
+}
+
+export interface AppModules {
+  readonly AppModule: Parameters<typeof NestFactory.create>[0];
+  readonly configureApp: (app: INestApplication) => void;
+}
+
+export async function defaultAppLoader(): Promise<AppModules> {
   const [{ AppModule }, { configureApp }] = await Promise.all([
     import('../app.module.js'),
     import('../app.setup.js'),
   ]);
+  return { AppModule, configureApp };
+}
+
+export async function writeContracts(
+  outDir: string,
+  appLoader: () => Promise<AppModules> = defaultAppLoader,
+): Promise<void> {
+  const { AppModule, configureApp } = await appLoader();
   const app = await NestFactory.create(AppModule, {
     bodyParser: false,
     logger: false,
@@ -114,9 +149,14 @@ export async function assertNoDrift(tempDir: string): Promise<void> {
   const files = ['openapi.json', 'schema.graphql', 'contracts.md'];
   const drifted: string[] = [];
   for (const file of files) {
-    const expected = await readFile(join(CONTRACT_DIR, file), 'utf8');
-    const actual = await readFile(join(tempDir, file), 'utf8');
-    if (expected !== actual) drifted.push(file);
+    try {
+      const expected = await readFile(join(CONTRACT_DIR, file), 'utf8');
+      const actual = await readFile(join(tempDir, file), 'utf8');
+      if (expected !== actual) drifted.push(file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      drifted.push(file);
+    }
   }
   if (drifted.length > 0) {
     throw new Error(`Contract drift detected: ${drifted.join(', ')}`);

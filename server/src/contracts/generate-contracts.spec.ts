@@ -1,3 +1,11 @@
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { INestApplication } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { SwaggerModule } from '@nestjs/swagger';
+import { buildSchema } from 'graphql';
+import * as genModule from './generate-contracts';
 import {
   contractsMarkdown,
   ensureContractEnv,
@@ -108,6 +116,183 @@ describe('generate-contracts', () => {
       expect(markdown).toContain('# Acres API contracts');
       expect(markdown).toContain('## REST');
       expect(markdown).toContain('## GraphQL');
+    });
+  });
+
+  describe('assertNoDrift', () => {
+    it('resolves without error when temp directory files match CONTRACT_DIR', async () => {
+      await expect(
+        genModule.assertNoDrift(genModule.CONTRACT_DIR),
+      ).resolves.toBeUndefined();
+    });
+
+    it('throws error when contract files differ or are missing', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'test-drift-'));
+      try {
+        await writeFile(
+          join(tempDir, 'openapi.json'),
+          '{"differs": true}',
+          'utf8',
+        );
+        await writeFile(
+          join(tempDir, 'schema.graphql'),
+          'type Differs { id: ID }',
+          'utf8',
+        );
+        await writeFile(join(tempDir, 'contracts.md'), '# Differs', 'utf8');
+
+        await expect(genModule.assertNoDrift(tempDir)).rejects.toThrow(
+          /Contract drift detected: openapi\.json, schema\.graphql, contracts\.md/,
+        );
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('reports a missing generated file as contract drift', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'test-missing-contract-'));
+      try {
+        await writeFile(
+          join(tempDir, 'openapi.json'),
+          await readFile(join(genModule.CONTRACT_DIR, 'openapi.json'), 'utf8'),
+        );
+        await writeFile(
+          join(tempDir, 'contracts.md'),
+          await readFile(join(genModule.CONTRACT_DIR, 'contracts.md'), 'utf8'),
+        );
+        await expect(genModule.assertNoDrift(tempDir)).rejects.toThrow(
+          'Contract drift detected: schema.graphql',
+        );
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('writeContracts', () => {
+    it('generates openapi, graphql schema, and contracts.md in target directory', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'test-write-contracts-'));
+      const mockSchema = buildSchema('type Query { version: String! }');
+      const mockApp = {
+        init: jest.fn().mockResolvedValue(undefined),
+        close: jest.fn().mockResolvedValue(undefined),
+        get: jest.fn().mockReturnValue({ schema: mockSchema }),
+      };
+      jest
+        .spyOn(NestFactory, 'create')
+        .mockResolvedValue(mockApp as unknown as INestApplication);
+      const mockOpenApiDoc = {
+        openapi: '3.0.0',
+        info: { title: 'Acres API', version: '1.0.0' },
+        paths: {},
+        servers: [{ url: 'http://localhost' }],
+      };
+      jest
+        .spyOn(SwaggerModule, 'createDocument')
+        .mockReturnValue(mockOpenApiDoc);
+
+      try {
+        const configureApp = jest.fn();
+        await genModule.writeContracts(tempDir, () =>
+          Promise.resolve({
+            AppModule: class DummyModule {},
+            configureApp,
+          }),
+        );
+
+        expect(configureApp).toHaveBeenCalledWith(mockApp);
+        expect(mockApp.init).toHaveBeenCalled();
+        expect(mockApp.close).toHaveBeenCalled();
+
+        const [openapi, schema, contracts] = await Promise.all([
+          readFile(join(tempDir, 'openapi.json'), 'utf8'),
+          readFile(join(tempDir, 'schema.graphql'), 'utf8'),
+          readFile(join(tempDir, 'contracts.md'), 'utf8'),
+        ]);
+
+        const parsedOpenApi = JSON.parse(openapi) as Record<string, unknown>;
+        expect(parsedOpenApi).toHaveProperty('openapi', '3.0.0');
+        expect(parsedOpenApi).not.toHaveProperty('servers');
+        expect(schema).toContain('type Query');
+        expect(contracts).toContain('# Acres API contracts');
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('runContractGeneration & main', () => {
+    const originalArgv = [...process.argv];
+
+    afterEach(() => {
+      process.argv = [...originalArgv];
+      jest.restoreAllMocks();
+    });
+
+    it('executes in --check mode with temporary directory creation and verification', async () => {
+      let generatedDir = '';
+      const writer = jest.fn(async (outDir: string) => {
+        generatedDir = outDir;
+        expect((await stat(outDir)).isDirectory()).toBe(true);
+      });
+      const asserter = jest.fn(async (outDir: string) => {
+        expect(outDir).toBe(generatedDir);
+        expect((await stat(outDir)).isDirectory()).toBe(true);
+      });
+
+      await genModule.runContractGeneration({
+        check: true,
+        writer,
+        asserter,
+      });
+
+      expect(writer).toHaveBeenCalledWith(
+        expect.stringContaining('acres-contracts-'),
+      );
+      expect(asserter).toHaveBeenCalled();
+      await expect(stat(generatedDir)).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    });
+
+    it('removes the temporary directory when drift verification fails', async () => {
+      let generatedDir = '';
+      const writer = jest.fn((outDir: string) => {
+        generatedDir = outDir;
+        return Promise.resolve();
+      });
+      const asserter = jest.fn(() => Promise.reject(new Error('drift')));
+
+      await expect(
+        genModule.runContractGeneration({ check: true, writer, asserter }),
+      ).rejects.toThrow('drift');
+      await expect(stat(generatedDir)).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    });
+
+    it('executes standard generation writing directly to CONTRACT_DIR', async () => {
+      const writer = jest.fn().mockResolvedValue(undefined);
+      const asserter = jest.fn().mockResolvedValue(undefined);
+
+      await genModule.runContractGeneration({
+        check: false,
+        writer,
+        asserter,
+      });
+
+      expect(writer).toHaveBeenCalledWith(genModule.CONTRACT_DIR);
+      expect(asserter).not.toHaveBeenCalled();
+    });
+
+    it('main delegates to runContractGeneration', async () => {
+      process.argv = ['node', 'generate-contracts.js', '--check'];
+      const spy = jest
+        .spyOn(genModule.contractRunner, 'run')
+        .mockResolvedValue(undefined);
+
+      await expect(genModule.main()).resolves.toBeUndefined();
+      expect(spy).toHaveBeenCalled();
     });
   });
 });

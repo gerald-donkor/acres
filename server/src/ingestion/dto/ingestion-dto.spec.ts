@@ -51,11 +51,14 @@ describe('Ingestion DTOs validation', () => {
 
     it('accepts partial update in UpdateDatasetDto', async () => {
       const result = await transformDto(UpdateDatasetDto, {
+        name: 'Updated Name',
         description: 'Updated description',
+        sourceMetadata: { updated: true },
       });
       expect(result).toBeInstanceOf(UpdateDatasetDto);
-      expect(result.name).toBeUndefined();
+      expect(result.name).toBe('Updated Name');
       expect(result.description).toBe('Updated description');
+      expect(result.sourceMetadata).toEqual({ updated: true });
     });
 
     it('rejects non-object sourceMetadata', async () => {

@@ -13,6 +13,7 @@ import {
 } from '../../analytics/seed/plan-evaluator';
 
 export interface GeographyPlanCheckOptions {
+  readonly prisma?: PrismaClient;
   readonly connectionString?: string;
   readonly gridDimension?: number;
   readonly thresholds?: Partial<PlanEvaluationThresholds>;
@@ -96,12 +97,14 @@ export async function runGeographyPlanChecks(
   const connectionString =
     options.connectionString ?? process.env.DATABASE_URL ?? '';
 
-  const prisma = new PrismaClient({
-    adapter: new PrismaPg({
-      connectionString,
-      connectionTimeoutMillis: 5000,
-    }),
-  });
+  const prisma =
+    options.prisma ??
+    new PrismaClient({
+      adapter: new PrismaPg({
+        connectionString,
+        connectionTimeoutMillis: 5000,
+      }),
+    });
 
   let summary: GeographySeedSummary | undefined;
   let outcome: GeographyPlanCheckOutcome | undefined;
@@ -200,7 +203,11 @@ Seeded Rows: ${summary.geometryCount} geometries across ${summary.regionCount} r
   return outcome;
 }
 
-async function main() {
+export const geographyPlanRunner = {
+  run: runGeographyPlanChecks,
+};
+
+export async function main(): Promise<void> {
   const isTestEnv =
     process.env.NODE_ENV === 'test' ||
     process.env.ACRES_ALLOW_TEST_SEED === '1';
@@ -221,7 +228,7 @@ async function main() {
     'Running deterministic geography scale seed & PostGIS plan check...',
   );
   try {
-    const outcome = await runGeographyPlanChecks();
+    const outcome = await geographyPlanRunner.run();
     console.log(outcome.report);
 
     if (!outcome.passed) {

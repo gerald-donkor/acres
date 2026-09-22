@@ -95,6 +95,66 @@ describe('AccountTokensService', () => {
     expect(tx.accountToken.findUnique).toHaveBeenCalledTimes(1);
   });
 
+  it('returns null when token row is not found despite update count claim', async () => {
+    const tx = {
+      accountToken: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn((callback: (arg: typeof tx) => unknown) =>
+        callback(tx),
+      ),
+    };
+    const service = serviceWith(prisma as unknown as Partial<PrismaService>);
+
+    await expect(
+      service.consume('ghost-token', 'password_recovery'),
+    ).resolves.toBeNull();
+    expect(tx.accountToken.findUnique).toHaveBeenCalled();
+  });
+
+  describe('revoke', () => {
+    it('revokes matching tokens and returns the updated count', async () => {
+      const prisma = {
+        accountToken: {
+          updateMany: jest.fn().mockResolvedValue({ count: 3 }),
+        },
+      };
+      const service = serviceWith(prisma as unknown as Partial<PrismaService>);
+
+      const revokedCount = await service.revoke('acc-1', 'password_recovery');
+      expect(revokedCount).toBe(3);
+      const calls = prisma.accountToken.updateMany.mock.calls as unknown as [
+        [{ data: { revokedAt: Date } }],
+      ];
+      const call = calls[0][0];
+      expect(call.data.revokedAt).toBeInstanceOf(Date);
+      expect(prisma.accountToken.updateMany).toHaveBeenCalledWith({
+        where: {
+          accountId: 'acc-1',
+          purpose: 'password_recovery',
+          consumedAt: null,
+          revokedAt: null,
+        },
+        data: { revokedAt: call.data.revokedAt },
+      });
+    });
+
+    it('returns 0 when updateMany result count is undefined', async () => {
+      const prisma = {
+        accountToken: {
+          updateMany: jest.fn().mockResolvedValue(null),
+        },
+      };
+      const service = serviceWith(prisma as unknown as Partial<PrismaService>);
+
+      const revokedCount = await service.revoke('acc-1', 'password_recovery');
+      expect(revokedCount).toBe(0);
+    });
+  });
+
   describe('isAccountTokenPurpose', () => {
     it('returns true for all ACCOUNT_TOKEN_PURPOSES', () => {
       for (const purpose of ACCOUNT_TOKEN_PURPOSES) {
@@ -106,7 +166,7 @@ describe('AccountTokensService', () => {
       expect(isAccountTokenPurpose('session_refresh')).toBe(false);
       expect(isAccountTokenPurpose('PASSWORD_RECOVERY')).toBe(false);
       expect(isAccountTokenPurpose('')).toBe(false);
-      expect(isAccountTokenPurpose(null as unknown as string)).toBe(false);
+      expect(isAccountTokenPurpose(null)).toBe(false);
     });
   });
 });

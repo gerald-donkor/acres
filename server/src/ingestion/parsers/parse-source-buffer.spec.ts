@@ -123,4 +123,35 @@ describe('parseSourceBuffer parser_exception sanitization', () => {
       executor.onApplicationShutdown();
     }
   });
+
+  it('parses valid XLSX spreadsheet buffers or reports container issues', async () => {
+    // Valid minimal XLSX or invalid buffer for xlsx mediaType
+    const summary = await parseSourceBuffer(
+      Buffer.from('not-a-valid-zip-xlsx'),
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      limits,
+    );
+    expect(summary.sourceKind).toBe('xlsx');
+    expect(summary.issues.length).toBeGreaterThan(0);
+  });
+
+  it('parses GeoJSON buffers through GeojsonSourceParser', async () => {
+    const summary = await parseSourceBuffer(
+      Buffer.from(JSON.stringify({ type: 'FeatureCollection', features: [] })),
+      'application/geo+json',
+      limits,
+    );
+    expect(summary.sourceKind).toBe('geojson');
+    expect(summary.rowCount).toBe(0);
+  });
+
+  it('handles unknown media types safely with zero counts', async () => {
+    const summary = await parseSourceBuffer(
+      Buffer.from('raw binary data'),
+      'application/octet-stream',
+      limits,
+    );
+    expect(summary.rowCount).toBe(0);
+    expect(summary.columnCount).toBe(0);
+  });
 });

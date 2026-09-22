@@ -1,7 +1,10 @@
 import {
   buildDeterministicSeedPlan,
+  cleanScaleSeed,
   deterministicUuid,
+  seedAnalyticsScale,
 } from './analytics-scale-seed';
+import type { PrismaClient } from '../../generated/prisma/client';
 
 describe('analytics-scale-seed', () => {
   describe('deterministicUuid', () => {
@@ -102,6 +105,187 @@ describe('analytics-scale-seed', () => {
         expect(observationIds.has(lin.observationId)).toBe(true);
         expect(datasetVersionIds.has(lin.datasetVersionId)).toBe(true);
       }
+    });
+  });
+
+  describe('cleanScaleSeed & seedAnalyticsScale', () => {
+    const createMockTx = () => ({
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      dashboardView: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      metricAggregateLineage: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      metricAggregate: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      observationQuality: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      metricObservation: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      metricDefinition: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      datasetVersion: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      columnMapping: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      dataset: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      upload: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      storedObject: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      membership: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      organization: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      account: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+      region: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        create: jest.fn().mockResolvedValue({}),
+      },
+    });
+
+    it('cleanScaleSeed sets session configs and deletes records across models', async () => {
+      const mockTx = createMockTx();
+      const mockPrisma = {
+        $transaction: jest
+          .fn()
+          .mockImplementation(
+            (callback: (tx: typeof mockTx) => Promise<unknown>) =>
+              callback(mockTx),
+          ),
+      };
+
+      const plan = buildDeterministicSeedPlan();
+      await cleanScaleSeed(mockPrisma as unknown as PrismaClient, plan);
+
+      const sqlCalls = mockTx.$executeRaw.mock.calls as unknown as Array<
+        [TemplateStringsArray, ...unknown[]]
+      >;
+      expect(sqlCalls[0][0].join(' ')).toContain('acres.account_id');
+      expect(sqlCalls[0][0].join(' ')).toContain('acres.worker_access');
+      expect(sqlCalls[0][0].join(' ')).toContain('acres.organization_id');
+      expect(sqlCalls[0].slice(1)).toEqual([plan.accounts[0].id]);
+      expect(sqlCalls.slice(1).map((call) => call.slice(1))).toEqual(
+        plan.organizations.map((org) => [org.id]),
+      );
+
+      const deleteOrder = [
+        mockTx.dashboardView.deleteMany,
+        mockTx.metricAggregateLineage.deleteMany,
+        mockTx.metricAggregate.deleteMany,
+        mockTx.observationQuality.deleteMany,
+        mockTx.metricObservation.deleteMany,
+        mockTx.metricDefinition.deleteMany,
+        mockTx.datasetVersion.deleteMany,
+        mockTx.columnMapping.deleteMany,
+        mockTx.dataset.deleteMany,
+        mockTx.upload.deleteMany,
+        mockTx.storedObject.deleteMany,
+        mockTx.membership.deleteMany,
+        mockTx.organization.deleteMany,
+        mockTx.account.deleteMany,
+        mockTx.region.deleteMany,
+      ];
+      expect(mockTx.dashboardView.deleteMany).toHaveBeenCalledTimes(
+        plan.organizations.length,
+      );
+      for (const deletion of deleteOrder) {
+        expect(deletion).toHaveBeenCalled();
+      }
+      expect(
+        deleteOrder.map((deletion) => deletion.mock.invocationCallOrder[0]),
+      ).toEqual(
+        [
+          ...deleteOrder.map(
+            (deletion) => deletion.mock.invocationCallOrder[0],
+          ),
+        ].sort((left, right) => left - right),
+      );
+      expect(mockTx.region.deleteMany).toHaveBeenCalledWith({
+        where: { slug: { in: plan.regions.map((region) => region.slug) } },
+      });
+    });
+
+    it('seedAnalyticsScale runs cleanScaleSeed and creates all plan entities', async () => {
+      const mockTx = createMockTx();
+      const mockPrisma = {
+        $transaction: jest
+          .fn()
+          .mockImplementation(
+            (callback: (tx: typeof mockTx) => Promise<unknown>) =>
+              callback(mockTx),
+          ),
+      };
+
+      const plan = buildDeterministicSeedPlan();
+      const summary = await seedAnalyticsScale(
+        mockPrisma as unknown as PrismaClient,
+        plan,
+      );
+
+      expect(summary.organizationCount).toBe(plan.organizations.length);
+      expect(summary.accountCount).toBe(plan.accounts.length);
+      expect(summary.observationCount).toBe(plan.metricObservations.length);
+      expect(summary.aggregateCount).toBe(plan.metricAggregates.length);
+      expect(summary.sampleIds).toBeDefined();
+
+      const createCalls = [
+        [mockTx.account.create, plan.accounts.length],
+        [mockTx.organization.create, plan.organizations.length],
+        [mockTx.membership.create, plan.memberships.length],
+        [mockTx.region.create, plan.regions.length],
+        [mockTx.storedObject.create, plan.storedObjects.length],
+        [mockTx.upload.create, plan.uploads.length],
+        [mockTx.dataset.create, plan.datasets.length],
+        [mockTx.columnMapping.create, plan.columnMappings.length],
+        [mockTx.datasetVersion.create, plan.datasetVersions.length],
+        [mockTx.metricDefinition.create, plan.metricDefinitions.length],
+        [mockTx.dashboardView.create, plan.dashboardViews.length],
+      ] as const;
+      for (const [create, count] of createCalls) {
+        expect(create).toHaveBeenCalledTimes(count);
+      }
+      expect(mockTx.metricObservation.createMany).toHaveBeenCalledWith({
+        data: plan.metricObservations,
+      });
+      expect(mockTx.observationQuality.createMany).toHaveBeenCalledWith({
+        data: plan.observationQualities,
+      });
+      expect(mockTx.metricAggregate.createMany).toHaveBeenCalledWith({
+        data: plan.metricAggregates,
+      });
+      expect(mockTx.metricAggregateLineage.createMany).toHaveBeenCalledWith({
+        data: plan.metricAggregateLineages,
+      });
     });
   });
 });
