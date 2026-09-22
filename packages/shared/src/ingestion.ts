@@ -10,6 +10,12 @@ export const INGESTION_RUN_STATES = [
 
 export type IngestionRunState = (typeof INGESTION_RUN_STATES)[number];
 
+export function isIngestionRunState(
+  state: string,
+): state is IngestionRunState {
+  return (INGESTION_RUN_STATES as readonly string[]).includes(state);
+}
+
 export const TERMINAL_INGESTION_RUN_STATES = [
   'published',
   'failed',

@@ -152,15 +152,24 @@ export type Report = {
   aiDraftEnabled?: boolean;
 };
 
-export type AiGenerationState =
-  | 'succeeded'
-  | 'validation_rejected'
-  | 'rate_limited'
-  | 'timeout'
-  | 'unavailable'
-  | 'malformed_output'
-  | 'grounding_rejected'
-  | 'failed';
+export const AI_GENERATION_STATES = [
+  'succeeded',
+  'validation_rejected',
+  'rate_limited',
+  'timeout',
+  'unavailable',
+  'malformed_output',
+  'grounding_rejected',
+  'failed',
+] as const;
+
+export type AiGenerationState = (typeof AI_GENERATION_STATES)[number];
+
+export function isAiGenerationState(
+  state: string,
+): state is AiGenerationState {
+  return (AI_GENERATION_STATES as readonly string[]).includes(state);
+}
 
 export type AiDraftProposal = {
   heading: string;

@@ -8,6 +8,12 @@ export const STORED_OBJECT_STATES = [
 
 export type StoredObjectState = (typeof STORED_OBJECT_STATES)[number];
 
+export function isStoredObjectState(
+  state: string,
+): state is StoredObjectState {
+  return (STORED_OBJECT_STATES as readonly string[]).includes(state);
+}
+
 export const UPLOAD_STATES = [
   'pending_upload',
   'completed',
@@ -19,6 +25,10 @@ export const UPLOAD_STATES = [
 ] as const;
 
 export type UploadState = (typeof UPLOAD_STATES)[number];
+
+export function isUploadState(state: string): state is UploadState {
+  return (UPLOAD_STATES as readonly string[]).includes(state);
+}
 
 export const TERMINAL_UPLOAD_STATES = [
   'accepted',

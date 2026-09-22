@@ -105,7 +105,7 @@ function reject(code: string, message: string, requestId: string): never {
   });
 }
 
-function countOperation(input: {
+export function countOperation(input: {
   document: DocumentNode;
   operationName: string | undefined;
   variables: Record<string, unknown> | undefined;
@@ -202,9 +202,13 @@ function countOperation(input: {
   }
 }
 
-const CONNECTION_FIELDS = new Set([
+export const CONNECTION_FIELDS = new Set([
   'organizationMembers',
   'organizationInvitations',
   'organizationAuditEvents',
   'regions',
 ]);
+
+export function isConnectionField(fieldName: string): boolean {
+  return CONNECTION_FIELDS.has(fieldName);
+}

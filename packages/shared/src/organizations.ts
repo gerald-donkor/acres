@@ -58,6 +58,12 @@ export const ORGANIZATION_PERMISSIONS = [
 
 export type OrganizationPermission = (typeof ORGANIZATION_PERMISSIONS)[number];
 
+export function isOrganizationPermission(
+  permission: string,
+): permission is OrganizationPermission {
+  return (ORGANIZATION_PERMISSIONS as readonly string[]).includes(permission);
+}
+
 export const AUDIT_ACTIONS = [
   "organization_created",
   "organization_updated",
@@ -72,6 +78,10 @@ export const AUDIT_ACTIONS = [
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+export function isAuditAction(action: string): action is AuditAction {
+  return (AUDIT_ACTIONS as readonly string[]).includes(action);
+}
 
 export interface OrganizationSummary {
   id: string;
