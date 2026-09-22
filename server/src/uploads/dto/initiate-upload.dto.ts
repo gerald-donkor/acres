@@ -8,20 +8,14 @@ import {
   Min,
   Matches,
 } from 'class-validator';
-
-const MEDIA_TYPES = [
-  'text/csv',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/geo+json',
-  'application/json',
-] as const;
+import { UPLOAD_MEDIA_TYPES } from '@acres/shared';
 
 export class InitiateUploadDto {
   @IsString()
   @MaxLength(180)
   filename!: string;
 
-  @IsIn(MEDIA_TYPES)
+  @IsIn(UPLOAD_MEDIA_TYPES)
   mediaType!: string;
 
   @IsInt()

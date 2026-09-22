@@ -28,7 +28,7 @@ export interface PlanCheckOutcome {
   readonly report: string;
 }
 
-function redactUrl(url: string): string {
+export function redactUrl(url: string): string {
   try {
     const parsed = new URL(url);
     if (parsed.password) {
@@ -38,6 +38,76 @@ function redactUrl(url: string): string {
   } catch {
     return url.replace(/:[^:@]+@/, ':***@');
   }
+}
+
+export interface AnalyticsPlanQuery {
+  name: string;
+  sql: string;
+  params: unknown[];
+  thresholds?: Partial<PlanEvaluationThresholds>;
+}
+
+export function buildAnalyticsPlanQueries(
+  sampleIds: SeedSummary['sampleIds'],
+): AnalyticsPlanQuery[] {
+  const orgId = sampleIds.primaryOrgId;
+  const metricId = sampleIds.metricId;
+  const regionId = sampleIds.regionId;
+  const datasetVersionId = sampleIds.datasetVersionId;
+  const dimensionHash = sampleIds.dimensionHash;
+  const periodStart = sampleIds.periodStart;
+  const periodEnd = sampleIds.periodEnd;
+  const aggregateId = sampleIds.aggregateId;
+
+  return [
+    {
+      name: 'findMetrics',
+      sql: `SELECT "id", "organizationId", "datasetId", "key", "label", "description", "valueType", "canonicalUnit", "allowedAggregation", "calculationVersion", "status", "createdAt", "updatedAt" FROM "MetricDefinition" WHERE "organizationId" = $1 AND "status" = 'active'::"MetricDefinitionStatus" ORDER BY "key" ASC LIMIT 100`,
+      params: [orgId],
+    },
+    {
+      name: 'findAggregates (filtered)',
+      sql: `SELECT "id", "organizationId", "datasetVersionId", "metricDefinitionId", "regionId", "periodStart", "periodEnd", "dimensionHash", "dimensions", "aggregateType", "numericValue", "textValue", "booleanValue", "unit", "calculationVersion", "observationCount", "qualitySummary", "datasetVersionIds", "createdAt" FROM "MetricAggregate" WHERE "organizationId" = $1 AND "metricDefinitionId" = $2 AND "regionId" = $3 AND "datasetVersionId" = $4 AND "dimensionHash" = $5 AND "periodStart" >= $6 AND "periodEnd" <= $7 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 50`,
+      params: [
+        orgId,
+        metricId,
+        regionId,
+        datasetVersionId,
+        dimensionHash,
+        periodStart,
+        periodEnd,
+      ],
+    },
+    {
+      name: 'findObservations (filtered)',
+      sql: `SELECT "id", "organizationId", "datasetVersionId", "regionId", "metricDefinitionId", "periodStart", "periodEnd", "periodLabel", "numericValue", "textValue", "booleanValue", "unit", "dimensionHash", "dimensions", "sourceRowNumber", "sourceReference", "createdAt" FROM "MetricObservation" WHERE "organizationId" = $1 AND "metricDefinitionId" = $2 AND "regionId" = $3 AND "datasetVersionId" = $4 AND "dimensionHash" = $5 AND "periodStart" >= $6 AND "periodEnd" <= $7 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 50`,
+      params: [
+        orgId,
+        metricId,
+        regionId,
+        datasetVersionId,
+        dimensionHash,
+        periodStart,
+        periodEnd,
+      ],
+    },
+    {
+      name: 'findAggregateEvidence (lineage)',
+      sql: `SELECT "id", "organizationId", "aggregateId", "observationId", "datasetVersionId", "createdAt" FROM "MetricAggregateLineage" WHERE "organizationId" = $1 AND "aggregateId" = $2 ORDER BY "createdAt" ASC LIMIT 200`,
+      params: [orgId, aggregateId],
+    },
+    {
+      name: 'listDashboardViews',
+      sql: `SELECT "id", "organizationId", "ownerAccountId", "name", "description", "filters", "presentation", "status", "createdAt", "updatedAt" FROM "DashboardView" WHERE "organizationId" = $1 AND "status" = 'active'::"DashboardViewStatus" ORDER BY "updatedAt" DESC LIMIT 50`,
+      params: [orgId],
+    },
+    {
+      name: 'dashboardSummary (aggregates)',
+      sql: `SELECT "id", "organizationId", "datasetVersionId", "metricDefinitionId", "regionId", "periodStart", "periodEnd", "dimensionHash", "dimensions", "aggregateType", "numericValue", "textValue", "booleanValue", "unit", "calculationVersion", "observationCount", "qualitySummary", "datasetVersionIds", "createdAt" FROM "MetricAggregate" WHERE "organizationId" = $1 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 24`,
+      params: [orgId],
+      thresholds: { disallowSeqScanOnTables: [] },
+    },
+  ];
 }
 
 export async function runAnalyticsPlanChecks(
@@ -85,77 +155,14 @@ export async function runAnalyticsPlanChecks(
     await prisma.$executeRawUnsafe('ANALYZE "MetricAggregateLineage"');
     await prisma.$executeRawUnsafe('ANALYZE "DashboardView"');
 
-    const orgId = summary.sampleIds.primaryOrgId;
-    const metricId = summary.sampleIds.metricId;
-    const regionId = summary.sampleIds.regionId;
-    const datasetVersionId = summary.sampleIds.datasetVersionId;
-    const dimensionHash = summary.sampleIds.dimensionHash;
-    const periodStart = summary.sampleIds.periodStart;
-    const periodEnd = summary.sampleIds.periodEnd;
-    const aggregateId = summary.sampleIds.aggregateId;
-
-    // 4. Query definitions to benchmark
-    const queries: Array<{
-      name: string;
-      sql: string;
-      params: unknown[];
-      thresholds?: Partial<PlanEvaluationThresholds>;
-    }> = [
-      {
-        name: 'findMetrics',
-        sql: `SELECT "id", "organizationId", "datasetId", "key", "label", "description", "valueType", "canonicalUnit", "allowedAggregation", "calculationVersion", "status", "createdAt", "updatedAt" FROM "MetricDefinition" WHERE "organizationId" = $1 AND "status" = 'active'::"MetricDefinitionStatus" ORDER BY "key" ASC LIMIT 100`,
-        params: [orgId],
-      },
-      {
-        name: 'findAggregates (filtered)',
-        sql: `SELECT "id", "organizationId", "datasetVersionId", "metricDefinitionId", "regionId", "periodStart", "periodEnd", "dimensionHash", "dimensions", "aggregateType", "numericValue", "textValue", "booleanValue", "unit", "calculationVersion", "observationCount", "qualitySummary", "datasetVersionIds", "createdAt" FROM "MetricAggregate" WHERE "organizationId" = $1 AND "metricDefinitionId" = $2 AND "regionId" = $3 AND "datasetVersionId" = $4 AND "dimensionHash" = $5 AND "periodStart" >= $6 AND "periodEnd" <= $7 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 50`,
-        params: [
-          orgId,
-          metricId,
-          regionId,
-          datasetVersionId,
-          dimensionHash,
-          periodStart,
-          periodEnd,
-        ],
-      },
-      {
-        name: 'findObservations (filtered)',
-        sql: `SELECT "id", "organizationId", "datasetVersionId", "regionId", "metricDefinitionId", "periodStart", "periodEnd", "periodLabel", "numericValue", "textValue", "booleanValue", "unit", "dimensionHash", "dimensions", "sourceRowNumber", "sourceReference", "createdAt" FROM "MetricObservation" WHERE "organizationId" = $1 AND "metricDefinitionId" = $2 AND "regionId" = $3 AND "datasetVersionId" = $4 AND "dimensionHash" = $5 AND "periodStart" >= $6 AND "periodEnd" <= $7 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 50`,
-        params: [
-          orgId,
-          metricId,
-          regionId,
-          datasetVersionId,
-          dimensionHash,
-          periodStart,
-          periodEnd,
-        ],
-      },
-      {
-        name: 'findAggregateEvidence (lineage)',
-        sql: `SELECT "id", "organizationId", "aggregateId", "observationId", "datasetVersionId", "createdAt" FROM "MetricAggregateLineage" WHERE "organizationId" = $1 AND "aggregateId" = $2 ORDER BY "createdAt" ASC LIMIT 200`,
-        params: [orgId, aggregateId],
-      },
-      {
-        name: 'listDashboardViews',
-        sql: `SELECT "id", "organizationId", "ownerAccountId", "name", "description", "filters", "presentation", "status", "createdAt", "updatedAt" FROM "DashboardView" WHERE "organizationId" = $1 AND "status" = 'active'::"DashboardViewStatus" ORDER BY "updatedAt" DESC LIMIT 50`,
-        params: [orgId],
-      },
-      {
-        name: 'dashboardSummary (aggregates)',
-        sql: `SELECT "id", "organizationId", "datasetVersionId", "metricDefinitionId", "regionId", "periodStart", "periodEnd", "dimensionHash", "dimensions", "aggregateType", "numericValue", "textValue", "booleanValue", "unit", "calculationVersion", "observationCount", "qualitySummary", "datasetVersionIds", "createdAt" FROM "MetricAggregate" WHERE "organizationId" = $1 ORDER BY "periodStart" ASC, "createdAt" ASC LIMIT 24`,
-        params: [orgId],
-        thresholds: { disallowSeqScanOnTables: [] },
-      },
-    ];
+    const queries = buildAnalyticsPlanQueries(summary.sampleIds);
 
     // Benchmark queries inside an interactive transaction with active tenant RLS context
     const results: QueryPlanResult[] = await prisma.$transaction(
       async (tx) => {
         await tx.$executeRaw`
           SELECT
-            set_config('acres.organization_id', ${orgId}, true),
+            set_config('acres.organization_id', ${summary.sampleIds.primaryOrgId}, true),
             set_config('acres.worker_access', '', true)
         `;
 

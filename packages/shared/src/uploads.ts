@@ -45,6 +45,19 @@ export function isTerminalUploadState(
   return (TERMINAL_UPLOAD_STATES as readonly string[]).includes(state);
 }
 
+export const UPLOAD_MEDIA_TYPES = [
+  'text/csv',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/geo+json',
+  'application/json',
+] as const;
+
+export type UploadMediaType = (typeof UPLOAD_MEDIA_TYPES)[number];
+
+export function isUploadMediaType(type: unknown): type is UploadMediaType {
+  return typeof type === 'string' && (UPLOAD_MEDIA_TYPES as readonly string[]).includes(type);
+}
+
 export interface UploadStatus {
   readonly id: string;
   readonly state: UploadState;

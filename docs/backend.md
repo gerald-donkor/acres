@@ -450,6 +450,30 @@ The shared contracts, GraphQL query budgeting plugin, context decorators, and se
 - `server/src/sessions/current-account.decorator.spec.ts` (3 tests) verifies `getAccountFromContext` and `CurrentAccount`: extracts account profile from session context, throws `ApiException.unauthenticated` when session context is missing.
 - `server/src/security/strict-throttle.decorator.spec.ts` (3 tests) verifies `StrictThrottle` and `STRICT_THROTTLE_KEY`: symbol type identity, class decorator metadata, and method decorator metadata application.
 
+### Canonical DTO validation, contract generation, and plan check unit testing
+
+All DTOs across auth, organizations, uploads, forms, ingestion, analytics, dashboards, reports, and AI draft previews bind to shared canonical validation constants, with isolated unit testing across DTOs, contract generation, and plan checks (prompt 156):
+- `packages/shared/src/uploads.ts` exports canonical const tuple `UPLOAD_MEDIA_TYPES = ['text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/geo+json', 'application/json'] as const`, derived type `UploadMediaType`, and type predicate `isUploadMediaType`.
+- `packages/shared/src/organizations.ts` exports canonical const tuple `ASSIGNABLE_ROLES = ['admin', 'analyst', 'viewer'] as const`, derived type `AssignableRole`, and type predicate `isAssignableRole`.
+- `server/src/uploads/dto/initiate-upload.dto.ts` binds `@IsIn(UPLOAD_MEDIA_TYPES)` directly to shared media types.
+- `server/src/organizations/dto.ts` binds `@IsIn(ASSIGNABLE_ROLES)` directly to shared assignable roles.
+- `server/src/dashboards/dto/dashboard-view.dto.ts` binds presentation charts and compare-by options to canonical `DASHBOARD_PRESENTATION_CHARTS` and `DASHBOARD_COMPARE_BY_OPTIONS`.
+- `server/src/reports/dto/report.dto.ts` binds export format validation to canonical `EXPORT_FORMATS`.
+- `server/src/contracts/generate-contracts.ts` exports `stableStringify`, `sortValue`, `ensureContractEnv`, `assertNoDrift`, and `contractsMarkdown`, guarded by entrypoint inspection.
+- `server/src/contracts/generate-contracts.spec.ts` (8 tests) verifies deterministic JSON serialization (alphabetical key sorting, undefined exclusion, array order preservation), environment defaults hydration, and contract documentation output.
+- `server/src/analytics/seed/check-analytics-plans.ts` exports `redactUrl` and `buildAnalyticsPlanQueries`.
+- `server/src/analytics/seed/check-analytics-plans.spec.ts` (7 tests) verifies database URI credential redaction and all 6 canonical benchmark queries (`findMetrics`, `findAggregates (filtered)`, `findObservations (filtered)`, `findAggregateEvidence (lineage)`, `listDashboardViews`, `dashboardSummary (aggregates)`) with tenant RLS parameters and limit clauses.
+- `server/src/auth/dto/auth-dto.spec.ts` (13 tests) verifies `LoginDto`, `RegisterAccountDto`, `ForgotPasswordDto`, and `ResetPasswordDto` against validation pipe rules (email trimming/lowercasing, password length limits, optional display names).
+- `server/src/organizations/dto/organizations-dto.spec.ts` (14 tests) verifies `CreateOrganizationDto`, `UpdateOrganizationDto`, `InviteMemberDto`, `ChangeMemberRoleDto`, `TransferOwnershipDto`, and `AcceptInvitationDto` (role enforcement against `ASSIGNABLE_ROLES`, owner exclusion, UUID check, token bounds).
+- `server/src/uploads/dto/uploads-dto.spec.ts` (7 tests) verifies `InitiateUploadDto` and `CompleteUploadDto` (media type whitelist, 50MB byte bounds, SHA-256 hex checksum regex).
+- `server/src/forms/dto/forms-dto.spec.ts` (5 tests) verifies `ContactSubmissionDto` (name/message length bounds, email format, optional organization and source).
+- `server/src/ingestion/dto/ingestion-dto.spec.ts` (8 tests) verifies `CreateDatasetDto`, `UpdateDatasetDto`, `CreateMappingDto`, and `StartIngestionRunDto` (name lengths, object metadata, UUID identifiers).
+- `server/src/analytics/dto/analytics-dto.spec.ts` (8 tests) verifies `MetricParamDto`, `AggregateParamDto`, `AnalyticsObservationQueryDto`, and `AnalyticsAggregateQueryDto` (UUID params, ISO8601 timestamps, 64-hex dimension hashes, limit coercion and max 100).
+- `server/src/dashboards/dto/dashboards-dto.spec.ts` (6 tests) verifies `DashboardFiltersDto`, `DashboardPresentationDto`, `CreateDashboardViewDto`, and `UpdateDashboardViewDto` (chart/compareBy enums, nested object validation, name trimming).
+- `server/src/reports/dto/reports-dto.spec.ts` (10 tests) verifies `ReportInsightDto`, `ReportEvidenceDto`, `CreateReportDto`, `UpdateReportDto`, `UpdateRevisionDto`, `CreateRevisionDto`, and `CreateExportDto` (export format enum, expectedVersion bounds, nested insight/evidence arrays).
+- `server/src/ai/dto/ai-draft-dto.spec.ts` (6 tests) verifies `CreateAiDraftDto` (purpose trimming, evidence UUID array bounds 1..10, proposalCount range 1..5, mandatory acknowledgement).
+- `server/src/contracts/shared-predicates.spec.ts` (36 tests) updated with tests for `isUploadMediaType` and `isAssignableRole`.
+
 ---
 
 ## 5. CSRF — what protects what

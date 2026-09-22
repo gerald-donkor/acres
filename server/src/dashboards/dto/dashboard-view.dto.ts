@@ -11,7 +11,13 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { VALIDATION } from '@acres/shared';
+import {
+  DASHBOARD_COMPARE_BY_OPTIONS,
+  DASHBOARD_PRESENTATION_CHARTS,
+  type DashboardCompareBy,
+  type DashboardPresentationChart,
+  VALIDATION,
+} from '@acres/shared';
 import { trimValue } from '../../common/transform';
 
 export class DashboardFiltersDto {
@@ -42,12 +48,12 @@ export class DashboardFiltersDto {
 
 export class DashboardPresentationDto {
   @IsOptional()
-  @IsIn(['bar', 'line', 'table'])
-  chart?: 'bar' | 'line' | 'table';
+  @IsIn(DASHBOARD_PRESENTATION_CHARTS)
+  chart?: DashboardPresentationChart;
 
   @IsOptional()
-  @IsIn(['region', 'period'])
-  compareBy?: 'region' | 'period';
+  @IsIn(DASHBOARD_COMPARE_BY_OPTIONS)
+  compareBy?: DashboardCompareBy;
 }
 
 export class CreateDashboardViewDto {

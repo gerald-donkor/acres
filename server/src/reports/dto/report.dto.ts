@@ -13,7 +13,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { VALIDATION } from '@acres/shared';
+import { EXPORT_FORMATS, type ExportFormat, VALIDATION } from '@acres/shared';
 import { trimValue } from '../../common/transform';
 
 export class ReportInsightDto {
@@ -133,6 +133,6 @@ export class CreateExportDto {
   @IsUUID()
   revisionId?: string;
 
-  @IsIn(['csv', 'pdf'])
-  format!: 'csv' | 'pdf';
+  @IsIn(EXPORT_FORMATS)
+  format!: ExportFormat;
 }

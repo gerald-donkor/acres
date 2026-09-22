@@ -3,6 +3,7 @@ import {
   AI_GENERATION_STATES,
   ANONYMOUS_SESSION,
   API_ERROR_CODES,
+  ASSIGNABLE_ROLES,
   AUDIT_ACTIONS,
   CSRF_ERROR_CODE,
   CSRF_ERROR_MESSAGE,
@@ -37,6 +38,7 @@ import {
   TERMINAL_EXPORT_STATUSES,
   TERMINAL_INGESTION_RUN_STATES,
   TERMINAL_UPLOAD_STATES,
+  UPLOAD_MEDIA_TYPES,
   UPLOAD_STATES,
   VALIDATION,
   VALIDATION_ISSUE_SEVERITIES,
@@ -44,6 +46,7 @@ import {
   isAiGenerationState,
   isApiError,
   isApiErrorCode,
+  isAssignableRole,
   isAuditAction,
   isDashboardCompareBy,
   isDashboardPresentationChart,
@@ -71,6 +74,7 @@ import {
   isTerminalExportStatus,
   isTerminalIngestionRunState,
   isTerminalUploadState,
+  isUploadMediaType,
   isUploadState,
   isValidationIssueSeverity,
 } from '@acres/shared';
@@ -182,6 +186,17 @@ describe('shared-predicates and contracts', () => {
       expect(isInvitationRole(null as unknown as string)).toBe(false);
     });
 
+    it('verifies isAssignableRole', () => {
+      for (const role of ASSIGNABLE_ROLES) {
+        expect(isAssignableRole(role)).toBe(true);
+      }
+      expect(isAssignableRole('owner')).toBe(false);
+      expect(isAssignableRole('guest')).toBe(false);
+      expect(isAssignableRole('')).toBe(false);
+      expect(isAssignableRole(null)).toBe(false);
+      expect(isAssignableRole(undefined)).toBe(false);
+    });
+
     it('verifies isOrganizationPermission', () => {
       for (const perm of ORGANIZATION_PERMISSIONS) {
         expect(isOrganizationPermission(perm)).toBe(true);
@@ -238,6 +253,16 @@ describe('shared-predicates and contracts', () => {
       expect(isTerminalUploadState('pending_upload')).toBe(false);
       expect(isTerminalUploadState('scanning')).toBe(false);
       expect(isTerminalUploadState(null as unknown as string)).toBe(false);
+    });
+
+    it('verifies isUploadMediaType', () => {
+      for (const type of UPLOAD_MEDIA_TYPES) {
+        expect(isUploadMediaType(type)).toBe(true);
+      }
+      expect(isUploadMediaType('application/x-msdownload')).toBe(false);
+      expect(isUploadMediaType('')).toBe(false);
+      expect(isUploadMediaType(null)).toBe(false);
+      expect(isUploadMediaType(undefined)).toBe(false);
     });
   });
 

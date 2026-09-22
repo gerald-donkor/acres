@@ -23,6 +23,18 @@ export function isInvitationRole(role: string): role is InvitationRole {
   return (INVITATION_ROLES as readonly string[]).includes(role);
 }
 
+export const ASSIGNABLE_ROLES = [
+  "admin",
+  "analyst",
+  "viewer",
+] as const;
+
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
+
+export function isAssignableRole(role: unknown): role is AssignableRole {
+  return typeof role === "string" && (ASSIGNABLE_ROLES as readonly string[]).includes(role);
+}
+
 export const ORGANIZATION_HEADER_NAME = "x-acres-organization-id" as const;
 export type OrganizationHeaderName = typeof ORGANIZATION_HEADER_NAME;
 

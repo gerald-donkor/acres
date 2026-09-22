@@ -9,22 +9,11 @@ import {
   MinLength,
 } from 'class-validator';
 import {
-  ORGANIZATION_ROLES,
-  type OrganizationRole,
+  ASSIGNABLE_ROLES,
+  type AssignableRole,
   VALIDATION,
 } from '@acres/shared';
-
-const assignableRoles = ORGANIZATION_ROLES.filter(
-  (role): role is Exclude<OrganizationRole, 'owner'> => role !== 'owner',
-);
-
-function trim({ value }: { value: unknown }): unknown {
-  return typeof value === 'string' ? value.trim() : value;
-}
-
-function normalizeEmail({ value }: { value: unknown }): unknown {
-  return typeof value === 'string' ? value.trim().toLowerCase() : value;
-}
+import { normaliseEmailValue, trimValue } from '../common/transform';
 
 export class CreateOrganizationDto {
   @ApiProperty({
@@ -32,7 +21,7 @@ export class CreateOrganizationDto {
     maxLength: VALIDATION.organization.name.maxLength,
     example: 'Acme Analytics',
   })
-  @Transform(trim)
+  @Transform(trimValue)
   @IsString()
   @MinLength(VALIDATION.organization.name.minLength)
   @MaxLength(VALIDATION.organization.name.maxLength)
@@ -47,26 +36,26 @@ export class InviteMemberDto {
     maxLength: VALIDATION.email.maxLength,
     example: 'teammate@example.com',
   })
-  @Transform(normalizeEmail)
+  @Transform(normaliseEmailValue)
   @IsEmail()
   @MaxLength(VALIDATION.email.maxLength)
   email!: string;
 
   @ApiProperty({
-    enum: assignableRoles,
+    enum: ASSIGNABLE_ROLES,
     example: 'viewer',
   })
-  @IsIn(assignableRoles)
-  role!: Exclude<OrganizationRole, 'owner'>;
+  @IsIn(ASSIGNABLE_ROLES)
+  role!: AssignableRole;
 }
 
 export class ChangeMemberRoleDto {
   @ApiProperty({
-    enum: assignableRoles,
+    enum: ASSIGNABLE_ROLES,
     example: 'analyst',
   })
-  @IsIn(assignableRoles)
-  role!: Exclude<OrganizationRole, 'owner'>;
+  @IsIn(ASSIGNABLE_ROLES)
+  role!: AssignableRole;
 }
 
 export class TransferOwnershipDto {
