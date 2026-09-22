@@ -248,6 +248,22 @@ npm run analytics:plans
 
 The script verifies that `NODE_ENV=test` and `DATABASE_URL` targets `acres_test`, enforces RLS transaction context (`acres.organization_id`), executes `seedAnalyticsScale`, benchmarks each query path, evaluates node types and timing guards, redacts credentials and sensitive parameters, and prints a structured summary table.
 
+CI runs this six-query gate as `npm run analytics:plans` in the `checks` job,
+after test-database migrations, privilege hardening, server E2E, and the
+geography plan gate. It uses the migrated `acres_test` database through the
+non-owner `acres_test` role. A rejected plan or seed/database failure exits
+nonzero and prevents the dependent Docker job from starting.
+
+On 2026-09-22, the local CI-equivalent sequence passed: `npm run test:server`
+reported 6 suites and 143 tests passed, `npm run geography:plans` passed 2/2,
+then `npm run analytics:plans` exited 0 with 6/6 plans passed. Analytics
+execution times were 0.04, 0.09, 0.07, 0.04, 0.04, and 0.98 ms in the query
+order above. The filtered aggregate, filtered observation, and lineage paths
+used their expected indexes; the dashboard summary used a sequential scan,
+which its existing thresholds allow. These are local regression results, not
+customer SLOs.
+GitHub-hosted CI timing and outcome remain unobserved until a workflow run.
+
 ## Verification
 
 Passing during this implementation:

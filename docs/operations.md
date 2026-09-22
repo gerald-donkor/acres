@@ -382,9 +382,17 @@ error text stays server-log-only).
 
 CI has `permissions: contents: read` and pins all actions to immutable
 40-character commit SHAs. The `checks` job runs the full lint, typecheck, build,
-contract drift, database role/migration, fail-closed server E2E, and separate
-`npm run geography:plans` sequence, plus `npm run ops:check`. The Docker job
+contract drift, database role/migration, fail-closed server E2E,
+`npm run geography:plans`, and then the six-query `npm run analytics:plans`
+gate, plus `npm run ops:check`. Both plan steps use the migrated `acres_test`
+database through its non-owner test role; an analytics seed, database, or plan
+failure fails `checks` and prevents the dependent Docker job. The Docker job
 builds the server image and smoke-tests `/health` with `push: false`.
+
+The local sequence on 2026-09-22 passed server E2E (6 suites, 143 tests),
+geography plans (2/2), and analytics plans (6/6). YAML parsing and step-order
+verification passed. A GitHub-hosted run of the added step is pending; local
+timings do not establish hosted-run performance.
 
 ## No-AI Production Posture
 
