@@ -2790,3 +2790,74 @@ npm run test:client:e2e
 npm run contracts:check
 ✔ Generated Prisma Client (7.9.1)
 ```
+
+## 21. CLI and shared validation unit-test hardening
+
+Implemented by
+`prompts/157-geoboundaries-cli-account-profile-and-shared-predicate-unit-tests.md`.
+
+- The geoBoundaries operator CLI exports its pure and command helpers for
+  isolated tests and runs only when its compiled entrypoint is invoked. Its
+  command error now names `acquire`, `review`, and `import`.
+- CLI tests use private temporary directories and real filesystem operations to
+  prove selection parsing, canonical real-path work-directory confinement,
+  atomic JSON cleanup and modes, direct-symlink rejection and
+  ancestor-symlink escape prevention, byte-length and checksum verification,
+  normalization, acquisition, hierarchy review, Nest application-context
+  closure, all command dispatch paths, and the guarded entrypoint failure path.
+- Account profile tests cover email normalization, public-field projection,
+  ISO date serialization, and nullable display names.
+- Dataset and AI-draft DTO limits now read the canonical `VALIDATION` values
+  exported by `@acres/shared`. The API-error, Node environment, account-token,
+  job-status, and scheduled-job predicates accept `unknown` and reject
+  non-string values without caller casts.
+
+Verification on 2026-09-22:
+
+```text
+npm run test --workspace=@acres/server -- src/geography/geoboundaries-cli.spec.ts
+Test Suites: 1 passed, 1 total
+Tests:       27 passed, 27 total
+
+npm run test --workspace=@acres/server -- src/accounts/account-profile.spec.ts
+Test Suites: 1 passed, 1 total
+Tests:       4 passed, 4 total
+
+npm run test --workspace=@acres/server -- src/contracts/shared-predicates.spec.ts
+Test Suites: 1 passed, 1 total
+Tests:       36 passed, 36 total
+
+npm run test --workspace=@acres/server -- --coverage \
+  --collectCoverageFrom=geography/geoboundaries-cli.ts \
+  --collectCoverageFrom=accounts/account-profile.ts \
+  geography/geoboundaries-cli.spec.ts accounts/account-profile.spec.ts
+account-profile.ts: 100% statements, branches, functions, and lines
+geoboundaries-cli.ts: 100% statements, branches, functions, and lines
+
+npm run test --workspace=@acres/server -- --runInBand
+Test Suites: 118 passed, 118 total
+Tests:       1782 passed, 1782 total
+
+npm run test:server
+Test Suites: 6 passed, 6 total
+Tests:       143 passed, 143 total
+
+npm run contracts:check
+exit 0
+
+npm run lint
+exit 0
+
+npm run typecheck
+exit 0
+
+npm run build
+shared, Next production build, and Nest production build passed (host run)
+```
+
+The initial sandboxed production build hit the repository's documented Next
+detached-`tsc --showConfig` output-capture limitation, while standalone
+`tsc --showConfig` emitted valid JSON. The host build passed unchanged. The
+initial sandboxed E2E attempt likewise could not bind a Supertest port or reach
+local PostgreSQL/PostGIS; the host rerun passed all six suites. Neither
+environmental retry changed code.

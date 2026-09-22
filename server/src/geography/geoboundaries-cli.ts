@@ -3,11 +3,12 @@ import {
   lstat,
   mkdir,
   readFile,
+  realpath,
   rename,
   rm,
   writeFile,
 } from 'node:fs/promises';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { GeoBoundariesImportService } from './geoboundaries-import.service';
@@ -26,17 +27,17 @@ import type {
   GeoBoundariesSelection,
 } from './geoboundaries.types';
 
-function fail(message: string): never {
+export function fail(message: string): never {
   console.error(`geography-cli: ${message}`);
   process.exitCode = 2;
   throw new Error(message);
 }
-function arg(args: string[], name: string): string {
+export function arg(args: string[], name: string): string {
   const index = args.indexOf(name);
   if (index < 0 || !args[index + 1]) return fail(`missing ${name}`);
   return args[index + 1];
 }
-function selections(value: string): GeoBoundariesSelection[] {
+export function selections(value: string): GeoBoundariesSelection[] {
   const output = value.split(',').map((item) => {
     const [countryCode, level] = item.split('/');
     if (
@@ -56,7 +57,7 @@ function selections(value: string): GeoBoundariesSelection[] {
     return fail('selection must be non-empty and unique.');
   return output;
 }
-function workDirectory(value: string): string {
+export function workDirectory(value: string): string {
   const path = resolve(value);
   if (path === resolve(process.cwd()) || path === resolve('/'))
     return fail(
@@ -64,7 +65,7 @@ function workDirectory(value: string): string {
     );
   return path;
 }
-async function atomicJson(path: string, value: unknown): Promise<void> {
+export async function atomicJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temp = `${path}.${process.pid}.tmp`;
   try {
@@ -78,24 +79,62 @@ async function atomicJson(path: string, value: unknown): Promise<void> {
   }
 }
 
-async function regularInside(
+export async function regularInside(
   directory: string,
   path: string,
   name: string,
 ): Promise<void> {
-  if (
-    relative(directory, path).startsWith('..') ||
-    relative(directory, path) === ''
-  )
-    fail(`${name} must be a file inside --workdir.`);
+  const lexical = relative(directory, path);
+  if (outsideOrSame(lexical)) fail(`${name} must be a file inside --workdir.`);
   const stat = await lstat(path).catch(() =>
     fail(`${name} is not a regular file.`),
   );
   if (!stat.isFile() || stat.isSymbolicLink())
     fail(`${name} must be a non-symlink regular file.`);
+  const canonical = relative(await realpath(directory), await realpath(path));
+  if (outsideOrSame(canonical))
+    fail(`${name} must resolve to a file inside --workdir.`);
 }
 
-async function normalizedManifest(directory: string, manifestPath: string) {
+function outsideOrSame(value: string): boolean {
+  return (
+    value === '' ||
+    value === '..' ||
+    value.startsWith(`..${sep}`) ||
+    isAbsolute(value)
+  );
+}
+
+async function writableInside(
+  directory: string,
+  path: string,
+  name: string,
+): Promise<void> {
+  const lexical = relative(directory, path);
+  if (outsideOrSame(lexical))
+    fail(`${name} must be a distinct path inside --workdir.`);
+  const parent = dirname(path);
+  const parentStat = await lstat(parent).catch(() =>
+    fail(`${name} parent must be an existing directory inside --workdir.`),
+  );
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink())
+    fail(`${name} parent must be a non-symlink directory inside --workdir.`);
+  const canonicalParent = relative(
+    await realpath(directory),
+    await realpath(parent),
+  );
+  if (
+    canonicalParent === '..' ||
+    canonicalParent.startsWith(`..${sep}`) ||
+    isAbsolute(canonicalParent)
+  )
+    fail(`${name} parent must resolve inside --workdir.`);
+}
+
+export async function normalizedManifest(
+  directory: string,
+  manifestPath: string,
+) {
   await regularInside(directory, manifestPath, '--manifest');
   const manifest = validateGeoBoundariesManifest(
     JSON.parse(await readFile(manifestPath, 'utf8')) as unknown,
@@ -123,7 +162,7 @@ async function normalizedManifest(directory: string, manifestPath: string) {
   return { manifest, normalized };
 }
 
-async function acquire(args: string[]): Promise<void> {
+export async function acquire(args: string[]): Promise<void> {
   const directory = workDirectory(arg(args, '--workdir'));
   const selected = selections(arg(args, '--select'));
   const dryRun = args.includes('--dry-run');
@@ -159,7 +198,7 @@ async function acquire(args: string[]): Promise<void> {
   );
 }
 
-async function importManifest(args: string[]): Promise<void> {
+export async function importManifest(args: string[]): Promise<void> {
   const manifestPath = resolve(arg(args, '--manifest'));
   const directory = workDirectory(arg(args, '--workdir'));
   const dryRun = args.includes('--dry-run');
@@ -187,17 +226,14 @@ async function importManifest(args: string[]): Promise<void> {
   }
 }
 
-async function reviewHierarchy(args: string[]): Promise<void> {
+export async function reviewHierarchy(args: string[]): Promise<void> {
   const directory = workDirectory(arg(args, '--workdir'));
   const manifestPath = resolve(arg(args, '--manifest'));
   const parentMapPath = resolve(arg(args, '--parent-map'));
   const outputPath = resolve(arg(args, '--output'));
-  if (
-    outputPath === manifestPath ||
-    outputPath === parentMapPath ||
-    relative(directory, outputPath).startsWith('..')
-  )
+  if (outputPath === manifestPath || outputPath === parentMapPath)
     fail('--output must be a distinct path inside --workdir.');
+  await writableInside(directory, outputPath, '--output');
   await regularInside(directory, parentMapPath, '--parent-map');
   const { manifest, normalized } = await normalizedManifest(
     directory,
@@ -243,7 +279,7 @@ async function reviewHierarchy(args: string[]): Promise<void> {
   );
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2);
   if (args.includes('--help') || command === '--help' || !command) {
     console.log(
@@ -254,11 +290,14 @@ async function main(): Promise<void> {
   if (command === 'acquire') return acquire(args);
   if (command === 'review') return reviewHierarchy(args);
   if (command === 'import') return importManifest(args);
-  fail('command must be acquire or import.');
+  fail('command must be acquire, review, or import.');
 }
-void main().catch((error: unknown) => {
-  if (process.exitCode === undefined) process.exitCode = 1;
-  console.error(
-    `geography-cli: ${error instanceof Error ? error.message : 'failed'}`,
-  );
-});
+
+if (process.argv[1] && process.argv[1].includes('geoboundaries-cli')) {
+  void main().catch((error: unknown) => {
+    if (process.exitCode === undefined) process.exitCode = 1;
+    console.error(
+      `geography-cli: ${error instanceof Error ? error.message : 'failed'}`,
+    );
+  });
+}

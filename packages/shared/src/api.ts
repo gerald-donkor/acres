@@ -50,8 +50,11 @@ export const API_ERROR_CODES = [
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 
-export function isApiErrorCode(code: string): code is ApiErrorCode {
-  return (API_ERROR_CODES as readonly string[]).includes(code);
+export function isApiErrorCode(code: unknown): code is ApiErrorCode {
+  return (
+    typeof code === 'string' &&
+    (API_ERROR_CODES as readonly string[]).includes(code)
+  );
 }
 
 export function isApiError<TData>(
@@ -69,6 +72,8 @@ export type IdempotencyHeaderName = typeof IDEMPOTENCY_HEADER_NAME;
 export const NODE_ENVS = ['development', 'test', 'production'] as const;
 export type NodeEnv = (typeof NODE_ENVS)[number];
 
-export function isNodeEnv(env: string): env is NodeEnv {
-  return (NODE_ENVS as readonly string[]).includes(env);
+export function isNodeEnv(env: unknown): env is NodeEnv {
+  return (
+    typeof env === 'string' && (NODE_ENVS as readonly string[]).includes(env)
+  );
 }

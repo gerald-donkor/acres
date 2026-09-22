@@ -14,6 +14,15 @@ export const VALIDATION = {
     name: { minLength: 1, maxLength: 120 },
     description: { maxLength: 500 },
   },
+  dataset: {
+    name: { maxLength: 160 },
+    description: { maxLength: 1000 },
+  },
+  aiDraft: {
+    purpose: { minLength: 1, maxLength: 500 },
+    evidenceIds: { minSize: 1, maxSize: 10 },
+    proposalCount: { min: 1, max: 5 },
+  },
   report: {
     title: { minLength: 1, maxLength: 160 },
     summary: { maxLength: 1000 },

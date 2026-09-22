@@ -8,9 +8,12 @@ export const ACCOUNT_TOKEN_PURPOSES = [
 export type AccountTokenPurpose = (typeof ACCOUNT_TOKEN_PURPOSES)[number];
 
 export function isAccountTokenPurpose(
-  purpose: string,
+  purpose: unknown,
 ): purpose is AccountTokenPurpose {
-  return (ACCOUNT_TOKEN_PURPOSES as readonly string[]).includes(purpose);
+  return (
+    typeof purpose === 'string' &&
+    (ACCOUNT_TOKEN_PURPOSES as readonly string[]).includes(purpose)
+  );
 }
 
 export const CSRF_HEADER_NAME = 'x-csrf-token' as const;

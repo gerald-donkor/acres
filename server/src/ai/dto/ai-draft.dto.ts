@@ -13,27 +13,27 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import type { CreateAiDraftInput } from '@acres/shared';
+import { VALIDATION, type CreateAiDraftInput } from '@acres/shared';
 import { trimValue } from '../../common/transform';
 
 export class CreateAiDraftDto implements CreateAiDraftInput {
   @IsString()
   @Transform(trimValue)
-  @MinLength(1)
-  @MaxLength(500)
+  @MinLength(VALIDATION.aiDraft.purpose.minLength)
+  @MaxLength(VALIDATION.aiDraft.purpose.maxLength)
   purpose!: string;
 
   @IsArray()
-  @ArrayMinSize(1)
-  @ArrayMaxSize(10)
+  @ArrayMinSize(VALIDATION.aiDraft.evidenceIds.minSize)
+  @ArrayMaxSize(VALIDATION.aiDraft.evidenceIds.maxSize)
   @IsUUID('all', { each: true })
   evidenceIds!: string[];
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(5)
+  @Min(VALIDATION.aiDraft.proposalCount.min)
+  @Max(VALIDATION.aiDraft.proposalCount.max)
   proposalCount?: number;
 
   @IsDefined()

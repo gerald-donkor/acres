@@ -1,19 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { VALIDATION } from '@acres/shared';
 
 export class CreateDatasetDto {
-  @ApiProperty({ maxLength: 160, example: 'Regional housing starts' })
+  @ApiProperty({
+    maxLength: VALIDATION.dataset.name.maxLength,
+    example: 'Regional housing starts',
+  })
   @IsString()
-  @MaxLength(160)
+  @MaxLength(VALIDATION.dataset.name.maxLength)
   name!: string;
 
   @ApiPropertyOptional({
-    maxLength: 1000,
+    maxLength: VALIDATION.dataset.description.maxLength,
     example: 'Quarterly source file imported from the planning office.',
   })
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
+  @MaxLength(VALIDATION.dataset.description.maxLength)
   description?: string;
 
   @ApiPropertyOptional({

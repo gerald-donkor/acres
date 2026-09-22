@@ -87,9 +87,11 @@ describe('shared-predicates and contracts', () => {
       }
       expect(isApiErrorCode('UNKNOWN_CODE')).toBe(false);
       expect(isApiErrorCode('')).toBe(false);
-      expect(isApiErrorCode(null as unknown as string)).toBe(false);
-      expect(isApiErrorCode(undefined as unknown as string)).toBe(false);
-      expect(isApiErrorCode(123 as unknown as string)).toBe(false);
+      expect(isApiErrorCode(null)).toBe(false);
+      expect(isApiErrorCode(undefined)).toBe(false);
+      expect(isApiErrorCode(123)).toBe(false);
+      expect(isApiErrorCode(false)).toBe(false);
+      expect(isApiErrorCode({})).toBe(false);
     });
 
     it('verifies isNodeEnv', () => {
@@ -98,8 +100,11 @@ describe('shared-predicates and contracts', () => {
       }
       expect(isNodeEnv('staging')).toBe(false);
       expect(isNodeEnv('')).toBe(false);
-      expect(isNodeEnv(null as unknown as string)).toBe(false);
-      expect(isNodeEnv(undefined as unknown as string)).toBe(false);
+      expect(isNodeEnv(null)).toBe(false);
+      expect(isNodeEnv(undefined)).toBe(false);
+      expect(isNodeEnv(123)).toBe(false);
+      expect(isNodeEnv(false)).toBe(false);
+      expect(isNodeEnv({})).toBe(false);
     });
 
     it('verifies isApiError', () => {
@@ -130,7 +135,11 @@ describe('shared-predicates and contracts', () => {
       }
       expect(isAccountTokenPurpose('session_refresh')).toBe(false);
       expect(isAccountTokenPurpose('')).toBe(false);
-      expect(isAccountTokenPurpose(null as unknown as string)).toBe(false);
+      expect(isAccountTokenPurpose(null)).toBe(false);
+      expect(isAccountTokenPurpose(undefined)).toBe(false);
+      expect(isAccountTokenPurpose(123)).toBe(false);
+      expect(isAccountTokenPurpose(false)).toBe(false);
+      expect(isAccountTokenPurpose({})).toBe(false);
     });
 
     it('verifies CSRF and session constants', () => {
@@ -152,7 +161,11 @@ describe('shared-predicates and contracts', () => {
       }
       expect(isJobRunStatus('queued')).toBe(false);
       expect(isJobRunStatus('')).toBe(false);
-      expect(isJobRunStatus(null as unknown as string)).toBe(false);
+      expect(isJobRunStatus(null)).toBe(false);
+      expect(isJobRunStatus(undefined)).toBe(false);
+      expect(isJobRunStatus(123)).toBe(false);
+      expect(isJobRunStatus(false)).toBe(false);
+      expect(isJobRunStatus({})).toBe(false);
     });
 
     it('verifies isScheduledJobName', () => {
@@ -161,7 +174,11 @@ describe('shared-predicates and contracts', () => {
       }
       expect(isScheduledJobName('analytics.rebuild')).toBe(false);
       expect(isScheduledJobName('')).toBe(false);
-      expect(isScheduledJobName(null as unknown as string)).toBe(false);
+      expect(isScheduledJobName(null)).toBe(false);
+      expect(isScheduledJobName(undefined)).toBe(false);
+      expect(isScheduledJobName(123)).toBe(false);
+      expect(isScheduledJobName(false)).toBe(false);
+      expect(isScheduledJobName({})).toBe(false);
     });
   });
 

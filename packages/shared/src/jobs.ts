@@ -8,8 +8,11 @@ export const JOB_RUN_STATUSES = [
 
 export type JobRunStatus = (typeof JOB_RUN_STATUSES)[number];
 
-export function isJobRunStatus(status: string): status is JobRunStatus {
-  return (JOB_RUN_STATUSES as readonly string[]).includes(status);
+export function isJobRunStatus(status: unknown): status is JobRunStatus {
+  return (
+    typeof status === 'string' &&
+    (JOB_RUN_STATUSES as readonly string[]).includes(status)
+  );
 }
 
 export const SCHEDULED_JOB_NAMES = [
@@ -22,8 +25,11 @@ export const SCHEDULED_JOB_NAMES = [
 
 export type ScheduledJobName = (typeof SCHEDULED_JOB_NAMES)[number];
 
-export function isScheduledJobName(name: string): name is ScheduledJobName {
-  return (SCHEDULED_JOB_NAMES as readonly string[]).includes(name);
+export function isScheduledJobName(name: unknown): name is ScheduledJobName {
+  return (
+    typeof name === 'string' &&
+    (SCHEDULED_JOB_NAMES as readonly string[]).includes(name)
+  );
 }
 
 export interface JobRunSummary {
