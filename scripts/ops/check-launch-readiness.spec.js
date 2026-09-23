@@ -172,9 +172,18 @@ function buildValidApprovedRecord() {
   };
 }
 
+function expectedImageEnv(record) {
+  const { client_image, server_image } = record.sections.deployment_and_rollback.release.current;
+  return { ACRES_CLIENT_IMAGE: client_image, ACRES_SERVER_IMAGE: server_image };
+}
+
+function validateApprovedRecord(record, filePath = 'test.json') {
+  return validateReadiness(record, filePath, { env: expectedImageEnv(record) });
+}
+
 test('validateReadiness passes for a fully approved record with no-AI assertions', () => {
   const record = buildValidApprovedRecord();
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
 
   assert.strictEqual(Object.keys(result.categoryBlockers).length, 0);
   assert.strictEqual(result.totalApproved, REQUIRED_SECTIONS.length);
@@ -193,7 +202,7 @@ test('release approval fails closed on missing and placeholder fields', () => {
       let target = record.sections.deployment_and_rollback.release;
       for (const part of fieldPath.slice(0, -1)) target = target[part];
       target[fieldPath.at(-1)] = value;
-      const result = validateReadiness(record, 'test.json');
+      const result = validateApprovedRecord(record);
       assert.ok(result.categoryBlockers.deployment_and_rollback?.length, `${fieldPath.join('.')} ${value}`);
     }
   }
@@ -212,7 +221,7 @@ test('release approval rejects malformed and inconsistent image pairs', () => {
   for (const mutate of mutations) {
     const record = buildValidApprovedRecord();
     mutate(record.sections.deployment_and_rollback.release);
-    assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length);
+    assert.ok(validateApprovedRecord(record).categoryBlockers.deployment_and_rollback?.length);
   }
 });
 
@@ -225,39 +234,52 @@ test('release evidence requires distinct stable identifiers or successful local 
     const record = buildValidApprovedRecord();
     const release = record.sections.deployment_and_rollback.release;
     release.live_drill_evidence = file;
-    assert.strictEqual(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback, undefined);
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.deployment_and_rollback, undefined);
     release.live_drill_evidence = 'https://artifacts.example/release/drill.json';
-    assert.strictEqual(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback, undefined);
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.deployment_and_rollback, undefined);
     for (const value of ['a free-text sentence', 'artifact:*', 'missing.json', '']) {
       release.live_drill_evidence = value;
-      assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length, value);
+      assert.ok(validateApprovedRecord(record).categoryBlockers.deployment_and_rollback?.length, value);
     }
     release.live_drill_evidence = release.client_provenance_evidence;
-    assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length);
+    assert.ok(validateApprovedRecord(record).categoryBlockers.deployment_and_rollback?.length);
     fs.writeFileSync(file, JSON.stringify({ status: 'FAILED' }));
     release.live_drill_evidence = file;
-    assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length);
+    assert.ok(validateApprovedRecord(record).categoryBlockers.deployment_and_rollback?.length);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('bound mode requires the exact current pair and redacts supplied images', () => {
+test('approved deployment requires the exact current pair and redacts supplied images', () => {
   const record = buildValidApprovedRecord();
   const release = record.sections.deployment_and_rollback.release;
-  const good = { ACRES_CLIENT_IMAGE: release.current.client_image, ACRES_SERVER_IMAGE: release.current.server_image };
-  assert.strictEqual(validateReadiness(record, 'test.json', { bindImages: true, env: good }).categoryBlockers.deployment_and_rollback, undefined);
-  for (const env of [{}, { ...good, ACRES_CLIENT_IMAGE: good.ACRES_SERVER_IMAGE }, { ...good, ACRES_SERVER_IMAGE: 'sensitive-operator-value' }]) {
-    const blockers = validateReadiness(record, 'test.json', { bindImages: true, env }).categoryBlockers.deployment_and_rollback;
+  const good = expectedImageEnv(record);
+  assert.strictEqual(validateReadiness(record, 'test.json', { env: good }).categoryBlockers.deployment_and_rollback, undefined);
+  const sensitive = 'sensitive-operator-value';
+  const cases = [
+    [{}, ['ACRES_CLIENT_IMAGE', 'ACRES_SERVER_IMAGE']],
+    [{ ACRES_CLIENT_IMAGE: good.ACRES_CLIENT_IMAGE }, ['ACRES_SERVER_IMAGE']],
+    [{ ACRES_SERVER_IMAGE: good.ACRES_SERVER_IMAGE }, ['ACRES_CLIENT_IMAGE']],
+    [{ ...good, ACRES_CLIENT_IMAGE: good.ACRES_SERVER_IMAGE, ACRES_SERVER_IMAGE: good.ACRES_CLIENT_IMAGE }, ['ACRES_CLIENT_IMAGE', 'ACRES_SERVER_IMAGE']],
+    [{ ...good, ACRES_CLIENT_IMAGE: sensitive }, ['ACRES_CLIENT_IMAGE']],
+    [{ ...good, ACRES_SERVER_IMAGE: sensitive }, ['ACRES_SERVER_IMAGE']],
+    [{ ACRES_CLIENT_IMAGE: sensitive, ACRES_SERVER_IMAGE: sensitive }, ['ACRES_CLIENT_IMAGE', 'ACRES_SERVER_IMAGE']],
+  ];
+  for (const [env, expectedNames] of cases) {
+    const blockers = validateReadiness(record, 'test.json', { env }).categoryBlockers.deployment_and_rollback;
     assert.ok(blockers?.length);
-    assert.ok(!JSON.stringify(blockers).includes('sensitive-operator-value'));
+    for (const name of expectedNames) assert.ok(blockers.some((message) => message.includes(name)));
+    assert.ok(!JSON.stringify(blockers).includes(sensitive));
   }
+  assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length);
   release.current.client_image = '__REQUIRED_sentinel-with-sensitive-operator-value__';
-  const blockers = validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback;
+  const blockers = validateReadiness(record, 'test.json', { env: good }).categoryBlockers.deployment_and_rollback;
   assert.ok(!JSON.stringify(blockers).includes('sensitive-operator-value'));
 });
 
-test('CLI bound mode checks the exported pair without echoing it', () => {
+test('ordinary CLI and aggregate wrapper require the pair without echoing it', () => {
+  if (process.env.ACRES_READINESS_WRAPPER_TEST_NESTED === '1') return;
   const os = require('node:os');
   const dir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'release-readiness-'));
   try {
@@ -267,12 +289,24 @@ test('CLI bound mode checks the exported pair without echoing it', () => {
     const images = record.sections.deployment_and_rollback.release.current;
     const env = { ...process.env, ACRES_CLIENT_IMAGE: images.client_image, ACRES_SERVER_IMAGE: images.server_image };
     const command = path.join(__dirname, 'check-launch-readiness.js');
-    const passed = spawnSync(process.execPath, [command, '--bind-images', file], { env, encoding: 'utf8' });
-    assert.strictEqual(passed.status, 0, passed.stdout + passed.stderr);
-    env.ACRES_SERVER_IMAGE = 'operator-secret-image-value';
-    const failed = spawnSync(process.execPath, [command, '--bind-images', file], { env, encoding: 'utf8' });
-    assert.strictEqual(failed.status, 1);
-    assert.ok(!(failed.stdout + failed.stderr).includes('operator-secret-image-value'));
+    const obsolete = spawnSync(process.execPath, [command, '--bind-images', file], { env, encoding: 'utf8' });
+    assert.strictEqual(obsolete.status, 1);
+    assert.match(obsolete.stdout + obsolete.stderr, /Usage:/, String(obsolete.error));
+    const wrapper = path.join(__dirname, 'launch-readiness.sh');
+    const commands = [[process.execPath, [command, file]], ['sh', [wrapper, file]]];
+    for (const [executable, args] of commands) {
+      const commandEnv = executable === 'sh' ? { ...env, ACRES_READINESS_WRAPPER_TEST_NESTED: '1' } : env;
+      const passed = spawnSync(executable, args, { env: commandEnv, encoding: 'utf8' });
+      assert.strictEqual(passed.status, 0, passed.stdout + passed.stderr);
+      for (const pair of [{}, { ACRES_CLIENT_IMAGE: images.client_image }, { ACRES_SERVER_IMAGE: 'operator-secret-image-value' }]) {
+        const checkEnv = { ...commandEnv, ...pair };
+        if (!Object.hasOwn(pair, 'ACRES_CLIENT_IMAGE')) delete checkEnv.ACRES_CLIENT_IMAGE;
+        if (!Object.hasOwn(pair, 'ACRES_SERVER_IMAGE')) delete checkEnv.ACRES_SERVER_IMAGE;
+        const failed = spawnSync(executable, args, { env: checkEnv, encoding: 'utf8' });
+        assert.strictEqual(failed.status, 1, failed.stdout + failed.stderr);
+        assert.ok(!(failed.stdout + failed.stderr).includes('operator-secret-image-value'));
+      }
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -282,7 +316,7 @@ test('validateReadiness rejects ai_enabled: true with the launch-exclusion fatal
   const record = buildValidApprovedRecord();
   record.sections.optional_ai_posture.ai_enabled = true;
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -297,7 +331,7 @@ test('validateReadiness fails closed when no_ai_path_verified is false on approv
   const record = buildValidApprovedRecord();
   record.sections.optional_ai_posture.no_ai_path_verified = false;
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -310,7 +344,7 @@ test('validateReadiness fails closed when server_ai_draft_enabled_false is not a
   const record = buildValidApprovedRecord();
   record.sections.optional_ai_posture.server_ai_draft_enabled_false = false;
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -323,7 +357,7 @@ test('validateReadiness fails closed when no_gemini_api_key_provisioned is not a
   const record = buildValidApprovedRecord();
   record.sections.optional_ai_posture.no_gemini_api_key_provisioned = false;
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -336,7 +370,7 @@ test('validateReadiness fails closed when unpaid_provider_excluded is not assert
   const record = buildValidApprovedRecord();
   record.sections.optional_ai_posture.unpaid_provider_excluded = false;
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -349,7 +383,7 @@ test('validateReadiness fails closed when phase11_status is missing or empty', (
   const record = buildValidApprovedRecord();
   record.sections.optional_ai_posture.phase11_status = '';
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -362,7 +396,7 @@ test('validateReadiness fails closed when ai_enabled is non-boolean or null', ()
   const record = buildValidApprovedRecord();
   record.sections.optional_ai_posture.ai_enabled = null;
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -403,7 +437,7 @@ test('validateReadiness rejects Gemini key reference in secret_references as a c
   const record = buildValidApprovedRecord();
   record.sections.secret_references.gemini_api_key_source = 'vault:acres/prod#gemini';
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -416,7 +450,7 @@ test('validateReadiness rejects Gemini key in optional_ai_posture as a contradic
   const record = buildValidApprovedRecord();
   record.sections.optional_ai_posture.gemini_api_key = 'vault:acres/prod#gemini';
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];
 
   assert.ok(
@@ -438,7 +472,7 @@ test('validateReadiness passes evidence cross-validation when a referenced dossi
     const record = buildValidApprovedRecord();
     record.sections.backup_and_disaster_recovery.evidence = [dossierPath];
 
-    const result = validateReadiness(record, 'test.json');
+    const result = validateApprovedRecord(record);
     assert.strictEqual(Object.keys(result.categoryBlockers).length, 0);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -449,7 +483,7 @@ test('validateReadiness blocks approval when referenced evidence file is missing
   const record = buildValidApprovedRecord();
   record.sections.backup_and_disaster_recovery.evidence = ['backups/restore-drill-evidence-does-not-exist.json'];
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
   assert.ok(
     blockers.some((b) => b.includes('no matching file exists on disk')),
@@ -470,7 +504,7 @@ test('validateReadiness blocks approval when referenced evidence reports failure
     const record = buildValidApprovedRecord();
     record.sections.backup_and_disaster_recovery.evidence = [dossierPath];
 
-    const result = validateReadiness(record, 'test.json');
+    const result = validateApprovedRecord(record);
     const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
     assert.ok(
       blockers.some((b) => b.includes('reports drill failure')),
@@ -490,7 +524,7 @@ test('validateReadiness blocks approval when referenced evidence is not valid JS
     const record = buildValidApprovedRecord();
     record.sections.slo_and_alerting.evidence = [badPath];
 
-    const result = validateReadiness(record, 'test.json');
+    const result = validateApprovedRecord(record);
     const blockers = result.categoryBlockers.slo_and_alerting || [];
     assert.ok(
       blockers.some((b) => b.includes('is not valid JSON')),
@@ -506,7 +540,7 @@ test('validateReadiness skips cross-validation for non-approved sections', () =>
   record.sections.backup_and_disaster_recovery.status = 'unresolved';
   record.sections.backup_and_disaster_recovery.evidence = ['backups/restore-drill-evidence-does-not-exist.json'];
 
-  const result = validateReadiness(record, 'test.json');
+  const result = validateApprovedRecord(record);
   const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
   assert.ok(
     blockers.every((b) => !b.includes('no matching file exists on disk')),
@@ -525,7 +559,7 @@ test('validateReadiness resolves repo-relative evidence from a record kept in a 
     const record = buildValidApprovedRecord();
     record.sections.backup_and_disaster_recovery.evidence = ['my-evidence.json'];
 
-    const result = validateReadiness(record, path.join(subDir, 'operator.json'));
+    const result = validateApprovedRecord(record, path.join(subDir, 'operator.json'));
     const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
     assert.ok(
       blockers.every((b) => !b.includes('no matching file exists on disk')),
@@ -545,7 +579,7 @@ test('validateReadiness blocks approval when evidence reports a non-zero exitCod
     const record = buildValidApprovedRecord();
     record.sections.backup_and_disaster_recovery.evidence = [reportPath];
 
-    const result = validateReadiness(record, 'test.json');
+    const result = validateApprovedRecord(record);
     const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
     assert.ok(
       blockers.some((b) => b.includes('summary.exitCode: 1')),
@@ -565,6 +599,10 @@ test('the checked-in template readiness.example.json fails closed with unresolve
 
   assert.ok(categories.length > 0, 'Expected checked-in template to have unresolved blockers');
   assert.strictEqual(result.totalApproved, 0, 'Expected 0 approved categories in checked-in template');
+  assert.ok(
+    (result.categoryBlockers.deployment_and_rollback || []).every((message) => !message.includes('ACRES_CLIENT_IMAGE') && !message.includes('ACRES_SERVER_IMAGE')),
+    'Unapproved template must not require image exports'
+  );
 
   // Verify that optional_ai_posture in template fails because status is unresolved and evidence is empty
   const aiBlockers = result.categoryBlockers.optional_ai_posture || [];

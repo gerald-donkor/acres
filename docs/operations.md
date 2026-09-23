@@ -200,7 +200,8 @@ The readiness document contains 11 structured categories under `sections`:
 # Evaluate the default checked-in example (expected: fails closed with blockers)
 npm run ops:launch-readiness
 
-# Or evaluate a specific operator-provided readiness record:
+# In the release shell, export the exact current client/server digest pair,
+# then evaluate the operator-provided readiness record:
 npm run ops:launch-readiness -- infra/launch/production-readiness.json
 # or directly:
 node scripts/ops/check-launch-readiness.js infra/launch/production-readiness.json
@@ -236,14 +237,14 @@ Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
 This repository intentionally fails closed until real operator decisions and live drills are recorded.
 ```
 
-### Release evidence binding (prompt 164)
+### Release evidence binding (prompts 164–165)
 
 The deployment category now requires a reviewed source commit, distinct current
 and previous pinned client/server pairs, and three distinct evidence references.
 The validator reuses the release-image preflight grammar, checks the current
 registry host/repository prefix on a path boundary, checks local JSON evidence
 for missing files and failure markers, and compares the current pair with
-`ACRES_CLIENT_IMAGE`/`ACRES_SERVER_IMAGE` when `--bind-images` is requested.
+`ACRES_CLIENT_IMAGE`/`ACRES_SERVER_IMAGE` for every approved deployment check.
 Scheme-prefixed artifact URIs remain external references for operator inspection,
 including those ending in `.json`. These structural checks cannot establish
 cryptographic provenance or prove publication, promotion, or drill execution.
@@ -256,6 +257,20 @@ build needed unrestricted network/process access in this environment; the
 initial restricted attempts failed at registry DNS and Next's TypeScript
 `--showConfig` subprocess respectively. No release image was published or
 deployed.
+
+Prompt 165 closes the optional-binding bypass: an approved
+`deployment_and_rollback` section now requires the exported current client and
+server digest pair on both the direct Node CLI and `ops:launch-readiness`.
+Missing or mismatched exports produce field-only blockers without echoing the
+supplied values. The unapproved template still needs no exports and fails for
+its 69 operator-owned blockers. Verification on 2026-09-23: the focused
+readiness suite passed 24/24 tests; `ops:release-images-test`, `ops:templates`,
+`ops:check`, `lint`, `typecheck`, `build`, `contracts:check`, and
+`git diff --check` exited 0. The template command exited 1 as expected with
+0 approved categories. Restricted runs of the subprocess test and Next build
+hit process `EPERM`; the restricted dependency audit hit registry DNS
+`EAI_AGAIN`. The same checks passed with the required process and network
+access. No release image was published or deployed.
 
 ## Runbooks
 
@@ -278,7 +293,7 @@ network/process access their tools require. No image was published or deployed.
 2. Run `npm run ops:check` from the repository root.
 3. Run the normal repository verification suite.
 4. Retain the reviewed 40-hex source commit and previous known-good client/server digest pair. Build and publish the new pair through the operator-approved external release process. Separately verify each digest's provenance against the reviewed commit under `image_provenance_policy`; save distinct, stable verification artifact references. Complete the live promotion and rollback drill and save its evidence reference. Inspect the external artifacts before approval: the local validator only checks reference structure and local JSON failure markers, not signatures, registry contents, source-to-build origin, or whether a drill truly ran.
-5. Fill `deployment_and_rollback.release` with the source commit, current and previous pairs, and the three evidence references described above. The `image_registry_path` is a registry host or repository prefix, never a substring match. Do not store attestation tokens, signing keys, credentials, or registry auth in the record. Export `ACRES_CLIENT_IMAGE` and `ACRES_SERVER_IMAGE` once in the release shell through the approved environment injector as the exact **current** pair. In that **same shell**, run `node scripts/ops/check-launch-readiness.js --bind-images <operator-readiness.json> && node scripts/ops/check-release-images.js && docker compose --env-file <production-env-file> --env-file <garage-env-file> -f infra/compose/docker-compose.production.example.yml config --quiet`. Keep both exports unchanged for migration and production Compose commands. Compose gives exported shell variables precedence over values in `--env-file` ([Docker interpolation precedence](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)), so all three checks inspect the same pair. Bound readiness fails when either export is absent or mismatched. Avoid printing the resolved production environment.
+5. Fill `deployment_and_rollback.release` with the source commit, current and previous pairs, and the three evidence references described above. The `image_registry_path` is a registry host or repository prefix, never a substring match. Do not store attestation tokens, signing keys, credentials, or registry auth in the record. Export `ACRES_CLIENT_IMAGE` and `ACRES_SERVER_IMAGE` once in the release shell through the approved environment injector as the exact **current** pair. In that **same shell**, run `npm run ops:launch-readiness -- <operator-readiness.json> && node scripts/ops/check-release-images.js && docker compose --env-file <production-env-file> --env-file <garage-env-file> -f infra/compose/docker-compose.production.example.yml config --quiet`. The direct `node scripts/ops/check-launch-readiness.js <operator-readiness.json>` command enforces the same binding. Keep both exports unchanged for migration and production Compose commands. Compose gives exported shell variables precedence over values in `--env-file` ([Docker interpolation precedence](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)), so all three checks inspect the same pair. Approved deployment readiness fails when either export is absent or mismatched. Avoid printing the resolved production environment.
 6. Confirm only Caddy publishes host ports, stateful services use encrypted mounts, and Grafana/Prometheus are not public unless an authenticated operator path has been approved.
 
 ### Deploy

@@ -136,8 +136,13 @@ do not report failure.
   `release.previous.server_image`, `release.client_provenance_evidence`,
   `release.server_provenance_evidence`, and `release.live_drill_evidence`.
   The approver inspects both external verification artifacts and the live drill
-  evidence, then runs `check-launch-readiness.js --bind-images <record>` with
-  the current pair exported before image preflight and Compose validation.
+  evidence. In the release shell, export the exact current pair and run
+  `npm run ops:launch-readiness -- <record>` (or
+  `node scripts/ops/check-launch-readiness.js <record>`), followed by
+  `node scripts/ops/check-release-images.js` and production Compose
+  `config --quiet` in that same shell. Approved deployment checks require
+  the exported pair. The checked-in unapproved template still fails with
+  operator blockers when no pair is exported.
 - Accept: target host profile, pinned OCI registry path, named
   `deployment_approver` and `rollback_authority`, image provenance policy
   (signed, additive migrations only), `live_readiness_drill_completed: true`

@@ -514,13 +514,11 @@ function validateReadiness(record, _filePath, options = {}) {
       if (new Set(refs).size !== refs.length) {
         addBlocker(category, 'Release evidence references must be distinct');
       }
-      if (options.bindImages === true) {
-        for (const [role, envName] of [['client_image', 'ACRES_CLIENT_IMAGE'], ['server_image', 'ACRES_SERVER_IMAGE']]) {
-          if (typeof options.env?.[envName] !== 'string' || !options.env[envName]) {
-            addBlocker(category, `${envName} is required in bound mode`);
-          } else if (options.env[envName] !== release.current?.[role]) {
-            addBlocker(category, `${envName} does not match release.current.${role}`);
-          }
+      for (const [role, envName] of [['client_image', 'ACRES_CLIENT_IMAGE'], ['server_image', 'ACRES_SERVER_IMAGE']]) {
+        if (typeof options.env?.[envName] !== 'string' || !options.env[envName]) {
+          addBlocker(category, `${envName} is required for approved deployment`);
+        } else if (options.env[envName] !== release.current?.[role]) {
+          addBlocker(category, `${envName} does not match release.current.${role}`);
         }
       }
     }
@@ -596,14 +594,12 @@ function validateReadiness(record, _filePath, options = {}) {
 
 function main() {
   const args = process.argv.slice(2);
-  const bindImages = args.includes('--bind-images');
-  const paths = args.filter((arg) => arg !== '--bind-images');
-  if (paths.length > 1 || paths.some((arg) => arg.startsWith('--'))) {
-    console.error('Usage: check-launch-readiness.js [--bind-images] [readiness.json]');
+  if (args.length > 1 || args.some((arg) => arg.startsWith('--'))) {
+    console.error('Usage: check-launch-readiness.js [readiness.json]');
     process.exit(1);
   }
-  const targetPath = paths[0]
-    ? path.resolve(process.cwd(), paths[0])
+  const targetPath = args[0]
+    ? path.resolve(process.cwd(), args[0])
     : path.resolve(process.cwd(), 'infra/launch/readiness.example.json');
 
   const relativePath = path.relative(process.cwd(), targetPath);
@@ -627,7 +623,7 @@ function main() {
     process.exit(1);
   }
 
-  const { categoryBlockers, totalApproved, totalSections } = validateReadiness(record, targetPath, { bindImages, env: process.env });
+  const { categoryBlockers, totalApproved, totalSections } = validateReadiness(record, targetPath, { env: process.env });
 
   const categoriesWithBlockers = Object.keys(categoryBlockers);
   let totalBlockersCount = 0;
