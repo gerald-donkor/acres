@@ -172,8 +172,8 @@ test('verifyAlertRules: rejects a 4xx numerator for High429Rate', () => {
     const alertsObj = yaml.load(fs.readFileSync(ALERTS_FILE, 'utf8'));
     const rule = alertsObj.groups[0].rules.find((item) => item.alert === 'High429Rate');
     rule.expr = rule.expr.replace(
-      'acres_http_429_responses_total[5m]',
-      'acres_http_requests_total{status_class="4xx"}[5m]',
+      'acres_http_429_responses_total{job="acres-api"}[5m]',
+      'acres_http_requests_total{job="acres-api",status_class="4xx"}[5m]',
     );
     const tmpAlertsPath = path.join(tmpDir, 'alerts.yml');
     fs.writeFileSync(tmpAlertsPath, yaml.dump(alertsObj), 'utf8');
@@ -205,7 +205,7 @@ test('HighHttpConcurrency: rejects a changed signal, duration, or severity', () 
 
     const result = verifyAlertRules({ alertsPath: tmpAlertsPath, promConfigPath: PROM_FILE });
     assert.equal(result.valid, false);
-    assert.ok(result.errors.some((error) => error.includes('expr must be acres_http_active_requests > 40')));
+    assert.ok(result.errors.some((error) => error.includes('expr must be acres_http_active_requests{job="acres-api"} > 40')));
     assert.ok(result.errors.some((error) => error.includes('for must be 2m')));
     assert.ok(result.errors.some((error) => error.includes('severity must be warning')));
   } finally {
@@ -254,4 +254,17 @@ test('isValidDuration: accurately accepts valid Prometheus durations and rejects
   assert.equal(isValidDuration(null), false);
   assert.equal(isValidDuration(undefined), false);
   assert.equal(isValidDuration(100), false);
+});
+
+test('verifyAlertRules: rejects an unscoped outbox selector that would duplicate alert instances', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-alert-test-'));
+  try {
+    const alertsObj = yaml.load(fs.readFileSync(ALERTS_FILE, 'utf8'));
+    alertsObj.groups[0].rules.find((item) => item.alert === 'OutboxDeliveryLag').expr = 'acres_outbox_pending_events > 50';
+    const tmpAlertsPath = path.join(tmpDir, 'alerts.yml');
+    fs.writeFileSync(tmpAlertsPath, yaml.dump(alertsObj));
+    const result = verifyAlertRules({ alertsPath: tmpAlertsPath, promConfigPath: PROM_FILE });
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some((error) => error.includes('every metric selector must use job="acres-api"')));
+  } finally { fs.rmSync(tmpDir, { recursive: true, force: true }); }
 });

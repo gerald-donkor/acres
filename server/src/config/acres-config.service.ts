@@ -26,6 +26,14 @@ export class AcresConfigService {
     return this.get('port');
   }
 
+  get workerMetricsHost(): string {
+    return this.get('workerMetricsHost');
+  }
+
+  get workerMetricsPort(): number {
+    return this.get('workerMetricsPort');
+  }
+
   get clientOrigin(): string {
     return this.get('clientOrigin');
   }

@@ -60,8 +60,9 @@ closed once during Prisma shutdown. A fresh API process reports zero total,
 idle, and waiting connections and the driver's effective maximum. A failed
 snapshot fails the scrape instead of preserving an old value. `waiting > 0`
 demonstrates local pool acquisition backlog; `total == max` alone does not
-prove saturation. The values do not cover the worker, migrator, other clients,
-server-wide connection limits, lock waits, query duration, or wait duration.
+prove saturation. This API sample does not cover the separately scraped worker, migrator, other
+clients, server-wide connection limits, lock waits, query duration, or wait
+duration.
 No pool saturation alert or threshold is configured; production capacity
 evidence is still needed before setting one. Rolling back this change removes
 the gauges and dashboard panels, returning to an unobserved API pool.
@@ -86,6 +87,16 @@ defense-in-depth for untyped callers and preserves the bounded `source_kind`
 label cardinality invariant. No label value, exposition line, or
 counter/histogram behavior changed (`acres_parser_executions_total`,
 `acres_parser_execution_duration_seconds`).
+
+### Worker telemetry (prompt 169, 2026-09-23)
+
+The worker remains a Nest application context. After its initial outbox dispatch and queue startup return, a separate Node HTTP listener serves exact `GET /health` (plain `ok`, process-start readiness only) and `GET /metrics` (the worker's own `prom-client` registry). Other paths return 404, other methods 405, and collection failure returns an empty 503. The listener binds `127.0.0.1:3002` by default; production Compose sets `WORKER_METRICS_HOST=0.0.0.0` on the isolated `private` network, exposes port 3002 only to peers, and does not publish it or route it through Caddy. `WORKER_METRICS_PORT` accepts only 1–65535. The worker Compose healthcheck overrides the shared image's API probe and calls `127.0.0.1:3002/health`. The listener stops accepting and closes active scrape connections before job drain and Nest shutdown, so a stalled collector cannot delay worker drain; startup failure cleans up the worker and application context.
+
+Prometheus scrapes `acres-worker` every 30 seconds. This registry exports worker queue, parser and scheduled-job counters plus process-local `pg.Pool` total, idle, waiting, and configured maximum gauges. The pool snapshot itself issues no query; the existing outbox-pending collector **does** query PostgreSQL on each scrape and currently catches its own failures, so that gauge can be stale if the database is unavailable. A failed pool collector fails the scrape and makes `up{job="acres-worker"}` zero. The dashboard shows worker status and worker pool panels apart from API panels. HTTP, 429, latency, concurrency, and outbox alerts select `acres-api`; the queue-dead-letter alert selects `acres-worker`. This avoids duplicate outbox alert instances. All seven alert names, thresholds, and severities remain unchanged.
+
+Verification on 2026-09-23: the focused listener/config suite passed 137/137 tests; the complete server unit suite passed 120/120 suites and 1851/1851 tests before the stalled-scrape follow-up; its focused listener suite then passed 4/4 tests; the server E2E suite passed 6/6 suites and 143/143 tests. `npm run ops:templates` passed; `npm run ops:alert-test` passed; `npm run ops:alert-drill` passed 16/16 checks; `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed. The sandboxed listener test could not bind localhost (`EPERM`) and the sandboxed Next build could not parse the TypeScript `--showConfig` subprocess output; both completed when rerun with local execution permission. No Docker/Prometheus live scrape, production traffic, or PostgreSQL-wide load was measured.
+
+These are two process-local pool snapshots, not PostgreSQL-wide connection counts. Lock/query diagnostics, acquisition wait duration, all other clients, and an evidence-based pool saturation threshold remain open. Rollback removes the worker listener, scrape, and dashboard panels and restores the old worker image healthcheck limitation; alert selectors should be reconsidered only with the target topology.
 
 ## Artifacts
 

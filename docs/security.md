@@ -628,3 +628,5 @@ references; `scan-secrets.sh` remains a gating stage).
 - **Runbooks**: `docs/launch-checklist.md` §5 gives each of the 7
   `infra/prometheus/alerts.yml` rules a triage/containment/escalation/clearing
   path, so a firing alert maps to an operator action rather than a dashboard.
+
+**2026-09-23 worker telemetry boundary:** The worker also exposes unauthenticated `GET /metrics` and `GET /health` on a separate Node listener. Its local default is loopback; production binds port 3002 only on the internal Compose network, with no host publication or Caddy route. Metrics responses contain bounded process/queue labels, and collector errors return an empty 503. Private-network access is the control; a compromised private peer could read operational metrics or repeatedly scrape, so operators must preserve network isolation.

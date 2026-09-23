@@ -17,3 +17,10 @@ scrape_configs:
     static_configs:
       - targets:
           - api:3001
+
+  - job_name: acres-worker
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - worker:3002

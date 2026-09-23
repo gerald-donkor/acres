@@ -41,7 +41,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -94,7 +96,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -151,7 +155,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -159,7 +165,7 @@
       },
       "targets": [
         {
-          "expr": "acres_outbox_pending_events",
+          "expr": "acres_outbox_pending_events{job=\"acres-api\"}",
           "legendFormat": "Pending Outbox",
           "refId": "A"
         }
@@ -204,7 +210,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -212,7 +220,7 @@
       },
       "targets": [
         {
-          "expr": "sum(acres_queue_jobs_total{status=\"failed\"}) or vector(0)",
+          "expr": "sum(acres_queue_jobs_total{job=\"acres-worker\",status=\"failed\"}) or vector(0)",
           "legendFormat": "Failed Queue Jobs",
           "refId": "A"
         }
@@ -253,7 +261,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(acres_http_requests_total[5m])) by (route_group)",
+          "expr": "sum(rate(acres_http_requests_total{job=\"acres-api\"}[5m])) by (route_group)",
           "legendFormat": "{{route_group}}",
           "refId": "A"
         }
@@ -291,7 +299,7 @@
       },
       "targets": [
         {
-          "expr": "(sum(rate(acres_http_requests_total{status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100",
+          "expr": "(sum(rate(acres_http_requests_total{job=\"acres-api\",status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job=\"acres-api\"}[5m])), 0.001)) * 100",
           "legendFormat": "5xx Error Rate (%)",
           "refId": "A"
         }
@@ -329,12 +337,12 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket[5m])) by (le, route_group))",
+          "expr": "histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket{job=\"acres-api\"}[5m])) by (le, route_group))",
           "legendFormat": "p95 - {{route_group}}",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.50, sum(rate(acres_http_request_duration_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(acres_http_request_duration_seconds_bucket{job=\"acres-api\"}[5m])) by (le))",
           "legendFormat": "p50 - aggregate",
           "refId": "B"
         }
@@ -372,7 +380,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(acres_scheduled_job_runs_total[5m])) by (job_name, status)",
+          "expr": "sum(rate(acres_scheduled_job_runs_total{job=\"acres-worker\"}[5m])) by (job_name, status)",
           "legendFormat": "{{job_name}} ({{status}})",
           "refId": "A"
         }
@@ -473,11 +481,163 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 30
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"acres-worker\"}",
+          "legendFormat": "Worker Status",
+          "refId": "A"
+        }
+      ],
+      "title": "Acres Worker Status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "type": "timeseries",
+      "id": 12,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 30
+      },
+      "title": "Worker PostgreSQL Pool Connections",
+      "description": "One worker process pg.Pool; excludes API and other PostgreSQL clients.",
+      "targets": [
+        {
+          "expr": "acres_postgres_pool_connections_total{job=\"acres-worker\"}",
+          "legendFormat": "Total",
+          "refId": "A"
+        },
+        {
+          "expr": "acres_postgres_pool_connections_idle{job=\"acres-worker\"}",
+          "legendFormat": "Idle",
+          "refId": "B"
+        },
+        {
+          "expr": "acres_postgres_pool_connections_max{job=\"acres-worker\"}",
+          "legendFormat": "Configured maximum",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "type": "timeseries",
+      "id": 13,
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 30
+      },
+      "title": "Worker PostgreSQL Pool Acquisition Backlog",
+      "description": "Waiting requests in the worker process pg.Pool; a positive value shows local acquisition backlog.",
+      "targets": [
+        {
+          "expr": "acres_postgres_pool_requests_waiting{job=\"acres-worker\"}",
+          "legendFormat": "Waiting",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "refresh": "30s",
   "schemaVersion": 41,
-  "tags": ["acres", "operations"],
+  "tags": [
+    "acres",
+    "operations"
+  ],
   "templating": {
     "list": []
   },
@@ -488,5 +648,5 @@
   "timezone": "browser",
   "title": "Acres Operations Foundation",
   "uid": "acres-operations-foundation",
-  "version": 3
+  "version": 4
 }

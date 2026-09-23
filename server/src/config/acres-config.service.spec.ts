@@ -10,6 +10,8 @@ describe('AcresConfigService', () => {
     nodeEnv: 'development',
     isProduction: false,
     port: 3001,
+    workerMetricsHost: '127.0.0.1',
+    workerMetricsPort: 3002,
     clientOrigin: 'http://localhost:3000',
     databaseUrl: 'postgresql://acres:acres@localhost:5432/acres',
     sessionCookieName: 'acres_session',

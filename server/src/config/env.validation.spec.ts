@@ -58,6 +58,8 @@ describe('validateEnv', () => {
       expect(config.nodeEnv).toBe('development');
       expect(config.isProduction).toBe(false);
       expect(config.port).toBe(3001);
+      expect(config.workerMetricsHost).toBe('127.0.0.1');
+      expect(config.workerMetricsPort).toBe(3002);
       expect(config.clientOrigin).toBe('http://localhost:3000');
       expect(config.databaseUrl).toBe(BASE_VALID_ENV.DATABASE_URL);
       expect(config.sessionCookieName).toBe('acres_session');
@@ -236,6 +238,36 @@ describe('validateEnv', () => {
         'Storage/queue credentials still use development placeholders.',
       );
     });
+  });
+
+  describe('worker metrics listener configuration', () => {
+    it('accepts a private interface bind and valid port', () => {
+      const config = validateEnv({
+        ...BASE_VALID_ENV,
+        WORKER_METRICS_HOST: '0.0.0.0',
+        WORKER_METRICS_PORT: '4000',
+      });
+      expect(config.workerMetricsHost).toBe('0.0.0.0');
+      expect(config.workerMetricsPort).toBe(4000);
+    });
+
+    it.each(['localhost', '::', '10.0.0.1', ''])(
+      'rejects invalid host %s',
+      (host) => {
+        expect(() =>
+          validateEnv({ ...BASE_VALID_ENV, WORKER_METRICS_HOST: host }),
+        ).toThrow('WORKER_METRICS_HOST');
+      },
+    );
+
+    it.each(['0', '65536', '-1', '3.1', 'abc'])(
+      'rejects invalid port %s',
+      (port) => {
+        expect(() =>
+          validateEnv({ ...BASE_VALID_ENV, WORKER_METRICS_PORT: port }),
+        ).toThrow('WORKER_METRICS_PORT');
+      },
+    );
   });
 
   describe('positiveInt validation', () => {

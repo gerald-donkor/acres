@@ -231,6 +231,18 @@ if (!scrapeJobs.includes('acres-api')) {
   process.exit(1);
 }
 
+const worker = services.worker;
+const workerScrape = (prom.scrape_configs || []).find((job) => job.job_name === 'acres-worker');
+if (!workerScrape || workerScrape.metrics_path !== '/metrics' ||
+    !workerScrape.static_configs?.some((entry) => entry.targets?.includes('worker:3002')) ||
+    !worker.expose?.includes('3002') || worker.environment?.WORKER_METRICS_HOST !== '0.0.0.0' ||
+    worker.environment?.WORKER_METRICS_PORT !== '3002' ||
+    !JSON.stringify(worker.healthcheck?.test).includes('127.0.0.1:3002/health') ||
+    JSON.stringify(services.caddy).includes('worker:3002')) {
+  console.error('ops template check failed: worker metrics must stay on private port 3002 with matching probe and scrape');
+  process.exit(1);
+}
+
 const alerts = readYaml('infra/prometheus/alerts.yml');
 const alertNames = (alerts.groups || []).flatMap((g) => (g.rules || []).map((r) => r.alert));
 const requiredAlerts = [
@@ -260,6 +272,18 @@ if (dashboard.uid !== 'acres-operations-foundation') {
 if (!Array.isArray(dashboard.panels) || dashboard.panels.length < 5) {
   console.error('ops template check failed: Grafana dashboard missing operational panels');
   process.exit(1);
+}
+
+for (const panel of dashboard.panels) {
+  for (const target of panel.targets || []) {
+    const expr = target.expr || '';
+    const expectedJob = panel.id === 1 ? 'prometheus' :
+      [4, 8, 11, 12, 13].includes(panel.id) ? 'acres-worker' : 'acres-api';
+    if (!expr.includes(`job="${expectedJob}"`)) {
+      console.error(`ops template check failed: dashboard panel ${panel.id} lacks ${expectedJob} scope`);
+      process.exit(1);
+    }
+  }
 }
 
 const readinessExample = readJson('infra/launch/readiness.example.json');

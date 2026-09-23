@@ -11,7 +11,7 @@ groups:
           description: The Acres API process at api:3001 has been unreachable for more than 1 minute.
 
       - alert: HighHttp5xxRate
-        expr: (sum(rate(acres_http_requests_total{status_class="5xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 5
+        expr: (sum(rate(acres_http_requests_total{job="acres-api",status_class="5xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job="acres-api"}[5m])), 0.001)) * 100 > 5
         for: 5m
         labels:
           severity: critical
@@ -20,7 +20,7 @@ groups:
           description: HTTP 5xx response rate has exceeded 5% of total requests over a 5-minute window.
 
       - alert: P95LatencyThresholdExceeded
-        expr: histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        expr: histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket{job="acres-api"}[5m])) by (le)) > 0.5
         for: 5m
         labels:
           severity: warning
@@ -29,7 +29,7 @@ groups:
           description: API p95 latency has exceeded 500ms for more than 5 minutes.
 
       - alert: High429Rate
-        expr: (sum(rate(acres_http_429_responses_total[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 10
+        expr: (sum(rate(acres_http_429_responses_total{job="acres-api"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job="acres-api"}[5m])), 0.001)) * 100 > 10
         for: 5m
         labels:
           severity: warning
@@ -38,7 +38,7 @@ groups:
           description: Rate of HTTP 429 responses exceeds 10% of total requests, indicating potential credential stuffing or DoS attempt.
 
       - alert: QueueDeadLettersDetected
-        expr: sum(acres_queue_jobs_total{status="failed"}) > 0
+        expr: sum(acres_queue_jobs_total{job="acres-worker",status="failed"}) > 0
         for: 1m
         labels:
           severity: warning
@@ -47,7 +47,7 @@ groups:
           description: One or more background worker jobs have encountered fatal errors and entered dead-letter storage.
 
       - alert: OutboxDeliveryLag
-        expr: acres_outbox_pending_events > 50
+        expr: acres_outbox_pending_events{job="acres-api"} > 50
         for: 10m
         labels:
           severity: warning
@@ -56,7 +56,7 @@ groups:
           description: More than 50 outbox events have remained pending delivery for over 10 minutes.
 
       - alert: HighHttpConcurrency
-        expr: acres_http_active_requests > 40
+        expr: acres_http_active_requests{job="acres-api"} > 40
         for: 2m
         labels:
           severity: warning

@@ -275,12 +275,14 @@ cause, action items) before resolving the alert thread.
 
 ### HighHttpConcurrency (warning)
 
-- PromQL: `acres_http_active_requests > 40` for 2m — more than 40 API HTTP
+- PromQL: `acres_http_active_requests{job="acres-api"} > 40` for 2m — more than 40 API HTTP
   requests in flight; this gauge does not measure database pool occupancy.
 - Triage: inspect in-flight request load, route patterns, p95 latency, 5xx,
   and dependency health. Check the API pool connection and waiting gauges
   named in the latency runbook alongside PostgreSQL evidence before
-  attributing cause. These gauges omit the worker, migrator, other clients,
+  attributing cause. Compare the separate `acres-worker` pool total, idle, max,
+  and waiting panels and `up{job="acres-worker"}` before assigning a pool
+  incident to the API. These gauges omit the migrator and other clients,
   server-wide limits, lock waits, and query performance.
 - Contain: address the observed cause and follow existing rollback authority
   if a deployment caused it. Escalate to on-call SRE if concurrency persists

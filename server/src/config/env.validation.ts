@@ -14,6 +14,8 @@ export interface AcresEnv {
   nodeEnv: NodeEnv;
   isProduction: boolean;
   port: number;
+  workerMetricsHost: string;
+  workerMetricsPort: number;
   clientOrigin: string;
   databaseUrl: string;
   sessionCookieName: string;
@@ -88,6 +90,8 @@ const REQUIRED = ['DATABASE_URL', 'CLIENT_ORIGIN', 'SESSION_SECRET'] as const;
 
 const DEFAULTS = {
   PORT: '3001',
+  WORKER_METRICS_HOST: '127.0.0.1',
+  WORKER_METRICS_PORT: '3002',
   SESSION_COOKIE_NAME: 'acres_session',
   SESSION_TTL_DAYS: '30',
   CSRF_COOKIE_NAME: 'acres_csrf',
@@ -174,6 +178,22 @@ function csv(name: string, raw: string): string[] {
     throw new Error(`${name} must include at least one value`);
   }
   return values;
+}
+
+function workerMetricsHost(raw: string): string {
+  if (raw !== '127.0.0.1' && raw !== '0.0.0.0') {
+    throw new Error('WORKER_METRICS_HOST must be 127.0.0.1 or 0.0.0.0');
+  }
+  return raw;
+}
+
+function workerMetricsPort(raw: string): number {
+  if (!/^[0-9]+$/.test(raw))
+    throw new Error('WORKER_METRICS_PORT must be an integer from 1 to 65535');
+  const port = Number(raw);
+  if (port < 1 || port > 65535)
+    throw new Error('WORKER_METRICS_PORT must be an integer from 1 to 65535');
+  return port;
 }
 
 export function validateEnv(raw: Record<string, unknown>): AcresEnv {
@@ -303,6 +323,12 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
     nodeEnv: nodeEnv as NodeEnv,
     isProduction: nodeEnv === 'production',
     port: positiveInt('PORT', env.PORT ?? DEFAULTS.PORT),
+    workerMetricsHost: workerMetricsHost(
+      env.WORKER_METRICS_HOST ?? DEFAULTS.WORKER_METRICS_HOST,
+    ),
+    workerMetricsPort: workerMetricsPort(
+      env.WORKER_METRICS_PORT ?? DEFAULTS.WORKER_METRICS_PORT,
+    ),
     clientOrigin: env.CLIENT_ORIGIN as string,
     databaseUrl: env.DATABASE_URL as string,
     sessionCookieName: env.SESSION_COOKIE_NAME ?? DEFAULTS.SESSION_COOKIE_NAME,

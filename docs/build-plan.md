@@ -796,8 +796,9 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   database pool saturation telemetry remains unimplemented and does not satisfy
   Phase 12's DB/query/pool observability target.
 - **2026-09-23 follow-up:** Prompt 168 adds API-process `pg.Pool` total, idle,
-  waiting, and maximum gauges. Worker and PostgreSQL-wide pool visibility,
-  wait duration, and evidence-based saturation alerting remain open.
+  waiting, and maximum gauges. Prompt 169 adds separate worker-process gauges
+  through a private scrape. PostgreSQL-wide visibility, wait duration, and
+  evidence-based saturation alerting remain open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).

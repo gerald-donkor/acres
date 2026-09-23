@@ -250,21 +250,29 @@ function verifyAlertRules(options = {}) {
 
     if (requiredAlert === 'High429Rate' && typeof rule.expr === 'string') {
       const normalized = rule.expr.replace(/\s+/g, '');
-      const expected = '(sum(rate(acres_http_429_responses_total[5m]))/clamp_min(sum(rate(acres_http_requests_total[5m])),0.001))*100>10';
+      const expected = '(sum(rate(acres_http_429_responses_total{job="acres-api"}[5m]))/clamp_min(sum(rate(acres_http_requests_total{job="acres-api"}[5m])),0.001))*100>10';
       if (normalized !== expected) {
         ruleErrors.push('expr must use the dedicated 429 counter over total requests at the configured 5m and 10% threshold');
       }
     }
 
     if (requiredAlert === 'HighHttpConcurrency') {
-      if (typeof rule.expr !== 'string' || rule.expr.trim() !== 'acres_http_active_requests > 40') {
-        ruleErrors.push('expr must be acres_http_active_requests > 40');
+      if (typeof rule.expr !== 'string' || rule.expr.trim() !== 'acres_http_active_requests{job="acres-api"} > 40') {
+        ruleErrors.push('expr must be acres_http_active_requests{job="acres-api"} > 40');
       }
       if (rule.for !== '2m') {
         ruleErrors.push('for must be 2m');
       }
       if (severity !== 'warning') {
         ruleErrors.push('severity must be warning');
+      }
+    }
+
+    const expectedJob = requiredAlert === 'QueueDeadLettersDetected' ? 'acres-worker' : 'acres-api';
+    if (typeof rule.expr === 'string') {
+      const selectors = [...rule.expr.matchAll(/\b(?:up|acres_[a-z0-9_]+)(?:\{([^}]*)\})?/g)];
+      if (selectors.some((match) => !match[1]?.includes(`job="${expectedJob}"`))) {
+        ruleErrors.push(`every metric selector must use job="${expectedJob}"`);
       }
     }
 

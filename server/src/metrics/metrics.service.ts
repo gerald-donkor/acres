@@ -79,7 +79,7 @@ export class MetricsService implements OnModuleDestroy {
 
     this.postgresPoolConnectionsTotal = new Gauge({
       name: 'acres_postgres_pool_connections_total',
-      help: 'Connections in the API process pg.Pool',
+      help: 'Connections in the current process pg.Pool',
       registers: [this.registry],
       collect: () => {
         if (!this.prisma) return;
@@ -92,17 +92,17 @@ export class MetricsService implements OnModuleDestroy {
     });
     this.postgresPoolConnectionsIdle = new Gauge({
       name: 'acres_postgres_pool_connections_idle',
-      help: 'Idle connections in the API process pg.Pool',
+      help: 'Idle connections in the current process pg.Pool',
       registers: [this.registry],
     });
     this.postgresPoolRequestsWaiting = new Gauge({
       name: 'acres_postgres_pool_requests_waiting',
-      help: 'Requests waiting to acquire an API process pg.Pool connection',
+      help: 'Requests waiting to acquire the current process pg.Pool connection',
       registers: [this.registry],
     });
     this.postgresPoolConnectionsMax = new Gauge({
       name: 'acres_postgres_pool_connections_max',
-      help: 'Configured maximum connections in the API process pg.Pool',
+      help: 'Configured maximum connections in the current process pg.Pool',
       registers: [this.registry],
     });
 
