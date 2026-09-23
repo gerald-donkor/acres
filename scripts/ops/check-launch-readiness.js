@@ -11,6 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { validateImageReference } = require('./check-release-images');
 
 const REQUIRED_SECTIONS = [
   'production_domain_tls',
@@ -53,7 +54,7 @@ function checkPlaceholdersAndSecrets(obj, currentPath, blockers) {
 
   if (typeof obj === 'string') {
     if (obj.includes('__REQUIRED_') || obj.includes('<REQUIRED_') || obj.includes('change-me')) {
-      blockers.push(`Field '${currentPath}' contains unresolved placeholder: "${obj}"`);
+      blockers.push(`Field '${currentPath}' contains unresolved placeholder`);
     }
     if (/NEXT_PUBLIC_.*(SECRET|PASSWORD|TOKEN|KEY)/i.test(obj)) {
       blockers.push(`Field '${currentPath}' contains client-exposed secret pattern`);
@@ -161,7 +162,7 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   }
 }
 
-function validateReadiness(record, _filePath) {
+function validateReadiness(record, _filePath, options = {}) {
   const categoryBlockers = {};
   let totalApproved = 0;
 
@@ -446,6 +447,83 @@ function validateReadiness(record, _filePath) {
     if (depSec.live_readiness_drill_completed !== true) {
       addBlocker('deployment_and_rollback', 'Live deployment & Caddy routing drill must be completed (live_readiness_drill_completed: true)');
     }
+    const category = 'deployment_and_rollback';
+    const release = depSec.release;
+    if (!release || typeof release !== 'object' || Array.isArray(release)) {
+      addBlocker(category, 'Release record is required');
+    } else {
+      if (typeof release.reviewed_source_commit !== 'string' || !/^[a-fA-F0-9]{40}$/.test(release.reviewed_source_commit)) {
+        addBlocker(category, 'release.reviewed_source_commit must be exactly 40 ASCII hex characters');
+      }
+      const images = {};
+      for (const pair of ['current', 'previous']) {
+        images[pair] = {};
+        for (const role of ['client_image', 'server_image']) {
+          const value = release[pair]?.[role];
+          try {
+            validateImageReference(value, `release.${pair}.${role}`);
+            images[pair][role] = value;
+          } catch {
+            addBlocker(category, `release.${pair}.${role} must be a valid immutable image reference`);
+          }
+        }
+        if (images[pair].client_image && images[pair].client_image === images[pair].server_image) {
+          addBlocker(category, `release.${pair} must use distinct client and server images`);
+        }
+      }
+      if (images.current.client_image && images.current.server_image &&
+          images.current.client_image === images.previous.client_image &&
+          images.current.server_image === images.previous.server_image) {
+        addBlocker(category, 'release.current and release.previous must differ');
+      }
+      const prefix = depSec.image_registry_path;
+      const validPrefix = typeof prefix === 'string' && !prefix.includes('@') &&
+        !prefix.endsWith('/') && (() => {
+          try {
+            validateImageReference(`${prefix}/probe@sha256:${'a'.repeat(64)}`, 'image_registry_path');
+            return true;
+          } catch { return false; }
+        })();
+      if (!validPrefix) {
+        addBlocker(category, 'image_registry_path must be a registry host or repository prefix');
+      } else {
+        for (const role of ['client_image', 'server_image']) {
+          if (images.current[role] && !images.current[role].startsWith(`${prefix}/`)) {
+            addBlocker(category, `release.current.${role} is outside image_registry_path`);
+          }
+        }
+      }
+      const refs = [];
+      const baseDirs = [process.cwd()];
+      if (typeof _filePath === 'string' && _filePath.length > 0) {
+        const fileDir = path.dirname(path.resolve(process.cwd(), _filePath));
+        if (!baseDirs.includes(fileDir)) baseDirs.push(fileDir);
+      }
+      for (const field of ['client_provenance_evidence', 'server_provenance_evidence', 'live_drill_evidence']) {
+        const ref = release[field];
+        const external = typeof ref === 'string' && /^[a-z][a-z0-9+.-]*:[^\s]+$/i.test(ref);
+        if (typeof ref !== 'string' || !ref.trim() || ref !== ref.trim() ||
+            ref.includes('__REQUIRED_') || ref.includes('*') ||
+            (!ref.endsWith('.json') && !external)) {
+          addBlocker(category, `release.${field} must be a local JSON path or stable external identifier`);
+          continue;
+        }
+        refs.push(ref);
+        if (!external) checkEvidenceFile(ref, category, addBlocker, baseDirs);
+      }
+      if (new Set(refs).size !== refs.length) {
+        addBlocker(category, 'Release evidence references must be distinct');
+      }
+      if (options.bindImages === true) {
+        for (const [role, envName] of [['client_image', 'ACRES_CLIENT_IMAGE'], ['server_image', 'ACRES_SERVER_IMAGE']]) {
+          if (typeof options.env?.[envName] !== 'string' || !options.env[envName]) {
+            addBlocker(category, `${envName} is required in bound mode`);
+          } else if (options.env[envName] !== release.current?.[role]) {
+            addBlocker(category, `${envName} does not match release.current.${role}`);
+          }
+        }
+      }
+    }
   }
 
   // 3.11 optional_ai_posture - FAIL-CLOSED on AI enablement
@@ -517,8 +595,15 @@ function validateReadiness(record, _filePath) {
 }
 
 function main() {
-  const targetPath = process.argv[2]
-    ? path.resolve(process.cwd(), process.argv[2])
+  const args = process.argv.slice(2);
+  const bindImages = args.includes('--bind-images');
+  const paths = args.filter((arg) => arg !== '--bind-images');
+  if (paths.length > 1 || paths.some((arg) => arg.startsWith('--'))) {
+    console.error('Usage: check-launch-readiness.js [--bind-images] [readiness.json]');
+    process.exit(1);
+  }
+  const targetPath = paths[0]
+    ? path.resolve(process.cwd(), paths[0])
     : path.resolve(process.cwd(), 'infra/launch/readiness.example.json');
 
   const relativePath = path.relative(process.cwd(), targetPath);
@@ -542,7 +627,7 @@ function main() {
     process.exit(1);
   }
 
-  const { categoryBlockers, totalApproved, totalSections } = validateReadiness(record, targetPath);
+  const { categoryBlockers, totalApproved, totalSections } = validateReadiness(record, targetPath, { bindImages, env: process.env });
 
   const categoriesWithBlockers = Object.keys(categoryBlockers);
   let totalBlockersCount = 0;

@@ -191,7 +191,7 @@ The readiness document contains 11 structured categories under `sections`:
 7. `data_retention_policy`: Formal retention windows for accounts, audit logs, upload quarantine, rejected objects, report exports, generated reports, telemetry metrics, and backups.
 8. `volume_encryption`: Host-level volume encryption mechanism (LUKS2/KMS), encrypted mount paths for all stateful services (PostgreSQL, Valkey, Garage), key separation confirmation, and key recovery owner.
 9. `graphql_introspection`: Production introspection state and security justification.
-10. `deployment_and_rollback`: Target host architecture, OCI image registry, deployment approver, rollback authority, image provenance policy (Cosign/OIDC), and live readiness drill status.
+10. `deployment_and_rollback`: Target host architecture, OCI registry host or repository prefix, deployment approver, rollback authority, image provenance policy (Cosign/OIDC), live readiness drill status, and a structured `release` record. `release.reviewed_source_commit` is exactly 40 hex characters. `release.current.client_image`, `release.current.server_image`, `release.previous.client_image`, and `release.previous.server_image` are complete pinned image references. `release.client_provenance_evidence`, `release.server_provenance_evidence`, and `release.live_drill_evidence` are distinct local JSON paths or stable external artifact identifiers (for example, `artifact:release-123-client-verification`). The current images must have `image_registry_path` as a complete registry host or repository prefix, followed by `/`; prior images may come from a former registry.
 11. `optional_ai_posture`: Verification that `ai_enabled` is `false`, `no_ai_path_verified` is `true`, `server_ai_draft_enabled_false` is `true`, `no_gemini_api_key_provisioned` is `true`, `unpaid_provider_excluded` is `true`, and `phase11_status` documents the exclusion. Any record with `ai_enabled: true` fails immediately because the unpaid Gemini Developer API preview is excluded from production launch.
 
 ### Running the Validator
@@ -209,7 +209,7 @@ node scripts/ops/check-launch-readiness.js infra/launch/production-readiness.jso
 ### Distinction: `ops:check` vs `ops:launch-readiness`
 
 - `npm run ops:check`: **CI-safe**. Validates that all production templates exist, parse cleanly as YAML/JSON, have correct service scopes, do not leak secrets into git, and that dependencies have no critical vulnerabilities. It passes in CI on every push.
-- `npm run ops:launch-readiness`: **Launch-gated fail-closed validator**. Runs all baseline checks and then validates the readiness record. The checked-in template `infra/launch/readiness.example.json` intentionally fails with 61 unresolved blockers across all 11 categories because operator decisions and live host drills have not been performed.
+- `npm run ops:launch-readiness`: **Launch-gated fail-closed validator**. Runs all baseline checks and then validates the readiness record. The checked-in template `infra/launch/readiness.example.json` intentionally fails with unresolved blockers across all 11 categories because operator decisions and live host drills have not been performed.
 
 ### Expected Failing Output on Checked-in Example
 
@@ -222,19 +222,40 @@ Target: infra/launch/readiness.example.json
 ================================================================================
 
 Unresolved Launch Blockers by Category:
-... (lists all 61 unresolved placeholders and unapproved categories) ...
+... (lists unresolved placeholders and unapproved categories) ...
 
 --------------------------------------------------------------------------------
 SUMMARY:
   Total Required Categories: 11
   Approved Categories:       0
   Unresolved / Blocked:      11
-  Total Blockers Detected:   61
+  Total Blockers Detected:   69
 ================================================================================
 
 Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
 This repository intentionally fails closed until real operator decisions and live drills are recorded.
 ```
+
+### Release evidence binding (prompt 164)
+
+The deployment category now requires a reviewed source commit, distinct current
+and previous pinned client/server pairs, and three distinct evidence references.
+The validator reuses the release-image preflight grammar, checks the current
+registry host/repository prefix on a path boundary, checks local JSON evidence
+for missing files and failure markers, and compares the current pair with
+`ACRES_CLIENT_IMAGE`/`ACRES_SERVER_IMAGE` when `--bind-images` is requested.
+Scheme-prefixed artifact URIs remain external references for operator inspection,
+including those ending in `.json`. These structural checks cannot establish
+cryptographic provenance or prove publication, promotion, or drill execution.
+
+Verification on 2026-09-23: `ops:readiness-test`, `ops:release-images-test`,
+`ops:templates`, `ops:check`, `lint`, `typecheck`, `contracts:check`, and the
+production `build` passed. `ops:launch-readiness` exited 1 as expected for the
+checked-in example, with 0 approved categories and 69 blockers. The audit and
+build needed unrestricted network/process access in this environment; the
+initial restricted attempts failed at registry DNS and Next's TypeScript
+`--showConfig` subprocess respectively. No release image was published or
+deployed.
 
 ## Runbooks
 
@@ -256,8 +277,8 @@ network/process access their tools require. No image was published or deployed.
 1. Resolve every `__REQUIRED_*__` value from `infra/env/production.env.example` through the approved secret store or host mechanism.
 2. Run `npm run ops:check` from the repository root.
 3. Run the normal repository verification suite.
-4. Build and publish the reviewed client and server images through the operator-approved external release process. Record the source commit and both registry manifest digests; verify them under the approved provenance policy. Retain the previous known-good digests.
-5. Export `ACRES_CLIENT_IMAGE` and `ACRES_SERVER_IMAGE` once in the release shell through the approved environment injector as `registry/path@sha256:<64 lowercase hex>` references. In that **same shell**, run `node scripts/ops/check-release-images.js && docker compose --env-file <production-env-file> --env-file <garage-env-file> -f infra/compose/docker-compose.production.example.yml config --quiet`. Keep both exports unchanged for the subsequent production Compose commands. Do not pass image variables only to the preflight command: Compose gives exported shell variables precedence over values in `--env-file` ([Docker interpolation precedence](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)), which binds both commands to the same references. The preflight checks syntax and Compose wiring; it does not verify signatures, registry contents, or the source commit. Avoid printing the resolved production environment.
+4. Retain the reviewed 40-hex source commit and previous known-good client/server digest pair. Build and publish the new pair through the operator-approved external release process. Separately verify each digest's provenance against the reviewed commit under `image_provenance_policy`; save distinct, stable verification artifact references. Complete the live promotion and rollback drill and save its evidence reference. Inspect the external artifacts before approval: the local validator only checks reference structure and local JSON failure markers, not signatures, registry contents, source-to-build origin, or whether a drill truly ran.
+5. Fill `deployment_and_rollback.release` with the source commit, current and previous pairs, and the three evidence references described above. The `image_registry_path` is a registry host or repository prefix, never a substring match. Do not store attestation tokens, signing keys, credentials, or registry auth in the record. Export `ACRES_CLIENT_IMAGE` and `ACRES_SERVER_IMAGE` once in the release shell through the approved environment injector as the exact **current** pair. In that **same shell**, run `node scripts/ops/check-launch-readiness.js --bind-images <operator-readiness.json> && node scripts/ops/check-release-images.js && docker compose --env-file <production-env-file> --env-file <garage-env-file> -f infra/compose/docker-compose.production.example.yml config --quiet`. Keep both exports unchanged for migration and production Compose commands. Compose gives exported shell variables precedence over values in `--env-file` ([Docker interpolation precedence](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)), so all three checks inspect the same pair. Bound readiness fails when either export is absent or mismatched. Avoid printing the resolved production environment.
 6. Confirm only Caddy publishes host ports, stateful services use encrypted mounts, and Grafana/Prometheus are not public unless an authenticated operator path has been approved.
 
 ### Deploy

@@ -131,6 +131,13 @@ do not report failure.
   approved provenance verification for each, and both previous known-good
   digests. Include the release-image preflight and Compose `config --quiet`
   result; static checks alone do not establish live readiness.
+- Record `release.reviewed_source_commit`, `release.current.client_image`,
+  `release.current.server_image`, `release.previous.client_image`,
+  `release.previous.server_image`, `release.client_provenance_evidence`,
+  `release.server_provenance_evidence`, and `release.live_drill_evidence`.
+  The approver inspects both external verification artifacts and the live drill
+  evidence, then runs `check-launch-readiness.js --bind-images <record>` with
+  the current pair exported before image preflight and Compose validation.
 - Accept: target host profile, pinned OCI registry path, named
   `deployment_approver` and `rollback_authority`, image provenance policy
   (signed, additive migrations only), `live_readiness_drill_completed: true`

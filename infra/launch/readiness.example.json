@@ -127,10 +127,24 @@
       "deployment_approver": "__REQUIRED_DEPLOYMENT_APPROVER__",
       "rollback_authority": "__REQUIRED_ROLLBACK_AUTHORITY__",
       "image_provenance_policy": "__REQUIRED_IMAGE_PROVENANCE_POLICY__",
+      "release": {
+        "reviewed_source_commit": "__REQUIRED_REVIEWED_SOURCE_COMMIT__",
+        "current": {
+          "client_image": "__REQUIRED_CURRENT_CLIENT_IMAGE_DIGEST__",
+          "server_image": "__REQUIRED_CURRENT_SERVER_IMAGE_DIGEST__"
+        },
+        "previous": {
+          "client_image": "__REQUIRED_PREVIOUS_CLIENT_IMAGE_DIGEST__",
+          "server_image": "__REQUIRED_PREVIOUS_SERVER_IMAGE_DIGEST__"
+        },
+        "client_provenance_evidence": "__REQUIRED_CLIENT_PROVENANCE_EVIDENCE__",
+        "server_provenance_evidence": "__REQUIRED_SERVER_PROVENANCE_EVIDENCE__",
+        "live_drill_evidence": "__REQUIRED_LIVE_DRILL_EVIDENCE__"
+      },
       "live_readiness_drill_completed": false,
       "approver": null,
       "evidence": [],
-      "notes": "Requires designated deployer/rollback authority, immutable tagged image build pipeline, and smoke-tested Caddy routing."
+      "notes": "Requires designated deployer/rollback authority, immutable digest-pinned image publication, provenance inspection, and a live promotion/rollback drill."
     },
     "optional_ai_posture": {
       "status": "unresolved",

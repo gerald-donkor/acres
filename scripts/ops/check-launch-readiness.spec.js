@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const {
   validateReadiness,
   checkPlaceholdersAndSecrets,
@@ -132,6 +133,20 @@ function buildValidApprovedRecord() {
         deployment_approver: 'release-manager',
         rollback_authority: 'on-call-sre',
         image_provenance_policy: 'cosign-signed-commits-only',
+        release: {
+          reviewed_source_commit: 'a'.repeat(40),
+          current: {
+            client_image: `registry.example.com/acres/app/client@sha256:${'a'.repeat(64)}`,
+            server_image: `registry.example.com/acres/app/server@sha256:${'b'.repeat(64)}`,
+          },
+          previous: {
+            client_image: `old.example.com/acres/client@sha256:${'c'.repeat(64)}`,
+            server_image: `old.example.com/acres/server@sha256:${'d'.repeat(64)}`,
+          },
+          client_provenance_evidence: 'artifact:client-attestation-1',
+          server_provenance_evidence: 'artifact:server-attestation-1',
+          live_drill_evidence: 'artifact:live-drill-1',
+        },
         live_readiness_drill_completed: true,
         approver: 'release-manager',
         evidence: ['Staging deployment and rollback drill executed successfully'],
@@ -164,6 +179,103 @@ test('validateReadiness passes for a fully approved record with no-AI assertions
   assert.strictEqual(Object.keys(result.categoryBlockers).length, 0);
   assert.strictEqual(result.totalApproved, REQUIRED_SECTIONS.length);
   assert.strictEqual(result.totalSections, REQUIRED_SECTIONS.length);
+});
+
+test('release approval fails closed on missing and placeholder fields', () => {
+  const fields = [
+    ['reviewed_source_commit'], ['current', 'client_image'], ['current', 'server_image'],
+    ['previous', 'client_image'], ['previous', 'server_image'],
+    ['client_provenance_evidence'], ['server_provenance_evidence'], ['live_drill_evidence'],
+  ];
+  for (const fieldPath of fields) {
+    for (const value of [undefined, '__REQUIRED_VALUE__']) {
+      const record = buildValidApprovedRecord();
+      let target = record.sections.deployment_and_rollback.release;
+      for (const part of fieldPath.slice(0, -1)) target = target[part];
+      target[fieldPath.at(-1)] = value;
+      const result = validateReadiness(record, 'test.json');
+      assert.ok(result.categoryBlockers.deployment_and_rollback?.length, `${fieldPath.join('.')} ${value}`);
+    }
+  }
+});
+
+test('release approval rejects malformed and inconsistent image pairs', () => {
+  const mutations = [
+    (r) => { r.reviewed_source_commit = 'g'.repeat(40); },
+    (r) => { r.current.client_image = 'registry.example.com/acres/app/client:latest'; },
+    (r) => { r.current.client_image = r.current.server_image; },
+    (r) => { r.previous.client_image = r.previous.server_image; },
+    (r) => { r.previous = { ...r.current }; },
+    (r) => { r.current.client_image = `registry.example.com/acres/application/client@sha256:${'a'.repeat(64)}`; },
+    (r) => { r.current.client_image = `wrong.example.com/acres/app/client@sha256:${'a'.repeat(64)}`; },
+  ];
+  for (const mutate of mutations) {
+    const record = buildValidApprovedRecord();
+    mutate(record.sections.deployment_and_rollback.release);
+    assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length);
+  }
+});
+
+test('release evidence requires distinct stable identifiers or successful local JSON', () => {
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'release-evidence-'));
+  try {
+    const file = path.join(dir, 'passed.json');
+    fs.writeFileSync(file, JSON.stringify({ status: 'success' }));
+    const record = buildValidApprovedRecord();
+    const release = record.sections.deployment_and_rollback.release;
+    release.live_drill_evidence = file;
+    assert.strictEqual(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback, undefined);
+    release.live_drill_evidence = 'https://artifacts.example/release/drill.json';
+    assert.strictEqual(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback, undefined);
+    for (const value of ['a free-text sentence', 'artifact:*', 'missing.json', '']) {
+      release.live_drill_evidence = value;
+      assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length, value);
+    }
+    release.live_drill_evidence = release.client_provenance_evidence;
+    assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length);
+    fs.writeFileSync(file, JSON.stringify({ status: 'FAILED' }));
+    release.live_drill_evidence = file;
+    assert.ok(validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback?.length);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('bound mode requires the exact current pair and redacts supplied images', () => {
+  const record = buildValidApprovedRecord();
+  const release = record.sections.deployment_and_rollback.release;
+  const good = { ACRES_CLIENT_IMAGE: release.current.client_image, ACRES_SERVER_IMAGE: release.current.server_image };
+  assert.strictEqual(validateReadiness(record, 'test.json', { bindImages: true, env: good }).categoryBlockers.deployment_and_rollback, undefined);
+  for (const env of [{}, { ...good, ACRES_CLIENT_IMAGE: good.ACRES_SERVER_IMAGE }, { ...good, ACRES_SERVER_IMAGE: 'sensitive-operator-value' }]) {
+    const blockers = validateReadiness(record, 'test.json', { bindImages: true, env }).categoryBlockers.deployment_and_rollback;
+    assert.ok(blockers?.length);
+    assert.ok(!JSON.stringify(blockers).includes('sensitive-operator-value'));
+  }
+  release.current.client_image = '__REQUIRED_sentinel-with-sensitive-operator-value__';
+  const blockers = validateReadiness(record, 'test.json').categoryBlockers.deployment_and_rollback;
+  assert.ok(!JSON.stringify(blockers).includes('sensitive-operator-value'));
+});
+
+test('CLI bound mode checks the exported pair without echoing it', () => {
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'release-readiness-'));
+  try {
+    const record = buildValidApprovedRecord();
+    const file = path.join(dir, 'approved.json');
+    fs.writeFileSync(file, JSON.stringify(record));
+    const images = record.sections.deployment_and_rollback.release.current;
+    const env = { ...process.env, ACRES_CLIENT_IMAGE: images.client_image, ACRES_SERVER_IMAGE: images.server_image };
+    const command = path.join(__dirname, 'check-launch-readiness.js');
+    const passed = spawnSync(process.execPath, [command, '--bind-images', file], { env, encoding: 'utf8' });
+    assert.strictEqual(passed.status, 0, passed.stdout + passed.stderr);
+    env.ACRES_SERVER_IMAGE = 'operator-secret-image-value';
+    const failed = spawnSync(process.execPath, [command, '--bind-images', file], { env, encoding: 'utf8' });
+    assert.strictEqual(failed.status, 1);
+    assert.ok(!(failed.stdout + failed.stderr).includes('operator-secret-image-value'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('validateReadiness rejects ai_enabled: true with the launch-exclusion fatal blocker', () => {
