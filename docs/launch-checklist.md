@@ -127,6 +127,10 @@ do not report failure.
 
 - Drill/verify: `bash scripts/ops/run-deployment-drill.sh --dry-run`
 - Evidence: `backups/deployment-drill-evidence-<timestamp>.json`
+- Release evidence: reviewed source commit, client and server manifest digests,
+  approved provenance verification for each, and both previous known-good
+  digests. Include the release-image preflight and Compose `config --quiet`
+  result; static checks alone do not establish live readiness.
 - Accept: target host profile, pinned OCI registry path, named
   `deployment_approver` and `rollback_authority`, image provenance policy
   (signed, additive migrations only), `live_readiness_drill_completed: true`

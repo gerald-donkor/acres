@@ -240,15 +240,29 @@ This repository intentionally fails closed until real operator decisions and liv
 
 ### Preflight
 
+The reference production Compose uses required digest inputs for `next`,
+`api`, and `worker`; API and worker use the same server digest and have no
+production-host source build fallback. `npm run ops:templates` checks this
+static contract, and `npm run ops:release-images-test` covers invalid inputs.
+CI still builds and smoke-tests local images only; it does not publish, attest,
+verify provenance, or promote release images.
+On 2026-09-23, the new release-image test, template check, container security
+check, and deployment dry-run exited 0. A synthetic pinned pair passed the
+preflight and Compose 5.5.1 `config --quiet` with both example env files;
+a tag-only client reference failed with exit 1. The full `ops:check`, lint,
+typecheck, contract check, and production build exited 0 when run with the
+network/process access their tools require. No image was published or deployed.
+
 1. Resolve every `__REQUIRED_*__` value from `infra/env/production.env.example` through the approved secret store or host mechanism.
 2. Run `npm run ops:check` from the repository root.
-3. Run `docker compose -f infra/compose/docker-compose.production.example.yml config` with the real production env file loaded.
-4. Confirm only Caddy publishes host ports, stateful services use encrypted mounts, and Grafana/Prometheus are not public unless an authenticated operator path has been approved.
-5. Run the normal repository verification suite before building images.
+3. Run the normal repository verification suite.
+4. Build and publish the reviewed client and server images through the operator-approved external release process. Record the source commit and both registry manifest digests; verify them under the approved provenance policy. Retain the previous known-good digests.
+5. Export `ACRES_CLIENT_IMAGE` and `ACRES_SERVER_IMAGE` once in the release shell through the approved environment injector as `registry/path@sha256:<64 lowercase hex>` references. In that **same shell**, run `node scripts/ops/check-release-images.js && docker compose --env-file <production-env-file> --env-file <garage-env-file> -f infra/compose/docker-compose.production.example.yml config --quiet`. Keep both exports unchanged for the subsequent production Compose commands. Do not pass image variables only to the preflight command: Compose gives exported shell variables precedence over values in `--env-file` ([Docker interpolation precedence](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)), which binds both commands to the same references. The preflight checks syntax and Compose wiring; it does not verify signatures, registry contents, or the source commit. Avoid printing the resolved production environment.
+6. Confirm only Caddy publishes host ports, stateful services use encrypted mounts, and Grafana/Prometheus are not public unless an authenticated operator path has been approved.
 
 ### Deploy
 
-1. Build immutable client and server images from a reviewed commit.
+1. Confirm the preflight and Compose validation passed for the exact reviewed client/server digests being promoted.
 2. Apply database migrations with the migrator identity before starting the new API/worker pair.
 3. Start/replace Caddy, Next, API, worker, and private dependencies with the production environment injected at runtime.
 4. Verify `GET /health` for liveness and `GET /health/ready` for dependency readiness through the Caddy path and from the private network.
@@ -257,7 +271,7 @@ This repository intentionally fails closed until real operator decisions and liv
 
 ### Rollback
 
-Use immutable image tags and keep the previous Caddy/app configuration available. Application rollback may point Caddy back to the previous Next/API images. Schema rollback is not assumed: migrations must be backward-compatible for at least one release cycle, and irreversible data changes use forward fixes unless a reviewed undo migration exists.
+Keep the previous Caddy/app configuration and known-good client/server digests available. Application rollback restores both previous digest references as one pair. Schema rollback is not assumed: migrations must be backward-compatible for at least one release cycle, and irreversible data changes use forward fixes unless a reviewed undo migration exists.
 
 ### Deployment & Caddy Ingress Drill
 

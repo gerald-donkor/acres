@@ -26,9 +26,7 @@ services:
     stop_grace_period: 30s
 
   next:
-    build:
-      context: ../..
-      dockerfile: infra/docker/client.Dockerfile.example
+    image: ${ACRES_CLIENT_IMAGE:?inject pinned client image digest}
     restart: unless-stopped
     env_file:
       - ../env/production.env.example
@@ -44,9 +42,7 @@ services:
     stop_grace_period: 30s
 
   api:
-    build:
-      context: ../..
-      dockerfile: server/Dockerfile
+    image: ${ACRES_SERVER_IMAGE:?inject pinned server image digest}
     restart: unless-stopped
     env_file:
       - ../env/production.env.example
@@ -76,9 +72,7 @@ services:
     stop_grace_period: 45s
 
   worker:
-    build:
-      context: ../..
-      dockerfile: server/Dockerfile
+    image: ${ACRES_SERVER_IMAGE:?inject pinned server image digest}
     restart: unless-stopped
     command: ["node", "server/dist/worker.js"]
     env_file:

@@ -36,10 +36,13 @@ require_file scripts/ops/verify-capacity-load.js
 require_file scripts/ops/verify-capacity-load.spec.js
 require_file scripts/ops/run-dos-resilience-drill.sh
 require_file scripts/ops/run-capacity-alerting-drill.sh
+require_file scripts/ops/check-release-images.js
+require_file scripts/ops/check-release-images.spec.js
 
 node <<'NODE'
 const fs = require('fs');
 const yaml = require('js-yaml');
+const { validateComposeImages } = require('./scripts/ops/check-release-images');
 
 function readYaml(path) {
   try {
@@ -62,6 +65,12 @@ function readJson(path) {
 const compose = readYaml('infra/compose/docker-compose.production.example.yml');
 const localCompose = readYaml('docker-compose.yml');
 const services = compose && compose.services ? compose.services : {};
+try {
+  validateComposeImages(compose);
+} catch (error) {
+  console.error(`ops template check failed: ${error.message}`);
+  process.exit(1);
+}
 const requiredServices = [
   'caddy',
   'next',
