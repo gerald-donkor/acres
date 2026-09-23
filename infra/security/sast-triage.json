@@ -7,22 +7,84 @@
       "rule_id": "SAST-01",
       "path": "server/src/geography/seed/check-geography-plans.ts",
       "severity": "LOW",
-      "lines": [134, 135],
       "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands",
       "approved_by": "security-owner",
       "approved_date": "2026-09-09",
-      "expires_at": "2027-09-09"
+      "expires_at": "2027-09-09",
+      "line": 137,
+      "snippet": "await prisma.$executeRawUnsafe('ANALYZE \"RegionGeometry\"');"
+    },
+    {
+      "id": "SUP-006",
+      "rule_id": "SAST-01",
+      "path": "server/src/geography/seed/check-geography-plans.ts",
+      "severity": "LOW",
+      "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09",
+      "line": 138,
+      "snippet": "await prisma.$executeRawUnsafe('ANALYZE \"Region\"');"
     },
     {
       "id": "SUP-002",
       "rule_id": "SAST-01",
       "path": "server/src/analytics/seed/check-analytics-plans.ts",
       "severity": "LOW",
-      "lines": [82, 83, 84, 85, 86],
       "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands in test isolation",
       "approved_by": "security-owner",
       "approved_date": "2026-09-09",
-      "expires_at": "2027-09-09"
+      "expires_at": "2027-09-09",
+      "line": 155,
+      "snippet": "await prisma.$executeRawUnsafe('ANALYZE \"MetricAggregate\"');"
+    },
+    {
+      "id": "SUP-007",
+      "rule_id": "SAST-01",
+      "path": "server/src/analytics/seed/check-analytics-plans.ts",
+      "severity": "LOW",
+      "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands in test isolation",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09",
+      "line": 156,
+      "snippet": "await prisma.$executeRawUnsafe('ANALYZE \"MetricObservation\"');"
+    },
+    {
+      "id": "SUP-008",
+      "rule_id": "SAST-01",
+      "path": "server/src/analytics/seed/check-analytics-plans.ts",
+      "severity": "LOW",
+      "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands in test isolation",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09",
+      "line": 157,
+      "snippet": "await prisma.$executeRawUnsafe('ANALYZE \"MetricDefinition\"');"
+    },
+    {
+      "id": "SUP-009",
+      "rule_id": "SAST-01",
+      "path": "server/src/analytics/seed/check-analytics-plans.ts",
+      "severity": "LOW",
+      "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands in test isolation",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09",
+      "line": 158,
+      "snippet": "await prisma.$executeRawUnsafe('ANALYZE \"MetricAggregateLineage\"');"
+    },
+    {
+      "id": "SUP-010",
+      "rule_id": "SAST-01",
+      "path": "server/src/analytics/seed/check-analytics-plans.ts",
+      "severity": "LOW",
+      "rationale": "Offline query plan benchmarking script running parameterized EXPLAIN commands in test isolation",
+      "approved_by": "security-owner",
+      "approved_date": "2026-09-09",
+      "expires_at": "2027-09-09",
+      "line": 159,
+      "snippet": "await prisma.$executeRawUnsafe('ANALYZE \"DashboardView\"');"
     },
     {
       "id": "SUP-003",

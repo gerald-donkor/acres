@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 
 const {
   SAST_RULES,
@@ -237,6 +238,55 @@ test('evaluateTriage: enforces exact path and granular line/lines constraints', 
   assert.equal(res.active.length, 2);
   assert.ok(res.active.some((f) => f.line === 20 && f.file === 'server/src/db.ts'));
   assert.ok(res.active.some((f) => f.file === 'other/path/to/server/src/db.ts'));
+});
+
+test('approved plan ANALYZE calls do not suppress dynamic SQL at the same line', () => {
+  const rootDir = path.resolve(__dirname, '../..');
+  const policy = JSON.parse(
+    fs.readFileSync(path.join(rootDir, 'infra/security/sast-triage.json'), 'utf8'),
+  );
+  const approvals = policy.suppressions.filter((s) =>
+    s.rule_id === 'SAST-01' && s.snippet?.includes('ANALYZE'),
+  );
+  const expectedTables = [
+    'DashboardView', 'MetricAggregate', 'MetricAggregateLineage',
+    'MetricDefinition', 'MetricObservation', 'Region', 'RegionGeometry',
+  ];
+  assert.deepEqual(
+    approvals.map((s) => s.snippet.match(/ANALYZE "(\w+)"/)?.[1]).sort(),
+    expectedTables.sort(),
+  );
+
+  const rule = SAST_RULES.find((r) => r.id === 'SAST-01');
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-sast-plan-'));
+  try {
+    for (const approval of approvals) {
+      const sourceLine = fs.readFileSync(path.join(rootDir, approval.path), 'utf8')
+        .split('\n')[approval.line - 1].trim();
+      assert.equal(sourceLine, approval.snippet, `${approval.id} must cover one complete fixed call`);
+      const approvedFinding = scanFile(approval.path, rootDir, [rule])
+        .find((finding) => finding.line === approval.line);
+      assert.ok(approvedFinding, `${approval.id} must still be detected`);
+      assert.equal(evaluateTriage([approvedFinding], policy).triaged.length, 1);
+
+      const mutatedLine = "await prisma.$executeRawUnsafe('ANALYZE \"' + tableName + '\"');";
+      const tempPath = path.join(tempRoot, approval.path);
+      fs.mkdirSync(path.dirname(tempPath), { recursive: true });
+      fs.writeFileSync(tempPath, `${'\n'.repeat(approval.line - 1)}${mutatedLine}\n`);
+      const mutatedFinding = scanFile(approval.path, tempRoot, [rule])
+        .find((finding) => finding.line === approval.line);
+      assert.ok(mutatedFinding, 'dynamic unsafe call must still be detected');
+      assert.equal(evaluateTriage([mutatedFinding], policy).active.length, 1);
+
+      fs.writeFileSync(tempPath, `${'\n'.repeat(approval.line - 1)}${sourceLine} ${mutatedLine}\n`);
+      const appendedFinding = scanFile(approval.path, tempRoot, [rule])
+        .find((finding) => finding.line === approval.line);
+      assert.ok(appendedFinding, 'appended unsafe call must still be detected');
+      assert.equal(evaluateTriage([appendedFinding], policy).active.length, 1);
+    }
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('runSastScan: repository scan passes cleanly with zero unreviewed blockers', () => {

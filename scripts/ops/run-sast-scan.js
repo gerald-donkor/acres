@@ -336,7 +336,7 @@ function evaluateTriage(findings, triagePolicy, now = new Date()) {
       if (Array.isArray(s.lines) && !s.lines.includes(finding.line)) {
         return false;
       }
-      if (typeof s.snippet === 'string' && !finding.snippet.includes(s.snippet)) {
+      if (typeof s.snippet === 'string' && finding.snippet !== s.snippet) {
         return false;
       }
 

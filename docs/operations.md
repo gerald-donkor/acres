@@ -430,6 +430,29 @@ statements call `$executeRawUnsafe`. All seven lines are present in baseline
 commit `a383fb2`; they are separate from this client image gate. The operations
 suite therefore has no passing end-to-end result for this change.
 
+On 2026-09-23, prompt 162 repaired those seven stale SAST triage locations.
+The existing `SUP-001` and `SUP-002` approvals retain their owner, rationale,
+date, LOW severity, and 2027-09-09 expiration. Five added entries (`SUP-006`
+through `SUP-010`) carry the same approved exception for the remaining calls.
+Each entry now matches exactly one fixed `ANALYZE` call by file, line, and full
+statement snippet. The source SQL and scanner rules are unchanged; triage now
+requires an exact trimmed-line snippet match, so an extra unsafe call on the
+same line cannot inherit the exception. A regression test scans each real
+approved call, a replacement with dynamic SQL, and an appended dynamic SQL
+call; only the fixed call is triaged.
+
+Local `npm run ops:sast-test` exited 0. `npm run ops:sast` scanned 360 files,
+reported 10 rule matches, 10 triaged suppressions, zero expired suppressions,
+zero active findings, and exited 0. The first sandboxed `npm run ops:check`
+stopped at `npm run ops:audit` because DNS resolution for `registry.npmjs.org`
+returned `EAI_AGAIN`; its retry with network access exited 0 through the final
+launch-drill test. That audit reported 16 moderate/high dependency advisories
+and zero critical vulnerabilities under the gate's existing threshold. Lint,
+typecheck, contract drift check, and the production build exited 0; the build
+needed an unsandboxed retry after Next failed to parse its TypeScript
+`--showConfig` child-process output inside the sandbox. No GitHub-hosted run of
+this repair has been observed, and operator launch approval remains open.
+
 ## No-AI Production Posture
 
 Phase 11A's assistive drafting preview is implemented in the application codebase behind a feature toggle (`AI_DRAFT_ENABLED=false`) and evaluated with synthetic fixtures. However, the unpaid Gemini Developer API is strictly excluded from the production launch profile. Launch evidence must demonstrate that regional browsing, dashboards, governed reports, exports, and operational runbooks work in a verified deterministic no-AI deployment. The production launch gate enforces `AI_DRAFT_ENABLED=false`, ensures no `GEMINI_API_KEY` is present in production environments or images, and requires explicit attestation of unpaid provider exclusion. Any future production AI service requires a separate decision regarding a paid, private, or local runtime and approved operational profile.
