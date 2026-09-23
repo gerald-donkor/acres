@@ -891,6 +891,62 @@ activity-label collision and an existing-volume rollout instruction gap;
 follow-up review reported no remaining findings. No production deployment
 or launch sign-off occurred.
 
+**Prompt 171 update (2026-09-23): lock waits and transaction age.** Prometheus
+now retains `pg_stat_activity_max_tx_duration` alongside the five existing
+PostgreSQL exporter metrics. The existing 30-second scrape, private exporter,
+monitor role, labels, and seven alerts are unchanged. Grafana panel 21 uses
+`sum by (wait_event) (pg_stat_activity_count{job="acres-postgres",datname="acres",wait_event_type="Lock"})`
+to count currently waiting `acres` backends by PostgreSQL lock event. Panel 22
+uses `max(pg_stat_activity_max_tx_duration{job="acres-postgres",datname="acres"})`
+in seconds to show the oldest current transaction across the collector's
+activity groups. Both panels preserve **No data** rather than filling absent
+series with zero. The collector's SQL calculates transaction age as
+`MAX(EXTRACT(EPOCH FROM now() - xact_start))`, excludes its own backend, and
+emits synthetic zero rows for database/state combinations without sessions.
+Neither panel measures query latency, lock-wait duration, pool-acquisition
+time, or server headroom. A 30-second sample may miss transient waits.
+
+On a disposable PostgreSQL 18.6 server with the pinned exporter v0.20.1, a
+two-session row-update conflict yielded
+`pg_stat_activity_count{application_name="psql",backend_type="client backend",datname="acres",state="active",usename="postgres",wait_event="transactionid",wait_event_type="Lock"} 1`.
+The same scrape reported transaction-age values of `4.132126` seconds for
+the holder (`wait_event_type="Timeout",wait_event="PgSleep"`) and `2.139469`
+seconds for the waiter (`wait_event_type="Lock",wait_event="transactionid"`),
+with `pg_up 1` and `pg_exporter_last_scrape_error 0`. Both sessions ended and
+the disposable containers and network were removed. This proves the pinned
+collector's series under a controlled wait; it does not prove production
+Prometheus ingestion or incident detection.
+The exact runbook SQL also succeeded during a second conflict on PostgreSQL
+18.6: it returned the waiting PID with `wait_event_type=Lock`,
+`wait_event=transactionid`, transaction age `2.2` seconds, and the holder PID
+from `pg_blocking_pids`; its second result included both transactions. No
+query text or tenant data was selected.
+
+The bounded, read-only PostgreSQL 18 query in `docs/launch-checklist.md` §5
+inspects current waits, blocker PIDs, and old transactions without selecting
+SQL text or tenant/user identifiers. `pg_monitor` can still read SQL text in
+its own console, so operator SQL access and output remain restricted. During
+promotion, apply the Prometheus allowlist first and verify
+`up{job="acres-postgres"} == 1`, `pg_up == 1`, collector error `0`, and the
+transaction-age series over two scrapes. Verify the lock series during a
+controlled wait when feasible; its absence without a wait is expected. Then
+publish the dashboard. Rollback removes
+panels 21–22 and the new allowlist entry; existing connection/activity panels
+continue to work. Query and wait-duration instrumentation, production checks,
+and launch sign-off remain open.
+
+Prompt 171 verification: the focused diagnostics suite passed 4/4 mutation
+groups, including missing age metric, wrong panel selectors, reused IDs,
+synthetic zero, extra query-text metrics, and wildcard retention. The static
+template gate, full `ops:check` gate, alert test, lint, typecheck, build,
+`git diff --check`, and pinned Prometheus v3.8.0 `promtool check config` and
+`check rules` passed. The sandboxed `ops:check` stopped at npm audit because
+the registry was unreachable; an elevated run passed all stages. The
+sandboxed Next build failed at TypeScript `--showConfig`; an elevated build
+completed the shared, client, and server builds. Static validation proves
+configuration shape; the disposable scrape above supplies the live lock
+evidence. Production Prometheus ingestion remains untested.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

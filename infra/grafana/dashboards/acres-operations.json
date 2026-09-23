@@ -909,6 +909,84 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 21,
+      "title": "Acres Lock Waits by Event",
+      "description": "Current acres backends waiting on PostgreSQL heavyweight locks, sampled every 30 seconds. Brief waits may be missed; values are counts, not wait duration. No data is not zero.",
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (wait_event) (pg_stat_activity_count{job=\"acres-postgres\",datname=\"acres\",wait_event_type=\"Lock\"})",
+          "legendFormat": "{{wait_event}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "type": "timeseries",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 22,
+      "title": "Oldest Acres Transaction Age",
+      "description": "Maximum now() - xact_start across acres activity groups, in seconds. Idle transactions are included. Synthetic zero rows are possible; no data indicates missing collection. This is not query or lock-wait duration.",
+      "gridPos": {
+        "x": 12,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max(pg_stat_activity_max_tx_duration{job=\"acres-postgres\",datname=\"acres\"})",
+          "legendFormat": "Oldest transaction",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "refresh": "30s",
@@ -927,5 +1005,5 @@
   "timezone": "browser",
   "title": "Acres Operations Foundation",
   "uid": "acres-operations-foundation",
-  "version": 5
+  "version": 6
 }

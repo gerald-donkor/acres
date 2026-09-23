@@ -39,10 +39,12 @@ require_file scripts/ops/run-dos-resilience-drill.sh
 require_file scripts/ops/run-capacity-alerting-drill.sh
 require_file scripts/ops/check-release-images.js
 require_file scripts/ops/check-release-images.spec.js
+require_file scripts/ops/verify-postgres-diagnostics.js
 
 node <<'NODE'
 const fs = require('fs');
 const yaml = require('js-yaml');
+const { verifyPostgresDiagnostics } = require('./scripts/ops/verify-postgres-diagnostics');
 const { validateComposeImages } = require('./scripts/ops/check-release-images');
 
 function readYaml(path) {
@@ -269,7 +271,8 @@ if (JSON.stringify(exporter.profiles) !== JSON.stringify(['observability']) ||
     !exporterScrape.static_configs?.some((entry) => entry.targets?.includes('postgres-exporter:9187')) ||
     !exporterRelabel.some((rule) => rule.action === 'keep' &&
       ['pg_up', 'pg_exporter_last_scrape_error', 'pg_settings_max_connections',
-       'pg_stat_database_numbackends', 'pg_stat_activity_count'].every((metric) =>
+       'pg_stat_database_numbackends', 'pg_stat_activity_count',
+       'pg_stat_activity_max_tx_duration'].every((metric) =>
         String(rule.regex).split('|').includes(metric))) ||
     exporterRelabel.some((rule) => rule.action === 'labeldrop') ||
     JSON.stringify(services.caddy).includes('postgres-exporter') ||
@@ -334,7 +337,7 @@ for (const panel of dashboard.panels) {
     const expr = target.expr || '';
     const expectedJob = panel.id === 1 ? 'prometheus' :
       [4, 8, 11, 12, 13].includes(panel.id) ? 'acres-worker' :
-      panel.id >= 14 && panel.id <= 20 ? 'acres-postgres' : 'acres-api';
+      panel.id >= 14 && panel.id <= 22 ? 'acres-postgres' : 'acres-api';
     if (!expr.includes(`job="${expectedJob}"`)) {
       console.error(`ops template check failed: dashboard panel ${panel.id} lacks ${expectedJob} scope`);
       process.exit(1);
@@ -360,6 +363,11 @@ for (const id of [14, 15, 16]) {
     console.error('ops template check failed: postgres health panels must preserve absent data');
     process.exit(1);
   }
+}
+const diagnosticsErrors = verifyPostgresDiagnostics(exporterScrape, dashboard);
+if (diagnosticsErrors.length > 0) {
+  console.error(`ops template check failed: ${diagnosticsErrors.join('; ')}`);
+  process.exit(1);
 }
 
 const readinessExample = readJson('infra/launch/readiness.example.json');

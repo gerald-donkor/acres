@@ -89,7 +89,9 @@ do not report failure.
   `up{job="acres-postgres"}` and `pg_up{job="acres-postgres"}` with
   `pg_exporter_last_scrape_error{job="acres-postgres"}`. Exercise exporter-down
   and database/authentication-failure cases separately. Confirm the private
-  monitor file mount and existing-volume role reconciliation.
+  monitor file mount and existing-volume role reconciliation. Record the
+  lock-wait count and oldest transaction-age panels with their scrape health;
+  follow the read-only diagnosis in §5 when either suggests contention.
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
@@ -238,6 +240,8 @@ cause, action items) before resolving the alert thread.
   `acres_postgres_pool_requests_waiting` alongside PostgreSQL evidence before
   attributing latency to connection pressure. Waiting above zero shows local
   acquisition backlog; total equaling max alone does not prove saturation.
+  Compare worker pool backlog, sampled lock waits, and oldest transaction age;
+  use the database procedure below to confirm blockers before assigning cause.
 - Contain: address the observed bottleneck within the approved host profile;
   use existing rollback authority if onset matches a deployment. Escalate to on-call SRE
   if p95 exceeds 2s or availability SLO is threatened.
@@ -288,11 +292,53 @@ cause, action items) before resolving the alert thread.
   and waiting panels and `up{job="acres-worker"}` before assigning a pool
   incident to the API. These gauges omit the migrator and other clients,
   server-wide limits, lock waits, and query performance.
+  Compare the lock-wait and transaction-age panels with API/worker pool backlog
+  and HTTP latency. Confirm current blockers with the database procedure below;
+  a zero sampled count can miss a brief lock incident.
 - Contain: address the observed cause and follow existing rollback authority
   if a deployment caused it. Escalate to on-call SRE if concurrency persists
   with degraded latency or availability.
 - Clear: active requests back under 30 for 15m (operator-defined clearing bar,
   under the 40-request fire threshold).
+
+### PostgreSQL lock and transaction diagnosis
+
+Use an approved operator SQL console connected to `acres`. Confirm
+`up{job="acres-postgres"} == 1`, `pg_up{job="acres-postgres"} == 1`, and
+`pg_exporter_last_scrape_error{job="acres-postgres"} == 0` before interpreting
+the panels. Run this read-only PostgreSQL 18 query. Its two result sets are
+bounded to 50 rows each and its transaction has a two-second statement timeout.
+
+```sql
+BEGIN READ ONLY;
+SET LOCAL statement_timeout = '2s';
+SELECT pid, state, wait_event_type, wait_event,
+       round(EXTRACT(EPOCH FROM clock_timestamp() - xact_start)::numeric, 1) AS transaction_age_seconds,
+       pg_blocking_pids(pid) AS blocking_pids
+FROM pg_stat_activity
+WHERE datname = 'acres' AND pid <> pg_backend_pid() AND wait_event_type = 'Lock'
+ORDER BY xact_start NULLS LAST, pid
+LIMIT 50;
+SELECT pid, state, wait_event_type, wait_event,
+       round(EXTRACT(EPOCH FROM clock_timestamp() - xact_start)::numeric, 1) AS transaction_age_seconds,
+       pg_blocking_pids(pid) AS blocking_pids
+FROM pg_stat_activity
+WHERE datname = 'acres' AND pid <> pg_backend_pid() AND xact_start IS NOT NULL
+ORDER BY xact_start, pid
+LIMIT 50;
+COMMIT;
+```
+
+The first result shows current lock waiters; `pg_blocking_pids` identifies
+blocking backends and can include PIDs outside the filtered result. The second
+shows old transactions, including idle transactions. The dashboard counts
+current waiters at 30-second scrapes and can miss short waits. Transaction age
+is `now() - xact_start`, not query runtime or wait duration. Correlate these
+results with API and worker pool waiting gauges and HTTP latency before
+attributing cause. A production cancellation or termination requires a separate
+operator decision. `pg_monitor` can read SQL text from `pg_stat_activity`;
+restrict console and output access even though this query selects no SQL text,
+parameters, credentials, or product user/tenant identifiers.
 
 ## 6. Emergency Rollback & Disaster Recovery
 
