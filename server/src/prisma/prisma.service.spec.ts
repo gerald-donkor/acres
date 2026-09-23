@@ -20,6 +20,8 @@ interface PrismaServiceInternals {
   disconnect: () => Promise<void>;
   pool: Pool;
   notifyAcquisition: (durationSeconds: number) => void;
+  notifyQuery: (operation: string, durationSeconds: number) => void;
+  extractQueryOperation: (config: unknown) => string;
 }
 
 function getInternals(service: PrismaService): PrismaServiceInternals {
@@ -278,6 +280,285 @@ describe('PrismaService', () => {
       unsub();
       getInternals(service).notifyAcquisition(0.05);
       expect(durations.length).toBe(0);
+    });
+  });
+
+  describe('operation extraction', () => {
+    it('extracts canonical operations from SQL strings and config objects', () => {
+      const service = new PrismaService(mockConfig);
+      const internals = getInternals(service);
+
+      expect(internals.extractQueryOperation('SELECT 1')).toBe('select');
+      expect(internals.extractQueryOperation('  select * from users')).toBe(
+        'select',
+      );
+      expect(
+        internals.extractQueryOperation('INSERT INTO orgs VALUES ($1)'),
+      ).toBe('insert');
+      expect(
+        internals.extractQueryOperation('update account set name = $1'),
+      ).toBe('update');
+      expect(
+        internals.extractQueryOperation('DELETE FROM session WHERE id = $1'),
+      ).toBe('delete');
+      expect(internals.extractQueryOperation('BEGIN')).toBe('begin');
+      expect(internals.extractQueryOperation('COMMIT')).toBe('commit');
+      expect(internals.extractQueryOperation('ROLLBACK')).toBe('rollback');
+      expect(
+        internals.extractQueryOperation('SET LOCAL app.current_tenant = $1'),
+      ).toBe('set');
+      expect(
+        internals.extractQueryOperation({ text: 'SELECT count(*) FROM table' }),
+      ).toBe('select');
+      expect(
+        internals.extractQueryOperation({ text: 'UPDATE table SET x = 1' }),
+      ).toBe('update');
+    });
+
+    it('falls back to "other" for non-matching, empty, or unknown SQL statements', () => {
+      const service = new PrismaService(mockConfig);
+      const internals = getInternals(service);
+
+      expect(internals.extractQueryOperation('TRUNCATE table')).toBe('other');
+      expect(internals.extractQueryOperation('')).toBe('other');
+      expect(internals.extractQueryOperation(null)).toBe('other');
+      expect(internals.extractQueryOperation(undefined)).toBe('other');
+      expect(internals.extractQueryOperation({})).toBe('other');
+      expect(internals.extractQueryOperation({ text: null })).toBe('other');
+      expect(internals.extractQueryOperation('12345')).toBe('other');
+    });
+  });
+
+  describe('query duration tracking', () => {
+    it('notifies registered listeners with elapsed duration and operation on callback-based query', (done) => {
+      const events: Array<{ op: string; duration: number }> = [];
+      const fakeRelease = jest.fn();
+      const fakeClient = {
+        query: jest.fn(
+          (
+            _config: unknown,
+            valuesOrCallback?: unknown,
+            cb?: (err?: Error, res?: unknown) => void,
+          ) => {
+            const callback =
+              typeof cb === 'function'
+                ? cb
+                : typeof valuesOrCallback === 'function'
+                  ? (valuesOrCallback as (err?: Error, res?: unknown) => void)
+                  : undefined;
+            if (callback) {
+              setTimeout(() => {
+                callback(undefined, { rows: [{ count: 1 }] });
+              }, 10);
+            }
+          },
+        ),
+      };
+
+      const mockConnect = jest.fn(
+        (
+          cb?: (err?: Error, client?: PoolClient, release?: () => void) => void,
+        ) => {
+          if (cb) {
+            cb(undefined, fakeClient as unknown as PoolClient, fakeRelease);
+          }
+        },
+      );
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation(mockConnect as never);
+
+      const wrappedService = new PrismaService(mockConfig);
+      const unsubscribe = wrappedService.onQuery((op, d) =>
+        events.push({ op, duration: d }),
+      );
+      const wrappedPool = getInternals(wrappedService).pool;
+
+      wrappedPool.connect((err, client) => {
+        expect(err).toBeUndefined();
+        expect(client).toBeDefined();
+
+        client!.query('SELECT * FROM accounts', (queryErr, res) => {
+          expect(queryErr).toBeUndefined();
+          expect(res).toEqual({ rows: [{ count: 1 }] });
+          expect(events.length).toBe(1);
+          expect(events[0].op).toBe('select');
+          expect(events[0].duration).toBeGreaterThan(0.005);
+          unsubscribe();
+          done();
+        });
+      });
+    });
+
+    it('notifies registered listeners on promise-based query resolution and rejection', async () => {
+      const events: Array<{ op: string; duration: number }> = [];
+      const fakeClient = {
+        query: jest.fn((config: unknown) => {
+          return new Promise((resolve, reject) => {
+            setTimeout(() => {
+              if (typeof config === 'string' && config.includes('FAIL')) {
+                reject(new Error('Query execution failed'));
+              } else {
+                resolve({ rowCount: 1 });
+              }
+            }, 10);
+          });
+        }),
+      };
+
+      const mockConnect = jest.fn(() => {
+        return Promise.resolve(fakeClient as unknown as PoolClient);
+      });
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation(mockConnect as never);
+
+      const wrappedService = new PrismaService(mockConfig);
+      wrappedService.onQuery((op, d) => events.push({ op, duration: d }));
+      const wrappedPool = getInternals(wrappedService).pool;
+
+      const client = await wrappedPool.connect();
+      const result = await client.query({
+        text: 'UPDATE account SET name = $1',
+      });
+      expect(result).toEqual({ rowCount: 1 });
+      expect(events.length).toBe(1);
+      expect(events[0].op).toBe('update');
+      expect(events[0].duration).toBeGreaterThan(0.005);
+
+      // Rejection
+      await expect(client.query('SELECT FAIL')).rejects.toThrow(
+        'Query execution failed',
+      );
+      expect(events.length).toBe(2);
+      expect(events[1].op).toBe('select');
+      expect(events[1].duration).toBeGreaterThan(0.005);
+    });
+
+    it('logs warning and does not interrupt query execution if listener throws', async () => {
+      const fakeClient = {
+        query: jest.fn(() => Promise.resolve({ rows: [] })),
+      };
+
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation((() =>
+          Promise.resolve(fakeClient as unknown as PoolClient)) as never);
+
+      const wrappedService = new PrismaService(mockConfig);
+      const wrappedInternals = getInternals(wrappedService);
+      const warnSpy = jest
+        .spyOn(wrappedInternals.logger, 'warn')
+        .mockImplementation(() => {});
+
+      wrappedService.onQuery(() => {
+        throw new Error('Query listener crashed');
+      });
+
+      const client = await wrappedInternals.pool.connect();
+      const res = await client.query('SELECT 1');
+      expect(res).toEqual({ rows: [] });
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Database query listener failed: Query listener crashed',
+      );
+    });
+
+    it('handles callback-based query errors and records duration', (done) => {
+      const events: Array<{ op: string; duration: number }> = [];
+      const fakeRelease = jest.fn();
+      const fakeClient = {
+        query: jest.fn(
+          (
+            _config: unknown,
+            valuesOrCallback?: unknown,
+            cb?: (err?: Error, res?: unknown) => void,
+          ) => {
+            const callback =
+              typeof cb === 'function'
+                ? cb
+                : typeof valuesOrCallback === 'function'
+                  ? (valuesOrCallback as (err?: Error, res?: unknown) => void)
+                  : undefined;
+            if (callback) {
+              setTimeout(() => {
+                callback(new Error('Syntax error'));
+              }, 10);
+            }
+          },
+        ),
+      };
+
+      const mockConnect = jest.fn(
+        (
+          cb?: (err?: Error, client?: PoolClient, release?: () => void) => void,
+        ) => {
+          if (cb) {
+            cb(undefined, fakeClient as unknown as PoolClient, fakeRelease);
+          }
+        },
+      );
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation(mockConnect as never);
+
+      const wrappedService = new PrismaService(mockConfig);
+      const unsubscribe = wrappedService.onQuery((op, d) =>
+        events.push({ op, duration: d }),
+      );
+      const wrappedPool = getInternals(wrappedService).pool;
+
+      wrappedPool.connect((err, client) => {
+        expect(err).toBeUndefined();
+        expect(client).toBeDefined();
+
+        client!.query('SELECT INVALID', (queryErr) => {
+          expect(queryErr).toBeDefined();
+          expect(queryErr?.message).toBe('Syntax error');
+          expect(events.length).toBe(1);
+          expect(events[0].op).toBe('select');
+          expect(events[0].duration).toBeGreaterThan(0.005);
+          unsubscribe();
+          done();
+        });
+      });
+    });
+
+    it('does not re-wrap an already wrapped PoolClient on subsequent checkouts', async () => {
+      const fakeClient = {
+        query: jest.fn(() => Promise.resolve({ rows: [] })),
+      };
+
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation((() =>
+          Promise.resolve(fakeClient as unknown as PoolClient)) as never);
+
+      const wrappedService = new PrismaService(mockConfig);
+      const events: Array<{ op: string; duration: number }> = [];
+      wrappedService.onQuery((op, d) => events.push({ op, duration: d }));
+      const wrappedPool = getInternals(wrappedService).pool;
+
+      // Checkout 1
+      const client1 = await wrappedPool.connect();
+      await client1.query('SELECT 1');
+      expect(events.length).toBe(1);
+
+      // Checkout 2 with same client (reused from pool)
+      const client2 = await wrappedPool.connect();
+      expect(client2).toBe(client1);
+      await client2.query('SELECT 2');
+      expect(events.length).toBe(2);
+    });
+
+    it('unsubscribes query listener when unsubscribe function is called', () => {
+      const service = new PrismaService(mockConfig);
+      const events: Array<{ op: string; duration: number }> = [];
+      const unsub = service.onQuery((op, d) =>
+        events.push({ op, duration: d }),
+      );
+      unsub();
+      getInternals(service).notifyQuery('select', 0.05);
+      expect(events.length).toBe(0);
     });
   });
 });

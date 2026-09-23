@@ -336,7 +336,7 @@ for (const panel of dashboard.panels) {
   for (const target of panel.targets || []) {
     const expr = target.expr || '';
     const expectedJob = panel.id === 1 ? 'prometheus' :
-      [4, 8, 11, 12, 13, 24].includes(panel.id) ? 'acres-worker' :
+      [4, 8, 11, 12, 13, 24, 26].includes(panel.id) ? 'acres-worker' :
       panel.id >= 14 && panel.id <= 22 ? 'acres-postgres' : 'acres-api';
     if (!expr.includes(`job="${expectedJob}"`)) {
       console.error(`ops template check failed: dashboard panel ${panel.id} lacks ${expectedJob} scope`);
@@ -357,7 +357,7 @@ if (new Set(ids).size !== ids.length || [...postgresMetrics].some(([id, metric])
   console.error('ops template check failed: postgres dashboard panels or metrics drifted');
   process.exit(1);
 }
-for (const id of [14, 15, 16, 23, 24]) {
+for (const id of [14, 15, 16, 23, 24, 25, 26]) {
   const panel = dashboard.panels.find((p) => p.id === id);
   const exprs = (panel?.targets || []).map((t) => t.expr || '').join(' ');
   if (exprs.includes('or vector(0)') || exprs.includes('or on() vector(0)')) {
@@ -371,6 +371,14 @@ if (!p23 || !p24 || p23.fieldConfig?.defaults?.unit !== 's' || p24.fieldConfig?.
     !p23.targets?.some((t) => t.expr?.includes('acres_postgres_pool_acquisition_duration_seconds_bucket{job="acres-api"}')) ||
     !p24.targets?.some((t) => t.expr?.includes('acres_postgres_pool_acquisition_duration_seconds_bucket{job="acres-worker"}'))) {
   console.error('ops template check failed: pool acquisition duration panels drifted');
+  process.exit(1);
+}
+const p25 = dashboard.panels.find((p) => p.id === 25);
+const p26 = dashboard.panels.find((p) => p.id === 26);
+if (!p25 || !p26 || p25.fieldConfig?.defaults?.unit !== 's' || p26.fieldConfig?.defaults?.unit !== 's' ||
+    !p25.targets?.some((t) => t.expr?.includes('acres_database_query_duration_seconds_bucket{job="acres-api"}')) ||
+    !p26.targets?.some((t) => t.expr?.includes('acres_database_query_duration_seconds_bucket{job="acres-worker"}'))) {
+  console.error('ops template check failed: database query duration panels drifted');
   process.exit(1);
 }
 const diagnosticsErrors = verifyPostgresDiagnostics(exporterScrape, dashboard);

@@ -93,8 +93,11 @@ do not report failure.
   lock-wait count and oldest transaction-age panels with their scrape health;
   follow the read-only diagnosis in §5 when either suggests contention.
   Record API and Worker PostgreSQL pool acquisition latency percentiles (panels
-  23 and 24, `acres_postgres_pool_acquisition_duration_seconds`); elevated
-  acquisition p95/p99 indicates pool checkout queueing or exhaustion.
+  23 and 24, `acres_postgres_pool_acquisition_duration_seconds`) and SQL query
+  execution latency percentiles (panels 25 and 26, `acres_database_query_duration_seconds`);
+  elevated acquisition p95/p99 indicates pool checkout queueing or exhaustion,
+  while elevated query latency with low acquisition latency isolates database-side
+  query or index bottlenecks.
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
@@ -245,7 +248,11 @@ cause, action items) before resolving the alert thread.
   latency percentiles (`acres_postgres_pool_acquisition_duration_seconds{job="acres-api"}`):
   elevated p95/p99 latency (e.g. > 50ms) confirms connection checkout queueing
   in `pg.Pool`, whereas low acquisition latency (< 1ms) isolates delay to
-  query execution or downstream processing. Waiting above zero shows local
+  query execution or downstream processing. Inspect API and Worker SQL query
+  execution latency percentiles (`acres_database_query_duration_seconds`):
+  elevated query latency (e.g. p95 > 100ms) confirms slow database execution or
+  unindexed scans, while low query latency points to application compute or
+  external service delays. Waiting above zero shows local
   acquisition backlog; total equaling max alone does not prove saturation.
   Compare worker pool backlog and acquisition latency, sampled lock waits, and oldest transaction age;
   use the database procedure below to confirm blockers before assigning cause.

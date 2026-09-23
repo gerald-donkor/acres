@@ -1093,6 +1093,112 @@
           "refId": "C"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "noValue": "No data",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "type": "timeseries",
+      "id": 25,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 68
+      },
+      "title": "API PostgreSQL Query Execution Latency",
+      "description": "Percentile execution duration of PostgreSQL queries executed by the API process, in seconds. Measures database query execution time, not pool checkout or HTTP queueing.",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(acres_database_query_duration_seconds_bucket{job=\"acres-api\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(acres_database_query_duration_seconds_bucket{job=\"acres-api\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(acres_database_query_duration_seconds_bucket{job=\"acres-api\"}[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "noValue": "No data",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "type": "timeseries",
+      "id": 26,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 68
+      },
+      "title": "Worker PostgreSQL Query Execution Latency",
+      "description": "Percentile execution duration of PostgreSQL queries executed by the worker process, in seconds. Measures database query execution time, not pool checkout or queue wait time.",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(acres_database_query_duration_seconds_bucket{job=\"acres-worker\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(acres_database_query_duration_seconds_bucket{job=\"acres-worker\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(acres_database_query_duration_seconds_bucket{job=\"acres-worker\"}[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "C"
+        }
+      ]
     }
   ],
   "refresh": "30s",
@@ -1111,5 +1217,5 @@
   "timezone": "browser",
   "title": "Acres Operations Foundation",
   "uid": "acres-operations-foundation",
-  "version": 7
+  "version": 8
 }

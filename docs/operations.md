@@ -977,6 +977,38 @@ and PostgreSQL diagnostics spec (`verify-postgres-diagnostics.spec.js`) passed
 `npm run ops:alert-test`, `npm run lint`, `npm run typecheck`, `npm run build`,
 and `git diff --check` passed cleanly.
 
+**Prompt 173 update (2026-09-23): PostgreSQL query execution duration.**
+`PrismaService` now wraps `client.query` on every checked-out `PoolClient` instance
+using an idempotent `WeakSet<PoolClient>` guard, measuring elapsed wall-clock
+duration via `process.hrtime.bigint()` across both callback and Promise execution
+paths (including query failures and rejections). SQL query operations are normalized
+via `extractQueryOperation` into 9 bounded low-cardinality values (`select`, `insert`,
+`update`, `delete`, `begin`, `commit`, `rollback`, `set`, and fallback `other`),
+eliminating query parameters, user/org identifiers, and raw SQL text from Prometheus
+label cardinality.
+
+`MetricsService` subscribes via `onQuery` to record each duration in the existing
+`acres_database_query_duration_seconds` histogram across both API (`job="acres-api"`)
+and background worker (`job="acres-worker"`) processes, and cleanly unsubscribes on
+`onModuleDestroy()`.
+
+Grafana panel 25 ("API PostgreSQL Query Execution Latency") and panel 26
+("Worker PostgreSQL Query Execution Latency") show p50, p95, and p99 percentiles
+at row `y: 68` with units in seconds and `No data` preserved on absence.
+In incident triage, operators correlate query execution duration with pool
+acquisition latency: high query duration with low acquisition latency isolates
+performance degradation to slow SQL statements, database table scans, or lock contention,
+distinguishing database-side execution time from pool queueing or application CPU bottlenecks.
+Operator capacity baseline and launch sign-off remain open.
+
+Prompt 173 verification: focused Prisma and metrics unit test suites passed
+28/28 tests; full server suite passed 120/120 suites (1864 tests); template verification
+(`scripts/ops/check-production-templates.sh`) and PostgreSQL diagnostics spec
+(`verify-postgres-diagnostics.spec.js`) passed 6/6 tests including unique IDs and
+scoping invariants. Full `npm run ops:check` passed all stages. `npm run ops:templates`,
+`npm run ops:alert-test`, `npm run lint`, `npm run typecheck`, `npm run build`,
+and `git diff --check` passed cleanly.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

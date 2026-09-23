@@ -98,6 +98,50 @@ describe('MetricsService', () => {
     }
   });
 
+  it('observes database query durations by operation when prisma emits query events', async () => {
+    let capturedListener:
+      ((operation: string, duration: number) => void) | undefined;
+    const unsubscribe = jest.fn();
+    const onQuery = jest.fn((listener: (op: string, d: number) => void) => {
+      capturedListener = listener;
+      return unsubscribe;
+    });
+    const prisma = {
+      getPoolSnapshot: jest.fn(() => ({
+        total: 1,
+        idle: 1,
+        waiting: 0,
+        max: 10,
+      })),
+      onQuery,
+    } as unknown as PrismaService;
+    const metrics = new MetricsService(prisma);
+    try {
+      expect(onQuery).toHaveBeenCalledTimes(1);
+      expect(capturedListener).toBeDefined();
+
+      capturedListener!('select', 0.003);
+      capturedListener!('insert', 0.045);
+
+      const text = await metrics.getMetrics();
+      expect(text).toContain(
+        'acres_database_query_duration_seconds_bucket{le="0.005",operation="select"} 1',
+      );
+      expect(text).toContain(
+        'acres_database_query_duration_seconds_bucket{le="0.05",operation="insert"} 1',
+      );
+      expect(text).toContain(
+        'acres_database_query_duration_seconds_count{operation="select"} 1',
+      );
+      expect(text).toContain(
+        'acres_database_query_duration_seconds_count{operation="insert"} 1',
+      );
+    } finally {
+      metrics.onModuleDestroy();
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it('fails a scrape when the pool snapshot cannot be read', async () => {
     const prisma = {
       getPoolSnapshot: jest.fn(() => {

@@ -66,3 +66,9 @@ test('pool acquisition latency panels have unique IDs and correct scope', () => 
   duplicate.panels.find((panel) => panel.id === 24).id = 23;
   assert.match(verifyPostgresDiagnostics(scrape, duplicate).join(' '), /IDs are reused/);
 });
+
+test('database query execution latency panels have unique IDs and correct scope', () => {
+  const duplicate = copy(dashboard);
+  duplicate.panels.find((panel) => panel.id === 26).id = 25;
+  assert.match(verifyPostgresDiagnostics(scrape, duplicate).join(' '), /IDs are reused/);
+});

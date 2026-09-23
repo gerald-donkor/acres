@@ -37,6 +37,7 @@ export class MetricsService implements OnModuleDestroy {
   readonly postgresPoolAcquisitionDurationSeconds: Histogram<string>;
   readonly outboxPendingEvents: Gauge<string>;
   private readonly unsubscribeAcquisition?: () => void;
+  private readonly unsubscribeQuery?: () => void;
   readonly queueJobsTotal: Counter<'queue_name' | 'status'>;
   readonly queueActiveJobs: Gauge<'queue_name'>;
   readonly queueWaitingJobs: Gauge<'queue_name'>;
@@ -180,6 +181,16 @@ export class MetricsService implements OnModuleDestroy {
       registers: [this.registry],
     });
 
+    if (typeof this.prisma?.onQuery === 'function') {
+      this.unsubscribeQuery = this.prisma.onQuery(
+        (operation: string, durationSeconds: number) => {
+          this.databaseQueryDurationSeconds
+            .labels({ operation })
+            .observe(durationSeconds);
+        },
+      );
+    }
+
     this.parserExecutionsTotal = new Counter({
       name: 'acres_parser_executions_total',
       help: 'Total number of parser executions',
@@ -269,6 +280,7 @@ export class MetricsService implements OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.unsubscribeAcquisition?.();
+    this.unsubscribeQuery?.();
     this.registry.clear();
   }
 }
