@@ -14,6 +14,7 @@ describe('MetricsService', () => {
   it('initializes and exports Prometheus metrics', async () => {
     const text = await service.getMetrics();
     expect(text).toContain('# TYPE acres_http_requests_total counter');
+    expect(text).toContain('# TYPE acres_http_429_responses_total counter');
     expect(text).toContain(
       '# TYPE acres_http_request_duration_seconds histogram',
     );
@@ -24,6 +25,24 @@ describe('MetricsService', () => {
     expect(text).toContain('# TYPE acres_parser_executions_total counter');
     expect(text).toContain(
       '# TYPE acres_parser_execution_duration_seconds histogram',
+    );
+  });
+
+  it('counts only 429 responses without changing the total request labels', async () => {
+    service.recordHttpRequest('POST', '/api/v1/auth/login', 401, 0.1);
+    service.recordHttpRequest('POST', '/api/v1/auth/login', 403, 0.1);
+    service.recordHttpRequest('POST', '/api/v1/auth/login', 429, 0.1);
+    service.recordHttpRequest('POST', '/api/v1/auth/login', 429, 0.1);
+    service.recordHttpRequest('POST', '/api/v1/auth/login', 500, 0.1);
+
+    const text = await service.getMetrics();
+    const lines = text.split('\n');
+    expect(lines).toContain('acres_http_429_responses_total 2');
+    expect(lines).toContain(
+      'acres_http_requests_total{method="POST",route_group="/api/v1/auth",status_class="4xx"} 4',
+    );
+    expect(lines).toContain(
+      'acres_http_requests_total{method="POST",route_group="/api/v1/auth",status_class="5xx"} 1',
     );
   });
 

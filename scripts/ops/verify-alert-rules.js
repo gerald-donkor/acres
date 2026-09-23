@@ -39,6 +39,7 @@ const REQUIRED_ALERTS = [
 const KNOWN_METRIC_IDENTIFIERS = [
   'up',
   'acres_http_requests_total',
+  'acres_http_429_responses_total',
   'acres_http_request_duration_seconds_bucket',
   'acres_http_active_requests',
   'acres_queue_jobs_total',
@@ -75,12 +76,12 @@ const SIMULATION_DEFINITIONS = {
   High429Rate: {
     evaluate: (data) => {
       const total = Math.max(data.totalRequests || 0, 0.001);
-      const rate4xx = data.requests4xx || 0;
-      return (rate4xx / total) * 100 > 10;
+      const rate429 = data.requests429 || 0;
+      return (rate429 / total) * 100 > 10;
     },
-    firingSample: { totalRequests: 100, requests4xx: 24 },
-    clearedSample: { totalRequests: 100, requests4xx: 2 },
-    thresholdDescription: '4xx / 429 rate > 10% of total requests',
+    firingSample: { totalRequests: 100, requests429: 24 },
+    clearedSample: { totalRequests: 100, requests429: 2 },
+    thresholdDescription: '429 rate > 10% of total requests',
   },
   QueueDeadLettersDetected: {
     evaluate: (data) => (data.failedJobs || 0) > 0,
@@ -247,6 +248,14 @@ function verifyAlertRules(options = {}) {
       ruleErrors.push(`expr does not reference any known Acres metrics: ${rule.expr}`);
     }
 
+    if (requiredAlert === 'High429Rate' && typeof rule.expr === 'string') {
+      const normalized = rule.expr.replace(/\s+/g, '');
+      const expected = '(sum(rate(acres_http_429_responses_total[5m]))/clamp_min(sum(rate(acres_http_requests_total[5m])),0.001))*100>10';
+      if (normalized !== expected) {
+        ruleErrors.push('expr must use the dedicated 429 counter over total requests at the configured 5m and 10% threshold');
+      }
+    }
+
     const passed = ruleErrors.length === 0;
     checks.push({
       id: `alert-syntax-${requiredAlert}`,
@@ -280,8 +289,10 @@ function verifyAlertRules(options = {}) {
 
     const firesOnBreach = simDef.evaluate(simDef.firingSample);
     const clearsOnNormal = !simDef.evaluate(simDef.clearedSample);
+    const ignoresOther4xx = requiredAlert !== 'High429Rate' ||
+      !simDef.evaluate({ totalRequests: 100, requests4xx: 90, requests429: 0 });
 
-    const simPassed = firesOnBreach && clearsOnNormal;
+    const simPassed = firesOnBreach && clearsOnNormal && ignoresOther4xx;
     checks.push({
       id: `alert-simulation-${requiredAlert}`,
       passed: simPassed,
@@ -299,6 +310,7 @@ function verifyAlertRules(options = {}) {
       thresholdDescription: simDef.thresholdDescription,
       firesOnBreach,
       clearsOnNormal,
+      ...(requiredAlert === 'High429Rate' ? { ignoresOther4xx } : {}),
       passed: simPassed,
     });
   }

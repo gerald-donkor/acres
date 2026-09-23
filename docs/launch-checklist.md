@@ -235,10 +235,10 @@ cause, action items) before resolving the alert thread.
 
 ### High429Rate (warning)
 
-- PromQL: `(sum(rate(acres_http_requests_total{status_class="4xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 10` for 5m.
-  Note the rule counts all 4xx, not just 429s — treat it as a rate-limit
-  spike / possible credential-stuffing or DoS signal, and confirm the 429
-  share in the access logs before acting.
+- PromQL: `(sum(rate(acres_http_429_responses_total[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 10` for 5m.
+  The numerator counts HTTP 429 responses only. Treat it as a rate-limit
+  spike / possible credential-stuffing or DoS signal; confirm the route and
+  client context in access logs before acting.
 - Triage: top offending IPs/routes in Caddy access logs; check whether the
   spike is one client (abuse) or broad (misconfigured client release).
 - Contain: block abusive IPs at Caddy, tighten Throttler windows, rotate

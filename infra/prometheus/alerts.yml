@@ -29,7 +29,7 @@ groups:
           description: API p95 latency has exceeded 500ms for more than 5 minutes.
 
       - alert: High429Rate
-        expr: (sum(rate(acres_http_requests_total{status_class="4xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 10
+        expr: (sum(rate(acres_http_429_responses_total[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 10
         for: 5m
         labels:
           severity: warning

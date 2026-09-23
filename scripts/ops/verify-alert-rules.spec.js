@@ -166,6 +166,32 @@ test('verifyAlertRules: flags expression not referencing recognized Acres metric
   }
 });
 
+test('verifyAlertRules: rejects a 4xx numerator for High429Rate', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-alert-test-'));
+  try {
+    const alertsObj = yaml.load(fs.readFileSync(ALERTS_FILE, 'utf8'));
+    const rule = alertsObj.groups[0].rules.find((item) => item.alert === 'High429Rate');
+    rule.expr = rule.expr.replace(
+      'acres_http_429_responses_total[5m]',
+      'acres_http_requests_total{status_class="4xx"}[5m]',
+    );
+    const tmpAlertsPath = path.join(tmpDir, 'alerts.yml');
+    fs.writeFileSync(tmpAlertsPath, yaml.dump(alertsObj), 'utf8');
+
+    const result = verifyAlertRules({ alertsPath: tmpAlertsPath, promConfigPath: PROM_FILE });
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some((error) => error.includes('dedicated 429 counter')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('High429Rate: heavy non-429 4xx traffic does not fire', () => {
+  const simulation = SIMULATION_DEFINITIONS.High429Rate;
+  assert.equal(simulation.evaluate({ totalRequests: 100, requests4xx: 90, requests429: 0 }), false);
+  assert.equal(simulation.evaluate({ totalRequests: 100, requests4xx: 90, requests429: 11 }), true);
+});
+
 test('SIMULATION_DEFINITIONS: evaluates each alert condition faithfully on breach and normal samples', () => {
   for (const alertName of REQUIRED_ALERTS) {
     const sim = SIMULATION_DEFINITIONS[alertName];

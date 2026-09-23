@@ -46,12 +46,18 @@ It is excluded from public Caddy routing and is exempt from JSON response envelo
 and rate limiting:
 
 1. `acres_http_requests_total`: Counter by `method`, `route_group`, `status_class`.
-2. `acres_http_request_duration_seconds`: Histogram with Web latency buckets `[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`.
-3. `acres_http_active_requests`: Gauge of current in-flight requests.
-4. `acres_outbox_pending_events`: Gauge tracking pending outbox events.
-5. `acres_queue_jobs_total`: Counter by `queue_name`, `status`.
-6. `acres_queue_active_jobs` and `acres_queue_waiting_jobs`: Gauges for queue depth.
-7. `acres_scheduled_job_runs_total`: Counter by `job_name`, `status`.
+2. `acres_http_429_responses_total`: Unlabeled counter of HTTP 429 responses; the `High429Rate` alert uses its 5-minute rate over the rate of all HTTP requests.
+3. `acres_http_request_duration_seconds`: Histogram with Web latency buckets `[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`.
+4. `acres_http_active_requests`: Gauge of current in-flight requests.
+5. `acres_outbox_pending_events`: Gauge tracking pending outbox events.
+6. `acres_queue_jobs_total`: Counter by `queue_name`, `status`.
+7. `acres_queue_active_jobs` and `acres_queue_waiting_jobs`: Gauges for queue depth.
+8. `acres_scheduled_job_runs_total`: Counter by `job_name`, `status`.
+
+The 429 counter records responses observed by the NestJS metrics middleware.
+Responses generated solely at the Caddy edge are outside this API metric and
+require edge access logs for investigation. An unlabeled `prom-client` counter
+exports `0` before its first increment, so the 429 rate has a zero baseline.
 
 **Cardinality and Redaction Invariant**: `route_group` collapses all paths to
 fixed parameterized route templates (e.g. `/api/v1/auth`, `/api/v1/organizations`,
@@ -664,8 +670,10 @@ Implemented in Prompt 66:
      6. `OutboxDeliveryLag` (Outbox Health: > 50 pending events for > 10m, for 10m, warning);
      7. `DatabaseConnectionPoolSaturation` (Resources: active requests > 40, for 2m, warning).
    - Statically validates PromQL expressions, durations, severities, and annotations.
+   - The `High429Rate` static check requires the dedicated 429 numerator, the total-request denominator, and the configured 5m/10% expression; its synthetic check confirms heavy non-429 4xx traffic does not fire the alert. These checks do not exercise a running Prometheus server or production traffic.
    - Evaluates synthetic time-series metric data verifying that each alert fires when thresholds are breached and clears when healthy.
    - Unit test suite (`verify-alert-rules.spec.js`): 9/9 unit tests passing in 100ms.
+
 4. **Top-Level Capacity & Alerting Drill Runner (`scripts/ops/run-capacity-alerting-drill.sh`)**:
    - Unified drill orchestrator executing alert verification, capacity evaluation, and DoS resilience checks.
    - Emits consolidated JSON audit evidence reports (`backups/capacity-alerting-drill-evidence-<timestamp>.json`).
@@ -678,6 +686,24 @@ Implemented in Prompt 66:
    - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`.
    - Updated `scripts/ops/check-production-templates.sh` requiring all 7 alerts, alert rule verification, and capacity evaluation.
    - Closes TM-05, TM-16, TM-20, and Category 5 launch readiness requirements.
+
+**Prompt 166 verification (2026-09-23):** `High429Rate` now reads only
+`acres_http_429_responses_total`, over the unchanged total-request rate and
+5m/10% threshold. The service test proved that two 429s among 401, 403, and
+500 responses expose a 429 count of 2 while total route/status-class counts
+remain 4 for 4xx and 1 for 5xx. The static verifier rejects the former 4xx
+numerator, and its synthetic case does not fire on 90 non-429 4xx responses.
+Focused metrics suites: 20/20 tests passed; alert verifier: 11/11 tests passed
+(`ops:alert-test` passed);
+`ops:alert-drill`: 16/16 checks and 7/7 simulations passed;
+`ops:templates`: passed; `ops:capacity-alerting-drill -- --dry-run`: passed,
+with ignored evidence at
+`backups/capacity-alerting-drill-evidence-20260923T193003Z.json`.
+`npm run lint`, `npm run typecheck`, and `npm run build` passed. The sandboxed
+client build could not parse TypeScript `--showConfig` because subprocess stdout
+was empty; the same production build completed outside that restriction.
+No local `promtool` was available, and no running Prometheus or production
+alert behavior was verified.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 

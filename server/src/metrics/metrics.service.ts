@@ -25,6 +25,7 @@ export class MetricsService implements OnModuleDestroy {
   readonly httpRequestsTotal: Counter<
     'method' | 'route_group' | 'status_class'
   >;
+  readonly http429ResponsesTotal: Counter<string>;
   readonly httpRequestDurationSeconds: Histogram<
     'method' | 'route_group' | 'status_class'
   >;
@@ -49,6 +50,12 @@ export class MetricsService implements OnModuleDestroy {
       name: 'acres_http_requests_total',
       help: 'Total number of HTTP requests processed by Acres API',
       labelNames: ['method', 'route_group', 'status_class'],
+      registers: [this.registry],
+    });
+
+    this.http429ResponsesTotal = new Counter({
+      name: 'acres_http_429_responses_total',
+      help: 'Total number of HTTP 429 responses processed by Acres API',
       registers: [this.registry],
     });
 
@@ -167,6 +174,9 @@ export class MetricsService implements OnModuleDestroy {
       route_group,
       status_class,
     });
+    if (statusCode === 429) {
+      this.http429ResponsesTotal.inc();
+    }
     this.httpRequestDurationSeconds.observe(
       {
         method: safeMethod,
