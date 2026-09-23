@@ -5,6 +5,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { PrismaClient } from '../generated/prisma/client';
 import { AcresConfigService } from '../config/acres-config.service';
 
@@ -22,14 +23,36 @@ export class PrismaService
   implements OnModuleDestroy, OnApplicationShutdown
 {
   private readonly logger = new Logger(PrismaService.name);
+  private readonly pool: Pool;
+  private disconnectPromise?: Promise<void>;
 
   constructor(config: AcresConfigService) {
-    super({
-      adapter: new PrismaPg({
-        connectionString: config.databaseUrl,
-        connectionTimeoutMillis: 5000,
-      }),
+    const pool = new Pool({
+      connectionString: config.databaseUrl,
+      connectionTimeoutMillis: 5000,
     });
+    super({
+      adapter: new PrismaPg(pool),
+    });
+    this.pool = pool;
+  }
+
+  getPoolSnapshot(): {
+    total: number;
+    idle: number;
+    waiting: number;
+    max: number;
+  } {
+    const max = this.pool.options.max;
+    if (max === undefined) {
+      throw new Error('PostgreSQL pool maximum is unavailable');
+    }
+    return {
+      total: this.pool.totalCount,
+      idle: this.pool.idleCount,
+      waiting: this.pool.waitingCount,
+      max,
+    };
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -41,12 +64,23 @@ export class PrismaService
   }
 
   private async disconnect(): Promise<void> {
-    try {
-      await this.$disconnect();
-    } catch (error) {
-      this.logger.warn(
-        `Prisma disconnect failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+    this.disconnectPromise ??= (async () => {
+      try {
+        await this.$disconnect();
+      } catch (error) {
+        this.logger.warn(
+          `Prisma disconnect failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      } finally {
+        try {
+          await this.pool.end();
+        } catch (error) {
+          this.logger.warn(
+            `PostgreSQL pool close failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+    })();
+    await this.disconnectPromise;
   }
 }

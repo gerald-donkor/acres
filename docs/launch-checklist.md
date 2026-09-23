@@ -227,8 +227,13 @@ cause, action items) before resolving the alert thread.
 - PromQL: `histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket[5m])) by (le)) > 0.5` for 5m.
 - Triage: `node scripts/ops/verify-capacity-load.js --synthetic` for the SLO
   baseline; inspect route patterns, slow-query evidence, dependency health,
-  and in-flight HTTP requests. Confirm database connection pressure from
-  PostgreSQL/Prisma evidence before treating it as a cause.
+  and in-flight HTTP requests. Inspect API pool
+  `acres_postgres_pool_connections_total`,
+  `acres_postgres_pool_connections_idle`,
+  `acres_postgres_pool_connections_max`, and
+  `acres_postgres_pool_requests_waiting` alongside PostgreSQL evidence before
+  attributing latency to connection pressure. Waiting above zero shows local
+  acquisition backlog; total equaling max alone does not prove saturation.
 - Contain: address the observed bottleneck within the approved host profile;
   use existing rollback authority if onset matches a deployment. Escalate to on-call SRE
   if p95 exceeds 2s or availability SLO is threatened.
@@ -273,8 +278,10 @@ cause, action items) before resolving the alert thread.
 - PromQL: `acres_http_active_requests > 40` for 2m — more than 40 API HTTP
   requests in flight; this gauge does not measure database pool occupancy.
 - Triage: inspect in-flight request load, route patterns, p95 latency, 5xx,
-  and dependency health. If database saturation is suspected, inspect
-  PostgreSQL/Prisma connection evidence separately before attributing cause.
+  and dependency health. Check the API pool connection and waiting gauges
+  named in the latency runbook alongside PostgreSQL evidence before
+  attributing cause. These gauges omit the worker, migrator, other clients,
+  server-wide limits, lock waits, and query performance.
 - Contain: address the observed cause and follow existing rollback authority
   if a deployment caused it. Escalate to on-call SRE if concurrency persists
   with degraded latency or availability.

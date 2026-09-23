@@ -1,4 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { PrismaService } from './prisma.service';
 import type { AcresConfigService } from '../config/acres-config.service';
 
@@ -17,6 +18,7 @@ interface PrismaServiceInternals {
     warn: (message: string) => void;
   };
   disconnect: () => Promise<void>;
+  pool: Pool;
 }
 
 function getInternals(service: PrismaService): PrismaServiceInternals {
@@ -33,14 +35,34 @@ describe('PrismaService', () => {
   });
 
   describe('constructor', () => {
-    it('builds PrismaPg adapter with config.databaseUrl and 5000 timeout', () => {
-      new PrismaService(mockConfig);
-
-      expect(PrismaPg).toHaveBeenCalledWith({
-        connectionString:
-          'postgresql://postgres:secret@localhost:5432/acres_test',
-        connectionTimeoutMillis: 5000,
+    it('shares one lazy pool with PrismaPg and exposes its driver counts', () => {
+      const service = new PrismaService(mockConfig);
+      const pool = getInternals(service).pool;
+      expect(PrismaPg).toHaveBeenCalledWith(pool);
+      expect(pool.options.connectionString).toBe(mockConfig.databaseUrl);
+      expect(pool.options.connectionTimeoutMillis).toBe(5000);
+      expect(service.getPoolSnapshot()).toEqual({
+        total: 0,
+        idle: 0,
+        waiting: 0,
+        max: pool.options.max,
       });
+      expect(pool.totalCount).toBe(0);
+    });
+
+    it('reads live pool counts without exposing connection settings', () => {
+      const service = new PrismaService(mockConfig);
+      const pool = getInternals(service).pool;
+      jest.spyOn(pool, 'totalCount', 'get').mockReturnValue(4);
+      jest.spyOn(pool, 'idleCount', 'get').mockReturnValue(1);
+      jest.spyOn(pool, 'waitingCount', 'get').mockReturnValue(2);
+      expect(service.getPoolSnapshot()).toEqual({
+        total: 4,
+        idle: 1,
+        waiting: 2,
+        max: pool.options.max,
+      });
+      expect(JSON.stringify(service.getPoolSnapshot())).not.toContain('secret');
     });
   });
 
@@ -71,6 +93,18 @@ describe('PrismaService', () => {
   });
 
   describe('disconnect', () => {
+    it('closes the externally owned pool once across both hooks', async () => {
+      const service = new PrismaService(mockConfig);
+      const pool = getInternals(service).pool;
+      const endSpy = jest.spyOn(pool, 'end');
+      jest.spyOn(service, '$disconnect').mockResolvedValue(undefined);
+
+      await service.onModuleDestroy();
+      await service.onApplicationShutdown();
+
+      expect(endSpy).toHaveBeenCalledTimes(1);
+      expect(pool.ended).toBe(true);
+    });
     it('catches any error thrown by $disconnect() and logs a warning via logger.warn without rethrowing', async () => {
       const service = new PrismaService(mockConfig);
       const internals = getInternals(service);

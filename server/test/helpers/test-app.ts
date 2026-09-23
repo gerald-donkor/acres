@@ -201,6 +201,7 @@ export interface PrismaDouble {
   $queryRaw: jest.Mock;
   $transaction: jest.Mock;
   $disconnect: jest.Mock;
+  getPoolSnapshot: jest.Mock;
 }
 
 export function createPrismaDouble(): PrismaDouble {
@@ -388,6 +389,12 @@ export function createPrismaDouble(): PrismaDouble {
     $queryRaw: jest.fn(),
     $transaction: jest.fn(),
     $disconnect: jest.fn().mockResolvedValue(undefined),
+    getPoolSnapshot: jest.fn().mockReturnValue({
+      total: 0,
+      idle: 0,
+      waiting: 0,
+      max: 10,
+    }),
   };
   prisma.$transaction.mockImplementation(
     (callback: (tx: PrismaDouble) => unknown) =>

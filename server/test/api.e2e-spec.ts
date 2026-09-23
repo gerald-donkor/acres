@@ -153,6 +153,12 @@ describe('Acres API', () => {
         '# TYPE acres_http_active_requests gauge',
       );
       expect(response.text).toContain(
+        'acres_postgres_pool_connections_total 0',
+      );
+      expect(response.text).toContain('acres_postgres_pool_connections_idle 0');
+      expect(response.text).toContain('acres_postgres_pool_requests_waiting 0');
+      expect(response.text).toContain('acres_postgres_pool_connections_max 10');
+      expect(response.text).toContain(
         '# TYPE acres_outbox_pending_events gauge',
       );
       expect(response.body).toEqual({});

@@ -53,6 +53,18 @@ and rate limiting:
 6. `acres_queue_jobs_total`: Counter by `queue_name`, `status`.
 7. `acres_queue_active_jobs` and `acres_queue_waiting_jobs`: Gauges for queue depth.
 8. `acres_scheduled_job_runs_total`: Counter by `job_name`, `status`.
+9. `acres_postgres_pool_connections_total`, `acres_postgres_pool_connections_idle`, `acres_postgres_pool_connections_max`, and `acres_postgres_pool_requests_waiting`: unlabeled gauges sampled from the API process's `pg.Pool` during a scrape, without a query. The Grafana dashboard plots connections and acquisition backlog separately.
+
+The API pool is created lazily with the existing 5000 ms connection timeout and
+closed once during Prisma shutdown. A fresh API process reports zero total,
+idle, and waiting connections and the driver's effective maximum. A failed
+snapshot fails the scrape instead of preserving an old value. `waiting > 0`
+demonstrates local pool acquisition backlog; `total == max` alone does not
+prove saturation. The values do not cover the worker, migrator, other clients,
+server-wide connection limits, lock waits, query duration, or wait duration.
+No pool saturation alert or threshold is configured; production capacity
+evidence is still needed before setting one. Rolling back this change removes
+the gauges and dashboard panels, returning to an unobserved API pool.
 
 The 429 counter records responses observed by the NestJS metrics middleware.
 Responses generated solely at the Caddy edge are outside this API metric and
@@ -84,7 +96,7 @@ counter/histogram behavior changed (`acres_parser_executions_total`,
 | `infra/docker/client.Dockerfile.example` and `infra/docker/client.Dockerfile.example.dockerignore` | Example Node 24 production image for the Next client, with a Dockerfile-specific context ignore because the root `.dockerignore` intentionally excludes client source for the server image |
 | `infra/env/production.env.example` and `infra/env/garage.production.env.example` | Production environment inventory with `__REQUIRED_*__` sentinels for operator-provided values and every Compose interpolation variable; Garage admin/metrics secrets stay service-scoped |
 | `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`) |
-| `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json` | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, and scheduled job health |
+| `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json` | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, scheduled job health, and API process pool state |
 | `server/src/metrics/*` | `MetricsModule`, `MetricsService`, `MetricsController`, `MetricsMiddleware`, and `route-normalizer` |
 | `server/src/jobs/retention-maintenance.job.ts` | Cron-driven retention maintenance for expired uploads, idempotency records, and authentication/recovery tokens |
 | `client/e2e/helpers.ts` | Shared Playwright test helpers and deterministic mock fixture generators |
@@ -732,6 +744,22 @@ passed. The sandboxed build again failed while parsing TypeScript
 server builds. Local `promtool` was unavailable. The review found no issues;
 no live Prometheus evaluation, Alertmanager receiver transition, or production
 traffic behavior was tested.
+
+**Prompt 168 update (2026-09-23):** The API now exports direct `pg.Pool`
+total, idle, waiting, and configured maximum gauges. This closes the narrow
+API-process pool-count visibility gap described in the prompt 167 record above.
+It does not measure wait time, exhaustion across multiple processes, the worker
+pool, or PostgreSQL server-wide saturation. No eighth alert or launch sign-off
+was added. Focused pool/metrics suites passed 14/14 tests; the full server unit
+suite passed 119/119 suites and 1836/1836 tests. `npm run ops:templates` and
+`npm run ops:alert-test` passed (`pass 1`, `fail 0`); `npm run lint`,
+`npm run typecheck`, `npm run build` (outside the sandbox's documented Next
+`--showConfig` subprocess restriction), and `git diff --check` passed. The
+sandboxed server E2E run failed because `acres_test` was unreachable and HTTP
+test servers could not bind. After fixing the shared Prisma test double, an
+elevated E2E run passed 6/6 suites and 143/143 tests, including the private
+`/metrics` HTTP exposition. No live API/worker pool or production Prometheus
+scrape was measured.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 

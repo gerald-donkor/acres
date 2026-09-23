@@ -30,6 +30,10 @@ export class MetricsService implements OnModuleDestroy {
     'method' | 'route_group' | 'status_class'
   >;
   readonly httpActiveRequests: Gauge<string>;
+  readonly postgresPoolConnectionsTotal: Gauge<string>;
+  readonly postgresPoolConnectionsIdle: Gauge<string>;
+  readonly postgresPoolRequestsWaiting: Gauge<string>;
+  readonly postgresPoolConnectionsMax: Gauge<string>;
   readonly outboxPendingEvents: Gauge<string>;
   readonly queueJobsTotal: Counter<'queue_name' | 'status'>;
   readonly queueActiveJobs: Gauge<'queue_name'>;
@@ -70,6 +74,35 @@ export class MetricsService implements OnModuleDestroy {
     this.httpActiveRequests = new Gauge({
       name: 'acres_http_active_requests',
       help: 'Current number of in-flight HTTP requests',
+      registers: [this.registry],
+    });
+
+    this.postgresPoolConnectionsTotal = new Gauge({
+      name: 'acres_postgres_pool_connections_total',
+      help: 'Connections in the API process pg.Pool',
+      registers: [this.registry],
+      collect: () => {
+        if (!this.prisma) return;
+        const snapshot = this.prisma.getPoolSnapshot();
+        this.postgresPoolConnectionsTotal.set(snapshot.total);
+        this.postgresPoolConnectionsIdle.set(snapshot.idle);
+        this.postgresPoolRequestsWaiting.set(snapshot.waiting);
+        this.postgresPoolConnectionsMax.set(snapshot.max);
+      },
+    });
+    this.postgresPoolConnectionsIdle = new Gauge({
+      name: 'acres_postgres_pool_connections_idle',
+      help: 'Idle connections in the API process pg.Pool',
+      registers: [this.registry],
+    });
+    this.postgresPoolRequestsWaiting = new Gauge({
+      name: 'acres_postgres_pool_requests_waiting',
+      help: 'Requests waiting to acquire an API process pg.Pool connection',
+      registers: [this.registry],
+    });
+    this.postgresPoolConnectionsMax = new Gauge({
+      name: 'acres_postgres_pool_connections_max',
+      help: 'Configured maximum connections in the API process pg.Pool',
       registers: [this.registry],
     });
 

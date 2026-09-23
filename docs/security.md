@@ -594,6 +594,11 @@ As of 2026-09-09, automated performance capacity evaluation, multi-layer DoS res
     pool saturation, but its expression measured API HTTP requests in flight.
     Prompt 167 renamed the current rule `HighHttpConcurrency`; it does not
     establish database pool occupancy or exhaustion, which remains unmeasured.
+  - **2026-09-23 follow-up:** Prompt 168 exposes the API process's `pg.Pool`
+    total, idle, waiting, and configured maximum as private, unlabeled metrics.
+    Waiting above zero shows local acquisition backlog. Worker and server-wide
+    occupancy, wait duration, and an evidence-based saturation alert remain
+    unmeasured; the seven-alert count is unchanged.
 - **Top-Level Orchestrator & Evidence Emission**:
   - `scripts/ops/run-capacity-alerting-drill.sh` executes alert simulation, capacity evaluation, and DoS drill in sequence, emitting unified JSON evidence (`backups/capacity-alerting-drill-evidence-<timestamp>.json`).
 - **Operations & CI Integration**:

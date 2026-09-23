@@ -1,4 +1,5 @@
 import { MetricsService } from './metrics.service';
+import type { PrismaService } from '../prisma/prisma.service';
 
 describe('MetricsService', () => {
   let service: MetricsService;
@@ -26,6 +27,47 @@ describe('MetricsService', () => {
     expect(text).toContain(
       '# TYPE acres_parser_execution_duration_seconds histogram',
     );
+  });
+
+  it('exports fresh, unlabeled API pool counts on every scrape', async () => {
+    const snapshot = { total: 0, idle: 0, waiting: 0, max: 10 };
+    const getPoolSnapshot = jest.fn(() => ({ ...snapshot }));
+    const prisma = {
+      getPoolSnapshot,
+    } as unknown as PrismaService;
+    const metrics = new MetricsService(prisma);
+    try {
+      const first = await metrics.getMetrics();
+      expect(first).toContain('acres_postgres_pool_connections_total 0');
+      expect(first).toContain('acres_postgres_pool_connections_idle 0');
+      expect(first).toContain('acres_postgres_pool_requests_waiting 0');
+      expect(first).toContain('acres_postgres_pool_connections_max 10');
+      snapshot.total = 10;
+      snapshot.idle = 2;
+      snapshot.waiting = 3;
+      const second = await metrics.getMetrics();
+      expect(second).toContain('acres_postgres_pool_connections_total 10');
+      expect(second).toContain('acres_postgres_pool_connections_idle 2');
+      expect(second).toContain('acres_postgres_pool_requests_waiting 3');
+      expect(second).not.toMatch(/acres_postgres_pool_[^\n]*\{/);
+      expect(getPoolSnapshot).toHaveBeenCalledTimes(2);
+    } finally {
+      metrics.onModuleDestroy();
+    }
+  });
+
+  it('fails a scrape when the pool snapshot cannot be read', async () => {
+    const prisma = {
+      getPoolSnapshot: jest.fn(() => {
+        throw new Error('pool unavailable');
+      }),
+    } as unknown as PrismaService;
+    const metrics = new MetricsService(prisma);
+    try {
+      await expect(metrics.getMetrics()).rejects.toThrow('pool unavailable');
+    } finally {
+      metrics.onModuleDestroy();
+    }
   });
 
   it('counts only 429 responses without changing the total request labels', async () => {

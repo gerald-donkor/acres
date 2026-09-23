@@ -1,0 +1,50 @@
+# 168 — expose API PostgreSQL pool telemetry
+
+## Scope and why this is next
+
+The committed baseline is `10f8450` on `main`; the worktree was clean when this prompt was prepared. `docs/build-plan.md` Phase 12 requires DB/query/pool observability, and prompt 167 corrected the seventh alert's misleading pool name. `docs/operations.md` records the remaining gap: no direct pool occupancy, wait, or exhaustion metric has been verified. This is the next dependency-safe Phase 12 operations step: expose the **API process's actual `pg.Pool` state** through its existing private `/metrics` endpoint and show it in the operator dashboard. Establish the signal before choosing an alert threshold from production capacity evidence.
+
+## References and verified APIs
+
+- `AGENTS.md` §§2, 4–7, 8.2, 10; `docs/build-plan.md` §§13–14; `docs/operations.md` “Topology & Telemetry” and the prompt 167 correction; `docs/backend.md` Prisma and metrics implementation record; `docs/launch-checklist.md` §5; `docs/security.md` TM-20; `docs/system-architecture.md` current Prisma/observability sections. Read these again on execution.
+- `server/src/prisma/prisma.service.ts` constructs `PrismaPg` from `{ connectionString, connectionTimeoutMillis: 5000 }`, with lazy first-query connection and `$disconnect()` in two shutdown hooks. `server/src/metrics/metrics.service.ts` owns a per-process `prom-client` registry; `server/src/metrics/metrics.controller.ts` exposes it privately. `server/src/worker.ts` creates an application context without HTTP, so its own pool cannot be scraped at `/metrics` today.
+- Installed `node_modules/@prisma/adapter-pg/dist/index.d.ts` declares `new PrismaPg(poolOrConfig: pg.Pool | pg.PoolConfig | string, options?)`; `PrismaPgOptions.disposeExternalPool` defaults to false. The installed adapter implementation creates its own pool for a config and closes it on disposal; for an externally supplied pool it closes only when `disposeExternalPool: true`. Installed `node_modules/@types/pg/index.d.ts` and `node_modules/pg-pool/index.js` expose `Pool.totalCount`, `idleCount`, `waitingCount` and `Pool.options.max`. Confirm versions and behavior again before coding. `pg` currently arrives transitively through `@prisma/adapter-pg`; an explicit import requires direct runtime `pg` and development `@types/pg` declarations in `server/package.json` and lockfile, using installed compatible versions.
+- `infra/prometheus/prometheus.yml` scrapes `api:3001/metrics` every 30 seconds. `infra/grafana/dashboards/acres-operations.json` is the checked-in operator dashboard. `infra/prometheus/alerts.yml` currently has seven alerts, including `HighHttpConcurrency` on `acres_http_active_requests > 40`. No browser comp, board crop, static-design measurement, Next API, or breakpoint applies. Pool counts are integer runtime values; report them as observed values, not comp-derived measurements.
+
+## Implementation contract
+
+1. In `PrismaService`, create exactly one owned `pg.Pool` with the same connection string and 5000 ms connection timeout. Pass that pool to `PrismaPg` with verified disposal semantics that close it on Prisma shutdown. Preserve lazy database connection: constructing the pool or gathering counts must not perform a query or open a connection. Avoid an extra pool, dynamic client creation, or a connection probe on every scrape. If installed adapter behavior or existing lifecycle tests show double-disposal or a different ownership contract, resolve against source and tests before proceeding.
+2. Expose a small read-only, credential-free pool snapshot from `PrismaService` containing `total`, `idle`, `waiting`, and configured `max` counts. Verify `0 <= idle <= total <= max` and `waiting >= 0` where the driver guarantees it; do not clamp or invent values that hide a bug. Derive `active = total - idle` only if the driver semantics support it. Do not return the pool, connection string, host, username, backend PID, query text, tenant identifier, or unbounded label.
+3. In `MetricsService`, add fixed-name gauges with no dynamic labels for API pool `total`, `idle`, `waiting`, and `max` (and `active` only if justified). Choose names/help text that make `pg.Pool` state and per-process scope explicit, for example `acres_postgres_pool_connections_total`, `acres_postgres_pool_connections_idle`, `acres_postgres_pool_requests_waiting`, `acres_postgres_pool_connections_max`. Collect a coherent snapshot at scrape time from the injected `PrismaService`; avoid a timer or DB query. Test zero values before the first query, nonzero and waiting values under a controlled pool fixture, and shutdown behavior. If a snapshot cannot be read, do not silently emit stale healthy-looking values; use the existing scrape failure/error conventions and document the failure mode. Preserve all existing metric names and cardinality.
+4. Add an API pool section to `infra/grafana/dashboards/acres-operations.json` showing total/idle/max and waiting as separate, correctly labeled series or panels. Keep current panels and datasource provisioning valid. Show only the API process, because the Compose Prometheus configuration does not scrape the worker application context. Do not aggregate it as if it were fleet-wide PostgreSQL usage.
+5. Update the current-state metric inventory and limitations in `docs/operations.md`, and the `HighHttpConcurrency` / latency runbook triage in `docs/launch-checklist.md` to point operators to the new API pool metrics. State explicitly: `waiting > 0` demonstrates local pool acquisition backlog, while `total == max` alone does not prove saturation; API pool counts do not cover the worker, migrator, other clients, server-wide connection limits, lock waits, or query performance. Reconcile any current-state claims in `docs/security.md`, `docs/system-architecture.md`, or `docs/build-plan.md` only where the actual new implementation changes them; preserve historical records with dated addenda. No launch category is approved by this work.
+
+## Behavior, failure cases, and rollout
+
+- `/metrics` remains private and version-neutral. Its response gains bounded, unlabeled API pool series; API business routes, auth, RLS, schema, migrations, and database connection configuration otherwise retain behavior.
+- A fresh API process exposes zero total/idle/waiting and its configured max. A disconnected database can still cause application queries to fail; scrape must not turn into a connection attempt. During shutdown, pool ownership must close connections once without hanging or leaking, including the two current Nest lifecycle hooks.
+- `max` is the effective pool limit from the installed driver, not an invented constant. A wait count is a snapshot, not wait duration or an SLO. Do not label a worker-only pool incident as covered. No new alert or numeric saturation threshold is added without an operator-approved capacity baseline; existing seven alerts and receiver identity remain intact. Rollback removes these gauges/panel and returns the adapter to its previous config-managed pool construction; document the loss of this signal.
+
+## Verification and execution sequence
+
+1. On approval, re-read this prompt, owning docs, scoped source, installed adapter/`pg` types, and every skill below. Record branch, initial status, `BASE_SHA`, `HEAD_SHA`, and actual dependency versions. Check that there are no unrelated changes to stage. Confirm explicit `pg` import/packaging under the installed npm workspace.
+2. Add focused Jest coverage in `server/src/prisma/prisma.service.spec.ts` and `server/src/metrics/metrics.service.spec.ts` for shared pool wiring, lazy zero snapshot, real snapshot values, bounded unlabeled exposition, and close semantics. Use a controlled `pg.Pool` fake for unit behavior; use a real-database integration test only if a concrete lifecycle or backlog risk cannot be resolved with existing infrastructure. Test failure handling without exposing credentials. Add a dashboard JSON/static check only where it protects a real panel query or placement contract.
+3. Run the focused server tests, `npm run test:server` if the database is available, `npm run ops:templates`, `npm run ops:alert-test`, then `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check`. If a required check cannot run, quote its exact failure and distinguish environment limits from code failures. Inspect `/metrics` exposition through the service test and, if a local server/database is available, through a private HTTP scrape. Never claim a live worker or production pool was measured without doing so.
+4. Inspect the full diff, complete the required `requesting-code-review` reviewer subagent and `receiving-code-review` feedback loop, fix verified issues, and re-review if pool lifecycle or metric contract changes materially. Record real implementation/check evidence in `docs/operations.md`, including the remaining worker/server-wide visibility gap. Stage only approved paths, inspect the staged diff, commit locally on `main` using `caveman-commit`, and do not push.
+
+## Non-goals
+
+- A new pool-size setting, changed timeout, database migration, SQL instrumentation, connection limit change, or production capacity claim.
+- Worker metrics endpoint/scrape, whole-PostgreSQL telemetry, an alert threshold or eighth alert, receiver routing, launch sign-off, or operator-owned SLO decisions. These need separate topology and production evidence.
+- Customer dashboard/UI, static design, motion, and accessibility changes.
+
+## SKILLS USED
+
+- `prometheus-configuration` — metric semantics, scrape behavior, and bounded cardinality.
+- `grafana-dashboards` — operator pool panel with accurate scope and units.
+- `nestjs-best-practices` — Prisma service lifecycle, DI, and metrics collection wiring.
+- `postgres-best-practices` — connection-pool ownership and database-resource behavior.
+- `javascript-testing-patterns` — focused lifecycle and metric exposition tests.
+- `requesting-code-review` — Stage 1 review after self-verification.
+- `receiving-code-review` — validate and resolve review feedback.
+- `caveman-commit` — required local commit message during execution.
