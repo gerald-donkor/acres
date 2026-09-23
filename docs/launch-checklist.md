@@ -226,10 +226,11 @@ cause, action items) before resolving the alert thread.
 
 - PromQL: `histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket[5m])) by (le)) > 0.5` for 5m.
 - Triage: `node scripts/ops/verify-capacity-load.js --synthetic` for the SLO
-  baseline; inspect slow-query log and pool saturation
-  (`DatabaseConnectionPoolSaturation` firing jointly points at the pool).
-- Contain: raise pool limits within the approved host profile, add capacity,
-  or enable stricter Caddy throttling on hot routes. Escalate to on-call SRE
+  baseline; inspect route patterns, slow-query evidence, dependency health,
+  and in-flight HTTP requests. Confirm database connection pressure from
+  PostgreSQL/Prisma evidence before treating it as a cause.
+- Contain: address the observed bottleneck within the approved host profile;
+  use existing rollback authority if onset matches a deployment. Escalate to on-call SRE
   if p95 exceeds 2s or availability SLO is threatened.
 - Clear: p95 back under 500ms for 15m (operator-defined; matches the fire threshold).
 
@@ -267,15 +268,18 @@ cause, action items) before resolving the alert thread.
   of lag.
 - Clear: pending events back under 10 for 15m (operator-defined clearing bar, stricter than the 50-event fire threshold).
 
-### DatabaseConnectionPoolSaturation (warning)
+### HighHttpConcurrency (warning)
 
-- PromQL: `acres_http_active_requests > 40` for 2m — concurrency nearing pool capacity.
-- Triage: active connections vs pool max; identify long-held connections
-  (slow endpoints, missing `await`/release, report/export jobs on the API pool).
-- Contain: move heavy jobs to the worker pool, add API replicas within the
-  host profile, or raise the pool ceiling after confirming Postgres headroom.
-  Escalate to on-call SRE if connections plateau at max (outage precursor).
-- Clear: active requests back under 30 for 15m (operator-defined clearing bar, under the 40-request fire threshold).
+- PromQL: `acres_http_active_requests > 40` for 2m — more than 40 API HTTP
+  requests in flight; this gauge does not measure database pool occupancy.
+- Triage: inspect in-flight request load, route patterns, p95 latency, 5xx,
+  and dependency health. If database saturation is suspected, inspect
+  PostgreSQL/Prisma connection evidence separately before attributing cause.
+- Contain: address the observed cause and follow existing rollback authority
+  if a deployment caused it. Escalate to on-call SRE if concurrency persists
+  with degraded latency or availability.
+- Clear: active requests back under 30 for 15m (operator-defined clearing bar,
+  under the 40-request fire threshold).
 
 ## 6. Emergency Rollback & Disaster Recovery
 

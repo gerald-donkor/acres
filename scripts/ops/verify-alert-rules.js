@@ -13,7 +13,7 @@
  *    - High429Rate (Security: HTTP 429 rate > 10% over 5m)
  *    - QueueDeadLettersDetected (Queue Health: failed jobs > 0)
  *    - OutboxDeliveryLag (Outbox Health: > 50 pending events for > 10m)
- *    - DatabaseConnectionPoolSaturation (Resources: active requests > 40)
+ *    - HighHttpConcurrency (API load: active HTTP requests > 40)
  * 2. Validates PromQL syntax, durations, label schemas, and annotations.
  * 3. Simulates metric time-series data to verify that each alert triggers under breach conditions
  *    and clears cleanly under normal traffic.
@@ -33,7 +33,7 @@ const REQUIRED_ALERTS = [
   'High429Rate',
   'QueueDeadLettersDetected',
   'OutboxDeliveryLag',
-  'DatabaseConnectionPoolSaturation',
+  'HighHttpConcurrency',
 ];
 
 const KNOWN_METRIC_IDENTIFIERS = [
@@ -95,11 +95,11 @@ const SIMULATION_DEFINITIONS = {
     clearedSample: { pendingEvents: 10 },
     thresholdDescription: 'outbox pending events > 50',
   },
-  DatabaseConnectionPoolSaturation: {
+  HighHttpConcurrency: {
     evaluate: (data) => (data.activeRequests || 0) > 40,
     firingSample: { activeRequests: 46 },
-    clearedSample: { activeRequests: 14 },
-    thresholdDescription: 'active concurrent requests > 40',
+    clearedSample: { activeRequests: 40 },
+    thresholdDescription: 'active API HTTP requests > 40',
   },
 };
 
@@ -253,6 +253,18 @@ function verifyAlertRules(options = {}) {
       const expected = '(sum(rate(acres_http_429_responses_total[5m]))/clamp_min(sum(rate(acres_http_requests_total[5m])),0.001))*100>10';
       if (normalized !== expected) {
         ruleErrors.push('expr must use the dedicated 429 counter over total requests at the configured 5m and 10% threshold');
+      }
+    }
+
+    if (requiredAlert === 'HighHttpConcurrency') {
+      if (typeof rule.expr !== 'string' || rule.expr.trim() !== 'acres_http_active_requests > 40') {
+        ruleErrors.push('expr must be acres_http_active_requests > 40');
+      }
+      if (rule.for !== '2m') {
+        ruleErrors.push('for must be 2m');
+      }
+      if (severity !== 'warning') {
+        ruleErrors.push('severity must be warning');
       }
     }
 

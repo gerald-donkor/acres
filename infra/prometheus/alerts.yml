@@ -55,11 +55,11 @@ groups:
           summary: Outbox event publication lag
           description: More than 50 outbox events have remained pending delivery for over 10 minutes.
 
-      - alert: DatabaseConnectionPoolSaturation
+      - alert: HighHttpConcurrency
         expr: acres_http_active_requests > 40
         for: 2m
         labels:
           severity: warning
         annotations:
-          summary: Active HTTP concurrency approaching database connection pool limit
-          description: Concurrent active HTTP requests have exceeded 40, approaching the configured database pool capacity.
+          summary: High API HTTP request concurrency
+          description: More than 40 API HTTP requests have been in flight for two minutes.

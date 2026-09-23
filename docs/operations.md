@@ -83,7 +83,7 @@ counter/histogram behavior changed (`acres_parser_executions_total`,
 | `infra/compose/docker-compose.production.example.yml` | Inert single-host Compose reference for Caddy, Next, API, worker, Postgres/PostGIS, Valkey, Garage, ClamAV, and optional observability |
 | `infra/docker/client.Dockerfile.example` and `infra/docker/client.Dockerfile.example.dockerignore` | Example Node 24 production image for the Next client, with a Dockerfile-specific context ignore because the root `.dockerignore` intentionally excludes client source for the server image |
 | `infra/env/production.env.example` and `infra/env/garage.production.env.example` | Production environment inventory with `__REQUIRED_*__` sentinels for operator-provided values and every Compose interpolation variable; Garage admin/metrics secrets stay service-scoped |
-| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `DatabaseConnectionPoolSaturation`) |
+| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`) |
 | `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json` | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, and scheduled job health |
 | `server/src/metrics/*` | `MetricsModule`, `MetricsService`, `MetricsController`, `MetricsMiddleware`, and `route-normalizer` |
 | `server/src/jobs/retention-maintenance.job.ts` | Cron-driven retention maintenance for expired uploads, idempotency records, and authentication/recovery tokens |
@@ -103,7 +103,7 @@ counter/histogram behavior changed (`acres_parser_executions_total`,
 | `scripts/ops/run-sast-scan.js` & `.spec.js` | Pure Node.js static application security testing (SAST) engine evaluating SAST-01 through SAST-08 across source trees with triage policy enforcement |
 | `infra/security/sast-triage.json` & `.schema.json` | Actionable SAST triage policy registry with schema, rationale, approved owners, and fail-closed expiration gating |
 | `scripts/ops/verify-container-security.js` & `.spec.js` | Static multi-stage build validator verifying non-root `USER node`, pinned `node:24-alpine`, bounded healthchecks, direct exec CMD, and Compose network/credential isolation |
-| `scripts/ops/verify-alert-rules.js` & `.spec.js` | Prometheus alert rule validator and time-series simulation engine verifying 7 golden signal and threat alerts (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `DatabaseConnectionPoolSaturation`) |
+| `scripts/ops/verify-alert-rules.js` & `.spec.js` | Prometheus alert rule validator and time-series simulation engine verifying 7 golden signal and threat alerts (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`) |
 | `scripts/ops/verify-capacity-load.js` & `.spec.js` | Pure Node.js performance, capacity, and latency evaluation engine evaluating Category 5 SLOs (availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS) |
 | `scripts/ops/run-dos-resilience-drill.sh` | Automated multi-layer DoS resilience and rate limiting drill runner asserting edge bounds, in-process throttles, GraphQL resource caps, upload bounds, and constant-time bcrypt |
 | `scripts/ops/run-capacity-alerting-drill.sh` | Automated top-level drill orchestrator executing alert simulation, capacity evaluation, and DoS resilience checks with unified JSON evidence emission |
@@ -668,7 +668,7 @@ Implemented in Prompt 66:
      4. `High429Rate` (Security: HTTP 429 rate > 10% over 5m, for 5m, warning);
      5. `QueueDeadLettersDetected` (Queue Health: failed jobs > 0, for 1m, warning);
      6. `OutboxDeliveryLag` (Outbox Health: > 50 pending events for > 10m, for 10m, warning);
-     7. `DatabaseConnectionPoolSaturation` (Resources: active requests > 40, for 2m, warning).
+     7. `DatabaseConnectionPoolSaturation` (then named for a pool, but based on active requests > 40, for 2m, warning).
    - Statically validates PromQL expressions, durations, severities, and annotations.
    - The `High429Rate` static check requires the dedicated 429 numerator, the total-request denominator, and the configured 5m/10% expression; its synthetic check confirms heavy non-429 4xx traffic does not fire the alert. These checks do not exercise a running Prometheus server or production traffic.
    - Evaluates synthetic time-series metric data verifying that each alert fires when thresholds are breached and clears when healthy.
@@ -704,6 +704,34 @@ client build could not parse TypeScript `--showConfig` because subprocess stdout
 was empty; the same production build completed outside that restriction.
 No local `promtool` was available, and no running Prometheus or production
 alert behavior was verified.
+
+**Prompt 167 correction (2026-09-23):** The seventh alert is now
+`HighHttpConcurrency`, measuring `acres_http_active_requests > 40` for 2m at
+warning severity. This keeps the existing threshold but correctly identifies
+an API HTTP load signal. The prompt 66 inventory above records its original
+name; it did not measure database pool saturation. No direct Prisma/PostgreSQL
+pool utilization, wait-time, or exhaustion metric has been verified in this
+repository. True pool saturation remains an open launch telemetry gap, and a
+worker-only pool problem may not trigger this HTTP alert. On promotion, the old
+alert series disappears and the new series starts a fresh 2-minute pending
+timer. Operators must update any external receiver routing, silences, and
+saved links keyed to the old name. No Alertmanager receiver is configured in
+this repository. The 40-request threshold is carried forward, not newly
+justified as an SLO; production Prometheus and receiver behavior remain to be
+verified.
+
+Prompt 167 verification: `node --test scripts/ops/verify-alert-rules.spec.js`
+and `npm run ops:alert-test` each reported `pass 1`, `fail 0` (the installed
+Node runner reports the file as one test). `npm run ops:alert-drill` reported
+16/16 checks and 7/7 simulations passed. `npm run ops:templates` passed;
+`npm run ops:capacity-alerting-drill -- --dry-run` passed and wrote ignored
+evidence at `backups/capacity-alerting-drill-evidence-20260923T195847Z.json`.
+`npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check`
+passed. The sandboxed build again failed while parsing TypeScript
+`--showConfig` output; an elevated run completed the shared, client, and
+server builds. Local `promtool` was unavailable. The review found no issues;
+no live Prometheus evaluation, Alertmanager receiver transition, or production
+traffic behavior was tested.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 

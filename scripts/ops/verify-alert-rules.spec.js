@@ -74,7 +74,7 @@ test('verifyAlertRules: flags missing required alert rule', () => {
     assert.ok(result.errors.some((e) => e.includes('Missing required alert rule: HighHttp5xxRate')));
     assert.ok(result.errors.some((e) => e.includes('Missing required alert rule: P95LatencyThresholdExceeded')));
     assert.ok(result.errors.some((e) => e.includes('Missing required alert rule: High429Rate')));
-    assert.ok(result.errors.some((e) => e.includes('Missing required alert rule: DatabaseConnectionPoolSaturation')));
+    assert.ok(result.errors.some((e) => e.includes('Missing required alert rule: HighHttpConcurrency')));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -190,6 +190,33 @@ test('High429Rate: heavy non-429 4xx traffic does not fire', () => {
   const simulation = SIMULATION_DEFINITIONS.High429Rate;
   assert.equal(simulation.evaluate({ totalRequests: 100, requests4xx: 90, requests429: 0 }), false);
   assert.equal(simulation.evaluate({ totalRequests: 100, requests4xx: 90, requests429: 11 }), true);
+});
+
+test('HighHttpConcurrency: rejects a changed signal, duration, or severity', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-alert-test-'));
+  try {
+    const alertsObj = yaml.load(fs.readFileSync(ALERTS_FILE, 'utf8'));
+    const rule = alertsObj.groups[0].rules.find((item) => item.alert === 'HighHttpConcurrency');
+    rule.expr = 'acres_outbox_pending_events > 40';
+    rule.for = '5m';
+    rule.labels.severity = 'critical';
+    const tmpAlertsPath = path.join(tmpDir, 'alerts.yml');
+    fs.writeFileSync(tmpAlertsPath, yaml.dump(alertsObj), 'utf8');
+
+    const result = verifyAlertRules({ alertsPath: tmpAlertsPath, promConfigPath: PROM_FILE });
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some((error) => error.includes('expr must be acres_http_active_requests > 40')));
+    assert.ok(result.errors.some((error) => error.includes('for must be 2m')));
+    assert.ok(result.errors.some((error) => error.includes('severity must be warning')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('HighHttpConcurrency: fires above 40 and clears at 40', () => {
+  const simulation = SIMULATION_DEFINITIONS.HighHttpConcurrency;
+  assert.equal(simulation.evaluate({ activeRequests: 41 }), true);
+  assert.equal(simulation.evaluate({ activeRequests: 40 }), false);
 });
 
 test('SIMULATION_DEFINITIONS: evaluates each alert condition faithfully on breach and normal samples', () => {

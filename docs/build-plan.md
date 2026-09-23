@@ -790,6 +790,11 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   - `scripts/ops/verify-alert-rules.spec.js`: exit 0; all 9 unit tests passed in 100ms;
   - Expands `infra/prometheus/alerts.yml` to 7 operational golden signals and security threat alerts (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `DatabaseConnectionPoolSaturation`);
   - Simulates time-series metric data verifying each alert fires on threshold breach and clears on normal traffic.
+- **2026-09-23 correction:** Prompt 66 originally named the seventh rule
+  `DatabaseConnectionPoolSaturation`, but its expression measured in-flight HTTP
+  requests. Prompt 167 renamed the current rule `HighHttpConcurrency`; direct
+  database pool saturation telemetry remains unimplemented and does not satisfy
+  Phase 12's DB/query/pool observability target.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
