@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { PrismaService } from './prisma.service';
 import type { AcresConfigService } from '../config/acres-config.service';
 
@@ -19,6 +19,7 @@ interface PrismaServiceInternals {
   };
   disconnect: () => Promise<void>;
   pool: Pool;
+  notifyAcquisition: (durationSeconds: number) => void;
 }
 
 function getInternals(service: PrismaService): PrismaServiceInternals {
@@ -149,6 +150,134 @@ describe('PrismaService', () => {
       await internals.disconnect();
 
       expect(warnSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('acquisition duration tracking', () => {
+    it('notifies registered listeners with elapsed duration on callback-based connect', (done) => {
+      const durations: number[] = [];
+      const fakeClient = { query: jest.fn() };
+      const fakeRelease = jest.fn();
+
+      const mockConnect = jest.fn(
+        (
+          cb?: (err?: Error, client?: PoolClient, release?: () => void) => void,
+        ) => {
+          if (cb) {
+            setTimeout(() => {
+              cb(undefined, fakeClient as unknown as PoolClient, fakeRelease);
+            }, 10);
+          }
+        },
+      );
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation(mockConnect as never);
+
+      const wrappedService = new PrismaService(mockConfig);
+      const unsubscribe = wrappedService.onAcquisition((d) =>
+        durations.push(d),
+      );
+      const wrappedPool = getInternals(wrappedService).pool;
+
+      wrappedPool.connect((err, client, release) => {
+        expect(err).toBeUndefined();
+        expect(client).toBe(fakeClient);
+        expect(release).toBe(fakeRelease);
+        expect(durations.length).toBe(1);
+        expect(durations[0]).toBeGreaterThan(0.005);
+        unsubscribe();
+        done();
+      });
+    });
+
+    it('notifies registered listeners on promise-based connect resolution and rejection', async () => {
+      const durations: number[] = [];
+      const fakeClient = { query: jest.fn() };
+      const mockSuccess = jest.fn(() => {
+        return new Promise<PoolClient>((resolve) => {
+          setTimeout(() => {
+            resolve(fakeClient as unknown as PoolClient);
+          }, 10);
+        });
+      });
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation(mockSuccess as never);
+
+      const wrappedService = new PrismaService(mockConfig);
+      wrappedService.onAcquisition((d) => durations.push(d));
+      const wrappedPool = getInternals(wrappedService).pool;
+
+      const client = await wrappedPool.connect();
+      expect(client).toBe(fakeClient);
+      expect(durations.length).toBe(1);
+      expect(durations[0]).toBeGreaterThan(0.005);
+
+      // Test rejection
+      const mockFail = jest.fn(() => {
+        return new Promise<PoolClient>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Connection timeout'));
+          }, 10);
+        });
+      });
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation(mockFail as never);
+
+      const failService = new PrismaService(mockConfig);
+      const failDurations: number[] = [];
+      failService.onAcquisition((d) => failDurations.push(d));
+      const failPool = getInternals(failService).pool;
+
+      await expect(failPool.connect()).rejects.toThrow('Connection timeout');
+      expect(failDurations.length).toBe(1);
+      expect(failDurations[0]).toBeGreaterThan(0.005);
+    });
+
+    it('logs warning and does not interrupt connection checkout if listener throws', (done) => {
+      const fakeClient = { query: jest.fn() };
+      const fakeRelease = jest.fn();
+
+      const mockThrowing = jest.fn(
+        (
+          cb?: (err?: Error, client?: PoolClient, release?: () => void) => void,
+        ) => {
+          if (cb) {
+            setImmediate(() => {
+              cb(undefined, fakeClient as unknown as PoolClient, fakeRelease);
+            });
+          }
+        },
+      );
+      jest
+        .spyOn(Pool.prototype, 'connect')
+        .mockImplementation(mockThrowing as never);
+
+      const wrappedService = new PrismaService(mockConfig);
+      const wrappedInternals = getInternals(wrappedService);
+      jest.spyOn(wrappedInternals.logger, 'warn').mockImplementation(() => {});
+      wrappedService.onAcquisition(() => {
+        throw new Error('Listener crash');
+      });
+
+      const wrappedPool = wrappedInternals.pool;
+
+      wrappedPool.connect((err, client) => {
+        expect(err).toBeUndefined();
+        expect(client).toBe(fakeClient);
+        done();
+      });
+    });
+
+    it('unsubscribes listener when unsubscribe function is called', () => {
+      const service = new PrismaService(mockConfig);
+      const durations: number[] = [];
+      const unsub = service.onAcquisition((d) => durations.push(d));
+      unsub();
+      getInternals(service).notifyAcquisition(0.05);
+      expect(durations.length).toBe(0);
     });
   });
 });

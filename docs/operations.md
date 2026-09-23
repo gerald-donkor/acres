@@ -947,6 +947,36 @@ completed the shared, client, and server builds. Static validation proves
 configuration shape; the disposable scrape above supplies the live lock
 evidence. Production Prometheus ingestion remains untested.
 
+**Prompt 172 update (2026-09-23): PostgreSQL pool acquisition wait duration.**
+`PrismaService` now wraps `this.pool.connect` using `process.hrtime.bigint()`
+across both callback and Promise checkout flows, observing the elapsed wall-clock
+duration until connection acquisition (or failure/timeout). The decoupled
+`onAcquisition` subscription pattern keeps `PrismaService` free of a circular
+dependency on `MetricsService`. `MetricsService` registers
+`acres_postgres_pool_acquisition_duration_seconds` with 13 duration buckets
+ranging from 0.5ms (`0.0005s`) to 5s (`5s`), capturing both sub-millisecond idle
+checkouts and multi-second pool queueing/starvation. Because both the API and
+the background worker instantiate `PrismaService` and `MetricsService`, this
+histogram is exposed by both processes and distinguished in Prometheus by
+`job="acres-api"` and `job="acres-worker"`.
+
+Grafana panel 23 ("API PostgreSQL Pool Acquisition Latency") and panel 24
+("Worker PostgreSQL Pool Acquisition Latency") show p50, p95, and p99 percentiles
+at row `y: 60` with units in seconds and `No data` preserved on absence.
+In incident triage, operators correlate acquisition latency with HTTP latency:
+an elevated acquisition p95/p99 (e.g. > 50ms) confirms `pg.Pool` queueing and
+connection checkout backlog, whereas low acquisition latency (< 1ms) isolates
+high HTTP latency to SQL execution, application compute, or downstream services.
+SQL query execution duration instrumentation, operator capacity baseline,
+and launch sign-off remain open.
+
+Prompt 172 verification: focused Prisma and metrics unit test suites passed
+19/19 tests; template verification (`scripts/ops/check-production-templates.sh`)
+and PostgreSQL diagnostics spec (`verify-postgres-diagnostics.spec.js`) passed
+5/5 tests including reused ID, scope, and template invariants. `npm run ops:templates`,
+`npm run ops:alert-test`, `npm run lint`, `npm run typecheck`, `npm run build`,
+and `git diff --check` passed cleanly.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

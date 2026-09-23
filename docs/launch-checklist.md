@@ -92,6 +92,9 @@ do not report failure.
   monitor file mount and existing-volume role reconciliation. Record the
   lock-wait count and oldest transaction-age panels with their scrape health;
   follow the read-only diagnosis in §5 when either suggests contention.
+  Record API and Worker PostgreSQL pool acquisition latency percentiles (panels
+  23 and 24, `acres_postgres_pool_acquisition_duration_seconds`); elevated
+  acquisition p95/p99 indicates pool checkout queueing or exhaustion.
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
@@ -238,9 +241,13 @@ cause, action items) before resolving the alert thread.
   `acres_postgres_pool_connections_idle`,
   `acres_postgres_pool_connections_max`, and
   `acres_postgres_pool_requests_waiting` alongside PostgreSQL evidence before
-  attributing latency to connection pressure. Waiting above zero shows local
+  attributing latency to connection pressure. Check API pool acquisition
+  latency percentiles (`acres_postgres_pool_acquisition_duration_seconds{job="acres-api"}`):
+  elevated p95/p99 latency (e.g. > 50ms) confirms connection checkout queueing
+  in `pg.Pool`, whereas low acquisition latency (< 1ms) isolates delay to
+  query execution or downstream processing. Waiting above zero shows local
   acquisition backlog; total equaling max alone does not prove saturation.
-  Compare worker pool backlog, sampled lock waits, and oldest transaction age;
+  Compare worker pool backlog and acquisition latency, sampled lock waits, and oldest transaction age;
   use the database procedure below to confirm blockers before assigning cause.
 - Contain: address the observed bottleneck within the approved host profile;
   use existing rollback authority if onset matches a deployment. Escalate to on-call SRE

@@ -49,10 +49,52 @@ describe('MetricsService', () => {
       expect(second).toContain('acres_postgres_pool_connections_total 10');
       expect(second).toContain('acres_postgres_pool_connections_idle 2');
       expect(second).toContain('acres_postgres_pool_requests_waiting 3');
-      expect(second).not.toMatch(/acres_postgres_pool_[^\n]*\{/);
+      expect(second).not.toMatch(
+        /acres_postgres_pool_(connections|requests)_[^\n]*\{/,
+      );
       expect(getPoolSnapshot).toHaveBeenCalledTimes(2);
     } finally {
       metrics.onModuleDestroy();
+    }
+  });
+
+  it('observes pool acquisition durations when prisma emits acquisition events', async () => {
+    let capturedListener: ((duration: number) => void) | undefined;
+    const unsubscribe = jest.fn();
+    const onAcquisition = jest.fn((listener: (d: number) => void) => {
+      capturedListener = listener;
+      return unsubscribe;
+    });
+    const prisma = {
+      getPoolSnapshot: jest.fn(() => ({
+        total: 1,
+        idle: 1,
+        waiting: 0,
+        max: 10,
+      })),
+      onAcquisition,
+    } as unknown as PrismaService;
+    const metrics = new MetricsService(prisma);
+    try {
+      expect(onAcquisition).toHaveBeenCalledTimes(1);
+      expect(capturedListener).toBeDefined();
+
+      capturedListener!(0.003); // 3ms -> falls into le="0.005"
+      capturedListener!(0.045); // 45ms -> falls into le="0.05"
+
+      const text = await metrics.getMetrics();
+      expect(text).toContain(
+        'acres_postgres_pool_acquisition_duration_seconds_count 2',
+      );
+      expect(text).toContain(
+        'acres_postgres_pool_acquisition_duration_seconds_bucket{le="0.005"} 1',
+      );
+      expect(text).toContain(
+        'acres_postgres_pool_acquisition_duration_seconds_bucket{le="0.05"} 2',
+      );
+    } finally {
+      metrics.onModuleDestroy();
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
     }
   });
 

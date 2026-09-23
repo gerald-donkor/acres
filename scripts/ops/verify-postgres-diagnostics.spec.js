@@ -60,3 +60,9 @@ test('reused IDs, query-text metrics, and hidden absence fail', () => {
   delete hidden.panels.find((panel) => panel.id === 21).fieldConfig.defaults.noValue;
   assert.match(verifyPostgresDiagnostics(scrape, hidden).join(' '), /absent-data/);
 });
+
+test('pool acquisition latency panels have unique IDs and correct scope', () => {
+  const duplicate = copy(dashboard);
+  duplicate.panels.find((panel) => panel.id === 24).id = 23;
+  assert.match(verifyPostgresDiagnostics(scrape, duplicate).join(' '), /IDs are reused/);
+});

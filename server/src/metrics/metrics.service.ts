@@ -34,7 +34,9 @@ export class MetricsService implements OnModuleDestroy {
   readonly postgresPoolConnectionsIdle: Gauge<string>;
   readonly postgresPoolRequestsWaiting: Gauge<string>;
   readonly postgresPoolConnectionsMax: Gauge<string>;
+  readonly postgresPoolAcquisitionDurationSeconds: Histogram<string>;
   readonly outboxPendingEvents: Gauge<string>;
+  private readonly unsubscribeAcquisition?: () => void;
   readonly queueJobsTotal: Counter<'queue_name' | 'status'>;
   readonly queueActiveJobs: Gauge<'queue_name'>;
   readonly queueWaitingJobs: Gauge<'queue_name'>;
@@ -105,6 +107,24 @@ export class MetricsService implements OnModuleDestroy {
       help: 'Configured maximum connections in the current process pg.Pool',
       registers: [this.registry],
     });
+
+    this.postgresPoolAcquisitionDurationSeconds = new Histogram({
+      name: 'acres_postgres_pool_acquisition_duration_seconds',
+      help: 'Duration of PostgreSQL connection pool acquisition in seconds',
+      buckets: [
+        0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5,
+        5,
+      ],
+      registers: [this.registry],
+    });
+
+    if (typeof this.prisma?.onAcquisition === 'function') {
+      this.unsubscribeAcquisition = this.prisma.onAcquisition(
+        (durationSeconds: number) => {
+          this.postgresPoolAcquisitionDurationSeconds.observe(durationSeconds);
+        },
+      );
+    }
 
     this.outboxPendingEvents = new Gauge({
       name: 'acres_outbox_pending_events',
@@ -248,6 +268,7 @@ export class MetricsService implements OnModuleDestroy {
   }
 
   onModuleDestroy(): void {
+    this.unsubscribeAcquisition?.();
     this.registry.clear();
   }
 }

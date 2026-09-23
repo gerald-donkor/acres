@@ -987,6 +987,112 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "noValue": "No data",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "type": "timeseries",
+      "id": 23,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 60
+      },
+      "title": "API PostgreSQL Pool Acquisition Latency",
+      "description": "Elapsed duration to check out a connection from API process pg.Pool, in seconds. Measures connection checkout queueing/backlog, not query execution time.",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(acres_postgres_pool_acquisition_duration_seconds_bucket{job=\"acres-api\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(acres_postgres_pool_acquisition_duration_seconds_bucket{job=\"acres-api\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(acres_postgres_pool_acquisition_duration_seconds_bucket{job=\"acres-api\"}[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "noValue": "No data",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "type": "timeseries",
+      "id": 24,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 60
+      },
+      "title": "Worker PostgreSQL Pool Acquisition Latency",
+      "description": "Elapsed duration to check out a connection from worker process pg.Pool, in seconds. Measures connection checkout queueing/backlog, not query execution time.",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(acres_postgres_pool_acquisition_duration_seconds_bucket{job=\"acres-worker\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(acres_postgres_pool_acquisition_duration_seconds_bucket{job=\"acres-worker\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(acres_postgres_pool_acquisition_duration_seconds_bucket{job=\"acres-worker\"}[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "C"
+        }
+      ]
     }
   ],
   "refresh": "30s",
@@ -1005,5 +1111,5 @@
   "timezone": "browser",
   "title": "Acres Operations Foundation",
   "uid": "acres-operations-foundation",
-  "version": 6
+  "version": 7
 }
