@@ -238,6 +238,10 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
 
     for (const [k, strVal] of envEntries) {
       if (/(?:PASSWORD|SECRET|TOKEN|KEY|CREDENTIAL)/i.test(k)) {
+        // This one-time bootstrap value is optional when an initialized
+        // database volume starts; reconciliation injects it explicitly.
+        if (svcName === 'postgres' && k === 'ACRES_MONITOR_BOOTSTRAP_PASSWORD' &&
+            strVal === '${ACRES_MONITOR_BOOTSTRAP_PASSWORD-}') continue;
         // Must use variable expansion syntax e.g. ${VAR:?msg}
         if (!strVal.startsWith('${') || !strVal.includes(':?')) {
           hardcodedSecretsFound = true;

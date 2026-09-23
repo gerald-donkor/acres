@@ -24,6 +24,7 @@ require_file infra/grafana/dashboards/acres-operations.json
 require_file infra/launch/readiness.example.json
 require_file scripts/ops/check-launch-readiness.js
 require_file scripts/db/bootstrap-production-roles.sh
+require_file scripts/db/reconcile-production-monitor.sh
 require_file scripts/ops/verify-caddy-routing.js
 require_file scripts/ops/verify-caddy-routing.spec.js
 require_file scripts/ops/run-deployment-drill.sh
@@ -82,6 +83,7 @@ const requiredServices = [
   'clamav',
   'prometheus',
   'grafana',
+  'postgres-exporter',
 ];
 
 for (const service of requiredServices) {
@@ -194,7 +196,7 @@ for (const match of composeText.matchAll(/\$\{([A-Z0-9_]+)(?::[?+-][^}]*)?\}/g))
   interpolationKeys.add(match[1]);
 }
 for (const key of interpolationKeys) {
-  if (!envKeys.has(key)) {
+  if (!envKeys.has(key) && key !== 'ACRES_MONITOR_BOOTSTRAP_PASSWORD') {
     console.error(`ops template check failed: ${key} is used by compose but missing from production.env.example`);
     process.exit(1);
   }
@@ -243,6 +245,59 @@ if (!workerScrape || workerScrape.metrics_path !== '/metrics' ||
   process.exit(1);
 }
 
+const exporter = services['postgres-exporter'];
+const exporterScrape = (prom.scrape_configs || []).find((job) => job.job_name === 'acres-postgres');
+const exporterRelabel = exporterScrape?.metric_relabel_configs || [];
+const exporterMounts = (exporter.volumes || []).map(mountDetails);
+const monitorMount = exporterMounts.find((mount) => mount.target === '/run/secrets/acres_monitor_password');
+if (JSON.stringify(exporter.profiles) !== JSON.stringify(['observability']) ||
+    JSON.stringify(exporter.networks) !== JSON.stringify(['private']) ||
+    !exporter.expose?.includes('9187') || exporter.ports?.length ||
+    !JSON.stringify(exporter.healthcheck?.test).includes('127.0.0.1:9187/') ||
+    exporter.environment?.DATA_SOURCE_URI !== 'postgres:5432/acres?sslmode=disable' ||
+    exporter.environment?.DATA_SOURCE_USER !== 'acres_monitor' ||
+    exporter.environment?.DATA_SOURCE_PASS_FILE !== '/run/secrets/acres_monitor_password' ||
+    exporter.environment?.PG_EXPORTER_COLLECTION_TIMEOUT !== '10s' ||
+    exporter.env_file || exporter.command ||
+    Object.keys(exporter.environment || {}).some((key) => /DATA_SOURCE_(?:PASS|NAME)$/.test(key)) ||
+    Object.keys(exporter.environment || {}).some((key) => /POSTGRES|DATABASE_URL|ACRES_APP|ACRES_MIGRATOR/.test(key)) ||
+    exporterMounts.length !== 1 ||
+    !monitorMount || monitorMount.source !== '${ACRES_MONITOR_PASSWORD_FILE:?inject monitor password file path}' ||
+    monitorMount.writable ||
+    !exporterScrape || exporterScrape.metrics_path !== '/metrics' ||
+    exporterScrape.scrape_interval !== '30s' || exporterScrape.scrape_timeout !== '15s' ||
+    !exporterScrape.static_configs?.some((entry) => entry.targets?.includes('postgres-exporter:9187')) ||
+    !exporterRelabel.some((rule) => rule.action === 'keep' &&
+      ['pg_up', 'pg_exporter_last_scrape_error', 'pg_settings_max_connections',
+       'pg_stat_database_numbackends', 'pg_stat_activity_count'].every((metric) =>
+        String(rule.regex).split('|').includes(metric))) ||
+    exporterRelabel.some((rule) => rule.action === 'labeldrop') ||
+    JSON.stringify(services.caddy).includes('postgres-exporter') ||
+    fs.readFileSync('infra/caddy/Caddyfile.example', 'utf8').includes('postgres-exporter') ||
+    !String(services.postgres?.environment?.ACRES_MONITOR_BOOTSTRAP_PASSWORD || '').includes('ACRES_MONITOR_BOOTSTRAP_PASSWORD') ||
+    !JSON.stringify(services.postgres.volumes).includes('reconcile-production-monitor.sh')) {
+  console.error('ops template check failed: postgres exporter must use private file credentials and bounded scrape');
+  process.exit(1);
+}
+const monitorSql = fs.readFileSync('scripts/db/reconcile-production-monitor.sh', 'utf8');
+if (!monitorSql.includes('GRANT pg_monitor TO acres_monitor') ||
+    !monitorSql.includes('NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS') ||
+    !monitorSql.includes('acres_monitor privilege verification failed') ||
+    !fs.readFileSync('docs/operations.md', 'utf8').includes('002-reconcile-production-monitor.sh')) {
+  console.error('ops template check failed: monitor role reconciliation or existing-volume procedure missing');
+  process.exit(1);
+}
+for (const [name, service] of Object.entries(services)) {
+  if (name !== 'postgres-exporter' && JSON.stringify(service.volumes || []).includes('ACRES_MONITOR_PASSWORD_FILE')) {
+    console.error(`ops template check failed: monitor password file must not be mounted into ${name}`);
+    process.exit(1);
+  }
+  if (name !== 'postgres' && JSON.stringify(service.environment || {}).includes('ACRES_MONITOR_BOOTSTRAP_PASSWORD')) {
+    console.error(`ops template check failed: monitor bootstrap password must not reach ${name}`);
+    process.exit(1);
+  }
+}
+
 const alerts = readYaml('infra/prometheus/alerts.yml');
 const alertNames = (alerts.groups || []).flatMap((g) => (g.rules || []).map((r) => r.alert));
 const requiredAlerts = [
@@ -278,11 +333,32 @@ for (const panel of dashboard.panels) {
   for (const target of panel.targets || []) {
     const expr = target.expr || '';
     const expectedJob = panel.id === 1 ? 'prometheus' :
-      [4, 8, 11, 12, 13].includes(panel.id) ? 'acres-worker' : 'acres-api';
+      [4, 8, 11, 12, 13].includes(panel.id) ? 'acres-worker' :
+      panel.id >= 14 && panel.id <= 20 ? 'acres-postgres' : 'acres-api';
     if (!expr.includes(`job="${expectedJob}"`)) {
       console.error(`ops template check failed: dashboard panel ${panel.id} lacks ${expectedJob} scope`);
       process.exit(1);
     }
+  }
+}
+const postgresMetrics = new Map([
+  [14, 'up'], [15, 'pg_up'], [16, 'pg_exporter_last_scrape_error'],
+  [17, 'pg_settings_max_connections'], [18, 'pg_stat_database_numbackends'],
+  [19, 'pg_stat_database_numbackends'], [20, 'pg_stat_activity_count'],
+]);
+const ids = dashboard.panels.map((panel) => panel.id);
+if (new Set(ids).size !== ids.length || [...postgresMetrics].some(([id, metric]) =>
+  !dashboard.panels.find((panel) => panel.id === id)?.targets?.some((target) =>
+    target.expr?.includes(`${metric}{job="acres-postgres"`) ||
+    target.expr?.includes(`${metric}{job="acres-postgres",`)))) {
+  console.error('ops template check failed: postgres dashboard panels or metrics drifted');
+  process.exit(1);
+}
+for (const id of [14, 15, 16]) {
+  const expr = dashboard.panels.find((panel) => panel.id === id)?.targets?.[0]?.expr || '';
+  if (expr.includes('or vector(0)') || expr.includes('or on() vector(0)')) {
+    console.error('ops template check failed: postgres health panels must preserve absent data');
+    process.exit(1);
   }
 }
 

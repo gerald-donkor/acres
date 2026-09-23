@@ -555,6 +555,14 @@ development may use unencrypted disposable volumes when clearly labelled.
 
 ### 11.2 Health and shutdown
 
+The optional production observability profile includes a private
+`postgres-exporter` peer. It reads PostgreSQL statistics through a dedicated
+`acres_monitor` role and a read-only password file; Prometheus scrapes
+`:9187/metrics` on the internal Compose network. No application module or
+public Caddy route crosses this boundary. `pg_monitor` can inspect other
+sessions' query text inside PostgreSQL, though these metrics do not publish
+it. Exporter reachability and database scrape success are separate signals.
+
 - **Liveness** answers whether the process/event loop can serve; it does not
   block on every dependency.
 - **Readiness** fails when a dependency required for that process's declared

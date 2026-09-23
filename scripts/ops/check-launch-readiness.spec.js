@@ -58,6 +58,7 @@ function buildValidApprovedRecord() {
         csrf_secret_source: 'vault:acres/production/csrf#secret',
         db_migrator_secret_source: 'vault:acres/production/postgres#migrator_password',
         db_app_secret_source: 'vault:acres/production/postgres#app_password',
+        db_monitor_secret_source: 'vault:acres/production/postgres#monitor_password',
         valkey_secret_source: 'vault:acres/production/valkey#password',
         garage_rpc_secret_source: 'vault:acres/production/garage#rpc_secret',
         garage_admin_secret_source: 'vault:acres/production/garage#admin_token',

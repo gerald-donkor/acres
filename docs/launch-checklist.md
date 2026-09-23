@@ -72,10 +72,10 @@ do not report failure.
 ### 4. Secret References (`secret_references`)
 
 - Drill/verify: `scripts/ops/scan-secrets.sh`
-- Evidence: Vault policy showing all 11 indirect references
+- Evidence: Vault policy showing all 12 indirect references
 - Accept: all of `session`, `csrf`, `db_migrator`, `db_app`, `valkey`,
   `garage_rpc`, `garage_admin`, `garage_metrics`, `garage_s3`, `smtp`,
-  `grafana_admin` present as store references; zero plaintext credentials;
+  `grafana_admin`, `db_monitor` present as store references; zero plaintext credentials;
   no AI/Gemini secret source (contradicts the no-AI posture)
 
 ### 5. SLOs, Alerting & Capacity (`slo_and_alerting`)
@@ -85,7 +85,11 @@ do not report failure.
 - Evidence: `backups/capacity-alerting-drill-evidence-<timestamp>.json`
 - Accept: availability target 99.0–100.0%, p95 latency ceiling, capacity RPS
   target, ≥1 alert recipient, `alert_thresholds_defined: true`, escalation
-  runbook reference; all 7 alert rules validated
+  runbook reference; all 7 alert rules validated. Record both
+  `up{job="acres-postgres"}` and `pg_up{job="acres-postgres"}` with
+  `pg_exporter_last_scrape_error{job="acres-postgres"}`. Exercise exporter-down
+  and database/authentication-failure cases separately. Confirm the private
+  monitor file mount and existing-volume role reconciliation.
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 

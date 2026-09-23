@@ -114,11 +114,13 @@ services:
       POSTGRES_DB: postgres
       ACRES_MIGRATOR_PASSWORD: ${ACRES_MIGRATOR_PASSWORD:?inject migrator password}
       ACRES_APP_PASSWORD: ${ACRES_APP_PASSWORD:?inject app password}
+      ACRES_MONITOR_BOOTSTRAP_PASSWORD: ${ACRES_MONITOR_BOOTSTRAP_PASSWORD-}
     expose:
       - "5432"
     volumes:
       - ${ACRES_POSTGRES_ENCRYPTED_MOUNT:?set encrypted Postgres mount path}:/var/lib/postgresql
       - ../../scripts/db/bootstrap-production-roles.sh:/docker-entrypoint-initdb.d/001-bootstrap-production-roles.sh:ro
+      - ../../scripts/db/reconcile-production-monitor.sh:/docker-entrypoint-initdb.d/002-reconcile-production-monitor.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -211,6 +213,28 @@ services:
     networks:
       - private
     stop_grace_period: 45s
+
+  postgres-exporter:
+    image: ghcr.io/prometheus-community/postgres-exporter@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
+    restart: unless-stopped
+    profiles: ["observability"]
+    environment:
+      DATA_SOURCE_URI: postgres:5432/acres?sslmode=disable
+      DATA_SOURCE_USER: acres_monitor
+      DATA_SOURCE_PASS_FILE: /run/secrets/acres_monitor_password
+      PG_EXPORTER_COLLECTION_TIMEOUT: 10s
+    volumes:
+      - ${ACRES_MONITOR_PASSWORD_FILE:?inject monitor password file path}:/run/secrets/acres_monitor_password:ro
+    expose:
+      - "9187"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9187/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - private
+    stop_grace_period: 15s
 
   grafana:
     image: grafana/grafana:12.3.0

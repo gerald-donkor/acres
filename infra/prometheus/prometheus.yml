@@ -24,3 +24,16 @@ scrape_configs:
     static_configs:
       - targets:
           - worker:3002
+
+  - job_name: acres-postgres
+    metrics_path: /metrics
+    scheme: http
+    scrape_interval: 30s
+    scrape_timeout: 15s
+    static_configs:
+      - targets:
+          - postgres-exporter:9187
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: pg_up|pg_exporter_last_scrape_error|pg_settings_max_connections|pg_stat_database_numbackends|pg_stat_activity_count
+        action: keep

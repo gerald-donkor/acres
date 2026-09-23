@@ -599,6 +599,14 @@ As of 2026-09-09, automated performance capacity evaluation, multi-layer DoS res
     Waiting above zero shows local acquisition backlog. Worker and server-wide
     occupancy, wait duration, and an evidence-based saturation alert remain
     unmeasured; the seven-alert count is unchanged.
+  - **2026-09-23 follow-up:** Prompt 170 adds a private PostgreSQL exporter
+    peer with its own `acres_monitor` identity and file-only exporter password.
+    `pg_monitor` permits inspection of other sessions' SQL text through
+    `pg_stat_activity`; protect the credential and private metrics network.
+    Configured collectors emit activity counts, not query strings or tenant
+    IDs. Prometheus HTTP `up` and exporter `pg_up`/scrape-error have distinct
+    failure meanings. Live exposition and host file permissions remain
+    operator promotion checks.
 - **Top-Level Orchestrator & Evidence Emission**:
   - `scripts/ops/run-capacity-alerting-drill.sh` executes alert simulation, capacity evaluation, and DoS drill in sequence, emitting unified JSON evidence (`backups/capacity-alerting-drill-evidence-<timestamp>.json`).
 - **Operations & CI Integration**:

@@ -10,6 +10,7 @@ const APP_IMAGES = {
   api: '${ACRES_SERVER_IMAGE:?inject pinned server image digest}',
   worker: '${ACRES_SERVER_IMAGE:?inject pinned server image digest}',
 };
+const EXPORTER_IMAGE = 'ghcr.io/prometheus-community/postgres-exporter@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e';
 
 // A deliberately narrow subset of Docker's distribution/reference grammar:
 // an explicit DNS registry (or host:port), lowercase repository components,
@@ -43,6 +44,11 @@ function validateComposeImages(compose) {
     if (!service || Object.prototype.hasOwnProperty.call(service, 'build') || service.image !== expectedImage) {
       throw new Error(`${serviceName} must use its required release image input without a build`);
     }
+  }
+  const exporter = compose?.services?.['postgres-exporter'];
+  if (!exporter || Object.prototype.hasOwnProperty.call(exporter, 'build') ||
+      exporter.image !== EXPORTER_IMAGE) {
+    throw new Error('postgres-exporter must use its required pinned image input without a build');
   }
 }
 

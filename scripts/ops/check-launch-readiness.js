@@ -32,6 +32,7 @@ const REQUIRED_SECRET_KEYS = [
   'csrf_secret_source',
   'db_migrator_secret_source',
   'db_app_secret_source',
+  'db_monitor_secret_source',
   'valkey_secret_source',
   'garage_rpc_secret_source',
   'garage_admin_secret_source',

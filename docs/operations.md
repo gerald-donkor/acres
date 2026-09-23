@@ -772,6 +772,125 @@ elevated E2E run passed 6/6 suites and 143/143 tests, including the private
 `/metrics` HTTP exposition. No live API/worker pool or production Prometheus
 scrape was measured.
 
+**Prompt 170 update (2026-09-23): PostgreSQL server telemetry.** The optional
+`postgres-exporter` service is a private-only `observability` peer, scraped as
+`acres-postgres` every 30s. The exporter collection limit is 10s and the
+Prometheus scrape timeout is 15s. Its HTTP root healthcheck tests the process;
+`up{job="acres-postgres"}` tests Prometheus reachability, `pg_up` tests database
+access, and `pg_exporter_last_scrape_error` reports collector errors. A healthy
+HTTP endpoint alone is not database evidence. The seven alert rules are unchanged.
+
+The Compose image is pinned to the v0.20.1 multi-platform manifest digest
+`sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e`.
+`docker buildx imagetools inspect` verified the digest and its amd64, arm64,
+arm/v7, and ppc64le child manifests against the
+[official GHCR package](https://github.com/prometheus-community/postgres_exporter/pkgs/container/postgres-exporter). The release check rejects image
+substitution or a floating tag.
+The [v0.20.1 exporter source](https://github.com/prometheus-community/postgres_exporter/tree/v0.20.1/collector)
+defines `pg_stat_activity_count` (labels include `datname` and `state`),
+`pg_stat_database_numbackends` (per database), and
+`pg_settings_max_connections` (server setting). The exporter also emits
+`pg_up` and `pg_exporter_last_scrape_error`. Dashboard panels 14–20 keep
+process-local API/worker pools separate from server values. The all-database
+backend panel sums per-database current backends; it does not count background
+processes or establish usable headroom after reserved slots. The activity
+collector excludes its own backend. Empty series remain **No data**, never
+healthy zero.
+Prometheus keeps only these five PostgreSQL exporter metrics. Activity count
+series retain the upstream database role, application name, and wait-event
+labels because dropping them can collapse distinct series into duplicate
+samples. The application must not put product user or tenant IDs into the
+PostgreSQL application name. The private exporter endpoint itself exposes
+additional upstream default series and must remain restricted to trusted
+Compose peers.
+
+`acres_monitor` is a separate LOGIN with `pg_monitor` and CONNECT on `acres`.
+It has no superuser, role/database creation, replication, BYPASSRLS, schema
+CREATE, or application table grants. The role setup script checks those
+properties and fails if another role membership exists. `pg_monitor` includes
+`pg_read_all_stats`, so this credential can inspect other sessions' SQL text
+through `pg_stat_activity`, even though the configured exporter does not emit
+query strings or tenant/user IDs. Treat the credential and the private metrics
+endpoint as sensitive. No custom SQL, database autodiscovery, multi-target
+`/probe`, or `pg_stat_statements` collector is enabled.
+
+Operator procedure, from the repository root with the approved
+environment and secret manager active:
+
+1. Provision a unique single-line monitor password without a trailing newline. Write it through the
+   secret manager to an operator-owned host file, outside Git. Set
+   `ACRES_MONITOR_PASSWORD_FILE` to its absolute path. The bind mount is
+   read-only and reaches only the exporter at
+   `/run/secrets/acres_monitor_password`. The official image runs as UID/GID
+   65534; grant that identity file read access (for example, owner 65534,
+   mode 0400) and keep parent directories traversable only for the deployment
+   operator. Verify the resulting mount inside the container before promotion.
+2. **Fresh volume:** inject the same password as
+   `ACRES_MONITOR_BOOTSTRAP_PASSWORD` only in the Compose invocation that
+   initializes PostgreSQL. The entrypoint runs the production role bootstrap
+   and then the monitor reconciliation script. Do not place this value in the
+   shared `production.env` file; remove it from the operator shell afterward.
+3. **Existing volume:** entrypoint initialization does not rerun. First recreate
+   the PostgreSQL container with the updated Compose file so the new read-only
+   script mount exists (`docker compose -f infra/compose/docker-compose.production.example.yml up -d --no-deps --force-recreate postgres`).
+   Schedule this database restart because it briefly interrupts application
+   traffic. After PostgreSQL is healthy, inject the same password through the
+   controlled admin shell, then run
+   `docker compose -f infra/compose/docker-compose.production.example.yml exec -T -e ACRES_MONITOR_BOOTSTRAP_PASSWORD postgres bash /docker-entrypoint-initdb.d/002-reconcile-production-monitor.sh`.
+   This is idempotent. It disables statement/error-statement logging for the
+   password-bearing SQL session and prints only a success line or a SQL error;
+   a failed privilege check stops promotion. Compare the injected value with
+   the exporter file through the secret manager, never by printing either.
+4. Start the optional exporter, then promote Prometheus/Grafana. From a
+   private peer, inspect `/metrics` for `pg_up 1`,
+   `pg_exporter_last_scrape_error 0`, `pg_settings_max_connections`,
+   `pg_stat_database_numbackends{datname="acres"}`, and
+   `pg_stat_activity_count{datname="acres"}`. In Prometheus, confirm
+   `up{job="acres-postgres"} == 1` and the same database signals. Exporter
+   down must yield `up == 0`; database authentication/reachability failure
+   may leave `up == 1` while `pg_up == 0` or the scrape error is 1. Capture
+   both cases in operator evidence before sign-off. A disposable local
+   PostgreSQL 18/PostGIS and the pinned exporter produced `pg_up 1`,
+   `pg_exporter_last_scrape_error 0`, `pg_settings_max_connections 100`,
+   and `pg_stat_activity_count{datname="acres",state="active",...} 0`;
+   the role attributes were `LOGIN=true`, all five elevated flags false,
+   and `pg_monitor` membership true. Reconciliation passed twice. An
+   exporter scrape before the database TCP listener was ready produced
+   `pg_up 0` and scrape error 1 while the exporter HTTP endpoint answered.
+   A disposable Prometheus v3.8.0 target pointed at an absent exporter
+   returned `up{instance="127.0.0.1:19187",job="acres-postgres"} => 0`.
+   The pinned exporter root returned HTML with an unreachable database,
+   confirming its healthcheck is process liveness. Production Prometheus
+   reachability and operator host permissions remain promotion checks.
+
+For rotation, provision a new secret-manager version and host file; inject
+the new value in the admin shell, rerun reconciliation, atomically replace
+the file, restart only `postgres-exporter`, and confirm `up == 1`, `pg_up == 1`,
+and scrape error 0 for two scrapes. Revoke the old secret version after the
+new exporter succeeds. If monitoring fails, keep application traffic serving;
+roll back exporter, scrape, and panels while retaining the harmless role until
+an operator separately revokes it. The blind spot during rollback is
+server-wide activity and connection-cap evidence. Lock/query diagnosis,
+wait-duration collection, saturation thresholds, and production sign-off
+remain open.
+
+Prompt 170 verification: `npm run ops:templates` passed;
+`npm run ops:check` passed all stages, including 22/22 release-image tests,
+24/24 readiness tests, 10/10 container-security tests, and 9/9 launch-drill
+tests. `npm run ops:alert-test` passed (one test file, zero failures).
+`docker compose --env-file infra/env/production.env.example --env-file
+infra/env/garage.production.env.example -f
+infra/compose/docker-compose.production.example.yml --profile observability
+config --quiet` exited 0. Prometheus v3.8.0 `promtool check config` reported
+one valid rule file and seven rules. `npm run lint`, `npm run typecheck`, and
+`npm run build` passed (the build required an elevated run because sandboxed
+Next failed while parsing TypeScript `--showConfig`). `git diff --check`
+passed. The initial sandboxed operations gate could not reach npm audit; the
+elevated gate passed with zero critical advisories. Review found and fixed an
+activity-label collision and an existing-volume rollout instruction gap;
+follow-up review reported no remaining findings. No production deployment
+or launch sign-off occurred.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

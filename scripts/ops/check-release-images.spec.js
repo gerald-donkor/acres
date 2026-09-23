@@ -47,6 +47,7 @@ for (const [name, change] of [
   ['wrong client variable', (copy) => { copy.services.next.image = copy.services.api.image; }],
   ['divergent worker variable', (copy) => { copy.services.worker.image = '${ACRES_WORKER_IMAGE:?inject image}'; }],
   ['reintroduced build', (copy) => { copy.services.api.build = { context: '../..' }; }],
+  ['floating exporter image', (copy) => { copy.services['postgres-exporter'].image = 'ghcr.io/prometheus-community/postgres-exporter:latest'; }],
 ]) {
   test(`rejects ${name}`, () => {
     const copy = structuredClone(compose);
@@ -54,3 +55,11 @@ for (const [name, change] of [
     assert.throws(() => checkReleaseImages(copy, env));
   });
 }
+
+test('rejects substituted exporter registry and digest', () => {
+  const copy = structuredClone(compose);
+  copy.services['postgres-exporter'].image = `registry.example.com/postgres-exporter@sha256:${digest}`;
+  assert.throws(() => checkReleaseImages(copy, env));
+  copy.services['postgres-exporter'].image = `ghcr.io/prometheus-community/postgres-exporter@sha256:${digest}`;
+  assert.throws(() => checkReleaseImages(copy, env));
+});

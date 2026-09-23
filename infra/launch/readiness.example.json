@@ -46,6 +46,7 @@
       "csrf_secret_source": "__REQUIRED_SECRET_REF_CSRF__",
       "db_migrator_secret_source": "__REQUIRED_SECRET_REF_DB_MIGRATOR__",
       "db_app_secret_source": "__REQUIRED_SECRET_REF_DB_APP__",
+      "db_monitor_secret_source": "__REQUIRED_SECRET_REF_DB_MONITOR__",
       "valkey_secret_source": "__REQUIRED_SECRET_REF_VALKEY__",
       "garage_rpc_secret_source": "__REQUIRED_SECRET_REF_GARAGE_RPC__",
       "garage_admin_secret_source": "__REQUIRED_SECRET_REF_GARAGE_ADMIN__",

@@ -630,6 +630,285 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "id": 14,
+      "title": "PostgreSQL Exporter HTTP Scrape",
+      "description": "Prometheus can reach the exporter. A value of 1 does not prove database access.",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 6,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"acres-postgres\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "id": 15,
+      "title": "PostgreSQL Database Scrape",
+      "description": "Exporter can connect to PostgreSQL. No data means collection or target failure; inspect pg_exporter_last_scrape_error.",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 38,
+        "w": 6,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "pg_up{job=\"acres-postgres\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "id": 16,
+      "title": "PostgreSQL Collector Error",
+      "description": "1 means at least one database collector failed. Check this even when pg_up is 1.",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 38,
+        "w": 6,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "pg_exporter_last_scrape_error{job=\"acres-postgres\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "id": 17,
+      "title": "PostgreSQL Server Connection Cap",
+      "description": "Server max_connections setting, including reserved slots. It is not the app pool maximum.",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 38,
+        "w": 6,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "pg_settings_max_connections{job=\"acres-postgres\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "id": 18,
+      "title": "Acres Database Backends",
+      "description": "Current backends connected to the acres database; excludes other databases.",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "pg_stat_database_numbackends{job=\"acres-postgres\",datname=\"acres\"}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "id": 19,
+      "title": "All Database Backends",
+      "description": "Sum of current per-database backend counts across this PostgreSQL server. Does not represent background processes or reserved connection slots.",
+      "type": "stat",
+      "gridPos": {
+        "x": 8,
+        "y": 44,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(pg_stat_database_numbackends{job=\"acres-postgres\"})",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "id": 20,
+      "title": "Acres Activity by State",
+      "description": "Connections in each activity state for acres. Collector excludes its own backend; no data is not zero.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 44,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (state) (pg_stat_activity_count{job=\"acres-postgres\",datname=\"acres\"})",
+          "refId": "A",
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     }
   ],
   "refresh": "30s",
@@ -648,5 +927,5 @@
   "timezone": "browser",
   "title": "Acres Operations Foundation",
   "uid": "acres-operations-foundation",
-  "version": 4
+  "version": 5
 }
