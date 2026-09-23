@@ -393,7 +393,11 @@ starts local Nest and production-built Next servers on 3101 and 3100. Its Next
 web server alone gets `ENABLE_TEST_HARNESS=true`; the route guard remains off
 by default outside that test process. Any plan or browser failure fails
 `checks` and prevents the dependent Docker job. The Docker job builds the
-server image and smoke-tests `/health` with `push: false`.
+server image and smoke-tests `/health`, then builds the production Next client
+image from its Dockerfile-specific context and checks `/` for HTTP 200 and the
+Acres hero marker plus an HTML-referenced `/_next/static/` asset for HTTP 200.
+Both builds use `push: false`; the client probe removes its container even after
+a failed build, startup, or request.
 
 The local sequence on 2026-09-22 passed server E2E (6 suites, 143 tests),
 geography plans (2/2), and analytics plans (6/6). YAML parsing and step-order
@@ -406,6 +410,25 @@ build and disposable PostGIS: direct Playwright discovery listed 74 tests in
 in 1.6 minutes. The workflow YAML parsed, the required step order and Docker
 dependency were checked, and lint, typecheck, build, and contract drift checks
 passed. This is local evidence; the new browser gate has not yet run on GitHub.
+
+The client image gate was verified locally on 2026-09-23 with
+`docker build --file infra/docker/client.Dockerfile.example --tag acres-client:ci .`:
+the Dockerfile-specific ignore admitted the client source, `npm ci` and the
+Next 16.3.4 production build completed, and the image imported successfully.
+The exact workflow smoke script returned `client landing page: HTTP 200`,
+`Acres hero marker found`, and `client static asset: HTTP 200`. Docker reported
+`Configured user=node`, UID `1000`, and a healthy running container; removal
+left no `acres-client-ci` container. YAML parsing confirmed the ordered build,
+smoke, and unconditional cleanup steps. This is local image evidence; a
+GitHub-hosted run of the new client image gate has not been observed, and the
+operator launch approval remains open.
+
+During this verification, `npm run ops:check` stopped at its SAST test:
+`npm run ops:sast` reported seven `SAST-01` blockers in the pre-existing
+analytics and geography query-plan seed scripts, where constant `ANALYZE`
+statements call `$executeRawUnsafe`. All seven lines are present in baseline
+commit `a383fb2`; they are separate from this client image gate. The operations
+suite therefore has no passing end-to-end result for this change.
 
 ## No-AI Production Posture
 

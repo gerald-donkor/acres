@@ -83,7 +83,7 @@ jobs:
         run: npm run test:client:e2e
 
   docker:
-    name: Build and smoke-test the API image
+    name: Build and smoke-test API and client images
     runs-on: ubuntu-latest
     needs: checks
     steps:
@@ -124,3 +124,61 @@ jobs:
       - name: Stop container
         if: always()
         run: docker rm -f acres-server-ci
+
+      - uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
+        with:
+          context: .
+          file: infra/docker/client.Dockerfile.example
+          push: false
+          load: true
+          tags: acres-client:ci
+      - name: Run client image
+        run: |
+          docker run -d --name acres-client-ci -p 3100:3000 acres-client:ci
+      - name: Smoke-test client HTML and static asset
+        run: |
+          html=$(mktemp)
+          trap 'rm -f "$html"' EXIT
+          status=
+          for i in $(seq 1 15); do
+            if ! status=$(curl -sS --max-time 5 -o "$html" -w '%{http_code}' http://localhost:3100/); then
+              status=connection-failed
+            fi
+            if [ "$status" = 200 ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$status" != 200 ]; then
+            echo "client landing page did not return HTTP 200 (last status: $status)"
+            exit 1
+          fi
+          echo "client landing page: HTTP $status"
+          if ! grep -Fq 'Browse everything.' "$html"; then
+            echo 'client landing page lacks the Acres hero marker'
+            exit 1
+          fi
+          echo 'client landing page: Acres hero marker found'
+          asset=$(node -e 'const h=require("fs").readFileSync(process.argv[1],"utf8"); const m=h.match(/(?:src|href)="(\/_next\/static\/[^"?]+(?:\?[^\"]*)?)"/); if(m)process.stdout.write(m[1]);' "$html")
+          if [ -z "$asset" ]; then
+            echo 'client landing page lacks a generated Next static asset URL'
+            exit 1
+          fi
+          asset_status=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "http://localhost:3100$asset")
+          if [ "$asset_status" != 200 ]; then
+            echo "client static asset returned HTTP $asset_status"
+            exit 1
+          fi
+          echo "client static asset: HTTP $asset_status"
+      - name: Client container logs
+        if: always()
+        run: |
+          if docker container inspect acres-client-ci >/dev/null 2>&1; then
+            docker logs acres-client-ci
+          fi
+      - name: Stop client container
+        if: always()
+        run: |
+          if docker container inspect acres-client-ci >/dev/null 2>&1; then
+            docker rm -f acres-client-ci
+          fi
