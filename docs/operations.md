@@ -1091,6 +1091,13 @@ This formally closes the operator capacity baseline telemetry and evidence requi
 
 Prompt 178 verification: capacity load test suite passed 15/15 tests; capacity drill (`npm run ops:capacity-drill`) evaluated synthetic HTTP and database latency baselines with 100% availability, 125 RPS, 1.25ms database acquisition p95, and 23.36ms database query p95; capacity alerting drill (`npm run ops:capacity-alerting-drill`) verified all 11 operational alert rules, capacity SLO compliance, DoS resilience, and emitted structured `databaseTelemetryBaseline`. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 
+**Prompt 179 update (2026-09-24): launch readiness database SLO and baseline validation.**
+`scripts/ops/check-launch-readiness.js` now validates that approved readiness records in `sections.slo_and_alerting` declare positive database connection pool acquisition p95 latency ceilings (`max_database_acquisition_p95_latency_ms <= 50`) and SQL query execution p95 latency ceilings (`max_database_query_p95_latency_ms <= 100`) per Category 5 SLO requirements. In `checkEvidenceFile`, cross-validation now inspects evidence files for database baseline failure markers (`summary.databaseBaselineCompliance === 'failed'`) and baseline breach states (`databaseTelemetryBaseline.status === 'breached'`), failing closed to prevent compromised or degraded database performance baselines from passing launch approval.
+
+`infra/launch/readiness.example.json` was updated to document the required 50ms acquisition and 100ms query latency ceilings. `scripts/ops/check-production-templates.sh` now enforces that `readiness.example.json` defines both database latency SLO fields. `scripts/ops/check-launch-readiness.spec.js` expanded from 24 to 27 unit tests verifying ceiling boundary enforcement, non-number rejection, missing field fail-closed behavior, and database baseline failure/breach evidence blocking. Operator launch sign-off remains open.
+
+Prompt 179 verification: readiness test suite passed 27/27 tests; template verification (`scripts/ops/check-production-templates.sh`) verified template integrity; capacity tests and drill (`npm run ops:capacity-test`, `npm run ops:capacity-drill`) confirmed baseline metrics. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

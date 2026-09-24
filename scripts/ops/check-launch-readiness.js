@@ -160,6 +160,18 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
     ) {
       addBlocker(category, `Approved evidence file '${ref}' reports drill failure (summary.exitCode: ${parsed.summary.exitCode})`);
     }
+    const dbCompliance = typeof parsed.summary?.databaseBaselineCompliance === 'string'
+      ? parsed.summary.databaseBaselineCompliance.toLowerCase()
+      : null;
+    if (dbCompliance === 'failed' || dbCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports database baseline failure (summary.databaseBaselineCompliance: "${parsed.summary.databaseBaselineCompliance}")`);
+    }
+    const dbStatus = typeof parsed.databaseTelemetryBaseline?.status === 'string'
+      ? parsed.databaseTelemetryBaseline.status.toLowerCase()
+      : null;
+    if (dbStatus === 'breached' || dbStatus === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports database baseline breach (databaseTelemetryBaseline.status: "${parsed.databaseTelemetryBaseline.status}")`);
+    }
   }
 }
 
@@ -341,6 +353,28 @@ function validateReadiness(record, _filePath, options = {}) {
     }
     if (typeof sloSec.capacity_target_rps !== 'number' || sloSec.capacity_target_rps <= 0) {
       addBlocker('slo_and_alerting', `Capacity target RPS must be a positive number (received: ${sloSec.capacity_target_rps})`);
+    }
+    if (
+      typeof sloSec.max_database_acquisition_p95_latency_ms !== 'number' ||
+      !Number.isFinite(sloSec.max_database_acquisition_p95_latency_ms) ||
+      sloSec.max_database_acquisition_p95_latency_ms <= 0 ||
+      sloSec.max_database_acquisition_p95_latency_ms > 50
+    ) {
+      addBlocker(
+        'slo_and_alerting',
+        `Max database pool acquisition p95 latency ceiling must be a positive number <= 50ms (received: ${sloSec.max_database_acquisition_p95_latency_ms})`
+      );
+    }
+    if (
+      typeof sloSec.max_database_query_p95_latency_ms !== 'number' ||
+      !Number.isFinite(sloSec.max_database_query_p95_latency_ms) ||
+      sloSec.max_database_query_p95_latency_ms <= 0 ||
+      sloSec.max_database_query_p95_latency_ms > 100
+    ) {
+      addBlocker(
+        'slo_and_alerting',
+        `Max database query execution p95 latency ceiling must be a positive number <= 100ms (received: ${sloSec.max_database_query_p95_latency_ms})`
+      );
     }
     if (!Array.isArray(sloSec.alert_recipients) || sloSec.alert_recipients.length === 0) {
       addBlocker('slo_and_alerting', 'Alert recipients list must contain at least one contact/destination');

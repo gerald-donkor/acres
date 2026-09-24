@@ -396,6 +396,13 @@ if (!readinessExample || typeof readinessExample !== 'object' || !readinessExamp
   console.error('ops template check failed: infra/launch/readiness.example.json missing sections object');
   process.exit(1);
 }
+const sloAlerting = readinessExample.sections.slo_and_alerting;
+if (!sloAlerting ||
+    sloAlerting.max_database_acquisition_p95_latency_ms !== 50 ||
+    sloAlerting.max_database_query_p95_latency_ms !== 100) {
+  console.error('ops template check failed: infra/launch/readiness.example.json missing database latency SLO ceilings (50ms acquisition, 100ms query)');
+  process.exit(1);
+}
 
 NODE
 

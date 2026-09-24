@@ -63,6 +63,8 @@
       "availability_target_percent": 99.9,
       "max_p95_latency_ms": 500,
       "capacity_target_rps": 100,
+      "max_database_acquisition_p95_latency_ms": 50,
+      "max_database_query_p95_latency_ms": 100,
       "alert_recipients": [
         "__REQUIRED_ON_CALL_ALERT_CONTACT__"
       ],
@@ -70,7 +72,7 @@
       "escalation_runbook_ref": "__REQUIRED_ESCALATION_RUNBOOK_REF__",
       "approver": null,
       "evidence": [],
-      "notes": "Requires operator-confirmed availability SLO, alert routing (PagerDuty/Opsgenie/email), and escalation contacts."
+      "notes": "Requires operator-confirmed availability SLO (>=99.9%), HTTP p95 latency (<=500ms), throughput (>=100 RPS), database pool acquisition p95 latency ceiling (<=50ms), database query execution p95 latency ceiling (<=100ms), alert routing (PagerDuty/Opsgenie/email), and escalation contacts."
     },
     "backup_and_disaster_recovery": {
       "status": "unresolved",

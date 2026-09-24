@@ -106,6 +106,10 @@ do not report failure.
   - `poolAcquisitionLatency`: API and Worker p50, p95 (ceiling ≤ 50ms), p99 (`acres_postgres_pool_acquisition_duration_seconds`)
   - `queryExecutionDuration`: API and Worker p50, p95 (ceiling ≤ 100ms), p99 (`acres_database_query_duration_seconds`)
   - `serverActivity`: `lockWaits` (0 required) and `maxTransactionDurationSec`
+- Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
+  - Requires `max_database_acquisition_p95_latency_ms` to be a positive number ≤ 50ms;
+  - Requires `max_database_query_p95_latency_ms` to be a positive number ≤ 100ms;
+  - Fails closed if approved evidence reports `summary.databaseBaselineCompliance: "failed"` or `databaseTelemetryBaseline.status: "breached"`.
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
@@ -446,3 +450,8 @@ parameters, credentials, or product user/tenant identifiers.
 Launch is approved only when all 11 rows are signed, the unified dossier
 (`backups/launch-evidence-dossier-<timestamp>.json`) reports `PASSED`, and
 `node scripts/ops/check-launch-readiness.js <operator-readiness.json>` exits 0.
+Category 5 (`slo_and_alerting`) approval requires operator confirmation of all
+11 operational alert rules, availability target ≥ 99.9%, HTTP p95 latency ≤ 500ms,
+throughput ≥ 100 RPS, database connection pool acquisition p95 latency ceiling ≤ 50ms,
+database query execution p95 latency ceiling ≤ 100ms, and verified database baseline
+telemetry evidence (`summary.databaseBaselineCompliance: "passed"`).

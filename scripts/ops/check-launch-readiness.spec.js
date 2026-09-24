@@ -75,6 +75,8 @@ function buildValidApprovedRecord() {
         availability_target_percent: 99.9,
         max_p95_latency_ms: 500,
         capacity_target_rps: 100,
+        max_database_acquisition_p95_latency_ms: 50,
+        max_database_query_p95_latency_ms: 100,
         alert_recipients: ['pagerduty:acres-production-alerts'],
         alert_thresholds_defined: true,
         escalation_runbook_ref: 'docs/runbooks/escalation.md',
@@ -590,6 +592,103 @@ test('validateReadiness blocks approval when evidence reports a non-zero exitCod
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test('validateReadiness fails closed when max_database_acquisition_p95_latency_ms is missing, non-number, or exceeds 50ms', () => {
+  const missingRecord = buildValidApprovedRecord();
+  delete missingRecord.sections.slo_and_alerting.max_database_acquisition_p95_latency_ms;
+  const missingResult = validateApprovedRecord(missingRecord);
+  const missingBlockers = missingResult.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    missingBlockers.some((b) => b.includes('Max database pool acquisition p95 latency ceiling must be a positive number <= 50ms')),
+    `Expected missing acquisition latency blocker, got: ${JSON.stringify(missingBlockers)}`
+  );
+
+  const invalidRecord = buildValidApprovedRecord();
+  invalidRecord.sections.slo_and_alerting.max_database_acquisition_p95_latency_ms = '50';
+  const invalidResult = validateApprovedRecord(invalidRecord);
+  const invalidBlockers = invalidResult.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    invalidBlockers.some((b) => b.includes('Max database pool acquisition p95 latency ceiling must be a positive number <= 50ms')),
+    `Expected non-number acquisition latency blocker, got: ${JSON.stringify(invalidBlockers)}`
+  );
+
+  const exceededRecord = buildValidApprovedRecord();
+  exceededRecord.sections.slo_and_alerting.max_database_acquisition_p95_latency_ms = 75;
+  const exceededResult = validateApprovedRecord(exceededRecord);
+  const exceededBlockers = exceededResult.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    exceededBlockers.some((b) => b.includes('Max database pool acquisition p95 latency ceiling must be a positive number <= 50ms (received: 75)')),
+    `Expected ceiling exceeded acquisition latency blocker, got: ${JSON.stringify(exceededBlockers)}`
+  );
+});
+
+test('validateReadiness fails closed when max_database_query_p95_latency_ms is missing, non-number, or exceeds 100ms', () => {
+  const missingRecord = buildValidApprovedRecord();
+  delete missingRecord.sections.slo_and_alerting.max_database_query_p95_latency_ms;
+  const missingResult = validateApprovedRecord(missingRecord);
+  const missingBlockers = missingResult.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    missingBlockers.some((b) => b.includes('Max database query execution p95 latency ceiling must be a positive number <= 100ms')),
+    `Expected missing query latency blocker, got: ${JSON.stringify(missingBlockers)}`
+  );
+
+  const invalidRecord = buildValidApprovedRecord();
+  invalidRecord.sections.slo_and_alerting.max_database_query_p95_latency_ms = -10;
+  const invalidResult = validateApprovedRecord(invalidRecord);
+  const invalidBlockers = invalidResult.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    invalidBlockers.some((b) => b.includes('Max database query execution p95 latency ceiling must be a positive number <= 100ms')),
+    `Expected negative query latency blocker, got: ${JSON.stringify(invalidBlockers)}`
+  );
+
+  const exceededRecord = buildValidApprovedRecord();
+  exceededRecord.sections.slo_and_alerting.max_database_query_p95_latency_ms = 150;
+  const exceededResult = validateApprovedRecord(exceededRecord);
+  const exceededBlockers = exceededResult.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    exceededBlockers.some((b) => b.includes('Max database query execution p95 latency ceiling must be a positive number <= 100ms (received: 150)')),
+    `Expected ceiling exceeded query latency blocker, got: ${JSON.stringify(exceededBlockers)}`
+  );
+});
+
+test('validateReadiness blocks approval when evidence reports database baseline failure or breach', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-db-'));
+  try {
+    const failedSummaryPath = path.join(tmpDir, 'failed-summary-evidence.json');
+    fs.writeFileSync(
+      failedSummaryPath,
+      JSON.stringify({ status: 'success', summary: { databaseBaselineCompliance: 'failed' } }),
+      'utf8'
+    );
+    const rec1 = buildValidApprovedRecord();
+    rec1.sections.slo_and_alerting.evidence = [failedSummaryPath];
+    const res1 = validateApprovedRecord(rec1);
+    const blockers1 = res1.categoryBlockers.slo_and_alerting || [];
+    assert.ok(
+      blockers1.some((b) => b.includes('reports database baseline failure (summary.databaseBaselineCompliance: "failed")')),
+      `Expected baseline compliance failure blocker, got: ${JSON.stringify(blockers1)}`
+    );
+
+    const breachedBaselinePath = path.join(tmpDir, 'breached-baseline-evidence.json');
+    fs.writeFileSync(
+      breachedBaselinePath,
+      JSON.stringify({ status: 'success', databaseTelemetryBaseline: { status: 'breached' } }),
+      'utf8'
+    );
+    const rec2 = buildValidApprovedRecord();
+    rec2.sections.slo_and_alerting.evidence = [breachedBaselinePath];
+    const res2 = validateApprovedRecord(rec2);
+    const blockers2 = res2.categoryBlockers.slo_and_alerting || [];
+    assert.ok(
+      blockers2.some((b) => b.includes('reports database baseline breach (databaseTelemetryBaseline.status: "breached")')),
+      `Expected baseline breach blocker, got: ${JSON.stringify(blockers2)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('the checked-in template readiness.example.json fails closed with unresolved blockers', () => {
   const templatePath = path.resolve(__dirname, '../../infra/launch/readiness.example.json');
   const raw = fs.readFileSync(templatePath, 'utf8');
