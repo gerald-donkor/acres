@@ -83,10 +83,11 @@ do not report failure.
 - Drill/verify: `bash scripts/ops/run-capacity-alerting-drill.sh`,
   `node scripts/ops/verify-alert-rules.js`, `node scripts/ops/verify-capacity-load.js --synthetic`
 - Evidence: `backups/capacity-alerting-drill-evidence-<timestamp>.json`
-- Accept: availability target 99.0–100.0%, p95 latency ceiling, capacity RPS
-  target, ≥1 alert recipient, `alert_thresholds_defined: true`, escalation
-  runbook reference; all 11 alert rules validated. Record both
-  `up{job="acres-postgres"}` and `pg_up{job="acres-postgres"}` with
+- Accept: availability target ≥ 99.9% (error rate < 0.1%), HTTP p95 latency ceiling ≤ 500ms,
+  capacity target ≥ 100 RPS, database connection pool acquisition p95 latency ceiling ≤ 50ms,
+  database query execution p95 latency ceiling ≤ 100ms, ≥ 1 alert recipient,
+  `alert_thresholds_defined: true`, escalation runbook reference; all 11 alert rules validated.
+  Record both `up{job="acres-postgres"}` and `pg_up{job="acres-postgres"}` with
   `pg_exporter_last_scrape_error{job="acres-postgres"}`. Exercise exporter-down
   and database/authentication-failure cases separately. Confirm the private
   monitor file mount and existing-volume role reconciliation. Record the
@@ -98,6 +99,13 @@ do not report failure.
   elevated acquisition p95/p99 indicates pool checkout queueing or exhaustion,
   while elevated query latency with low acquisition latency isolates database-side
   query or index bottlenecks.
+- Capacity baseline telemetry structure in evidence (`databaseTelemetryBaseline`):
+  - `postgresExporter`: `up == 1` (`up{job="acres-postgres"}`), `lastScrapeError == 0` (`pg_exporter_last_scrape_error{job="acres-postgres"}`)
+  - `postgresServer`: `pgUp == 1` (`pg_up{job="acres-postgres"}`)
+  - `connectionPool`: API and Worker `totalConnections`, `idleConnections`, `maxConnections`, `requestsWaiting` (0 required)
+  - `poolAcquisitionLatency`: API and Worker p50, p95 (ceiling ≤ 50ms), p99 (`acres_postgres_pool_acquisition_duration_seconds`)
+  - `queryExecutionDuration`: API and Worker p50, p95 (ceiling ≤ 100ms), p99 (`acres_database_query_duration_seconds`)
+  - `serverActivity`: `lockWaits` (0 required) and `maxTransactionDurationSec`
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 

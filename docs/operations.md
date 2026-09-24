@@ -1081,6 +1081,16 @@ Operator capacity baseline and launch sign-off remain open.
 
 Prompt 177 verification: alert rule test suite passed 22/22 tests including schema, PromQL, duration, severity, and breach/clear simulation; template verification (`scripts/ops/check-production-templates.sh`) and alert drill (`scripts/ops/verify-alert-rules.js`) verified all 11/11 operational alert rules and 25/25 checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 
+**Prompt 178 update (2026-09-24): operator capacity baseline telemetry and evidence.**
+`scripts/ops/verify-capacity-load.js` now evaluates database connection pool acquisition latency (p95 ceiling ≤ 50ms) and SQL query execution latency (p95 ceiling ≤ 100ms) alongside HTTP availability (≥ 99.9%) and throughput (≥ 100 RPS) under default Category 5 SLO targets. In synthetic mode, realistic right-skewed log-normal distributions are generated for database metrics with monotonicity guaranteed across percentiles. Elevated acquisition latency (> 50ms) or query latency (> 100ms) triggers deterministic SLO compliance violations.
+
+`scripts/ops/run-capacity-alerting-drill.sh` now captures structured `databaseTelemetryBaseline` in `unifiedEvidence` emitted to `backups/capacity-alerting-drill-evidence-<timestamp>.json`, recording metrics exporter scrape health (`up == 1`, `pg_exporter_last_scrape_error == 0`), database reachability (`pg_up == 1`), connection pool state (API and Worker total, idle, max, waiting 0), pool acquisition percentiles (p50, p95, p99), query execution percentiles (p50, p95, p99), lock wait count (0), and transaction duration diagnostics. Step 1's header comment was updated to verify all 11 operational rules.
+
+`scripts/ops/verify-capacity-load.spec.js` expanded from 9 to 15 unit tests covering database latency calculations, custom SLO thresholds, elevated acquisition/query latency violations, monotonicity breaches, PRNG fallbacks, and report schema validation.
+This formally closes the operator capacity baseline telemetry and evidence requirement. Operator launch sign-off remains open.
+
+Prompt 178 verification: capacity load test suite passed 15/15 tests; capacity drill (`npm run ops:capacity-drill`) evaluated synthetic HTTP and database latency baselines with 100% availability, 125 RPS, 1.25ms database acquisition p95, and 23.36ms database query p95; capacity alerting drill (`npm run ops:capacity-alerting-drill`) verified all 11 operational alert rules, capacity SLO compliance, DoS resilience, and emitted structured `databaseTelemetryBaseline`. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

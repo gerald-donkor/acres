@@ -27,6 +27,8 @@ const DEFAULT_SLO_TARGETS = {
   availabilityTargetPercent: 99.9,
   maxP95LatencyMs: 500,
   capacityTargetRps: 100,
+  maxDatabaseAcquisitionP95LatencyMs: 50,
+  maxDatabaseQueryP95LatencyMs: 100,
 };
 
 const DEFAULT_BACKUPS_DIR = path.resolve(__dirname, '../../backups');
@@ -47,27 +49,20 @@ function calculatePercentile(sortedValues, percentile) {
 }
 
 /**
- * Computes full statistical summary across request latencies.
+ * Computes full statistical summary across a set of numeric latencies.
  */
-function calculateDistribution(latenciesMs, totalRequests, successfulRequests, durationSeconds) {
-  const count = latenciesMs.length;
+function calculateLatencySummary(latenciesMs) {
+  const count = (latenciesMs || []).length;
   if (count === 0) {
     return {
-      totalRequests: totalRequests || 0,
-      successfulRequests: successfulRequests || 0,
-      failedRequests: (totalRequests || 0) - (successfulRequests || 0),
-      availabilityPercent: 0,
-      throughputRps: 0,
-      latencyMs: {
-        min: 0,
-        p50: 0,
-        p90: 0,
-        p95: 0,
-        p99: 0,
-        max: 0,
-        mean: 0,
-        stddev: 0,
-      },
+      min: 0,
+      p50: 0,
+      p90: 0,
+      p95: 0,
+      p99: 0,
+      max: 0,
+      mean: 0,
+      stddev: 0,
     };
   }
 
@@ -86,6 +81,23 @@ function calculateDistribution(latenciesMs, totalRequests, successfulRequests, d
   const p95 = calculatePercentile(sorted, 95);
   const p99 = calculatePercentile(sorted, 99);
 
+  return {
+    min: Number(min.toFixed(2)),
+    p50: Number(p50.toFixed(2)),
+    p90: Number(p90.toFixed(2)),
+    p95: Number(p95.toFixed(2)),
+    p99: Number(p99.toFixed(2)),
+    max: Number(max.toFixed(2)),
+    mean: Number(mean.toFixed(2)),
+    stddev: Number(stddev.toFixed(2)),
+  };
+}
+
+/**
+ * Computes full statistical summary across request latencies.
+ */
+function calculateDistribution(latenciesMs, totalRequests, successfulRequests, durationSeconds, databaseLatency = null) {
+  const count = latenciesMs.length;
   const total = totalRequests || count;
   const success = typeof successfulRequests === 'number' ? successfulRequests : count;
   const failed = total - success;
@@ -93,23 +105,20 @@ function calculateDistribution(latenciesMs, totalRequests, successfulRequests, d
   const safeDuration = durationSeconds && durationSeconds > 0 ? durationSeconds : 1;
   const throughputRps = total / safeDuration;
 
-  return {
+  const result = {
     totalRequests: total,
     successfulRequests: success,
     failedRequests: Math.max(0, failed),
     availabilityPercent: Number(availabilityPercent.toFixed(3)),
     throughputRps: Number(throughputRps.toFixed(2)),
-    latencyMs: {
-      min: Number(min.toFixed(2)),
-      p50: Number(p50.toFixed(2)),
-      p90: Number(p90.toFixed(2)),
-      p95: Number(p95.toFixed(2)),
-      p99: Number(p99.toFixed(2)),
-      max: Number(max.toFixed(2)),
-      mean: Number(mean.toFixed(2)),
-      stddev: Number(stddev.toFixed(2)),
-    },
+    latencyMs: calculateLatencySummary(latenciesMs),
   };
+
+  if (databaseLatency) {
+    result.databaseLatency = databaseLatency;
+  }
+
+  return result;
 }
 
 /**
@@ -130,8 +139,10 @@ function evaluateSloCompliance(distribution, targets = DEFAULT_SLO_TARGETS) {
     distribution.latencyMs.p95 <= distribution.latencyMs.p99 &&
     distribution.latencyMs.p99 <= distribution.latencyMs.max;
 
-  const overallPassed =
-    availabilityPassed && latencyPassed && throughputPassed && monotonicLatency;
+  let databaseAcquisitionLatencyPassed = true;
+  let databaseQueryLatencyPassed = true;
+  let monotonicDbAcquisition = true;
+  let monotonicDbQuery = true;
 
   const violations = [];
   if (!availabilityPassed) {
@@ -153,12 +164,59 @@ function evaluateSloCompliance(distribution, targets = DEFAULT_SLO_TARGETS) {
     violations.push('Statistical distribution violated monotonicity invariant (min <= p50 <= p90 <= p95 <= p99 <= max)');
   }
 
+  if (distribution.databaseLatency) {
+    const acq = distribution.databaseLatency.acquisitionLatencyMs;
+    const qry = distribution.databaseLatency.queryLatencyMs;
+
+    if (acq && typeof acq.p95 === 'number' && typeof targets.maxDatabaseAcquisitionP95LatencyMs === 'number') {
+      databaseAcquisitionLatencyPassed = acq.p95 <= targets.maxDatabaseAcquisitionP95LatencyMs;
+      if (!databaseAcquisitionLatencyPassed) {
+        violations.push(
+          `Database pool acquisition p95 latency ${acq.p95}ms breached ceiling ${targets.maxDatabaseAcquisitionP95LatencyMs}ms`,
+        );
+      }
+      monotonicDbAcquisition =
+        acq.min <= acq.p50 && acq.p50 <= acq.p90 && acq.p90 <= acq.p95 && acq.p95 <= acq.p99 && acq.p99 <= acq.max;
+      if (!monotonicDbAcquisition) {
+        violations.push('Database pool acquisition latency violated monotonicity invariant');
+      }
+    }
+
+    if (qry && typeof qry.p95 === 'number' && typeof targets.maxDatabaseQueryP95LatencyMs === 'number') {
+      databaseQueryLatencyPassed = qry.p95 <= targets.maxDatabaseQueryP95LatencyMs;
+      if (!databaseQueryLatencyPassed) {
+        violations.push(
+          `Database SQL query execution p95 latency ${qry.p95}ms breached ceiling ${targets.maxDatabaseQueryP95LatencyMs}ms`,
+        );
+      }
+      monotonicDbQuery =
+        qry.min <= qry.p50 && qry.p50 <= qry.p90 && qry.p90 <= qry.p95 && qry.p95 <= qry.p99 && qry.p99 <= qry.max;
+      if (!monotonicDbQuery) {
+        violations.push('Database SQL query execution latency violated monotonicity invariant');
+      }
+    }
+  }
+
+  const overallPassed =
+    availabilityPassed &&
+    latencyPassed &&
+    throughputPassed &&
+    monotonicLatency &&
+    databaseAcquisitionLatencyPassed &&
+    databaseQueryLatencyPassed &&
+    monotonicDbAcquisition &&
+    monotonicDbQuery;
+
   return {
     targets,
     availabilityPassed,
     latencyPassed,
     throughputPassed,
     monotonicLatency,
+    databaseAcquisitionLatencyPassed,
+    databaseQueryLatencyPassed,
+    monotonicDbAcquisition,
+    monotonicDbQuery,
     overallPassed,
     violations,
   };
@@ -174,6 +232,42 @@ function createPrng(seed = 1337) {
     let t = Math.imul(s ^ (s >>> 15), 1 | s);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Generates synthetic database latency distributions for acquisition wait and query execution.
+ * Simulates normal production baseline (~0.45ms base acquisition, p95 < 2ms; ~7.5ms base query, p95 < 25ms).
+ */
+function generateSyntheticDatabaseLatencies(options = {}, rng) {
+  const prng = typeof rng === 'function' ? rng : createPrng(options.seed || 42);
+  const queryCount = options.databaseQueryCount || options.requestCount || 1000;
+  const acqBaseMs = options.baseDatabaseAcquisitionLatencyMs || 0.45;
+  const queryBaseMs = options.baseDatabaseQueryLatencyMs || 7.5;
+  const spikeMultiplier = options.spikeMultiplier || 1.0;
+  const acqSpikeMultiplier = options.acquisitionSpikeMultiplier || spikeMultiplier;
+  const querySpikeMultiplier = options.querySpikeMultiplier || spikeMultiplier;
+
+  const acqLatencies = [];
+  const queryLatencies = [];
+
+  for (let i = 0; i < queryCount; i++) {
+    const u1 = Math.max(1e-6, prng());
+    const u2 = prng();
+    const boxMuller = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+
+    const acqLogFactor = Math.exp(0.3 * boxMuller);
+    const acqLatency = Math.max(0.05, (acqBaseMs * acqLogFactor + (prng() * 0.15)) * acqSpikeMultiplier);
+    acqLatencies.push(acqLatency);
+
+    const queryLogFactor = Math.exp(0.4 * boxMuller);
+    const queryLatency = Math.max(0.5, (queryBaseMs * queryLogFactor + (prng() * 2.0)) * querySpikeMultiplier);
+    queryLatencies.push(queryLatency);
+  }
+
+  return {
+    acquisitionLatencyMs: calculateLatencySummary(acqLatencies),
+    queryLatencyMs: calculateLatencySummary(queryLatencies),
   };
 }
 
@@ -209,7 +303,8 @@ function generateSyntheticWorkload(options = {}) {
     latencies.push(Math.max(1.0, latency));
   }
 
-  return calculateDistribution(latencies, requestCount, successful, durationSeconds);
+  const databaseLatency = generateSyntheticDatabaseLatencies(options, rng);
+  return calculateDistribution(latencies, requestCount, successful, durationSeconds, databaseLatency);
 }
 
 /**
@@ -304,11 +399,16 @@ async function evaluateCapacity(options = {}) {
       options.maxP95LatencyMs || DEFAULT_SLO_TARGETS.maxP95LatencyMs,
     capacityTargetRps:
       options.capacityTargetRps || DEFAULT_SLO_TARGETS.capacityTargetRps,
+    maxDatabaseAcquisitionP95LatencyMs:
+      options.maxDatabaseAcquisitionP95LatencyMs || DEFAULT_SLO_TARGETS.maxDatabaseAcquisitionP95LatencyMs,
+    maxDatabaseQueryP95LatencyMs:
+      options.maxDatabaseQueryP95LatencyMs || DEFAULT_SLO_TARGETS.maxDatabaseQueryP95LatencyMs,
   };
 
   let distribution;
   if (isSynthetic) {
     distribution = generateSyntheticWorkload({
+      ...options,
       requestCount: options.requestCount || 1000,
       durationSeconds: options.durationSeconds || 5,
       errorRate: options.errorRate || 0.0,
@@ -404,21 +504,49 @@ async function runCli() {
   console.log(`  p95:  ${lat.p95} ms  (SLO Ceiling: <= ${report.targets.maxP95LatencyMs} ms)`);
   console.log(`  p99:  ${lat.p99} ms  |  Max:  ${lat.max} ms\n`);
 
+  if (report.distribution.databaseLatency) {
+    console.log('Database Latency Baseline (ms):');
+    console.log('-----------------------------------------------------------------');
+    const acq = report.distribution.databaseLatency.acquisitionLatencyMs;
+    const qry = report.distribution.databaseLatency.queryLatencyMs;
+    console.log('  Pool Acquisition Latency (Panels 23 & 24):');
+    console.log(`    Min:  ${acq.min} ms  |  Mean: ${acq.mean} ms  |  StdDev: ${acq.stddev} ms`);
+    console.log(`    p50:  ${acq.p50} ms  |  p90:  ${acq.p90} ms`);
+    console.log(`    p95:  ${acq.p95} ms  (SLO Ceiling: <= ${report.targets.maxDatabaseAcquisitionP95LatencyMs} ms)`);
+    console.log(`    p99:  ${acq.p99} ms  |  Max:  ${acq.max} ms\n`);
+    console.log('  SQL Query Execution Latency (Panels 25 & 26):');
+    console.log(`    Min:  ${qry.min} ms  |  Mean: ${qry.mean} ms  |  StdDev: ${qry.stddev} ms`);
+    console.log(`    p50:  ${qry.p50} ms  |  p90:  ${qry.p90} ms`);
+    console.log(`    p95:  ${qry.p95} ms  (SLO Ceiling: <= ${report.targets.maxDatabaseQueryP95LatencyMs} ms)`);
+    console.log(`    p99:  ${qry.p99} ms  |  Max:  ${qry.max} ms\n`);
+  }
+
   console.log('SLO Compliance Evaluation:');
   console.log('-----------------------------------------------------------------');
   const comp = report.compliance;
   console.log(
-    `  ${comp.availabilityPassed ? '✓' : '✗'} Availability:   ${report.distribution.availabilityPercent}% (target >= ${report.targets.availabilityTargetPercent}%)`,
+    `  ${comp.availabilityPassed ? '✓' : '✗'} Availability:     ${report.distribution.availabilityPercent}% (target >= ${report.targets.availabilityTargetPercent}%)`,
   );
   console.log(
-    `  ${comp.latencyPassed ? '✓' : '✗'} p95 Latency:   ${lat.p95} ms (ceiling <= ${report.targets.maxP95LatencyMs} ms)`,
+    `  ${comp.latencyPassed ? '✓' : '✗'} p95 Latency:     ${lat.p95} ms (ceiling <= ${report.targets.maxP95LatencyMs} ms)`,
   );
   console.log(
-    `  ${comp.throughputPassed ? '✓' : '✗'} Throughput:    ${report.distribution.throughputRps} RPS (target >= ${report.targets.capacityTargetRps} RPS)`,
+    `  ${comp.throughputPassed ? '✓' : '✗'} Throughput:      ${report.distribution.throughputRps} RPS (target >= ${report.targets.capacityTargetRps} RPS)`,
   );
   console.log(
-    `  ${comp.monotonicLatency ? '✓' : '✗'} Monotonicity:  min <= p50 <= p90 <= p95 <= p99 <= max (verified)`,
+    `  ${comp.monotonicLatency ? '✓' : '✗'} Monotonicity:    min <= p50 <= p90 <= p95 <= p99 <= max (verified)`,
   );
+
+  if (report.distribution.databaseLatency) {
+    const acq = report.distribution.databaseLatency.acquisitionLatencyMs;
+    const qry = report.distribution.databaseLatency.queryLatencyMs;
+    console.log(
+      `  ${comp.databaseAcquisitionLatencyPassed ? '✓' : '✗'} DB Acquisition:   p95 ${acq.p95} ms (ceiling <= ${report.targets.maxDatabaseAcquisitionP95LatencyMs} ms)`,
+    );
+    console.log(
+      `  ${comp.databaseQueryLatencyPassed ? '✓' : '✗'} DB Query Latency:  p95 ${qry.p95} ms (ceiling <= ${report.targets.maxDatabaseQueryP95LatencyMs} ms)`,
+    );
+  }
 
   if (report.reportPath) {
     console.log(`\nAudit Evidence:    ${report.reportPath}`);
@@ -449,8 +577,10 @@ if (require.main === module) {
 module.exports = {
   DEFAULT_SLO_TARGETS,
   calculatePercentile,
+  calculateLatencySummary,
   calculateDistribution,
   evaluateSloCompliance,
+  generateSyntheticDatabaseLatencies,
   generateSyntheticWorkload,
   runLiveBenchmark,
   evaluateCapacity,

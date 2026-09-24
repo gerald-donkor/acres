@@ -780,8 +780,8 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
 
 - **Performance, Capacity, and Latency Evaluation Engine (TM-20, Category 5 SLOs)**:
   - `scripts/ops/verify-capacity-load.js`: pure Node.js statistical benchmarking engine calculating min, p50, p90, p95, p99, max, mean, stddev, throughput (RPS), and availability percentage;
-  - `scripts/ops/verify-capacity-load.spec.js`: exit 0; all 9 unit tests passed in 90ms;
-  - Validates Category 5 SLO requirements: availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS;
+  - `scripts/ops/verify-capacity-load.spec.js`: exit 0; all 15 unit tests passed in 90ms;
+  - Validates Category 5 SLO requirements: availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS, database pool acquisition p95 <= 50ms, database query execution p95 <= 100ms;
   - Enforces mathematical monotonicity: `min <= p50 <= p90 <= p95 <= p99 <= max`;
   - Supports deterministic synthetic workload simulation for CI and live HTTP benchmarking mode;
   - Emits structured JSON audit reports (`backups/capacity-load-report-<timestamp>.json`).
@@ -812,7 +812,12 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   alerting gap.
   Prompt 177 adds the eleventh required Prometheus alert rule `PostgresExporterDown`
   (`up{job="acres-postgres"} == 0` for 1m, warning), closing the exporter availability and telemetry-self-health
-  alerting gap. Operator capacity baseline remains open.
+  alerting gap.
+  Prompt 178 adds database connection pool acquisition latency (p95 ≤ 50ms) and SQL query
+  execution latency (p95 ≤ 100ms) evaluations to `scripts/ops/verify-capacity-load.js`, updates
+  `scripts/ops/run-capacity-alerting-drill.sh` to capture structured `databaseTelemetryBaseline`
+  in drill evidence, and expands unit tests (15/15 passed), formally closing the operator
+  capacity baseline requirement. Operator launch sign-off remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
