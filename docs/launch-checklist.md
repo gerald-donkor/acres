@@ -107,6 +107,9 @@ do not report failure.
   - `queryExecutionDuration`: API and Worker p50, p95 (ceiling ≤ 100ms), p99 (`acres_database_query_duration_seconds`)
   - `serverActivity`: `lockWaits` (0 required) and `maxTransactionDurationSec`
 - Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
+  - Requires `availability_target_percent` to be a number between 99.9 and 100.0%;
+  - Requires `max_p95_latency_ms` to be a positive number ≤ 500ms;
+  - Requires `capacity_target_rps` to be a positive number ≥ 100 RPS;
   - Requires `max_database_acquisition_p95_latency_ms` to be a positive number ≤ 50ms;
   - Requires `max_database_query_p95_latency_ms` to be a positive number ≤ 100ms;
   - Fails closed if approved evidence reports `summary.databaseBaselineCompliance: "failed"` or `databaseTelemetryBaseline.status: "breached"`.
@@ -119,6 +122,12 @@ do not report failure.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`
+- Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
+  - Requires `rpo_hours` to be a positive number ≤ 1 hour;
+  - Requires `rto_hours` to be a positive number ≤ 4 hours;
+  - Rejects restore drill evidence reporting `rto_compliant: false`, record parity failure, PostGIS/foreign key verification failure, or table/migration count discrepancies;
+  - Rejects storage reconciliation reports reporting status `error`, missing objects, or checksum/size mismatches;
+  - Rejects Unified Launch Evidence Dossiers reporting `disasterRecoveryBaseline.status: "breached"` or restore/reconcile compliance failures (`summary.restoreCompliance: "failed"`, `summary.reconcileCompliance: "failed"`).
 - Known constraint (judgement, verified): both sub-drills require live drill
   infra even in `--dry-run` — PGPASSWORD plus reachable Postgres (`pg_isready`)
   for the restore drill, plus authenticated Postgres and reachable Garage/S3

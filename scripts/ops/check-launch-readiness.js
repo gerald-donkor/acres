@@ -211,6 +211,81 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
     if (dbStatus === 'breached' || dbStatus === 'failed') {
       addBlocker(category, `Approved evidence file '${ref}' reports database baseline breach (databaseTelemetryBaseline.status: "${parsed.databaseTelemetryBaseline.status}")`);
     }
+
+    // Restore drill child evidence checks
+    if (
+      file.includes('restore-drill-evidence-') ||
+      typeof parsed.rto_target_seconds === 'number' ||
+      typeof parsed.tables_source === 'number' ||
+      typeof parsed.rto_compliant === 'boolean'
+    ) {
+      if (parsed.rto_compliant === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports RTO breach (rto_compliant: false)`);
+      }
+      if (parsed.record_parity_verified === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports record parity verification failure (record_parity_verified: false)`);
+      }
+      if (parsed.postgis_verified === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports PostGIS extension verification failure (postgis_verified: false)`);
+      }
+      if (parsed.foreign_keys_verified === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports foreign key constraint verification failure (foreign_keys_verified: false)`);
+      }
+      if (
+        typeof parsed.tables_source === 'number' &&
+        typeof parsed.tables_restored === 'number' &&
+        parsed.tables_source !== parsed.tables_restored
+      ) {
+        addBlocker(category, `Approved evidence file '${ref}' reports table count discrepancy (source: ${parsed.tables_source}, restored: ${parsed.tables_restored})`);
+      }
+      if (
+        typeof parsed.migrations_source === 'number' &&
+        typeof parsed.migrations_restored === 'number' &&
+        parsed.migrations_source !== parsed.migrations_restored
+      ) {
+        addBlocker(category, `Approved evidence file '${ref}' reports migration count discrepancy (source: ${parsed.migrations_source}, restored: ${parsed.migrations_restored})`);
+      }
+    }
+
+    // Storage reconciliation child report checks
+    if (
+      file.includes('reconcile-report-') ||
+      file.includes('reconciliation-report') ||
+      (parsed.summary && typeof parsed.summary === 'object' && typeof parsed.summary.totalDatabaseObjects === 'number')
+    ) {
+      if (parsed.summary && typeof parsed.summary === 'object') {
+        const rStatus = typeof parsed.summary.status === 'string' ? parsed.summary.status.toLowerCase() : null;
+        if (rStatus === 'error' || rStatus === 'failed') {
+          addBlocker(category, `Approved evidence file '${ref}' reports storage reconciliation failure (summary.status: "${parsed.summary.status}")`);
+        }
+        if (typeof parsed.summary.missingObjects === 'number' && parsed.summary.missingObjects > 0) {
+          addBlocker(category, `Approved evidence file '${ref}' reports missing storage object(s) (${parsed.summary.missingObjects} missing)`);
+        }
+        if (typeof parsed.summary.mismatchedObjects === 'number' && parsed.summary.mismatchedObjects > 0) {
+          addBlocker(category, `Approved evidence file '${ref}' reports storage object checksum or size mismatch(es) (${parsed.summary.mismatchedObjects} mismatched)`);
+        }
+      }
+    }
+
+    // Unified Launch Evidence Dossier disaster recovery baseline checks
+    const drStatus = typeof parsed.disasterRecoveryBaseline?.status === 'string'
+      ? parsed.disasterRecoveryBaseline.status.toLowerCase()
+      : null;
+    if (drStatus === 'breached' || drStatus === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports disaster recovery baseline breach (disasterRecoveryBaseline.status: "${parsed.disasterRecoveryBaseline.status}")`);
+    }
+    const restoreCompliance = typeof parsed.summary?.restoreCompliance === 'string'
+      ? parsed.summary.restoreCompliance.toLowerCase()
+      : null;
+    if (restoreCompliance === 'failed' || restoreCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports restore drill compliance failure (summary.restoreCompliance: "${parsed.summary.restoreCompliance}")`);
+    }
+    const reconcileCompliance = typeof parsed.summary?.reconcileCompliance === 'string'
+      ? parsed.summary.reconcileCompliance.toLowerCase()
+      : null;
+    if (reconcileCompliance === 'failed' || reconcileCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports storage reconciliation compliance failure (summary.reconcileCompliance: "${parsed.summary.reconcileCompliance}")`);
+    }
   }
 }
 
@@ -384,14 +459,28 @@ function validateReadiness(record, _filePath, options = {}) {
   // 3.5 slo_and_alerting
   const sloSec = sections.slo_and_alerting;
   if (sloSec && sloSec.status === 'approved') {
-    if (typeof sloSec.availability_target_percent !== 'number' || sloSec.availability_target_percent < 99.0 || sloSec.availability_target_percent > 100.0) {
-      addBlocker('slo_and_alerting', `Availability target percent must be between 99.0 and 100.0 (received: ${sloSec.availability_target_percent})`);
+    if (
+      typeof sloSec.availability_target_percent !== 'number' ||
+      !Number.isFinite(sloSec.availability_target_percent) ||
+      sloSec.availability_target_percent < 99.9 ||
+      sloSec.availability_target_percent > 100.0
+    ) {
+      addBlocker('slo_and_alerting', `Availability target percent must be between 99.9 and 100.0 (received: ${sloSec.availability_target_percent})`);
     }
-    if (typeof sloSec.max_p95_latency_ms !== 'number' || sloSec.max_p95_latency_ms <= 0) {
-      addBlocker('slo_and_alerting', `Max p95 latency must be a positive number (received: ${sloSec.max_p95_latency_ms})`);
+    if (
+      typeof sloSec.max_p95_latency_ms !== 'number' ||
+      !Number.isFinite(sloSec.max_p95_latency_ms) ||
+      sloSec.max_p95_latency_ms <= 0 ||
+      sloSec.max_p95_latency_ms > 500
+    ) {
+      addBlocker('slo_and_alerting', `Max p95 latency ceiling must be a positive number <= 500ms (received: ${sloSec.max_p95_latency_ms})`);
     }
-    if (typeof sloSec.capacity_target_rps !== 'number' || sloSec.capacity_target_rps <= 0) {
-      addBlocker('slo_and_alerting', `Capacity target RPS must be a positive number (received: ${sloSec.capacity_target_rps})`);
+    if (
+      typeof sloSec.capacity_target_rps !== 'number' ||
+      !Number.isFinite(sloSec.capacity_target_rps) ||
+      sloSec.capacity_target_rps < 100
+    ) {
+      addBlocker('slo_and_alerting', `Capacity target RPS must be a positive number >= 100 RPS (received: ${sloSec.capacity_target_rps})`);
     }
     if (
       typeof sloSec.max_database_acquisition_p95_latency_ms !== 'number' ||
@@ -429,11 +518,21 @@ function validateReadiness(record, _filePath, options = {}) {
   // 3.6 backup_and_disaster_recovery
   const bdrSec = sections.backup_and_disaster_recovery;
   if (bdrSec && bdrSec.status === 'approved') {
-    if (typeof bdrSec.rpo_hours !== 'number' || bdrSec.rpo_hours <= 0) {
-      addBlocker('backup_and_disaster_recovery', `RPO hours must be a positive number (received: ${bdrSec.rpo_hours})`);
+    if (
+      typeof bdrSec.rpo_hours !== 'number' ||
+      !Number.isFinite(bdrSec.rpo_hours) ||
+      bdrSec.rpo_hours <= 0 ||
+      bdrSec.rpo_hours > 1
+    ) {
+      addBlocker('backup_and_disaster_recovery', `RPO hours must be a positive number <= 1 hour (received: ${bdrSec.rpo_hours})`);
     }
-    if (typeof bdrSec.rto_hours !== 'number' || bdrSec.rto_hours <= 0) {
-      addBlocker('backup_and_disaster_recovery', `RTO hours must be a positive number (received: ${bdrSec.rto_hours})`);
+    if (
+      typeof bdrSec.rto_hours !== 'number' ||
+      !Number.isFinite(bdrSec.rto_hours) ||
+      bdrSec.rto_hours <= 0 ||
+      bdrSec.rto_hours > 4
+    ) {
+      addBlocker('backup_and_disaster_recovery', `RTO hours must be a positive number <= 4 hours (received: ${bdrSec.rto_hours})`);
     }
     if (!bdrSec.backup_destination || typeof bdrSec.backup_destination !== 'string') {
       addBlocker('backup_and_disaster_recovery', 'Off-host backup destination is required');

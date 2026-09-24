@@ -293,6 +293,84 @@ const databaseTelemetryBaseline =
 const alertVerification = capEvidence?.summary?.alertVerification === "passed" ? "passed" : "failed";
 const dosResilience = capEvidence?.summary?.dosResilience === "passed" ? "passed" : "failed";
 
+const drStage = stages.find((s) => s.stage_id === "disaster_recovery");
+let restoreEvidence = null;
+let reconcileEvidence = null;
+if (drStage && drStage.status === "PASSED") {
+  const restoreFile = drStage.artifacts.find((a) => a.includes("restore-drill-evidence-") && a.endsWith(".json"));
+  if (restoreFile && fs.existsSync(restoreFile)) {
+    try {
+      restoreEvidence = JSON.parse(fs.readFileSync(restoreFile, "utf8"));
+    } catch {}
+  }
+  const reconcileFile = drStage.artifacts.find((a) => (a.includes("reconcile-report-") || a.includes("reconciliation-report")) && a.endsWith(".json"));
+  if (reconcileFile && fs.existsSync(reconcileFile)) {
+    try {
+      reconcileEvidence = JSON.parse(fs.readFileSync(reconcileFile, "utf8"));
+    } catch {}
+  }
+}
+
+const restorePassed = Boolean(
+  drStage?.status === "PASSED" &&
+  restoreEvidence &&
+  restoreEvidence.rto_compliant === true &&
+  restoreEvidence.record_parity_verified === true &&
+  restoreEvidence.postgis_verified === true &&
+  restoreEvidence.foreign_keys_verified === true &&
+  typeof restoreEvidence.tables_source === "number" &&
+  restoreEvidence.tables_source === restoreEvidence.tables_restored &&
+  typeof restoreEvidence.migrations_source === "number" &&
+  restoreEvidence.migrations_source === restoreEvidence.migrations_restored &&
+  restoreEvidence.status === "success"
+);
+
+const reconcilePassed = Boolean(
+  drStage?.status === "PASSED" &&
+  reconcileEvidence &&
+  reconcileEvidence.summary &&
+  reconcileEvidence.summary.status !== "error" &&
+  reconcileEvidence.summary.missingObjects === 0 &&
+  reconcileEvidence.summary.mismatchedObjects === 0 &&
+  reconcileEvidence.summary.exitCode === 0
+);
+
+let disasterRecoveryBaseline;
+if (restorePassed && reconcilePassed) {
+  disasterRecoveryBaseline = {
+    status: "verified",
+    restoreDrill: {
+      rtoSeconds: restoreEvidence.duration_seconds,
+      rtoTargetSeconds: restoreEvidence.rto_target_seconds,
+      rtoCompliant: restoreEvidence.rto_compliant,
+      tablesSource: restoreEvidence.tables_source,
+      tablesRestored: restoreEvidence.tables_restored,
+      migrationsSource: restoreEvidence.migrations_source,
+      migrationsRestored: restoreEvidence.migrations_restored,
+      postgisVerified: restoreEvidence.postgis_verified,
+      foreignKeysVerified: restoreEvidence.foreign_keys_verified,
+      recordParityVerified: restoreEvidence.record_parity_verified,
+    },
+    storageReconciliation: {
+      totalDatabaseObjects: reconcileEvidence.summary.totalDatabaseObjects,
+      totalBucketObjects: reconcileEvidence.summary.totalBucketObjects,
+      matchedObjects: reconcileEvidence.summary.matchedObjects,
+      missingObjects: reconcileEvidence.summary.missingObjects,
+      orphanObjects: reconcileEvidence.summary.orphanObjects,
+      mismatchedObjects: reconcileEvidence.summary.mismatchedObjects,
+      status: reconcileEvidence.summary.status,
+    },
+  };
+} else {
+  disasterRecoveryBaseline = {
+    status: "breached",
+    error_message: drStage?.error_message || "stage 7 failed or child evidence failed verification",
+  };
+}
+
+const restoreCompliance = restorePassed ? "passed" : "failed";
+const reconcileCompliance = reconcilePassed ? "passed" : "failed";
+
 const dossier = {
   version,
   timestamp,
@@ -304,6 +382,7 @@ const dossier = {
   duration_seconds: Number(durationS),
   stages,
   databaseTelemetryBaseline,
+  disasterRecoveryBaseline,
   summary: {
     staticIntegrity: statuses[0] === "PASSED" ? "passed" : "failed",
     supplyChainSecurity: statuses[1] === "PASSED" ? "passed" : "failed",
@@ -313,10 +392,12 @@ const dossier = {
     capacityAlerting: statuses[5] === "PASSED" ? "passed" : "failed",
     disasterRecovery: statuses[6] === "PASSED" ? "passed" : "failed",
     sloCompliance: statuses[5] === "PASSED" ? "capacity_alerts_verified" : "capacity_alerts_failed",
-    recoveryCompliance: statuses[6] === "PASSED" ? "restore_reconcile_verified" : "restore_reconcile_failed",
+    recoveryCompliance: (restoreCompliance === "passed" && reconcileCompliance === "passed") ? "restore_reconcile_verified" : "restore_reconcile_failed",
     alertVerification,
     dosResilience,
     databaseBaselineCompliance: dbCompliancePassed ? "passed" : "failed",
+    restoreCompliance,
+    reconcileCompliance,
     noAiPosture: "preview_excluded_from_launch",
   },
 };

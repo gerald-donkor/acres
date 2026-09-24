@@ -410,9 +410,20 @@ if (!readinessExample || typeof readinessExample !== 'object' || !readinessExamp
 }
 const sloAlerting = readinessExample.sections.slo_and_alerting;
 if (!sloAlerting ||
+    sloAlerting.availability_target_percent !== 99.9 ||
+    sloAlerting.max_p95_latency_ms !== 500 ||
+    sloAlerting.capacity_target_rps !== 100 ||
     sloAlerting.max_database_acquisition_p95_latency_ms !== 50 ||
     sloAlerting.max_database_query_p95_latency_ms !== 100) {
-  console.error('ops template check failed: infra/launch/readiness.example.json missing database latency SLO ceilings (50ms acquisition, 100ms query)');
+  console.error('ops template check failed: infra/launch/readiness.example.json missing required Category 5 SLO targets (99.9% availability, 500ms max p95, 100 RPS capacity, 50ms acquisition, 100ms query)');
+  process.exit(1);
+}
+
+const bdrSec = readinessExample.sections.backup_and_disaster_recovery;
+if (!bdrSec ||
+    bdrSec.rpo_hours !== 1 ||
+    bdrSec.rto_hours !== 4) {
+  console.error('ops template check failed: infra/launch/readiness.example.json missing required Category 6 RPO/RTO targets (1h RPO, 4h RTO)');
   process.exit(1);
 }
 
@@ -446,8 +457,11 @@ for (const rule of alertRules) {
 
 const launchDrillsScript = fs.readFileSync('scripts/ops/run-launch-drills.sh', 'utf8');
 if (!launchDrillsScript.includes('databaseBaselineCompliance') ||
-    !launchDrillsScript.includes('databaseTelemetryBaseline')) {
-  console.error('ops template check failed: scripts/ops/run-launch-drills.sh missing database baseline dossier integration');
+    !launchDrillsScript.includes('databaseTelemetryBaseline') ||
+    !launchDrillsScript.includes('disasterRecoveryBaseline') ||
+    !launchDrillsScript.includes('restoreCompliance') ||
+    !launchDrillsScript.includes('reconcileCompliance')) {
+  console.error('ops template check failed: scripts/ops/run-launch-drills.sh missing database or disaster recovery baseline dossier integration');
   process.exit(1);
 }
 

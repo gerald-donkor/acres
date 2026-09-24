@@ -838,6 +838,13 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   on dossier failed stages, stage failures, SLO/recovery compliance failures, and summary stage failures. Adds template integrity
   assertions in `scripts/ops/check-production-templates.sh` and expands test suites (`run-launch-drills.spec.js` 9/9 passed,
   `check-launch-readiness.spec.js` 30/30 passed). Operator launch sign-off remains open.
+  Prompt 183 bubbles up `disasterRecoveryBaseline`, `summary.restoreCompliance`, and `summary.reconcileCompliance`
+  from stage 7 child recovery evidence into the Unified Launch Evidence Dossier in `scripts/ops/run-launch-drills.sh`.
+  Hardens `check-launch-readiness.js` to fail closed on Category 5 SLO floors/ceilings (availability >= 99.9%, max p95 <= 500ms,
+  capacity >= 100 RPS) and Category 6 ceilings (RPO <= 1h, RTO <= 4h). Hardens `checkEvidenceFile` against restore drill
+  RTO breaches/discrepancies, storage reconciliation error/missing/mismatched objects, and recovery baseline breaches.
+  Adds template assertions in `scripts/ops/check-production-templates.sh` and expands test suites (`run-launch-drills.spec.js` 9/9 passed,
+  `check-launch-readiness.spec.js` 36/36 passed). Operator launch sign-off remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).

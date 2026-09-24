@@ -70,6 +70,12 @@ function assertDossierSchema(dossier) {
   assert.ok(['passed', 'failed'].includes(dossier.summary.dosResilience));
   assert.strictEqual(typeof dossier.databaseTelemetryBaseline, 'object');
   assert.ok(['verified', 'breached'].includes(dossier.databaseTelemetryBaseline.status));
+  assert.strictEqual(typeof dossier.disasterRecoveryBaseline, 'object');
+  assert.ok(['verified', 'breached'].includes(dossier.disasterRecoveryBaseline.status));
+  assert.strictEqual(typeof dossier.summary.restoreCompliance, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.restoreCompliance));
+  assert.strictEqual(typeof dossier.summary.reconcileCompliance, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.reconcileCompliance));
 }
 
 /**
@@ -146,6 +152,10 @@ test('--dry-run executes all 7 stages and emits a schema-compliant dossier', () 
     assert.strictEqual(dossier.databaseTelemetryBaseline.postgresServer.pgUp, 1);
     assert.strictEqual(dossier.summary.alertVerification, 'passed');
     assert.strictEqual(dossier.summary.dosResilience, 'passed');
+    assert.strictEqual(dossier.disasterRecoveryBaseline.status, 'breached');
+    assert.strictEqual(dossier.summary.restoreCompliance, 'failed');
+    assert.strictEqual(dossier.summary.reconcileCompliance, 'failed');
+    assert.strictEqual(dossier.summary.recoveryCompliance, 'restore_reconcile_failed');
     for (const stage of dossier.stages) {
       assert.ok(
         stage.artifacts.some((a) => a.includes(`launch-drill-stage-${stage.stage_id}.log`)),

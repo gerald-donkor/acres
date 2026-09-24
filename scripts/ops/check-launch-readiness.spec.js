@@ -814,6 +814,303 @@ test('validateReadiness accepts valid passed evidence dossier with database base
   }
 });
 
+test('validateReadiness blocks approval when availability_target_percent < 99.9, max_p95_latency_ms > 500, or capacity_target_rps < 100', () => {
+  const lowAvail = buildValidApprovedRecord();
+  lowAvail.sections.slo_and_alerting.availability_target_percent = 99.5;
+  const availRes = validateApprovedRecord(lowAvail);
+  const availBlockers = availRes.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    availBlockers.some((b) => b.includes('Availability target percent must be between 99.9 and 100.0 (received: 99.5)')),
+    `Expected low availability blocker, got: ${JSON.stringify(availBlockers)}`
+  );
+
+  const highLatency = buildValidApprovedRecord();
+  highLatency.sections.slo_and_alerting.max_p95_latency_ms = 750;
+  const latencyRes = validateApprovedRecord(highLatency);
+  const latencyBlockers = latencyRes.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    latencyBlockers.some((b) => b.includes('Max p95 latency ceiling must be a positive number <= 500ms (received: 750)')),
+    `Expected high latency blocker, got: ${JSON.stringify(latencyBlockers)}`
+  );
+
+  const lowRps = buildValidApprovedRecord();
+  lowRps.sections.slo_and_alerting.capacity_target_rps = 50;
+  const rpsRes = validateApprovedRecord(lowRps);
+  const rpsBlockers = rpsRes.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    rpsBlockers.some((b) => b.includes('Capacity target RPS must be a positive number >= 100 RPS (received: 50)')),
+    `Expected low capacity blocker, got: ${JSON.stringify(rpsBlockers)}`
+  );
+});
+
+test('validateReadiness blocks approval when rpo_hours > 1 or rto_hours > 4', () => {
+  const highRpo = buildValidApprovedRecord();
+  highRpo.sections.backup_and_disaster_recovery.rpo_hours = 2;
+  const rpoRes = validateApprovedRecord(highRpo);
+  const rpoBlockers = rpoRes.categoryBlockers.backup_and_disaster_recovery || [];
+  assert.ok(
+    rpoBlockers.some((b) => b.includes('RPO hours must be a positive number <= 1 hour (received: 2)')),
+    `Expected high RPO blocker, got: ${JSON.stringify(rpoBlockers)}`
+  );
+
+  const highRto = buildValidApprovedRecord();
+  highRto.sections.backup_and_disaster_recovery.rto_hours = 8;
+  const rtoRes = validateApprovedRecord(highRto);
+  const rtoBlockers = rtoRes.categoryBlockers.backup_and_disaster_recovery || [];
+  assert.ok(
+    rtoBlockers.some((b) => b.includes('RTO hours must be a positive number <= 4 hours (received: 8)')),
+    `Expected high RTO blocker, got: ${JSON.stringify(rtoBlockers)}`
+  );
+});
+
+test('validateReadiness blocks approval when restore drill evidence reports RTO breach, parity failure, or table/migration count mismatch', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-restore-drill-'));
+  try {
+    const rtoBreachPath = path.join(tmpDir, 'restore-drill-evidence-rto-breach.json');
+    fs.writeFileSync(
+      rtoBreachPath,
+      JSON.stringify({
+        status: 'success',
+        rto_target_seconds: 300,
+        rto_compliant: false,
+        record_parity_verified: true,
+        postgis_verified: true,
+        foreign_keys_verified: true,
+        tables_source: 46,
+        tables_restored: 46,
+        migrations_source: 17,
+        migrations_restored: 17,
+      }),
+      'utf8'
+    );
+    const rec1 = buildValidApprovedRecord();
+    rec1.sections.backup_and_disaster_recovery.evidence = [rtoBreachPath];
+    const res1 = validateApprovedRecord(rec1);
+    const b1 = res1.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(b1.some((msg) => msg.includes('reports RTO breach (rto_compliant: false)')));
+
+    const parityFailPath = path.join(tmpDir, 'restore-drill-evidence-parity-fail.json');
+    fs.writeFileSync(
+      parityFailPath,
+      JSON.stringify({
+        status: 'success',
+        rto_target_seconds: 300,
+        rto_compliant: true,
+        record_parity_verified: false,
+        postgis_verified: true,
+        foreign_keys_verified: true,
+        tables_source: 46,
+        tables_restored: 46,
+        migrations_source: 17,
+        migrations_restored: 17,
+      }),
+      'utf8'
+    );
+    const rec2 = buildValidApprovedRecord();
+    rec2.sections.backup_and_disaster_recovery.evidence = [parityFailPath];
+    const res2 = validateApprovedRecord(rec2);
+    const b2 = res2.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(b2.some((msg) => msg.includes('reports record parity verification failure')));
+
+    const tableMismatchPath = path.join(tmpDir, 'restore-drill-evidence-table-mismatch.json');
+    fs.writeFileSync(
+      tableMismatchPath,
+      JSON.stringify({
+        status: 'success',
+        rto_target_seconds: 300,
+        rto_compliant: true,
+        record_parity_verified: true,
+        postgis_verified: true,
+        foreign_keys_verified: true,
+        tables_source: 46,
+        tables_restored: 45,
+        migrations_source: 17,
+        migrations_restored: 17,
+      }),
+      'utf8'
+    );
+    const rec3 = buildValidApprovedRecord();
+    rec3.sections.backup_and_disaster_recovery.evidence = [tableMismatchPath];
+    const res3 = validateApprovedRecord(rec3);
+    const b3 = res3.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(b3.some((msg) => msg.includes('reports table count discrepancy (source: 46, restored: 45)')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when storage reconciliation evidence reports missing or mismatched objects or error status', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-reconcile-'));
+  try {
+    const errorStatusPath = path.join(tmpDir, 'reconcile-report-error.json');
+    fs.writeFileSync(
+      errorStatusPath,
+      JSON.stringify({
+        summary: {
+          totalDatabaseObjects: 10,
+          totalBucketObjects: 10,
+          matchedObjects: 8,
+          missingObjects: 2,
+          mismatchedObjects: 0,
+          status: 'error',
+          exitCode: 1,
+        },
+      }),
+      'utf8'
+    );
+    const rec1 = buildValidApprovedRecord();
+    rec1.sections.backup_and_disaster_recovery.evidence = [errorStatusPath];
+    const res1 = validateApprovedRecord(rec1);
+    const b1 = res1.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(b1.some((msg) => msg.includes('reports storage reconciliation failure (summary.status: "error")')));
+    assert.ok(b1.some((msg) => msg.includes('reports missing storage object(s) (2 missing)')));
+
+    const mismatchPath = path.join(tmpDir, 'reconcile-report-mismatch.json');
+    fs.writeFileSync(
+      mismatchPath,
+      JSON.stringify({
+        summary: {
+          totalDatabaseObjects: 10,
+          totalBucketObjects: 10,
+          matchedObjects: 9,
+          missingObjects: 0,
+          mismatchedObjects: 1,
+          status: 'error',
+          exitCode: 1,
+        },
+      }),
+      'utf8'
+    );
+    const rec2 = buildValidApprovedRecord();
+    rec2.sections.backup_and_disaster_recovery.evidence = [mismatchPath];
+    const res2 = validateApprovedRecord(rec2);
+    const b2 = res2.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(b2.some((msg) => msg.includes('reports storage object checksum or size mismatch(es) (1 mismatched)')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when evidence dossier reports disasterRecoveryBaseline breach or restore/reconcile compliance failure', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-dossier-dr-'));
+  try {
+    const drBreachPath = path.join(tmpDir, 'launch-evidence-dossier-dr-breached.json');
+    fs.writeFileSync(
+      drBreachPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        stages: [],
+        disasterRecoveryBaseline: {
+          status: 'breached',
+          error_message: 'stage failed',
+        },
+        summary: {
+          restoreCompliance: 'failed',
+          reconcileCompliance: 'failed',
+          recoveryCompliance: 'restore_reconcile_failed',
+        },
+      }),
+      'utf8'
+    );
+    const rec = buildValidApprovedRecord();
+    rec.sections.backup_and_disaster_recovery.evidence = [drBreachPath];
+    const res = validateApprovedRecord(rec);
+    const b = res.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(b.some((msg) => msg.includes('reports disaster recovery baseline breach (disasterRecoveryBaseline.status: "breached")')));
+    assert.ok(b.some((msg) => msg.includes('reports restore drill compliance failure (summary.restoreCompliance: "failed")')));
+    assert.ok(b.some((msg) => msg.includes('reports storage reconciliation compliance failure (summary.reconcileCompliance: "failed")')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness accepts valid passed disaster recovery evidence and compliant dossier', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-dossier-dr-pass-'));
+  try {
+    const passedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-dr-pass.json');
+    fs.writeFileSync(
+      passedDossierPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        passed_stages: 7,
+        failed_stages: 0,
+        stages: [
+          { stage_id: 'static_templates', status: 'PASSED' },
+          { stage_id: 'supply_chain_sast', status: 'PASSED' },
+          { stage_id: 'ingress_deployment', status: 'PASSED' },
+          { stage_id: 'volume_encryption', status: 'PASSED' },
+          { stage_id: 'secret_rotation', status: 'PASSED' },
+          { stage_id: 'capacity_alerting', status: 'PASSED' },
+          { stage_id: 'disaster_recovery', status: 'PASSED' },
+        ],
+        databaseTelemetryBaseline: {
+          status: 'verified',
+          postgresExporter: { up: 1, lastScrapeError: 0 },
+          postgresServer: { pgUp: 1 },
+        },
+        disasterRecoveryBaseline: {
+          status: 'verified',
+          restoreDrill: {
+            rtoSeconds: 2.1,
+            rtoTargetSeconds: 300,
+            rtoCompliant: true,
+            tablesSource: 46,
+            tablesRestored: 46,
+            migrationsSource: 17,
+            migrationsRestored: 17,
+            postgisVerified: true,
+            foreignKeysVerified: true,
+            recordParityVerified: true,
+          },
+          storageReconciliation: {
+            totalDatabaseObjects: 10,
+            totalBucketObjects: 10,
+            matchedObjects: 10,
+            missingObjects: 0,
+            orphanObjects: 0,
+            mismatchedObjects: 0,
+            status: 'clean',
+          },
+        },
+        summary: {
+          staticIntegrity: 'passed',
+          supplyChainSecurity: 'passed',
+          ingressDeployment: 'passed',
+          volumeEncryption: 'passed',
+          secretRotation: 'passed',
+          capacityAlerting: 'passed',
+          disasterRecovery: 'passed',
+          sloCompliance: 'capacity_alerts_verified',
+          recoveryCompliance: 'restore_reconcile_verified',
+          alertVerification: 'passed',
+          dosResilience: 'passed',
+          databaseBaselineCompliance: 'passed',
+          restoreCompliance: 'passed',
+          reconcileCompliance: 'passed',
+          noAiPosture: 'preview_excluded_from_launch',
+        },
+      }),
+      'utf8'
+    );
+    const rec = buildValidApprovedRecord();
+    rec.sections.backup_and_disaster_recovery.evidence = [passedDossierPath];
+    const res = validateApprovedRecord(rec);
+    assert.strictEqual(res.categoryBlockers.backup_and_disaster_recovery, undefined);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('the checked-in template readiness.example.json fails closed with unresolved blockers', () => {
   const templatePath = path.resolve(__dirname, '../../infra/launch/readiness.example.json');
   const raw = fs.readFileSync(templatePath, 'utf8');
