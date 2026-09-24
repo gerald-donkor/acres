@@ -54,6 +54,7 @@ const KNOWN_METRIC_IDENTIFIERS = [
   'acres_queue_jobs_total',
   'acres_outbox_pending_events',
   'acres_database_query_duration_seconds',
+  'acres_postgres_pool_acquisition_duration_seconds',
   'acres_postgres_pool_requests_waiting',
 ];
 

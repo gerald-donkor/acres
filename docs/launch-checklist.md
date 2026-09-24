@@ -229,6 +229,7 @@ cause, action items) before resolving the alert thread.
 ### AcresApiDown (critical)
 
 - PromQL: `up{job="acres-api"} == 0` for 1m — API process unreachable.
+- Dashboard: Panel 2 ("Acres API Status") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: `docker compose ps api`; `docker compose logs --tail=200 api`;
   `curl -f http://localhost:3001/health`; check host CPU/memory/disk.
 - Contain: restart the API container; if the image is bad, roll back to the
@@ -239,6 +240,7 @@ cause, action items) before resolving the alert thread.
 ### AcresWorkerDown (critical)
 
 - PromQL: `up{job="acres-worker"} == 0` for 1m — Worker process unreachable.
+- Dashboard: Panel 11 ("Acres Worker Status") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: `docker compose ps worker`; `docker compose logs --tail=200 worker`;
   `curl -f http://worker:3002/health` (or private interface); check host CPU/memory/disk,
   Valkey queue connectivity, and PostgreSQL database reachability.
@@ -250,6 +252,7 @@ cause, action items) before resolving the alert thread.
 ### PostgresDown (critical)
 
 - PromQL: `pg_up{job="acres-postgres"} == 0` for 1m — PostgreSQL database unreachable or failing connections.
+- Dashboard: Panel 15 ("PostgreSQL Database Scrape") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: `docker compose ps postgres`; `docker compose logs --tail=200 postgres`;
   check socket/port reachability (`docker compose exec postgres pg_isready -U acres_app -d acres`);
   check host disk/filesystem space (`df -h`); inspect exporter logs
@@ -262,6 +265,7 @@ cause, action items) before resolving the alert thread.
 ### PostgresExporterDown (warning)
 
 - PromQL: `up{job="acres-postgres"} == 0` for 1m — postgres-exporter process unreachable.
+- Dashboard: Panel 14 ("PostgreSQL Exporter HTTP Scrape") and Panel 16 ("PostgreSQL Collector Error") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: `docker compose ps postgres-exporter`; `docker compose logs --tail=200 postgres-exporter`;
   check whether container stopped, crashed, or was OOM-killed; check host resources and port contention;
   verify secret file mount `/run/secrets/acres_monitor_password` exists and has correct permissions;
@@ -275,7 +279,8 @@ cause, action items) before resolving the alert thread.
 
 ### HighHttp5xxRate (critical)
 
-- PromQL: `(sum(rate(acres_http_requests_total{status_class="5xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 5` for 5m — server error burst.
+- PromQL: `(sum(rate(acres_http_requests_total{job="acres-api",status_class="5xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job="acres-api"}[5m])), 0.001)) * 100 > 5` for 5m — server error burst.
+- Dashboard: Panel 6 ("HTTP 5xx Error Rate") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: `docker compose logs --tail=500 api | grep -E ' 5[0-9]{2} '`;
   correlate deploy time with error onset; check Postgres/Valkey/Garage reachability.
 - Contain: if onset matches a deploy, roll back per §6; otherwise shed load
@@ -285,7 +290,8 @@ cause, action items) before resolving the alert thread.
 
 ### P95LatencyThresholdExceeded (warning)
 
-- PromQL: `histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket[5m])) by (le)) > 0.5` for 5m.
+- PromQL: `histogram_quantile(0.95, sum(rate(acres_http_request_duration_seconds_bucket{job="acres-api"}[5m])) by (le)) > 0.5` for 5m.
+- Dashboard: Panel 7 ("HTTP Request Latency Percentiles") alongside Panels 23/24 (API/Worker pool acquisition latency) and Panels 25/26 (API/Worker query execution latency) in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: `node scripts/ops/verify-capacity-load.js --synthetic` for the SLO
   baseline; inspect route patterns, slow-query evidence, dependency health,
   and in-flight HTTP requests. Inspect API pool
@@ -312,10 +318,11 @@ cause, action items) before resolving the alert thread.
 
 ### High429Rate (warning)
 
-- PromQL: `(sum(rate(acres_http_429_responses_total[5m])) / clamp_min(sum(rate(acres_http_requests_total[5m])), 0.001)) * 100 > 10` for 5m.
+- PromQL: `(sum(rate(acres_http_429_responses_total{job="acres-api"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job="acres-api"}[5m])), 0.001)) * 100 > 10` for 5m.
   The numerator counts HTTP 429 responses only. Treat it as a rate-limit
   spike / possible credential-stuffing or DoS signal; confirm the route and
   client context in access logs before acting.
+- Dashboard: Panel 28 ("API HTTP 429 Rate Percentage") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: inspect Panel 28 in Grafana (`API HTTP 429 Rate Percentage`) for the rate trend; inspect top offending IPs/routes in Caddy access logs; check whether the
   spike is one client (abuse) or broad (misconfigured client release).
 - Contain: block abusive IPs at Caddy, tighten Throttler windows, rotate
@@ -326,7 +333,8 @@ cause, action items) before resolving the alert thread.
 
 ### QueueDeadLettersDetected (warning)
 
-- PromQL: `sum(acres_queue_jobs_total{status="failed"}) > 0` for 1m.
+- PromQL: `sum(acres_queue_jobs_total{job="acres-worker",status="failed"}) > 0` for 1m.
+- Dashboard: Panel 4 ("Queue Dead Letters") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: list dead-letter jobs in Valkey/BullMQ; inspect worker logs for the
   failing handler and payload class.
 - Contain: pause the failing queue, fix or quarantine the poison payload,
@@ -336,7 +344,8 @@ cause, action items) before resolving the alert thread.
 
 ### OutboxDeliveryLag (warning)
 
-- PromQL: `acres_outbox_pending_events > 50` for 10m.
+- PromQL: `acres_outbox_pending_events{job="acres-api"} > 50` for 10m.
+- Dashboard: Panel 3 ("Pending Outbox Events") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: check worker liveness and queue depth; look for stuck outbox
   dispatcher transactions or down downstream sinks.
 - Contain: restart the worker, clear the blocking event (quarantine, never
@@ -348,6 +357,7 @@ cause, action items) before resolving the alert thread.
 
 - PromQL: `acres_http_active_requests{job="acres-api"} > 40` for 2m — more than 40 API HTTP
   requests in flight; this gauge does not measure database pool occupancy.
+- Dashboard: Panel 27 ("API In-Flight Active HTTP Requests") in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: inspect Panel 27 in Grafana (`API In-Flight Active HTTP Requests`) for in-flight request load; inspect route patterns, p95 latency, 5xx,
   and dependency health. Check the API pool connection and waiting gauges
   named in the latency runbook alongside PostgreSQL evidence before
@@ -367,6 +377,7 @@ cause, action items) before resolving the alert thread.
 ### DatabaseConnectionPoolSaturation (warning)
 
 - PromQL: `acres_postgres_pool_requests_waiting{job="acres-api"} > 0` for 1m — requests queued waiting for an available PostgreSQL client from the API `pg.Pool`.
+- Dashboard: Panels 9/10 (API pool connections & backlog), Panel 23 (API pool acquisition latency), and Panel 25 (API query execution latency) in Grafana (`infra/grafana/dashboards/acres-operations.json`).
 - Triage: Check API pool connection gauges in Panels 9 and 10 (`acres_postgres_pool_connections_total`, `acres_postgres_pool_connections_idle`, `acres_postgres_pool_connections_max`, and `acres_postgres_pool_requests_waiting`). Inspect API pool acquisition latency in Panel 23 (`acres_postgres_pool_acquisition_duration_seconds{job="acres-api"}`) and API query execution latency in Panel 25 (`acres_database_query_duration_seconds{job="acres-api"}`).
   - If acquisition latency is elevated (p95 > 50ms) with low query latency (p95 < 25ms), concurrent API request volume has exceeded pool connection capacity (`max`); incoming queries are starved for connection checkout.
   - If query execution latency is elevated (p95 > 100ms), slow database queries or table scans are holding connections open for extended durations.

@@ -40,6 +40,7 @@ require_file scripts/ops/run-capacity-alerting-drill.sh
 require_file scripts/ops/check-release-images.js
 require_file scripts/ops/check-release-images.spec.js
 require_file scripts/ops/verify-postgres-diagnostics.js
+require_file docs/launch-checklist.md
 
 node <<'NODE'
 const fs = require('fs');
@@ -410,6 +411,34 @@ if (!sloAlerting ||
     sloAlerting.max_database_query_p95_latency_ms !== 100) {
   console.error('ops template check failed: infra/launch/readiness.example.json missing database latency SLO ceilings (50ms acquisition, 100ms query)');
   process.exit(1);
+}
+
+const checklist = fs.readFileSync('docs/launch-checklist.md', 'utf8');
+const alertRules = alerts && alerts.groups && alerts.groups[0] && Array.isArray(alerts.groups[0].rules)
+  ? alerts.groups[0].rules
+  : [];
+
+if (alertRules.length !== 11) {
+  console.error(`ops template check failed: expected 11 alert rules in alerts.yml, found ${alertRules.length}`);
+  process.exit(1);
+}
+
+for (const rule of alertRules) {
+  if (!checklist.includes(`### ${rule.alert}`)) {
+    console.error(`ops template check failed: docs/launch-checklist.md missing runbook section for ${rule.alert}`);
+    process.exit(1);
+  }
+  const sectionIdx = checklist.indexOf(`### ${rule.alert}`);
+  const nextSectionIdx = checklist.indexOf('### ', sectionIdx + 4);
+  const sectionContent = checklist.slice(sectionIdx, nextSectionIdx !== -1 ? nextSectionIdx : undefined);
+  if (!sectionContent.includes(rule.expr)) {
+    console.error(`ops template check failed: docs/launch-checklist.md missing exact scoped PromQL for ${rule.alert} in its runbook section: ${rule.expr}`);
+    process.exit(1);
+  }
+  if (!sectionContent.includes('- Dashboard:')) {
+    console.error(`ops template check failed: docs/launch-checklist.md missing Dashboard panel reference for ${rule.alert}`);
+    process.exit(1);
+  }
 }
 
 NODE

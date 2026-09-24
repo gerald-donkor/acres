@@ -1105,6 +1105,9 @@ This achieves 100% visual coverage across all 11 Prometheus alert rules in the G
 
 Prompt 180 verification: diagnostics test suite passed 7/7 tests; template verification (`scripts/ops/check-production-templates.sh`) passed all checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 
+**Prompt 181 update (2026-09-24): incident runbook and alert PromQL reconciliation.**
+`docs/launch-checklist.md` §5 now reconciles all 11 incident response runbooks with exact scoped PromQL expressions matching `infra/prometheus/alerts.yml` (`HighHttp5xxRate`, `High429Rate`, `QueueDeadLettersDetected`, and `OutboxDeliveryLag` explicitly scoped to their target jobs) and adds dedicated `- Dashboard:` cross-references to their operational Grafana panels (Panels 2, 11, 15, 14/16, 6, 7, 28, 4, 3, 27, and 9/10/23/25). `scripts/ops/verify-alert-rules.js` now includes `acres_postgres_pool_acquisition_duration_seconds` in `KNOWN_METRIC_IDENTIFIERS`, verified by `verify-alert-rules.spec.js` (23/23 tests passed). `scripts/ops/check-production-templates.sh` now statically verifies that `docs/launch-checklist.md` documents all 11 alert runbooks, matches each exact scoped PromQL expression, and includes Grafana panel references. Operator launch sign-off remains open.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.
@@ -1142,7 +1145,7 @@ This is the Phase 12 exit gate: one orchestrator, one dossier, one checklist.
      is present — that is the gate working, not a defect.
 2. **Operator Launch Checklist (`docs/launch-checklist.md`)**: 11-category
    verification matrix (drill command, evidence artifact, acceptance criteria
-   per category), 7 Prometheus alert runbooks with PromQL, triage,
+   per category), 11 Prometheus alert runbooks with PromQL, triage,
    containment, escalation, and clearing conditions, rollback/DR procedures,
    and the formal sign-off matrix.
 3. **Launch Readiness Evidence Cross-Validation

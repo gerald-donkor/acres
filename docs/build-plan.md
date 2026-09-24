@@ -827,6 +827,11 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   to `infra/grafana/dashboards/acres-operations.json`, achieving 100% visual coverage of all 11 Prometheus alert
   rules in the Grafana operational dashboard. Extends `scripts/ops/check-production-templates.sh` and expands
   diagnostics unit tests (7/7 passed). Operator launch sign-off remains open.
+  Prompt 181 reconciles all 11 incident response runbooks in `docs/launch-checklist.md` §5 with exact scoped PromQL
+  expressions matching `infra/prometheus/alerts.yml` and adds explicit Grafana dashboard panel references across all
+  runbooks. Adds `acres_postgres_pool_acquisition_duration_seconds` to `KNOWN_METRIC_IDENTIFIERS` in `scripts/ops/verify-alert-rules.js`
+  (23/23 tests passed). Extends `scripts/ops/check-production-templates.sh` to enforce runbook PromQL and panel integrity.
+  Operator launch sign-off remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
@@ -853,7 +858,7 @@ checklist with incident runbooks, and readiness evidence cross-validation.
     exit 0 only on 7/7 pass;
   - `scripts/ops/run-launch-drills.spec.js`: exit 0; all 9 unit tests passed.
 - **Operator Launch Checklist & Runbooks (`docs/launch-checklist.md`)**:
-  - 11-category verification matrix, 7 Prometheus alert runbooks, rollback/DR
+  - 11-category verification matrix, 11 Prometheus alert runbooks, rollback/DR
     procedures, formal sign-off matrix; indexed in `AGENTS.md`.
 - **Readiness Evidence Cross-Validation**:
   - `scripts/ops/check-launch-readiness.js`: approved sections referencing

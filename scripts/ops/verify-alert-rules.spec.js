@@ -377,3 +377,8 @@ test('verifyAlertRules: rejects an unscoped outbox selector that would duplicate
     assert.ok(result.errors.some((error) => error.includes('every metric selector must use job="acres-api"')));
   } finally { fs.rmSync(tmpDir, { recursive: true, force: true }); }
 });
+
+test('KNOWN_METRIC_IDENTIFIERS: includes database pool acquisition and query execution latency histograms', () => {
+  assert.ok(KNOWN_METRIC_IDENTIFIERS.includes('acres_postgres_pool_acquisition_duration_seconds'));
+  assert.ok(KNOWN_METRIC_IDENTIFIERS.includes('acres_database_query_duration_seconds'));
+});
