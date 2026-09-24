@@ -307,6 +307,7 @@ const requiredAlerts = [
   'AcresApiDown',
   'AcresWorkerDown',
   'PostgresDown',
+  'PostgresExporterDown',
   'HighHttp5xxRate',
   'P95LatencyThresholdExceeded',
   'High429Rate',

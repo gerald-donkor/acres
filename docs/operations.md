@@ -1062,6 +1062,25 @@ Operator capacity baseline and launch sign-off remain open.
 
 Prompt 176 verification: alert rule test suite passed 20/20 tests including schema, PromQL, duration, severity, and breach/clear simulation; template verification (`scripts/ops/check-production-templates.sh`) and alert drill (`scripts/ops/verify-alert-rules.js`) verified all 10/10 operational alert rules and 23/23 checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 
+**Prompt 177 update (2026-09-24): PostgreSQL metrics exporter availability alert.**
+`infra/prometheus/alerts.yml` now configures the eleventh required operational alert:
+`PostgresExporterDown` with expression `up{job="acres-postgres"} == 0`, `for: 1m`, and `severity: warning`.
+This alert establishes telemetry-self-health monitoring for the database observability pipeline:
+when `postgres-exporter` crashes, runs out of memory, or fails to answer Prometheus scrapes,
+`PostgresExporterDown` fires at warning severity to notify operators that database metrics
+(connections, lock waits, transaction ages, scrape health) are dark, closing the gap where a dead
+exporter prevented `pg_up == 0` from ever being evaluated.
+
+The rule verifier (`scripts/ops/verify-alert-rules.js`), test suite (`scripts/ops/verify-alert-rules.spec.js`),
+production template validator (`scripts/ops/check-production-templates.sh`), and drill orchestrator
+(`scripts/ops/run-capacity-alerting-drill.sh`) now require and simulate all 11 operational rules.
+`docs/launch-checklist.md` §5 details the triage runbook correlating exporter container liveness, logs,
+secret file mount permissions, and scrape timeouts.
+This formally closes the exporter availability and telemetry-self-health alerting gap.
+Operator capacity baseline and launch sign-off remain open.
+
+Prompt 177 verification: alert rule test suite passed 22/22 tests including schema, PromQL, duration, severity, and breach/clear simulation; template verification (`scripts/ops/check-production-templates.sh`) and alert drill (`scripts/ops/verify-alert-rules.js`) verified all 11/11 operational alert rules and 25/25 checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

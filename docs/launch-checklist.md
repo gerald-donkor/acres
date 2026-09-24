@@ -25,7 +25,7 @@ excluded. Deterministic no-AI journeys are the launch path.
 | `deployment_approver` | approves promotion of a pinned, provenance-attested image |
 | `rollback_authority` | owns the rollback decision and executes it |
 | `key_recovery_owner` | holds volume-encryption recovery material under dual custody |
-| on-call alert team | receives the 10 Prometheus alerts and works the runbooks in §5 |
+| on-call alert team | receives the 11 Prometheus alerts and works the runbooks in §5 |
 
 Pre-flight (all must pass before the checklist below):
 
@@ -85,7 +85,7 @@ do not report failure.
 - Evidence: `backups/capacity-alerting-drill-evidence-<timestamp>.json`
 - Accept: availability target 99.0–100.0%, p95 latency ceiling, capacity RPS
   target, ≥1 alert recipient, `alert_thresholds_defined: true`, escalation
-  runbook reference; all 10 alert rules validated. Record both
+  runbook reference; all 11 alert rules validated. Record both
   `up{job="acres-postgres"}` and `pg_up{job="acres-postgres"}` with
   `pg_exporter_last_scrape_error{job="acres-postgres"}`. Exercise exporter-down
   and database/authentication-failure cases separately. Confirm the private
@@ -204,7 +204,7 @@ Reference a dossier from an approved readiness section by placing its
 `evidence` array; the validator confirms the file exists, parses as JSON, and
 rejects dossiers whose `overall_status`/`status` is `"FAILED"`.
 
-## 5. Incident Response Runbooks (10 Prometheus Alerts)
+## 5. Incident Response Runbooks (11 Prometheus Alerts)
 
 Alert rules live in `infra/prometheus/alerts.yml`. Severity `critical` pages
 the on-call team; `warning` notifies the shared channel — with what tool
@@ -246,6 +246,20 @@ cause, action items) before resolving the alert thread.
   verify volume integrity. If database corruption is detected, initiate emergency disaster recovery restore drill per §6.
   Escalate to database administrator and `rollback_authority` after 5 minutes down or a failed restart.
 - Clear: `pg_up{job="acres-postgres"} == 1` for 5m.
+
+### PostgresExporterDown (warning)
+
+- PromQL: `up{job="acres-postgres"} == 0` for 1m — postgres-exporter process unreachable.
+- Triage: `docker compose ps postgres-exporter`; `docker compose logs --tail=200 postgres-exporter`;
+  check whether container stopped, crashed, or was OOM-killed; check host resources and port contention;
+  verify secret file mount `/run/secrets/acres_monitor_password` exists and has correct permissions;
+  check whether Prometheus scrape timeout (15s) is exceeded.
+- Contain: restart postgres-exporter container (`docker compose restart postgres-exporter`);
+  if credential or configuration failure, verify monitor credentials via `DATA_SOURCE_PASS_FILE`;
+  if recurring crash, check container memory and network connectivity. Note: production database
+  traffic and API/worker services are unaffected unless `PostgresDown` also fires.
+  Escalate to on-call SRE if exporter remains down > 15m.
+- Clear: `up{job="acres-postgres"} == 1` for 5m.
 
 ### HighHttp5xxRate (critical)
 

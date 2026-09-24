@@ -6,10 +6,11 @@
  * Prometheus Alert Rule Verification & Synthetic Simulation Engine (TM-16, TM-20).
  *
  * Statically parses and validates infra/prometheus/alerts.yml and infra/prometheus/prometheus.yml:
- * 1. Asserts presence of all 10 required operational golden signals and security threat alerts:
+ * 1. Asserts presence of all 11 required operational golden signals and security threat alerts:
  *    - AcresApiDown (Availability: up{job="acres-api"} == 0)
  *    - AcresWorkerDown (Availability: up{job="acres-worker"} == 0)
  *    - PostgresDown (Availability: pg_up{job="acres-postgres"} == 0)
+ *    - PostgresExporterDown (Telemetry: up{job="acres-postgres"} == 0)
  *    - HighHttp5xxRate (Errors: > 5% 5xx over 5m)
  *    - P95LatencyThresholdExceeded (Latency: p95 latency > 500ms over 5m)
  *    - High429Rate (Security: HTTP 429 rate > 10% over 5m)
@@ -33,6 +34,7 @@ const REQUIRED_ALERTS = [
   'AcresApiDown',
   'AcresWorkerDown',
   'PostgresDown',
+  'PostgresExporterDown',
   'HighHttp5xxRate',
   'P95LatencyThresholdExceeded',
   'High429Rate',
@@ -76,6 +78,12 @@ const SIMULATION_DEFINITIONS = {
     firingSample: { pgUp: 0 },
     clearedSample: { pgUp: 1 },
     thresholdDescription: 'pg_up{job="acres-postgres"} == 0',
+  },
+  PostgresExporterDown: {
+    evaluate: (data) => data.exporterUp === 0,
+    firingSample: { exporterUp: 0 },
+    clearedSample: { exporterUp: 1 },
+    thresholdDescription: 'up{job="acres-postgres"} == 0',
   },
   HighHttp5xxRate: {
     evaluate: (data) => {
@@ -340,7 +348,19 @@ function verifyAlertRules(options = {}) {
       }
     }
 
-    const expectedJob = requiredAlert === 'PostgresDown'
+    if (requiredAlert === 'PostgresExporterDown') {
+      if (typeof rule.expr !== 'string' || rule.expr.trim() !== 'up{job="acres-postgres"} == 0') {
+        ruleErrors.push('expr must be up{job="acres-postgres"} == 0');
+      }
+      if (rule.for !== '1m') {
+        ruleErrors.push('for must be 1m');
+      }
+      if (severity !== 'warning') {
+        ruleErrors.push('severity must be warning');
+      }
+    }
+
+    const expectedJob = (requiredAlert === 'PostgresDown' || requiredAlert === 'PostgresExporterDown')
       ? 'acres-postgres'
       : (requiredAlert === 'QueueDeadLettersDetected' || requiredAlert === 'AcresWorkerDown')
       ? 'acres-worker'

@@ -99,7 +99,7 @@ printf 'Timestamp:            %s\n\n' "$TIMESTAMP"
 printf '%s\n' '--- [Step 1/3] Prometheus Alert Rules Verification & Simulation ---'
 ALERT_OUTPUT_JSON=""
 if ALERT_OUTPUT_JSON="$(node scripts/ops/verify-alert-rules.js --json)"; then
-  printf '  ✓ Prometheus alert rules verified (10/10 rules valid and simulated)\n'
+  printf '  ✓ Prometheus alert rules verified (11/11 rules valid and simulated)\n'
 else
   printf '  ✗ Prometheus alert rule verification failed\n'
   DRILL_STATUS="failed"

@@ -28,6 +28,15 @@ groups:
           summary: PostgreSQL database instance is down
           description: The PostgreSQL database is unreachable from postgres-exporter or failing connections for more than 1 minute.
 
+      - alert: PostgresExporterDown
+        expr: up{job="acres-postgres"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: PostgreSQL metrics exporter is down
+          description: The postgres-exporter process at postgres-exporter:9187 has been unreachable for more than 1 minute, disabling PostgreSQL metrics collection.
+
       - alert: HighHttp5xxRate
         expr: (sum(rate(acres_http_requests_total{job="acres-api",status_class="5xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job="acres-api"}[5m])), 0.001)) * 100 > 5
         for: 5m
