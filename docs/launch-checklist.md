@@ -25,7 +25,7 @@ excluded. Deterministic no-AI journeys are the launch path.
 | `deployment_approver` | approves promotion of a pinned, provenance-attested image |
 | `rollback_authority` | owns the rollback decision and executes it |
 | `key_recovery_owner` | holds volume-encryption recovery material under dual custody |
-| on-call alert team | receives the 8 Prometheus alerts and works the runbooks in §5 |
+| on-call alert team | receives the 9 Prometheus alerts and works the runbooks in §5 |
 
 Pre-flight (all must pass before the checklist below):
 
@@ -85,7 +85,7 @@ do not report failure.
 - Evidence: `backups/capacity-alerting-drill-evidence-<timestamp>.json`
 - Accept: availability target 99.0–100.0%, p95 latency ceiling, capacity RPS
   target, ≥1 alert recipient, `alert_thresholds_defined: true`, escalation
-  runbook reference; all 8 alert rules validated. Record both
+  runbook reference; all 9 alert rules validated. Record both
   `up{job="acres-postgres"}` and `pg_up{job="acres-postgres"}` with
   `pg_exporter_last_scrape_error{job="acres-postgres"}`. Exercise exporter-down
   and database/authentication-failure cases separately. Confirm the private
@@ -204,7 +204,7 @@ Reference a dossier from an approved readiness section by placing its
 `evidence` array; the validator confirms the file exists, parses as JSON, and
 rejects dossiers whose `overall_status`/`status` is `"FAILED"`.
 
-## 5. Incident Response Runbooks (8 Prometheus Alerts)
+## 5. Incident Response Runbooks (9 Prometheus Alerts)
 
 Alert rules live in `infra/prometheus/alerts.yml`. Severity `critical` pages
 the on-call team; `warning` notifies the shared channel — with what tool
@@ -223,6 +223,17 @@ cause, action items) before resolving the alert thread.
   last pinned image per §6. Escalate to `rollback_authority` after 10 minutes
   down or a second failed restart.
 - Clear: `up{job="acres-api"} == 1` for 5m and `/health` 200.
+
+### AcresWorkerDown (critical)
+
+- PromQL: `up{job="acres-worker"} == 0` for 1m — Worker process unreachable.
+- Triage: `docker compose ps worker`; `docker compose logs --tail=200 worker`;
+  `curl -f http://worker:3002/health` (or private interface); check host CPU/memory/disk,
+  Valkey queue connectivity, and PostgreSQL database reachability.
+- Contain: restart the worker container (`docker compose restart worker`); if the image
+  is bad, roll back to the last pinned image per §6. Escalate to `rollback_authority`
+  and on-call backend engineer after 10 minutes down or a second failed restart.
+- Clear: `up{job="acres-worker"} == 1` for 5m and `/health` 200.
 
 ### HighHttp5xxRate (critical)
 

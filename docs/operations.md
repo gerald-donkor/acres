@@ -106,7 +106,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `infra/compose/docker-compose.production.example.yml` | Inert single-host Compose reference for Caddy, Next, API, worker, Postgres/PostGIS, Valkey, Garage, ClamAV, and optional observability |
 | `infra/docker/client.Dockerfile.example` and `infra/docker/client.Dockerfile.example.dockerignore` | Example Node 24 production image for the Next client, with a Dockerfile-specific context ignore because the root `.dockerignore` intentionally excludes client source for the server image |
 | `infra/env/production.env.example` and `infra/env/garage.production.env.example` | Production environment inventory with `__REQUIRED_*__` sentinels for operator-provided values and every Compose interpolation variable; Garage admin/metrics secrets stay service-scoped |
-| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`, `DatabaseConnectionPoolSaturation`) |
+| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `AcresWorkerDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`, `DatabaseConnectionPoolSaturation`) |
 | `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json` | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, scheduled job health, and API process pool state |
 | `server/src/metrics/*` | `MetricsModule`, `MetricsService`, `MetricsController`, `MetricsMiddleware`, and `route-normalizer` |
 | `server/src/jobs/retention-maintenance.job.ts` | Cron-driven retention maintenance for expired uploads, idempotency records, and authentication/recovery tokens |
@@ -126,7 +126,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `scripts/ops/run-sast-scan.js` & `.spec.js` | Pure Node.js static application security testing (SAST) engine evaluating SAST-01 through SAST-08 across source trees with triage policy enforcement |
 | `infra/security/sast-triage.json` & `.schema.json` | Actionable SAST triage policy registry with schema, rationale, approved owners, and fail-closed expiration gating |
 | `scripts/ops/verify-container-security.js` & `.spec.js` | Static multi-stage build validator verifying non-root `USER node`, pinned `node:24-alpine`, bounded healthchecks, direct exec CMD, and Compose network/credential isolation |
-| `scripts/ops/verify-alert-rules.js` & `.spec.js` | Prometheus alert rule validator and time-series simulation engine verifying 7 golden signal and threat alerts (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`) |
+| `scripts/ops/verify-alert-rules.js` & `.spec.js` | Prometheus alert rule validator and time-series simulation engine verifying 9 golden signal and threat alerts (`AcresApiDown`, `AcresWorkerDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`, `DatabaseConnectionPoolSaturation`) |
 | `scripts/ops/verify-capacity-load.js` & `.spec.js` | Pure Node.js performance, capacity, and latency evaluation engine evaluating Category 5 SLOs (availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS) |
 | `scripts/ops/run-dos-resilience-drill.sh` | Automated multi-layer DoS resilience and rate limiting drill runner asserting edge bounds, in-process throttles, GraphQL resource caps, upload bounds, and constant-time bcrypt |
 | `scripts/ops/run-capacity-alerting-drill.sh` | Automated top-level drill orchestrator executing alert simulation, capacity evaluation, and DoS resilience checks with unified JSON evidence emission |
@@ -1026,6 +1026,24 @@ This formally closes the open evidence-based saturation alerting requirement fro
 Operator capacity baseline and launch sign-off remain open.
 
 Prompt 174 verification: alert rule test suite passed 16/16 tests including schema, PromQL, duration, severity, and breach/clear simulation; template verification (`scripts/ops/check-production-templates.sh`) and alert drill (`scripts/ops/verify-alert-rules.js`) verified all 8/8 operational alert rules and 18/18 checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+
+**Prompt 175 update (2026-09-24): background worker process availability alert.**
+`infra/prometheus/alerts.yml` now configures the ninth required operational alert:
+`AcresWorkerDown` with expression `up{job="acres-worker"} == 0`, `for: 1m`, and `severity: critical`.
+This alert provides operational parity with `AcresApiDown`, monitoring the background worker process at
+`worker:3002`: when the worker container crashes, exits, or fails its scrape/pool collector for more than
+1 minute, the alert fires to page the on-call team and prevent background processing starvation across outbox
+dispatching, dataset ingestion/parsing, file retention purging, and report export rendering.
+
+The rule verifier (`scripts/ops/verify-alert-rules.js`), test suite (`scripts/ops/verify-alert-rules.spec.js`),
+production template validator (`scripts/ops/check-production-templates.sh`), and drill orchestrator
+(`scripts/ops/run-capacity-alerting-drill.sh`) now require and simulate all 9 operational rules.
+`docs/launch-checklist.md` §5 details the triage runbook correlating worker process liveness, logs,
+`worker:3002/health`, queue backlog, and PostgreSQL connectivity.
+This formally closes the worker process availability alerting gap.
+Operator capacity baseline and launch sign-off remain open.
+
+Prompt 175 verification: alert rule test suite passed 18/18 tests including schema, PromQL, duration, severity, and breach/clear simulation; template verification (`scripts/ops/check-production-templates.sh`) and alert drill (`scripts/ops/verify-alert-rules.js`) verified all 9/9 operational alert rules and 20/20 checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 

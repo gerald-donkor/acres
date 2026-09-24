@@ -305,6 +305,7 @@ const alerts = readYaml('infra/prometheus/alerts.yml');
 const alertNames = (alerts.groups || []).flatMap((g) => (g.rules || []).map((r) => r.alert));
 const requiredAlerts = [
   'AcresApiDown',
+  'AcresWorkerDown',
   'HighHttp5xxRate',
   'P95LatencyThresholdExceeded',
   'High429Rate',

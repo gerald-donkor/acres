@@ -6,7 +6,7 @@ set -euo pipefail
 # Automated Capacity, Load Resilience, and Prometheus Alert Simulation Drill (TM-05, TM-16, TM-20).
 #
 # Top-level drill orchestrator executing:
-# 1. Prometheus Alerting Rule Verification & Time-Series Simulation (8 rules);
+# 1. Prometheus Alerting Rule Verification & Time-Series Simulation (9 rules);
 # 2. Capacity & Latency SLO Evaluation (Availability >= 99.9%, p95 <= 500ms, Throughput >= 100 RPS);
 # 3. Multi-Layer DoS Resilience & Rate Limiting Drill (Caddy, Throttler, GraphQL, Storage, Bcrypt);
 # 4. Unified Audit Evidence Generation (backups/capacity-alerting-drill-evidence-<timestamp>.json).
@@ -99,7 +99,7 @@ printf 'Timestamp:            %s\n\n' "$TIMESTAMP"
 printf '%s\n' '--- [Step 1/3] Prometheus Alert Rules Verification & Simulation ---'
 ALERT_OUTPUT_JSON=""
 if ALERT_OUTPUT_JSON="$(node scripts/ops/verify-alert-rules.js --json)"; then
-  printf '  ✓ Prometheus alert rules verified (8/8 rules valid and simulated)\n'
+  printf '  ✓ Prometheus alert rules verified (9/9 rules valid and simulated)\n'
 else
   printf '  ✗ Prometheus alert rule verification failed\n'
   DRILL_STATUS="failed"

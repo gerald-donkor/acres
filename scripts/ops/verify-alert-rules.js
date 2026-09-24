@@ -6,8 +6,9 @@
  * Prometheus Alert Rule Verification & Synthetic Simulation Engine (TM-16, TM-20).
  *
  * Statically parses and validates infra/prometheus/alerts.yml and infra/prometheus/prometheus.yml:
- * 1. Asserts presence of all 8 required operational golden signals and security threat alerts:
+ * 1. Asserts presence of all 9 required operational golden signals and security threat alerts:
  *    - AcresApiDown (Availability: up{job="acres-api"} == 0)
+ *    - AcresWorkerDown (Availability: up{job="acres-worker"} == 0)
  *    - HighHttp5xxRate (Errors: > 5% 5xx over 5m)
  *    - P95LatencyThresholdExceeded (Latency: p95 latency > 500ms over 5m)
  *    - High429Rate (Security: HTTP 429 rate > 10% over 5m)
@@ -29,6 +30,7 @@ const DEFAULT_PROM_CONFIG_PATH = path.resolve(__dirname, '../../infra/prometheus
 
 const REQUIRED_ALERTS = [
   'AcresApiDown',
+  'AcresWorkerDown',
   'HighHttp5xxRate',
   'P95LatencyThresholdExceeded',
   'High429Rate',
@@ -59,6 +61,12 @@ const SIMULATION_DEFINITIONS = {
     firingSample: { up: 0 },
     clearedSample: { up: 1 },
     thresholdDescription: 'up{job="acres-api"} == 0',
+  },
+  AcresWorkerDown: {
+    evaluate: (data) => data.workerUp === 0,
+    firingSample: { workerUp: 0 },
+    clearedSample: { workerUp: 1 },
+    thresholdDescription: 'up{job="acres-worker"} == 0',
   },
   HighHttp5xxRate: {
     evaluate: (data) => {
@@ -183,8 +191,18 @@ function verifyAlertRules(options = {}) {
           ? 'Prometheus acres-api /metrics scrape job configured'
           : 'Prometheus missing acres-api /metrics scrape target',
       });
-      if (!hasApiScrape) {
-        errors.push('Prometheus missing acres-api scrape config');
+      const hasWorkerScrape = scrapeConfigs.some(
+        (sc) => sc.job_name === 'acres-worker' && sc.metrics_path === '/metrics',
+      );
+      checks.push({
+        id: 'prom-worker-scrape-configured',
+        passed: hasWorkerScrape,
+        message: hasWorkerScrape
+          ? 'Prometheus acres-worker /metrics scrape job configured'
+          : 'Prometheus missing acres-worker /metrics scrape target',
+      });
+      if (!hasWorkerScrape) {
+        errors.push('Prometheus missing acres-worker scrape config');
       }
     } catch (err) {
       errors.push(`Failed to parse prometheus.yml: ${err.message}`);
@@ -289,7 +307,19 @@ function verifyAlertRules(options = {}) {
       }
     }
 
-    const expectedJob = requiredAlert === 'QueueDeadLettersDetected' ? 'acres-worker' : 'acres-api';
+    if (requiredAlert === 'AcresWorkerDown') {
+      if (typeof rule.expr !== 'string' || rule.expr.trim() !== 'up{job="acres-worker"} == 0') {
+        ruleErrors.push('expr must be up{job="acres-worker"} == 0');
+      }
+      if (rule.for !== '1m') {
+        ruleErrors.push('for must be 1m');
+      }
+      if (severity !== 'critical') {
+        ruleErrors.push('severity must be critical');
+      }
+    }
+
+    const expectedJob = (requiredAlert === 'QueueDeadLettersDetected' || requiredAlert === 'AcresWorkerDown') ? 'acres-worker' : 'acres-api';
     if (typeof rule.expr === 'string') {
       const selectors = [...rule.expr.matchAll(/\b(?:up|acres_[a-z0-9_]+)(?:\{([^}]*)\})?/g)];
       if (selectors.some((match) => !match[1]?.includes(`job="${expectedJob}"`))) {

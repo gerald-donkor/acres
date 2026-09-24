@@ -10,6 +10,15 @@ groups:
           summary: Acres API instance is down
           description: The Acres API process at api:3001 has been unreachable for more than 1 minute.
 
+      - alert: AcresWorkerDown
+        expr: up{job="acres-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Acres worker instance is down
+          description: The Acres background worker process at worker:3002 has been unreachable for more than 1 minute.
+
       - alert: HighHttp5xxRate
         expr: (sum(rate(acres_http_requests_total{job="acres-api",status_class="5xx"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job="acres-api"}[5m])), 0.001)) * 100 > 5
         for: 5m
