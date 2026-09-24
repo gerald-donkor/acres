@@ -25,13 +25,13 @@ test('verifyAlertRules: production alert definitions pass 100% of schema, PromQL
 
   assert.equal(result.valid, true, `Expected valid alert rules, errors: ${result.errors.join(', ')}`);
   assert.equal(result.errors.length, 0);
-  assert.equal(result.alerts.length, 7);
-  assert.equal(result.simulations.length, 7);
-  assert.ok(result.checks.length >= 16);
+  assert.equal(result.alerts.length, 8);
+  assert.equal(result.simulations.length, 8);
+  assert.ok(result.checks.length >= 18);
   assert.ok(result.checks.every((c) => c.passed === true));
 });
 
-test('verifyAlertRules: verifies all 7 required alerts are present', () => {
+test('verifyAlertRules: verifies all 8 required alerts are present', () => {
   const result = verifyAlertRules({
     alertsPath: ALERTS_FILE,
     promConfigPath: PROM_FILE,
@@ -217,6 +217,34 @@ test('HighHttpConcurrency: fires above 40 and clears at 40', () => {
   const simulation = SIMULATION_DEFINITIONS.HighHttpConcurrency;
   assert.equal(simulation.evaluate({ activeRequests: 41 }), true);
   assert.equal(simulation.evaluate({ activeRequests: 40 }), false);
+});
+
+test('DatabaseConnectionPoolSaturation: rejects a changed signal, duration, or severity', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-alert-test-'));
+  try {
+    const alertsObj = yaml.load(fs.readFileSync(ALERTS_FILE, 'utf8'));
+    const rule = alertsObj.groups[0].rules.find((item) => item.alert === 'DatabaseConnectionPoolSaturation');
+    rule.expr = 'acres_postgres_pool_requests_waiting{job="acres-worker"} > 0';
+    rule.for = '5m';
+    rule.labels.severity = 'critical';
+    const tmpAlertsPath = path.join(tmpDir, 'alerts.yml');
+    fs.writeFileSync(tmpAlertsPath, yaml.dump(alertsObj), 'utf8');
+
+    const result = verifyAlertRules({ alertsPath: tmpAlertsPath, promConfigPath: PROM_FILE });
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some((error) => error.includes('expr must be acres_postgres_pool_requests_waiting{job="acres-api"} > 0')));
+    assert.ok(result.errors.some((error) => error.includes('for must be 1m')));
+    assert.ok(result.errors.some((error) => error.includes('severity must be warning')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('DatabaseConnectionPoolSaturation: fires when waiting requests > 0 and clears at 0', () => {
+  const simulation = SIMULATION_DEFINITIONS.DatabaseConnectionPoolSaturation;
+  assert.equal(simulation.evaluate({ postgresPoolRequestsWaiting: 1 }), true);
+  assert.equal(simulation.evaluate({ postgresPoolRequestsWaiting: 5 }), true);
+  assert.equal(simulation.evaluate({ postgresPoolRequestsWaiting: 0 }), false);
 });
 
 test('SIMULATION_DEFINITIONS: evaluates each alert condition faithfully on breach and normal samples', () => {

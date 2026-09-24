@@ -106,7 +106,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `infra/compose/docker-compose.production.example.yml` | Inert single-host Compose reference for Caddy, Next, API, worker, Postgres/PostGIS, Valkey, Garage, ClamAV, and optional observability |
 | `infra/docker/client.Dockerfile.example` and `infra/docker/client.Dockerfile.example.dockerignore` | Example Node 24 production image for the Next client, with a Dockerfile-specific context ignore because the root `.dockerignore` intentionally excludes client source for the server image |
 | `infra/env/production.env.example` and `infra/env/garage.production.env.example` | Production environment inventory with `__REQUIRED_*__` sentinels for operator-provided values and every Compose interpolation variable; Garage admin/metrics secrets stay service-scoped |
-| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`) |
+| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`, `DatabaseConnectionPoolSaturation`) |
 | `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json` | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, scheduled job health, and API process pool state |
 | `server/src/metrics/*` | `MetricsModule`, `MetricsService`, `MetricsController`, `MetricsMiddleware`, and `route-normalizer` |
 | `server/src/jobs/retention-maintenance.job.ts` | Cron-driven retention maintenance for expired uploads, idempotency records, and authentication/recovery tokens |
@@ -1008,6 +1008,24 @@ Prompt 173 verification: focused Prisma and metrics unit test suites passed
 scoping invariants. Full `npm run ops:check` passed all stages. `npm run ops:templates`,
 `npm run ops:alert-test`, `npm run lint`, `npm run typecheck`, `npm run build`,
 and `git diff --check` passed cleanly.
+
+**Prompt 174 update (2026-09-24): evidence-based database connection pool saturation alert.**
+`infra/prometheus/alerts.yml` now configures the eighth required operational alert:
+`DatabaseConnectionPoolSaturation` with expression `acres_postgres_pool_requests_waiting{job="acres-api"} > 0`,
+`for: 1m`, and `severity: warning`. This alert directly measures connection starvation in the API process's
+`pg.Pool`: when incoming HTTP queries cannot acquire a connection from the pool and remain queued in
+`acres_postgres_pool_requests_waiting` for more than 1 minute (exceeding twelve 5000ms connection timeout cycles),
+the alert fires to notify operators of pool exhaustion.
+
+The rule verifier (`scripts/ops/verify-alert-rules.js`), test suite (`scripts/ops/verify-alert-rules.spec.js`),
+production template validator (`scripts/ops/check-production-templates.sh`), and drill orchestrator
+(`scripts/ops/run-capacity-alerting-drill.sh`) now require and simulate all 8 operational rules.
+`docs/launch-checklist.md` §5 details the triage runbook correlating Panels 9 and 10 pool gauges, Panel 23 acquisition latency,
+Panel 25 query execution latency, Panels 19–22 server activity and lock counts, and read-only PostgreSQL contention queries.
+This formally closes the open evidence-based saturation alerting requirement from prompts 167–169 and `docs/build-plan.md`.
+Operator capacity baseline and launch sign-off remain open.
+
+Prompt 174 verification: alert rule test suite passed 16/16 tests including schema, PromQL, duration, severity, and breach/clear simulation; template verification (`scripts/ops/check-production-templates.sh`) and alert drill (`scripts/ops/verify-alert-rules.js`) verified all 8/8 operational alert rules and 18/18 checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 

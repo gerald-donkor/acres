@@ -6,7 +6,7 @@
  * Prometheus Alert Rule Verification & Synthetic Simulation Engine (TM-16, TM-20).
  *
  * Statically parses and validates infra/prometheus/alerts.yml and infra/prometheus/prometheus.yml:
- * 1. Asserts presence of all 7 required operational golden signals and security threat alerts:
+ * 1. Asserts presence of all 8 required operational golden signals and security threat alerts:
  *    - AcresApiDown (Availability: up{job="acres-api"} == 0)
  *    - HighHttp5xxRate (Errors: > 5% 5xx over 5m)
  *    - P95LatencyThresholdExceeded (Latency: p95 latency > 500ms over 5m)
@@ -14,6 +14,7 @@
  *    - QueueDeadLettersDetected (Queue Health: failed jobs > 0)
  *    - OutboxDeliveryLag (Outbox Health: > 50 pending events for > 10m)
  *    - HighHttpConcurrency (API load: active HTTP requests > 40)
+ *    - DatabaseConnectionPoolSaturation (Database: requests waiting for pool connection > 0)
  * 2. Validates PromQL syntax, durations, label schemas, and annotations.
  * 3. Simulates metric time-series data to verify that each alert triggers under breach conditions
  *    and clears cleanly under normal traffic.
@@ -34,6 +35,7 @@ const REQUIRED_ALERTS = [
   'QueueDeadLettersDetected',
   'OutboxDeliveryLag',
   'HighHttpConcurrency',
+  'DatabaseConnectionPoolSaturation',
 ];
 
 const KNOWN_METRIC_IDENTIFIERS = [
@@ -45,6 +47,7 @@ const KNOWN_METRIC_IDENTIFIERS = [
   'acres_queue_jobs_total',
   'acres_outbox_pending_events',
   'acres_database_query_duration_seconds',
+  'acres_postgres_pool_requests_waiting',
 ];
 
 /**
@@ -100,6 +103,12 @@ const SIMULATION_DEFINITIONS = {
     firingSample: { activeRequests: 46 },
     clearedSample: { activeRequests: 40 },
     thresholdDescription: 'active API HTTP requests > 40',
+  },
+  DatabaseConnectionPoolSaturation: {
+    evaluate: (data) => (data.postgresPoolRequestsWaiting || 0) > 0,
+    firingSample: { postgresPoolRequestsWaiting: 3 },
+    clearedSample: { postgresPoolRequestsWaiting: 0 },
+    thresholdDescription: 'acres_postgres_pool_requests_waiting{job="acres-api"} > 0',
   },
 };
 
@@ -268,6 +277,18 @@ function verifyAlertRules(options = {}) {
       }
     }
 
+    if (requiredAlert === 'DatabaseConnectionPoolSaturation') {
+      if (typeof rule.expr !== 'string' || rule.expr.trim() !== 'acres_postgres_pool_requests_waiting{job="acres-api"} > 0') {
+        ruleErrors.push('expr must be acres_postgres_pool_requests_waiting{job="acres-api"} > 0');
+      }
+      if (rule.for !== '1m') {
+        ruleErrors.push('for must be 1m');
+      }
+      if (severity !== 'warning') {
+        ruleErrors.push('severity must be warning');
+      }
+    }
+
     const expectedJob = requiredAlert === 'QueueDeadLettersDetected' ? 'acres-worker' : 'acres-api';
     if (typeof rule.expr === 'string') {
       const selectors = [...rule.expr.matchAll(/\b(?:up|acres_[a-z0-9_]+)(?:\{([^}]*)\})?/g)];
@@ -411,7 +432,7 @@ function runCli() {
     process.exit(1);
   }
 
-  console.log('\nResult: PASSED. All 7 required alerts and simulations verified.\n');
+  console.log(`\nResult: PASSED. All ${REQUIRED_ALERTS.length} required alerts and simulations verified.\n`);
   console.log('=================================================================\n');
   process.exit(0);
 }

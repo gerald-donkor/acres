@@ -25,7 +25,7 @@ excluded. Deterministic no-AI journeys are the launch path.
 | `deployment_approver` | approves promotion of a pinned, provenance-attested image |
 | `rollback_authority` | owns the rollback decision and executes it |
 | `key_recovery_owner` | holds volume-encryption recovery material under dual custody |
-| on-call alert team | receives the 7 Prometheus alerts and works the runbooks in §5 |
+| on-call alert team | receives the 8 Prometheus alerts and works the runbooks in §5 |
 
 Pre-flight (all must pass before the checklist below):
 
@@ -85,7 +85,7 @@ do not report failure.
 - Evidence: `backups/capacity-alerting-drill-evidence-<timestamp>.json`
 - Accept: availability target 99.0–100.0%, p95 latency ceiling, capacity RPS
   target, ≥1 alert recipient, `alert_thresholds_defined: true`, escalation
-  runbook reference; all 7 alert rules validated. Record both
+  runbook reference; all 8 alert rules validated. Record both
   `up{job="acres-postgres"}` and `pg_up{job="acres-postgres"}` with
   `pg_exporter_last_scrape_error{job="acres-postgres"}`. Exercise exporter-down
   and database/authentication-failure cases separately. Confirm the private
@@ -204,7 +204,7 @@ Reference a dossier from an approved readiness section by placing its
 `evidence` array; the validator confirms the file exists, parses as JSON, and
 rejects dossiers whose `overall_status`/`status` is `"FAILED"`.
 
-## 5. Incident Response Runbooks (7 Prometheus Alerts)
+## 5. Incident Response Runbooks (8 Prometheus Alerts)
 
 Alert rules live in `infra/prometheus/alerts.yml`. Severity `critical` pages
 the on-call team; `warning` notifies the shared channel — with what tool
@@ -314,6 +314,21 @@ cause, action items) before resolving the alert thread.
   with degraded latency or availability.
 - Clear: active requests back under 30 for 15m (operator-defined clearing bar,
   under the 40-request fire threshold).
+
+### DatabaseConnectionPoolSaturation (warning)
+
+- PromQL: `acres_postgres_pool_requests_waiting{job="acres-api"} > 0` for 1m — requests queued waiting for an available PostgreSQL client from the API `pg.Pool`.
+- Triage: Check API pool connection gauges in Panels 9 and 10 (`acres_postgres_pool_connections_total`, `acres_postgres_pool_connections_idle`, `acres_postgres_pool_connections_max`, and `acres_postgres_pool_requests_waiting`). Inspect API pool acquisition latency in Panel 23 (`acres_postgres_pool_acquisition_duration_seconds{job="acres-api"}`) and API query execution latency in Panel 25 (`acres_database_query_duration_seconds{job="acres-api"}`).
+  - If acquisition latency is elevated (p95 > 50ms) with low query latency (p95 < 25ms), concurrent API request volume has exceeded pool connection capacity (`max`); incoming queries are starved for connection checkout.
+  - If query execution latency is elevated (p95 > 100ms), slow database queries or table scans are holding connections open for extended durations.
+  - Inspect PostgreSQL server connections and lock panels (Panels 19–22). If lock waits in Panel 21 (`pg_stat_activity_count{wait_event_type="Lock"}`) or transaction age in Panel 22 (`pg_stat_activity_max_tx_duration`) are elevated, run the read-only PostgreSQL diagnosis procedure below to identify blocking PIDs.
+  - Check worker pool state (Panels 12, 13, 24, 26) to determine whether worker background tasks are causing cross-process PostgreSQL connection contention.
+- Contain:
+  - If lock contention or long-running transactions are identified, terminate blocking backend PIDs per the diagnostic procedure below.
+  - If caused by a sudden traffic burst, apply Caddy edge rate limits to shed non-critical traffic and allow the pool queue to drain.
+  - If pool saturation is sustained under normal legitimate traffic, evaluate increasing `ACRES_DB_MAX_CONNECTIONS` within PostgreSQL server `max_connections` limits.
+  - Escalate to `rollback_authority` if saturation onset correlates with a recent application release.
+- Clear: `acres_postgres_pool_requests_waiting{job="acres-api"} == 0` for 5m.
 
 ### PostgreSQL lock and transaction diagnosis
 

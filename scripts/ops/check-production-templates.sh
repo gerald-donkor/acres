@@ -311,6 +311,7 @@ const requiredAlerts = [
   'QueueDeadLettersDetected',
   'OutboxDeliveryLag',
   'HighHttpConcurrency',
+  'DatabaseConnectionPoolSaturation',
 ];
 for (const reqAlert of requiredAlerts) {
   if (!alertNames.includes(reqAlert)) {

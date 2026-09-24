@@ -63,3 +63,12 @@ groups:
         annotations:
           summary: High API HTTP request concurrency
           description: More than 40 API HTTP requests have been in flight for two minutes.
+
+      - alert: DatabaseConnectionPoolSaturation
+        expr: acres_postgres_pool_requests_waiting{job="acres-api"} > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: API PostgreSQL connection pool saturation
+          description: Requests have been waiting to acquire a connection from the API PostgreSQL pool for more than 1 minute, indicating connection starvation.

@@ -799,6 +799,11 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   waiting, and maximum gauges. Prompt 169 adds separate worker-process gauges
   through a private scrape. PostgreSQL-wide visibility, wait duration, and
   evidence-based saturation alerting remain open.
+- **2026-09-24 follow-up:** Prompts 170–173 added PostgreSQL server connection/activity
+  visibility, lock-wait diagnostics, pool acquisition latency, and query execution latency.
+  Prompt 174 adds the eighth required Prometheus alert rule `DatabaseConnectionPoolSaturation`
+  (`acres_postgres_pool_requests_waiting{job="acres-api"} > 0` for 1m), formally closing the
+  evidence-based pool saturation alerting requirement. Operator capacity baseline remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
