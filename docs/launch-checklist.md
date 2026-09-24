@@ -68,6 +68,9 @@ do not report failure.
 - Evidence: `backups/secret-rotation-evidence-<timestamp>.json`
 - Accept: runtime injection mechanism (Vault/AWS SM/Infisical), log masking
   policy, 90-day rotation cadence, compromise response runbook reference
+- Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
+  - Rejects secret rotation drill evidence reporting failure (`status !== 'success'`), any errors in `errors[]`, any failed rotation step among the 7 verified steps (`session_rollover`, `csrf_rollover`, `database_rotation`, `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`), or secret redaction / leak audit failure (`raw_secrets_masked: false`, `zero_dev_passwords_detected: false`);
+  - Rejects Unified Launch Evidence Dossiers reporting `secretRotationBaseline.status: "breached"` or `summary.secretRotationCompliance: "failed"`.
 
 ### 4. Secret References (`secret_references`)
 
@@ -179,6 +182,9 @@ do not report failure.
 - Accept: target host profile, pinned OCI registry path, named
   `deployment_approver` and `rollback_authority`, image provenance policy
   (signed, additive migrations only), `live_readiness_drill_completed: true`
+- Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
+  - Rejects deployment drill evidence reporting failure (`status !== 'success'`), schema backward compatibility failure (`schema_backward_compatible: false`), rollback procedure verification failure, Caddy routing verification failure, or network isolation verification failure;
+  - Rejects Unified Launch Evidence Dossiers reporting `deploymentBaseline.status: "breached"`, `summary.deploymentCompliance: "failed"`, or `summary.rollbackCompliance: "failed"`.
 
 ### 11. No-AI Production Posture (`optional_ai_posture`)
 
@@ -209,6 +215,13 @@ Flags: `--dry-run` (offline where the underlying tool supports it),
 1 with the failing stage named in the dossier (`error_message`) and on the
 console. Stages 1–6 pass fully offline; stage 7 needs drill infra (§3.6).
 
+The Unified Launch Evidence Dossier aggregates structured baselines from child evidence across all operational dimensions:
+- `deploymentBaseline` (stage 3): schema backward compatibility, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
+- `secretRotationBaseline` (stage 5): verified 7-step zero-downtime rotation (session, CSRF, database, Valkey, storage, compromise response, and credential redaction audit);
+- `databaseTelemetryBaseline` (stage 6): exporter health, database ping, connection pool saturation metrics, pool acquisition p95 latency, SQL query execution p95 latency, lock waits, and transaction age;
+- `disasterRecoveryBaseline` (stage 7): restore drill RTO, table parity, migration parity, PostGIS/foreign-key verification, and storage object reconciliation;
+- `summary`: compliance flags across static integrity, supply chain, ingress/deployment, volume encryption, secret rotation, capacity alerting, disaster recovery, SLO compliance, recovery compliance, alert verification, DoS resilience, database baseline compliance, restore compliance, reconcile compliance, deployment compliance, rollback compliance, secret rotation compliance, and no-AI posture.
+
 Implementation notes: the orchestrator is bash (arrays, `[[ ]]`), matching the
 sibling drill runners. Each stage's full child output is captured to
 `launch-drill-stage-<stage_id>.log` in the evidence dir, and every dossier
@@ -223,7 +236,8 @@ stays `--dry-run`; it is read-only but still requires live drill infra).
 Reference a dossier from an approved readiness section by placing its
 `backups/launch-evidence-dossier-<timestamp>.json` path in that section's
 `evidence` array; the validator confirms the file exists, parses as JSON, and
-rejects dossiers whose `overall_status`/`status` is `"FAILED"`.
+rejects dossiers whose `overall_status`/`status` is `"FAILED"`, or whose
+underlying baselines report breach or compliance failure.
 
 ## 5. Incident Response Runbooks (11 Prometheus Alerts)
 

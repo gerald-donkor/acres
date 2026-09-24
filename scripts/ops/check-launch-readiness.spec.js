@@ -1111,6 +1111,249 @@ test('validateReadiness accepts valid passed disaster recovery evidence and comp
   }
 });
 
+test('validateReadiness blocks approval when deployment drill evidence reports failure, non-backward-compatible schema, or rollback verification failure', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-dep-drill-'));
+  try {
+    const depFailPath = path.join(tmpDir, 'deployment-drill-evidence-fail.json');
+    fs.writeFileSync(
+      depFailPath,
+      JSON.stringify({
+        status: 'failed',
+        schema_backward_compatible: false,
+        rollback_procedure_verified: false,
+        caddy_routing_verified: false,
+        network_isolation_verified: false,
+      }),
+      'utf8'
+    );
+    const rec = buildValidApprovedRecord();
+    rec.sections.deployment_and_rollback.evidence = [depFailPath];
+    rec.sections.deployment_and_rollback.release.live_drill_evidence = depFailPath;
+    const res = validateApprovedRecord(rec);
+    const b = res.categoryBlockers.deployment_and_rollback || [];
+    assert.ok(b.some((msg) => msg.includes('reports deployment drill failure (status: "failed")')));
+    assert.ok(b.some((msg) => msg.includes('reports schema backward compatibility failure (schema_backward_compatible: false)')));
+    assert.ok(b.some((msg) => msg.includes('reports rollback procedure verification failure (rollback_procedure_verified: false)')));
+    assert.ok(b.some((msg) => msg.includes('reports Caddy routing verification failure (caddy_routing_verified: false)')));
+    assert.ok(b.some((msg) => msg.includes('reports network isolation verification failure (network_isolation_verified: false)')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when secret rotation evidence reports failure, errors, step failure, or secret leakage', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-sec-drill-'));
+  try {
+    const secFailPath = path.join(tmpDir, 'secret-rotation-evidence-fail.json');
+    fs.writeFileSync(
+      secFailPath,
+      JSON.stringify({
+        drill_type: 'zero_downtime_secret_rotation_and_compromise_response',
+        status: 'failed',
+        errors: ['database credential rotation error'],
+        steps: {
+          session_rollover: { status: 'passed' },
+          csrf_rollover: { status: 'failed' },
+          database_rotation: { status: 'failed' },
+          valkey_rotation: { status: 'passed' },
+          storage_rotation: { status: 'passed' },
+          compromise_response: { status: 'passed' },
+          redaction_audit: {
+            status: 'failed',
+            raw_secrets_masked: false,
+            zero_dev_passwords_detected: false,
+          },
+        },
+      }),
+      'utf8'
+    );
+    const rec = buildValidApprovedRecord();
+    rec.sections.secrets_management.evidence = [secFailPath];
+    const res = validateApprovedRecord(rec);
+    const b = res.categoryBlockers.secrets_management || [];
+    assert.ok(b.some((msg) => msg.includes('reports secret rotation drill failure (status: "failed")')));
+    assert.ok(b.some((msg) => msg.includes('reports secret rotation drill error(s): database credential rotation error')));
+    assert.ok(b.some((msg) => msg.includes("reports secret rotation step 'csrf_rollover' failure (status: \"failed\")")));
+    assert.ok(b.some((msg) => msg.includes("reports secret rotation step 'database_rotation' failure (status: \"failed\")")));
+    assert.ok(b.some((msg) => msg.includes('reports secret redaction or leak audit failure')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when evidence dossier reports deployment or secret rotation baseline breach or compliance failure', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-dossier-dep-sec-'));
+  try {
+    const breachDossierPath = path.join(tmpDir, 'launch-evidence-dossier-breached.json');
+    fs.writeFileSync(
+      breachDossierPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        stages: [],
+        deploymentBaseline: {
+          status: 'breached',
+          error_message: 'deployment drill failed',
+        },
+        secretRotationBaseline: {
+          status: 'breached',
+          error_message: 'secret rotation drill failed',
+        },
+        summary: {
+          deploymentCompliance: 'failed',
+          rollbackCompliance: 'failed',
+          secretRotationCompliance: 'failed',
+        },
+      }),
+      'utf8'
+    );
+    const rec1 = buildValidApprovedRecord();
+    rec1.sections.deployment_and_rollback.evidence = [breachDossierPath];
+    rec1.sections.deployment_and_rollback.release.live_drill_evidence = breachDossierPath;
+    const res1 = validateApprovedRecord(rec1);
+    const b1 = res1.categoryBlockers.deployment_and_rollback || [];
+    assert.ok(b1.some((msg) => msg.includes('reports deployment baseline breach (deploymentBaseline.status: "breached")')));
+    assert.ok(b1.some((msg) => msg.includes('reports deployment compliance failure (summary.deploymentCompliance: "failed")')));
+    assert.ok(b1.some((msg) => msg.includes('reports rollback compliance failure (summary.rollbackCompliance: "failed")')));
+
+    const rec2 = buildValidApprovedRecord();
+    rec2.sections.secrets_management.evidence = [breachDossierPath];
+    const res2 = validateApprovedRecord(rec2);
+    const b2 = res2.categoryBlockers.secrets_management || [];
+    assert.ok(b2.some((msg) => msg.includes('reports secret rotation baseline breach (secretRotationBaseline.status: "breached")')));
+    assert.ok(b2.some((msg) => msg.includes('reports secret rotation compliance failure (summary.secretRotationCompliance: "failed")')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness accepts valid passed deployment & secret rotation evidence and compliant dossier', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-dep-sec-pass-'));
+  try {
+    const passedDepPath = path.join(tmpDir, 'deployment-drill-evidence-pass.json');
+    fs.writeFileSync(
+      passedDepPath,
+      JSON.stringify({
+        status: 'success',
+        schema_backward_compatible: true,
+        rollback_procedure_verified: true,
+        caddy_routing_verified: true,
+        network_isolation_verified: true,
+        migration_count: 23,
+        caddy_routes_tested: 12,
+      }),
+      'utf8'
+    );
+    const passedSecPath = path.join(tmpDir, 'secret-rotation-evidence-pass.json');
+    fs.writeFileSync(
+      passedSecPath,
+      JSON.stringify({
+        drill_type: 'zero_downtime_secret_rotation_and_compromise_response',
+        status: 'success',
+        errors: [],
+        steps: {
+          session_rollover: { status: 'passed' },
+          csrf_rollover: { status: 'passed' },
+          database_rotation: { status: 'passed' },
+          valkey_rotation: { status: 'passed' },
+          storage_rotation: { status: 'passed' },
+          compromise_response: { status: 'passed' },
+          redaction_audit: {
+            status: 'passed',
+            raw_secrets_masked: true,
+            zero_dev_passwords_detected: true,
+          },
+        },
+      }),
+      'utf8'
+    );
+    const passedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-pass.json');
+    fs.writeFileSync(
+      passedDossierPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        passed_stages: 7,
+        failed_stages: 0,
+        stages: [
+          { stage_id: 'static_templates', status: 'PASSED' },
+          { stage_id: 'supply_chain_sast', status: 'PASSED' },
+          { stage_id: 'ingress_deployment', status: 'PASSED' },
+          { stage_id: 'volume_encryption', status: 'PASSED' },
+          { stage_id: 'secret_rotation', status: 'PASSED' },
+          { stage_id: 'capacity_alerting', status: 'PASSED' },
+          { stage_id: 'disaster_recovery', status: 'PASSED' },
+        ],
+        databaseTelemetryBaseline: {
+          status: 'verified',
+        },
+        disasterRecoveryBaseline: {
+          status: 'verified',
+        },
+        deploymentBaseline: {
+          status: 'verified',
+          schemaBackwardCompatible: true,
+          caddyRoutingVerified: true,
+          rollbackProcedureVerified: true,
+          networkIsolationVerified: true,
+        },
+        secretRotationBaseline: {
+          status: 'verified',
+          steps: {
+            sessionRollover: 'passed',
+            csrfRollover: 'passed',
+            databaseRotation: 'passed',
+            valkeyRotation: 'passed',
+            storageRotation: 'passed',
+            compromiseResponse: 'passed',
+            redactionAudit: 'passed',
+          },
+        },
+        summary: {
+          staticIntegrity: 'passed',
+          supplyChainSecurity: 'passed',
+          ingressDeployment: 'passed',
+          volumeEncryption: 'passed',
+          secretRotation: 'passed',
+          capacityAlerting: 'passed',
+          disasterRecovery: 'passed',
+          sloCompliance: 'capacity_alerts_verified',
+          recoveryCompliance: 'restore_reconcile_verified',
+          alertVerification: 'passed',
+          dosResilience: 'passed',
+          databaseBaselineCompliance: 'passed',
+          restoreCompliance: 'passed',
+          reconcileCompliance: 'passed',
+          deploymentCompliance: 'passed',
+          rollbackCompliance: 'passed',
+          secretRotationCompliance: 'passed',
+          noAiPosture: 'preview_excluded_from_launch',
+        },
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.deployment_and_rollback.evidence = [passedDepPath, passedDossierPath];
+    rec.sections.deployment_and_rollback.release.live_drill_evidence = passedDepPath;
+    rec.sections.secrets_management.evidence = [passedSecPath, passedDossierPath];
+
+    const res = validateApprovedRecord(rec);
+    assert.strictEqual(res.categoryBlockers.deployment_and_rollback, undefined);
+    assert.strictEqual(res.categoryBlockers.secrets_management, undefined);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('the checked-in template readiness.example.json fails closed with unresolved blockers', () => {
   const templatePath = path.resolve(__dirname, '../../infra/launch/readiness.example.json');
   const raw = fs.readFileSync(templatePath, 'utf8');

@@ -286,6 +286,105 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
     if (reconcileCompliance === 'failed' || reconcileCompliance === 'failure') {
       addBlocker(category, `Approved evidence file '${ref}' reports storage reconciliation compliance failure (summary.reconcileCompliance: "${parsed.summary.reconcileCompliance}")`);
     }
+
+    // Deployment & rollback drill child evidence checks
+    if (
+      file.includes('deployment-drill-evidence-') ||
+      typeof parsed.schema_backward_compatible === 'boolean' ||
+      typeof parsed.caddy_routing_verified === 'boolean' ||
+      typeof parsed.rollback_procedure_verified === 'boolean'
+    ) {
+      if (typeof parsed.status === 'string' && parsed.status.toLowerCase() !== 'success') {
+        addBlocker(category, `Approved evidence file '${ref}' reports deployment drill failure (status: "${parsed.status}")`);
+      }
+      if (parsed.schema_backward_compatible === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports schema backward compatibility failure (schema_backward_compatible: false)`);
+      }
+      if (parsed.rollback_procedure_verified === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports rollback procedure verification failure (rollback_procedure_verified: false)`);
+      }
+      if (parsed.caddy_routing_verified === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports Caddy routing verification failure (caddy_routing_verified: false)`);
+      }
+      if (parsed.network_isolation_verified === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports network isolation verification failure (network_isolation_verified: false)`);
+      }
+    }
+
+    // Secret rotation drill child evidence checks
+    if (
+      file.includes('secret-rotation-evidence-') ||
+      parsed.drill_type === 'zero_downtime_secret_rotation_and_compromise_response' ||
+      (parsed.steps && typeof parsed.steps === 'object' && parsed.steps.session_rollover)
+    ) {
+      if (typeof parsed.status === 'string' && parsed.status.toLowerCase() !== 'success') {
+        addBlocker(category, `Approved evidence file '${ref}' reports secret rotation drill failure (status: "${parsed.status}")`);
+      }
+      if (Array.isArray(parsed.errors) && parsed.errors.length > 0) {
+        addBlocker(category, `Approved evidence file '${ref}' reports secret rotation drill error(s): ${parsed.errors.join('; ')}`);
+      }
+      if (parsed.steps && typeof parsed.steps === 'object') {
+        const requiredSteps = [
+          'session_rollover',
+          'csrf_rollover',
+          'database_rotation',
+          'valkey_rotation',
+          'storage_rotation',
+          'compromise_response',
+          'redaction_audit',
+        ];
+        for (const s of requiredSteps) {
+          const stepObj = parsed.steps[s];
+          if (stepObj && typeof stepObj === 'object') {
+            const sStatus = typeof stepObj.status === 'string' ? stepObj.status.toLowerCase() : null;
+            if (sStatus && sStatus !== 'passed') {
+              addBlocker(category, `Approved evidence file '${ref}' reports secret rotation step '${s}' failure (status: "${stepObj.status}")`);
+            }
+          }
+        }
+        if (
+          parsed.steps.redaction_audit &&
+          typeof parsed.steps.redaction_audit === 'object' &&
+          (parsed.steps.redaction_audit.raw_secrets_masked === false ||
+            parsed.steps.redaction_audit.zero_dev_passwords_detected === false)
+        ) {
+          addBlocker(category, `Approved evidence file '${ref}' reports secret redaction or leak audit failure`);
+        }
+      }
+    }
+
+    // Unified Launch Evidence Dossier deployment & secret rotation baseline checks
+    const depStatus = typeof parsed.deploymentBaseline?.status === 'string'
+      ? parsed.deploymentBaseline.status.toLowerCase()
+      : null;
+    if (depStatus === 'breached' || depStatus === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports deployment baseline breach (deploymentBaseline.status: "${parsed.deploymentBaseline.status}")`);
+    }
+    const depCompliance = typeof parsed.summary?.deploymentCompliance === 'string'
+      ? parsed.summary.deploymentCompliance.toLowerCase()
+      : null;
+    if (depCompliance === 'failed' || depCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports deployment compliance failure (summary.deploymentCompliance: "${parsed.summary.deploymentCompliance}")`);
+    }
+    const rollbackCompliance = typeof parsed.summary?.rollbackCompliance === 'string'
+      ? parsed.summary.rollbackCompliance.toLowerCase()
+      : null;
+    if (rollbackCompliance === 'failed' || rollbackCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports rollback compliance failure (summary.rollbackCompliance: "${parsed.summary.rollbackCompliance}")`);
+    }
+
+    const secStatus = typeof parsed.secretRotationBaseline?.status === 'string'
+      ? parsed.secretRotationBaseline.status.toLowerCase()
+      : null;
+    if (secStatus === 'breached' || secStatus === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports secret rotation baseline breach (secretRotationBaseline.status: "${parsed.secretRotationBaseline.status}")`);
+    }
+    const secCompliance = typeof parsed.summary?.secretRotationCompliance === 'string'
+      ? parsed.summary.secretRotationCompliance.toLowerCase()
+      : null;
+    if (secCompliance === 'failed' || secCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports secret rotation compliance failure (summary.secretRotationCompliance: "${parsed.summary.secretRotationCompliance}")`);
+    }
   }
 }
 

@@ -371,6 +371,103 @@ if (restorePassed && reconcilePassed) {
 const restoreCompliance = restorePassed ? "passed" : "failed";
 const reconcileCompliance = reconcilePassed ? "passed" : "failed";
 
+const depStage = stages.find((s) => s.stage_id === "ingress_deployment");
+let depEvidence = null;
+if (depStage && depStage.status === "PASSED") {
+  const depFile = depStage.artifacts.find((a) => a.includes("deployment-drill-evidence-") && a.endsWith(".json"));
+  if (depFile && fs.existsSync(depFile)) {
+    try {
+      depEvidence = JSON.parse(fs.readFileSync(depFile, "utf8"));
+    } catch {}
+  }
+}
+
+const depPassed = Boolean(
+  depStage?.status === "PASSED" &&
+  depEvidence &&
+  depEvidence.status === "success" &&
+  depEvidence.schema_backward_compatible === true &&
+  depEvidence.caddy_routing_verified === true &&
+  depEvidence.rollback_procedure_verified === true &&
+  depEvidence.network_isolation_verified === true
+);
+
+let deploymentBaseline;
+if (depPassed) {
+  deploymentBaseline = {
+    status: "verified",
+    schemaBackwardCompatible: depEvidence.schema_backward_compatible,
+    caddyRoutingVerified: depEvidence.caddy_routing_verified,
+    rollbackProcedureVerified: depEvidence.rollback_procedure_verified,
+    networkIsolationVerified: depEvidence.network_isolation_verified,
+    migrationCount: depEvidence.migration_count,
+    routesTested: depEvidence.caddy_routes_tested,
+  };
+} else {
+  deploymentBaseline = {
+    status: "breached",
+    error_message: depStage?.error_message || "stage 3 failed or child deployment evidence failed verification",
+  };
+}
+
+const deploymentCompliance = depPassed ? "passed" : "failed";
+const rollbackCompliance = (depPassed && depEvidence?.rollback_procedure_verified === true) ? "passed" : "failed";
+
+const secStage = stages.find((s) => s.stage_id === "secret_rotation");
+let secEvidence = null;
+if (secStage && secStage.status === "PASSED") {
+  const secFile = secStage.artifacts.find((a) => a.includes("secret-rotation-evidence-") && a.endsWith(".json"));
+  if (secFile && fs.existsSync(secFile)) {
+    try {
+      secEvidence = JSON.parse(fs.readFileSync(secFile, "utf8"));
+    } catch {}
+  }
+}
+
+const secPassed = Boolean(
+  secStage?.status === "PASSED" &&
+  secEvidence &&
+  secEvidence.status === "success" &&
+  Array.isArray(secEvidence.errors) &&
+  secEvidence.errors.length === 0 &&
+  secEvidence.steps?.session_rollover?.status === "passed" &&
+  secEvidence.steps?.csrf_rollover?.status === "passed" &&
+  secEvidence.steps?.database_rotation?.status === "passed" &&
+  secEvidence.steps?.valkey_rotation?.status === "passed" &&
+  secEvidence.steps?.storage_rotation?.status === "passed" &&
+  secEvidence.steps?.compromise_response?.status === "passed" &&
+  secEvidence.steps?.redaction_audit?.status === "passed" &&
+  secEvidence.steps?.redaction_audit?.raw_secrets_masked === true &&
+  secEvidence.steps?.redaction_audit?.zero_dev_passwords_detected === true
+);
+
+let secretRotationBaseline;
+if (secPassed) {
+  secretRotationBaseline = {
+    status: "verified",
+    steps: {
+      sessionRollover: secEvidence.steps.session_rollover.status,
+      csrfRollover: secEvidence.steps.csrf_rollover.status,
+      databaseRotation: secEvidence.steps.database_rotation.status,
+      valkeyRotation: secEvidence.steps.valkey_rotation.status,
+      storageRotation: secEvidence.steps.storage_rotation.status,
+      compromiseResponse: secEvidence.steps.compromise_response.status,
+      redactionAudit: secEvidence.steps.redaction_audit.status,
+    },
+    redactionAudit: {
+      rawSecretsMasked: secEvidence.steps.redaction_audit.raw_secrets_masked,
+      zeroDevPasswordsDetected: secEvidence.steps.redaction_audit.zero_dev_passwords_detected,
+    },
+  };
+} else {
+  secretRotationBaseline = {
+    status: "breached",
+    error_message: secStage?.error_message || "stage 5 failed or child secret rotation evidence failed verification",
+  };
+}
+
+const secretRotationCompliance = secPassed ? "passed" : "failed";
+
 const dossier = {
   version,
   timestamp,
@@ -383,6 +480,8 @@ const dossier = {
   stages,
   databaseTelemetryBaseline,
   disasterRecoveryBaseline,
+  deploymentBaseline,
+  secretRotationBaseline,
   summary: {
     staticIntegrity: statuses[0] === "PASSED" ? "passed" : "failed",
     supplyChainSecurity: statuses[1] === "PASSED" ? "passed" : "failed",
@@ -398,6 +497,9 @@ const dossier = {
     databaseBaselineCompliance: dbCompliancePassed ? "passed" : "failed",
     restoreCompliance,
     reconcileCompliance,
+    deploymentCompliance,
+    rollbackCompliance,
+    secretRotationCompliance,
     noAiPosture: "preview_excluded_from_launch",
   },
 };

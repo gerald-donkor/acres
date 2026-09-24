@@ -460,8 +460,13 @@ if (!launchDrillsScript.includes('databaseBaselineCompliance') ||
     !launchDrillsScript.includes('databaseTelemetryBaseline') ||
     !launchDrillsScript.includes('disasterRecoveryBaseline') ||
     !launchDrillsScript.includes('restoreCompliance') ||
-    !launchDrillsScript.includes('reconcileCompliance')) {
-  console.error('ops template check failed: scripts/ops/run-launch-drills.sh missing database or disaster recovery baseline dossier integration');
+    !launchDrillsScript.includes('reconcileCompliance') ||
+    !launchDrillsScript.includes('deploymentBaseline') ||
+    !launchDrillsScript.includes('secretRotationBaseline') ||
+    !launchDrillsScript.includes('deploymentCompliance') ||
+    !launchDrillsScript.includes('rollbackCompliance') ||
+    !launchDrillsScript.includes('secretRotationCompliance')) {
+  console.error('ops template check failed: scripts/ops/run-launch-drills.sh missing database, disaster recovery, deployment, or secret rotation baseline dossier integration');
   process.exit(1);
 }
 
