@@ -832,6 +832,12 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   runbooks. Adds `acres_postgres_pool_acquisition_duration_seconds` to `KNOWN_METRIC_IDENTIFIERS` in `scripts/ops/verify-alert-rules.js`
   (23/23 tests passed). Extends `scripts/ops/check-production-templates.sh` to enforce runbook PromQL and panel integrity.
   Operator launch sign-off remains open.
+  Prompt 182 bubbles up `databaseTelemetryBaseline` and `summary.databaseBaselineCompliance` (alongside `alertVerification`
+  and `dosResilience`) from stage 6 child capacity evidence into the Unified Launch Evidence Dossier in
+  `scripts/ops/run-launch-drills.sh`. Hardens `checkEvidenceFile` in `scripts/ops/check-launch-readiness.js` to fail closed
+  on dossier failed stages, stage failures, SLO/recovery compliance failures, and summary stage failures. Adds template integrity
+  assertions in `scripts/ops/check-production-templates.sh` and expands test suites (`run-launch-drills.spec.js` 9/9 passed,
+  `check-launch-readiness.spec.js` 30/30 passed). Operator launch sign-off remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).

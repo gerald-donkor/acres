@@ -40,6 +40,9 @@ require_file scripts/ops/run-capacity-alerting-drill.sh
 require_file scripts/ops/check-release-images.js
 require_file scripts/ops/check-release-images.spec.js
 require_file scripts/ops/verify-postgres-diagnostics.js
+require_file scripts/ops/run-launch-drills.sh
+require_file scripts/ops/run-launch-drills.spec.js
+require_file scripts/ops/launch-readiness.sh
 require_file docs/launch-checklist.md
 
 node <<'NODE'
@@ -439,6 +442,13 @@ for (const rule of alertRules) {
     console.error(`ops template check failed: docs/launch-checklist.md missing Dashboard panel reference for ${rule.alert}`);
     process.exit(1);
   }
+}
+
+const launchDrillsScript = fs.readFileSync('scripts/ops/run-launch-drills.sh', 'utf8');
+if (!launchDrillsScript.includes('databaseBaselineCompliance') ||
+    !launchDrillsScript.includes('databaseTelemetryBaseline')) {
+  console.error('ops template check failed: scripts/ops/run-launch-drills.sh missing database baseline dossier integration');
+  process.exit(1);
 }
 
 NODE

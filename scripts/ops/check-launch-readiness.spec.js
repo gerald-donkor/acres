@@ -689,6 +689,131 @@ test('validateReadiness blocks approval when evidence reports database baseline 
   }
 });
 
+test('validateReadiness blocks approval when evidence dossier reports failed stages or stage-level failures', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-dossier-'));
+  try {
+    const failedStagesDossierPath = path.join(tmpDir, 'dossier-failed-stages.json');
+    fs.writeFileSync(
+      failedStagesDossierPath,
+      JSON.stringify({
+        overall_status: 'PASSED',
+        failed_stages: 1,
+        stages: [{ stage_id: 'ingress_deployment', status: 'FAILED', error_message: 'Caddy routing error' }],
+      }),
+      'utf8'
+    );
+    const rec = buildValidApprovedRecord();
+    rec.sections.deployment_and_rollback.evidence = [failedStagesDossierPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.deployment_and_rollback || [];
+    assert.ok(
+      blockers.some((b) => b.includes('reports 1 failed drill stage(s)')),
+      `Expected failed stages blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes("reports stage 'ingress_deployment' failed: Caddy routing error")),
+      `Expected stage failure blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when evidence dossier reports sloCompliance or recoveryCompliance failure', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-dossier-summary-'));
+  try {
+    const failedSloDossierPath = path.join(tmpDir, 'dossier-failed-slo.json');
+    fs.writeFileSync(
+      failedSloDossierPath,
+      JSON.stringify({
+        overall_status: 'PASSED',
+        failed_stages: 0,
+        summary: {
+          sloCompliance: 'capacity_alerts_failed',
+          recoveryCompliance: 'restore_reconcile_failed',
+          staticIntegrity: 'failed',
+        },
+      }),
+      'utf8'
+    );
+    const rec = buildValidApprovedRecord();
+    rec.sections.slo_and_alerting.evidence = [failedSloDossierPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.slo_and_alerting || [];
+    assert.ok(
+      blockers.some((b) => b.includes('reports SLO compliance failure (summary.sloCompliance: "capacity_alerts_failed")')),
+      `Expected sloCompliance blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports recovery compliance failure (summary.recoveryCompliance: "restore_reconcile_failed")')),
+      `Expected recoveryCompliance blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports stage summary failure (summary.staticIntegrity: "failed")')),
+      `Expected staticIntegrity blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness accepts valid passed evidence dossier with database baseline compliance', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-dossier-pass-'));
+  try {
+    const passedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-pass.json');
+    fs.writeFileSync(
+      passedDossierPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        passed_stages: 7,
+        failed_stages: 0,
+        stages: [
+          { stage_id: 'static_templates', status: 'PASSED' },
+          { stage_id: 'supply_chain_sast', status: 'PASSED' },
+          { stage_id: 'ingress_deployment', status: 'PASSED' },
+          { stage_id: 'volume_encryption', status: 'PASSED' },
+          { stage_id: 'secret_rotation', status: 'PASSED' },
+          { stage_id: 'capacity_alerting', status: 'PASSED' },
+          { stage_id: 'disaster_recovery', status: 'PASSED' },
+        ],
+        databaseTelemetryBaseline: {
+          status: 'verified',
+          postgresExporter: { up: 1, lastScrapeError: 0 },
+          postgresServer: { pgUp: 1 },
+        },
+        summary: {
+          staticIntegrity: 'passed',
+          supplyChainSecurity: 'passed',
+          ingressDeployment: 'passed',
+          volumeEncryption: 'passed',
+          secretRotation: 'passed',
+          capacityAlerting: 'passed',
+          disasterRecovery: 'passed',
+          sloCompliance: 'capacity_alerts_verified',
+          recoveryCompliance: 'restore_reconcile_verified',
+          alertVerification: 'passed',
+          dosResilience: 'passed',
+          databaseBaselineCompliance: 'passed',
+          noAiPosture: 'preview_excluded_from_launch',
+        },
+      }),
+      'utf8'
+    );
+    const rec = buildValidApprovedRecord();
+    rec.sections.slo_and_alerting.evidence = [passedDossierPath];
+    const res = validateApprovedRecord(rec);
+    assert.strictEqual(res.categoryBlockers.slo_and_alerting, undefined);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('the checked-in template readiness.example.json fails closed with unresolved blockers', () => {
   const templatePath = path.resolve(__dirname, '../../infra/launch/readiness.example.json');
   const raw = fs.readFileSync(templatePath, 'utf8');

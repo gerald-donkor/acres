@@ -267,6 +267,32 @@ const stages = ids.map((id, i) => ({
   artifacts: [...(arts[i] === "" ? [] : arts[i].split("\n")), outputPath],
   error_message: errs[i] === "" ? null : errs[i],
 }));
+
+const capStage = stages.find((s) => s.stage_id === "capacity_alerting");
+let capEvidence = null;
+if (capStage && capStage.status === "PASSED") {
+  const capFile = capStage.artifacts.find((a) => a.includes("capacity-alerting-drill-evidence-") && a.endsWith(".json"));
+  if (capFile && fs.existsSync(capFile)) {
+    try {
+      capEvidence = JSON.parse(fs.readFileSync(capFile, "utf8"));
+    } catch {}
+  }
+}
+
+const dbCompliancePassed = Boolean(
+  capStage?.status === "PASSED" &&
+  capEvidence?.summary?.databaseBaselineCompliance === "passed" &&
+  capEvidence?.databaseTelemetryBaseline?.status === "verified"
+);
+
+const databaseTelemetryBaseline =
+  capEvidence?.databaseTelemetryBaseline && capEvidence.databaseTelemetryBaseline.status
+    ? capEvidence.databaseTelemetryBaseline
+    : { status: "breached" };
+
+const alertVerification = capEvidence?.summary?.alertVerification === "passed" ? "passed" : "failed";
+const dosResilience = capEvidence?.summary?.dosResilience === "passed" ? "passed" : "failed";
+
 const dossier = {
   version,
   timestamp,
@@ -277,6 +303,7 @@ const dossier = {
   failed_stages: Number(failed),
   duration_seconds: Number(durationS),
   stages,
+  databaseTelemetryBaseline,
   summary: {
     staticIntegrity: statuses[0] === "PASSED" ? "passed" : "failed",
     supplyChainSecurity: statuses[1] === "PASSED" ? "passed" : "failed",
@@ -287,6 +314,9 @@ const dossier = {
     disasterRecovery: statuses[6] === "PASSED" ? "passed" : "failed",
     sloCompliance: statuses[5] === "PASSED" ? "capacity_alerts_verified" : "capacity_alerts_failed",
     recoveryCompliance: statuses[6] === "PASSED" ? "restore_reconcile_verified" : "restore_reconcile_failed",
+    alertVerification,
+    dosResilience,
+    databaseBaselineCompliance: dbCompliancePassed ? "passed" : "failed",
     noAiPosture: "preview_excluded_from_launch",
   },
 };

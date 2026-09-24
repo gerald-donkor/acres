@@ -160,6 +160,45 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
     ) {
       addBlocker(category, `Approved evidence file '${ref}' reports drill failure (summary.exitCode: ${parsed.summary.exitCode})`);
     }
+    if (typeof parsed.failed_stages === 'number' && parsed.failed_stages > 0) {
+      addBlocker(category, `Approved evidence file '${ref}' reports ${parsed.failed_stages} failed drill stage(s)`);
+    }
+    if (Array.isArray(parsed.stages)) {
+      for (const stage of parsed.stages) {
+        if (stage && typeof stage === 'object' && typeof stage.status === 'string' && stage.status.toUpperCase() === 'FAILED') {
+          addBlocker(category, `Approved evidence file '${ref}' reports stage '${stage.stage_id}' failed: ${stage.error_message || 'unspecified error'}`);
+        }
+      }
+    }
+    const sloCompliance = typeof parsed.summary?.sloCompliance === 'string'
+      ? parsed.summary.sloCompliance.toLowerCase()
+      : null;
+    if (sloCompliance === 'capacity_alerts_failed' || sloCompliance === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports SLO compliance failure (summary.sloCompliance: "${parsed.summary.sloCompliance}")`);
+    }
+    const recoveryCompliance = typeof parsed.summary?.recoveryCompliance === 'string'
+      ? parsed.summary.recoveryCompliance.toLowerCase()
+      : null;
+    if (recoveryCompliance === 'restore_reconcile_failed' || recoveryCompliance === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports recovery compliance failure (summary.recoveryCompliance: "${parsed.summary.recoveryCompliance}")`);
+    }
+    const summaryStageFlags = [
+      'staticIntegrity',
+      'supplyChainSecurity',
+      'ingressDeployment',
+      'volumeEncryption',
+      'secretRotation',
+      'capacityAlerting',
+      'disasterRecovery',
+      'alertVerification',
+      'dosResilience',
+    ];
+    for (const flag of summaryStageFlags) {
+      const val = typeof parsed.summary?.[flag] === 'string' ? parsed.summary[flag].toLowerCase() : null;
+      if (val === 'failed' || val === 'failure') {
+        addBlocker(category, `Approved evidence file '${ref}' reports stage summary failure (summary.${flag}: "${parsed.summary[flag]}")`);
+      }
+    }
     const dbCompliance = typeof parsed.summary?.databaseBaselineCompliance === 'string'
       ? parsed.summary.databaseBaselineCompliance.toLowerCase()
       : null;

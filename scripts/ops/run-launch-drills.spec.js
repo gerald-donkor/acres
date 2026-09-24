@@ -62,6 +62,14 @@ function assertDossierSchema(dossier) {
   }
 
   assert.strictEqual(typeof dossier.summary, 'object');
+  assert.strictEqual(typeof dossier.summary.databaseBaselineCompliance, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.databaseBaselineCompliance));
+  assert.strictEqual(typeof dossier.summary.alertVerification, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.alertVerification));
+  assert.strictEqual(typeof dossier.summary.dosResilience, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.dosResilience));
+  assert.strictEqual(typeof dossier.databaseTelemetryBaseline, 'object');
+  assert.ok(['verified', 'breached'].includes(dossier.databaseTelemetryBaseline.status));
 }
 
 /**
@@ -132,6 +140,12 @@ test('--dry-run executes all 7 stages and emits a schema-compliant dossier', () 
       capacityStage.artifacts.some((a) => a.includes('capacity-alerting-drill-evidence-')),
       `expected child evidence in artifacts, got: ${JSON.stringify(capacityStage.artifacts)}`
     );
+    assert.strictEqual(dossier.summary.databaseBaselineCompliance, 'passed');
+    assert.strictEqual(dossier.databaseTelemetryBaseline.status, 'verified');
+    assert.strictEqual(dossier.databaseTelemetryBaseline.postgresExporter.up, 1);
+    assert.strictEqual(dossier.databaseTelemetryBaseline.postgresServer.pgUp, 1);
+    assert.strictEqual(dossier.summary.alertVerification, 'passed');
+    assert.strictEqual(dossier.summary.dosResilience, 'passed');
     for (const stage of dossier.stages) {
       assert.ok(
         stage.artifacts.some((a) => a.includes(`launch-drill-stage-${stage.stage_id}.log`)),
