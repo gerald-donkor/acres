@@ -385,6 +385,51 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
     if (secCompliance === 'failed' || secCompliance === 'failure') {
       addBlocker(category, `Approved evidence file '${ref}' reports secret rotation compliance failure (summary.secretRotationCompliance: "${parsed.summary.secretRotationCompliance}")`);
     }
+
+    // Volume encryption drill child evidence checks
+    if (
+      file.includes('volume-encryption-evidence-') ||
+      parsed.drill_type === 'production_volume_encryption_and_key_separation' ||
+      (parsed.keySeparation && typeof parsed.keySeparation === 'object' && Array.isArray(parsed.evaluatedMounts))
+    ) {
+      if (typeof parsed.status === 'string' && parsed.status.toLowerCase() !== 'success') {
+        addBlocker(category, `Approved evidence file '${ref}' reports volume encryption verification failure (status: "${parsed.status}")`);
+      }
+      if (parsed.valid === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports invalid volume encryption configuration (valid: false)`);
+      }
+      if (Array.isArray(parsed.errors) && parsed.errors.length > 0) {
+        addBlocker(category, `Approved evidence file '${ref}' reports volume encryption error(s): ${parsed.errors.join('; ')}`);
+      }
+      if (parsed.keySeparation && typeof parsed.keySeparation === 'object') {
+        if (parsed.keySeparation.verified === false) {
+          addBlocker(category, `Approved evidence file '${ref}' reports Key Separation Invariant violation (keySeparation.verified: false)`);
+        }
+        if (Array.isArray(parsed.keySeparation.detectedViolations) && parsed.keySeparation.detectedViolations.length > 0) {
+          addBlocker(category, `Approved evidence file '${ref}' reports ${parsed.keySeparation.detectedViolations.length} detected keyfile violation(s) in volume mounts or repository`);
+        }
+      }
+      if (Array.isArray(parsed.evaluatedMounts)) {
+        const failedMounts = parsed.evaluatedMounts.filter((m) => m && m.passed === false);
+        if (failedMounts.length > 0) {
+          addBlocker(category, `Approved evidence file '${ref}' reports ${failedMounts.length} failed stateful storage mount(s): ${failedMounts.map((m) => m.service + ':' + m.containerPath).join(', ')}`);
+        }
+      }
+    }
+
+    // Unified Launch Evidence Dossier volume encryption baseline checks
+    const volStatus = typeof parsed.volumeEncryptionBaseline?.status === 'string'
+      ? parsed.volumeEncryptionBaseline.status.toLowerCase()
+      : null;
+    if (volStatus === 'breached' || volStatus === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports volume encryption baseline breach (volumeEncryptionBaseline.status: "${parsed.volumeEncryptionBaseline.status}")`);
+    }
+    const volCompliance = typeof parsed.summary?.volumeEncryptionCompliance === 'string'
+      ? parsed.summary.volumeEncryptionCompliance.toLowerCase()
+      : null;
+    if (volCompliance === 'failed' || volCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports volume encryption compliance failure (summary.volumeEncryptionCompliance: "${parsed.summary.volumeEncryptionCompliance}")`);
+    }
   }
 }
 

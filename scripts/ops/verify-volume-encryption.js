@@ -549,11 +549,14 @@ function runCli() {
   let readinessPath = DEFAULT_READINESS_PATH;
   const hostMountPaths = [];
   let asJson = false;
+  let outputPath = null;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--json') {
       asJson = true;
+    } else if ((arg === '--output' || arg === '-o') && args[i + 1]) {
+      outputPath = path.resolve(process.cwd(), args[++i]);
     } else if (arg === '--compose' && args[i + 1]) {
       composePath = path.resolve(process.cwd(), args[++i]);
     } else if (arg === '--env' && args[i + 1]) {
@@ -573,6 +576,7 @@ Options:
   --env <file>         Path to environment template (default: infra/env/production.env.example)
   --readiness <file>   Path to launch readiness JSON (default: infra/launch/readiness.example.json)
   --mount-path <dir>   Explicit host directory path to scan for key separation (repeatable)
+  --output, -o <file>  Write structured JSON drill evidence to target file path
   --json               Output structured JSON report
   --help, -h           Show this help message
 `);
@@ -613,8 +617,27 @@ Options:
     },
   });
 
+  const payload = {
+    drill_type: 'production_volume_encryption_and_key_separation',
+    timestamp: new Date().toISOString(),
+    status: result.valid ? 'success' : 'failed',
+    valid: result.valid,
+    errors: result.errors,
+    warnings: result.warnings,
+    totalRequiredMounts: result.totalRequiredMounts,
+    validMountsCount: result.validMountsCount,
+    evaluatedMounts: result.evaluatedMounts,
+    keySeparation: result.keySeparation,
+    readinessEvaluated: result.readinessEvaluated,
+  };
+
+  if (outputPath) {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2), 'utf8');
+  }
+
   if (asJson) {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(payload, null, 2));
     process.exit(result.valid ? 0 : 1);
   }
 

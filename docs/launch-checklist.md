@@ -146,11 +146,14 @@ do not report failure.
 
 ### 8. Volume Encryption (`volume_encryption`)
 
-- Drill/verify: `node scripts/ops/verify-volume-encryption.js`
-- Evidence: validator output showing encrypted mounts and key separation
+- Drill/verify: `node scripts/ops/verify-volume-encryption.js --output backups/volume-encryption-evidence-<timestamp>.json`
+- Evidence: `backups/volume-encryption-evidence-<timestamp>.json`
 - Accept: LUKS2/CMEK-class mechanism, ≥3 encrypted stateful mounts
   (PostgreSQL, Valkey, Garage), `key_separation_confirmed: true` (zero keys in
   mounts/backups/git), designated `key_recovery_owner`
+- Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
+  - Rejects volume encryption evidence reporting failure (`status !== 'success'`), invalid configuration (`valid: false`), any errors in `errors[]`, key separation violation (`keySeparation.verified: false`), detected keyfile violations in volume mounts or Git tracking, or any failed stateful storage mounts;
+  - Rejects Unified Launch Evidence Dossiers reporting `volumeEncryptionBaseline.status: "breached"` or `summary.volumeEncryptionCompliance: "failed"`.
 
 ### 9. GraphQL Introspection (`graphql_introspection`)
 
@@ -217,10 +220,11 @@ console. Stages 1–6 pass fully offline; stage 7 needs drill infra (§3.6).
 
 The Unified Launch Evidence Dossier aggregates structured baselines from child evidence across all operational dimensions:
 - `deploymentBaseline` (stage 3): schema backward compatibility, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
+- `volumeEncryptionBaseline` (stage 4): stateful mount evaluation, required mount counts, and Key Separation Invariant verification;
 - `secretRotationBaseline` (stage 5): verified 7-step zero-downtime rotation (session, CSRF, database, Valkey, storage, compromise response, and credential redaction audit);
 - `databaseTelemetryBaseline` (stage 6): exporter health, database ping, connection pool saturation metrics, pool acquisition p95 latency, SQL query execution p95 latency, lock waits, and transaction age;
 - `disasterRecoveryBaseline` (stage 7): restore drill RTO, table parity, migration parity, PostGIS/foreign-key verification, and storage object reconciliation;
-- `summary`: compliance flags across static integrity, supply chain, ingress/deployment, volume encryption, secret rotation, capacity alerting, disaster recovery, SLO compliance, recovery compliance, alert verification, DoS resilience, database baseline compliance, restore compliance, reconcile compliance, deployment compliance, rollback compliance, secret rotation compliance, and no-AI posture.
+- `summary`: compliance flags across static integrity, supply chain, ingress/deployment, volume encryption, secret rotation, capacity alerting, disaster recovery, SLO compliance, recovery compliance, alert verification, DoS resilience, database baseline compliance, restore compliance, reconcile compliance, deployment compliance, rollback compliance, secret rotation compliance, volume encryption compliance, and no-AI posture.
 
 Implementation notes: the orchestrator is bash (arrays, `[[ ]]`), matching the
 sibling drill runners. Each stage's full child output is captured to

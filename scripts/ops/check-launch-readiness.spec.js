@@ -1354,6 +1354,168 @@ test('validateReadiness accepts valid passed deployment & secret rotation eviden
   }
 });
 
+test('validateReadiness blocks approval when volume encryption evidence reports failure, invalid config, errors, key separation violation, detected keyfile, or mount failure', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-vol-'));
+  try {
+    const failedStatusPath = path.join(tmpDir, 'volume-encryption-evidence-fail.json');
+    fs.writeFileSync(
+      failedStatusPath,
+      JSON.stringify({
+        drill_type: 'production_volume_encryption_and_key_separation',
+        status: 'failed',
+        valid: false,
+        errors: ['Mount missing'],
+        evaluatedMounts: [{ service: 'postgres', containerPath: '/var/lib/postgresql', passed: false }],
+        keySeparation: { verified: false, detectedViolations: [{ path: '/var/lib/postgresql/server.key' }] },
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.volume_encryption.evidence = [failedStatusPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.volume_encryption || [];
+
+    assert.ok(
+      blockers.some((b) => b.includes('reports volume encryption verification failure (status: "failed")')),
+      `Expected status blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports invalid volume encryption configuration (valid: false)')),
+      `Expected valid: false blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports volume encryption error(s): Mount missing')),
+      `Expected error message blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports Key Separation Invariant violation (keySeparation.verified: false)')),
+      `Expected key separation verified blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports 1 detected keyfile violation(s) in volume mounts or repository')),
+      `Expected detected keyfile blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports 1 failed stateful storage mount(s): postgres:/var/lib/postgresql')),
+      `Expected failed mount blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when evidence dossier reports volume encryption baseline breach or compliance failure', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-vol-dossier-'));
+  try {
+    const breachedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-breached.json');
+    fs.writeFileSync(
+      breachedDossierPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        passed_stages: 7,
+        failed_stages: 0,
+        stages: [],
+        volumeEncryptionBaseline: { status: 'breached' },
+        summary: { volumeEncryptionCompliance: 'failed' },
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.volume_encryption.evidence = [breachedDossierPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.volume_encryption || [];
+
+    assert.ok(
+      blockers.some((b) => b.includes('reports volume encryption baseline breach (volumeEncryptionBaseline.status: "breached")')),
+      `Expected baseline breach blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports volume encryption compliance failure (summary.volumeEncryptionCompliance: "failed")')),
+      `Expected compliance failure blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness accepts valid passed volume encryption evidence and compliant dossier', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-vol-pass-'));
+  try {
+    const passedVolPath = path.join(tmpDir, 'volume-encryption-evidence-pass.json');
+    fs.writeFileSync(
+      passedVolPath,
+      JSON.stringify({
+        drill_type: 'production_volume_encryption_and_key_separation',
+        status: 'success',
+        valid: true,
+        errors: [],
+        warnings: [],
+        totalRequiredMounts: 9,
+        validMountsCount: 9,
+        evaluatedMounts: [
+          { service: 'postgres', containerPath: '/var/lib/postgresql', passed: true },
+          { service: 'valkey', containerPath: '/data', passed: true },
+          { service: 'garage', containerPath: '/var/lib/garage/meta', passed: true },
+          { service: 'garage', containerPath: '/var/lib/garage/data', passed: true },
+          { service: 'clamav', containerPath: '/var/lib/clamav', passed: true },
+          { service: 'caddy', containerPath: '/data', passed: true },
+          { service: 'caddy', containerPath: '/config', passed: true },
+          { service: 'prometheus', containerPath: '/prometheus', passed: true },
+          { service: 'grafana', containerPath: '/var/lib/grafana', passed: true },
+        ],
+        keySeparation: {
+          verified: true,
+          scannedPaths: ['/backups'],
+          detectedViolations: [],
+        },
+      }),
+      'utf8'
+    );
+    const passedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-pass.json');
+    fs.writeFileSync(
+      passedDossierPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        passed_stages: 7,
+        failed_stages: 0,
+        stages: [
+          { stage_id: 'volume_encryption', status: 'PASSED' },
+        ],
+        volumeEncryptionBaseline: {
+          status: 'verified',
+          totalRequiredMounts: 9,
+          validMountsCount: 9,
+          keySeparationVerified: true,
+          violationsDetected: 0,
+        },
+        summary: {
+          volumeEncryptionCompliance: 'passed',
+        },
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.volume_encryption.evidence = [passedVolPath, passedDossierPath];
+
+    const res = validateApprovedRecord(rec);
+    assert.strictEqual(res.categoryBlockers.volume_encryption, undefined);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('the checked-in template readiness.example.json fails closed with unresolved blockers', () => {
   const templatePath = path.resolve(__dirname, '../../infra/launch/readiness.example.json');
   const raw = fs.readFileSync(templatePath, 'utf8');

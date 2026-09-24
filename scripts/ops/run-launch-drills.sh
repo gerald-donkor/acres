@@ -206,7 +206,7 @@ run_stage "ingress_deployment" "Caddy routing + deployment drill" \
 
 # Stage 4: production volume encryption key separation
 run_stage "volume_encryption" "Volume encryption + key separation" \
-  "node scripts/ops/verify-volume-encryption.js"
+  "node scripts/ops/verify-volume-encryption.js --output \"${EVIDENCE_DIR}/volume-encryption-evidence-${STAMP}.json\""
 
 # Stage 5: zero-downtime secret rotation & compromise drill.
 # Always --dry-run: credential rotation stays an explicit operator action.
@@ -468,6 +468,51 @@ if (secPassed) {
 
 const secretRotationCompliance = secPassed ? "passed" : "failed";
 
+const volStage = stages.find((s) => s.stage_id === "volume_encryption");
+let volEvidence = null;
+if (volStage && volStage.status === "PASSED") {
+  const volFile = volStage.artifacts.find((a) => a.includes("volume-encryption-evidence-") && a.endsWith(".json"));
+  if (volFile && fs.existsSync(volFile)) {
+    try {
+      volEvidence = JSON.parse(fs.readFileSync(volFile, "utf8"));
+    } catch {}
+  }
+}
+
+const volPassed = Boolean(
+  volStage?.status === "PASSED" &&
+  volEvidence &&
+  volEvidence.status === "success" &&
+  volEvidence.valid === true &&
+  Array.isArray(volEvidence.errors) &&
+  volEvidence.errors.length === 0 &&
+  Array.isArray(volEvidence.evaluatedMounts) &&
+  volEvidence.evaluatedMounts.length >= 9 &&
+  volEvidence.evaluatedMounts.every((m) => m.passed === true) &&
+  volEvidence.keySeparation?.verified === true &&
+  Array.isArray(volEvidence.keySeparation?.detectedViolations) &&
+  volEvidence.keySeparation.detectedViolations.length === 0
+);
+
+let volumeEncryptionBaseline;
+if (volPassed) {
+  volumeEncryptionBaseline = {
+    status: "verified",
+    totalRequiredMounts: volEvidence.totalRequiredMounts,
+    validMountsCount: volEvidence.validMountsCount,
+    keySeparationVerified: volEvidence.keySeparation.verified,
+    violationsDetected: volEvidence.keySeparation.detectedViolations.length,
+    scannedPathsCount: Array.isArray(volEvidence.keySeparation.scannedPaths) ? volEvidence.keySeparation.scannedPaths.length : 0,
+  };
+} else {
+  volumeEncryptionBaseline = {
+    status: "breached",
+    error_message: volStage?.error_message || "stage 4 failed or child volume encryption evidence failed verification",
+  };
+}
+
+const volumeEncryptionCompliance = volPassed ? "passed" : "failed";
+
 const dossier = {
   version,
   timestamp,
@@ -482,6 +527,7 @@ const dossier = {
   disasterRecoveryBaseline,
   deploymentBaseline,
   secretRotationBaseline,
+  volumeEncryptionBaseline,
   summary: {
     staticIntegrity: statuses[0] === "PASSED" ? "passed" : "failed",
     supplyChainSecurity: statuses[1] === "PASSED" ? "passed" : "failed",
@@ -500,6 +546,7 @@ const dossier = {
     deploymentCompliance,
     rollbackCompliance,
     secretRotationCompliance,
+    volumeEncryptionCompliance,
     noAiPosture: "preview_excluded_from_launch",
   },
 };

@@ -86,6 +86,10 @@ function assertDossierSchema(dossier) {
   assert.ok(['passed', 'failed'].includes(dossier.summary.rollbackCompliance));
   assert.strictEqual(typeof dossier.summary.secretRotationCompliance, 'string');
   assert.ok(['passed', 'failed'].includes(dossier.summary.secretRotationCompliance));
+  assert.strictEqual(typeof dossier.volumeEncryptionBaseline, 'object');
+  assert.ok(['verified', 'breached'].includes(dossier.volumeEncryptionBaseline.status));
+  assert.strictEqual(typeof dossier.summary.volumeEncryptionCompliance, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.volumeEncryptionCompliance));
 }
 
 /**

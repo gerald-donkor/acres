@@ -395,3 +395,55 @@ test('Key Separation Invariant: checkGit clean repository validation', () => {
   // Since current repo git does not track any keyfiles, checkGit must succeed
   assert.equal(result.keySeparation.verified, true);
 });
+
+test('verifyVolumeEncryption: CLI --output writes structured JSON drill evidence', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-vol-output-test-'));
+  const outputFile = path.join(tmpDir, 'volume-encryption-evidence.json');
+  try {
+    const { execFileSync } = require('node:child_process');
+    execFileSync(process.execPath, [
+      path.resolve(__dirname, 'verify-volume-encryption.js'),
+      '--output',
+      outputFile,
+    ], { encoding: 'utf8' });
+
+    assert.ok(fs.existsSync(outputFile), 'Expected output file to be created');
+    const parsed = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+
+    assert.equal(parsed.drill_type, 'production_volume_encryption_and_key_separation');
+    assert.equal(parsed.status, 'success');
+    assert.equal(parsed.valid, true);
+    assert.deepEqual(parsed.errors, []);
+    assert.equal(parsed.totalRequiredMounts, 9);
+    assert.equal(parsed.validMountsCount, 9);
+    assert.equal(parsed.evaluatedMounts.length, 9);
+    assert.ok(parsed.evaluatedMounts.every((m) => m.passed === true));
+    assert.equal(parsed.keySeparation.verified, true);
+    assert.deepEqual(parsed.keySeparation.detectedViolations, []);
+    assert.ok(typeof parsed.timestamp === 'string');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('verifyVolumeEncryption: CLI -o alias writes structured JSON drill evidence', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-vol-output-test-short-'));
+  const outputFile = path.join(tmpDir, 'volume-encryption-evidence-short.json');
+  try {
+    const { execFileSync } = require('node:child_process');
+    execFileSync(process.execPath, [
+      path.resolve(__dirname, 'verify-volume-encryption.js'),
+      '-o',
+      outputFile,
+    ], { encoding: 'utf8' });
+
+    assert.ok(fs.existsSync(outputFile), 'Expected output file to be created');
+    const parsed = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+
+    assert.equal(parsed.drill_type, 'production_volume_encryption_and_key_separation');
+    assert.equal(parsed.status, 'success');
+    assert.equal(parsed.valid, true);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

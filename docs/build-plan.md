@@ -853,6 +853,15 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   and secret leaks, as well as dossier deployment and secret rotation baseline breaches. Adds template assertions in
   `scripts/ops/check-production-templates.sh` and expands test suites (`run-launch-drills.spec.js` 9/9 passed,
   `check-launch-readiness.spec.js` 40/40 passed). Operator launch sign-off remains open.
+  Prompt 185 adds `--output <file>` option to `scripts/ops/verify-volume-encryption.js`, updates
+  stage 4 of `scripts/ops/run-launch-drills.sh` to emit child evidence (`volume-encryption-evidence-<timestamp>.json`),
+  and bubbles up `volumeEncryptionBaseline` and `summary.volumeEncryptionCompliance` into the Unified Launch
+  Evidence Dossier. Hardens `checkEvidenceFile` in `scripts/ops/check-launch-readiness.js` against volume encryption
+  verification failures, invalid configurations, errors, Key Separation Invariant violations, detected keyfiles in mounts
+  or Git tracking, and stateful storage mount failures, as well as dossier volume encryption baseline breaches and
+  compliance failures. Adds template assertions in `scripts/ops/check-production-templates.sh` and expands test suites
+  (`verify-volume-encryption.spec.js` 16/16 passed, `run-launch-drills.spec.js` 9/9 passed,
+  `check-launch-readiness.spec.js` 43/43 passed). Operator launch sign-off remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
