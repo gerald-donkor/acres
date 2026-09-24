@@ -306,6 +306,7 @@ const alertNames = (alerts.groups || []).flatMap((g) => (g.rules || []).map((r) 
 const requiredAlerts = [
   'AcresApiDown',
   'AcresWorkerDown',
+  'PostgresDown',
   'HighHttp5xxRate',
   'P95LatencyThresholdExceeded',
   'High429Rate',

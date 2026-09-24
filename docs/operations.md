@@ -1045,6 +1045,23 @@ Operator capacity baseline and launch sign-off remain open.
 
 Prompt 175 verification: alert rule test suite passed 18/18 tests including schema, PromQL, duration, severity, and breach/clear simulation; template verification (`scripts/ops/check-production-templates.sh`) and alert drill (`scripts/ops/verify-alert-rules.js`) verified all 9/9 operational alert rules and 20/20 checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 
+**Prompt 176 update (2026-09-24): PostgreSQL server availability alert.**
+`infra/prometheus/alerts.yml` now configures the tenth required operational alert:
+`PostgresDown` with expression `pg_up{job="acres-postgres"} == 0`, `for: 1m`, and `severity: critical`.
+This alert establishes operational availability alerting across the core database service: when the PostgreSQL database
+server is unreachable, halts, or fails connections from `postgres-exporter` for more than 1 minute, the alert fires
+to page the on-call team and prevent undetected downtime across the entire platform.
+
+The rule verifier (`scripts/ops/verify-alert-rules.js`), test suite (`scripts/ops/verify-alert-rules.spec.js`),
+production template validator (`scripts/ops/check-production-templates.sh`), and drill orchestrator
+(`scripts/ops/run-capacity-alerting-drill.sh`) now require and simulate all 10 operational rules.
+`docs/launch-checklist.md` §5 details the triage runbook correlating database container liveness, logs,
+`pg_isready` socket connectivity, host disk space, and exporter scrape errors.
+This formally closes the PostgreSQL server availability alerting gap.
+Operator capacity baseline and launch sign-off remain open.
+
+Prompt 176 verification: alert rule test suite passed 20/20 tests including schema, PromQL, duration, severity, and breach/clear simulation; template verification (`scripts/ops/check-production-templates.sh`) and alert drill (`scripts/ops/verify-alert-rules.js`) verified all 10/10 operational alert rules and 23/23 checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

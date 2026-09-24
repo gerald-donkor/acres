@@ -6,9 +6,10 @@
  * Prometheus Alert Rule Verification & Synthetic Simulation Engine (TM-16, TM-20).
  *
  * Statically parses and validates infra/prometheus/alerts.yml and infra/prometheus/prometheus.yml:
- * 1. Asserts presence of all 9 required operational golden signals and security threat alerts:
+ * 1. Asserts presence of all 10 required operational golden signals and security threat alerts:
  *    - AcresApiDown (Availability: up{job="acres-api"} == 0)
  *    - AcresWorkerDown (Availability: up{job="acres-worker"} == 0)
+ *    - PostgresDown (Availability: pg_up{job="acres-postgres"} == 0)
  *    - HighHttp5xxRate (Errors: > 5% 5xx over 5m)
  *    - P95LatencyThresholdExceeded (Latency: p95 latency > 500ms over 5m)
  *    - High429Rate (Security: HTTP 429 rate > 10% over 5m)
@@ -31,6 +32,7 @@ const DEFAULT_PROM_CONFIG_PATH = path.resolve(__dirname, '../../infra/prometheus
 const REQUIRED_ALERTS = [
   'AcresApiDown',
   'AcresWorkerDown',
+  'PostgresDown',
   'HighHttp5xxRate',
   'P95LatencyThresholdExceeded',
   'High429Rate',
@@ -42,6 +44,7 @@ const REQUIRED_ALERTS = [
 
 const KNOWN_METRIC_IDENTIFIERS = [
   'up',
+  'pg_up',
   'acres_http_requests_total',
   'acres_http_429_responses_total',
   'acres_http_request_duration_seconds_bucket',
@@ -67,6 +70,12 @@ const SIMULATION_DEFINITIONS = {
     firingSample: { workerUp: 0 },
     clearedSample: { workerUp: 1 },
     thresholdDescription: 'up{job="acres-worker"} == 0',
+  },
+  PostgresDown: {
+    evaluate: (data) => data.pgUp === 0,
+    firingSample: { pgUp: 0 },
+    clearedSample: { pgUp: 1 },
+    thresholdDescription: 'pg_up{job="acres-postgres"} == 0',
   },
   HighHttp5xxRate: {
     evaluate: (data) => {
@@ -319,9 +328,25 @@ function verifyAlertRules(options = {}) {
       }
     }
 
-    const expectedJob = (requiredAlert === 'QueueDeadLettersDetected' || requiredAlert === 'AcresWorkerDown') ? 'acres-worker' : 'acres-api';
+    if (requiredAlert === 'PostgresDown') {
+      if (typeof rule.expr !== 'string' || rule.expr.trim() !== 'pg_up{job="acres-postgres"} == 0') {
+        ruleErrors.push('expr must be pg_up{job="acres-postgres"} == 0');
+      }
+      if (rule.for !== '1m') {
+        ruleErrors.push('for must be 1m');
+      }
+      if (severity !== 'critical') {
+        ruleErrors.push('severity must be critical');
+      }
+    }
+
+    const expectedJob = requiredAlert === 'PostgresDown'
+      ? 'acres-postgres'
+      : (requiredAlert === 'QueueDeadLettersDetected' || requiredAlert === 'AcresWorkerDown')
+      ? 'acres-worker'
+      : 'acres-api';
     if (typeof rule.expr === 'string') {
-      const selectors = [...rule.expr.matchAll(/\b(?:up|acres_[a-z0-9_]+)(?:\{([^}]*)\})?/g)];
+      const selectors = [...rule.expr.matchAll(/\b(?:up|pg_up|acres_[a-z0-9_]+)(?:\{([^}]*)\})?/g)];
       if (selectors.some((match) => !match[1]?.includes(`job="${expectedJob}"`))) {
         ruleErrors.push(`every metric selector must use job="${expectedJob}"`);
       }

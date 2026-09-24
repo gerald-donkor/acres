@@ -806,6 +806,9 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   evidence-based pool saturation alerting requirement.
   Prompt 175 adds the ninth required Prometheus alert rule `AcresWorkerDown`
   (`up{job="acres-worker"} == 0` for 1m, critical), closing the worker process availability
+  alerting gap.
+  Prompt 176 adds the tenth required Prometheus alert rule `PostgresDown`
+  (`pg_up{job="acres-postgres"} == 0` for 1m, critical), closing the PostgreSQL server availability
   alerting gap. Operator capacity baseline remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
@@ -815,7 +818,7 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
 - **Operations & CI Integration**:
   - Root package scripts: `npm run ops:capacity-test`, `npm run ops:capacity-drill`, `npm run ops:alert-test`, `npm run ops:alert-drill`, `npm run ops:dos-drill`, `npm run ops:capacity-alerting-drill`;
   - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`;
-  - Updated `scripts/ops/check-production-templates.sh` requiring all 9 alerts and alert/capacity checks;
+  - Updated `scripts/ops/check-production-templates.sh` requiring all 10 alerts and alert/capacity checks;
   - Closes TM-05, TM-16, TM-20, and Category 5 launch readiness requirements.
 
 ## 22. Phase 12K verification record — 2026-09-09
