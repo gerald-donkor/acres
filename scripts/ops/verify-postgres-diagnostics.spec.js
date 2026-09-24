@@ -72,3 +72,9 @@ test('database query execution latency panels have unique IDs and correct scope'
   duplicate.panels.find((panel) => panel.id === 26).id = 25;
   assert.match(verifyPostgresDiagnostics(scrape, duplicate).join(' '), /IDs are reused/);
 });
+
+test('active concurrency and 429 rate panels have unique IDs and correct scope', () => {
+  const duplicate = copy(dashboard);
+  duplicate.panels.find((panel) => panel.id === 28).id = 27;
+  assert.match(verifyPostgresDiagnostics(scrape, duplicate).join(' '), /IDs are reused/);
+});

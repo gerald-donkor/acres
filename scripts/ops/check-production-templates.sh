@@ -361,7 +361,7 @@ if (new Set(ids).size !== ids.length || [...postgresMetrics].some(([id, metric])
   console.error('ops template check failed: postgres dashboard panels or metrics drifted');
   process.exit(1);
 }
-for (const id of [14, 15, 16, 23, 24, 25, 26]) {
+for (const id of [14, 15, 16, 23, 24, 25, 26, 27, 28]) {
   const panel = dashboard.panels.find((p) => p.id === id);
   const exprs = (panel?.targets || []).map((t) => t.expr || '').join(' ');
   if (exprs.includes('or vector(0)') || exprs.includes('or on() vector(0)')) {
@@ -383,6 +383,14 @@ if (!p25 || !p26 || p25.fieldConfig?.defaults?.unit !== 's' || p26.fieldConfig?.
     !p25.targets?.some((t) => t.expr?.includes('acres_database_query_duration_seconds_bucket{job="acres-api"}')) ||
     !p26.targets?.some((t) => t.expr?.includes('acres_database_query_duration_seconds_bucket{job="acres-worker"}'))) {
   console.error('ops template check failed: database query duration panels drifted');
+  process.exit(1);
+}
+const p27 = dashboard.panels.find((p) => p.id === 27);
+const p28 = dashboard.panels.find((p) => p.id === 28);
+if (!p27 || !p28 || p27.fieldConfig?.defaults?.unit !== 'short' || p28.fieldConfig?.defaults?.unit !== 'percent' ||
+    !p27.targets?.some((t) => t.expr?.includes('acres_http_active_requests{job="acres-api"}')) ||
+    !p28.targets?.some((t) => t.expr?.includes('acres_http_429_responses_total{job="acres-api"}'))) {
+  console.error('ops template check failed: active requests or 429 rate panels drifted');
   process.exit(1);
 }
 const diagnosticsErrors = verifyPostgresDiagnostics(exporterScrape, dashboard);

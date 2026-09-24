@@ -1098,6 +1098,13 @@ Prompt 178 verification: capacity load test suite passed 15/15 tests; capacity d
 
 Prompt 179 verification: readiness test suite passed 27/27 tests; template verification (`scripts/ops/check-production-templates.sh`) verified template integrity; capacity tests and drill (`npm run ops:capacity-test`, `npm run ops:capacity-drill`) confirmed baseline metrics. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 
+**Prompt 180 update (2026-09-24): Grafana operational dashboard active concurrency and 429 rate panels.**
+`infra/grafana/dashboards/acres-operations.json` now configures Panel 27 ("API In-Flight Active HTTP Requests") with expression `acres_http_active_requests{job="acres-api"}` (thresholds: 30 yellow clearing bar, 40 red fire threshold; unit `short`) and Panel 28 ("API HTTP 429 Rate Percentage") with expression `(sum(rate(acres_http_429_responses_total{job="acres-api"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job="acres-api"}[5m])), 0.001)) * 100` (thresholds: 2 yellow clearing bar, 10 red fire threshold; unit `percent`) at row `y: 76`.
+
+This achieves 100% visual coverage across all 11 Prometheus alert rules in the Grafana operational dashboard, enabling operators triaging `HighHttpConcurrency` or `High429Rate` to observe in-flight concurrency and rate-limiting spike trends directly. `scripts/ops/check-production-templates.sh` now enforces that Panels 27 and 28 exist, reference their respective API metric expressions, and configure expected units. `scripts/ops/verify-postgres-diagnostics.spec.js` expanded to 7 unit tests verifying panel ID uniqueness across the dashboard. Operator launch sign-off remains open.
+
+Prompt 180 verification: diagnostics test suite passed 7/7 tests; template verification (`scripts/ops/check-production-templates.sh`) passed all checks. Full `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

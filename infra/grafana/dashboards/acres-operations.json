@@ -1199,6 +1199,126 @@
           "refId": "C"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 40
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 76
+      },
+      "id": 27,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "title": "API In-Flight Active HTTP Requests",
+      "description": "In-flight HTTP requests currently handled by the Acres API process. HighHttpConcurrency fires at > 40 requests for 2m; clearing bar is < 30 requests.",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "acres_http_active_requests{job=\"acres-api\"}",
+          "legendFormat": "Active Requests",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 76
+      },
+      "id": 28,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "title": "API HTTP 429 Rate Percentage",
+      "description": "Percentage of HTTP 429 rate-limited responses relative to total API requests over 5 minutes. High429Rate fires at > 10% for 5m; clearing bar is < 2%.",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "(sum(rate(acres_http_429_responses_total{job=\"acres-api\"}[5m])) / clamp_min(sum(rate(acres_http_requests_total{job=\"acres-api\"}[5m])), 0.001)) * 100",
+          "legendFormat": "429 Rate (%)",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "refresh": "30s",
@@ -1217,5 +1337,5 @@
   "timezone": "browser",
   "title": "Acres Operations Foundation",
   "uid": "acres-operations-foundation",
-  "version": 8
+  "version": 9
 }

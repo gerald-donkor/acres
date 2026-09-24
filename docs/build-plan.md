@@ -822,6 +822,11 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   `max_database_query_p95_latency_ms <= 100`) and database baseline compliance/breach cross-validation
   to `scripts/ops/check-launch-readiness.js`, updates `infra/launch/readiness.example.json` and
   `scripts/ops/check-production-templates.sh`, and expands unit tests (27/27 passed). Operator launch sign-off remains open.
+  Prompt 180 adds Panel 27 ("API In-Flight Active HTTP Requests", `acres_http_active_requests{job="acres-api"}`)
+  and Panel 28 ("API HTTP 429 Rate Percentage", `acres_http_429_responses_total{job="acres-api"}`)
+  to `infra/grafana/dashboards/acres-operations.json`, achieving 100% visual coverage of all 11 Prometheus alert
+  rules in the Grafana operational dashboard. Extends `scripts/ops/check-production-templates.sh` and expands
+  diagnostics unit tests (7/7 passed). Operator launch sign-off remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).

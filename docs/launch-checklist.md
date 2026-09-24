@@ -316,7 +316,7 @@ cause, action items) before resolving the alert thread.
   The numerator counts HTTP 429 responses only. Treat it as a rate-limit
   spike / possible credential-stuffing or DoS signal; confirm the route and
   client context in access logs before acting.
-- Triage: top offending IPs/routes in Caddy access logs; check whether the
+- Triage: inspect Panel 28 in Grafana (`API HTTP 429 Rate Percentage`) for the rate trend; inspect top offending IPs/routes in Caddy access logs; check whether the
   spike is one client (abuse) or broad (misconfigured client release).
 - Contain: block abusive IPs at Caddy, tighten Throttler windows, rotate
   exposed credentials if stuffing is suspected. Escalate to security lead on
@@ -348,7 +348,7 @@ cause, action items) before resolving the alert thread.
 
 - PromQL: `acres_http_active_requests{job="acres-api"} > 40` for 2m — more than 40 API HTTP
   requests in flight; this gauge does not measure database pool occupancy.
-- Triage: inspect in-flight request load, route patterns, p95 latency, 5xx,
+- Triage: inspect Panel 27 in Grafana (`API In-Flight Active HTTP Requests`) for in-flight request load; inspect route patterns, p95 latency, 5xx,
   and dependency health. Check the API pool connection and waiting gauges
   named in the latency runbook alongside PostgreSQL evidence before
   attributing cause. Compare the separate `acres-worker` pool total, idle, max,
