@@ -233,6 +233,39 @@ function validateReconciliationReport(report, now) {
     (summary.orphanObjects === 0 ? summary.status === 'clean' : summary.status === 'warning');
 }
 
+function isVolumeEncryptionCandidate({ file, parsed } = {}) {
+  const name = typeof file === 'string' ? path.basename(file) : '';
+  if (name.includes('volume-encryption-evidence-') || name.includes('volume-encryption')) return true;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  return parsed.drill_type === 'production_volume_encryption_and_key_separation' ||
+    (parsed.keySeparation && typeof parsed.keySeparation === 'object' && Array.isArray(parsed.evaluatedMounts));
+}
+
+function validateVolumeEncryptionReport(report, now) {
+  if (!report || typeof report !== 'object' || Array.isArray(report) ||
+      typeof report.timestamp !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(report.timestamp)) return false;
+  const timestamp = new Date(report.timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!Number.isFinite(timestamp.getTime()) || timestamp.toISOString() !== report.timestamp ||
+      timestamp.getTime() > evalNow.getTime()) return false;
+  if (report.status !== 'success' || report.valid !== true) return false;
+  if (!Array.isArray(report.errors) || report.errors.length > 0) return false;
+  const keySep = report.keySeparation;
+  if (!keySep || typeof keySep !== 'object' || Array.isArray(keySep)) return false;
+  if (keySep.verified !== true) return false;
+  if (!Array.isArray(keySep.detectedViolations) || keySep.detectedViolations.length > 0) return false;
+  if (!Array.isArray(report.evaluatedMounts) || report.evaluatedMounts.length < 3) return false;
+  if (report.evaluatedMounts.some((m) => !m || typeof m !== 'object' || m.passed !== true)) return false;
+  if (report.totalRequiredMounts !== undefined || report.validMountsCount !== undefined) {
+    if (!Number.isSafeInteger(report.totalRequiredMounts) || report.totalRequiredMounts < 3 ||
+        !Number.isSafeInteger(report.validMountsCount) || report.validMountsCount !== report.totalRequiredMounts) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -655,6 +688,8 @@ function validateReadiness(record, _filePath, options = {}) {
   const categoryBlockers = {};
   let totalApproved = 0;
   const recoveryEvidence = [];
+  const volumeEvidence = [];
+  const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
     if (!categoryBlockers[category]) {
@@ -726,6 +761,7 @@ function validateReadiness(record, _filePath, options = {}) {
           if (isEvidenceFileReference(ev)) {
             const parsedFiles = checkEvidenceFile(ev.trim(), sectionName, addBlocker, baseDirs);
             if (sectionName === 'backup_and_disaster_recovery') recoveryEvidence.push(...parsedFiles);
+            if (sectionName === 'volume_encryption') volumeEvidence.push(...parsedFiles);
           }
         });
       }
@@ -910,7 +946,6 @@ function validateReadiness(record, _filePath, options = {}) {
     if (bdrSec.restore_drill_completed !== true) {
       addBlocker('backup_and_disaster_recovery', 'Restore drill must be verified and completed (restore_drill_completed: true)');
     }
-    const now = options.now instanceof Date ? options.now : new Date();
     const declaredDate = typeof bdrSec.restore_drill_date === 'string'
       ? parseUtcDate(bdrSec.restore_drill_date) : null;
     if (!declaredDate || declaredDate.getTime() > now.getTime()) {
@@ -983,6 +1018,12 @@ function validateReadiness(record, _filePath, options = {}) {
     }
     if (!encSec.key_recovery_owner || typeof encSec.key_recovery_owner !== 'string') {
       addBlocker('volume_encryption', 'Key recovery owner must be designated');
+    }
+    const volumeCandidates = volumeEvidence.filter(isVolumeEncryptionCandidate);
+    if (volumeCandidates.length === 0) {
+      addBlocker('volume_encryption', 'A successful volume encryption child JSON report is required');
+    } else if (volumeCandidates.some(({ parsed }) => !validateVolumeEncryptionReport(parsed, now))) {
+      addBlocker('volume_encryption', 'A referenced volume encryption report is invalid or failed');
     }
   }
 
@@ -1243,4 +1284,6 @@ module.exports = {
   REQUIRED_SECTIONS,
   REQUIRED_SECRET_KEYS,
   DEV_PASSWORDS,
+  isVolumeEncryptionCandidate,
+  validateVolumeEncryptionReport,
 };

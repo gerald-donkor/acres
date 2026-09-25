@@ -972,3 +972,22 @@ consistency does not prove provenance or production scope: the operator still
 must verify the target PostgreSQL/Garage instances, tenant/bucket/prefix scope,
 backup transfer and freshness, zero-object results, warning orphans, and
 representative restore load before approving launch.
+
+**Prompt 191 verification (2026-09-25):** Approved Category 8 records now
+require a concrete volume encryption child JSON report in `evidence` alongside
+the `key_separation_confirmed: true` declaration and encrypted mount paths.
+Content at a custom path qualifies by report structure and content; a declaration,
+prose, filename alone, or the unified dossier does not. The validator requires
+a real, nonfuture ISO UTC `timestamp`, `status: "success"`, `valid: true`, empty
+`errors` array, `keySeparation.verified: true`, empty `keySeparation.detectedViolations`
+array, and an `evaluatedMounts` array containing all items with `passed: true`
+covering at least 3 stateful mounts (PostgreSQL, Valkey, Garage). If total/valid
+mount counts are declared, they must be equal positive integers. Every referenced
+child report, including wildcard matches, must pass; a malformed or failed report
+blocks even beside a valid one. The readiness suite passed 64/64 and volume drill
+suite passed 17/17; `ops:templates` reported `ops template check passed`, `ops:check`
+exited 0, lint, typecheck, build, and `git diff --check` passed cleanly. The
+unresolved example still failed closed (0 approved categories, 11 blocked, 70 blockers).
+Report consistency does not replace operator verification: the operator must still
+inspect detached LUKS2 keyfiles or cloud KMS keys, confirm dual-custody parameters,
+and physically audit production volume mounts before approving launch.

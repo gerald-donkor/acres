@@ -182,7 +182,19 @@ do not report failure.
 - Accept: LUKS2/CMEK-class mechanism, ≥3 encrypted stateful mounts
   (PostgreSQL, Valkey, Garage), `key_separation_confirmed: true` (zero keys in
   mounts/backups/git), designated `key_recovery_owner`
+- An approved record must reference a concrete, successful volume encryption
+  child JSON report in `evidence`. A custom path is accepted by report content,
+  not name. Its ISO UTC `timestamp` must be real and no later than validation
+  time. Every referenced volume encryption report must pass: `status: "success"`,
+  `valid: true`, empty `errors` array, `keySeparation.verified: true`, empty
+  `keySeparation.detectedViolations` array, and `evaluatedMounts` array containing
+  all items with `passed: true` covering at least the 3 required stateful mounts
+  (PostgreSQL, Valkey, Garage). If total/valid mount counts are present, they
+  must be equal positive integers. A failed or malformed report blocks even
+  alongside a valid one. The unified dossier alone, prose, and
+  `key_separation_confirmed: true` without child evidence are insufficient.
 - Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
+  - Requires at least one concrete, successful volume encryption child report in `evidence` for approved status;
   - Rejects volume encryption evidence reporting failure (`status !== 'success'`), invalid configuration (`valid: false`), any errors in `errors[]`, key separation violation (`keySeparation.verified: false`), detected keyfile violations in volume mounts or Git tracking, or any failed stateful storage mounts;
   - Rejects Unified Launch Evidence Dossiers reporting `volumeEncryptionBaseline.status: "breached"` or `summary.volumeEncryptionCompliance: "failed"`.
 

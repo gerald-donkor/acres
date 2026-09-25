@@ -49,6 +49,35 @@ const validReconciliationReport = {
   matched: [{}], missing: [], orphans: [], mismatches: [],
 };
 fs.writeFileSync(reconciliationFixturePath, JSON.stringify(validReconciliationReport));
+const volumeEncryptionFixturePath = path.join(restoreFixtureDir, 'volume-encryption-evidence-valid.json');
+const validVolumeEncryptionReport = {
+  drill_type: 'production_volume_encryption_and_key_separation',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  valid: true,
+  errors: [],
+  warnings: [],
+  totalRequiredMounts: 9,
+  validMountsCount: 9,
+  evaluatedMounts: [
+    { service: 'postgres', containerPath: '/var/lib/postgresql', passed: true },
+    { service: 'valkey', containerPath: '/data', passed: true },
+    { service: 'garage', containerPath: '/var/lib/garage/meta', passed: true },
+    { service: 'garage', containerPath: '/var/lib/garage/data', passed: true },
+    { service: 'clamav', containerPath: '/var/lib/clamav', passed: true },
+    { service: 'caddy', containerPath: '/data', passed: true },
+    { service: 'caddy', containerPath: '/config', passed: true },
+    { service: 'prometheus', containerPath: '/prometheus', passed: true },
+    { service: 'grafana', containerPath: '/var/lib/grafana', passed: true },
+  ],
+  keySeparation: {
+    verified: true,
+    scannedPaths: ['/mnt/encrypted'],
+    detectedViolations: [],
+  },
+  readinessEvaluated: null,
+};
+fs.writeFileSync(volumeEncryptionFixturePath, JSON.stringify(validVolumeEncryptionReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -159,7 +188,7 @@ function buildValidApprovedRecord() {
         key_separation_confirmed: true,
         key_recovery_owner: 'infra-security-team',
         approver: 'security-lead',
-        evidence: ['LUKS2 block device encryption verified with separate key storage'],
+        evidence: [volumeEncryptionFixturePath],
         notes: 'Verified volume encryption',
       },
       graphql_introspection: {
@@ -1745,6 +1774,7 @@ test('validateReadiness accepts valid passed volume encryption evidence and comp
       passedVolPath,
       JSON.stringify({
         drill_type: 'production_volume_encryption_and_key_separation',
+        timestamp: '2026-08-28T12:00:00.000Z',
         status: 'success',
         valid: true,
         errors: [],
@@ -2189,4 +2219,121 @@ test('static integrity dossier baseline and compliance must agree with approval'
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('approved volume encryption requires a child report beyond declaration, prose, or dossier', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-vol-report-'));
+  try {
+    const record = buildValidApprovedRecord();
+
+    // 1. Prose only
+    record.sections.volume_encryption.evidence = ['LUKS2 block device encryption verified'];
+    let blockers = validateApprovedRecord(record).categoryBlockers.volume_encryption || [];
+    assert.ok(blockers.some((b) => b.includes('A successful volume encryption child JSON report is required')));
+
+    // 2. Dossier only
+    const dossierPath = path.join(dir, 'launch-evidence-dossier-only.json');
+    fs.writeFileSync(
+      dossierPath,
+      JSON.stringify({
+        overall_status: 'PASSED',
+        total_stages: 7,
+        passed_stages: 7,
+        failed_stages: 0,
+        stages: [{ stage_id: 'volume_encryption', status: 'PASSED' }],
+        volumeEncryptionBaseline: { status: 'verified', totalRequiredMounts: 9, validMountsCount: 9, keySeparationVerified: true, violationsDetected: 0 },
+        summary: { volumeEncryptionCompliance: 'passed' },
+      })
+    );
+    record.sections.volume_encryption.evidence = [dossierPath];
+    blockers = validateApprovedRecord(record).categoryBlockers.volume_encryption || [];
+    assert.ok(blockers.some((b) => b.includes('A successful volume encryption child JSON report is required')));
+
+    // 3. Arbitrary JSON with plausible name
+    const arbitraryPath = path.join(dir, 'volume-encryption-evidence-fake.json');
+    fs.writeFileSync(arbitraryPath, JSON.stringify({ message: 'not a volume encryption report' }));
+    record.sections.volume_encryption.evidence = [arbitraryPath];
+    blockers = validateApprovedRecord(record).categoryBlockers.volume_encryption || [];
+    assert.ok(blockers.some((b) => b.includes('A referenced volume encryption report is invalid or failed')));
+
+    // 4. Valid report at custom path passes
+    const customPath = path.join(dir, 'custom-mount-audit.json');
+    fs.writeFileSync(customPath, JSON.stringify(validVolumeEncryptionReport));
+    record.sections.volume_encryption.evidence = [customPath];
+    blockers = validateApprovedRecord(record).categoryBlockers.volume_encryption;
+    assert.strictEqual(blockers, undefined);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('volume encryption child report validates producer fields, timestamps, mount counts, and key separation', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-vol-fields-'));
+  try {
+    const file = path.join(dir, 'volume-encryption-evidence-test.json');
+    const record = buildValidApprovedRecord();
+    record.sections.volume_encryption.evidence = [file];
+
+    const mutations = [
+      (v) => { v.status = 'failed'; },
+      (v) => { v.valid = false; },
+      (v) => { v.errors = ['Disk error']; },
+      (v) => { v.errors = 'not an array'; },
+      (v) => { v.keySeparation = null; },
+      (v) => { v.keySeparation.verified = false; },
+      (v) => { v.keySeparation.detectedViolations = ['/var/lib/postgresql/key.pem']; },
+      (v) => { v.keySeparation.detectedViolations = 'not an array'; },
+      (v) => { v.evaluatedMounts = []; },
+      (v) => { v.evaluatedMounts = [{ service: 'postgres', containerPath: '/var/lib/postgresql', passed: true }]; },
+      (v) => { v.evaluatedMounts[0].passed = false; },
+      (v) => { v.totalRequiredMounts = 10; v.validMountsCount = 9; },
+      (v) => { v.totalRequiredMounts = '10'; v.validMountsCount = '10'; },
+      (v) => { v.totalRequiredMounts = null; },
+      (v) => { v.timestamp = 'invalid-timestamp'; },
+      (v) => { v.timestamp = new Date(fixedNow.getTime() + 60000).toISOString(); },
+      (v) => { delete v.timestamp; },
+    ];
+
+    for (const mutate of mutations) {
+      const copy = structuredClone(validVolumeEncryptionReport);
+      mutate(copy);
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.volume_encryption || [];
+      assert.ok(
+        blockers.some((b) => b.includes('A referenced volume encryption report is invalid or failed')),
+        `Expected invalid report blocker, got: ${JSON.stringify(blockers)}`
+      );
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('wildcard volume encryption evidence rejects a failed child alongside a valid child', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-vol-wildcard-'));
+  try {
+    const goodPath = path.join(dir, 'volume-encryption-evidence-1.json');
+    const badPath = path.join(dir, 'volume-encryption-evidence-2.json');
+    fs.writeFileSync(goodPath, JSON.stringify(validVolumeEncryptionReport));
+    fs.writeFileSync(badPath, JSON.stringify({ ...validVolumeEncryptionReport, status: 'failed', valid: false }));
+
+    const record = buildValidApprovedRecord();
+    record.sections.volume_encryption.evidence = [path.join(dir, 'volume-encryption-evidence-*.json')];
+    const blockers = validateApprovedRecord(record).categoryBlockers.volume_encryption || [];
+    assert.ok(
+      blockers.some((b) => b.includes('A referenced volume encryption report is invalid or failed')),
+      `Expected blocker for bad report alongside good report, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('volume encryption helper functions handle edge cases and missing parameters safely', () => {
+  const { isVolumeEncryptionCandidate, validateVolumeEncryptionReport } = require('./check-launch-readiness');
+  assert.strictEqual(isVolumeEncryptionCandidate(), false);
+  assert.strictEqual(isVolumeEncryptionCandidate({ parsed: null }), false);
+  assert.strictEqual(isVolumeEncryptionCandidate({ parsed: { drill_type: 'production_volume_encryption_and_key_separation' } }), true);
+  assert.strictEqual(validateVolumeEncryptionReport(null), false);
+  assert.strictEqual(validateVolumeEncryptionReport(validVolumeEncryptionReport), true);
 });
