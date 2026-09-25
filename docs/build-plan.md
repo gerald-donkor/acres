@@ -927,3 +927,14 @@ fields. Runner tests passed 8/8, launch drill tests 9/9, and readiness tests
 51/51; `ops:templates`, `ops:scan-secrets`, `ops:docker-runtime`, `ops:check`,
 lint, typecheck, build, and diff checks passed. Operator launch approval and
 the stage 7 live infrastructure drill remain outstanding.
+
+**Prompt 188 verification (2026-09-25):** Category 6 now parses a narrow UTC
+every-hour cron subset and rejects unsupported syntax or a maximum scheduled
+start gap greater than the declared RPO. The example and approved fixture use
+`0 * * * *` for a one-hour RPO, and template validation applies the same parser.
+The readiness suite passed 53/53 tests; `ops:templates`, `ops:check`, lint,
+typecheck, build, and `git diff --check` passed. The checked-in unresolved
+example still failed closed (0 approved categories, 11 blocked, 70 blockers).
+This static check does not prove backup completion, encrypted off-host transfer,
+PostgreSQL and Garage coverage, freshness, or a restore under load. Operator
+launch approval and the live infrastructure drill remain outstanding.

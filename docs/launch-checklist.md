@@ -125,8 +125,18 @@ do not report failure.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`
+- The schedule must run in UTC. Supported five-field cron syntax has `*` for
+  hour, day of month, month, and day of week; the minute field is `*`, one
+  minute `0..59`, `*/n` for `1..60`, or distinct comma-separated minutes.
+  The longest interval between scheduled starts, including the hour boundary,
+  must be no greater than `rpo_hours × 60` minutes. The example uses
+  `0 * * * *` for a one-hour RPO.
+- Start frequency alone does not establish the RPO. The operator must show
+  successful backup completion, encrypted off-host transfer, PostgreSQL and
+  Garage coverage, backup freshness, and a restore drill under actual load.
 - Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
   - Requires `rpo_hours` to be a positive number ≤ 1 hour;
+  - Rejects unsupported cron syntax and schedules whose maximum UTC start gap exceeds the declared RPO;
   - Requires `rto_hours` to be a positive number ≤ 4 hours;
   - Rejects restore drill evidence reporting `rto_compliant: false`, record parity failure, PostGIS/foreign key verification failure, or table/migration count discrepancies;
   - Rejects storage reconciliation reports reporting status `error`, missing objects, or checksum/size mismatches;

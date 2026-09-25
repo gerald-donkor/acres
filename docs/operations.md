@@ -364,6 +364,18 @@ Keep the previous Caddy/app configuration and known-good client/server digests a
 
 Run `scripts/ops/backup-postgres.sh` with `PGPASSWORD` and destination configured. Back up PostgreSQL, Garage object data and metadata, deployment config, certificate state, and recoverable signing/encryption material. Backups must be encrypted, access-controlled, off-host, and separate from live volume unlock material. Role authentication falls back gracefully between `POSTGRES_PASSWORD`, `POSTGRES_SUPERUSER_PASSWORD`, and `ACRES_MIGRATOR_PASSWORD`. `acres_migrator` is provisioned with `BYPASSRLS` so that table dumps succeed completely across all tenant tables enforcing `FORCE ROW LEVEL SECURITY`.
 
+Approved Category 6 readiness records require a UTC five-field backup cron
+schedule with `*` in the hour, day-of-month, month, and day-of-week fields.
+The minute field supports `*`, a single minute `0..59`, `*/n` (`1..60`), or
+distinct comma-separated minutes. The validator expands the minutes and checks
+the largest gap between starts, including across an hour boundary, against
+`rpo_hours × 60` without rounding. The checked-in example uses `0 * * * *`
+for its one-hour RPO. Unsupported or slower schedules block approval.
+This static frequency check does not establish achieved RPO: the operator must
+provide evidence of successful completion, encrypted off-host transfer,
+PostgreSQL and Garage coverage, freshness, and restore under actual load.
+`backup-postgres.sh` alone does not schedule or transfer a backup off-host.
+
 ### Restore & Drill Execution
 
 1. **Ad-hoc Restore**:

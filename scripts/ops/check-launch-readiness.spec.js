@@ -5,6 +5,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const {
   validateReadiness,
+  parseBackupScheduleCron,
   checkPlaceholdersAndSecrets,
   REQUIRED_SECTIONS,
   REQUIRED_SECRET_KEYS,
@@ -90,7 +91,7 @@ function buildValidApprovedRecord() {
         rpo_hours: 1,
         rto_hours: 4,
         backup_destination: 's3://acres-dr-backups-us-west-2/backups',
-        backup_schedule_cron: '0 2 * * *',
+        backup_schedule_cron: '0 * * * *',
         restore_drill_completed: true,
         restore_drill_date: '2026-08-28T12:00:00Z',
         db_object_reconciliation_tested: true,
@@ -862,6 +863,47 @@ test('validateReadiness blocks approval when rpo_hours > 1 or rto_hours > 4', ()
     rtoBlockers.some((b) => b.includes('RTO hours must be a positive number <= 4 hours (received: 8)')),
     `Expected high RTO blocker, got: ${JSON.stringify(rtoBlockers)}`
   );
+});
+
+test('backup cron parser computes maximum cyclic start gaps', () => {
+  for (const [cron, gap] of [
+    ['0 * * * *', 60], ['0,30 * * * *', 30], ['* * * * *', 1],
+    ['5,20,55 * * * *', 35], ['*/7 * * * *', 7],
+    ['*/40 * * * *', 40], ['  0\t* * * *  ', 60],
+    ['0\f*\v*\f*\v*', 60],
+  ]) {
+    assert.deepStrictEqual(parseBackupScheduleCron(cron), { valid: true, maxGapMinutes: gap });
+  }
+  for (const cron of [
+    '0 2 * * *', '0 * * * * *', '@daily', '*/0 * * * *', '*/61 * * * *',
+    '0,0 * * * *', '0,60 * * * *', '0, * * * *', ',0 * * * *',
+    '0-30 * * * *', '+0 * * * *', '00x * * * *', '0 * 1 * *',
+    '0 * * jan *', '0 * * * mon', '', null,
+  ]) {
+    assert.strictEqual(parseBackupScheduleCron(cron).valid, false, String(cron));
+  }
+});
+
+test('approved recovery requires a supported UTC start gap within its RPO', () => {
+  for (const [cron, rpo, blocked] of [
+    ['0 * * * *', 1, false], ['0,30 * * * *', 0.5, false],
+    ['* * * * *', 1 / 60, false], ['5,20,55 * * * *', 35 / 60, false],
+    ['*/7 * * * *', 7 / 60, false], ['*/40 * * * *', 0.5, true],
+    ['0 2 * * *', 1, true], ['0 * * * *', 0.5, true],
+  ]) {
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.backup_schedule_cron = cron;
+    record.sections.backup_and_disaster_recovery.rpo_hours = rpo;
+    const result = validateApprovedRecord(record);
+    const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.strictEqual(blockers.some((item) => item.includes('Backup schedule')), blocked, cron);
+  }
+  const record = buildValidApprovedRecord();
+  record.sections.backup_and_disaster_recovery.backup_schedule_cron = '0 * * * *';
+  record.sections.backup_and_disaster_recovery.rpo_hours = 0;
+  const blockers = validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
+  assert.ok(blockers.some((item) => item.includes('RPO hours')));
+  assert.ok(blockers.every((item) => !item.includes('maximum start gap')));
 });
 
 test('validateReadiness blocks approval when restore drill evidence reports RTO breach, parity failure, or table/migration count mismatch', () => {

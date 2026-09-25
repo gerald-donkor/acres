@@ -51,6 +51,42 @@ const DEV_PASSWORDS = [
   'acres_valkey_dev_password',
 ];
 
+// Only minute schedules that repeat every UTC hour have unambiguous gaps here.
+function parseBackupScheduleCron(expression) {
+  if (typeof expression !== 'string' || expression.length > 512 ||
+      /[^\x20-\x7e\x09-\x0d]/.test(expression)) {
+    return { valid: false, reason: 'unsupported schedule' };
+  }
+  const fields = expression.replace(/^[\x20\x09-\x0d]+|[\x20\x09-\x0d]+$/g, '')
+    .split(/[\x20\x09-\x0d]+/);
+  if (fields.length !== 5 || fields.slice(1).some((field) => field !== '*')) {
+    return { valid: false, reason: 'unsupported schedule' };
+  }
+  const minute = fields[0];
+  let minutes;
+  if (minute === '*') {
+    minutes = Array.from({ length: 60 }, (_, value) => value);
+  } else if (/^\*\/[0-9]+$/.test(minute)) {
+    const step = Number(minute.slice(2));
+    if (!Number.isSafeInteger(step) || step < 1 || step > 60) {
+      return { valid: false, reason: 'unsupported schedule' };
+    }
+    minutes = Array.from({ length: 60 }, (_, value) => value).filter((value) => value % step === 0);
+  } else if (/^[0-9]+(?:,[0-9]+)*$/.test(minute)) {
+    minutes = minute.split(',').map(Number);
+    if (minutes.some((value) => !Number.isSafeInteger(value) || value > 59) ||
+        new Set(minutes).size !== minutes.length) {
+      return { valid: false, reason: 'unsupported schedule' };
+    }
+    minutes.sort((a, b) => a - b);
+  } else {
+    return { valid: false, reason: 'unsupported schedule' };
+  }
+  const gaps = minutes.slice(1).map((value, index) => value - minutes[index]);
+  gaps.push(60 + minutes[0] - minutes.at(-1));
+  return { valid: true, maxGapMinutes: Math.max(...gaps) };
+}
+
 function checkPlaceholdersAndSecrets(obj, currentPath, blockers) {
   if (obj === null || obj === undefined) return;
 
@@ -768,12 +804,12 @@ function validateReadiness(record, _filePath, options = {}) {
   // 3.6 backup_and_disaster_recovery
   const bdrSec = sections.backup_and_disaster_recovery;
   if (bdrSec && bdrSec.status === 'approved') {
-    if (
+    const invalidRpo =
       typeof bdrSec.rpo_hours !== 'number' ||
       !Number.isFinite(bdrSec.rpo_hours) ||
       bdrSec.rpo_hours <= 0 ||
-      bdrSec.rpo_hours > 1
-    ) {
+      bdrSec.rpo_hours > 1;
+    if (invalidRpo) {
       addBlocker('backup_and_disaster_recovery', `RPO hours must be a positive number <= 1 hour (received: ${bdrSec.rpo_hours})`);
     }
     if (
@@ -787,8 +823,11 @@ function validateReadiness(record, _filePath, options = {}) {
     if (!bdrSec.backup_destination || typeof bdrSec.backup_destination !== 'string') {
       addBlocker('backup_and_disaster_recovery', 'Off-host backup destination is required');
     }
-    if (!bdrSec.backup_schedule_cron || typeof bdrSec.backup_schedule_cron !== 'string') {
-      addBlocker('backup_and_disaster_recovery', 'Backup schedule cron expression is required');
+    const schedule = parseBackupScheduleCron(bdrSec.backup_schedule_cron);
+    if (!schedule.valid) {
+      addBlocker('backup_and_disaster_recovery', 'Backup schedule must use a supported every-hour UTC cron expression');
+    } else if (!invalidRpo && schedule.maxGapMinutes > bdrSec.rpo_hours * 60) {
+      addBlocker('backup_and_disaster_recovery', 'Backup schedule maximum start gap exceeds the declared RPO');
     }
     if (bdrSec.restore_drill_completed !== true) {
       addBlocker('backup_and_disaster_recovery', 'Restore drill must be verified and completed (restore_drill_completed: true)');
@@ -1090,6 +1129,7 @@ if (require.main === module) {
 
 module.exports = {
   validateReadiness,
+  parseBackupScheduleCron,
   checkPlaceholdersAndSecrets,
   REQUIRED_SECTIONS,
   REQUIRED_SECRET_KEYS,

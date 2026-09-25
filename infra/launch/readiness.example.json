@@ -79,7 +79,7 @@
       "rpo_hours": 1,
       "rto_hours": 4,
       "backup_destination": "__REQUIRED_OFF_HOST_BACKUP_DESTINATION__",
-      "backup_schedule_cron": "0 2 * * *",
+      "backup_schedule_cron": "0 * * * *",
       "restore_drill_completed": false,
       "restore_drill_date": null,
       "db_object_reconciliation_tested": false,

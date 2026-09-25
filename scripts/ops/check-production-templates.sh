@@ -52,6 +52,7 @@ const fs = require('fs');
 const yaml = require('js-yaml');
 const { verifyPostgresDiagnostics } = require('./scripts/ops/verify-postgres-diagnostics');
 const { validateComposeImages } = require('./scripts/ops/check-release-images');
+const { parseBackupScheduleCron } = require('./scripts/ops/check-launch-readiness');
 
 function readYaml(path) {
   try {
@@ -426,6 +427,11 @@ if (!bdrSec ||
     bdrSec.rpo_hours !== 1 ||
     bdrSec.rto_hours !== 4) {
   console.error('ops template check failed: infra/launch/readiness.example.json missing required Category 6 RPO/RTO targets (1h RPO, 4h RTO)');
+  process.exit(1);
+}
+const backupSchedule = parseBackupScheduleCron(bdrSec.backup_schedule_cron);
+if (!backupSchedule.valid || backupSchedule.maxGapMinutes > bdrSec.rpo_hours * 60) {
+  console.error('ops template check failed: Category 6 backup UTC start gap exceeds RPO or uses unsupported cron syntax');
   process.exit(1);
 }
 
