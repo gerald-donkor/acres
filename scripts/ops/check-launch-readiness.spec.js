@@ -15,6 +15,9 @@ const {
   isDeploymentDrillCandidate,
   validateDeploymentDrillReport,
   DEPLOYMENT_DRAIN_PERIODS,
+  isCapacityAlertingCandidate,
+  validateCapacityAlertingReport,
+  parseCapacityAlertingTimestamp,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -149,6 +152,75 @@ const validDeploymentDrillReport = {
   status: 'success',
 };
 fs.writeFileSync(deploymentDrillFixturePath, JSON.stringify(validDeploymentDrillReport));
+const capacityAlertingFixturePath = path.join(restoreFixtureDir, 'capacity-alerting-drill-evidence-valid.json');
+const validCapacityAlertingReport = {
+  timestamp: '20260828T120000Z',
+  durationMs: 4500,
+  status: 'success',
+  summary: {
+    alertVerification: 'passed',
+    capacitySloCompliance: 'passed',
+    dosResilience: 'passed',
+    databaseBaselineCompliance: 'passed',
+  },
+  alerts: {
+    valid: true,
+    ruleCount: 11,
+    errors: [],
+    rules: Array.from({ length: 11 }, (_, i) => ({ alert: `Rule${i + 1}`, expr: 'up == 1' })),
+    simulations: Array.from({ length: 11 }, (_, i) => ({ rule: `Rule${i + 1}`, passed: true })),
+  },
+  capacity: {
+    status: 'passed',
+    compliance: {
+      availabilityPassed: true,
+      latencyPassed: true,
+      throughputPassed: true,
+      databaseAcquisitionLatencyPassed: true,
+      databaseQueryLatencyPassed: true,
+      monotonicDbAcquisition: true,
+      monotonicDbQuery: true,
+      overallPassed: true,
+    },
+    sloTargets: {
+      availabilityTargetPercent: 99.9,
+      maxP95LatencyMs: 500,
+      capacityTargetRps: 100,
+      maxDatabaseAcquisitionP95LatencyMs: 50,
+      maxDatabaseQueryP95LatencyMs: 100,
+    },
+  },
+  databaseTelemetryBaseline: {
+    status: 'verified',
+    postgresExporter: {
+      up: 1,
+      lastScrapeError: 0,
+    },
+    postgresServer: {
+      pgUp: 1,
+    },
+    connectionPool: {
+      api: { requestsWaiting: 0 },
+      worker: { requestsWaiting: 0 },
+    },
+    poolAcquisitionLatency: {
+      api: { p95Ms: 1.8 },
+      worker: { p95Ms: 1.8 },
+    },
+    queryExecutionDuration: {
+      api: { p95Ms: 24.1 },
+      worker: { p95Ms: 24.1 },
+    },
+    serverActivity: {
+      lockWaits: 0,
+    },
+  },
+  dosResilience: {
+    status: 'success',
+  },
+  failures: [],
+};
+fs.writeFileSync(capacityAlertingFixturePath, JSON.stringify(validCapacityAlertingReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -222,7 +294,7 @@ function buildValidApprovedRecord() {
         alert_thresholds_defined: true,
         escalation_runbook_ref: 'docs/runbooks/escalation.md',
         approver: 'sre-lead',
-        evidence: ['Prometheus alerts tested with alertmanager route'],
+        evidence: [capacityAlertingFixturePath],
         notes: 'Verified SLO and alerting',
       },
       backup_and_disaster_recovery: {
@@ -1156,7 +1228,7 @@ test('validateReadiness accepts valid passed evidence dossier with database base
       'utf8'
     );
     const rec = buildValidApprovedRecord();
-    rec.sections.slo_and_alerting.evidence = [passedDossierPath];
+    rec.sections.slo_and_alerting.evidence = [capacityAlertingFixturePath, passedDossierPath];
     const res = validateApprovedRecord(rec);
     assert.strictEqual(res.categoryBlockers.slo_and_alerting, undefined);
   } finally {
@@ -2694,4 +2766,148 @@ test('deployment drill helper functions handle edge cases and missing parameters
     api: '45s',
     worker: '60s',
   });
+});
+
+test('approved slo_and_alerting requires a child report beyond prose, declaration, or dossier', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-cap-child-'));
+  try {
+    const proseRecord = buildValidApprovedRecord();
+    proseRecord.sections.slo_and_alerting.evidence = ['All capacity targets confirmed in staging'];
+    const b1 = validateApprovedRecord(proseRecord).categoryBlockers.slo_and_alerting || [];
+    assert.ok(
+      b1.some((b) => b.includes('A successful capacity and alerting drill child JSON report is required')),
+      `Expected child report blocker for prose, got: ${JSON.stringify(b1)}`
+    );
+
+    const dossierPath = path.join(dir, 'launch-evidence-dossier-test.json');
+    fs.writeFileSync(dossierPath, JSON.stringify({
+      version: '1.0.0',
+      overall_status: 'PASSED',
+      stages: [{ stage_id: 'capacity_alerting', status: 'PASSED' }],
+      dossier_version: '1.0.0',
+    }));
+    const dossierRecord = buildValidApprovedRecord();
+    dossierRecord.sections.slo_and_alerting.evidence = [dossierPath];
+    const b2 = validateApprovedRecord(dossierRecord).categoryBlockers.slo_and_alerting || [];
+    assert.ok(
+      b2.some((b) => b.includes('A successful capacity and alerting drill child JSON report is required')),
+      `Expected child report blocker for dossier alone, got: ${JSON.stringify(b2)}`
+    );
+
+    const badNamePath = path.join(dir, 'capacity-alerting-drill-evidence-empty.json');
+    fs.writeFileSync(badNamePath, JSON.stringify({ notes: 'not a capacity drill report' }));
+    const badNameRecord = buildValidApprovedRecord();
+    badNameRecord.sections.slo_and_alerting.evidence = [badNamePath];
+    const b3 = validateApprovedRecord(badNameRecord).categoryBlockers.slo_and_alerting || [];
+    assert.ok(
+      b3.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed')),
+      `Expected child report blocker for non-candidate JSON, got: ${JSON.stringify(b3)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('capacity alerting child report validates producer fields, timestamps, alerts, capacity, telemetry, and DoS resilience', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-cap-validate-'));
+  try {
+    const file = path.join(dir, 'capacity-alerting-drill-evidence-drill.json');
+    const record = buildValidApprovedRecord();
+    record.sections.slo_and_alerting.evidence = [file];
+
+    const mutations = [
+      (s) => { s.status = 'failed'; },
+      (s) => { s.summary.alertVerification = 'failed'; },
+      (s) => { s.summary.capacitySloCompliance = 'failed'; },
+      (s) => { s.summary.dosResilience = 'failed'; },
+      (s) => { s.summary.databaseBaselineCompliance = 'failed'; },
+      (s) => { s.alerts.valid = false; },
+      (s) => { s.alerts.ruleCount = 10; },
+      (s) => { s.alerts.errors = ['rule error']; },
+      (s) => { s.alerts.simulations[0].passed = false; },
+      (s) => { s.capacity.status = 'failed'; },
+      (s) => { s.capacity.compliance.overallPassed = false; },
+      (s) => { s.capacity.compliance.availabilityPassed = false; },
+      (s) => { s.capacity.compliance.latencyPassed = false; },
+      (s) => { s.capacity.compliance.throughputPassed = false; },
+      (s) => { s.capacity.compliance.databaseAcquisitionLatencyPassed = false; },
+      (s) => { s.capacity.compliance.databaseQueryLatencyPassed = false; },
+      (s) => { s.capacity.compliance.monotonicDbAcquisition = false; },
+      (s) => { s.capacity.compliance.monotonicDbQuery = false; },
+      (s) => { s.databaseTelemetryBaseline.status = 'breached'; },
+      (s) => { s.databaseTelemetryBaseline.postgresExporter.up = 0; },
+      (s) => { s.databaseTelemetryBaseline.postgresExporter.lastScrapeError = 1; },
+      (s) => { s.databaseTelemetryBaseline.postgresServer.pgUp = 0; },
+      (s) => { s.databaseTelemetryBaseline.connectionPool.api.requestsWaiting = 1; },
+      (s) => { s.databaseTelemetryBaseline.connectionPool.worker.requestsWaiting = 1; },
+      (s) => { s.databaseTelemetryBaseline.poolAcquisitionLatency.api.p95Ms = 60; },
+      (s) => { s.databaseTelemetryBaseline.queryExecutionDuration.api.p95Ms = 120; },
+      (s) => { s.databaseTelemetryBaseline.serverActivity.lockWaits = 1; },
+      (s) => { s.dosResilience.status = 'failed'; },
+      (s) => { s.failures = ['simulated failure']; },
+      (s) => { s.timestamp = 'invalid-timestamp'; },
+      (s) => { s.timestamp = new Date(fixedNow.getTime() + 60000).toISOString(); },
+      (s) => { delete s.timestamp; },
+      (s) => { s.durationMs = -5; },
+    ];
+
+    for (const mutate of mutations) {
+      const copy = structuredClone(validCapacityAlertingReport);
+      mutate(copy);
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.slo_and_alerting || [];
+      assert.ok(
+        blockers.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed') || b.includes('reports capacity and alerting drill failure')),
+        `Expected invalid report blocker, got: ${JSON.stringify(blockers)}`
+      );
+    }
+
+    for (const validTs of ['20260828T120000Z', '2026-08-28T12:00:00.000Z', '2026-08-28T12:00:00Z']) {
+      const copy = structuredClone(validCapacityAlertingReport);
+      copy.timestamp = validTs;
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.slo_and_alerting;
+      assert.strictEqual(blockers, undefined, `Expected timestamp ${validTs} to pass validation`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('wildcard capacity alerting evidence rejects a failed child alongside a valid child', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-cap-wildcard-'));
+  try {
+    const goodPath = path.join(dir, 'capacity-alerting-drill-evidence-1.json');
+    const badPath = path.join(dir, 'capacity-alerting-drill-evidence-2.json');
+    fs.writeFileSync(goodPath, JSON.stringify(validCapacityAlertingReport));
+    fs.writeFileSync(badPath, JSON.stringify({ ...validCapacityAlertingReport, status: 'failed' }));
+
+    const record = buildValidApprovedRecord();
+    record.sections.slo_and_alerting.evidence = [path.join(dir, 'capacity-alerting-drill-evidence-*.json')];
+    const blockers = validateApprovedRecord(record).categoryBlockers.slo_and_alerting || [];
+    assert.ok(
+      blockers.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed')),
+      `Expected blocker for bad report alongside good report, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('capacity alerting helper functions handle edge cases and missing parameters safely', () => {
+  assert.strictEqual(isCapacityAlertingCandidate(), false);
+  assert.strictEqual(isCapacityAlertingCandidate({ parsed: null }), false);
+  assert.strictEqual(isCapacityAlertingCandidate({ file: 'capacity-alerting-drill-evidence-test.json' }), false);
+  assert.strictEqual(isCapacityAlertingCandidate({ file: 'capacity-alerting-drill-evidence-test.json', parsed: null }), false);
+  assert.strictEqual(isCapacityAlertingCandidate({ file: 'capacity-alerting-drill-evidence-test.json', parsed: [1, 2, 3] }), false);
+  assert.strictEqual(isCapacityAlertingCandidate({ file: 'capacity-alerting-drill-evidence-test.json', parsed: { stages: [] } }), false);
+  assert.strictEqual(isCapacityAlertingCandidate({ file: 'capacity-alerting-drill-evidence-test.json', parsed: { dossier_version: '1.0' } }), false);
+  assert.strictEqual(isCapacityAlertingCandidate({ file: 'capacity-alerting-drill-evidence-test.json', parsed: {} }), true);
+  assert.strictEqual(isCapacityAlertingCandidate({ parsed: { drill_type: 'capacity_and_prometheus_alerting_drill' } }), true);
+  assert.strictEqual(isCapacityAlertingCandidate({ file: 'launch-evidence-dossier.json', parsed: { stages: [] } }), false);
+  assert.strictEqual(validateCapacityAlertingReport(null), false);
+  assert.strictEqual(validateCapacityAlertingReport(validCapacityAlertingReport), true);
+  assert.strictEqual(validateCapacityAlertingReport({ ...validCapacityAlertingReport, capacity: { ...validCapacityAlertingReport.capacity, sloTargets: ['invalid'] } }), false);
+  assert.strictEqual(parseCapacityAlertingTimestamp('invalid-date'), null);
+  assert.ok(parseCapacityAlertingTimestamp('20260828T120000Z') instanceof Date);
 });

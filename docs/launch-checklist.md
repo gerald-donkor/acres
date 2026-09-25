@@ -130,6 +130,8 @@ do not report failure.
   - Requires `capacity_target_rps` to be a positive number ≥ 100 RPS;
   - Requires `max_database_acquisition_p95_latency_ms` to be a positive number ≤ 50ms;
   - Requires `max_database_query_p95_latency_ms` to be a positive number ≤ 100ms;
+  - Requires a referenced, valid, successful capacity alerting child JSON report in `evidence`;
+  - Validates child report `status: "success"`, valid nonfuture UTC `timestamp`, empty `failures` array, all summary flags `passed`, `alerts.valid: true`, `ruleCount >= 11`, all simulations `passed`, `capacity.compliance.overallPassed: true` with all individual compliance flags `true`, `databaseTelemetryBaseline.status: "verified"` with exporter/server up, zero waiting connections, acquisition p95 ≤ 50ms, query execution p95 ≤ 100ms, zero lock waits, and `dosResilience.status: "success"`;
   - Fails closed if approved evidence reports `summary.databaseBaselineCompliance: "failed"` or `databaseTelemetryBaseline.status: "breached"`.
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)

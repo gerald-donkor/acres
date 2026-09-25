@@ -412,6 +412,126 @@ function validateDeploymentDrillReport(report, now) {
   return true;
 }
 
+function isCapacityAlertingCandidate({ file, parsed } = {}) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  if (Array.isArray(parsed.stages) || parsed.dossier_version !== undefined) return false;
+  const name = typeof file === 'string' ? path.basename(file) : '';
+  if (name.includes('capacity-alerting-drill-evidence-') || name.includes('capacity-alerting')) return true;
+  return (
+    parsed.drill_type === 'capacity_and_prometheus_alerting_drill' ||
+    (parsed.summary &&
+      typeof parsed.summary === 'object' &&
+      typeof parsed.alerts === 'object' &&
+      typeof parsed.capacity === 'object' &&
+      typeof parsed.databaseTelemetryBaseline === 'object' &&
+      typeof parsed.dosResilience === 'object')
+  );
+}
+
+function parseCapacityAlertingTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const basic = parseUtcDate(value, true);
+  if (basic) return basic;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value)) {
+    const d = new Date(value);
+    if (Number.isFinite(d.getTime())) {
+      const iso = d.toISOString();
+      if (iso === value || iso.replace(/\.000Z$/, 'Z') === value) return d;
+    }
+  }
+  return null;
+}
+
+function validateCapacityAlertingReport(report, now) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const timestamp = parseCapacityAlertingTimestamp(report.timestamp || report.drill_timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!timestamp || timestamp.getTime() > evalNow.getTime()) return false;
+  if (report.status !== 'success') return false;
+  if (report.durationMs !== undefined) {
+    if (typeof report.durationMs !== 'number' || !Number.isFinite(report.durationMs) || report.durationMs < 0) {
+      return false;
+    }
+  }
+  if (!Array.isArray(report.failures) || report.failures.length > 0) return false;
+
+  const summary = report.summary;
+  if (!summary || typeof summary !== 'object' || Array.isArray(summary)) return false;
+  if (summary.alertVerification !== 'passed') return false;
+  if (summary.capacitySloCompliance !== 'passed') return false;
+  if (summary.dosResilience !== 'passed') return false;
+  if (summary.databaseBaselineCompliance !== 'passed') return false;
+
+  const alerts = report.alerts;
+  if (!alerts || typeof alerts !== 'object' || Array.isArray(alerts)) return false;
+  if (alerts.valid !== true) return false;
+  if (typeof alerts.ruleCount !== 'number' || !Number.isInteger(alerts.ruleCount) || alerts.ruleCount < 11) return false;
+  if (!Array.isArray(alerts.errors) || alerts.errors.length > 0) return false;
+  if (!Array.isArray(alerts.rules) || alerts.rules.length < 11) return false;
+  if (!Array.isArray(alerts.simulations) || alerts.simulations.length < 11) return false;
+  if (alerts.simulations.some((s) => !s || typeof s !== 'object' || s.passed !== true)) return false;
+
+  const capacity = report.capacity;
+  if (!capacity || typeof capacity !== 'object' || Array.isArray(capacity)) return false;
+  if (capacity.status !== 'passed') return false;
+  const comp = capacity.compliance;
+  if (!comp || typeof comp !== 'object' || Array.isArray(comp)) return false;
+  if (
+    comp.availabilityPassed !== true ||
+    comp.latencyPassed !== true ||
+    comp.throughputPassed !== true ||
+    comp.databaseAcquisitionLatencyPassed !== true ||
+    comp.databaseQueryLatencyPassed !== true ||
+    comp.monotonicDbAcquisition !== true ||
+    comp.monotonicDbQuery !== true ||
+    comp.overallPassed !== true
+  ) {
+    return false;
+  }
+  if (capacity.sloTargets !== undefined) {
+    if (!capacity.sloTargets || typeof capacity.sloTargets !== 'object' || Array.isArray(capacity.sloTargets)) {
+      return false;
+    }
+    const targets = capacity.sloTargets;
+    if (typeof targets.availabilityTargetPercent === 'number' && targets.availabilityTargetPercent < 99.9) return false;
+    if (typeof targets.maxP95LatencyMs === 'number' && (targets.maxP95LatencyMs <= 0 || targets.maxP95LatencyMs > 500)) return false;
+    if (typeof targets.capacityTargetRps === 'number' && targets.capacityTargetRps < 100) return false;
+    if (
+      typeof targets.maxDatabaseAcquisitionP95LatencyMs === 'number' &&
+      (targets.maxDatabaseAcquisitionP95LatencyMs <= 0 || targets.maxDatabaseAcquisitionP95LatencyMs > 50)
+    ) {
+      return false;
+    }
+    if (
+      typeof targets.maxDatabaseQueryP95LatencyMs === 'number' &&
+      (targets.maxDatabaseQueryP95LatencyMs <= 0 || targets.maxDatabaseQueryP95LatencyMs > 100)
+    ) {
+      return false;
+    }
+  }
+
+  const db = report.databaseTelemetryBaseline;
+  if (!db || typeof db !== 'object' || Array.isArray(db)) return false;
+  if (db.status !== 'verified') return false;
+  if (!db.postgresExporter || db.postgresExporter.up !== 1 || db.postgresExporter.lastScrapeError !== 0) return false;
+  if (!db.postgresServer || db.postgresServer.pgUp !== 1) return false;
+  if (!db.connectionPool || typeof db.connectionPool !== 'object') return false;
+  if (!db.connectionPool.api || db.connectionPool.api.requestsWaiting !== 0) return false;
+  if (!db.connectionPool.worker || db.connectionPool.worker.requestsWaiting !== 0) return false;
+  if (!db.poolAcquisitionLatency || typeof db.poolAcquisitionLatency !== 'object') return false;
+  if (!db.poolAcquisitionLatency.api || typeof db.poolAcquisitionLatency.api.p95Ms !== 'number' || db.poolAcquisitionLatency.api.p95Ms > 50) return false;
+  if (!db.poolAcquisitionLatency.worker || typeof db.poolAcquisitionLatency.worker.p95Ms !== 'number' || db.poolAcquisitionLatency.worker.p95Ms > 50) return false;
+  if (!db.queryExecutionDuration || typeof db.queryExecutionDuration !== 'object') return false;
+  if (!db.queryExecutionDuration.api || typeof db.queryExecutionDuration.api.p95Ms !== 'number' || db.queryExecutionDuration.api.p95Ms > 100) return false;
+  if (!db.queryExecutionDuration.worker || typeof db.queryExecutionDuration.worker.p95Ms !== 'number' || db.queryExecutionDuration.worker.p95Ms > 100) return false;
+  if (!db.serverActivity || typeof db.serverActivity !== 'object' || db.serverActivity.lockWaits !== 0) return false;
+
+  const dos = report.dosResilience;
+  if (!dos || typeof dos !== 'object' || Array.isArray(dos) || dos.status !== 'success') return false;
+
+  return true;
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -735,6 +855,85 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
       addBlocker(category, `Approved evidence file '${ref}' reports volume encryption compliance failure (summary.volumeEncryptionCompliance: "${parsed.summary.volumeEncryptionCompliance}")`);
     }
 
+    // Capacity & alerting drill child evidence checks
+    if (
+      file.includes('capacity-alerting-drill-evidence-') ||
+      file.includes('capacity-alerting') ||
+      parsed.drill_type === 'capacity_and_prometheus_alerting_drill' ||
+      (parsed.summary &&
+        typeof parsed.summary === 'object' &&
+        typeof parsed.alerts === 'object' &&
+        typeof parsed.capacity === 'object' &&
+        typeof parsed.dosResilience === 'object')
+    ) {
+      if (typeof parsed.status === 'string' && parsed.status.toLowerCase() !== 'success') {
+        addBlocker(category, `Approved evidence file '${ref}' reports capacity and alerting drill failure (status: "${parsed.status}")`);
+      }
+      if (parsed.summary && typeof parsed.summary === 'object') {
+        if (typeof parsed.summary.alertVerification === 'string' && parsed.summary.alertVerification.toLowerCase() !== 'passed') {
+          addBlocker(category, `Approved evidence file '${ref}' reports alert verification failure (summary.alertVerification: "${parsed.summary.alertVerification}")`);
+        }
+        if (typeof parsed.summary.capacitySloCompliance === 'string' && parsed.summary.capacitySloCompliance.toLowerCase() !== 'passed') {
+          addBlocker(category, `Approved evidence file '${ref}' reports capacity SLO compliance failure (summary.capacitySloCompliance: "${parsed.summary.capacitySloCompliance}")`);
+        }
+        if (typeof parsed.summary.dosResilience === 'string' && parsed.summary.dosResilience.toLowerCase() !== 'passed') {
+          addBlocker(category, `Approved evidence file '${ref}' reports DoS resilience failure (summary.dosResilience: "${parsed.summary.dosResilience}")`);
+        }
+        if (typeof parsed.summary.databaseBaselineCompliance === 'string' && parsed.summary.databaseBaselineCompliance.toLowerCase() !== 'passed') {
+          addBlocker(category, `Approved evidence file '${ref}' reports database baseline compliance failure (summary.databaseBaselineCompliance: "${parsed.summary.databaseBaselineCompliance}")`);
+        }
+      }
+      if (parsed.alerts && typeof parsed.alerts === 'object') {
+        if (parsed.alerts.valid === false) {
+          addBlocker(category, `Approved evidence file '${ref}' reports alert verification invalid (alerts.valid: false)`);
+        }
+        if (typeof parsed.alerts.ruleCount === 'number' && parsed.alerts.ruleCount < 11) {
+          addBlocker(category, `Approved evidence file '${ref}' reports insufficient alert rules tested (alerts.ruleCount: ${parsed.alerts.ruleCount})`);
+        }
+        if (Array.isArray(parsed.alerts.simulations)) {
+          const failedSims = parsed.alerts.simulations.filter((s) => s && s.passed === false);
+          if (failedSims.length > 0) {
+            addBlocker(category, `Approved evidence file '${ref}' reports ${failedSims.length} failed alert simulation(s)`);
+          }
+        }
+      }
+      if (parsed.capacity && typeof parsed.capacity === 'object') {
+        if (parsed.capacity.compliance && typeof parsed.capacity.compliance === 'object') {
+          if (parsed.capacity.compliance.overallPassed === false) {
+            addBlocker(category, `Approved evidence file '${ref}' reports capacity SLO overall compliance failure`);
+          }
+          if (parsed.capacity.compliance.availabilityPassed === false) {
+            addBlocker(category, `Approved evidence file '${ref}' reports availability SLO compliance failure`);
+          }
+          if (parsed.capacity.compliance.latencyPassed === false) {
+            addBlocker(category, `Approved evidence file '${ref}' reports latency SLO compliance failure`);
+          }
+          if (parsed.capacity.compliance.throughputPassed === false) {
+            addBlocker(category, `Approved evidence file '${ref}' reports throughput SLO compliance failure`);
+          }
+          if (parsed.capacity.compliance.databaseAcquisitionLatencyPassed === false) {
+            addBlocker(category, `Approved evidence file '${ref}' reports database pool acquisition latency SLO compliance failure`);
+          }
+          if (parsed.capacity.compliance.databaseQueryLatencyPassed === false) {
+            addBlocker(category, `Approved evidence file '${ref}' reports database query execution latency SLO compliance failure`);
+          }
+        }
+      }
+      if (parsed.databaseTelemetryBaseline && typeof parsed.databaseTelemetryBaseline === 'object') {
+        if (typeof parsed.databaseTelemetryBaseline.status === 'string' && parsed.databaseTelemetryBaseline.status.toLowerCase() !== 'verified') {
+          addBlocker(category, `Approved evidence file '${ref}' reports database baseline failure (databaseTelemetryBaseline.status: "${parsed.databaseTelemetryBaseline.status}")`);
+        }
+      }
+      if (parsed.dosResilience && typeof parsed.dosResilience === 'object') {
+        if (typeof parsed.dosResilience.status === 'string' && parsed.dosResilience.status.toLowerCase() !== 'success') {
+          addBlocker(category, `Approved evidence file '${ref}' reports DoS resilience failure (dosResilience.status: "${parsed.dosResilience.status}")`);
+        }
+      }
+      if (Array.isArray(parsed.failures) && parsed.failures.length > 0) {
+        addBlocker(category, `Approved evidence file '${ref}' reports ${parsed.failures.length} capacity and alerting failure(s)`);
+      }
+    }
+
     // SAST drill child evidence checks
     if (
       file.includes('sast-scan-evidence-') ||
@@ -837,6 +1036,7 @@ function validateReadiness(record, _filePath, options = {}) {
   const volumeEvidence = [];
   const secretEvidence = [];
   const deploymentEvidence = [];
+  const capacityEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -912,6 +1112,7 @@ function validateReadiness(record, _filePath, options = {}) {
             if (sectionName === 'volume_encryption') volumeEvidence.push(...parsedFiles);
             if (sectionName === 'secrets_management') secretEvidence.push(...parsedFiles);
             if (sectionName === 'deployment_and_rollback') deploymentEvidence.push(...parsedFiles);
+            if (sectionName === 'slo_and_alerting') capacityEvidence.push(...parsedFiles);
           }
         });
       }
@@ -1076,6 +1277,12 @@ function validateReadiness(record, _filePath, options = {}) {
     }
     if (!sloSec.escalation_runbook_ref || typeof sloSec.escalation_runbook_ref !== 'string') {
       addBlocker('slo_and_alerting', 'Escalation runbook reference is required');
+    }
+    const capacityCandidates = capacityEvidence.filter(isCapacityAlertingCandidate);
+    if (capacityCandidates.length === 0) {
+      addBlocker('slo_and_alerting', 'A successful capacity and alerting drill child JSON report is required');
+    } else if (capacityCandidates.some(({ parsed }) => !validateCapacityAlertingReport(parsed, now))) {
+      addBlocker('slo_and_alerting', 'A referenced capacity and alerting report is invalid or failed');
     }
   }
 
@@ -1468,4 +1675,7 @@ module.exports = {
   isDeploymentDrillCandidate,
   validateDeploymentDrillReport,
   DEPLOYMENT_DRAIN_PERIODS,
+  isCapacityAlertingCandidate,
+  parseCapacityAlertingTimestamp,
+  validateCapacityAlertingReport,
 };

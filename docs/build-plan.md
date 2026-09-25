@@ -1039,3 +1039,26 @@ The unresolved example still failed closed (0 approved categories, 11 blocked,
 70 blockers). Report consistency does not replace operator verification: the
 operator must still manage production deployment targets, OCI registry credentials,
 and execute live zero-downtime rollbacks before approving launch.
+
+**Prompt 194 verification (2026-09-25):** Approved Category 5 records now
+require a concrete capacity and alerting drill child JSON report in `evidence`
+alongside declared SLO targets, alert recipients, defined thresholds, and escalation
+runbook reference. Content at a custom path qualifies by report structure and content;
+a declaration, prose, filename alone, or the unified dossier does not. The validator
+requires a real, nonfuture UTC `timestamp` (basic `YYYYMMDDTHHMMSSZ` or ISO 8601),
+`status: "success"`, empty `failures` array, all 4 summary compliance flags
+(`alertVerification`, `capacitySloCompliance`, `dosResilience`, `databaseBaselineCompliance`)
+reporting `"passed"`, `alerts.valid: true`, integer `ruleCount >= 11`, all simulations
+reporting `passed: true`, empty `alerts.errors` array, `capacity.compliance.overallPassed: true`
+with all individual compliance flags (`availabilityPassed`, `latencyPassed`, `throughputPassed`,
+`databaseAcquisitionLatencyPassed`, `databaseQueryLatencyPassed`, `monotonicDbAcquisition`,
+`monotonicDbQuery`) reporting `true`, `databaseTelemetryBaseline.status: "verified"` with
+exporter/server reporting up, zero connection pool waiting requests, acquisition p95 ≤ 50ms,
+query execution p95 ≤ 100ms, zero lock waits, and `dosResilience.status: "success"`.
+Every referenced child report, including wildcard matches, must pass; a malformed or failed
+report blocks even beside a valid one. The readiness suite passed 78/78; `ops:templates`
+reported `ops template check passed`, `ops:check` exited 0, lint, typecheck, build, and
+`git diff --check` passed cleanly. The unresolved example still failed closed (0 approved
+categories, 11 blocked, 70 blockers). Report consistency does not replace operator verification:
+the operator must still manage live Prometheus/Alertmanager endpoints, PagerDuty/on-call routing,
+and active incident runbooks before approving launch.
