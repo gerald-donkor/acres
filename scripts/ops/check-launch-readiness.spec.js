@@ -12,6 +12,9 @@ const {
   REQUIRED_SECRET_KEYS,
   isSecretRotationCandidate,
   validateSecretRotationReport,
+  isDeploymentDrillCandidate,
+  validateDeploymentDrillReport,
+  DEPLOYMENT_DRAIN_PERIODS,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -116,6 +119,36 @@ const validSecretRotationReport = {
   },
 };
 fs.writeFileSync(secretRotationFixturePath, JSON.stringify(validSecretRotationReport));
+const deploymentDrillFixturePath = path.join(restoreFixtureDir, 'deployment-drill-evidence-valid.json');
+const validDeploymentDrillReport = {
+  drill_timestamp: '20260828T120000Z',
+  duration_ms: 1200,
+  duration_seconds: 1,
+  caddyfile: 'infra/caddy/Caddyfile.example',
+  compose_file: 'infra/compose/docker-compose.production.example.yml',
+  dry_run: true,
+  caddy_routing_verified: true,
+  caddy_routes_tested: 12,
+  security_headers_verified: true,
+  s3_sigv4_host_preserved: true,
+  migrations_verified: true,
+  migration_count: 5,
+  schema_backward_compatible: true,
+  operational_templates_verified: true,
+  secrets_scan_verified: true,
+  readiness_probes_verified: true,
+  probe_live_tested: false,
+  graceful_drain_periods_verified: {
+    caddy: '30s',
+    next: '30s',
+    api: '45s',
+    worker: '60s',
+  },
+  network_isolation_verified: true,
+  rollback_procedure_verified: true,
+  status: 'success',
+};
+fs.writeFileSync(deploymentDrillFixturePath, JSON.stringify(validDeploymentDrillReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -256,11 +289,11 @@ function buildValidApprovedRecord() {
           },
           client_provenance_evidence: 'artifact:client-attestation-1',
           server_provenance_evidence: 'artifact:server-attestation-1',
-          live_drill_evidence: 'artifact:live-drill-1',
+          live_drill_evidence: deploymentDrillFixturePath,
         },
         live_readiness_drill_completed: true,
         approver: 'release-manager',
-        evidence: ['Staging deployment and rollback drill executed successfully'],
+        evidence: [deploymentDrillFixturePath],
         notes: 'Verified deployment and rollback posture',
       },
       optional_ai_posture: {
@@ -1598,6 +1631,9 @@ test('validateReadiness accepts valid passed deployment & secret rotation eviden
     fs.writeFileSync(
       passedDepPath,
       JSON.stringify({
+        drill_timestamp: '20260828T120000Z',
+        duration_ms: 1200,
+        duration_seconds: 1,
         status: 'success',
         schema_backward_compatible: true,
         rollback_procedure_verified: true,
@@ -1605,6 +1641,18 @@ test('validateReadiness accepts valid passed deployment & secret rotation eviden
         network_isolation_verified: true,
         migration_count: 23,
         caddy_routes_tested: 12,
+        security_headers_verified: true,
+        s3_sigv4_host_preserved: true,
+        migrations_verified: true,
+        operational_templates_verified: true,
+        secrets_scan_verified: true,
+        readiness_probes_verified: true,
+        graceful_drain_periods_verified: {
+          caddy: '30s',
+          next: '30s',
+          api: '45s',
+          worker: '60s',
+        },
       }),
       'utf8'
     );
@@ -2515,4 +2563,135 @@ test('secret rotation helper functions handle edge cases and missing parameters 
   assert.strictEqual(isSecretRotationCandidate({ parsed: { drill_type: 'zero_downtime_secret_rotation_and_compromise_response' } }), true);
   assert.strictEqual(validateSecretRotationReport(null), false);
   assert.strictEqual(validateSecretRotationReport(validSecretRotationReport), true);
+});
+
+test('approved deployment_and_rollback requires a child report beyond prose, declaration, or dossier', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-dep-child-req-'));
+  try {
+    const record = buildValidApprovedRecord();
+    record.sections.deployment_and_rollback.evidence = ['Staging deployment and rollback drill executed successfully'];
+    record.sections.deployment_and_rollback.release.live_drill_evidence = 'artifact:live-drill-1';
+    const b1 = validateApprovedRecord(record).categoryBlockers.deployment_and_rollback || [];
+    assert.ok(
+      b1.some((b) => b.includes('A successful deployment drill child JSON report is required')),
+      `Expected child report blocker for prose evidence, got: ${JSON.stringify(b1)}`
+    );
+
+    const fakeDossier = path.join(dir, 'launch-evidence-dossier-20260828T120000Z.json');
+    fs.writeFileSync(fakeDossier, JSON.stringify({
+      version: '1.0.0',
+      overall_status: 'PASSED',
+      deploymentBaseline: { status: 'verified' },
+      summary: { deploymentCompliance: 'passed', rollbackCompliance: 'passed' },
+    }));
+    record.sections.deployment_and_rollback.evidence = [fakeDossier];
+    const b2 = validateApprovedRecord(record).categoryBlockers.deployment_and_rollback || [];
+    assert.ok(
+      b2.some((b) => b.includes('A successful deployment drill child JSON report is required')),
+      `Expected child report blocker when only dossier referenced, got: ${JSON.stringify(b2)}`
+    );
+
+    const nonCandidate = path.join(dir, 'deployment-notes.json');
+    fs.writeFileSync(nonCandidate, JSON.stringify({ notes: 'drill run successfully' }));
+    record.sections.deployment_and_rollback.evidence = [nonCandidate];
+    const b3 = validateApprovedRecord(record).categoryBlockers.deployment_and_rollback || [];
+    assert.ok(
+      b3.some((b) => b.includes('A successful deployment drill child JSON report is required')),
+      `Expected child report blocker for non-candidate JSON, got: ${JSON.stringify(b3)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('deployment drill child report validates producer fields, timestamps, routes, migrations, and drain periods', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-dep-validate-'));
+  try {
+    const file = path.join(dir, 'deployment-drill-evidence-drill.json');
+    const record = buildValidApprovedRecord();
+    record.sections.deployment_and_rollback.evidence = [file];
+    record.sections.deployment_and_rollback.release.live_drill_evidence = file;
+
+    const mutations = [
+      (s) => { s.status = 'failed'; },
+      (s) => { s.schema_backward_compatible = false; },
+      (s) => { s.rollback_procedure_verified = false; },
+      (s) => { s.caddy_routing_verified = false; },
+      (s) => { s.caddy_routes_tested = 11; },
+      (s) => { s.caddy_routes_tested = '12'; },
+      (s) => { s.network_isolation_verified = false; },
+      (s) => { s.security_headers_verified = false; },
+      (s) => { s.s3_sigv4_host_preserved = false; },
+      (s) => { s.migrations_verified = false; },
+      (s) => { s.migration_count = -1; },
+      (s) => { s.migration_count = '5'; },
+      (s) => { s.operational_templates_verified = false; },
+      (s) => { s.secrets_scan_verified = false; },
+      (s) => { s.readiness_probes_verified = false; },
+      (s) => { s.graceful_drain_periods_verified.caddy = '10s'; },
+      (s) => { s.graceful_drain_periods_verified.worker = '30s'; },
+      (s) => { delete s.graceful_drain_periods_verified.api; },
+      (s) => { s.drill_timestamp = 'invalid-timestamp'; },
+      (s) => { s.drill_timestamp = new Date(fixedNow.getTime() + 60000).toISOString(); },
+      (s) => { delete s.drill_timestamp; },
+      (s) => { s.duration_ms = -5; },
+    ];
+
+    for (const mutate of mutations) {
+      const copy = structuredClone(validDeploymentDrillReport);
+      mutate(copy);
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.deployment_and_rollback || [];
+      assert.ok(
+        blockers.some((b) => b.includes('A referenced deployment drill report is invalid or failed') || b.includes('reports deployment drill failure')),
+        `Expected invalid report blocker, got: ${JSON.stringify(blockers)}`
+      );
+    }
+
+    for (const validTs of ['20260828T120000Z', '2026-08-28T12:00:00.000Z', '2026-08-28T12:00:00Z']) {
+      const copy = structuredClone(validDeploymentDrillReport);
+      copy.drill_timestamp = validTs;
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.deployment_and_rollback;
+      assert.strictEqual(blockers, undefined, `Expected timestamp ${validTs} to pass validation`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('wildcard deployment drill evidence rejects a failed child alongside a valid child', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-dep-wildcard-'));
+  try {
+    const goodPath = path.join(dir, 'deployment-drill-evidence-1.json');
+    const badPath = path.join(dir, 'deployment-drill-evidence-2.json');
+    fs.writeFileSync(goodPath, JSON.stringify(validDeploymentDrillReport));
+    fs.writeFileSync(badPath, JSON.stringify({ ...validDeploymentDrillReport, status: 'failed', schema_backward_compatible: false }));
+
+    const record = buildValidApprovedRecord();
+    record.sections.deployment_and_rollback.evidence = [path.join(dir, 'deployment-drill-evidence-*.json')];
+    record.sections.deployment_and_rollback.release.live_drill_evidence = goodPath;
+    const blockers = validateApprovedRecord(record).categoryBlockers.deployment_and_rollback || [];
+    assert.ok(
+      blockers.some((b) => b.includes('A referenced deployment drill report is invalid or failed')),
+      `Expected blocker for bad report alongside good report, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('deployment drill helper functions handle edge cases and missing parameters safely', () => {
+  assert.strictEqual(isDeploymentDrillCandidate(), false);
+  assert.strictEqual(isDeploymentDrillCandidate({ parsed: null }), false);
+  assert.strictEqual(isDeploymentDrillCandidate({ file: 'deployment-drill-evidence-test.json', parsed: {} }), true);
+  assert.strictEqual(isDeploymentDrillCandidate({ parsed: { schema_backward_compatible: true, caddy_routing_verified: true, rollback_procedure_verified: true } }), true);
+  assert.strictEqual(validateDeploymentDrillReport(null), false);
+  assert.strictEqual(validateDeploymentDrillReport(validDeploymentDrillReport), true);
+  assert.deepStrictEqual(DEPLOYMENT_DRAIN_PERIODS, {
+    caddy: '30s',
+    next: '30s',
+    api: '45s',
+    worker: '60s',
+  });
 });

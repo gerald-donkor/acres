@@ -332,6 +332,86 @@ function validateSecretRotationReport(report, now) {
   return true;
 }
 
+const DEPLOYMENT_DRAIN_PERIODS = {
+  caddy: '30s',
+  next: '30s',
+  api: '45s',
+  worker: '60s',
+};
+
+function isDeploymentDrillCandidate({ file, parsed } = {}) {
+  const name = typeof file === 'string' ? path.basename(file) : '';
+  if (name.includes('deployment-drill-evidence-') || name.includes('deployment-drill')) return true;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  return (
+    typeof parsed.schema_backward_compatible === 'boolean' &&
+    typeof parsed.caddy_routing_verified === 'boolean' &&
+    typeof parsed.rollback_procedure_verified === 'boolean'
+  );
+}
+
+function parseDeploymentDrillTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const basic = parseUtcDate(value, true);
+  if (basic) return basic;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value)) {
+    const d = new Date(value);
+    if (Number.isFinite(d.getTime())) {
+      const iso = d.toISOString();
+      if (iso === value || iso.replace(/\.000Z$/, 'Z') === value) return d;
+    }
+  }
+  return null;
+}
+
+function validateDeploymentDrillReport(report, now) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const timestamp = parseDeploymentDrillTimestamp(report.drill_timestamp || report.timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!timestamp || timestamp.getTime() > evalNow.getTime()) return false;
+  if (report.status !== 'success') return false;
+  if (report.schema_backward_compatible !== true) return false;
+  if (report.rollback_procedure_verified !== true) return false;
+  if (report.caddy_routing_verified !== true) return false;
+  if (
+    typeof report.caddy_routes_tested !== 'number' ||
+    !Number.isInteger(report.caddy_routes_tested) ||
+    report.caddy_routes_tested < 12
+  ) {
+    return false;
+  }
+  if (report.security_headers_verified !== true) return false;
+  if (report.s3_sigv4_host_preserved !== true) return false;
+  if (report.migrations_verified !== true) return false;
+  if (
+    typeof report.migration_count !== 'number' ||
+    !Number.isInteger(report.migration_count) ||
+    report.migration_count < 0
+  ) {
+    return false;
+  }
+  if (report.operational_templates_verified !== true) return false;
+  if (report.secrets_scan_verified !== true) return false;
+  if (report.readiness_probes_verified !== true) return false;
+  if (report.network_isolation_verified !== true) return false;
+  if (
+    !report.graceful_drain_periods_verified ||
+    typeof report.graceful_drain_periods_verified !== 'object' ||
+    Array.isArray(report.graceful_drain_periods_verified)
+  ) {
+    return false;
+  }
+  for (const [svc, expected] of Object.entries(DEPLOYMENT_DRAIN_PERIODS)) {
+    if (report.graceful_drain_periods_verified[svc] !== expected) return false;
+  }
+  if (report.duration_ms !== undefined) {
+    if (typeof report.duration_ms !== 'number' || !Number.isFinite(report.duration_ms) || report.duration_ms < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -756,6 +836,7 @@ function validateReadiness(record, _filePath, options = {}) {
   const recoveryEvidence = [];
   const volumeEvidence = [];
   const secretEvidence = [];
+  const deploymentEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -830,6 +911,7 @@ function validateReadiness(record, _filePath, options = {}) {
             if (sectionName === 'backup_and_disaster_recovery') recoveryEvidence.push(...parsedFiles);
             if (sectionName === 'volume_encryption') volumeEvidence.push(...parsedFiles);
             if (sectionName === 'secrets_management') secretEvidence.push(...parsedFiles);
+            if (sectionName === 'deployment_and_rollback') deploymentEvidence.push(...parsedFiles);
           }
         });
       }
@@ -1203,7 +1285,12 @@ function validateReadiness(record, _filePath, options = {}) {
           continue;
         }
         refs.push(ref);
-        if (!external) checkEvidenceFile(ref, category, addBlocker, baseDirs);
+        if (!external) {
+          const parsedFiles = checkEvidenceFile(ref, category, addBlocker, baseDirs);
+          if (field === 'live_drill_evidence') {
+            deploymentEvidence.push(...parsedFiles);
+          }
+        }
       }
       if (new Set(refs).size !== refs.length) {
         addBlocker(category, 'Release evidence references must be distinct');
@@ -1215,6 +1302,12 @@ function validateReadiness(record, _filePath, options = {}) {
           addBlocker(category, `${envName} does not match release.current.${role}`);
         }
       }
+    }
+    const deploymentCandidates = deploymentEvidence.filter(isDeploymentDrillCandidate);
+    if (deploymentCandidates.length === 0) {
+      addBlocker('deployment_and_rollback', 'A successful deployment drill child JSON report is required');
+    } else if (deploymentCandidates.some(({ parsed }) => !validateDeploymentDrillReport(parsed, now))) {
+      addBlocker('deployment_and_rollback', 'A referenced deployment drill report is invalid or failed');
     }
   }
 
@@ -1372,4 +1465,7 @@ module.exports = {
   validateSecretRotationReport,
   SECRET_ROTATION_STEPS,
   SECRET_ROTATION_CLASSES,
+  isDeploymentDrillCandidate,
+  validateDeploymentDrillReport,
+  DEPLOYMENT_DRAIN_PERIODS,
 };

@@ -1010,8 +1010,32 @@ validated as a positive number ≤ 90 days. Every referenced child report,
 including wildcard matches, must pass; a malformed or failed report blocks even
 beside a valid one. The readiness suite passed 70/70; `ops:templates` reported
 `ops template check passed`, `ops:check` exited 0, lint, typecheck, build, and
-`git diff --check` passed cleanly. The unresolved example still failed closed
-(0 approved categories, 11 blocked, 70 blockers). Report consistency does not
-replace operator verification: the operator must still manage production secret
-stores (Vault/AWS SM/Infisical), execute live zero-downtime rotations, and audit
-credentials out of band before approving launch.
+`git diff --check` passed cleanly. The unresolved example still failed closed (0 approved categories, 11 blocked,
+70 blockers). Report consistency does not replace operator verification: the
+operator must still manage production secret stores (Vault/AWS SM/Infisical),
+execute live zero-downtime rotations, and audit credentials out of band before
+approving launch.
+
+**Prompt 193 verification (2026-09-25):** Approved Category 10 records now
+require a concrete deployment drill child JSON report in `evidence` or
+`release.live_drill_evidence` alongside target host profile, image registry
+path, deployment approver, rollback authority, image provenance policy, live drill
+completion declaration, and an immutable release record. Content at a custom path
+qualifies by report structure and content; a declaration, prose, filename alone,
+or the unified dossier does not. The validator requires a real, nonfuture UTC
+`timestamp` (basic `YYYYMMDDTHHMMSSZ` or ISO 8601), `status: "success"`,
+`schema_backward_compatible: true`, `rollback_procedure_verified: true`,
+`caddy_routing_verified: true`, integer `caddy_routes_tested >= 12`,
+`security_headers_verified: true`, `s3_sigv4_host_preserved: true`,
+`migrations_verified: true`, integer `migration_count >= 0`,
+`operational_templates_verified: true`, `secrets_scan_verified: true`,
+`readiness_probes_verified: true`, `network_isolation_verified: true`, and
+matching `graceful_drain_periods_verified` (`caddy: '30s'`, `next: '30s'`,
+`api: '45s'`, `worker: '60s'`). Every referenced child report, including wildcard
+matches, must pass; a malformed or failed report blocks even beside a valid one.
+The readiness suite passed 74/74; `ops:templates` reported `ops template check passed`,
+`ops:check` exited 0, lint, typecheck, build, and `git diff --check` passed cleanly.
+The unresolved example still failed closed (0 approved categories, 11 blocked,
+70 blockers). Report consistency does not replace operator verification: the
+operator must still manage production deployment targets, OCI registry credentials,
+and execute live zero-downtime rollbacks before approving launch.

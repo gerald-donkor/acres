@@ -243,8 +243,24 @@ do not report failure.
 - Accept: target host profile, pinned OCI registry path, named
   `deployment_approver` and `rollback_authority`, image provenance policy
   (signed, additive migrations only), `live_readiness_drill_completed: true`
+- An approved record must reference a concrete, successful deployment drill
+  child JSON report in `evidence` or `release.live_drill_evidence`. A custom
+  path is accepted by report content, not name. Its UTC timestamp (basic
+  `YYYYMMDDTHHMMSSZ` or ISO 8601) must be real and no later than validation
+  time. Every referenced deployment drill report must pass: `status: "success"`,
+  `schema_backward_compatible: true`, `rollback_procedure_verified: true`,
+  `caddy_routing_verified: true`, integer `caddy_routes_tested >= 12`,
+  `security_headers_verified: true`, `s3_sigv4_host_preserved: true`,
+  `migrations_verified: true`, integer `migration_count >= 0`,
+  `operational_templates_verified: true`, `secrets_scan_verified: true`,
+  `readiness_probes_verified: true`, `network_isolation_verified: true`,
+  and matching `graceful_drain_periods_verified` (`caddy: '30s'`, `next: '30s'`,
+  `api: '45s'`, `worker: '60s'`). A failed or malformed report blocks even
+  alongside a valid one. The unified dossier alone, prose, and
+  `live_readiness_drill_completed: true` without child evidence are insufficient.
 - Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
-  - Rejects deployment drill evidence reporting failure (`status !== 'success'`), schema backward compatibility failure (`schema_backward_compatible: false`), rollback procedure verification failure, Caddy routing verification failure, or network isolation verification failure;
+  - Requires at least one concrete, successful deployment drill child report in `evidence` or `release.live_drill_evidence` for approved status;
+  - Rejects deployment drill evidence reporting failure (`status !== 'success'`), schema backward compatibility failure (`schema_backward_compatible: false`), rollback procedure verification failure, Caddy routing verification failure, network isolation verification failure, missing security headers or S3 sigv4 verification, untested routes (< 12), invalid migration counts, or invalid graceful drain periods;
   - Rejects Unified Launch Evidence Dossiers reporting `deploymentBaseline.status: "breached"`, `summary.deploymentCompliance: "failed"`, or `summary.rollbackCompliance: "failed"`.
 
 ### 11. No-AI Production Posture (`optional_ai_posture`)
