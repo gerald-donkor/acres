@@ -1,0 +1,44 @@
+# 190 — bind storage reconciliation approval to evidence
+
+## Scope and why this is next
+
+The committed baseline is `35c523c` on `main`, with a clean worktree at planning time. Phase 12's launch gate remains open pending operator evidence and approval. Prompt 189 required an actual successful restore child report for approved Category 6 (`backup_and_disaster_recovery`), but the same category still accepts `db_object_reconciliation_tested: true` without any referenced reconciliation report. The existing generic JSON check rejects reported errors when a reconciliation file is referenced; it does not require that file or validate a complete clean result. Bind this remaining Category 6 declaration to the child report emitted by `scripts/ops/reconcile-storage-objects.js`.
+
+This is a dependency-safe Phase 12 step following prompt 189. It tightens the local approval gate; it does not declare the launch ready or substitute for a production operator's review of the drill scope and coverage.
+
+## References and verified baseline
+
+- Re-read `AGENTS.md` §§2–7 and 10, `docs/build-plan.md` §§13–14 and 22, `docs/operations.md` Phase 12 operations/backup/restore records, `docs/launch-checklist.md` Category 6 and sign-off, `docs/security.md` TM-19, and `docs/skills.md` before execution.
+- Inspect `scripts/ops/check-launch-readiness.js` evidence resolution, generic reconciliation checks and Category 6 validation; `scripts/ops/check-launch-readiness.spec.js` approved fixture; `scripts/ops/reconcile-storage-objects.js` report producer and its spec; `scripts/ops/run-launch-drills.sh` stage 7 and dossier derivation; `infra/launch/readiness.example.json`; `scripts/ops/check-production-templates.sh`; and root `package.json` before edits.
+- The producer emits a JSON object with ISO UTC `timestamp`, `summary` counts (`totalDatabaseObjects`, `activeDatabaseObjects`, `pendingOrDeletedExcluded`, `totalBucketObjects`, `matchedObjects`, `missingObjects`, `orphanObjects`, `mismatchedObjects`), `summary.status` (`clean`, `warning`, or `error`), `summary.exitCode`, and arrays `matched`, `missing`, `orphans`, `mismatches`. Stage 7 writes `reconcile-report-<timestamp>.json` after the restore child report; its dossier currently treats a report with no missing/mismatched objects and exit code 0 as passed. The checked-in example is unresolved and must remain so.
+- No static design comp or pixel measurement applies. The measurable contract is the producer's actual count/array structure and an authentic UTC calendar timestamp, compared with validation time. Do not invent a maximum evidence age, minimum object count, or requirement that reconciliation and restore occur on the same UTC date.
+
+## Implementation contract
+
+1. Add a focused validator for the reconciliation child report in `scripts/ops/check-launch-readiness.js`. Recognize candidate reports by report structure and, for malformed candidate handling, the established `reconcile-report-` / `reconciliation-report` filename patterns; do not accept a filename or arbitrary JSON object alone. Require a plain object with a valid, nonfuture UTC ISO timestamp; a summary object with all producer count fields as finite nonnegative safe integers; arrays for all four result collections; and count/array consistency (`matchedObjects`, `missingObjects`, `orphanObjects`, `mismatchedObjects`). Require `missingObjects === 0`, `mismatchedObjects === 0`, empty corresponding arrays, `summary.exitCode === 0`, and a permitted successful status (`clean` or `warning`). A warning with orphans remains an operator-visible result, consistent with the producer's default exit behavior; require its orphan count/array to agree. Validate only invariants justified by the producer; do not require nonzero objects or fabricate stronger coverage.
+2. For approved Category 6, require at least one concrete `.json` reconciliation child report in `evidence`, resolved by the existing cwd-first/readiness-directory path rules. Keep `db_object_reconciliation_tested: true` as a required operator declaration, but no longer accept the declaration, prose, or the unified dossier alone as reconciliation proof. A report at a custom path qualifies by its content. Every referenced candidate must validate; a malformed/failed report blocks approval even beside a valid one or inside a wildcard expansion. Keep the prompt 189 restore requirement and all generic evidence failure checks intact. Reuse parsed evidence from the existing resolver so files are not read twice.
+3. Use the validator's existing injected `options.now` for deterministic future-time tests and the real current time for CLI use. Bound new diagnostics to a generic Category 6 reason: do not echo object keys, bucket names, paths with credentials, report body, or supplied timestamps. Preserve existing behavior for other categories.
+4. Build or adapt temporary, test-generated reconciliation JSON in the approved readiness fixture and clean up the temp directory. Test no evidence, prose-only, dossier-only, arbitrary JSON with a plausible filename, a valid report at an arbitrary custom path, wildcard with mixed good/bad reports, missing/wrong-type fields, negative/nonintegral/unsafe counts, invalid or future timestamps, false clean status with nonempty missing/mismatch arrays, count/array disagreement, nonzero exit code, warning-with-orphans success, error/failed status, and continued acceptance of the valid restore report. Assert unrelated approved categories remain unaffected. Do not check in fabricated production evidence.
+5. Update `docs/operations.md`, `docs/launch-checklist.md` Category 6, and the Phase 12 verification record in `docs/build-plan.md` with the accepted child-report contract, exact verification results, and remaining operator duties. Keep `infra/launch/readiness.example.json` unresolved with empty evidence; change it or template assertions only if a concrete contract clarification needs it. No new `AGENTS.md` index row is needed.
+
+## Impact, non-goals, and rollback
+
+- No application route, schema, UI, API, queue, production storage configuration, backup schedule, or credential changes. An approved readiness record that previously relied only on `db_object_reconciliation_tested: true` will now fail closed until its actual child report is referenced.
+- This validates consistency of an operator-supplied JSON report, not its provenance or live execution. The operator still must verify the target production PostgreSQL and Garage instances, bucket/prefix/tenant scope, backup transfer and freshness, zero-object results, warning orphans, and restore under representative load. Do not run a live drill or create a synthetic production receipt in this step.
+- If the producer's actual successful report violates a proposed structural invariant, reconcile the invariant with producer code and tests before enforcement. Rollback is limited to this Category 6 binding and its documentation; retain prompt 189's restore gate and the generic failure checks.
+
+## Verification and review
+
+1. Re-read this approved prompt and load every named skill before code. Run `npm run ops:readiness-test`, `npm run ops:reconcile-test`, `npm run ops:templates`, and `npm run ops:check`; quote the real output. Run `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json` and record its expected fail-closed result without treating it as a test failure.
+2. Run `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check`. Inspect the whole diff and staged paths for real evidence, object keys, credentials, or unrelated changes.
+3. Dispatch a reviewer subagent through `requesting-code-review` after self-verification, providing the approved brief, base/head SHAs, changed paths, checks, and operator-supplied-evidence limitation. Evaluate feedback through `receiving-code-review`, fix verified issues, rerun affected checks, and re-review if the evidence contract changes materially.
+4. Record the implementation in owning docs, give the operator command for validating a readiness record, and commit prompt-scoped files locally on `main` with `caveman-commit`. Do not push.
+
+## SKILLS USED
+
+- `deployment-pipeline-design` — keep automated evidence validation separate from operator approval and actual production drill execution.
+- `javascript-testing-patterns` — use deterministic temporary fixtures and positive/negative report contract tests.
+- `secrets-management` — prevent object names, credentials, and report contents from leaking through new diagnostics or committed fixtures.
+- `requesting-code-review` — dispatch the required implementation review after self-verification.
+- `receiving-code-review` — verify and act on review feedback against the producer and validator contracts.
+- `caveman-commit` — write the required local commit message at execution.

@@ -136,6 +136,15 @@ do not report failure.
   integer `backup_bytes`, and finite nonnegative `duration_ms`. A failed or
   malformed report blocks even alongside a valid one. The dossier alone,
   prose, and `restore_drill_completed: true` are insufficient.
+- It must also reference a concrete reconciliation child JSON report. A custom
+  path is accepted by content; `db_object_reconciliation_tested: true`, prose,
+  a plausible filename, and the unified dossier alone are insufficient. Each
+  referenced report needs a real, nonfuture ISO UTC `timestamp`, the producer's
+  eight finite nonnegative safe-integer summary counts, four result arrays with
+  matching counts, zero missing/mismatched objects, and `exitCode: 0`. Status
+  must be `clean` with no orphans or `warning` with an accurate orphan array.
+  Every referenced report, including wildcard matches, must pass; the
+  operator reviews warning orphans and verifies the live drill's scope.
 - The schedule must run in UTC. Supported five-field cron syntax has `*` for
   hour, day of month, month, and day of week; the minute field is `*`, one
   minute `0..59`, `*/n` for `1..60`, or distinct comma-separated minutes.

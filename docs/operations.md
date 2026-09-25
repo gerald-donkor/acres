@@ -413,6 +413,18 @@ PostgreSQL and Garage coverage, freshness, and restore under actual load.
    - Asserts byte count and SHA-256 checksum alignment;
    - Excludes pending uploads, soft-deleted objects, and quarantined objects within the retention window;
    - Fails closed with exit code 1 if missing objects or corruption/checksum mismatches are found.
+   Approved Category 6 records must also reference a concrete reconciliation
+   child JSON report in `evidence`. A custom path qualifies by report content;
+   a declaration, prose, filename alone, or unified dossier does not. The
+   validator requires the producer's real, nonfuture ISO UTC `timestamp`, all
+   eight nonnegative safe-integer summary counts, all four result arrays, and
+   count/array agreement. Missing and mismatched counts and arrays must be
+   empty, `summary.exitCode` must be 0, and `summary.status` must be `clean`
+   with no orphans or `warning` with orphans. Every referenced child report,
+   including wildcard matches, must pass. A warning's orphan list remains for
+   operator review. This checks the supplied report's consistency; the
+   operator must verify live PostgreSQL/Garage scope, backup coverage,
+   freshness, zero-object results, and representative restore load.
 
 ### Data Retention & Cleanup
 

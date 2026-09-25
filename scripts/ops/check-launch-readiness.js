@@ -197,6 +197,42 @@ function validateRestoreReport(report, now) {
   return timestamp;
 }
 
+const RECONCILIATION_COUNTS = [
+  'totalDatabaseObjects', 'activeDatabaseObjects', 'pendingOrDeletedExcluded',
+  'totalBucketObjects', 'matchedObjects', 'missingObjects', 'orphanObjects',
+  'mismatchedObjects',
+];
+
+function isReconciliationCandidate({ file, parsed }) {
+  const name = path.basename(file);
+  if (name.includes('reconcile-report-') || name.includes('reconciliation-report')) return true;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  return RECONCILIATION_COUNTS.some((key) =>
+    parsed.summary && typeof parsed.summary === 'object' && key in parsed.summary) ||
+    ['matched', 'missing', 'orphans', 'mismatches'].some((key) => key in parsed);
+}
+
+function validateReconciliationReport(report, now) {
+  if (!report || typeof report !== 'object' || Array.isArray(report) ||
+      typeof report.timestamp !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(report.timestamp)) return false;
+  const timestamp = new Date(report.timestamp);
+  if (!Number.isFinite(timestamp.getTime()) || timestamp.toISOString() !== report.timestamp ||
+      timestamp.getTime() > now.getTime()) return false;
+  const summary = report.summary;
+  if (!summary || typeof summary !== 'object' || Array.isArray(summary) ||
+      RECONCILIATION_COUNTS.some((key) => !Number.isSafeInteger(summary[key]) || summary[key] < 0)) return false;
+  for (const [count, collection] of [
+    ['matchedObjects', 'matched'], ['missingObjects', 'missing'],
+    ['orphanObjects', 'orphans'], ['mismatchedObjects', 'mismatches'],
+  ]) {
+    if (!Array.isArray(report[collection]) || summary[count] !== report[collection].length) return false;
+  }
+  return summary.missingObjects === 0 && summary.mismatchedObjects === 0 &&
+    summary.exitCode === 0 &&
+    (summary.orphanObjects === 0 ? summary.status === 'clean' : summary.status === 'warning');
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -618,7 +654,7 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
 function validateReadiness(record, _filePath, options = {}) {
   const categoryBlockers = {};
   let totalApproved = 0;
-  const restoreEvidence = [];
+  const recoveryEvidence = [];
 
   function addBlocker(category, message) {
     if (!categoryBlockers[category]) {
@@ -689,7 +725,7 @@ function validateReadiness(record, _filePath, options = {}) {
         evidence.forEach((ev) => {
           if (isEvidenceFileReference(ev)) {
             const parsedFiles = checkEvidenceFile(ev.trim(), sectionName, addBlocker, baseDirs);
-            if (sectionName === 'backup_and_disaster_recovery') restoreEvidence.push(...parsedFiles);
+            if (sectionName === 'backup_and_disaster_recovery') recoveryEvidence.push(...parsedFiles);
           }
         });
       }
@@ -880,7 +916,7 @@ function validateReadiness(record, _filePath, options = {}) {
     if (!declaredDate || declaredDate.getTime() > now.getTime()) {
       addBlocker('backup_and_disaster_recovery', 'Restore drill date must be a valid, nonfuture UTC date');
     }
-    const candidates = restoreEvidence.filter(({ file, parsed }) =>
+    const candidates = recoveryEvidence.filter(({ file, parsed }) =>
       path.basename(file).startsWith('restore-drill-evidence-') ||
       (parsed && typeof parsed === 'object' && !Array.isArray(parsed) &&
         ['drill_timestamp', 'source_db', 'drill_db', 'backup_file', 'backup_bytes',
@@ -904,6 +940,12 @@ function validateReadiness(record, _filePath, options = {}) {
     }
     if (bdrSec.db_object_reconciliation_tested !== true) {
       addBlocker('backup_and_disaster_recovery', 'PostgreSQL and Garage object storage reconciliation drill must be verified (db_object_reconciliation_tested: true)');
+    }
+    const reconciliationCandidates = recoveryEvidence.filter(isReconciliationCandidate);
+    if (reconciliationCandidates.length === 0) {
+      addBlocker('backup_and_disaster_recovery', 'A successful storage reconciliation child JSON report is required');
+    } else if (reconciliationCandidates.some(({ parsed }) => !validateReconciliationReport(parsed, now))) {
+      addBlocker('backup_and_disaster_recovery', 'A referenced storage reconciliation report is invalid or failed');
     }
   }
 

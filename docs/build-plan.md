@@ -953,3 +953,22 @@ build, and `git diff --check` passed. The unresolved example still failed
 closed (0 approved categories, 11 blocked, 70 blockers). This checks report
 consistency with the operator record, not archive provenance, off-host
 transfer, Garage coverage, achieved RPO, or a restore under production load.
+
+**Prompt 190 verification (2026-09-25):** Approved Category 6 records now
+require a concrete reconciliation child JSON report in `evidence` alongside
+the restore child report and the `db_object_reconciliation_tested: true`
+declaration. Content at a custom path qualifies; a filename, prose, or unified
+dossier alone does not. Every referenced candidate, including wildcard matches,
+must have a real nonfuture ISO UTC timestamp, all eight producer summary counts
+as nonnegative safe integers, four arrays with matching counts, zero missing
+and mismatched objects, exit code 0, and a status consistent with the orphan
+count (`clean` or `warning`). A malformed or failed child blocks approval even
+beside a valid one; a warning with orphans remains operator visible. The
+readiness suite passed 61/61 and reconciliation producer suite passed 10/10;
+`ops:templates` reported `ops template check passed`, `ops:check` exited 0,
+lint, typecheck, build, and `git diff --check` passed. The unresolved example
+still failed closed (0 approved categories, 11 blocked, 70 blockers). Report
+consistency does not prove provenance or production scope: the operator still
+must verify the target PostgreSQL/Garage instances, tenant/bucket/prefix scope,
+backup transfer and freshness, zero-object results, warning orphans, and
+representative restore load before approving launch.
