@@ -266,6 +266,72 @@ function validateVolumeEncryptionReport(report, now) {
   return true;
 }
 
+const SECRET_ROTATION_STEPS = [
+  'session_rollover',
+  'csrf_rollover',
+  'database_rotation',
+  'valkey_rotation',
+  'storage_rotation',
+  'compromise_response',
+  'redaction_audit',
+];
+
+const SECRET_ROTATION_CLASSES = [
+  'session_secret',
+  'csrf_secret',
+  'postgres_passwords',
+  'valkey_password',
+  'storage_s3_keys',
+  'smtp_credentials',
+  'grafana_admin_password',
+];
+
+function isSecretRotationCandidate({ file, parsed } = {}) {
+  const name = typeof file === 'string' ? path.basename(file) : '';
+  if (name.includes('secret-rotation-evidence-') || name.includes('secret-rotation')) return true;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  return parsed.drill_type === 'zero_downtime_secret_rotation_and_compromise_response' ||
+    (Array.isArray(parsed.tested_secret_classes) && parsed.steps && typeof parsed.steps === 'object');
+}
+
+function parseSecretRotationTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const basic = parseUtcDate(value, true);
+  if (basic) return basic;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value)) {
+    const d = new Date(value);
+    if (Number.isFinite(d.getTime())) {
+      const iso = d.toISOString();
+      if (iso === value || iso.replace(/\.000Z$/, 'Z') === value) return d;
+    }
+  }
+  return null;
+}
+
+function validateSecretRotationReport(report, now) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const timestamp = parseSecretRotationTimestamp(report.timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!timestamp || timestamp.getTime() > evalNow.getTime()) return false;
+  if (report.status !== 'success') return false;
+  if (!Array.isArray(report.errors) || report.errors.length > 0) return false;
+  if (!Array.isArray(report.tested_secret_classes) ||
+      !SECRET_ROTATION_CLASSES.every((cls) => report.tested_secret_classes.includes(cls))) {
+    return false;
+  }
+  if (!report.steps || typeof report.steps !== 'object' || Array.isArray(report.steps)) return false;
+  for (const step of SECRET_ROTATION_STEPS) {
+    const s = report.steps[step];
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return false;
+    if (typeof s.status !== 'string' || s.status.toLowerCase() !== 'passed') return false;
+  }
+  const redaction = report.steps.redaction_audit;
+  if (!redaction || redaction.raw_secrets_masked !== true || redaction.zero_dev_passwords_detected !== true) {
+    return false;
+  }
+  return true;
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -689,6 +755,7 @@ function validateReadiness(record, _filePath, options = {}) {
   let totalApproved = 0;
   const recoveryEvidence = [];
   const volumeEvidence = [];
+  const secretEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -762,6 +829,7 @@ function validateReadiness(record, _filePath, options = {}) {
             const parsedFiles = checkEvidenceFile(ev.trim(), sectionName, addBlocker, baseDirs);
             if (sectionName === 'backup_and_disaster_recovery') recoveryEvidence.push(...parsedFiles);
             if (sectionName === 'volume_encryption') volumeEvidence.push(...parsedFiles);
+            if (sectionName === 'secrets_management') secretEvidence.push(...parsedFiles);
           }
         });
       }
@@ -819,11 +887,25 @@ function validateReadiness(record, _filePath, options = {}) {
     if (!secMgmt.masking_policy || typeof secMgmt.masking_policy !== 'string') {
       addBlocker('secrets_management', 'Secret masking policy is required');
     }
-    if (!secMgmt.rotation_cadence_days || typeof secMgmt.rotation_cadence_days !== 'number' || secMgmt.rotation_cadence_days <= 0) {
-      addBlocker('secrets_management', 'Rotation cadence (in days) must be a positive number');
+    if (
+      typeof secMgmt.rotation_cadence_days !== 'number' ||
+      !Number.isFinite(secMgmt.rotation_cadence_days) ||
+      secMgmt.rotation_cadence_days <= 0 ||
+      secMgmt.rotation_cadence_days > 90
+    ) {
+      addBlocker(
+        'secrets_management',
+        `Rotation cadence (in days) must be a positive number <= 90 days (received: ${secMgmt.rotation_cadence_days})`
+      );
     }
     if (!secMgmt.compromise_response_plan || typeof secMgmt.compromise_response_plan !== 'string') {
       addBlocker('secrets_management', 'Compromise response runbook reference is required');
+    }
+    const secretCandidates = secretEvidence.filter(isSecretRotationCandidate);
+    if (secretCandidates.length === 0) {
+      addBlocker('secrets_management', 'A successful secret rotation child JSON report is required');
+    } else if (secretCandidates.some(({ parsed }) => !validateSecretRotationReport(parsed, now))) {
+      addBlocker('secrets_management', 'A referenced secret rotation report is invalid or failed');
     }
   }
 
@@ -1286,4 +1368,8 @@ module.exports = {
   DEV_PASSWORDS,
   isVolumeEncryptionCandidate,
   validateVolumeEncryptionReport,
+  isSecretRotationCandidate,
+  validateSecretRotationReport,
+  SECRET_ROTATION_STEPS,
+  SECRET_ROTATION_CLASSES,
 };

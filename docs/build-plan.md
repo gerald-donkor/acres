@@ -991,3 +991,27 @@ unresolved example still failed closed (0 approved categories, 11 blocked, 70 bl
 Report consistency does not replace operator verification: the operator must still
 inspect detached LUKS2 keyfiles or cloud KMS keys, confirm dual-custody parameters,
 and physically audit production volume mounts before approving launch.
+
+**Prompt 192 verification (2026-09-25):** Approved Category 3 records now
+require a concrete secret rotation child JSON report in `evidence` alongside
+the runtime injection mechanism, masking policy, compromise runbook reference,
+and a rotation cadence not exceeding 90 days. Content at a custom path qualifies
+by report structure and content; a declaration, prose, filename alone, or the
+unified dossier does not. The validator requires a real, nonfuture UTC
+`timestamp` (basic `YYYYMMDDTHHMMSSZ` or ISO 8601), `status: "success"`, empty
+`errors` array, all 7 tested secret classes (`session_secret`, `csrf_secret`,
+`postgres_passwords`, `valkey_password`, `storage_s3_keys`, `smtp_credentials`,
+`grafana_admin_password`), and all 7 verified steps (`session_rollover`,
+`csrf_rollover`, `database_rotation`, `valkey_rotation`, `storage_rotation`,
+`compromise_response`, `redaction_audit`) reporting `status: "passed"` with
+secret redaction audit confirmation (`raw_secrets_masked: true`,
+`zero_dev_passwords_detected: true`). In addition, `rotation_cadence_days` is
+validated as a positive number ≤ 90 days. Every referenced child report,
+including wildcard matches, must pass; a malformed or failed report blocks even
+beside a valid one. The readiness suite passed 70/70; `ops:templates` reported
+`ops template check passed`, `ops:check` exited 0, lint, typecheck, build, and
+`git diff --check` passed cleanly. The unresolved example still failed closed
+(0 approved categories, 11 blocked, 70 blockers). Report consistency does not
+replace operator verification: the operator must still manage production secret
+stores (Vault/AWS SM/Infisical), execute live zero-downtime rotations, and audit
+credentials out of band before approving launch.

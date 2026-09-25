@@ -67,9 +67,24 @@ do not report failure.
 - Drill/verify: `scripts/ops/scan-secrets.sh`, `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`
 - Evidence: `backups/secret-rotation-evidence-<timestamp>.json`
 - Accept: runtime injection mechanism (Vault/AWS SM/Infisical), log masking
-  policy, 90-day rotation cadence, compromise response runbook reference
+  policy, 90-day rotation cadence (≤ 90 days), compromise response runbook reference
+- An approved record must reference a concrete, successful secret rotation
+  child JSON report in `evidence`. A custom path is accepted by report content,
+  not name. Its UTC timestamp (basic `YYYYMMDDTHHMMSSZ` or ISO 8601) must be real
+  and no later than validation time. Every referenced secret rotation report must
+  pass: `status: "success"`, empty `errors` array, all 7 tested secret classes
+  (`session_secret`, `csrf_secret`, `postgres_passwords`, `valkey_password`,
+  `storage_s3_keys`, `smtp_credentials`, `grafana_admin_password`), all 7
+  verified steps (`session_rollover`, `csrf_rollover`, `database_rotation`,
+  `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`)
+  with `status: "passed"`, and secret redaction audit confirmation
+  (`raw_secrets_masked: true`, `zero_dev_passwords_detected: true`). A failed or
+  malformed report blocks even alongside a valid one. The unified dossier alone,
+  prose, and declarations without child evidence are insufficient.
 - Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
-  - Rejects secret rotation drill evidence reporting failure (`status !== 'success'`), any errors in `errors[]`, any failed rotation step among the 7 verified steps (`session_rollover`, `csrf_rollover`, `database_rotation`, `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`), or secret redaction / leak audit failure (`raw_secrets_masked: false`, `zero_dev_passwords_detected: false`);
+  - Requires at least one concrete, successful secret rotation child report in `evidence` for approved status;
+  - Requires `rotation_cadence_days` to be a positive number ≤ 90 days;
+  - Rejects secret rotation drill evidence reporting failure (`status !== 'success'`), any errors in `errors[]`, missing secret classes or steps, any failed rotation step among the 7 verified steps (`session_rollover`, `csrf_rollover`, `database_rotation`, `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`), or secret redaction / leak audit failure (`raw_secrets_masked: false`, `zero_dev_passwords_detected: false`);
   - Rejects Unified Launch Evidence Dossiers reporting `secretRotationBaseline.status: "breached"` or `summary.secretRotationCompliance: "failed"`.
 
 ### 4. Secret References (`secret_references`)

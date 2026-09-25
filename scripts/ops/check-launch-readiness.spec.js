@@ -10,6 +10,8 @@ const {
   checkPlaceholdersAndSecrets,
   REQUIRED_SECTIONS,
   REQUIRED_SECRET_KEYS,
+  isSecretRotationCandidate,
+  validateSecretRotationReport,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -78,6 +80,42 @@ const validVolumeEncryptionReport = {
   readinessEvaluated: null,
 };
 fs.writeFileSync(volumeEncryptionFixturePath, JSON.stringify(validVolumeEncryptionReport));
+const secretRotationFixturePath = path.join(restoreFixtureDir, 'secret-rotation-evidence-valid.json');
+const validSecretRotationReport = {
+  drill_type: 'zero_downtime_secret_rotation_and_compromise_response',
+  timestamp: '20260828T120000Z',
+  dry_run: true,
+  status: 'success',
+  errors: [],
+  environment_topology: {
+    live_postgres: false,
+    live_valkey: false,
+    live_api: false,
+  },
+  tested_secret_classes: [
+    'session_secret',
+    'csrf_secret',
+    'postgres_passwords',
+    'valkey_password',
+    'storage_s3_keys',
+    'smtp_credentials',
+    'grafana_admin_password',
+  ],
+  steps: {
+    session_rollover: { status: 'passed' },
+    csrf_rollover: { status: 'passed' },
+    database_rotation: { status: 'passed' },
+    valkey_rotation: { status: 'passed' },
+    storage_rotation: { status: 'passed' },
+    compromise_response: { status: 'passed' },
+    redaction_audit: {
+      status: 'passed',
+      raw_secrets_masked: true,
+      zero_dev_passwords_detected: true,
+    },
+  },
+};
+fs.writeFileSync(secretRotationFixturePath, JSON.stringify(validSecretRotationReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -119,7 +157,7 @@ function buildValidApprovedRecord() {
         rotation_cadence_days: 90,
         compromise_response_plan: 'docs/runbooks/compromise-response.md',
         approver: 'security-lead',
-        evidence: ['Vault agent runtime injection drill completed'],
+        evidence: [secretRotationFixturePath],
         notes: 'Verified secrets management',
       },
       secret_references: {
@@ -1575,8 +1613,18 @@ test('validateReadiness accepts valid passed deployment & secret rotation eviden
       passedSecPath,
       JSON.stringify({
         drill_type: 'zero_downtime_secret_rotation_and_compromise_response',
+        timestamp: '2026-08-28T12:00:00.000Z',
         status: 'success',
         errors: [],
+        tested_secret_classes: [
+          'session_secret',
+          'csrf_secret',
+          'postgres_passwords',
+          'valkey_password',
+          'storage_s3_keys',
+          'smtp_credentials',
+          'grafana_admin_password',
+        ],
         steps: {
           session_rollover: { status: 'passed' },
           csrf_rollover: { status: 'passed' },
@@ -2128,7 +2176,7 @@ test('validateReadiness accepts valid passed SAST, SBOM, container security chil
     );
 
     const rec = buildValidApprovedRecord();
-    rec.sections.secrets_management.evidence = [passedSbomPath, passedSastPath, passedContainerPath, passedDossierPath];
+    rec.sections.secrets_management.evidence = [secretRotationFixturePath, passedSbomPath, passedSastPath, passedContainerPath, passedDossierPath];
 
     const res = validateApprovedRecord(rec);
     assert.strictEqual(res.categoryBlockers.secrets_management, undefined);
@@ -2336,4 +2384,135 @@ test('volume encryption helper functions handle edge cases and missing parameter
   assert.strictEqual(isVolumeEncryptionCandidate({ parsed: { drill_type: 'production_volume_encryption_and_key_separation' } }), true);
   assert.strictEqual(validateVolumeEncryptionReport(null), false);
   assert.strictEqual(validateVolumeEncryptionReport(validVolumeEncryptionReport), true);
+});
+
+test('approved secrets_management requires a child report beyond prose, declaration, or dossier', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-sec-report-'));
+  try {
+    const record = buildValidApprovedRecord();
+    record.sections.secrets_management.evidence = ['Vault agent runtime injection drill completed'];
+    const b1 = validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+    assert.ok(
+      b1.some((b) => b.includes('A successful secret rotation child JSON report is required')),
+      `Expected child report requirement blocker, got: ${JSON.stringify(b1)}`
+    );
+
+    const fakeDossier = path.join(dir, 'launch-evidence-dossier-sec.json');
+    fs.writeFileSync(fakeDossier, JSON.stringify({
+      version: '1.0.0',
+      overall_status: 'PASSED',
+      secretRotationBaseline: { status: 'verified' },
+      summary: { secretRotationCompliance: 'passed' },
+    }));
+    record.sections.secrets_management.evidence = [fakeDossier];
+    const b2 = validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+    assert.ok(
+      b2.some((b) => b.includes('A successful secret rotation child JSON report is required')),
+      `Expected child report blocker when only dossier referenced, got: ${JSON.stringify(b2)}`
+    );
+
+    const nonCandidate = path.join(dir, 'secret-notes.json');
+    fs.writeFileSync(nonCandidate, JSON.stringify({ notes: 'drill run successfully' }));
+    record.sections.secrets_management.evidence = [nonCandidate];
+    const b3 = validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+    assert.ok(
+      b3.some((b) => b.includes('A successful secret rotation child JSON report is required')),
+      `Expected child report blocker for non-candidate JSON, got: ${JSON.stringify(b3)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('secret rotation child report validates producer fields, timestamps, secret classes, steps, and redaction audit', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-sec-validate-'));
+  try {
+    const file = path.join(dir, 'secret-rotation-evidence-drill.json');
+    const record = buildValidApprovedRecord();
+    record.sections.secrets_management.evidence = [file];
+
+    const mutations = [
+      (s) => { s.status = 'failed'; },
+      (s) => { s.errors = ['rotation timeout on valkey']; },
+      (s) => { s.timestamp = 'invalid-timestamp'; },
+      (s) => { s.timestamp = new Date(fixedNow.getTime() + 60000).toISOString(); },
+      (s) => { delete s.timestamp; },
+      (s) => { s.tested_secret_classes = ['session_secret']; },
+      (s) => { delete s.steps.session_rollover; },
+      (s) => { s.steps.session_rollover.status = 'failed'; },
+      (s) => { delete s.steps.redaction_audit; },
+      (s) => { s.steps.redaction_audit.raw_secrets_masked = false; },
+      (s) => { s.steps.redaction_audit.zero_dev_passwords_detected = false; },
+    ];
+
+    for (const mutate of mutations) {
+      const copy = structuredClone(validSecretRotationReport);
+      mutate(copy);
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+      assert.ok(
+        blockers.some((b) => b.includes('A referenced secret rotation report is invalid or failed')),
+        `Expected invalid report blocker, got: ${JSON.stringify(blockers)}`
+      );
+    }
+
+    for (const validTs of ['20260828T120000Z', '2026-08-28T12:00:00.000Z', '2026-08-28T12:00:00Z']) {
+      const copy = structuredClone(validSecretRotationReport);
+      copy.timestamp = validTs;
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.secrets_management;
+      assert.strictEqual(blockers, undefined, `Expected timestamp ${validTs} to pass validation`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('approved secrets_management rejects rotation cadence exceeding 90 days or non-positive', () => {
+  const record = buildValidApprovedRecord();
+
+  const invalidCadences = [91, 100, 365, 0, -1, '90', null, undefined, NaN];
+  for (const cadence of invalidCadences) {
+    record.sections.secrets_management.rotation_cadence_days = cadence;
+    const blockers = validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+    assert.ok(
+      blockers.some((b) => b.includes('Rotation cadence (in days) must be a positive number <= 90 days')),
+      `Expected cadence blocker for cadence=${cadence}, got: ${JSON.stringify(blockers)}`
+    );
+  }
+
+  record.sections.secrets_management.rotation_cadence_days = 90;
+  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secrets_management, undefined);
+
+  record.sections.secrets_management.rotation_cadence_days = 30;
+  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secrets_management, undefined);
+});
+
+test('wildcard secret rotation evidence rejects a failed child alongside a valid child', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-sec-wildcard-'));
+  try {
+    const goodPath = path.join(dir, 'secret-rotation-evidence-1.json');
+    const badPath = path.join(dir, 'secret-rotation-evidence-2.json');
+    fs.writeFileSync(goodPath, JSON.stringify(validSecretRotationReport));
+    fs.writeFileSync(badPath, JSON.stringify({ ...validSecretRotationReport, status: 'failed', errors: ['boom'] }));
+
+    const record = buildValidApprovedRecord();
+    record.sections.secrets_management.evidence = [path.join(dir, 'secret-rotation-evidence-*.json')];
+    const blockers = validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+    assert.ok(
+      blockers.some((b) => b.includes('A referenced secret rotation report is invalid or failed')),
+      `Expected blocker for bad report alongside good report, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('secret rotation helper functions handle edge cases and missing parameters safely', () => {
+  const { isSecretRotationCandidate, validateSecretRotationReport } = require('./check-launch-readiness');
+  assert.strictEqual(isSecretRotationCandidate(), false);
+  assert.strictEqual(isSecretRotationCandidate({ parsed: null }), false);
+  assert.strictEqual(isSecretRotationCandidate({ parsed: { drill_type: 'zero_downtime_secret_rotation_and_compromise_response' } }), true);
+  assert.strictEqual(validateSecretRotationReport(null), false);
+  assert.strictEqual(validateSecretRotationReport(validSecretRotationReport), true);
 });
