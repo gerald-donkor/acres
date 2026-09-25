@@ -204,7 +204,7 @@ do not report failure.
 
 | # | `stage_id` | covers |
 | --- | --- | --- |
-| 1 | `static_templates` | production templates, docker runtime, secret scan |
+| 1 | `static_templates` | production templates, docker runtime, secret scan; `static-integrity-evidence-<timestamp>.json` |
 | 2 | `supply_chain_sast` | SBOM + licenses, SAST scan, container security |
 | 3 | `ingress_deployment` | Caddy routing verify, deployment drill |
 | 4 | `volume_encryption` | volume encryption + key separation |
@@ -219,6 +219,7 @@ Flags: `--dry-run` (offline where the underlying tool supports it),
 console. Stages 1–6 pass fully offline; stage 7 needs drill infra (§3.6).
 
 The Unified Launch Evidence Dossier aggregates structured baselines from child evidence across all operational dimensions:
+- `staticIntegrityBaseline` (stage 1): the three fixed checks, their exit codes, and total/passed/failed counts; `summary.staticIntegrityCompliance` is passed only when the complete child evidence is valid and stage 1 passed;
 - `supplyChainBaseline` (stage 2): package inventory count, license compliance verification, license violations, SAST scanned files, findings count, triaged/expired/blocking findings, container security validity, and container security checks count;
 - `deploymentBaseline` (stage 3): schema backward compatibility, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
 - `volumeEncryptionBaseline` (stage 4): stateful mount evaluation, required mount counts, and Key Separation Invariant verification;
@@ -243,6 +244,16 @@ Reference a dossier from an approved readiness section by placing its
 `evidence` array; the validator confirms the file exists, parses as JSON, and
 rejects dossiers whose `overall_status`/`status` is `"FAILED"`, or whose
 underlying baselines report breach or compliance failure.
+Stage 1 child evidence has `drill_type: "static_integrity_verification"`,
+`status`, `valid`, `totalChecks: 3`, `passedChecks`, `failedChecks`, and ordered
+`checks` for `production_templates`, `docker_runtime`, and `secret_defaults`.
+Each successful check requires `passed: true` and `exitCode: 0`; a failed
+process may report a nonzero exit code, while spawn failure reports a generic
+`failureKind: "spawn_failed"` and null exit code. The readiness validator
+rejects inconsistent child evidence and dossier static-integrity breach or
+compliance failure. Reference the child artifact alongside the dossier when
+reviewing Category 4 secret references; neither substitutes for the remaining
+operator sign-off and live drill evidence.
 
 ## 5. Incident Response Runbooks (11 Prometheus Alerts)
 

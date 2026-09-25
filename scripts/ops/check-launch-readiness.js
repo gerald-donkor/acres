@@ -12,6 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { validateImageReference } = require('./check-release-images');
+const { validateStaticEvidence } = require('./run-static-integrity-checks');
 
 const REQUIRED_SECTIONS = [
   'production_domain_tls',
@@ -210,6 +211,19 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
       : null;
     if (dbStatus === 'breached' || dbStatus === 'failed') {
       addBlocker(category, `Approved evidence file '${ref}' reports database baseline breach (databaseTelemetryBaseline.status: "${parsed.databaseTelemetryBaseline.status}")`);
+    }
+
+    if (parsed.drill_type === 'static_integrity_verification' || path.basename(file).startsWith('static-integrity-evidence-')) {
+      const result = validateStaticEvidence(parsed);
+      if (!result.valid) {
+        addBlocker(category, `Approved evidence file '${ref}' has invalid static integrity evidence${result.failedCheckId ? ` (${result.failedCheckId})` : ''}`);
+      }
+    }
+    if (parsed.staticIntegrityBaseline !== undefined && parsed.staticIntegrityBaseline?.status !== 'verified') {
+      addBlocker(category, `Approved evidence file '${ref}' reports static integrity baseline breach`);
+    }
+    if (parsed.summary?.staticIntegrityCompliance !== undefined && parsed.summary.staticIntegrityCompliance !== 'passed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports static integrity compliance failure`);
     }
 
     // Restore drill child evidence checks

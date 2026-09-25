@@ -62,6 +62,9 @@ function assertDossierSchema(dossier) {
   }
 
   assert.strictEqual(typeof dossier.summary, 'object');
+  assert.strictEqual(typeof dossier.staticIntegrityBaseline, 'object');
+  assert.ok(['verified', 'breached'].includes(dossier.staticIntegrityBaseline.status));
+  assert.ok(['passed', 'failed'].includes(dossier.summary.staticIntegrityCompliance));
   assert.strictEqual(typeof dossier.summary.databaseBaselineCompliance, 'string');
   assert.ok(['passed', 'failed'].includes(dossier.summary.databaseBaselineCompliance));
   assert.strictEqual(typeof dossier.summary.alertVerification, 'string');
@@ -163,6 +166,17 @@ test('--dry-run executes all 7 stages and emits a schema-compliant dossier', () 
     }
 
     // Stage artifacts must reference real child evidence, not just the dossier.
+    const staticStage = dossier.stages.find((s) => s.stage_id === 'static_templates');
+    const staticFile = staticStage.artifacts.find((a) => a.includes('static-integrity-evidence-'));
+    assert.ok(staticFile && fs.existsSync(staticFile));
+    const staticEvidence = JSON.parse(fs.readFileSync(staticFile, 'utf8'));
+    assert.deepStrictEqual(staticEvidence.checks.map((check) => check.id), [
+      'production_templates', 'docker_runtime', 'secret_defaults',
+    ]);
+    assert.ok(staticEvidence.checks.every((check) => check.passed && check.exitCode === 0));
+    assert.strictEqual(dossier.staticIntegrityBaseline.status, 'verified');
+    assert.strictEqual(dossier.staticIntegrityBaseline.passedChecks, 3);
+    assert.strictEqual(dossier.summary.staticIntegrityCompliance, 'passed');
     const scStage = dossier.stages.find((s) => s.stage_id === 'supply_chain_sast');
     assert.ok(
       scStage.artifacts.some((a) => a.includes('sbom-inventory-')),

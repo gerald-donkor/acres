@@ -194,7 +194,7 @@ fi
 
 # Stage 1: static templates & container runtime integrity
 run_stage "static_templates" "Templates, runtime, secret scan" \
-  "bash scripts/ops/check-production-templates.sh && bash scripts/ops/check-docker-runtime.sh && bash scripts/ops/scan-secrets.sh"
+  "node scripts/ops/run-static-integrity-checks.js --output \"${EVIDENCE_DIR}/static-integrity-evidence-${STAMP}.json\""
 
 # Stage 2: supply-chain SBOM & SAST security scanning
 run_stage "supply_chain_sast" "SBOM, SAST, container security" \
@@ -251,6 +251,8 @@ fi
 
 node -e '
 const fs = require("fs");
+const path = require("path");
+const { validateStaticEvidence } = require("./scripts/ops/run-static-integrity-checks");
 const [outputPath, version, timestamp, environment, overall, total, passed, failed, durationS, durationMs, idsRaw, descsRaw, statusesRaw, msRaw, errsRaw, artsRaw] = process.argv.slice(1);
 const ids = JSON.parse(idsRaw);
 const descs = JSON.parse(descsRaw);
@@ -267,6 +269,27 @@ const stages = ids.map((id, i) => ({
   artifacts: [...(arts[i] === "" ? [] : arts[i].split("\n")), outputPath],
   error_message: errs[i] === "" ? null : errs[i],
 }));
+
+const staticStage = stages.find((s) => s.stage_id === "static_templates");
+const staticFiles = staticStage?.artifacts.filter((artifact) =>
+  path.basename(artifact).startsWith("static-integrity-evidence-") && artifact.endsWith(".json")) || [];
+let staticEvidence = null;
+if (staticFiles.length === 1) {
+  try {
+    staticEvidence = JSON.parse(fs.readFileSync(staticFiles[0], "utf8"));
+  } catch {}
+}
+const staticPassed = staticStage?.status === "PASSED" && validateStaticEvidence(staticEvidence).valid;
+const staticIntegrityBaseline = staticPassed
+  ? {
+      status: "verified",
+      totalChecks: staticEvidence.totalChecks,
+      passedChecks: staticEvidence.passedChecks,
+      failedChecks: staticEvidence.failedChecks,
+      checks: staticEvidence.checks.map(({ id, passed, exitCode }) => ({ id, passed, exitCode })),
+    }
+  : { status: "breached", error_message: "stage 1 failed or child static integrity evidence failed verification" };
+const staticIntegrityCompliance = staticPassed ? "passed" : "failed";
 
 const capStage = stages.find((s) => s.stage_id === "capacity_alerting");
 let capEvidence = null;
@@ -596,6 +619,7 @@ const dossier = {
   failed_stages: Number(failed),
   duration_seconds: Number(durationS),
   stages,
+  staticIntegrityBaseline,
   supplyChainBaseline,
   databaseTelemetryBaseline,
   disasterRecoveryBaseline,
@@ -604,6 +628,7 @@ const dossier = {
   volumeEncryptionBaseline,
   summary: {
     staticIntegrity: statuses[0] === "PASSED" ? "passed" : "failed",
+    staticIntegrityCompliance,
     supplyChainSecurity: statuses[1] === "PASSED" ? "passed" : "failed",
     supplyChainCompliance,
     sastCompliance,

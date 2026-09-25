@@ -42,6 +42,8 @@ require_file scripts/ops/check-release-images.spec.js
 require_file scripts/ops/verify-postgres-diagnostics.js
 require_file scripts/ops/run-launch-drills.sh
 require_file scripts/ops/run-launch-drills.spec.js
+require_file scripts/ops/run-static-integrity-checks.js
+require_file scripts/ops/run-static-integrity-checks.spec.js
 require_file scripts/ops/launch-readiness.sh
 require_file docs/launch-checklist.md
 
@@ -456,7 +458,11 @@ for (const rule of alertRules) {
 }
 
 const launchDrillsScript = fs.readFileSync('scripts/ops/run-launch-drills.sh', 'utf8');
-if (!launchDrillsScript.includes('databaseBaselineCompliance') ||
+if (!launchDrillsScript.includes('run-static-integrity-checks.js --output') ||
+    !launchDrillsScript.includes('static-integrity-evidence-') ||
+    !launchDrillsScript.includes('staticIntegrityBaseline') ||
+    !launchDrillsScript.includes('staticIntegrityCompliance') ||
+    !launchDrillsScript.includes('databaseBaselineCompliance') ||
     !launchDrillsScript.includes('databaseTelemetryBaseline') ||
     !launchDrillsScript.includes('disasterRecoveryBaseline') ||
     !launchDrillsScript.includes('restoreCompliance') ||
@@ -472,7 +478,7 @@ if (!launchDrillsScript.includes('databaseBaselineCompliance') ||
     !launchDrillsScript.includes('supplyChainCompliance') ||
     !launchDrillsScript.includes('sastCompliance') ||
     !launchDrillsScript.includes('containerSecurityCompliance')) {
-  console.error('ops template check failed: scripts/ops/run-launch-drills.sh missing database, disaster recovery, deployment, secret rotation, volume encryption, or supply chain baseline dossier integration');
+  console.error('ops template check failed: scripts/ops/run-launch-drills.sh missing static integrity or other baseline dossier integration');
   process.exit(1);
 }
 

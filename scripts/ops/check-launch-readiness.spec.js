@@ -9,6 +9,7 @@ const {
   REQUIRED_SECTIONS,
   REQUIRED_SECRET_KEYS,
 } = require('./check-launch-readiness');
+const { runChecks } = require('./run-static-integrity-checks');
 
 function buildValidApprovedRecord() {
   return {
@@ -1841,4 +1842,61 @@ test('the checked-in template readiness.example.json fails closed with unresolve
     aiBlockers.some((b) => b.includes('Evidence array is empty or missing')),
     `Expected empty evidence blocker for optional_ai_posture, got: ${JSON.stringify(aiBlockers)}`
   );
+});
+
+test('static integrity child evidence accepts exact success and rejects contradictory checks', () => {
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-static-'));
+  try {
+    const file = path.join(dir, 'static-integrity-evidence-test.json');
+    const good = runChecks(() => ({ status: 0 }));
+    const record = buildValidApprovedRecord();
+    record.sections.secret_references.evidence = [file];
+    fs.writeFileSync(file, JSON.stringify(good));
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+
+    const mutations = [
+      (value) => { value.checks[0].passed = false; },
+      (value) => { value.checks[1].exitCode = 2; },
+      (value) => { value.checks[2].exitCode = null; },
+      (value) => { value.checks[1].id = value.checks[0].id; },
+      (value) => { value.checks.pop(); },
+      (value) => { value.passedChecks = 2; },
+      (value) => { value.valid = false; },
+      (value) => { value.status = 'failed'; },
+    ];
+    for (const mutate of mutations) {
+      const changed = structuredClone(good);
+      mutate(changed);
+      fs.writeFileSync(file, JSON.stringify(changed));
+      const blockers = validateApprovedRecord(record).categoryBlockers.secret_references || [];
+      assert.ok(blockers.some((blocker) => blocker.includes('invalid static integrity evidence')), JSON.stringify(blockers));
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('static integrity dossier baseline and compliance must agree with approval', () => {
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-static-dossier-'));
+  try {
+    const file = path.join(dir, 'launch-evidence-dossier-static.json');
+    const record = buildValidApprovedRecord();
+    record.sections.secret_references.evidence = [file];
+    const good = { overall_status: 'PASSED', staticIntegrityBaseline: { status: 'verified' },
+      summary: { staticIntegrity: 'passed', staticIntegrityCompliance: 'passed' } };
+    fs.writeFileSync(file, JSON.stringify(good));
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+    for (const changed of [
+      { ...good, staticIntegrityBaseline: { status: 'breached' } },
+      { ...good, summary: { ...good.summary, staticIntegrityCompliance: 'failed' } },
+      { ...good, staticIntegrityBaseline: {} },
+    ]) {
+      fs.writeFileSync(file, JSON.stringify(changed));
+      assert.ok(validateApprovedRecord(record).categoryBlockers.secret_references?.length);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

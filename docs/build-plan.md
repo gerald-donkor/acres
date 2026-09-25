@@ -916,3 +916,14 @@ checklist with incident runbooks, and readiness evidence cross-validation.
   PGPASSWORD + reachable Postgres/Garage); actionable alerts/runbooks; no
   unresolved critical security/accessibility findings; all repository,
   integration, E2E, isolation, and failure tests passing.
+
+**Prompt 187 verification (2026-09-25):** Stage 1 now produces atomic,
+structured evidence for all three fixed static checks, including individual
+exit codes and a generic spawn-failure marker. The dossier derives
+`staticIntegrityBaseline` and `summary.staticIntegrityCompliance` from that
+child artifact, while preserving `summary.staticIntegrity`. Readiness
+validation rejects malformed static child evidence and breached dossier
+fields. Runner tests passed 8/8, launch drill tests 9/9, and readiness tests
+51/51; `ops:templates`, `ops:scan-secrets`, `ops:docker-runtime`, `ops:check`,
+lint, typecheck, build, and diff checks passed. Operator launch approval and
+the stage 7 live infrastructure drill remain outstanding.
