@@ -131,11 +131,26 @@ do not report failure.
 ### 4. Secret References (`secret_references`)
 
 - Drill/verify: `scripts/ops/scan-secrets.sh`
-- Evidence: Vault policy showing all 12 indirect references
+- Evidence: a redacted `secret-reference-policy-<timestamp>.json` child report
 - Accept: all of `session`, `csrf`, `db_migrator`, `db_app`, `valkey`,
   `garage_rpc`, `garage_admin`, `garage_metrics`, `garage_s3`, `smtp`,
   `grafana_admin`, `db_monitor` present as store references; zero plaintext credentials;
   no AI/Gemini secret source (contradicts the no-AI posture)
+- An approved record must reference a concrete JSON report with
+  `drill_type: "secret_reference_policy_verification"`, a real nonfuture ISO UTC
+  `timestamp`, `status: "success"`, `errors: []`, and a nonempty opaque
+  `policy_reference`. Its `references` object must have exactly the twelve
+  source-field names in `REQUIRED_SECRET_KEYS`; each entry must contain only
+  `source` (exactly matching the approved indirect reference),
+  `access_verified: true`, and `plaintext_exposed: false`. Approved sources
+  use `vault:path#key`, `aws-sm:name`, `env:NAME`, or `file:/absolute/path` and
+  are distinct for each required field.
+  Prose, a dossier, or a filename alone cannot qualify. Every referenced JSON
+  file, including wildcard matches, must be a valid child report. Validate
+  with `node scripts/ops/check-launch-readiness.js <operator-readiness.json>`.
+  The operator obtains and redacts the live secret-store policy printout; the
+  validator checks internal consistency and cannot authenticate a hand-authored
+  report or prove live least-privilege access.
 
 ### 5. SLOs, Alerting & Capacity (`slo_and_alerting`)
 

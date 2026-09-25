@@ -1208,6 +1208,17 @@ failed closed with 0 approved categories, 11 blocked, and 70 blockers. The
 operator must obtain the actual provider receipt and public DNS printouts;
 the validator checks consistency, not provenance or live mail delivery.
 
+**Prompt 197 verification (2026-09-25):** Approved Category 4
+(`secret_references`) now requires a redacted secret-store policy child JSON
+report whose twelve entries exactly match the approved indirect references,
+confirm access checks, and explicitly record no plaintext exposure. Every
+referenced JSON child must pass; prose and a unified dossier alone do not
+qualify. The readiness suite passed 92/92; `ops:templates`, `ops:check`, lint,
+typecheck, build, and `git diff --check` passed. The unresolved example remains
+blocked (0 approved categories, 11 blocked, 70 blockers). The operator must
+obtain the live least-privilege policy printout and verify actual store access;
+the validator checks report consistency, not provenance or live permissions.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

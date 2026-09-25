@@ -23,6 +23,8 @@ const {
   validateCaddyRoutingReport,
   isSmtpDeliveryCandidate,
   validateSmtpDeliveryReport,
+  isSecretReferencePolicyCandidate,
+  validateSecretReferencePolicyReport,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -273,6 +275,31 @@ const validSmtpReport = {
   errors: [],
 };
 fs.writeFileSync(smtpFixturePath, JSON.stringify(validSmtpReport));
+const secretReferences = {
+  session_secret_source: 'vault:acres/production/session#secret',
+  csrf_secret_source: 'vault:acres/production/csrf#secret',
+  db_migrator_secret_source: 'vault:acres/production/postgres#migrator_password',
+  db_app_secret_source: 'vault:acres/production/postgres#app_password',
+  db_monitor_secret_source: 'vault:acres/production/postgres#monitor_password',
+  valkey_secret_source: 'vault:acres/production/valkey#password',
+  garage_rpc_secret_source: 'vault:acres/production/garage#rpc_secret',
+  garage_admin_secret_source: 'vault:acres/production/garage#admin_token',
+  garage_metrics_secret_source: 'vault:acres/production/garage#metrics_token',
+  garage_s3_secret_source: 'vault:acres/production/garage#s3_secret',
+  smtp_secret_source: 'vault:acres/production/smtp#password',
+  grafana_admin_secret_source: 'vault:acres/production/grafana#admin_password',
+};
+const secretPolicyFixturePath = path.join(restoreFixtureDir, 'secret-reference-policy-valid.json');
+const validSecretPolicyReport = {
+  drill_type: 'secret_reference_policy_verification',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  errors: [],
+  policy_reference: 'vault-policy-printout-123',
+  references: Object.fromEntries(Object.entries(secretReferences).map(([key, source]) =>
+    [key, { source, access_verified: true, plaintext_exposed: false }])),
+};
+fs.writeFileSync(secretPolicyFixturePath, JSON.stringify(validSecretPolicyReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -319,20 +346,9 @@ function buildValidApprovedRecord() {
       },
       secret_references: {
         status: 'approved',
-        session_secret_source: 'vault:acres/production/session#secret',
-        csrf_secret_source: 'vault:acres/production/csrf#secret',
-        db_migrator_secret_source: 'vault:acres/production/postgres#migrator_password',
-        db_app_secret_source: 'vault:acres/production/postgres#app_password',
-        db_monitor_secret_source: 'vault:acres/production/postgres#monitor_password',
-        valkey_secret_source: 'vault:acres/production/valkey#password',
-        garage_rpc_secret_source: 'vault:acres/production/garage#rpc_secret',
-        garage_admin_secret_source: 'vault:acres/production/garage#admin_token',
-        garage_metrics_secret_source: 'vault:acres/production/garage#metrics_token',
-        garage_s3_secret_source: 'vault:acres/production/garage#s3_secret',
-        smtp_secret_source: 'vault:acres/production/smtp#password',
-        grafana_admin_secret_source: 'vault:acres/production/grafana#admin_password',
+        ...secretReferences,
         approver: 'security-lead',
-        evidence: ['All secret references verified against Vault policy'],
+        evidence: [secretPolicyFixturePath],
         notes: 'Verified indirect secret references',
       },
       slo_and_alerting: {
@@ -2391,9 +2407,9 @@ test('static integrity child evidence accepts exact success and rejects contradi
     const file = path.join(dir, 'static-integrity-evidence-test.json');
     const good = runChecks(() => ({ status: 0 }));
     const record = buildValidApprovedRecord();
-    record.sections.secret_references.evidence = [file];
+    record.sections.data_retention_policy.evidence = [file];
     fs.writeFileSync(file, JSON.stringify(good));
-    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
 
     const mutations = [
       (value) => { value.checks[0].passed = false; },
@@ -2409,9 +2425,72 @@ test('static integrity child evidence accepts exact success and rejects contradi
       const changed = structuredClone(good);
       mutate(changed);
       fs.writeFileSync(file, JSON.stringify(changed));
-      const blockers = validateApprovedRecord(record).categoryBlockers.secret_references || [];
+      const blockers = validateApprovedRecord(record).categoryBlockers.data_retention_policy || [];
       assert.ok(blockers.some((blocker) => blocker.includes('invalid static integrity evidence')), JSON.stringify(blockers));
     }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('approved secret references require a matching policy child, not prose or a dossier', () => {
+  const record = buildValidApprovedRecord();
+  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+  record.sections.secret_references.evidence = ['All secret references verified against Vault policy'];
+  assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /policy child JSON report is required/);
+  record.sections.secret_references.evidence = [secretPolicyFixturePath];
+  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+  assert.equal(isSecretReferencePolicyCandidate({ parsed: {} }), true);
+  assert.equal(isSecretReferencePolicyCandidate({ parsed: [] }), false);
+});
+
+test('secret-reference policy validation rejects malformed and contradictory reports', () => {
+  const approved = buildValidApprovedRecord().sections.secret_references;
+  assert.equal(validateSecretReferencePolicyReport(validSecretPolicyReport, fixedNow, approved), true);
+  const mutations = [
+    (r) => { r.timestamp = '2026-02-30T12:00:00.000Z'; },
+    (r) => { r.timestamp = '2027-01-01T00:00:00.000Z'; },
+    (r) => { r.status = 'failed'; },
+    (r) => { r.errors = ['policy denied']; },
+    (r) => { r.policy_reference = ''; },
+    (r) => { delete r.references.session_secret_source; },
+    (r) => { r.references.gemini_api_key_source = { source: 'env:GEMINI_API_KEY', access_verified: true, plaintext_exposed: false }; },
+    (r) => { r.references.session_secret_source.source = 'vault:other/session#secret'; },
+    (r) => { r.references.session_secret_source.access_verified = false; },
+    (r) => { r.references.session_secret_source.plaintext_exposed = true; },
+    (r) => { r.references.session_secret_source.value = 'unexpected'; },
+  ];
+  for (const mutate of mutations) {
+    const report = structuredClone(validSecretPolicyReport);
+    mutate(report);
+    assert.equal(validateSecretReferencePolicyReport(report, fixedNow, approved), false);
+  }
+  approved.session_secret_source = 'plainpassword123';
+  assert.equal(validateSecretReferencePolicyReport(validSecretPolicyReport, fixedNow, approved), false);
+  approved.session_secret_source = 'vault:postgres://alice:password@db.example/acres#secret';
+  assert.equal(validateSecretReferencePolicyReport(validSecretPolicyReport, fixedNow, approved), false);
+  approved.session_secret_source = approved.csrf_secret_source;
+  assert.equal(validateSecretReferencePolicyReport(validSecretPolicyReport, fixedNow, approved), false);
+});
+
+test('secret-reference approval rejects custom-path failures and mixed wildcard evidence', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-policy-'));
+  try {
+    const good = path.join(dir, 'custom.json');
+    const bad = path.join(dir, 'other.json');
+    fs.writeFileSync(good, JSON.stringify(validSecretPolicyReport));
+    const record = buildValidApprovedRecord();
+    record.sections.secret_references.evidence = [good];
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+    fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
+    record.sections.secret_references.evidence = [path.join(dir, '*.json')];
+    assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /invalid or failed/);
+    fs.writeFileSync(bad, JSON.stringify({ ...validSecretPolicyReport, status: 'failed' }));
+    assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /invalid or failed/);
+    const uppercase = path.join(dir, 'failed.JSON');
+    fs.writeFileSync(uppercase, JSON.stringify({ ...validSecretPolicyReport, status: 'failed' }));
+    record.sections.secret_references.evidence = [good, uppercase];
+    assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /invalid or failed/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -2423,18 +2502,18 @@ test('static integrity dossier baseline and compliance must agree with approval'
   try {
     const file = path.join(dir, 'launch-evidence-dossier-static.json');
     const record = buildValidApprovedRecord();
-    record.sections.secret_references.evidence = [file];
+    record.sections.data_retention_policy.evidence = [file];
     const good = { overall_status: 'PASSED', staticIntegrityBaseline: { status: 'verified' },
       summary: { staticIntegrity: 'passed', staticIntegrityCompliance: 'passed' } };
     fs.writeFileSync(file, JSON.stringify(good));
-    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
     for (const changed of [
       { ...good, staticIntegrityBaseline: { status: 'breached' } },
       { ...good, summary: { ...good.summary, staticIntegrityCompliance: 'failed' } },
       { ...good, staticIntegrityBaseline: {} },
     ]) {
       fs.writeFileSync(file, JSON.stringify(changed));
-      assert.ok(validateApprovedRecord(record).categoryBlockers.secret_references?.length);
+      assert.ok(validateApprovedRecord(record).categoryBlockers.data_retention_policy?.length);
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

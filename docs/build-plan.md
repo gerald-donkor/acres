@@ -1090,3 +1090,13 @@ The readiness suite passed 89/89; `ops:templates`, `ops:check`, lint, typecheck,
 build, and `git diff --check` passed. The unresolved example remained blocked
 (0 approved categories, 11 blocked, 70 blockers). Operator-owned live provider
 and DNS proof remains required before launch sign-off.
+
+**Prompt 197 verification (2026-09-25):** Approved Category 4 requires a
+redacted secret-reference policy child JSON report with all twelve approved
+indirect source references, `access_verified: true`, and
+`plaintext_exposed: false`. Malformed, failed, mismatched, or unrelated JSON
+evidence blocks approval even beside a valid child. The readiness suite passed
+92/92; `ops:templates`, `ops:check`, lint, typecheck, build, and
+`git diff --check` passed. The unresolved example remained blocked (0 approved
+categories, 11 blocked, 70 blockers). Actual secret-store policy provenance
+and least-privilege access remain operator-owned launch work.

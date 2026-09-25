@@ -124,7 +124,8 @@ function checkPlaceholdersAndSecrets(obj, currentPath, blockers) {
 function isEvidenceFileReference(ev) {
   if (typeof ev !== 'string') return false;
   const trimmed = ev.trim();
-  return trimmed.endsWith('.json') || (trimmed.includes('*') && trimmed.includes('.json'));
+  return trimmed.toLowerCase().endsWith('.json') ||
+    (trimmed.includes('*') && trimmed.toLowerCase().includes('.json'));
 }
 
 function expandEvidenceGlob(ref, baseDirs) {
@@ -620,7 +621,7 @@ function validSmtpEmail(value) {
 
 function validSmtpSecretReference(value) {
   if (!validSmtpText(value)) return false;
-  return /^(?:vault:[^\s#]+#[^\s#]+|aws-sm:[^\s]+|env:[A-Z][A-Z0-9_]*|file:\/[^\s]+)$/.test(value);
+  return /^(?:vault:[A-Za-z0-9_./-]+#[A-Za-z0-9_.-]+|aws-sm:[A-Za-z0-9_./-]+|env:[A-Z][A-Z0-9_]*|file:\/[A-Za-z0-9_./-]+)$/.test(value);
 }
 
 function parseSmtpTimestamp(value) {
@@ -658,6 +659,42 @@ function validateSmtpDeliveryReport(report, now, approved) {
   return ['spf', 'dkim', 'dmarc'].every((key) =>
     dns[key] && typeof dns[key] === 'object' && !Array.isArray(dns[key]) &&
     dns[key].passed === true && validSmtpText(dns[key].record));
+}
+
+function isSecretReferencePolicyCandidate({ parsed } = {}) {
+  // A custom-named JSON file must be checked too; a dossier cannot qualify.
+  return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+}
+
+function validateSecretReferencePolicyReport(report, now, approved) {
+  if (!isSecretReferencePolicyCandidate({ parsed: report }) ||
+      report.drill_type !== 'secret_reference_policy_verification' ||
+      report.status !== 'success' ||
+      !validSmtpText(report.policy_reference) ||
+      !Array.isArray(report.errors) || report.errors.length !== 0) return false;
+  const timestamp = parseSmtpTimestamp(report.timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!timestamp || timestamp > evalNow ||
+      !report.references || typeof report.references !== 'object' || Array.isArray(report.references) ||
+      !approved || typeof approved !== 'object') return false;
+  const secretMarkers = [];
+  checkPlaceholdersAndSecrets(report, 'policy_report', secretMarkers);
+  if (secretMarkers.length > 0) return false;
+  if (Object.keys(report).sort().join(',') !==
+      ['drill_type', 'errors', 'policy_reference', 'references', 'status', 'timestamp'].sort().join(',')) return false;
+  const keys = Object.keys(report.references);
+  if (keys.length !== REQUIRED_SECRET_KEYS.length ||
+      keys.some((key) => !REQUIRED_SECRET_KEYS.includes(key))) return false;
+  if (new Set(REQUIRED_SECRET_KEYS.map((key) => approved[key])).size !== REQUIRED_SECRET_KEYS.length) return false;
+  return REQUIRED_SECRET_KEYS.every((key) => {
+    const entry = report.references[key];
+    return entry && typeof entry === 'object' && !Array.isArray(entry) &&
+      validSmtpSecretReference(approved[key]) &&
+      !/gemini/i.test(approved[key]) &&
+      entry.source === approved[key] && entry.access_verified === true &&
+      entry.plaintext_exposed === false &&
+      Object.keys(entry).length === 3;
+  });
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
@@ -1218,6 +1255,7 @@ function validateReadiness(record, _filePath, options = {}) {
   const capacityEvidence = [];
   const caddyEvidence = [];
   const smtpEvidence = [];
+  const secretReferenceEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -1296,6 +1334,7 @@ function validateReadiness(record, _filePath, options = {}) {
             if (sectionName === 'slo_and_alerting') capacityEvidence.push(...parsedFiles);
             if (sectionName === 'production_domain_tls') caddyEvidence.push(...parsedFiles);
             if (sectionName === 'smtp_delivery') smtpEvidence.push(...parsedFiles);
+            if (sectionName === 'secret_references') secretReferenceEvidence.push(...parsedFiles);
           }
         });
       }
@@ -1448,12 +1487,16 @@ function validateReadiness(record, _filePath, options = {}) {
       const val = secRefs[key];
       if (!val || typeof val !== 'string') {
         addBlocker('secret_references', `Missing secret source reference for '${key}'`);
-      } else if (secRefs.status === 'approved') {
-        // Must be a reference (e.g. vault:path#key, aws-sm:name, env:VAR, file:path)
-        // Must NOT look like a raw secret (e.g., raw password string, base64 blob, postgres/redis/valkey URL with plaintext password)
-        if (/^[a-zA-Z0-9+.-]+:\/\/[^:]+:[^@]+@/i.test(val)) {
-          addBlocker('secret_references', `Field '${key}' contains raw connection string with credentials instead of a secret reference`);
-        }
+      } else if (secRefs.status === 'approved' && !validSmtpSecretReference(val)) {
+        addBlocker('secret_references', `Field '${key}' must be an indirect secret-store reference`);
+      }
+    }
+    if (secRefs.status === 'approved') {
+      const candidates = secretReferenceEvidence.filter(isSecretReferencePolicyCandidate);
+      if (candidates.length === 0) {
+        addBlocker('secret_references', 'A successful secret-reference policy child JSON report is required');
+      } else if (candidates.some(({ parsed }) => !validateSecretReferencePolicyReport(parsed, now, secRefs))) {
+        addBlocker('secret_references', 'A referenced secret-reference policy report is invalid or failed');
       }
     }
   }
@@ -1920,4 +1963,6 @@ module.exports = {
   validateCaddyRoutingReport,
   isSmtpDeliveryCandidate,
   validateSmtpDeliveryReport,
+  isSecretReferencePolicyCandidate,
+  validateSecretReferencePolicyReport,
 };
