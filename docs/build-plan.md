@@ -1100,3 +1100,17 @@ evidence blocks approval even beside a valid child. The readiness suite passed
 `git diff --check` passed. The unresolved example remained blocked (0 approved
 categories, 11 blocked, 70 blockers). Actual secret-store policy provenance
 and least-privilege access remain operator-owned launch work.
+
+**Prompt 198 verification (2026-09-25):** Approved Category 7 requires standard
+retention window validation (quarantine 7d, rejected objects 1d, exports 30d,
+telemetry 15d, backups 30d, positive day windows for accounts and audit logs,
+and indefinite-or-positive-day duration for reports) and a concrete retention
+policy review child JSON report with `drill_type: "data_retention_policy_verification"`,
+nonfuture UTC timestamp, `status: "success"`, empty errors,
+`scheduled_cleanup_verified: true`, and all eight matching policy windows with
+`policy_verified: true`. Malformed, failed, mismatched, or unrelated JSON
+evidence blocks approval even beside a valid child. The readiness suite passed
+96/96; `ops:templates`, `ops:check`, lint, typecheck, build, and
+`git diff --check` passed. The unresolved example remained blocked (0 approved
+categories, 11 blocked, 70 blockers). Actual legal/operational retention sign-off
+and automated purge verification remain operator-owned launch work.

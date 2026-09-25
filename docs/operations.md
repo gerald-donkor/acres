@@ -1219,6 +1219,22 @@ blocked (0 approved categories, 11 blocked, 70 blockers). The operator must
 obtain the live least-privilege policy printout and verify actual store access;
 the validator checks report consistency, not provenance or live permissions.
 
+**Prompt 198 verification (2026-09-25):** Approved Category 7
+(`data_retention_policy`) now requires standard retention window validation
+(upload quarantine 7d, rejected objects 1d, exports 30d, telemetry 15d, backups
+30d, positive day windows for accounts and audit logs, and
+indefinite-or-positive-day duration for reports) and a concrete retention
+policy review child JSON report in `evidence` with `drill_type:
+"data_retention_policy_verification"`, nonfuture UTC timestamp, `status:
+"success"`, empty errors, `scheduled_cleanup_verified: true`, and all eight
+matching policy windows with `policy_verified: true`. Every referenced JSON
+child must pass; prose and a unified dossier alone do not qualify. The
+readiness suite passed 96/96; `ops:templates`, `ops:check`, lint, typecheck,
+build, and `git diff --check` passed. The unresolved example remains blocked (0
+approved categories, 11 blocked, 70 blockers). The operator must conduct the
+formal legal and operational retention review; the validator checks consistency,
+window compliance, and child report validity.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

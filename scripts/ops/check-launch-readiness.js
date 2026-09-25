@@ -43,6 +43,17 @@ const REQUIRED_SECRET_KEYS = [
   'grafana_admin_secret_source',
 ];
 
+const REQUIRED_RETENTION_KEYS = [
+  'account_retention_policy',
+  'audit_retention_policy',
+  'upload_quarantine_retention_policy',
+  'rejected_object_retention_policy',
+  'export_retention_policy',
+  'report_retention_policy',
+  'telemetry_retention_policy',
+  'backup_retention_policy',
+];
+
 const DEV_PASSWORDS = [
   'acres_superuser_dev_password',
   'acres_migrator_dev_password',
@@ -697,6 +708,41 @@ function validateSecretReferencePolicyReport(report, now, approved) {
   });
 }
 
+function isDataRetentionPolicyCandidate({ parsed } = {}) {
+  // A custom-named JSON file must be checked too; a dossier cannot qualify.
+  return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+}
+
+function validateDataRetentionPolicyReport(report, now, approved) {
+  if (!isDataRetentionPolicyCandidate({ parsed: report }) ||
+      report.drill_type !== 'data_retention_policy_verification' ||
+      report.status !== 'success' ||
+      !validSmtpText(report.policy_reference) ||
+      report.scheduled_cleanup_verified !== true ||
+      !Array.isArray(report.errors) || report.errors.length !== 0) return false;
+  const timestamp = parseSmtpTimestamp(report.timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!timestamp || timestamp > evalNow ||
+      !report.retention_windows || typeof report.retention_windows !== 'object' || Array.isArray(report.retention_windows) ||
+      !approved || typeof approved !== 'object') return false;
+  const secretMarkers = [];
+  checkPlaceholdersAndSecrets(report, 'retention_report', secretMarkers);
+  if (secretMarkers.length > 0) return false;
+  if (Object.keys(report).sort().join(',') !==
+      ['drill_type', 'errors', 'policy_reference', 'retention_windows', 'scheduled_cleanup_verified', 'status', 'timestamp'].sort().join(',')) return false;
+  const keys = Object.keys(report.retention_windows);
+  if (keys.length !== REQUIRED_RETENTION_KEYS.length ||
+      keys.some((key) => !REQUIRED_RETENTION_KEYS.includes(key))) return false;
+  return REQUIRED_RETENTION_KEYS.every((key) => {
+    const entry = report.retention_windows[key];
+    return entry && typeof entry === 'object' && !Array.isArray(entry) &&
+      typeof approved[key] === 'string' &&
+      entry.window === approved[key] &&
+      entry.policy_verified === true &&
+      Object.keys(entry).length === 2;
+  });
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -1256,6 +1302,7 @@ function validateReadiness(record, _filePath, options = {}) {
   const caddyEvidence = [];
   const smtpEvidence = [];
   const secretReferenceEvidence = [];
+  const retentionEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -1335,6 +1382,7 @@ function validateReadiness(record, _filePath, options = {}) {
             if (sectionName === 'production_domain_tls') caddyEvidence.push(...parsedFiles);
             if (sectionName === 'smtp_delivery') smtpEvidence.push(...parsedFiles);
             if (sectionName === 'secret_references') secretReferenceEvidence.push(...parsedFiles);
+            if (sectionName === 'data_retention_policy') retentionEvidence.push(...parsedFiles);
           }
         });
       }
@@ -1638,20 +1686,52 @@ function validateReadiness(record, _filePath, options = {}) {
   // 3.7 data_retention_policy
   const retSec = sections.data_retention_policy;
   if (retSec && retSec.status === 'approved') {
-    const requiredPolicies = [
-      'account_retention_policy',
-      'audit_retention_policy',
-      'upload_quarantine_retention_policy',
-      'rejected_object_retention_policy',
-      'export_retention_policy',
-      'report_retention_policy',
-      'telemetry_retention_policy',
-      'backup_retention_policy',
-    ];
-    for (const p of requiredPolicies) {
+    for (const p of REQUIRED_RETENTION_KEYS) {
       if (!retSec[p] || typeof retSec[p] !== 'string') {
         addBlocker('data_retention_policy', `Retention policy definition for '${p}' is required`);
       }
+    }
+    if (retSec.upload_quarantine_retention_policy !== '7d') {
+      addBlocker('data_retention_policy', "upload_quarantine_retention_policy must be '7d'");
+    }
+    if (retSec.rejected_object_retention_policy !== '1d') {
+      addBlocker('data_retention_policy', "rejected_object_retention_policy must be '1d'");
+    }
+    if (retSec.export_retention_policy !== '30d') {
+      addBlocker('data_retention_policy', "export_retention_policy must be '30d'");
+    }
+    if (retSec.telemetry_retention_policy !== '15d') {
+      addBlocker('data_retention_policy', "telemetry_retention_policy must be '15d'");
+    }
+    if (retSec.backup_retention_policy !== '30d') {
+      addBlocker('data_retention_policy', "backup_retention_policy must be '30d'");
+    }
+    if (typeof retSec.account_retention_policy === 'string') {
+      const valid = /^[1-9]\d*d$/.test(retSec.account_retention_policy) ||
+        retSec.account_retention_policy === 'indefinite_until_tenant_deletion';
+      if (!valid) {
+        addBlocker('data_retention_policy', "account_retention_policy must be a positive day duration (e.g. '365d') or 'indefinite_until_tenant_deletion'");
+      }
+    }
+    if (typeof retSec.audit_retention_policy === 'string') {
+      const valid = /^[1-9]\d*d$/.test(retSec.audit_retention_policy);
+      if (!valid) {
+        addBlocker('data_retention_policy', "audit_retention_policy must be a positive day duration (e.g. '730d')");
+      }
+    }
+    if (typeof retSec.report_retention_policy === 'string') {
+      const valid = /^[1-9]\d*d$/.test(retSec.report_retention_policy) ||
+        retSec.report_retention_policy === 'indefinite_until_tenant_deletion';
+      if (!valid) {
+        addBlocker('data_retention_policy', "report_retention_policy must be a positive day duration (e.g. '365d') or 'indefinite_until_tenant_deletion'");
+      }
+    }
+
+    const retentionCandidates = retentionEvidence.filter(isDataRetentionPolicyCandidate);
+    if (retentionCandidates.length === 0) {
+      addBlocker('data_retention_policy', 'A successful data retention policy child JSON report is required');
+    } else if (retentionCandidates.some(({ parsed }) => !validateDataRetentionPolicyReport(parsed, now, retSec))) {
+      addBlocker('data_retention_policy', 'A referenced data retention policy report is invalid or failed');
     }
   }
 
@@ -1965,4 +2045,7 @@ module.exports = {
   validateSmtpDeliveryReport,
   isSecretReferencePolicyCandidate,
   validateSecretReferencePolicyReport,
+  REQUIRED_RETENTION_KEYS,
+  isDataRetentionPolicyCandidate,
+  validateDataRetentionPolicyReport,
 };

@@ -25,6 +25,9 @@ const {
   validateSmtpDeliveryReport,
   isSecretReferencePolicyCandidate,
   validateSecretReferencePolicyReport,
+  REQUIRED_RETENTION_KEYS,
+  isDataRetentionPolicyCandidate,
+  validateDataRetentionPolicyReport,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -300,6 +303,28 @@ const validSecretPolicyReport = {
     [key, { source, access_verified: true, plaintext_exposed: false }])),
 };
 fs.writeFileSync(secretPolicyFixturePath, JSON.stringify(validSecretPolicyReport));
+const retentionPolicyWindows = {
+  account_retention_policy: '365d',
+  audit_retention_policy: '730d',
+  upload_quarantine_retention_policy: '7d',
+  rejected_object_retention_policy: '1d',
+  export_retention_policy: '30d',
+  report_retention_policy: 'indefinite_until_tenant_deletion',
+  telemetry_retention_policy: '15d',
+  backup_retention_policy: '30d',
+};
+const retentionPolicyFixturePath = path.join(restoreFixtureDir, 'retention-policy-review-valid.json');
+const validRetentionPolicyReport = {
+  drill_type: 'data_retention_policy_verification',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  errors: [],
+  policy_reference: 'policy-retention-review-2026-v1',
+  scheduled_cleanup_verified: true,
+  retention_windows: Object.fromEntries(Object.entries(retentionPolicyWindows).map(([key, window]) =>
+    [key, { window, policy_verified: true }])),
+};
+fs.writeFileSync(retentionPolicyFixturePath, JSON.stringify(validRetentionPolicyReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -389,7 +414,7 @@ function buildValidApprovedRecord() {
         telemetry_retention_policy: '15d',
         backup_retention_policy: '30d',
         approver: 'legal-lead',
-        evidence: ['Retention policy review approved'],
+        evidence: [retentionPolicyFixturePath],
         notes: 'Verified data retention policies',
       },
       volume_encryption: {
@@ -2407,9 +2432,9 @@ test('static integrity child evidence accepts exact success and rejects contradi
     const file = path.join(dir, 'static-integrity-evidence-test.json');
     const good = runChecks(() => ({ status: 0 }));
     const record = buildValidApprovedRecord();
-    record.sections.data_retention_policy.evidence = [file];
+    record.sections.graphql_introspection.evidence = [file];
     fs.writeFileSync(file, JSON.stringify(good));
-    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.graphql_introspection, undefined);
 
     const mutations = [
       (value) => { value.checks[0].passed = false; },
@@ -2425,7 +2450,7 @@ test('static integrity child evidence accepts exact success and rejects contradi
       const changed = structuredClone(good);
       mutate(changed);
       fs.writeFileSync(file, JSON.stringify(changed));
-      const blockers = validateApprovedRecord(record).categoryBlockers.data_retention_policy || [];
+      const blockers = validateApprovedRecord(record).categoryBlockers.graphql_introspection || [];
       assert.ok(blockers.some((blocker) => blocker.includes('invalid static integrity evidence')), JSON.stringify(blockers));
     }
   } finally {
@@ -2502,18 +2527,18 @@ test('static integrity dossier baseline and compliance must agree with approval'
   try {
     const file = path.join(dir, 'launch-evidence-dossier-static.json');
     const record = buildValidApprovedRecord();
-    record.sections.data_retention_policy.evidence = [file];
+    record.sections.graphql_introspection.evidence = [file];
     const good = { overall_status: 'PASSED', staticIntegrityBaseline: { status: 'verified' },
       summary: { staticIntegrity: 'passed', staticIntegrityCompliance: 'passed' } };
     fs.writeFileSync(file, JSON.stringify(good));
-    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.graphql_introspection, undefined);
     for (const changed of [
       { ...good, staticIntegrityBaseline: { status: 'breached' } },
       { ...good, summary: { ...good.summary, staticIntegrityCompliance: 'failed' } },
       { ...good, staticIntegrityBaseline: {} },
     ]) {
       fs.writeFileSync(file, JSON.stringify(changed));
-      assert.ok(validateApprovedRecord(record).categoryBlockers.data_retention_policy?.length);
+      assert.ok(validateApprovedRecord(record).categoryBlockers.graphql_introspection?.length);
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -3307,4 +3332,115 @@ test('SMTP evidence candidate includes dossiers and handles missing input', () =
   assert.strictEqual(isSmtpDeliveryCandidate({ file: 'custom.json', parsed: validSmtpReport }), true);
   assert.strictEqual(isSmtpDeliveryCandidate({ file: 'custom.json', parsed: { delivery: {} } }), true);
   assert.strictEqual(validateSmtpDeliveryReport(null), false);
+});
+
+test('approved data retention policy requires a matching policy child, not prose or a dossier', () => {
+  const record = buildValidApprovedRecord();
+  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
+  record.sections.data_retention_policy.evidence = ['Retention policy review approved'];
+  assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /policy child JSON report is required/);
+  record.sections.data_retention_policy.evidence = [retentionPolicyFixturePath];
+  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-retention-dossier-'));
+  try {
+    const dossierFile = path.join(dir, 'dossier.json');
+    fs.writeFileSync(dossierFile, JSON.stringify({ overall_status: 'PASSED' }));
+    record.sections.data_retention_policy.evidence = [dossierFile];
+    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /invalid or failed/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  assert.equal(isDataRetentionPolicyCandidate({ parsed: {} }), true);
+  assert.equal(isDataRetentionPolicyCandidate({ parsed: [] }), false);
+  assert.equal(isDataRetentionPolicyCandidate(), false);
+  assert.equal(validateDataRetentionPolicyReport(null), false);
+});
+
+test('data retention policy validation rejects malformed and contradictory reports', () => {
+  const approved = buildValidApprovedRecord().sections.data_retention_policy;
+  assert.equal(validateDataRetentionPolicyReport(validRetentionPolicyReport, fixedNow, approved), true);
+  const mutations = [
+    (r) => { r.timestamp = '2026-02-30T12:00:00.000Z'; },
+    (r) => { r.timestamp = '2027-01-01T00:00:00.000Z'; },
+    (r) => { r.status = 'failed'; },
+    (r) => { r.errors = ['purge failed']; },
+    (r) => { r.policy_reference = ''; },
+    (r) => { r.scheduled_cleanup_verified = false; },
+    (r) => { delete r.retention_windows.account_retention_policy; },
+    (r) => { r.retention_windows.extra_policy = { window: '10d', policy_verified: true }; },
+    (r) => { r.retention_windows.upload_quarantine_retention_policy.window = '14d'; },
+    (r) => { r.retention_windows.account_retention_policy.policy_verified = false; },
+    (r) => { r.retention_windows.account_retention_policy.extra_key = 'bad'; },
+    (r) => { r.extra_field = 'unexpected'; },
+  ];
+  for (const mutate of mutations) {
+    const report = structuredClone(validRetentionPolicyReport);
+    mutate(report);
+    assert.equal(validateDataRetentionPolicyReport(report, fixedNow, approved), false);
+  }
+});
+
+test('data retention approval enforces standard retention windows', () => {
+  const record = buildValidApprovedRecord();
+  const sec = record.sections.data_retention_policy;
+
+  const standardChecks = [
+    { field: 'upload_quarantine_retention_policy', bad: '14d', pattern: /upload_quarantine_retention_policy must be '7d'/ },
+    { field: 'rejected_object_retention_policy', bad: '2d', pattern: /rejected_object_retention_policy must be '1d'/ },
+    { field: 'export_retention_policy', bad: '60d', pattern: /export_retention_policy must be '30d'/ },
+    { field: 'telemetry_retention_policy', bad: '30d', pattern: /telemetry_retention_policy must be '15d'/ },
+    { field: 'backup_retention_policy', bad: '60d', pattern: /backup_retention_policy must be '30d'/ },
+    { field: 'account_retention_policy', bad: 'invalid', pattern: /account_retention_policy must be a positive day duration/ },
+    { field: 'audit_retention_policy', bad: 'invalid', pattern: /audit_retention_policy must be a positive day duration/ },
+    { field: 'report_retention_policy', bad: 'invalid', pattern: /report_retention_policy must be a positive day duration/ },
+  ];
+
+  for (const { field, bad, pattern } of standardChecks) {
+    const rec = buildValidApprovedRecord();
+    rec.sections.data_retention_policy[field] = bad;
+    const blockers = validateApprovedRecord(rec).categoryBlockers.data_retention_policy || [];
+    assert.ok(blockers.some((b) => pattern.test(b)), `Expected blocker matching ${pattern} for ${field}=${bad}, got: ${JSON.stringify(blockers)}`);
+  }
+
+  const altRecord = buildValidApprovedRecord();
+  altRecord.sections.data_retention_policy.account_retention_policy = 'indefinite_until_tenant_deletion';
+  const altReport = structuredClone(validRetentionPolicyReport);
+  altReport.retention_windows.account_retention_policy.window = 'indefinite_until_tenant_deletion';
+  const altDir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-retention-indefinite-'));
+  try {
+    const altFile = path.join(altDir, 'retention-indefinite.json');
+    fs.writeFileSync(altFile, JSON.stringify(altReport));
+    altRecord.sections.data_retention_policy.evidence = [altFile];
+    assert.strictEqual(validateApprovedRecord(altRecord).categoryBlockers.data_retention_policy, undefined);
+  } finally {
+    fs.rmSync(altDir, { recursive: true, force: true });
+  }
+});
+
+test('data retention approval rejects custom-path failures and mixed wildcard evidence', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-retention-'));
+  try {
+    const good = path.join(dir, 'custom.json');
+    const bad = path.join(dir, 'other.json');
+    fs.writeFileSync(good, JSON.stringify(validRetentionPolicyReport));
+    const record = buildValidApprovedRecord();
+    record.sections.data_retention_policy.evidence = [good];
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
+
+    fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
+    record.sections.data_retention_policy.evidence = [path.join(dir, '*.json')];
+    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /invalid or failed/);
+
+    fs.writeFileSync(bad, JSON.stringify({ ...validRetentionPolicyReport, status: 'failed' }));
+    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /invalid or failed/);
+
+    const uppercase = path.join(dir, 'failed.JSON');
+    fs.writeFileSync(uppercase, JSON.stringify({ ...validRetentionPolicyReport, status: 'failed' }));
+    record.sections.data_retention_policy.evidence = [good, uppercase];
+    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /invalid or failed/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

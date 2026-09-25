@@ -244,9 +244,29 @@ do not report failure.
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table
-- Evidence: policy review sign-off
+- Evidence: a redacted `retention-policy-review-<timestamp>.json` child report
 - Accept: explicit windows for accounts, audit events, upload quarantine (7d),
   rejected objects (1d), exports (30d), reports, telemetry (15d), backups (30d)
+- An approved record must reference a concrete JSON report with
+  `drill_type: "data_retention_policy_verification"`, a real nonfuture ISO UTC
+  `timestamp`, `status: "success"`, `errors: []`, a nonempty opaque
+  `policy_reference`, `scheduled_cleanup_verified: true`, and `retention_windows`
+  as an object keyed by all eight exact policy fields in `REQUIRED_RETENTION_KEYS`.
+  Each entry must contain `window` (matching the approved readiness value) and
+  `policy_verified: true`.
+  Approved readiness values enforce fixed policy windows:
+  `upload_quarantine_retention_policy: "7d"`,
+  `rejected_object_retention_policy: "1d"`,
+  `export_retention_policy: "30d"`,
+  `telemetry_retention_policy: "15d"`,
+  `backup_retention_policy: "30d"`,
+  positive day windows (`^\d+d$`) for `audit_retention_policy`,
+  and `indefinite_until_tenant_deletion` or positive day duration for `account_retention_policy` and `report_retention_policy`.
+  Prose alone, a dossier alone, or a malformed/failed report cannot qualify, even beside
+  a valid one or in a wildcard expansion. Validate with
+  `node scripts/ops/check-launch-readiness.js <operator-readiness.json>`.
+  The operator conducts the formal legal and operational policy review; the validator
+  checks internal consistency, window compliance, and child report validity.
 
 ### 8. Volume Encryption (`volume_encryption`)
 
