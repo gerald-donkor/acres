@@ -198,7 +198,7 @@ run_stage "static_templates" "Templates, runtime, secret scan" \
 
 # Stage 2: supply-chain SBOM & SAST security scanning
 run_stage "supply_chain_sast" "SBOM, SAST, container security" \
-  "node scripts/ops/generate-sbom.js --verify-licenses && node scripts/ops/run-sast-scan.js && node scripts/ops/verify-container-security.js"
+  "node scripts/ops/generate-sbom.js --verify-licenses --output \"${EVIDENCE_DIR}/sbom-inventory-${STAMP}.json\" && node scripts/ops/run-sast-scan.js --output \"${EVIDENCE_DIR}/sast-scan-evidence-${STAMP}.json\" && node scripts/ops/verify-container-security.js --output \"${EVIDENCE_DIR}/container-security-evidence-${STAMP}.json\""
 
 # Stage 3: Caddy ingress routing & deployment rollback preflight
 run_stage "ingress_deployment" "Caddy routing + deployment drill" \
@@ -513,6 +513,79 @@ if (volPassed) {
 
 const volumeEncryptionCompliance = volPassed ? "passed" : "failed";
 
+const scStage = stages.find((s) => s.stage_id === "supply_chain_sast");
+let sbomEvidence = null;
+let sastEvidence = null;
+let containerEvidence = null;
+if (scStage && scStage.status === "PASSED") {
+  const sbomFile = scStage.artifacts.find((a) => a.includes("sbom-inventory-") && a.endsWith(".json"));
+  if (sbomFile && fs.existsSync(sbomFile)) {
+    try {
+      sbomEvidence = JSON.parse(fs.readFileSync(sbomFile, "utf8"));
+    } catch {}
+  }
+  const sastFile = scStage.artifacts.find((a) => a.includes("sast-scan-evidence-") && a.endsWith(".json"));
+  if (sastFile && fs.existsSync(sastFile)) {
+    try {
+      sastEvidence = JSON.parse(fs.readFileSync(sastFile, "utf8"));
+    } catch {}
+  }
+  const containerFile = scStage.artifacts.find((a) => a.includes("container-security-evidence-") && a.endsWith(".json"));
+  if (containerFile && fs.existsSync(containerFile)) {
+    try {
+      containerEvidence = JSON.parse(fs.readFileSync(containerFile, "utf8"));
+    } catch {}
+  }
+}
+
+const scPassed = Boolean(
+  scStage?.status === "PASSED" &&
+  sbomEvidence && Array.isArray(sbomEvidence.components) && sbomEvidence.components.length > 0 &&
+  (!sbomEvidence.licenseCompliance || (sbomEvidence.licenseCompliance.compliant === true && Array.isArray(sbomEvidence.licenseCompliance.violations) && sbomEvidence.licenseCompliance.violations.length === 0)) &&
+  sastEvidence && (sastEvidence.status === "success" || sastEvidence.passed === true) && sastEvidence.passed === true &&
+  Array.isArray(sastEvidence.blockingActiveFindings) && sastEvidence.blockingActiveFindings.length === 0 &&
+  Array.isArray(sastEvidence.expiredFindings) && sastEvidence.expiredFindings.length === 0 &&
+  containerEvidence && (containerEvidence.status === "success" || containerEvidence.valid === true) && containerEvidence.valid === true &&
+  Array.isArray(containerEvidence.errors) && containerEvidence.errors.length === 0 &&
+  Array.isArray(containerEvidence.checks) && containerEvidence.checks.length > 0 &&
+  containerEvidence.checks.every((c) => c.passed === true)
+);
+
+let supplyChainBaseline;
+if (scPassed) {
+  supplyChainBaseline = {
+    status: "verified",
+    sbom: {
+      packagesCount: sbomEvidence.components.length,
+      licenseComplianceVerified: sbomEvidence.licenseCompliance ? sbomEvidence.licenseCompliance.compliant : true,
+      violationsCount: sbomEvidence.licenseCompliance?.violations?.length || 0,
+    },
+    sast: {
+      filesScanned: sastEvidence.scannedFilesCount,
+      totalFindingsCount: sastEvidence.totalFindingsCount,
+      triagedFindingsCount: Array.isArray(sastEvidence.triagedFindings) ? sastEvidence.triagedFindings.length : 0,
+      expiredFindingsCount: Array.isArray(sastEvidence.expiredFindings) ? sastEvidence.expiredFindings.length : 0,
+      blockingActiveFindingsCount: Array.isArray(sastEvidence.blockingActiveFindings) ? sastEvidence.blockingActiveFindings.length : 0,
+      passed: sastEvidence.passed,
+    },
+    containerSecurity: {
+      valid: containerEvidence.valid,
+      totalChecks: Array.isArray(containerEvidence.checks) ? containerEvidence.checks.length : 0,
+      passedChecks: Array.isArray(containerEvidence.checks) ? containerEvidence.checks.filter((c) => c.passed).length : 0,
+      errorsCount: Array.isArray(containerEvidence.errors) ? containerEvidence.errors.length : 0,
+    },
+  };
+} else {
+  supplyChainBaseline = {
+    status: "breached",
+    error_message: scStage?.error_message || "stage 2 failed or child supply chain / SAST / container evidence failed verification",
+  };
+}
+
+const supplyChainCompliance = scPassed ? "passed" : "failed";
+const sastCompliance = (scPassed && sastEvidence?.passed === true) ? "passed" : "failed";
+const containerSecurityCompliance = (scPassed && containerEvidence?.valid === true) ? "passed" : "failed";
+
 const dossier = {
   version,
   timestamp,
@@ -523,6 +596,7 @@ const dossier = {
   failed_stages: Number(failed),
   duration_seconds: Number(durationS),
   stages,
+  supplyChainBaseline,
   databaseTelemetryBaseline,
   disasterRecoveryBaseline,
   deploymentBaseline,
@@ -531,6 +605,9 @@ const dossier = {
   summary: {
     staticIntegrity: statuses[0] === "PASSED" ? "passed" : "failed",
     supplyChainSecurity: statuses[1] === "PASSED" ? "passed" : "failed",
+    supplyChainCompliance,
+    sastCompliance,
+    containerSecurityCompliance,
     ingressDeployment: statuses[2] === "PASSED" ? "passed" : "failed",
     volumeEncryption: statuses[3] === "PASSED" ? "passed" : "failed",
     secretRotation: statuses[4] === "PASSED" ? "passed" : "failed",

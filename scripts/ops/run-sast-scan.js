@@ -427,12 +427,33 @@ if (require.main === module) {
   const failOnSeverity = failOnIdx !== -1 && args[failOnIdx + 1] ? args[failOnIdx + 1].toUpperCase() : 'BLOCKER';
   const triageIdx = args.indexOf('--triage');
   const triagePath = triageIdx !== -1 && args[triageIdx + 1] ? path.resolve(args[triageIdx + 1]) : undefined;
+  const outIdx = args.indexOf('--output') !== -1 ? args.indexOf('--output') : args.indexOf('-o');
+  const outputPath = outIdx !== -1 && args[outIdx + 1] && !args[outIdx + 1].startsWith('-') ? path.resolve(process.cwd(), args[outIdx + 1]) : null;
 
   try {
     const result = runSastScan({ failOnSeverity, triagePath });
 
+    const payload = {
+      drill_type: 'sast_security_scan',
+      timestamp: new Date().toISOString(),
+      status: result.passed ? 'success' : 'failed',
+      passed: result.passed,
+      scannedFilesCount: result.scannedFilesCount,
+      totalFindingsCount: result.totalFindingsCount,
+      triagedFindings: result.triagedFindings,
+      expiredFindings: result.expiredFindings,
+      activeFindings: result.activeFindings,
+      blockingActiveFindings: result.blockingActiveFindings,
+      failOnSeverity: result.failOnSeverity,
+    };
+
+    if (outputPath) {
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    }
+
     if (formatJson) {
-      console.log(JSON.stringify(result, null, 2));
+      console.log(JSON.stringify(payload, null, 2));
       process.exit(result.passed ? 0 : 1);
     }
 
@@ -467,6 +488,10 @@ if (require.main === module) {
         console.error(`    ${f.reason}`);
         console.error(`    Code: ${f.snippet}`);
       }
+    }
+
+    if (outputPath) {
+      console.log(`\n  SAST scan evidence written to: ${outputPath}`);
     }
 
     if (result.passed) {

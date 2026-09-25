@@ -90,6 +90,14 @@ function assertDossierSchema(dossier) {
   assert.ok(['verified', 'breached'].includes(dossier.volumeEncryptionBaseline.status));
   assert.strictEqual(typeof dossier.summary.volumeEncryptionCompliance, 'string');
   assert.ok(['passed', 'failed'].includes(dossier.summary.volumeEncryptionCompliance));
+  assert.strictEqual(typeof dossier.supplyChainBaseline, 'object');
+  assert.ok(['verified', 'breached'].includes(dossier.supplyChainBaseline.status));
+  assert.strictEqual(typeof dossier.summary.supplyChainCompliance, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.supplyChainCompliance));
+  assert.strictEqual(typeof dossier.summary.sastCompliance, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.sastCompliance));
+  assert.strictEqual(typeof dossier.summary.containerSecurityCompliance, 'string');
+  assert.ok(['passed', 'failed'].includes(dossier.summary.containerSecurityCompliance));
 }
 
 /**
@@ -155,6 +163,27 @@ test('--dry-run executes all 7 stages and emits a schema-compliant dossier', () 
     }
 
     // Stage artifacts must reference real child evidence, not just the dossier.
+    const scStage = dossier.stages.find((s) => s.stage_id === 'supply_chain_sast');
+    assert.ok(
+      scStage.artifacts.some((a) => a.includes('sbom-inventory-')),
+      `expected sbom child evidence in artifacts, got: ${JSON.stringify(scStage.artifacts)}`
+    );
+    assert.ok(
+      scStage.artifacts.some((a) => a.includes('sast-scan-evidence-')),
+      `expected sast child evidence in artifacts, got: ${JSON.stringify(scStage.artifacts)}`
+    );
+    assert.ok(
+      scStage.artifacts.some((a) => a.includes('container-security-evidence-')),
+      `expected container security child evidence in artifacts, got: ${JSON.stringify(scStage.artifacts)}`
+    );
+    assert.strictEqual(dossier.summary.supplyChainCompliance, 'passed');
+    assert.strictEqual(dossier.summary.sastCompliance, 'passed');
+    assert.strictEqual(dossier.summary.containerSecurityCompliance, 'passed');
+    assert.strictEqual(dossier.supplyChainBaseline.status, 'verified');
+    assert.strictEqual(dossier.supplyChainBaseline.sbom.licenseComplianceVerified, true);
+    assert.strictEqual(dossier.supplyChainBaseline.sast.passed, true);
+    assert.strictEqual(dossier.supplyChainBaseline.containerSecurity.valid, true);
+
     const capacityStage = dossier.stages.find((s) => s.stage_id === 'capacity_alerting');
     assert.ok(
       capacityStage.artifacts.some((a) => a.includes('capacity-alerting-drill-evidence-')),

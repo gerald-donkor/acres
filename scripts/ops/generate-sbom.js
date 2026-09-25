@@ -268,25 +268,28 @@ if (require.main === module) {
   const args = process.argv.slice(2);
   const verifyLicenses = args.includes('--verify-licenses');
   const jsonOutput = args.includes('--json');
-  const outIdx = args.indexOf('--output');
-  const outputPath = outIdx !== -1 && args[outIdx + 1] ? args[outIdx + 1] : null;
+  const outIdx = args.indexOf('--output') !== -1 ? args.indexOf('--output') : args.indexOf('-o');
+  const outputPath = outIdx !== -1 && args[outIdx + 1] && !args[outIdx + 1].startsWith('-') ? args[outIdx + 1] : null;
 
   try {
     const { bom, components, devExcludedCount, licenseCounts } = generateSbom();
+    let compliance = null;
+    if (verifyLicenses) {
+      compliance = validateLicenseCompliance(components);
+      bom.licenseCompliance = compliance;
+    }
 
     if (outputPath) {
+      fs.mkdirSync(path.dirname(path.resolve(process.cwd(), outputPath)), { recursive: true });
       fs.writeFileSync(outputPath, JSON.stringify(bom, null, 2) + '\n', 'utf8');
     }
 
-    if (verifyLicenses) {
-      const compliance = validateLicenseCompliance(components);
-      if (!compliance.compliant) {
-        console.error('SBOM License Compliance Check FAILED:');
-        for (const v of compliance.violations) {
-          console.error(`  - [${v.component}] ${v.license}: ${v.reason}`);
-        }
-        process.exit(1);
+    if (verifyLicenses && !compliance.compliant) {
+      console.error('SBOM License Compliance Check FAILED:');
+      for (const v of compliance.violations) {
+        console.error(`  - [${v.component}] ${v.license}: ${v.reason}`);
       }
+      process.exit(1);
     }
 
     if (jsonOutput) {

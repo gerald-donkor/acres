@@ -430,6 +430,98 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
     if (volCompliance === 'failed' || volCompliance === 'failure') {
       addBlocker(category, `Approved evidence file '${ref}' reports volume encryption compliance failure (summary.volumeEncryptionCompliance: "${parsed.summary.volumeEncryptionCompliance}")`);
     }
+
+    // SAST drill child evidence checks
+    if (
+      file.includes('sast-scan-evidence-') ||
+      file.includes('sast-evidence-') ||
+      parsed.drill_type === 'sast_security_scan' ||
+      (Array.isArray(parsed.blockingActiveFindings) && typeof parsed.passed === 'boolean')
+    ) {
+      if (typeof parsed.status === 'string' && parsed.status.toLowerCase() !== 'success') {
+        addBlocker(category, `Approved evidence file '${ref}' reports SAST scan verification failure (status: "${parsed.status}")`);
+      }
+      if (parsed.passed === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports SAST scan failure (passed: false)`);
+      }
+      if (Array.isArray(parsed.blockingActiveFindings) && parsed.blockingActiveFindings.length > 0) {
+        addBlocker(category, `Approved evidence file '${ref}' reports ${parsed.blockingActiveFindings.length} active unreviewed SAST blocker finding(s)`);
+      }
+      if (Array.isArray(parsed.expiredFindings) && parsed.expiredFindings.length > 0) {
+        addBlocker(category, `Approved evidence file '${ref}' reports ${parsed.expiredFindings.length} expired SAST suppression(s) (fail-closed)`);
+      }
+    }
+
+    // SBOM drill child evidence checks
+    if (
+      file.includes('sbom-inventory-') ||
+      file.includes('sbom-evidence-') ||
+      parsed.bomFormat === 'CycloneDX' ||
+      parsed.licenseCompliance !== undefined
+    ) {
+      if (!parsed.licenseCompliance || typeof parsed.licenseCompliance !== 'object') {
+        addBlocker(category, `Approved evidence file '${ref}' missing license compliance verification (licenseCompliance object required)`);
+      } else {
+        if (parsed.licenseCompliance.compliant === false) {
+          addBlocker(category, `Approved evidence file '${ref}' reports SBOM license compliance failure (licenseCompliance.compliant: false)`);
+        }
+        if (Array.isArray(parsed.licenseCompliance.violations) && parsed.licenseCompliance.violations.length > 0) {
+          addBlocker(category, `Approved evidence file '${ref}' reports ${parsed.licenseCompliance.violations.length} SBOM license compliance violation(s): ${parsed.licenseCompliance.violations.map((v) => v.component + ' (' + v.license + ')').join(', ')}`);
+        }
+      }
+      if (Array.isArray(parsed.licenseViolations) && parsed.licenseViolations.length > 0) {
+        addBlocker(category, `Approved evidence file '${ref}' reports ${parsed.licenseViolations.length} SBOM license violation(s)`);
+      }
+    }
+
+    // Container security drill child evidence checks
+    if (
+      file.includes('container-security-evidence-') ||
+      parsed.drill_type === 'container_security_verification' ||
+      (Array.isArray(parsed.checks) && typeof parsed.valid === 'boolean')
+    ) {
+      if (typeof parsed.status === 'string' && parsed.status.toLowerCase() !== 'success') {
+        addBlocker(category, `Approved evidence file '${ref}' reports container security verification failure (status: "${parsed.status}")`);
+      }
+      if (parsed.valid === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports invalid container security configuration (valid: false)`);
+      }
+      if (Array.isArray(parsed.errors) && parsed.errors.length > 0) {
+        addBlocker(category, `Approved evidence file '${ref}' reports container security error(s): ${parsed.errors.join('; ')}`);
+      }
+      if (Array.isArray(parsed.checks)) {
+        const failedChecks = parsed.checks.filter((c) => c && c.passed === false);
+        if (failedChecks.length > 0) {
+          addBlocker(category, `Approved evidence file '${ref}' reports ${failedChecks.length} failed container security check(s): ${failedChecks.map((c) => '[' + c.target + '] ' + c.check).join(', ')}`);
+        }
+      }
+    }
+
+    // Unified Launch Evidence Dossier supply chain baseline checks
+    const scStatus = typeof parsed.supplyChainBaseline?.status === 'string'
+      ? parsed.supplyChainBaseline.status.toLowerCase()
+      : null;
+    if (scStatus === 'breached' || scStatus === 'failed') {
+      addBlocker(category, `Approved evidence file '${ref}' reports supply chain security baseline breach (supplyChainBaseline.status: "${parsed.supplyChainBaseline.status}")`);
+    }
+    const scCompliance = typeof parsed.summary?.supplyChainCompliance === 'string'
+      ? parsed.summary.supplyChainCompliance.toLowerCase()
+      : null;
+    if (scCompliance === 'failed' || scCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports supply chain security compliance failure (summary.supplyChainCompliance: "${parsed.summary.supplyChainCompliance}")`);
+    }
+    const sastCompliance = typeof parsed.summary?.sastCompliance === 'string'
+      ? parsed.summary.sastCompliance.toLowerCase()
+      : null;
+    if (sastCompliance === 'failed' || sastCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports SAST scan compliance failure (summary.sastCompliance: "${parsed.summary.sastCompliance}")`);
+    }
+    const containerSecCompliance = typeof parsed.summary?.containerSecurityCompliance === 'string'
+      ? parsed.summary.containerSecurityCompliance.toLowerCase()
+      : null;
+    if (containerSecCompliance === 'failed' || containerSecCompliance === 'failure') {
+      addBlocker(category, `Approved evidence file '${ref}' reports container security compliance failure (summary.containerSecurityCompliance: "${parsed.summary.containerSecurityCompliance}")`);
+    }
   }
 }
 

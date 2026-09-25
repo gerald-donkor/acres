@@ -137,3 +137,28 @@ test('validateLicenseCompliance: validates compound expressions correctly', () =
   const complianceInvalid = validateLicenseCompliance(invalidCompound);
   assert.equal(complianceInvalid.compliant, false);
 });
+
+test('generateSbom CLI: --verify-licenses and --output writes licenseCompliance to output file', () => {
+  const { execFileSync } = require('node:child_process');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sbom-test-'));
+  try {
+    const outPath = path.join(tmpDir, 'sbom-inventory.json');
+    const scriptPath = path.join(__dirname, 'generate-sbom.js');
+    execFileSync(process.execPath, [scriptPath, '--verify-licenses', '--output', outPath], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
+
+    assert.ok(fs.existsSync(outPath), 'SBOM file should be created');
+    const content = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+    assert.equal(content.bomFormat, 'CycloneDX');
+    assert.equal(content.specVersion, '1.5');
+    assert.ok(Array.isArray(content.components));
+    assert.ok(content.licenseCompliance, 'licenseCompliance must be present on bom');
+    assert.equal(content.licenseCompliance.compliant, true);
+    assert.deepEqual(content.licenseCompliance.violations, []);
+    assert.equal(content.licenseCompliance.totalComponents, content.components.length);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

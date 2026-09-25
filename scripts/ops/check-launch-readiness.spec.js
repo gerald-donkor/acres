@@ -1516,6 +1516,306 @@ test('validateReadiness accepts valid passed volume encryption evidence and comp
   }
 });
 
+test('validateReadiness blocks approval when SAST drill evidence reports failure, unreviewed blockers, or expired suppressions', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-sast-fail-'));
+  try {
+    const failedSastPath = path.join(tmpDir, 'sast-scan-evidence-fail.json');
+    fs.writeFileSync(
+      failedSastPath,
+      JSON.stringify({
+        drill_type: 'sast_security_scan',
+        status: 'failed',
+        passed: false,
+        scannedFilesCount: 300,
+        totalFindingsCount: 2,
+        blockingActiveFindings: [
+          { ruleId: 'SAST-01', severity: 'BLOCKER', file: 'server/src/leak.ts', line: 10 }
+        ],
+        expiredFindings: [
+          { finding: { ruleId: 'SAST-04' }, expiredAt: '2025-01-01' }
+        ],
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.secrets_management.evidence = [failedSastPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.secrets_management || [];
+
+    assert.ok(
+      blockers.some((b) => b.includes('reports SAST scan verification failure (status: "failed")')),
+      `Expected status blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports SAST scan failure (passed: false)')),
+      `Expected passed: false blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports 1 active unreviewed SAST blocker finding(s)')),
+      `Expected active blockers finding, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports 1 expired SAST suppression(s) (fail-closed)')),
+      `Expected expired suppression blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when SBOM drill evidence reports license compliance failure or unapproved copyleft licenses', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-sbom-fail-'));
+  try {
+    const failedSbomPath = path.join(tmpDir, 'sbom-inventory-fail.json');
+    fs.writeFileSync(
+      failedSbomPath,
+      JSON.stringify({
+        bomFormat: 'CycloneDX',
+        specVersion: '1.5',
+        components: [{ name: 'viral-pkg', version: '1.0.0' }],
+        licenseCompliance: {
+          compliant: false,
+          violations: [
+            { component: 'viral-pkg@1.0.0', license: 'AGPL-3.0-only', reason: 'banned' },
+          ],
+          totalComponents: 1,
+        },
+        licenseViolations: ['viral-pkg@1.0.0 (AGPL-3.0-only)'],
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.secrets_management.evidence = [failedSbomPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.secrets_management || [];
+
+    assert.ok(
+      blockers.some((b) => b.includes('reports SBOM license compliance failure (licenseCompliance.compliant: false)')),
+      `Expected compliant: false blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports 1 SBOM license compliance violation(s): viral-pkg@1.0.0 (AGPL-3.0-only)')),
+      `Expected license violation details blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports 1 SBOM license violation(s)')),
+      `Expected licenseViolations count blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when SBOM drill evidence is missing license compliance verification', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-sbom-nolic-'));
+  try {
+    const noLicSbomPath = path.join(tmpDir, 'sbom-inventory-unverified.json');
+    fs.writeFileSync(
+      noLicSbomPath,
+      JSON.stringify({
+        bomFormat: 'CycloneDX',
+        specVersion: '1.5',
+        components: [{ name: 'unverified-pkg', version: '1.0.0' }],
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.secrets_management.evidence = [noLicSbomPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.secrets_management || [];
+
+    assert.ok(
+      blockers.some((b) => b.includes('missing license compliance verification (licenseCompliance object required)')),
+      `Expected missing license compliance blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when container security drill evidence reports failure, errors, or failed security checks', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-container-fail-'));
+  try {
+    const failedContainerPath = path.join(tmpDir, 'container-security-evidence-fail.json');
+    fs.writeFileSync(
+      failedContainerPath,
+      JSON.stringify({
+        drill_type: 'container_security_verification',
+        status: 'failed',
+        valid: false,
+        errors: ['[Dockerfile] non-root-runtime-user: root user detected'],
+        checks: [
+          { target: 'Dockerfile', check: 'non-root-runtime-user', passed: false },
+        ],
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.secrets_management.evidence = [failedContainerPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.secrets_management || [];
+
+    assert.ok(
+      blockers.some((b) => b.includes('reports container security verification failure (status: "failed")')),
+      `Expected status blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports invalid container security configuration (valid: false)')),
+      `Expected valid: false blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports container security error(s): [Dockerfile] non-root-runtime-user: root user detected')),
+      `Expected errors blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports 1 failed container security check(s): [Dockerfile] non-root-runtime-user')),
+      `Expected failed check blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness blocks approval when evidence dossier reports supplyChainBaseline breach or compliance failure', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-sc-dossier-'));
+  try {
+    const breachedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-sc-breached.json');
+    fs.writeFileSync(
+      breachedDossierPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        passed_stages: 7,
+        failed_stages: 0,
+        stages: [],
+        supplyChainBaseline: { status: 'breached' },
+        summary: {
+          supplyChainCompliance: 'failed',
+          sastCompliance: 'failed',
+          containerSecurityCompliance: 'failed',
+        },
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.secrets_management.evidence = [breachedDossierPath];
+    const res = validateApprovedRecord(rec);
+    const blockers = res.categoryBlockers.secrets_management || [];
+
+    assert.ok(
+      blockers.some((b) => b.includes('reports supply chain security baseline breach (supplyChainBaseline.status: "breached")')),
+      `Expected supplyChainBaseline breach blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports supply chain security compliance failure (summary.supplyChainCompliance: "failed")')),
+      `Expected supplyChainCompliance failure blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports SAST scan compliance failure (summary.sastCompliance: "failed")')),
+      `Expected sastCompliance failure blocker, got: ${JSON.stringify(blockers)}`
+    );
+    assert.ok(
+      blockers.some((b) => b.includes('reports container security compliance failure (summary.containerSecurityCompliance: "failed")')),
+      `Expected containerSecurityCompliance failure blocker, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('validateReadiness accepts valid passed SAST, SBOM, container security child evidence, and compliant dossier', () => {
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-sc-pass-'));
+  try {
+    const passedSbomPath = path.join(tmpDir, 'sbom-inventory-pass.json');
+    fs.writeFileSync(
+      passedSbomPath,
+      JSON.stringify({
+        bomFormat: 'CycloneDX',
+        specVersion: '1.5',
+        components: [{ name: 'safe-pkg', version: '1.0.0' }],
+        licenseCompliance: {
+          compliant: true,
+          violations: [],
+          totalComponents: 1,
+        },
+      }),
+      'utf8'
+    );
+    const passedSastPath = path.join(tmpDir, 'sast-scan-evidence-pass.json');
+    fs.writeFileSync(
+      passedSastPath,
+      JSON.stringify({
+        drill_type: 'sast_security_scan',
+        status: 'success',
+        passed: true,
+        scannedFilesCount: 300,
+        totalFindingsCount: 0,
+        blockingActiveFindings: [],
+        expiredFindings: [],
+      }),
+      'utf8'
+    );
+    const passedContainerPath = path.join(tmpDir, 'container-security-evidence-pass.json');
+    fs.writeFileSync(
+      passedContainerPath,
+      JSON.stringify({
+        drill_type: 'container_security_verification',
+        status: 'success',
+        valid: true,
+        errors: [],
+        checks: [{ target: 'server/Dockerfile', check: 'non-root-runtime-user', passed: true }],
+      }),
+      'utf8'
+    );
+    const passedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-pass.json');
+    fs.writeFileSync(
+      passedDossierPath,
+      JSON.stringify({
+        version: '1.0.0',
+        environment: 'drill',
+        overall_status: 'PASSED',
+        total_stages: 7,
+        passed_stages: 7,
+        failed_stages: 0,
+        stages: [{ stage_id: 'supply_chain_sast', status: 'PASSED' }],
+        supplyChainBaseline: {
+          status: 'verified',
+          sbom: { packagesCount: 1, licenseComplianceVerified: true, violationsCount: 0 },
+          sast: { filesScanned: 300, totalFindingsCount: 0, blockingActiveFindingsCount: 0, expiredFindingsCount: 0, passed: true },
+          containerSecurity: { valid: true, totalChecks: 1, passedChecks: 1, errorsCount: 0 },
+        },
+        summary: {
+          supplyChainCompliance: 'passed',
+          sastCompliance: 'passed',
+          containerSecurityCompliance: 'passed',
+        },
+      }),
+      'utf8'
+    );
+
+    const rec = buildValidApprovedRecord();
+    rec.sections.secrets_management.evidence = [passedSbomPath, passedSastPath, passedContainerPath, passedDossierPath];
+
+    const res = validateApprovedRecord(rec);
+    assert.strictEqual(res.categoryBlockers.secrets_management, undefined);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('the checked-in template readiness.example.json fails closed with unresolved blockers', () => {
   const templatePath = path.resolve(__dirname, '../../infra/launch/readiness.example.json');
   const raw = fs.readFileSync(templatePath, 'utf8');

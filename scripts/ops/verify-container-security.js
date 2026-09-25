@@ -363,12 +363,31 @@ function verifyContainerSecurity(options = {}) {
 if (require.main === module) {
   const args = process.argv.slice(2);
   const jsonOutput = args.includes('--json');
+  const outIdx = args.indexOf('--output') !== -1 ? args.indexOf('--output') : args.indexOf('-o');
+  const outputPath = outIdx !== -1 && args[outIdx + 1] && !args[outIdx + 1].startsWith('-') ? path.resolve(process.cwd(), args[outIdx + 1]) : null;
 
   try {
     const result = verifyContainerSecurity();
 
+    const payload = {
+      drill_type: 'container_security_verification',
+      timestamp: new Date().toISOString(),
+      status: result.valid ? 'success' : 'failed',
+      valid: result.valid,
+      errors: result.errors,
+      checks: result.checks,
+      totalChecks: result.checks.length,
+      passedChecks: result.checks.filter((c) => c.passed).length,
+      failedChecks: result.checks.filter((c) => !c.passed).length,
+    };
+
+    if (outputPath) {
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    }
+
     if (jsonOutput) {
-      console.log(JSON.stringify(result, null, 2));
+      console.log(JSON.stringify(payload, null, 2));
       process.exit(result.valid ? 0 : 1);
     }
 
@@ -377,6 +396,10 @@ if (require.main === module) {
       const mark = c.passed ? '✔' : '✖';
       console.log(`  ${mark} [${c.target}] ${c.check}`);
       console.log(`    ${c.details}`);
+    }
+
+    if (outputPath) {
+      console.log(`\n  Container security evidence written to: ${outputPath}`);
     }
 
     if (result.valid) {

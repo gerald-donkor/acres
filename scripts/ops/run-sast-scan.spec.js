@@ -297,3 +297,39 @@ test('runSastScan: repository scan passes cleanly with zero unreviewed blockers'
   assert.equal(result.expiredFindings.length, 0, 'Must have zero expired suppressions');
   assert.ok(result.scannedFilesCount > 300, `Expected >300 files scanned, got ${result.scannedFilesCount}`);
 });
+
+test('runSastScan CLI: --output and -o create structured JSON evidence file matching schema', () => {
+  const { execFileSync } = require('node:child_process');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'sast-cli-test-'));
+  try {
+    const scriptPath = path.join(__dirname, 'run-sast-scan.js');
+    const outPath1 = path.join(tmpDir, 'sast-scan-evidence-1.json');
+    execFileSync(process.execPath, [scriptPath, '--output', outPath1], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
+
+    assert.ok(fs.existsSync(outPath1), 'evidence file 1 must be created');
+    const evidence1 = JSON.parse(fs.readFileSync(outPath1, 'utf8'));
+    assert.equal(evidence1.drill_type, 'sast_security_scan');
+    assert.match(evidence1.timestamp, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    assert.equal(evidence1.status, 'success');
+    assert.equal(evidence1.passed, true);
+    assert.ok(evidence1.scannedFilesCount > 300);
+    assert.deepEqual(evidence1.blockingActiveFindings, []);
+    assert.deepEqual(evidence1.expiredFindings, []);
+
+    const outPath2 = path.join(tmpDir, 'sast-scan-evidence-2.json');
+    execFileSync(process.execPath, [scriptPath, '-o', outPath2], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
+    assert.ok(fs.existsSync(outPath2), 'evidence file 2 must be created via -o');
+    const evidence2 = JSON.parse(fs.readFileSync(outPath2, 'utf8'));
+    assert.equal(evidence2.drill_type, 'sast_security_scan');
+    assert.equal(evidence2.status, 'success');
+    assert.equal(evidence2.passed, true);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

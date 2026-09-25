@@ -211,3 +211,42 @@ test('validateComposeConfig: detects missing internal: true on private network r
   assert.equal(res.valid, false);
   assert.ok(res.errors.some((e) => e.includes('private-network-internal-isolation')));
 });
+
+test('verifyContainerSecurity CLI: --output and -o create structured JSON evidence file matching schema', () => {
+  const os = require('node:os');
+  const { execFileSync } = require('node:child_process');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'container-cli-test-'));
+  try {
+    const scriptPath = path.join(__dirname, 'verify-container-security.js');
+    const outPath1 = path.join(tmpDir, 'container-security-evidence-1.json');
+    execFileSync(process.execPath, [scriptPath, '--output', outPath1], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
+
+    assert.ok(fs.existsSync(outPath1), 'evidence file 1 must be created');
+    const evidence1 = JSON.parse(fs.readFileSync(outPath1, 'utf8'));
+    assert.equal(evidence1.drill_type, 'container_security_verification');
+    assert.match(evidence1.timestamp, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    assert.equal(evidence1.status, 'success');
+    assert.equal(evidence1.valid, true);
+    assert.deepEqual(evidence1.errors, []);
+    assert.ok(Array.isArray(evidence1.checks));
+    assert.ok(evidence1.checks.length >= 17);
+    assert.ok(evidence1.checks.every((c) => c.passed === true));
+    assert.equal(evidence1.failedChecks, 0);
+
+    const outPath2 = path.join(tmpDir, 'container-security-evidence-2.json');
+    execFileSync(process.execPath, [scriptPath, '-o', outPath2], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
+    assert.ok(fs.existsSync(outPath2), 'evidence file 2 must be created via -o');
+    const evidence2 = JSON.parse(fs.readFileSync(outPath2, 'utf8'));
+    assert.equal(evidence2.drill_type, 'container_security_verification');
+    assert.equal(evidence2.status, 'success');
+    assert.equal(evidence2.valid, true);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

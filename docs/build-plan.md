@@ -862,6 +862,18 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   compliance failures. Adds template assertions in `scripts/ops/check-production-templates.sh` and expands test suites
   (`verify-volume-encryption.spec.js` 16/16 passed, `run-launch-drills.spec.js` 9/9 passed,
   `check-launch-readiness.spec.js` 43/43 passed). Operator launch sign-off remains open.
+  Prompt 186 attaches `licenseCompliance` to `bom` in `scripts/ops/generate-sbom.js` when `--verify-licenses`
+  and `--output` are combined, adds `--output <file>` option to `scripts/ops/run-sast-scan.js` and
+  `scripts/ops/verify-container-security.js`, updates stage 2 of `scripts/ops/run-launch-drills.sh` to emit child
+  evidence (`sbom-inventory-<timestamp>.json`, `sast-scan-evidence-<timestamp>.json`, and
+  `container-security-evidence-<timestamp>.json`), and bubbles up `supplyChainBaseline` and compliance summaries
+  (`summary.supplyChainCompliance`, `summary.sastCompliance`, `summary.containerSecurityCompliance`) into the Unified
+  Launch Evidence Dossier. Hardens `checkEvidenceFile` in `scripts/ops/check-launch-readiness.js` against SAST, SBOM,
+  and container security verification failures, active unreviewed blockers, expired suppressions, license violations,
+  and failed checks, as well as dossier supply chain baseline breaches and compliance failures. Adds template assertions
+  in `scripts/ops/check-production-templates.sh` and expands test suites (`generate-sbom.spec.js` 8/8 passed,
+  `run-sast-scan.spec.js` 14/14 passed, `verify-container-security.spec.js` 11/11 passed, `run-launch-drills.spec.js` 9/9 passed,
+  `check-launch-readiness.spec.js` 49/49 passed). Operator launch sign-off remains open.
 - **Multi-Layer DoS & Rate Limiting Resilience Drill (TM-05, TM-20)**:
   - `scripts/ops/run-dos-resilience-drill.sh`: automated drill asserting 5 defense-in-depth protection layers (Caddy body size ceiling and timeouts, NestJS `@StrictThrottle` 10 req/min fail-closed HTTP 429 with probe `@SkipThrottle` starvation defense, GraphQL 12KB/depth/alias/cost bounds, storage 50MB/quarantine limits, and constant-time bcrypt verification);
   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
