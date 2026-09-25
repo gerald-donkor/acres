@@ -1079,3 +1079,14 @@ children block approval even beside a valid report. The targeted suites passed 1
 passed. The unresolved example still failed closed (0 approved categories,
 11 blocked, 70 blockers). DNS records, live certificate issuance and TLS,
 HSTS approval, and certificate recovery remain operator verification steps.
+
+**Prompt 196 verification (2026-09-25):** Approved Category 2 now requires a
+referenced SMTP delivery child JSON report with a real nonfuture UTC timestamp,
+matching provider/host/port/TLS mode/sender, a delivered receipt identifier,
+passing SPF/DKIM/DMARC printout references, and no errors. The approved SMTP
+credential reference must equal the indirect secret reference. Every referenced
+child must pass; a malformed or failed child blocks even beside a valid one.
+The readiness suite passed 89/89; `ops:templates`, `ops:check`, lint, typecheck,
+build, and `git diff --check` passed. The unresolved example remained blocked
+(0 approved categories, 11 blocked, 70 blockers). Operator-owned live provider
+and DNS proof remains required before launch sign-off.

@@ -1195,6 +1195,19 @@ Approved Category 5 (`slo_and_alerting`) records now require a concrete capacity
 **Prompt 195 update (2026-09-25): bind production domain and TLS approval to child evidence.**
 Approved Category 1 (`production_domain_tls`) records require a concrete Caddy routing child JSON report in `evidence`, a valid production FQDN and TLS contact email, `hsts_approved: true`, and a boolean `custom_certificates`. The Caddy verifier emits structured JSON with `--output` or `--json`; Stage 3 of the unified drill writes a Caddy child artifact. For an approved production Caddyfile with active HSTS and a concrete positive `max-age`, the operator invokes the verifier with `--allow-hsts`. The readiness validator requires a real, nonfuture UTC timestamp, the expected drill type, success and validity, no errors, `hstsApproved: true`, verified security and proxy headers, S3 SigV4 Host preservation, and at least 12 passing routes with matching counts. The report domain must match the approved domain and its target cannot be `Caddyfile.example`; the default template drill report alone cannot approve a production domain. Every referenced child report, including wildcard matches, must pass. The targeted suites passed 112/112, `ops:check` exited 0, lint, typecheck, build, and `git diff --check` passed. The unresolved example remained blocked (0 approved categories, 11 blocked, 70 blockers). The operator must still verify production DNS, live TLS issuance/handshake, HSTS approval, and certificate recovery; static Caddyfile evidence does not prove those live conditions.
 
+**Prompt 196 verification (2026-09-25):** Approved Category 2 (`smtp_delivery`)
+now requires a concrete SMTP delivery child JSON report. The report binds the
+provider, host, integer port, TLS mode, and sender to the approved record and
+requires a delivered receipt identifier, real nonfuture UTC timestamps, and
+passing SPF, DKIM, and DMARC printout references. Every referenced child,
+including wildcard matches, must pass; prose and the unified dossier do not
+qualify. The SMTP credential reference must match the indirect SMTP secret
+reference. The readiness suite passed 89/89; `ops:templates`, `ops:check`, lint,
+typecheck, build, and `git diff --check` passed. The unresolved example still
+failed closed with 0 approved categories, 11 blocked, and 70 blockers. The
+operator must obtain the actual provider receipt and public DNS printouts;
+the validator checks consistency, not provenance or live mail delivery.
+
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.

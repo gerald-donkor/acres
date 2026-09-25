@@ -84,9 +84,24 @@ do not report failure.
 ### 2. SMTP Delivery (`smtp_delivery`)
 
 - Drill/verify: test delivery via the configured provider, DKIM/SPF/DMARC DNS checks
-- Evidence: delivery receipt, DNS record printout
+- Evidence: a redacted `smtp-delivery-evidence-<timestamp>.json` child report referencing the provider delivery receipt and DNS record printouts
 - Accept: provider, host, valid port, `from_address`, credentials secret
-  reference, delivery policy, bounce/abuse handling procedure
+  reference, delivery policy, bounce/abuse handling procedure, explicit STARTTLS
+  or TLS mode. The credential reference must match `secret_references.smtp_secret_source`.
+- An approved record must reference a concrete SMTP child JSON report in
+  `evidence`. The report requires `drill_type: "smtp_delivery_verification"`,
+  a real nonfuture ISO UTC `timestamp`, `status: "success"`, provider/host/port/
+  TLS mode/sender matching the readiness record, and `errors: []`. Its
+  `delivery` object requires `status: "delivered"`, an opaque nonempty
+  `receipt_id`, and a real nonfuture UTC timestamp. Its `dns` object requires
+  a real nonfuture UTC `checked_at` and `spf`, `dkim`, and `dmarc` entries,
+  each with `passed: true` and a nonempty printout reference in `record`.
+  Every referenced child, including wildcard matches, must pass; prose or a
+  dossier alone cannot support approval. Validate the operator record with
+  `node scripts/ops/check-launch-readiness.js <operator-readiness.json>`.
+  Operators must obtain the delivery receipt and DNS printouts from the live
+  provider and public DNS. This validator checks the report's consistency;
+  it cannot authenticate a hand-authored report or conduct a live mail test.
 
 ### 3. Secrets Management (`secrets_management`)
 

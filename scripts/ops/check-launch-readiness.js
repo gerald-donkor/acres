@@ -598,6 +598,68 @@ function validateCaddyRoutingReport(report, now, approvedDomain) {
   return true;
 }
 
+function isSmtpDeliveryCandidate({ parsed } = {}) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  // Every JSON file in SMTP evidence must be a valid child report. A dossier
+  // or a partial custom-named report cannot hide beside a valid sibling.
+  return true;
+}
+
+function validSmtpText(value) {
+  return typeof value === 'string' && value.trim() !== '' &&
+    !value.includes('__REQUIRED_') && !value.includes('<REQUIRED_') && !value.includes('change-me');
+}
+
+function validSmtpEmail(value) {
+  if (!validSmtpText(value) || value.length > 254) return false;
+  const parts = value.split('@');
+  if (parts.length !== 2 || parts[0].length > 64 || parts[0].startsWith('.') || parts[0].endsWith('.')) return false;
+  return !value.includes('..') &&
+    /^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/.test(value);
+}
+
+function validSmtpSecretReference(value) {
+  if (!validSmtpText(value)) return false;
+  return /^(?:vault:[^\s#]+#[^\s#]+|aws-sm:[^\s]+|env:[A-Z][A-Z0-9_]*|file:\/[^\s]+)$/.test(value);
+}
+
+function parseSmtpTimestamp(value) {
+  if (typeof value !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value)) return null;
+  return parseCaddyRoutingTimestamp(value);
+}
+
+function validateSmtpDeliveryReport(report, now, approved) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  if (report.drill_type !== 'smtp_delivery_verification' || report.status !== 'success') return false;
+  const evalNow = now instanceof Date ? now : new Date();
+  const timestamp = parseSmtpTimestamp(report.timestamp);
+  if (!timestamp || timestamp > evalNow) return false;
+  if (!Array.isArray(report.errors) || report.errors.length !== 0) return false;
+  if (!validSmtpText(report.provider) || !validSmtpText(report.host) || !validSmtpEmail(report.from_address)) return false;
+  if (!Number.isInteger(report.port) || report.port < 1 || report.port > 65535) return false;
+  if (!['STARTTLS', 'TLS'].includes(report.tls_mode)) return false;
+  if (approved) {
+    if (!validSmtpText(approved.provider) || !validSmtpText(approved.host) ||
+        !validSmtpEmail(approved.from_address)) return false;
+    if (report.provider !== approved.provider || report.host.toLowerCase() !== approved.host.toLowerCase() ||
+        report.port !== approved.port || report.tls_mode !== approved.tls_mode ||
+        report.from_address.toLowerCase() !== approved.from_address.toLowerCase()) return false;
+  }
+  const delivery = report.delivery;
+  if (!delivery || typeof delivery !== 'object' || Array.isArray(delivery) ||
+      delivery.status !== 'delivered' || !validSmtpText(delivery.receipt_id)) return false;
+  const deliveredAt = parseSmtpTimestamp(delivery.timestamp);
+  if (!deliveredAt || deliveredAt > evalNow) return false;
+  const dns = report.dns;
+  if (!dns || typeof dns !== 'object' || Array.isArray(dns)) return false;
+  const checkedAt = parseSmtpTimestamp(dns.checked_at);
+  if (!checkedAt || checkedAt > evalNow) return false;
+  return ['spf', 'dkim', 'dmarc'].every((key) =>
+    dns[key] && typeof dns[key] === 'object' && !Array.isArray(dns[key]) &&
+    dns[key].passed === true && validSmtpText(dns[key].record));
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -1155,6 +1217,7 @@ function validateReadiness(record, _filePath, options = {}) {
   const deploymentEvidence = [];
   const capacityEvidence = [];
   const caddyEvidence = [];
+  const smtpEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -1232,6 +1295,7 @@ function validateReadiness(record, _filePath, options = {}) {
             if (sectionName === 'deployment_and_rollback') deploymentEvidence.push(...parsedFiles);
             if (sectionName === 'slo_and_alerting') capacityEvidence.push(...parsedFiles);
             if (sectionName === 'production_domain_tls') caddyEvidence.push(...parsedFiles);
+            if (sectionName === 'smtp_delivery') smtpEvidence.push(...parsedFiles);
           }
         });
       }
@@ -1301,26 +1365,36 @@ function validateReadiness(record, _filePath, options = {}) {
   // 3.2 smtp_delivery
   const smtpSec = sections.smtp_delivery;
   if (smtpSec && smtpSec.status === 'approved') {
-    if (!smtpSec.provider || typeof smtpSec.provider !== 'string') {
+    if (!validSmtpText(smtpSec.provider)) {
       addBlocker('smtp_delivery', 'SMTP provider is required');
     }
-    if (!smtpSec.host || typeof smtpSec.host !== 'string') {
+    if (!validSmtpText(smtpSec.host)) {
       addBlocker('smtp_delivery', 'SMTP host is required');
     }
-    if (!smtpSec.port || typeof smtpSec.port !== 'number' || smtpSec.port <= 0 || smtpSec.port > 65535) {
+    if (!Number.isInteger(smtpSec.port) || smtpSec.port <= 0 || smtpSec.port > 65535) {
       addBlocker('smtp_delivery', `SMTP port must be a valid port number (received: ${smtpSec.port})`);
     }
-    if (!smtpSec.from_address || typeof smtpSec.from_address !== 'string' || !smtpSec.from_address.includes('@')) {
+    if (!['STARTTLS', 'TLS'].includes(smtpSec.tls_mode)) {
+      addBlocker('smtp_delivery', 'SMTP tls_mode must be STARTTLS or TLS');
+    }
+    if (!validSmtpEmail(smtpSec.from_address)) {
       addBlocker('smtp_delivery', `SMTP from_address is invalid: "${smtpSec.from_address}"`);
     }
-    if (!smtpSec.credentials_source_reference || typeof smtpSec.credentials_source_reference !== 'string') {
-      addBlocker('smtp_delivery', 'SMTP credentials source reference is required');
+    if (!validSmtpSecretReference(smtpSec.credentials_source_reference) ||
+        smtpSec.credentials_source_reference !== sections.secret_references?.smtp_secret_source) {
+      addBlocker('smtp_delivery', 'SMTP credentials source reference must match the approved secret reference');
     }
-    if (!smtpSec.delivery_policy || typeof smtpSec.delivery_policy !== 'string') {
+    if (!validSmtpText(smtpSec.delivery_policy)) {
       addBlocker('smtp_delivery', 'SMTP delivery policy description is required');
     }
-    if (!smtpSec.bounce_abuse_handling || typeof smtpSec.bounce_abuse_handling !== 'string') {
+    if (!validSmtpText(smtpSec.bounce_abuse_handling)) {
       addBlocker('smtp_delivery', 'SMTP bounce/abuse handling procedure reference is required');
+    }
+    const smtpCandidates = smtpEvidence.filter(isSmtpDeliveryCandidate);
+    if (smtpCandidates.length === 0) {
+      addBlocker('smtp_delivery', 'A successful SMTP delivery and DNS verification child JSON report is required');
+    } else if (smtpCandidates.some(({ parsed }) => !validateSmtpDeliveryReport(parsed, now, smtpSec))) {
+      addBlocker('smtp_delivery', 'A referenced SMTP delivery report is invalid or failed');
     }
   }
 
@@ -1844,4 +1918,6 @@ module.exports = {
   isCaddyRoutingCandidate,
   parseCaddyRoutingTimestamp,
   validateCaddyRoutingReport,
+  isSmtpDeliveryCandidate,
+  validateSmtpDeliveryReport,
 };

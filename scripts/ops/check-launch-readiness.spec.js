@@ -21,6 +21,8 @@ const {
   isCaddyRoutingCandidate,
   parseCaddyRoutingTimestamp,
   validateCaddyRoutingReport,
+  isSmtpDeliveryCandidate,
+  validateSmtpDeliveryReport,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -247,6 +249,30 @@ const validCaddyRoutingReport = {
   warnings: [],
 };
 fs.writeFileSync(caddyRoutingFixturePath, JSON.stringify(validCaddyRoutingReport));
+const smtpFixturePath = path.join(restoreFixtureDir, 'smtp-delivery-evidence-valid.json');
+const validSmtpReport = {
+  drill_type: 'smtp_delivery_verification',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  provider: 'resend',
+  host: 'smtp.resend.com',
+  port: 587,
+  tls_mode: 'STARTTLS',
+  from_address: 'notifications@acres.example.com',
+  delivery: {
+    status: 'delivered',
+    receipt_id: 'provider-receipt-123',
+    timestamp: '2026-08-28T12:01:00.000Z',
+  },
+  dns: {
+    checked_at: '2026-08-28T12:00:00.000Z',
+    spf: { passed: true, record: 'dns-printout-spf' },
+    dkim: { passed: true, record: 'dns-printout-dkim' },
+    dmarc: { passed: true, record: 'dns-printout-dmarc' },
+  },
+  errors: [],
+};
+fs.writeFileSync(smtpFixturePath, JSON.stringify(validSmtpReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -278,7 +304,7 @@ function buildValidApprovedRecord() {
         delivery_policy: 'Transactional notifications only',
         bounce_abuse_handling: 'docs/ops/smtp-bounce.md',
         approver: 'ops-lead',
-        evidence: ['DKIM and SPF records verified', 'Test delivery succeeded'],
+        evidence: [smtpFixturePath],
         notes: 'Verified SMTP delivery',
       },
       secrets_management: {
@@ -3131,4 +3157,75 @@ test('caddy routing helper functions handle edge cases and missing parameters sa
   assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, evaluatedRoutes: [{ passed: false }] }), false);
   assert.strictEqual(parseCaddyRoutingTimestamp('invalid-date'), null);
   assert.ok(parseCaddyRoutingTimestamp('20260828T120000Z') instanceof Date);
+});
+
+test('approved SMTP delivery requires matching delivered receipt and DNS child evidence', () => {
+  const record = buildValidApprovedRecord();
+  assert.deepStrictEqual(validateReadiness(record, null, { now: fixedNow }).categoryBlockers.smtp_delivery, undefined);
+  record.sections.smtp_delivery.evidence = ['Test delivery succeeded', 'SPF and DKIM verified'];
+  assert.match(validateReadiness(record, null, { now: fixedNow }).categoryBlockers.smtp_delivery.join(' '), /child JSON report is required/);
+  record.sections.smtp_delivery.evidence = [smtpFixturePath];
+  record.sections.smtp_delivery.credentials_source_reference = 'vault:other/smtp#password';
+  assert.match(validateReadiness(record, null, { now: fixedNow }).categoryBlockers.smtp_delivery.join(' '), /must match/);
+  record.sections.smtp_delivery.credentials_source_reference = 'plainpassword123';
+  record.sections.secret_references.smtp_secret_source = 'plainpassword123';
+  assert.match(validateReadiness(record, null, { now: fixedNow }).categoryBlockers.smtp_delivery.join(' '), /must match the approved secret reference/);
+});
+
+test('SMTP delivery report validation fails closed on invalid status, identity, timestamps, delivery, and DNS', () => {
+  const approved = buildValidApprovedRecord().sections.smtp_delivery;
+  assert.strictEqual(validateSmtpDeliveryReport(validSmtpReport, fixedNow, approved), true);
+  assert.strictEqual(validateSmtpDeliveryReport({
+    ...validSmtpReport,
+    delivery: { ...validSmtpReport.delivery, timestamp: '2026-08-28T11:59:00.000Z' },
+  }, fixedNow, approved), true);
+  const mutations = [
+    { status: 'failed' }, { provider: 'other' }, { host: 'other.example.com' },
+    { port: 587.5 }, { tls_mode: 'NONE' }, { from_address: 'invalid' },
+    { timestamp: '2026-09-26T12:00:00.000Z' }, { timestamp: '2026-02-30T12:00:00.000Z' },
+    { timestamp: '20260828T120000Z' },
+    { delivery: { ...validSmtpReport.delivery, status: 'accepted' } },
+    { delivery: { ...validSmtpReport.delivery, receipt_id: '' } },
+    { delivery: { ...validSmtpReport.delivery, timestamp: '2026-09-26T12:00:00.000Z' } },
+    { dns: { ...validSmtpReport.dns, dkim: { passed: false, record: 'dns-printout-dkim' } } },
+    { dns: { ...validSmtpReport.dns, spf: { passed: true, record: '' } } },
+    { dns: { ...validSmtpReport.dns, checked_at: 'not-a-date' } },
+    { errors: ['delivery rejected'] },
+  ];
+  for (const mutation of mutations) {
+    assert.strictEqual(validateSmtpDeliveryReport({ ...validSmtpReport, ...mutation }, fixedNow, approved), false,
+      `Expected rejection for ${JSON.stringify(mutation)}`);
+  }
+  assert.strictEqual(validateSmtpDeliveryReport(validSmtpReport, fixedNow, { ...approved, host: null }), false);
+  assert.strictEqual(validateSmtpDeliveryReport(validSmtpReport, fixedNow, { ...approved, from_address: null }), false);
+});
+
+test('SMTP evidence accepts custom path and rejects failed child in wildcard', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-smtp-wildcard-'));
+  try {
+    const good = path.join(dir, 'report-a.json');
+    const bad = path.join(dir, 'report-b.json');
+    fs.writeFileSync(good, JSON.stringify(validSmtpReport));
+    const record = buildValidApprovedRecord();
+    record.sections.smtp_delivery.evidence = [good];
+    assert.strictEqual(validateReadiness(record, null, { now: fixedNow }).categoryBlockers.smtp_delivery, undefined);
+    fs.writeFileSync(bad, JSON.stringify({ ...validSmtpReport, delivery: { ...validSmtpReport.delivery, status: 'bounced' } }));
+    record.sections.smtp_delivery.evidence = [path.join(dir, 'report-*.json')];
+    assert.match(validateReadiness(record, null, { now: fixedNow }).categoryBlockers.smtp_delivery.join(' '), /invalid or failed/);
+    fs.writeFileSync(bad, JSON.stringify({ delivery: validSmtpReport.delivery, status: 'success' }));
+    assert.match(validateReadiness(record, null, { now: fixedNow }).categoryBlockers.smtp_delivery.join(' '), /invalid or failed/);
+    fs.writeFileSync(bad, JSON.stringify({ ...validSmtpReport, stages: [], dossier_version: '1.0', status: 'failed' }));
+    assert.match(validateReadiness(record, null, { now: fixedNow }).categoryBlockers.smtp_delivery.join(' '), /invalid or failed/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SMTP evidence candidate includes dossiers and handles missing input', () => {
+  assert.strictEqual(isSmtpDeliveryCandidate(), false);
+  assert.strictEqual(isSmtpDeliveryCandidate({ parsed: [] }), false);
+  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'smtp-delivery-evidence-a.json', parsed: { stages: [] } }), true);
+  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'custom.json', parsed: validSmtpReport }), true);
+  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'custom.json', parsed: { delivery: {} } }), true);
+  assert.strictEqual(validateSmtpDeliveryReport(null), false);
 });
