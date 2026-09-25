@@ -532,6 +532,72 @@ function validateCapacityAlertingReport(report, now) {
   return true;
 }
 
+function isCaddyRoutingCandidate({ file, parsed } = {}) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  if (Array.isArray(parsed.stages) || parsed.dossier_version !== undefined) return false;
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  if (fileName.startsWith('caddy-routing-evidence-') || fileName.startsWith('caddy-routing')) return true;
+  if (parsed.drill_type === 'caddy_routing_and_tls_verification') return true;
+  return (
+    typeof parsed.securityHeadersVerified === 'boolean' &&
+    typeof parsed.s3SigV4HostPreserved === 'boolean' &&
+    typeof parsed.proxyHeadersVerified === 'boolean' &&
+    Array.isArray(parsed.evaluatedRoutes)
+  );
+}
+
+function parseCaddyRoutingTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const basic = parseUtcDate(value, true);
+  if (basic) return basic;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value)) {
+    const d = new Date(value);
+    if (Number.isFinite(d.getTime())) {
+      const iso = d.toISOString();
+      if (iso === value || iso.replace(/\.000Z$/, 'Z') === value) return d;
+    }
+  }
+  return null;
+}
+
+function validateCaddyRoutingReport(report, now, approvedDomain) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  if (report.drill_type !== 'caddy_routing_and_tls_verification') return false;
+  if (typeof approvedDomain === 'string') {
+    if (typeof report.domain !== 'string' || report.domain.toLowerCase() !== approvedDomain.toLowerCase()) return false;
+    if (typeof report.targetPath !== 'string' ||
+        report.targetPath.trim() === '' ||
+        path.basename(report.targetPath) === 'Caddyfile.example') return false;
+  }
+  const evalNow = now instanceof Date ? now : new Date();
+  const ts = parseCaddyRoutingTimestamp(report.timestamp);
+  if (!ts || ts.getTime() > evalNow.getTime()) return false;
+  if (report.status !== 'success') return false;
+  if (report.valid !== true) return false;
+  if (!Array.isArray(report.errors) || report.errors.length > 0) return false;
+  if (report.hstsApproved !== true) return false;
+  if (report.securityHeadersVerified !== true) return false;
+  if (report.s3SigV4HostPreserved !== true) return false;
+  if (report.proxyHeadersVerified !== true) return false;
+  if (
+    typeof report.routesEvaluated !== 'number' ||
+    !Number.isInteger(report.routesEvaluated) ||
+    report.routesEvaluated < 12
+  ) {
+    return false;
+  }
+  if (
+    typeof report.routesPassed !== 'number' ||
+    !Number.isInteger(report.routesPassed) ||
+    report.routesPassed !== report.routesEvaluated
+  ) {
+    return false;
+  }
+  if (!Array.isArray(report.evaluatedRoutes) || report.evaluatedRoutes.length !== report.routesEvaluated) return false;
+  if (report.evaluatedRoutes.some((r) => !r || r.passed !== true)) return false;
+  return true;
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -709,6 +775,57 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
       : null;
     if (reconcileCompliance === 'failed' || reconcileCompliance === 'failure') {
       addBlocker(category, `Approved evidence file '${ref}' reports storage reconciliation compliance failure (summary.reconcileCompliance: "${parsed.summary.reconcileCompliance}")`);
+    }
+
+    // Caddy routing drill child evidence checks
+    if (
+      file.includes('caddy-routing-evidence-') ||
+      file.includes('caddy-routing') ||
+      parsed.drill_type === 'caddy_routing_and_tls_verification' ||
+      (typeof parsed.securityHeadersVerified === 'boolean' &&
+        typeof parsed.s3SigV4HostPreserved === 'boolean' &&
+        Array.isArray(parsed.evaluatedRoutes))
+    ) {
+      if (typeof parsed.status === 'string' && parsed.status.toLowerCase() !== 'success') {
+        addBlocker(category, `Approved evidence file '${ref}' reports Caddy routing verification failure (status: "${parsed.status}")`);
+      }
+      if (parsed.valid === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports invalid Caddy routing configuration (valid: false)`);
+      }
+      if (parsed.hstsApproved === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports HSTS was not enabled and approved (hstsApproved: false)`);
+      }
+      if (Array.isArray(parsed.errors) && parsed.errors.length > 0) {
+        addBlocker(category, `Approved evidence file '${ref}' reports Caddy routing error(s): ${parsed.errors.join('; ')}`);
+      }
+      if (parsed.securityHeadersVerified === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports security headers verification failure (securityHeadersVerified: false)`);
+      }
+      if (parsed.s3SigV4HostPreserved === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports S3 SigV4 Host header preservation failure (s3SigV4HostPreserved: false)`);
+      }
+      if (parsed.proxyHeadersVerified === false) {
+        addBlocker(category, `Approved evidence file '${ref}' reports proxy headers verification failure (proxyHeadersVerified: false)`);
+      }
+      if (typeof parsed.routesEvaluated === 'number' && parsed.routesEvaluated < 12) {
+        addBlocker(category, `Approved evidence file '${ref}' reports insufficient routes tested (${parsed.routesEvaluated} < 12)`);
+      }
+      if (
+        typeof parsed.routesPassed === 'number' &&
+        typeof parsed.routesEvaluated === 'number' &&
+        parsed.routesPassed !== parsed.routesEvaluated
+      ) {
+        addBlocker(
+          category,
+          `Approved evidence file '${ref}' reports route evaluation discrepancies (${parsed.routesPassed}/${parsed.routesEvaluated} passed)`
+        );
+      }
+      if (Array.isArray(parsed.evaluatedRoutes)) {
+        const failed = parsed.evaluatedRoutes.filter((r) => r && r.passed === false);
+        if (failed.length > 0) {
+          addBlocker(category, `Approved evidence file '${ref}' reports ${failed.length} failed route(s)`);
+        }
+      }
     }
 
     // Deployment & rollback drill child evidence checks
@@ -1037,6 +1154,7 @@ function validateReadiness(record, _filePath, options = {}) {
   const secretEvidence = [];
   const deploymentEvidence = [];
   const capacityEvidence = [];
+  const caddyEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -1113,6 +1231,7 @@ function validateReadiness(record, _filePath, options = {}) {
             if (sectionName === 'secrets_management') secretEvidence.push(...parsedFiles);
             if (sectionName === 'deployment_and_rollback') deploymentEvidence.push(...parsedFiles);
             if (sectionName === 'slo_and_alerting') capacityEvidence.push(...parsedFiles);
+            if (sectionName === 'production_domain_tls') caddyEvidence.push(...parsedFiles);
           }
         });
       }
@@ -1124,14 +1243,58 @@ function validateReadiness(record, _filePath, options = {}) {
   // 3.1 production_domain_tls
   const domainSec = sections.production_domain_tls;
   if (domainSec && domainSec.status === 'approved') {
-    if (!domainSec.domain || typeof domainSec.domain !== 'string' || domainSec.domain.includes('localhost') || domainSec.domain.includes('127.0.0.1')) {
-      addBlocker('production_domain_tls', `Production domain is invalid or localhost: "${domainSec.domain}"`);
+    const rawDomain = typeof domainSec.domain === 'string' ? domainSec.domain.trim() : '';
+    const isIpAddress = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(rawDomain) || rawDomain.includes(':');
+    const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(rawDomain);
+    const hasUriParts = /[\/\?#\s]/.test(rawDomain);
+    const fqdnPattern = /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+    const isValidFqdn =
+      fqdnPattern.test(rawDomain) &&
+      !rawDomain.includes('localhost') &&
+      !rawDomain.includes('127.0.0.1') &&
+      !isIpAddress &&
+      !hasProtocol &&
+      !hasUriParts;
+
+    if (!isValidFqdn) {
+      addBlocker(
+        'production_domain_tls',
+        `Production domain must be a valid fully qualified domain name (received: "${domainSec.domain}")`
+      );
     }
-    if (!domainSec.tls_contact_email || typeof domainSec.tls_contact_email !== 'string' || !domainSec.tls_contact_email.includes('@')) {
+
+    const rawEmail = typeof domainSec.tls_contact_email === 'string' ? domainSec.tls_contact_email.trim() : '';
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+    const localPart = rawEmail.split('@')[0];
+    const isValidEmail =
+      rawEmail.length <= 254 &&
+      localPart.length <= 64 &&
+      emailPattern.test(rawEmail) &&
+      !localPart.startsWith('.') &&
+      !localPart.endsWith('.') &&
+      !rawEmail.includes('..') &&
+      !rawEmail.includes('__REQUIRED_');
+
+    if (!isValidEmail) {
       addBlocker('production_domain_tls', `TLS contact email is missing or invalid: "${domainSec.tls_contact_email}"`);
     }
+
     if (domainSec.hsts_approved !== true) {
       addBlocker('production_domain_tls', 'HSTS approval must be explicitly confirmed (hsts_approved: true)');
+    }
+
+    if (typeof domainSec.custom_certificates !== 'boolean') {
+      addBlocker(
+        'production_domain_tls',
+        'Field "custom_certificates" must be explicitly defined as a boolean (true or false)'
+      );
+    }
+
+    const caddyCandidates = caddyEvidence.filter(isCaddyRoutingCandidate);
+    if (caddyCandidates.length === 0) {
+      addBlocker('production_domain_tls', 'A successful Caddy routing and TLS verification child JSON report is required');
+    } else if (caddyCandidates.some(({ parsed }) => !validateCaddyRoutingReport(parsed, now, rawDomain))) {
+      addBlocker('production_domain_tls', 'A referenced Caddy routing report is invalid or failed');
     }
   }
 
@@ -1678,4 +1841,7 @@ module.exports = {
   isCapacityAlertingCandidate,
   parseCapacityAlertingTimestamp,
   validateCapacityAlertingReport,
+  isCaddyRoutingCandidate,
+  parseCaddyRoutingTimestamp,
+  validateCaddyRoutingReport,
 };

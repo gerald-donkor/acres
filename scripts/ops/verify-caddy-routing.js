@@ -97,6 +97,7 @@ function parseCaddyfile(content) {
         headers: {},
         removedHeaders: [],
         hstsEnabled: false,
+        hstsValue: null,
         requestBody: {},
         matchers: {},
         proxies: [],
@@ -131,6 +132,10 @@ function parseCaddyfile(content) {
                 const parts = hLine.split(/\s+/);
                 site.headers[parts[0]] = parts.slice(1).join(' ').replace(/^"(.*)"$/, '$1');
               }
+              if (site.headers['Strict-Transport-Security'] !== undefined) {
+                site.hstsEnabled = true;
+                site.hstsValue = site.headers['Strict-Transport-Security'];
+              }
             }
             currentIndex++;
           }
@@ -143,6 +148,7 @@ function parseCaddyfile(content) {
           const rest = curLine.slice(7).trim();
           if (rest.startsWith('Strict-Transport-Security')) {
             site.hstsEnabled = true;
+            site.hstsValue = rest.slice('Strict-Transport-Security'.length).trim().replace(/^"(.*)"$/, '$1');
           }
         }
 
@@ -413,6 +419,17 @@ function verifyCaddyfile(contentOrPath, options = {}) {
   if (site.hstsEnabled && !options.allowHsts) {
     errors.push('HSTS gate invariant violated: Strict-Transport-Security is active without operator approval');
   }
+  if (site.hstsEnabled && options.allowHsts) {
+    const value = site.hstsValue;
+    const maxAge = typeof value === 'string'
+      ? value.split(';').map((part) => part.trim()).filter((part) => /^max-age=/i.test(part))
+      : [];
+    if (typeof value !== 'string' || value.includes('{$') || maxAge.length !== 1 ||
+        !/^max-age=[1-9]\d*$/i.test(maxAge[0]) ||
+        !Number.isSafeInteger(Number(maxAge[0].slice('max-age='.length)))) {
+      errors.push('Active HSTS requires a concrete, positive max-age after operator approval');
+    }
+  }
   const hasHstsComment = parsedConfig.commentedLines.some((c) => c.text.includes('Strict-Transport-Security'));
   if (!hasHstsComment && !site.hstsEnabled) {
     warnings.push('Caddyfile does not contain the standard commented HSTS approval gate reference');
@@ -548,19 +565,112 @@ function verifyCaddyfile(contentOrPath, options = {}) {
 
 // CLI Execution Entry Point
 if (require.main === module) {
-  const targetPath = process.argv[2] || DEFAULT_CADDYFILE_PATH;
+  const args = process.argv.slice(2);
+  let targetPath = DEFAULT_CADDYFILE_PATH;
+  let outputPath = null;
+  let asJson = false;
+  let allowHsts = false;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--help' || arg === '-h') {
+      console.log(`Usage: node scripts/ops/verify-caddy-routing.js [target-caddyfile] [options]
+
+Validates Caddyfile structure, security headers, request body limits,
+transport timeouts, and upstream route dispatching.
+
+Options:
+  --output, -o <file>   Write structured JSON drill evidence to target file path
+  --json                Output structured JSON report to stdout
+  --allow-hsts          Verify active HSTS after operator approval
+  --help, -h            Show this help message
+`);
+      process.exit(0);
+    } else if (arg === '--output' || arg === '-o') {
+      outputPath = args[++i];
+      if (!outputPath || outputPath.startsWith('-')) {
+        console.error('Error: --output requires a file path');
+        process.exit(1);
+      }
+    } else if (arg === '--json') {
+      asJson = true;
+    } else if (arg === '--allow-hsts') {
+      allowHsts = true;
+    } else if (!arg.startsWith('-')) {
+      targetPath = arg;
+    } else {
+      console.error(`Error: unknown option ${arg}`);
+      process.exit(1);
+    }
+  }
+
+  if (!fs.existsSync(targetPath)) {
+    const errPayload = {
+      drill_type: 'caddy_routing_and_tls_verification',
+      timestamp: new Date().toISOString(),
+      status: 'failed',
+      valid: false,
+      targetPath,
+      errors: [`Error: target Caddyfile does not exist at "${targetPath}"`],
+    };
+    if (outputPath) {
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, JSON.stringify(errPayload, null, 2), 'utf8');
+    }
+    if (asJson) {
+      console.log(JSON.stringify(errPayload, null, 2));
+    } else {
+      console.error(`Error: target Caddyfile does not exist at "${targetPath}"`);
+    }
+    process.exit(1);
+  }
+
+  const result = verifyCaddyfile(targetPath, { allowHsts });
+  const site = result.parsedConfig?.siteBlocks?.[0] || null;
+  const domain = site ? site.domain : null;
+  const hstsApproved = Boolean(allowHsts && site?.hstsEnabled && result.valid);
+  const securityHeadersVerified = result.errors.length === 0;
+  const s3SigV4HostPreserved = site && site.proxies
+    ? site.proxies.some((p) => p.matcher === '@objects' && p.headersUp && p.headersUp['Host'] === '{host}')
+    : false;
+  const proxyHeadersVerified = site && site.proxies
+    ? site.proxies.some((p) => p.matcher === '@api' && p.headersUp && p.headersUp['X-Forwarded-Host'] === '{host}' && p.headersUp['X-Forwarded-Proto'] === '{scheme}')
+    : false;
+  const routesEvaluated = result.evaluatedRoutes ? result.evaluatedRoutes.length : 0;
+  const routesPassed = result.evaluatedRoutes ? result.evaluatedRoutes.filter((r) => r.passed).length : 0;
+
+  const payload = {
+    drill_type: 'caddy_routing_and_tls_verification',
+    timestamp: new Date().toISOString(),
+    status: result.valid ? 'success' : 'failed',
+    valid: result.valid,
+    targetPath,
+    domain,
+    hstsApproved,
+    securityHeadersVerified: result.valid && securityHeadersVerified,
+    s3SigV4HostPreserved: result.valid && s3SigV4HostPreserved,
+    proxyHeadersVerified: result.valid && proxyHeadersVerified,
+    routesEvaluated,
+    routesPassed,
+    evaluatedRoutes: result.evaluatedRoutes,
+    errors: result.errors,
+    warnings: result.warnings,
+  };
+
+  if (outputPath) {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2), 'utf8');
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+    process.exit(result.valid ? 0 : 1);
+  }
 
   console.log('=================================================================');
   console.log('         Acres Caddy Ingress & Same-Origin Route Verifier        ');
   console.log('=================================================================');
   console.log(`Target Caddyfile: ${targetPath}`);
-
-  if (!fs.existsSync(targetPath)) {
-    console.error(`Error: target Caddyfile does not exist at "${targetPath}"`);
-    process.exit(1);
-  }
-
-  const result = verifyCaddyfile(targetPath);
 
   console.log('\n--- Route Evaluation Matrix ---');
   for (const route of result.evaluatedRoutes) {
@@ -571,7 +681,6 @@ if (require.main === module) {
   }
 
   console.log('\n--- Edge Security Headers ---');
-  const site = result.parsedConfig.siteBlocks[0];
   if (site) {
     for (const [key, val] of Object.entries(site.headers)) {
       console.log(` ✓ ${key}: "${val}"`);

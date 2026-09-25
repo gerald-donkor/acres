@@ -51,9 +51,35 @@ do not report failure.
 
 ### 1. Production Domain & TLS (`production_domain_tls`)
 
-- Drill/verify: `node scripts/ops/verify-caddy-routing.js`, `scripts/ops/check-production-templates.sh`
-- Evidence: Caddyfile HSTS approval, DNS A/AAAA record printout
-- Accept: real (non-localhost) domain, valid TLS contact email, `hsts_approved: true`
+- Drill/verify: `node scripts/ops/verify-caddy-routing.js <materialized-production-Caddyfile> --allow-hsts --output backups/caddy-routing-evidence-<timestamp>.json`, `scripts/ops/check-production-templates.sh`
+- Evidence: `backups/caddy-routing-evidence-<timestamp>.json`, DNS A/AAAA record printout, Caddyfile HSTS approval
+- Accept: real (non-localhost) domain, valid TLS contact email, `hsts_approved: true`, boolean `custom_certificates` flag
+- An approved record must reference a concrete, successful Caddy routing
+  child JSON report in `evidence`. A custom path is accepted by report content,
+  not name alone. Its ISO UTC timestamp must be real and no later than validation
+  time. Every referenced report must have
+  `drill_type: "caddy_routing_and_tls_verification"`, `status: "success"`,
+  `valid: true`, an empty `errors` array, `hstsApproved: true`,
+  `securityHeadersVerified: true`,
+  `s3SigV4HostPreserved: true`, `proxyHeadersVerified: true`, at least 12
+  evaluated routes, `routesPassed === routesEvaluated`, and an `evaluatedRoutes`
+  array of the same length with every route's `passed` field true. A failed or
+  malformed report blocks even alongside a valid one. The unified dossier
+  alone, prose, and declarations without child evidence are insufficient.
+  The report domain must match the approved domain, and the report must name a
+  Caddyfile other than `Caddyfile.example`. The default Stage 3 dry-run report
+  verifies the template and cannot support production domain approval. Its
+  `hstsApproved` requires active HSTS with a concrete positive `max-age` in
+  the parsed file and the explicit `--allow-hsts` flag. Operator approval
+  remains the separate `hsts_approved`
+  declaration and Caddyfile evidence.
+- Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
+  - Requires at least one concrete, successful Caddy routing child report in `evidence` for approved status;
+  - Requires `domain` to be a valid FQDN (rejects localhost, 127.0.0.1, IPv4/IPv6, protocols, URIs, ports, paths, or placeholders);
+  - Requires `tls_contact_email` to be a valid non-placeholder email address;
+  - Requires `hsts_approved === true`;
+  - Requires `custom_certificates` to be an explicit boolean (`true` or `false`);
+  - Rejects any malformed, future, or failed child report.
 
 ### 2. SMTP Delivery (`smtp_delivery`)
 

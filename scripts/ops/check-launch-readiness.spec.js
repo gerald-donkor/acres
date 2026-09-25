@@ -18,6 +18,9 @@ const {
   isCapacityAlertingCandidate,
   validateCapacityAlertingReport,
   parseCapacityAlertingTimestamp,
+  isCaddyRoutingCandidate,
+  parseCaddyRoutingTimestamp,
+  validateCaddyRoutingReport,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -221,6 +224,29 @@ const validCapacityAlertingReport = {
   failures: [],
 };
 fs.writeFileSync(capacityAlertingFixturePath, JSON.stringify(validCapacityAlertingReport));
+const caddyRoutingFixturePath = path.join(restoreFixtureDir, 'caddy-routing-evidence-valid.json');
+const validCaddyRoutingReport = {
+  drill_type: 'caddy_routing_and_tls_verification',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  valid: true,
+  targetPath: 'infra/caddy/Caddyfile.production',
+  domain: 'acres.example.com',
+  hstsApproved: true,
+  securityHeadersVerified: true,
+  s3SigV4HostPreserved: true,
+  proxyHeadersVerified: true,
+  routesEvaluated: 12,
+  routesPassed: 12,
+  evaluatedRoutes: Array.from({ length: 12 }, (_, i) => ({
+    requestPath: `/test-route-${i}`,
+    upstream: 'api:3001',
+    passed: true,
+  })),
+  errors: [],
+  warnings: [],
+};
+fs.writeFileSync(caddyRoutingFixturePath, JSON.stringify(validCaddyRoutingReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -238,7 +264,7 @@ function buildValidApprovedRecord() {
         hsts_approved: true,
         custom_certificates: false,
         approver: 'ops-lead',
-        evidence: ['DNS A record points to host', 'Caddyfile HSTS verified'],
+        evidence: [caddyRoutingFixturePath, 'DNS A record points to host', 'Caddyfile HSTS verified'],
         notes: 'Verified production domain',
       },
       smtp_delivery: {
@@ -2910,4 +2936,199 @@ test('capacity alerting helper functions handle edge cases and missing parameter
   assert.strictEqual(validateCapacityAlertingReport({ ...validCapacityAlertingReport, capacity: { ...validCapacityAlertingReport.capacity, sloTargets: ['invalid'] } }), false);
   assert.strictEqual(parseCapacityAlertingTimestamp('invalid-date'), null);
   assert.ok(parseCapacityAlertingTimestamp('20260828T120000Z') instanceof Date);
+});
+
+test('approved production_domain_tls requires a child report beyond prose, declaration, or dossier', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-caddy-isolation-'));
+  try {
+    const record = buildValidApprovedRecord();
+    record.sections.production_domain_tls.evidence = ['DNS A record points to host', 'Caddyfile HSTS verified'];
+    const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+    assert.ok(
+      blockers.includes('A successful Caddy routing and TLS verification child JSON report is required'),
+      `Expected child report blocker, got: ${JSON.stringify(blockers)}`
+    );
+
+    // Unified dossier alone does not qualify
+    const dossierPath = path.join(dir, 'launch-evidence-dossier-test.json');
+    fs.writeFileSync(
+      dossierPath,
+      JSON.stringify({
+        dossier_version: '1.0.0',
+        timestamp: '2026-08-28T12:00:00.000Z',
+        summary: { overallStatus: 'PASSED' },
+        stages: [],
+      })
+    );
+    record.sections.production_domain_tls.evidence = [dossierPath];
+    const dossierBlockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+    assert.ok(
+      dossierBlockers.includes('A successful Caddy routing and TLS verification child JSON report is required'),
+      `Expected child report blocker when only dossier is provided, got: ${JSON.stringify(dossierBlockers)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('caddy routing child report validates producer fields, timestamps, routes, and security invariants', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-caddy-fields-'));
+  try {
+    const file = path.join(dir, 'caddy-routing-evidence-test.json');
+    const record = buildValidApprovedRecord();
+    record.sections.production_domain_tls.evidence = [file];
+
+    const mutations = [
+      (s) => { s.drill_type = 'unrelated_drill'; },
+      (s) => { s.domain = '{$ACRES_PRODUCTION_DOMAIN}'; },
+      (s) => { s.domain = 'other.example.com'; },
+      (s) => { s.targetPath = 'infra/caddy/Caddyfile.example'; },
+      (s) => { s.status = 'failed'; },
+      (s) => { s.valid = false; },
+      (s) => { s.errors = ['Caddy syntax error']; },
+      (s) => { s.hstsApproved = false; },
+      (s) => { s.securityHeadersVerified = false; },
+      (s) => { s.s3SigV4HostPreserved = false; },
+      (s) => { s.proxyHeadersVerified = false; },
+      (s) => { s.routesEvaluated = 11; },
+      (s) => { s.routesPassed = 11; },
+      (s) => { s.routesPassed = 10; },
+      (s) => { s.evaluatedRoutes = [{ requestPath: '/test', passed: false }]; },
+      (s) => { s.evaluatedRoutes = s.evaluatedRoutes.slice(1); },
+      (s) => { s.evaluatedRoutes[0].passed = false; },
+      (s) => { s.timestamp = '2099-01-01T00:00:00.000Z'; },
+      (s) => { s.timestamp = 'invalid-date'; },
+      (s) => { delete s.timestamp; },
+    ];
+
+    for (const mutate of mutations) {
+      const copy = structuredClone(validCaddyRoutingReport);
+      mutate(copy);
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+      assert.ok(
+        blockers.some((b) => b.includes('A referenced Caddy routing report is invalid or failed') || b.includes('reports Caddy routing verification failure')),
+        `Expected invalid report blocker, got: ${JSON.stringify(blockers)}`
+      );
+    }
+
+    for (const validTs of ['20260828T120000Z', '2026-08-28T12:00:00.000Z', '2026-08-28T12:00:00Z']) {
+      const copy = structuredClone(validCaddyRoutingReport);
+      copy.timestamp = validTs;
+      fs.writeFileSync(file, JSON.stringify(copy));
+      const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls;
+      assert.strictEqual(blockers, undefined, `Expected timestamp ${validTs} to pass validation`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('approved production_domain_tls rejects malformed or invalid domains (IP, localhost, URI, protocol, bad FQDN)', () => {
+  const invalidDomains = [
+    'localhost',
+    'http://localhost',
+    '127.0.0.1',
+    '192.168.1.100',
+    'https://acres.example.com',
+    'http://acres.example.com',
+    'acres.example.com:443',
+    'acres.example.com/app',
+    'acres.example.com?query=1',
+    'acres',
+    '.example.com',
+    'acres.example.c',
+    'acres example.com',
+    '',
+    null,
+  ];
+
+  for (const domain of invalidDomains) {
+    const record = buildValidApprovedRecord();
+    record.sections.production_domain_tls.domain = domain;
+    const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+    assert.ok(
+      blockers.some((b) => b.includes('Production domain must be a valid fully qualified domain name')),
+      `Expected domain blocker for "${domain}", got: ${JSON.stringify(blockers)}`
+    );
+  }
+});
+
+test('approved production_domain_tls rejects invalid or placeholder TLS contact email', () => {
+  const invalidEmails = [
+    '__REQUIRED_OPERATOR_TLS_EMAIL__',
+    'not-an-email',
+    'ops@',
+    '@example.com',
+    'ops@example',
+    'ops example.com',
+    'ops..lead@example.com',
+    '.ops@example.com',
+    'ops.@example.com',
+    'ops@example..com',
+    'ops@-example.com',
+    'ops@example-.com',
+    '',
+    null,
+  ];
+
+  for (const email of invalidEmails) {
+    const record = buildValidApprovedRecord();
+    record.sections.production_domain_tls.tls_contact_email = email;
+    const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+    assert.ok(
+      blockers.some((b) => b.includes('TLS contact email is missing or invalid')),
+      `Expected email blocker for "${email}", got: ${JSON.stringify(blockers)}`
+    );
+  }
+});
+
+test('approved production_domain_tls rejects non-boolean custom_certificates', () => {
+  for (const val of [null, undefined, 'false', 'true', 0, 1]) {
+    const record = buildValidApprovedRecord();
+    record.sections.production_domain_tls.custom_certificates = val;
+    const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+    assert.ok(
+      blockers.some((b) => b.includes('custom_certificates')),
+      `Expected custom_certificates blocker for ${val}, got: ${JSON.stringify(blockers)}`
+    );
+  }
+});
+
+test('wildcard caddy routing evidence rejects a failed child alongside a valid child', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-caddy-wildcard-'));
+  try {
+    const goodPath = path.join(dir, 'caddy-routing-evidence-1.json');
+    const badPath = path.join(dir, 'caddy-routing-evidence-2.json');
+    fs.writeFileSync(goodPath, JSON.stringify(validCaddyRoutingReport));
+    fs.writeFileSync(badPath, JSON.stringify({ ...validCaddyRoutingReport, status: 'failed' }));
+
+    const record = buildValidApprovedRecord();
+    record.sections.production_domain_tls.evidence = [path.join(dir, 'caddy-routing-evidence-*.json')];
+    const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+    assert.ok(
+      blockers.some((b) => b.includes('A referenced Caddy routing report is invalid or failed')),
+      `Expected blocker for bad report alongside good report, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('caddy routing helper functions handle edge cases and missing parameters safely', () => {
+  assert.strictEqual(isCaddyRoutingCandidate(), false);
+  assert.strictEqual(isCaddyRoutingCandidate({ parsed: null }), false);
+  assert.strictEqual(isCaddyRoutingCandidate({ file: 'caddy-routing-evidence-test.json' }), false);
+  assert.strictEqual(isCaddyRoutingCandidate({ file: 'caddy-routing-evidence-test.json', parsed: null }), false);
+  assert.strictEqual(isCaddyRoutingCandidate({ file: 'caddy-routing-evidence-test.json', parsed: [1, 2, 3] }), false);
+  assert.strictEqual(isCaddyRoutingCandidate({ file: 'caddy-routing-evidence-test.json', parsed: { stages: [] } }), false);
+  assert.strictEqual(isCaddyRoutingCandidate({ file: 'caddy-routing-evidence-test.json', parsed: { dossier_version: '1.0' } }), false);
+  assert.strictEqual(isCaddyRoutingCandidate({ file: 'caddy-routing-evidence-test.json', parsed: {} }), true);
+  assert.strictEqual(isCaddyRoutingCandidate({ parsed: { drill_type: 'caddy_routing_and_tls_verification' } }), true);
+  assert.strictEqual(isCaddyRoutingCandidate({ file: 'launch-evidence-dossier.json', parsed: { stages: [] } }), false);
+  assert.strictEqual(validateCaddyRoutingReport(null), false);
+  assert.strictEqual(validateCaddyRoutingReport(validCaddyRoutingReport), true);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, evaluatedRoutes: [{ passed: false }] }), false);
+  assert.strictEqual(parseCaddyRoutingTimestamp('invalid-date'), null);
+  assert.ok(parseCaddyRoutingTimestamp('20260828T120000Z') instanceof Date);
 });

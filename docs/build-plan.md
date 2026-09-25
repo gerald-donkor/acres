@@ -1062,3 +1062,20 @@ reported `ops template check passed`, `ops:check` exited 0, lint, typecheck, bui
 categories, 11 blocked, 70 blockers). Report consistency does not replace operator verification:
 the operator must still manage live Prometheus/Alertmanager endpoints, PagerDuty/on-call routing,
 and active incident runbooks before approving launch.
+
+**Prompt 195 verification (2026-09-25):** Approved Category 1 records now
+require a concrete Caddy routing child JSON report in `evidence` alongside a
+valid production FQDN, TLS contact email, explicit HSTS approval, and boolean
+custom-certificate setting. The verifier emits `--output`/`--json` evidence,
+and Stage 3 of the unified drill captures it. The validator checks a real,
+nonfuture UTC timestamp, successful report type and status, empty errors,
+active HSTS with a concrete positive `max-age` explicitly allowed by the
+operator through `--allow-hsts`,
+security/proxy/SigV4 headers, at least 12 fully passing routes with consistent
+counts, and a domain matching the approved record. A report for
+`Caddyfile.example` cannot authorize a production domain; failed or malformed
+children block approval even beside a valid report. The targeted suites passed 112/112;
+`ops:check` exited 0, lint, typecheck, build, and `git diff --check`
+passed. The unresolved example still failed closed (0 approved categories,
+11 blocked, 70 blockers). DNS records, live certificate issuance and TLS,
+HSTS approval, and certificate recovery remain operator verification steps.

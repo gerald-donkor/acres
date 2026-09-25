@@ -450,3 +450,144 @@ example.com {
   assert.strictEqual(parsed.siteBlocks[0].headers['X-Custom'], 'value # with hash');
 });
 
+test('verify-caddy-routing CLI: --output writes valid structured drill evidence', () => {
+  const { execFileSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'caddy-routing-test-'));
+  try {
+    const outPath = path.join(tmpDir, 'caddy-routing-evidence.json');
+    const scriptPath = path.join(__dirname, 'verify-caddy-routing.js');
+    execFileSync(process.execPath, [scriptPath, '--output', outPath], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
+
+    assert.ok(fs.existsSync(outPath), 'Evidence file should be created');
+    const content = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+    assert.strictEqual(content.drill_type, 'caddy_routing_and_tls_verification');
+    assert.strictEqual(content.status, 'success');
+    assert.strictEqual(content.valid, true);
+    assert.ok(content.timestamp);
+    assert.strictEqual(content.securityHeadersVerified, true);
+    assert.strictEqual(content.s3SigV4HostPreserved, true);
+    assert.strictEqual(content.proxyHeadersVerified, true);
+    assert.ok(content.routesEvaluated >= 12);
+    assert.strictEqual(content.routesPassed, content.routesEvaluated);
+    assert.ok(Array.isArray(content.evaluatedRoutes));
+    assert.ok(content.evaluatedRoutes.every((r) => r.passed));
+    assert.deepStrictEqual(content.errors, []);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('verify-caddy-routing CLI: --json outputs valid JSON to stdout', () => {
+  const { execFileSync } = require('node:child_process');
+  const scriptPath = path.join(__dirname, 'verify-caddy-routing.js');
+  const stdout = execFileSync(process.execPath, [scriptPath, '--json'], {
+    cwd: path.resolve(__dirname, '../..'),
+    encoding: 'utf8',
+  });
+
+  const parsed = JSON.parse(stdout);
+  assert.strictEqual(parsed.drill_type, 'caddy_routing_and_tls_verification');
+  assert.strictEqual(parsed.status, 'success');
+  assert.strictEqual(parsed.valid, true);
+  assert.strictEqual(parsed.securityHeadersVerified, true);
+  assert.strictEqual(parsed.s3SigV4HostPreserved, true);
+  assert.strictEqual(parsed.proxyHeadersVerified, true);
+  assert.ok(parsed.routesEvaluated >= 12);
+  assert.strictEqual(parsed.routesPassed, parsed.routesEvaluated);
+});
+
+test('verify-caddy-routing CLI: --help displays usage and exits with 0', () => {
+  const { execFileSync } = require('node:child_process');
+  const scriptPath = path.join(__dirname, 'verify-caddy-routing.js');
+  const stdout = execFileSync(process.execPath, [scriptPath, '--help'], {
+    cwd: path.resolve(__dirname, '../..'),
+    encoding: 'utf8',
+  });
+
+  assert.ok(stdout.includes('Usage: node scripts/ops/verify-caddy-routing.js'));
+  assert.ok(stdout.includes('--output'));
+  assert.ok(stdout.includes('--json'));
+});
+
+test('verify-caddy-routing CLI: rejects unknown options and missing output path', () => {
+  const { spawnSync } = require('node:child_process');
+  const scriptPath = path.join(__dirname, 'verify-caddy-routing.js');
+  for (const args of [['--bogus'], ['--output'], ['--output', '--json']]) {
+    const result = spawnSync(process.execPath, [scriptPath, ...args], {
+      cwd: path.resolve(__dirname, '../..'),
+      encoding: 'utf8',
+    });
+    assert.strictEqual(result.status, 1);
+    assert.match(result.stderr, /Error:/);
+  }
+});
+
+test('verify-caddy-routing CLI: approved active HSTS requires --allow-hsts', () => {
+  const { spawnSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'caddy-hsts-test-'));
+  try {
+    const target = path.join(tmpDir, 'Caddyfile.production');
+    const source = fs.readFileSync(DEFAULT_CADDYFILE_PATH, 'utf8')
+      .replace('{$ACRES_PRODUCTION_DOMAIN}', 'acres.example.com')
+      .replace('{$ACRES_TLS_CONTACT_EMAIL}', 'ops@example.com')
+      .replace('# header Strict-Transport-Security', 'header Strict-Transport-Security')
+      .replace('{$ACRES_HSTS_MAX_AGE}', '31536000');
+    fs.writeFileSync(target, source);
+    const scriptPath = path.join(__dirname, 'verify-caddy-routing.js');
+    const denied = spawnSync(process.execPath, [scriptPath, target, '--json'], { encoding: 'utf8' });
+    assert.strictEqual(denied.status, 1);
+    assert.strictEqual(JSON.parse(denied.stdout).hstsApproved, false);
+
+    const approved = spawnSync(process.execPath, [scriptPath, target, '--allow-hsts', '--json'], { encoding: 'utf8' });
+    assert.strictEqual(approved.status, 0, approved.stderr || approved.stdout);
+    const report = JSON.parse(approved.stdout);
+    assert.strictEqual(report.status, 'success');
+    assert.strictEqual(report.domain, 'acres.example.com');
+    assert.strictEqual(report.hstsApproved, true);
+
+    for (const invalid of ['0', '{$ACRES_HSTS_MAX_AGE}']) {
+      fs.writeFileSync(target, source.replace('max-age=31536000', `max-age=${invalid}`));
+      const rejected = spawnSync(process.execPath, [scriptPath, target, '--allow-hsts', '--json'], { encoding: 'utf8' });
+      assert.strictEqual(rejected.status, 1);
+      const rejectedReport = JSON.parse(rejected.stdout);
+      assert.strictEqual(rejectedReport.hstsApproved, false);
+      assert.ok(rejectedReport.errors.some((error) => error.includes('concrete, positive max-age')));
+    }
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('verify-caddy-routing CLI: nonexistent Caddyfile exits with 1 and writes failed report if --output is set', () => {
+  const { execFileSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'caddy-routing-test-'));
+  try {
+    const outPath = path.join(tmpDir, 'failed-caddy-routing-evidence.json');
+    const scriptPath = path.join(__dirname, 'verify-caddy-routing.js');
+    assert.throws(
+      () =>
+        execFileSync(process.execPath, [scriptPath, 'nonexistent.caddyfile', '--output', outPath], {
+          cwd: path.resolve(__dirname, '../..'),
+          encoding: 'utf8',
+        }),
+      (err) => err.status === 1
+    );
+
+    assert.ok(fs.existsSync(outPath));
+    const content = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+    assert.strictEqual(content.status, 'failed');
+    assert.strictEqual(content.valid, false);
+    assert.ok(content.errors.length > 0);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

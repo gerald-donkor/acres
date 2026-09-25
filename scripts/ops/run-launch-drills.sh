@@ -202,7 +202,7 @@ run_stage "supply_chain_sast" "SBOM, SAST, container security" \
 
 # Stage 3: Caddy ingress routing & deployment rollback preflight
 run_stage "ingress_deployment" "Caddy routing + deployment drill" \
-  "node scripts/ops/verify-caddy-routing.js && bash scripts/ops/run-deployment-drill.sh ${CHILD_DRY} --evidence-dir \"${EVIDENCE_DIR}\""
+  "node scripts/ops/verify-caddy-routing.js --output \"${EVIDENCE_DIR}/caddy-routing-evidence-${STAMP}.json\" && bash scripts/ops/run-deployment-drill.sh ${CHILD_DRY} --evidence-dir \"${EVIDENCE_DIR}\""
 
 # Stage 4: production volume encryption key separation
 run_stage "volume_encryption" "Volume encryption + key separation" \
@@ -396,6 +396,7 @@ const reconcileCompliance = reconcilePassed ? "passed" : "failed";
 
 const depStage = stages.find((s) => s.stage_id === "ingress_deployment");
 let depEvidence = null;
+let caddyEvidence = null;
 if (depStage && depStage.status === "PASSED") {
   const depFile = depStage.artifacts.find((a) => a.includes("deployment-drill-evidence-") && a.endsWith(".json"));
   if (depFile && fs.existsSync(depFile)) {
@@ -403,7 +404,21 @@ if (depStage && depStage.status === "PASSED") {
       depEvidence = JSON.parse(fs.readFileSync(depFile, "utf8"));
     } catch {}
   }
+  const caddyFile = depStage.artifacts.find((a) => a.includes("caddy-routing-evidence-") && a.endsWith(".json"));
+  if (caddyFile && fs.existsSync(caddyFile)) {
+    try {
+      caddyEvidence = JSON.parse(fs.readFileSync(caddyFile, "utf8"));
+    } catch {}
+  }
 }
+
+const caddyPassed = Boolean(caddyEvidence &&
+  caddyEvidence.status === "success" &&
+  caddyEvidence.valid === true &&
+  caddyEvidence.securityHeadersVerified === true &&
+  caddyEvidence.s3SigV4HostPreserved === true &&
+  caddyEvidence.proxyHeadersVerified === true
+);
 
 const depPassed = Boolean(
   depStage?.status === "PASSED" &&
@@ -412,7 +427,8 @@ const depPassed = Boolean(
   depEvidence.schema_backward_compatible === true &&
   depEvidence.caddy_routing_verified === true &&
   depEvidence.rollback_procedure_verified === true &&
-  depEvidence.network_isolation_verified === true
+  depEvidence.network_isolation_verified === true &&
+  caddyPassed
 );
 
 let deploymentBaseline;
