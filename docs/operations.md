@@ -389,6 +389,23 @@ PostgreSQL and Garage coverage, freshness, and restore under actual load.
    - Asserts table count parity, applied migration parity (`_prisma_migrations`), PostGIS spatial extension presence, foreign key integrity (`pg_constraint`), and record count invariants (`Account`, `Organization`, `Dataset`);
    - Measures elapsed time against the Recovery Time Objective (default 300s) and emits structured JSON evidence (`backups/restore-drill-evidence-<timestamp>.json`);
    - Cleans up ephemeral drill databases and archives cleanly on exit.
+   Approved Category 6 records must reference at least one concrete child JSON
+   report in `evidence`; prose, a dossier alone, and `restore_drill_completed: true`
+   do not establish this gate. The validator accepts a report at the runner's
+   default name or a custom path when its content has a valid basic UTC
+   `drill_timestamp` (`YYYYMMDDTHHMMSSZ`), exact `status: "success"`, and true
+   `rto_compliant`, `record_parity_verified`, `postgis_verified`, and
+   `foreign_keys_verified` flags. Source/restored table and migration counts
+   must be equal nonnegative integers, `backup_bytes` a positive integer, and
+   `duration_ms` a finite nonnegative number. Missing, malformed, failed, or
+   future-dated reports block approval, including when another report passes.
+   `restore_drill_date` must be a real UTC `YYYY-MM-DD` date or an ISO UTC
+   timestamp (`YYYY-MM-DDTHH:mm:ssZ`) whose date matches the latest valid
+   referenced report; future dates and timezone offsets are rejected. No
+   maximum report age is inferred. This validates the operator record against
+   a self-reported artifact; archive origin, scheduled completion, off-host
+   encryption and transfer, Garage coverage, freshness, and representative
+   load remain operator obligations.
 3. **PostgreSQL & Object Storage Reconciliation**:
    Execute `npm run ops:reconcile-storage` (or `scripts/ops/reconcile-storage-objects.js [options]`). Compares active database records (`StoredObject`, `Upload`, `ExportArtifact`) against bucket storage (Garage / S3):
    - Detects orphaned objects present in storage but absent from database metadata (storage leaks);

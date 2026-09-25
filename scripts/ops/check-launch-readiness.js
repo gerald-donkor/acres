@@ -164,11 +164,45 @@ function expandEvidenceGlob(ref, baseDirs) {
   return matches;
 }
 
+function parseUtcDate(value, basicTimestamp = false) {
+  const match = basicTimestamp
+    ? /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(value)
+    : /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})Z)?$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day, hour = '00', minute = '00', second = '00'] = match;
+  const date = new Date(0);
+  date.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
+  date.setUTCHours(Number(hour), Number(minute), Number(second), 0);
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() + 1 !== Number(month) ||
+      date.getUTCDate() !== Number(day) || date.getUTCHours() !== Number(hour) ||
+      date.getUTCMinutes() !== Number(minute) || date.getUTCSeconds() !== Number(second)) return null;
+  return date;
+}
+
+function validateRestoreReport(report, now) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return null;
+  if (typeof report.drill_timestamp !== 'string') return null;
+  const timestamp = parseUtcDate(report.drill_timestamp, true);
+  if (!timestamp || timestamp.getTime() > now.getTime() || report.status !== 'success' ||
+      report.rto_compliant !== true || report.record_parity_verified !== true ||
+      report.postgis_verified !== true || report.foreign_keys_verified !== true) return null;
+  for (const key of ['tables_source', 'tables_restored', 'migrations_source', 'migrations_restored']) {
+    if (!Number.isSafeInteger(report[key]) || report[key] < 0) return null;
+  }
+  if (report.tables_source !== report.tables_restored ||
+      report.migrations_source !== report.migrations_restored ||
+      !Number.isSafeInteger(report.backup_bytes) || report.backup_bytes <= 0 ||
+      typeof report.duration_ms !== 'number' || !Number.isFinite(report.duration_ms) ||
+      report.duration_ms < 0) return null;
+  return timestamp;
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
+  const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
   if (matches.length === 0) {
     addBlocker(category, `Approved evidence references file '${ref}' but no matching file exists on disk`);
-    return;
+    return parsedFiles;
   }
   for (const file of matches) {
     let parsed;
@@ -178,6 +212,11 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
       addBlocker(category, `Approved evidence file '${ref}' is not valid JSON (${err.message})`);
       continue;
     }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      addBlocker(category, 'Approved evidence file must contain a JSON object');
+      continue;
+    }
+    parsedFiles.push({ file, parsed });
     const status = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : null;
     const overall = typeof parsed.overall_status === 'string' ? parsed.overall_status.toLowerCase() : null;
     if (status === 'failed' || status === 'failure' || status === 'error') {
@@ -573,11 +612,13 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
       addBlocker(category, `Approved evidence file '${ref}' reports container security compliance failure (summary.containerSecurityCompliance: "${parsed.summary.containerSecurityCompliance}")`);
     }
   }
+  return parsedFiles;
 }
 
 function validateReadiness(record, _filePath, options = {}) {
   const categoryBlockers = {};
   let totalApproved = 0;
+  const restoreEvidence = [];
 
   function addBlocker(category, message) {
     if (!categoryBlockers[category]) {
@@ -647,7 +688,8 @@ function validateReadiness(record, _filePath, options = {}) {
         }
         evidence.forEach((ev) => {
           if (isEvidenceFileReference(ev)) {
-            checkEvidenceFile(ev.trim(), sectionName, addBlocker, baseDirs);
+            const parsedFiles = checkEvidenceFile(ev.trim(), sectionName, addBlocker, baseDirs);
+            if (sectionName === 'backup_and_disaster_recovery') restoreEvidence.push(...parsedFiles);
           }
         });
       }
@@ -832,8 +874,33 @@ function validateReadiness(record, _filePath, options = {}) {
     if (bdrSec.restore_drill_completed !== true) {
       addBlocker('backup_and_disaster_recovery', 'Restore drill must be verified and completed (restore_drill_completed: true)');
     }
-    if (!bdrSec.restore_drill_date || typeof bdrSec.restore_drill_date !== 'string') {
-      addBlocker('backup_and_disaster_recovery', 'Restore drill date is required for approved recovery posture');
+    const now = options.now instanceof Date ? options.now : new Date();
+    const declaredDate = typeof bdrSec.restore_drill_date === 'string'
+      ? parseUtcDate(bdrSec.restore_drill_date) : null;
+    if (!declaredDate || declaredDate.getTime() > now.getTime()) {
+      addBlocker('backup_and_disaster_recovery', 'Restore drill date must be a valid, nonfuture UTC date');
+    }
+    const candidates = restoreEvidence.filter(({ file, parsed }) =>
+      path.basename(file).startsWith('restore-drill-evidence-') ||
+      (parsed && typeof parsed === 'object' && !Array.isArray(parsed) &&
+        ['drill_timestamp', 'source_db', 'drill_db', 'backup_file', 'backup_bytes',
+          'duration_ms', 'duration_seconds', 'rto_target_seconds', 'rto_compliant',
+          'tables_source', 'tables_restored', 'migrations_source', 'migrations_restored',
+          'record_parity_verified', 'postgis_verified', 'foreign_keys_verified'].some((key) => key in parsed)));
+    if (candidates.length === 0) {
+      addBlocker('backup_and_disaster_recovery', 'A successful restore drill child JSON report is required');
+    } else {
+      const timestamps = candidates.map(({ parsed }) => validateRestoreReport(parsed, now));
+      if (timestamps.some((timestamp) => timestamp === null)) {
+        addBlocker('backup_and_disaster_recovery', 'A referenced restore drill report is invalid or failed');
+      }
+      const valid = timestamps.filter(Boolean);
+      if (valid.length > 0 && declaredDate) {
+        const latest = valid.reduce((max, date) => date > max ? date : max);
+        if (declaredDate.toISOString().slice(0, 10) !== latest.toISOString().slice(0, 10)) {
+          addBlocker('backup_and_disaster_recovery', 'Restore drill date does not match the latest successful report UTC date');
+        }
+      }
     }
     if (bdrSec.db_object_reconciliation_tested !== true) {
       addBlocker('backup_and_disaster_recovery', 'PostgreSQL and Garage object storage reconciliation drill must be verified (db_object_reconciliation_tested: true)');

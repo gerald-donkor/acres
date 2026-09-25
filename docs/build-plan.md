@@ -938,3 +938,18 @@ example still failed closed (0 approved categories, 11 blocked, 70 blockers).
 This static check does not prove backup completion, encrypted off-host transfer,
 PostgreSQL and Garage coverage, freshness, or a restore under load. Operator
 launch approval and the live infrastructure drill remain outstanding.
+
+**Prompt 189 verification (2026-09-25):** Approved Category 6 records now
+require a referenced restore child JSON report with a strict, nonfuture basic
+UTC `drill_timestamp`, exact successful status and RTO/parity/PostGIS/foreign-key
+flags, equal nonnegative integer source/restored table and migration counts,
+positive integer archive bytes, and finite nonnegative duration. The declared
+`restore_drill_date` must be a real, nonfuture UTC date (`YYYY-MM-DD` or
+`YYYY-MM-DDTHH:mm:ssZ`) matching the latest valid referenced report. Every
+referenced restore report is checked, including custom paths and wildcard
+matches; a malformed or failed report blocks even beside a valid one. The
+readiness suite passed 57/57, `ops:templates`, `ops:check`, lint, typecheck,
+build, and `git diff --check` passed. The unresolved example still failed
+closed (0 approved categories, 11 blocked, 70 blockers). This checks report
+consistency with the operator record, not archive provenance, off-host
+transfer, Garage coverage, achieved RPO, or a restore under production load.

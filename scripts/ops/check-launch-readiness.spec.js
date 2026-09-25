@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 const {
   validateReadiness,
@@ -11,6 +12,26 @@ const {
   REQUIRED_SECRET_KEYS,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
+
+const fixedNow = new Date('2026-09-25T12:00:00Z');
+const restoreFixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-restore-fixture-'));
+const restoreFixturePath = path.join(restoreFixtureDir, 'restore-drill-evidence-valid.json');
+const validRestoreReport = {
+  drill_timestamp: '20260828T120000Z',
+  status: 'success',
+  rto_compliant: true,
+  record_parity_verified: true,
+  postgis_verified: true,
+  foreign_keys_verified: true,
+  tables_source: 46,
+  tables_restored: 46,
+  migrations_source: 17,
+  migrations_restored: 17,
+  backup_bytes: 1024,
+  duration_ms: 2500,
+};
+fs.writeFileSync(restoreFixturePath, JSON.stringify(validRestoreReport));
+test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
   return {
@@ -96,7 +117,7 @@ function buildValidApprovedRecord() {
         restore_drill_date: '2026-08-28T12:00:00Z',
         db_object_reconciliation_tested: true,
         approver: 'sre-lead',
-        evidence: ['Automated restore drill executed with PostgreSQL and Garage data'],
+        evidence: [restoreFixturePath],
         notes: 'Verified disaster recovery',
       },
       data_retention_policy: {
@@ -183,7 +204,7 @@ function expectedImageEnv(record) {
 }
 
 function validateApprovedRecord(record, filePath = 'test.json') {
-  return validateReadiness(record, filePath, { env: expectedImageEnv(record) });
+  return validateReadiness(record, filePath, { env: expectedImageEnv(record), now: fixedNow });
 }
 
 test('validateReadiness passes for a fully approved record with no-AI assertions', () => {
@@ -193,6 +214,97 @@ test('validateReadiness passes for a fully approved record with no-AI assertions
   assert.strictEqual(Object.keys(result.categoryBlockers).length, 0);
   assert.strictEqual(result.totalApproved, REQUIRED_SECTIONS.length);
   assert.strictEqual(result.totalSections, REQUIRED_SECTIONS.length);
+});
+
+test('approved recovery requires a child report beyond prose, dossier, or a matching filename', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-restore-negative-'));
+  try {
+    const fake = path.join(dir, 'restore-drill-evidence-fake.json');
+    const dossier = path.join(dir, 'launch-evidence-dossier.json');
+    fs.writeFileSync(fake, JSON.stringify({ status: 'success' }));
+    fs.writeFileSync(dossier, JSON.stringify({ overall_status: 'PASSED' }));
+    for (const evidence of [[], ['Restore completed'], [dossier], [fake]]) {
+      const record = buildValidApprovedRecord();
+      record.sections.backup_and_disaster_recovery.evidence = evidence;
+      const blockers = validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
+      assert.ok(blockers.some((blocker) => /restore drill child JSON report|required|report is invalid/.test(blocker)), JSON.stringify(blockers));
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('restore child report validates every required success field and numerical invariant', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-restore-fields-'));
+  try {
+    const file = path.join(dir, 'custom-report.json');
+    const mutations = [
+      ['status', undefined], ['status', 'failed'], ['rto_compliant', false], ['rto_compliant', 'true'],
+      ['record_parity_verified', null], ['postgis_verified', false], ['foreign_keys_verified', undefined],
+      ['tables_source', -1], ['tables_restored', 45], ['migrations_source', 1.5],
+      ['migrations_restored', '17'], ['backup_bytes', 0], ['backup_bytes', Infinity],
+      ['duration_ms', -1], ['duration_ms', '2500'],
+      ['drill_timestamp', '20260230T120000Z'], ['drill_timestamp', '20260926T120000Z'],
+      ['drill_timestamp', '20260828T250000Z'], ['drill_timestamp', '2026-08-28T12:00:00Z'],
+    ];
+    for (const [field, value] of mutations) {
+      const report = { ...validRestoreReport, [field]: value };
+      fs.writeFileSync(file, JSON.stringify(report));
+      const record = buildValidApprovedRecord();
+      record.sections.backup_and_disaster_recovery.evidence = [file];
+      const blockers = validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
+      assert.ok(blockers.some((blocker) => blocker.includes('report is invalid or failed')), `${field}: ${JSON.stringify(blockers)}`);
+    }
+    fs.writeFileSync(file, JSON.stringify(validRestoreReport));
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.evidence = [file];
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery, undefined);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('restore date is strict UTC and tracks the latest valid referenced report', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-restore-dates-'));
+  try {
+    const older = path.join(dir, 'older.json');
+    const latest = path.join(dir, 'latest.json');
+    fs.writeFileSync(older, JSON.stringify(validRestoreReport));
+    fs.writeFileSync(latest, JSON.stringify({ ...validRestoreReport, drill_timestamp: '20260829T000000Z' }));
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.evidence = [latest, older];
+    record.sections.backup_and_disaster_recovery.restore_drill_date = '2026-08-29';
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery, undefined);
+    for (const date of ['2026-08-28', '2026-02-30', '2026-08-29T00:00:00+01:00',
+      'last Friday', '2026-09-26', '2026-08-29T25:00:00Z']) {
+      record.sections.backup_and_disaster_recovery.restore_drill_date = date;
+      assert.ok(validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery?.length, date);
+    }
+    record.sections.backup_and_disaster_recovery.restore_drill_date = '2026-08-29';
+    fs.writeFileSync(older, JSON.stringify({ ...validRestoreReport, status: 'failed' }));
+    assert.ok(validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery?.some(
+      (blocker) => blocker.includes('report is invalid or failed')));
+    fs.writeFileSync(older, JSON.stringify({ backup_bytes: 1024, duration_ms: 2500, postgis_verified: true }));
+    assert.ok(validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery?.some(
+      (blocker) => blocker.includes('report is invalid or failed')));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('non-object evidence blocker does not echo its path', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-evidence-path-'));
+  try {
+    const file = path.join(dir, 'credential-bearing-reference.json');
+    fs.writeFileSync(file, 'null');
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, file];
+    const blockers = validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(blockers.some((blocker) => blocker.includes('must contain a JSON object')));
+    assert.ok(!JSON.stringify(blockers).includes('credential-bearing-reference'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('release approval fails closed on missing and placeholder fields', () => {
@@ -475,7 +587,7 @@ test('validateReadiness passes evidence cross-validation when a referenced dossi
       'utf8'
     );
     const record = buildValidApprovedRecord();
-    record.sections.backup_and_disaster_recovery.evidence = [dossierPath];
+    record.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, dossierPath];
 
     const result = validateApprovedRecord(record);
     assert.strictEqual(Object.keys(result.categoryBlockers).length, 0);
@@ -1146,7 +1258,7 @@ test('validateReadiness accepts valid passed disaster recovery evidence and comp
       'utf8'
     );
     const rec = buildValidApprovedRecord();
-    rec.sections.backup_and_disaster_recovery.evidence = [passedDossierPath];
+    rec.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, passedDossierPath];
     const res = validateApprovedRecord(rec);
     assert.strictEqual(res.categoryBlockers.backup_and_disaster_recovery, undefined);
   } finally {

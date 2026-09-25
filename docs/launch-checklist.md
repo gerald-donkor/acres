@@ -125,6 +125,17 @@ do not report failure.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`
+- An approved record must reference a concrete, successful restore child JSON
+  report in `evidence`. A custom path is accepted by report content, not name.
+  Its basic UTC `drill_timestamp` (`YYYYMMDDTHHMMSSZ`) must be real and no later
+  than validation time; `restore_drill_date` must be a real, nonfuture UTC
+  `YYYY-MM-DD` date or `YYYY-MM-DDTHH:mm:ssZ` and match the latest valid
+  referenced report's UTC date. Every referenced restore report must pass:
+  `status: "success"`, true RTO/parity/PostGIS/foreign-key flags, equal
+  nonnegative integer source/restored table and migration counts, positive
+  integer `backup_bytes`, and finite nonnegative `duration_ms`. A failed or
+  malformed report blocks even alongside a valid one. The dossier alone,
+  prose, and `restore_drill_completed: true` are insufficient.
 - The schedule must run in UTC. Supported five-field cron syntax has `*` for
   hour, day of month, month, and day of week; the minute field is `*`, one
   minute `0..59`, `*/n` for `1..60`, or distinct comma-separated minutes.
@@ -134,6 +145,7 @@ do not report failure.
 - Start frequency alone does not establish the RPO. The operator must show
   successful backup completion, encrypted off-host transfer, PostgreSQL and
   Garage coverage, backup freshness, and a restore drill under actual load.
+  Report/date consistency does not authenticate an archive or prove recovery.
 - Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
   - Requires `rpo_hours` to be a positive number ≤ 1 hour;
   - Rejects unsupported cron syntax and schedules whose maximum UTC start gap exceeds the declared RPO;
