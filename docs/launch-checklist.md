@@ -187,6 +187,54 @@ client Next 16.3.4 build with `Could not parse output from TypeScript's
   - Rejects secret rotation drill evidence reporting failure (`status !== 'success'`), any errors in `errors[]`, missing secret classes or steps, any failed rotation step among the 7 verified steps (`session_rollover`, `csrf_rollover`, `database_rotation`, `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`), or secret redaction / leak audit failure (`raw_secrets_masked: false`, `zero_dev_passwords_detected: false`);
   - Rejects Unified Launch Evidence Dossiers reporting `secretRotationBaseline.status: "breached"` or `summary.secretRotationCompliance: "failed"`.
 
+**Prompt 207 Category 3 intake — 2026-09-26T20:41:49Z UTC.** Reviewed
+`f2f0e1b` on `main`. The repository-visible secrets management material is the
+unresolved `infra/launch/readiness.example.json`, rotation drill scripts, and
+validator test fixtures; no materialized production readiness record or
+secret-rotation child report was available for this assessment. This does not
+establish whether an operator's restricted evidence store contains either.
+Category 3 remains **unresolved**. No runtime injection inventory, log masking
+policy, rotation cadence decision (≤90 days), compromise response runbook, or
+dated security-lead sign-off was supplied for independent inspection. No live
+credential rotation was executed and no production configuration was mutated.
+Stage 5 of the unified launch drill explicitly forces `--dry-run`; simulation
+or drill artifacts alone do not prove live credential rotation.
+
+The **security lead** must identify through the approved operator channel the
+designated production target, restricted evidence-store location, runtime
+injection mechanism (Vault, AWS Secrets Manager, Infisical, or protected host
+env), masking/logging policy, approved rotation cadence (positive integer ≤ 90
+days), compromise-response runbook with named owner, seven-class rotation
+procedure (`session_secret`, `csrf_secret`, `postgres_passwords`,
+`valkey_password`, `storage_s3_keys`, `smtp_credentials`,
+`grafana_admin_password`), and named security-lead approver. Supply opaque
+references to the injector/audit records, previous live rotation evidence
+verifying the seven steps (`session_rollover`, `csrf_rollover`,
+`database_rotation`, `valkey_rotation`, `storage_rotation`,
+`compromise_response`, `redaction_audit`) and redaction flags
+(`raw_secrets_masked: true`, `zero_dev_passwords_detected: true`), and dated
+Category 3 approval. Read-only inspection of those safe sources is the next
+safe action. Any live credential rotation requires separate authorization naming
+the production target, secret class, operator, maintenance window,
+fallback/rollback procedure, and observer. Category 4 (`secret_references`) can
+remain unresolved during Category 3 inspection, but injection mechanisms and
+sources must align across both sections. Categories 1, 2, and all other launch
+gates retain their prior unresolved state.
+
+Repository checks for this intake: `ops:readiness-schema-test` passed (8/8),
+`ops:templates` passed, `ops:check` passed all 14 sub-suites (22 template/env
+tests, `ops:scan-secrets`, `ops:docker-runtime`, `ops:audit` with 0 critical
+vulnerabilities, schema test, 44 readiness validator tests, SAST gate with 0
+blockers/expired suppressions, 14 container security tests, 10 SAST tests, 14
+supply chain tests, 12 volume encryption tests, 14 secret rotation tests, 13
+capacity alerting tests, 14 DR tests, 13 launch drill tests), `npm run lint`
+passed across all workspaces, `npm run typecheck` passed, `npm run build`
+passed (including client Next 16.3.4 and server Nest), and `git diff --check`
+exited 0. The example readiness validator exited 1 as designed: 0 of 11
+categories approved, 11 blocked, 70 blockers, including five Category 3
+blockers (`injection_mechanism`, `masking_policy`, `compromise_response_plan`,
+unresolved section status, empty evidence array).
+
 ### 4. Secret References (`secret_references`)
 
 - Drill/verify: `scripts/ops/scan-secrets.sh`
