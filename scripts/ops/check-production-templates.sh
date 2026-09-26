@@ -22,7 +22,9 @@ require_file infra/grafana/provisioning/datasources/prometheus.yml
 require_file infra/grafana/provisioning/dashboards/acres.yml
 require_file infra/grafana/dashboards/acres-operations.json
 require_file infra/launch/readiness.example.json
+require_file infra/launch/readiness.schema.json
 require_file scripts/ops/check-launch-readiness.js
+require_file scripts/ops/check-readiness-schema.spec.js
 require_file scripts/db/bootstrap-production-roles.sh
 require_file scripts/db/reconcile-production-monitor.sh
 require_file scripts/ops/verify-caddy-routing.js

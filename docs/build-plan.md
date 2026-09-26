@@ -887,6 +887,17 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
 
 ## 22. Phase 12K verification record — 2026-09-09
 
+**Prompt 204 structural record schema (2026-09-26):** The readiness example's
+local `$schema` now resolves to a Draft 7 schema covering all eleven launch
+categories, twelve secret references, eight retention policies, and the
+release object. A focused Ajv check runs in `ops:check`. It validates record
+shape only; the existing readiness validator and operator sign-off remain the
+Phase 12 exit gate. Review found and corrected fractional numeric fields that
+the executable validator permits. Focused schema check, 103/103 readiness
+tests, `ops:templates`, `ops:check`, lint, typecheck, build, and diff whitespace
+check passed. The example still has 0/11 approved categories and 70 blockers.
+Prompt 201 remains open.
+
 **Prompt 203 preflight (2026-09-26):** At 2026-09-26T19:39:25Z UTC, against
 source commit `3da8949`, the checked-in readiness example failed closed as
 intended: 0/11 categories approved, 11 unresolved, 70 validator blockers

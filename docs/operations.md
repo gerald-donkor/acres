@@ -134,6 +134,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `scripts/ops/scan-secrets.sh` | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names |
 | `scripts/ops/check-docker-runtime.sh` | Static server Dockerfile check for Node 24, non-root runtime, healthcheck, and direct Node startup |
 | `infra/launch/readiness.example.json` | Inert, structured launch-readiness decision template covering all 11 operator categories with explicit placeholders |
+| `infra/launch/readiness.schema.json` | Draft 7 structural/editor contract for the readiness record; does not attest production readiness |
 | `scripts/ops/check-launch-readiness.js` | Deterministic fail-closed launch readiness validator enforcing approval status, secret source references, recovery drills, and no-AI posture |
 | `scripts/ops/launch-readiness.sh` | Aggregates operational checks and runs the fail-closed launch readiness validator |
 | `.github/workflows/ci.yml` | Pinned GitHub Actions (full 40-char commit SHAs) running `npm run ops:check` and verification suite |
@@ -1236,6 +1237,15 @@ formal legal and operational retention review; the validator checks consistency,
 window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
+
+Prompt 204 (2026-09-26) adds `infra/launch/readiness.schema.json` and
+`npm run ops:readiness-schema-test` to the operational gate. Ajv compiles the
+Draft 7 schema and checks the unresolved example plus representative malformed
+records. It is a structural/editor aid; `check-launch-readiness.js` retains
+the fail-closed evidence, secret, target, time, release-image, and approval
+decisions. The schema rejects unknown fields, so future record extensions must
+update it alongside the validator and template. The example remains unresolved
+and formal operator sign-off remains open.
 
 **Prompt 202 update (2026-09-26): target-bound launch drill evidence.**
 `run-launch-drills.sh` accepts `--caddyfile`, `--compose-file`, `--allow-hsts`,

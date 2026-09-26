@@ -64,12 +64,16 @@
     "ops:capacity-alerting-drill": "bash scripts/ops/run-capacity-alerting-drill.sh",
     "ops:launch-drill": "bash scripts/ops/run-launch-drills.sh --dry-run",
     "ops:launch-drill-test": "node --test scripts/ops/run-launch-drills.spec.js",
-    "ops:check": "npm run ops:templates && npm run ops:release-images-test && npm run ops:scan-secrets && npm run ops:docker-runtime && npm run ops:audit && npm run ops:readiness-test && npm run ops:reconcile-test && npm run ops:caddy-test && npm run ops:volume-test && npm run ops:sbom-test && npm run ops:sbom && npm run ops:sast-test && npm run ops:sast && npm run ops:container-test && npm run ops:container-security && npm run ops:capacity-test && npm run ops:alert-test && npm run ops:launch-drill-test",
+    "ops:check": "npm run ops:templates && npm run ops:release-images-test && npm run ops:scan-secrets && npm run ops:docker-runtime && npm run ops:audit && npm run ops:readiness-schema-test && npm run ops:readiness-test && npm run ops:reconcile-test && npm run ops:caddy-test && npm run ops:volume-test && npm run ops:sbom-test && npm run ops:sbom && npm run ops:sast-test && npm run ops:sast && npm run ops:container-test && npm run ops:container-security && npm run ops:capacity-test && npm run ops:alert-test && npm run ops:launch-drill-test",
     "ops:launch-readiness": "scripts/ops/launch-readiness.sh",
     "db:up": "docker compose up -d postgres",
     "deps:up": "docker compose up -d postgres valkey garage clamav mailpit",
     "garage:setup": "scripts/garage/setup-local.sh",
     "db:down": "docker compose down",
-    "db:reset": "docker compose down -v && docker compose up -d postgres"
+    "db:reset": "docker compose down -v && docker compose up -d postgres",
+    "ops:readiness-schema-test": "node --test scripts/ops/check-readiness-schema.spec.js"
+  },
+  "devDependencies": {
+    "ajv": "6.15.0"
   }
 }

@@ -1,0 +1,702 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "readiness.schema.json",
+  "title": "Acres launch readiness record structure",
+  "description": "Editor and CI structural contract only. Launch approval requires scripts/ops/check-launch-readiness.js and human sign-off. New fields require a schema revision.",
+  "type": "object",
+  "required": [
+    "$schema",
+    "version",
+    "environment",
+    "target_architecture",
+    "created_at",
+    "notes",
+    "sections"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./readiness.schema.json"
+    },
+    "version": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string"
+    },
+    "target_architecture": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "sections": {
+      "type": "object",
+      "required": [
+        "production_domain_tls",
+        "smtp_delivery",
+        "secrets_management",
+        "secret_references",
+        "slo_and_alerting",
+        "backup_and_disaster_recovery",
+        "data_retention_policy",
+        "volume_encryption",
+        "graphql_introspection",
+        "deployment_and_rollback",
+        "optional_ai_posture"
+      ],
+      "properties": {
+        "production_domain_tls": {
+          "type": "object",
+          "required": [
+            "status",
+            "domain",
+            "tls_contact_email",
+            "hsts_approved",
+            "custom_certificates",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "domain": {
+              "type": "string"
+            },
+            "tls_contact_email": {
+              "type": "string"
+            },
+            "hsts_approved": {
+              "type": "boolean"
+            },
+            "custom_certificates": {
+              "type": "boolean"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "smtp_delivery": {
+          "type": "object",
+          "required": [
+            "status",
+            "provider",
+            "host",
+            "port",
+            "tls_mode",
+            "from_address",
+            "credentials_source_reference",
+            "delivery_policy",
+            "bounce_abuse_handling",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "tls_mode": {
+              "type": "string"
+            },
+            "from_address": {
+              "type": "string"
+            },
+            "credentials_source_reference": {
+              "type": "string"
+            },
+            "delivery_policy": {
+              "type": "string"
+            },
+            "bounce_abuse_handling": {
+              "type": "string"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "secrets_management": {
+          "type": "object",
+          "required": [
+            "status",
+            "injection_mechanism",
+            "masking_policy",
+            "rotation_cadence_days",
+            "compromise_response_plan",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "injection_mechanism": {
+              "type": "string"
+            },
+            "masking_policy": {
+              "type": "string"
+            },
+            "rotation_cadence_days": {
+              "type": "number",
+              "minimum": 0
+            },
+            "compromise_response_plan": {
+              "type": "string"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "secret_references": {
+          "type": "object",
+          "required": [
+            "status",
+            "session_secret_source",
+            "csrf_secret_source",
+            "db_migrator_secret_source",
+            "db_app_secret_source",
+            "db_monitor_secret_source",
+            "valkey_secret_source",
+            "garage_rpc_secret_source",
+            "garage_admin_secret_source",
+            "garage_metrics_secret_source",
+            "garage_s3_secret_source",
+            "smtp_secret_source",
+            "grafana_admin_secret_source",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "session_secret_source": {
+              "type": "string"
+            },
+            "csrf_secret_source": {
+              "type": "string"
+            },
+            "db_migrator_secret_source": {
+              "type": "string"
+            },
+            "db_app_secret_source": {
+              "type": "string"
+            },
+            "db_monitor_secret_source": {
+              "type": "string"
+            },
+            "valkey_secret_source": {
+              "type": "string"
+            },
+            "garage_rpc_secret_source": {
+              "type": "string"
+            },
+            "garage_admin_secret_source": {
+              "type": "string"
+            },
+            "garage_metrics_secret_source": {
+              "type": "string"
+            },
+            "garage_s3_secret_source": {
+              "type": "string"
+            },
+            "smtp_secret_source": {
+              "type": "string"
+            },
+            "grafana_admin_secret_source": {
+              "type": "string"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "slo_and_alerting": {
+          "type": "object",
+          "required": [
+            "status",
+            "availability_target_percent",
+            "max_p95_latency_ms",
+            "capacity_target_rps",
+            "max_database_acquisition_p95_latency_ms",
+            "max_database_query_p95_latency_ms",
+            "alert_recipients",
+            "alert_thresholds_defined",
+            "escalation_runbook_ref",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "availability_target_percent": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max_p95_latency_ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "capacity_target_rps": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max_database_acquisition_p95_latency_ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max_database_query_p95_latency_ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "alert_recipients": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "alert_thresholds_defined": {
+              "type": "boolean"
+            },
+            "escalation_runbook_ref": {
+              "type": "string"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "backup_and_disaster_recovery": {
+          "type": "object",
+          "required": [
+            "status",
+            "rpo_hours",
+            "rto_hours",
+            "backup_destination",
+            "backup_schedule_cron",
+            "restore_drill_completed",
+            "restore_drill_date",
+            "db_object_reconciliation_tested",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "rpo_hours": {
+              "type": "number",
+              "minimum": 0
+            },
+            "rto_hours": {
+              "type": "number",
+              "minimum": 0
+            },
+            "backup_destination": {
+              "type": "string"
+            },
+            "backup_schedule_cron": {
+              "type": "string"
+            },
+            "restore_drill_completed": {
+              "type": "boolean"
+            },
+            "restore_drill_date": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "db_object_reconciliation_tested": {
+              "type": "boolean"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "data_retention_policy": {
+          "type": "object",
+          "required": [
+            "status",
+            "account_retention_policy",
+            "audit_retention_policy",
+            "upload_quarantine_retention_policy",
+            "rejected_object_retention_policy",
+            "export_retention_policy",
+            "report_retention_policy",
+            "telemetry_retention_policy",
+            "backup_retention_policy",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "account_retention_policy": {
+              "type": "string"
+            },
+            "audit_retention_policy": {
+              "type": "string"
+            },
+            "upload_quarantine_retention_policy": {
+              "type": "string"
+            },
+            "rejected_object_retention_policy": {
+              "type": "string"
+            },
+            "export_retention_policy": {
+              "type": "string"
+            },
+            "report_retention_policy": {
+              "type": "string"
+            },
+            "telemetry_retention_policy": {
+              "type": "string"
+            },
+            "backup_retention_policy": {
+              "type": "string"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "volume_encryption": {
+          "type": "object",
+          "required": [
+            "status",
+            "encryption_mechanism",
+            "encrypted_mount_paths",
+            "key_separation_confirmed",
+            "key_recovery_owner",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "encryption_mechanism": {
+              "type": "string"
+            },
+            "encrypted_mount_paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "key_separation_confirmed": {
+              "type": "boolean"
+            },
+            "key_recovery_owner": {
+              "type": "string"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "graphql_introspection": {
+          "type": "object",
+          "required": [
+            "status",
+            "production_introspection_enabled",
+            "justification",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "production_introspection_enabled": {
+              "type": "boolean"
+            },
+            "justification": {
+              "type": "string"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "deployment_and_rollback": {
+          "type": "object",
+          "required": [
+            "status",
+            "target_host_profile",
+            "image_registry_path",
+            "deployment_approver",
+            "rollback_authority",
+            "image_provenance_policy",
+            "release",
+            "live_readiness_drill_completed",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "target_host_profile": {
+              "type": "string"
+            },
+            "image_registry_path": {
+              "type": "string"
+            },
+            "deployment_approver": {
+              "type": "string"
+            },
+            "rollback_authority": {
+              "type": "string"
+            },
+            "image_provenance_policy": {
+              "type": "string"
+            },
+            "release": {
+              "type": "object",
+              "required": [
+                "reviewed_source_commit",
+                "current",
+                "previous",
+                "client_provenance_evidence",
+                "server_provenance_evidence",
+                "live_drill_evidence"
+              ],
+              "properties": {
+                "reviewed_source_commit": {
+                  "type": "string"
+                },
+                "current": {
+                  "type": "object",
+                  "required": [
+                    "client_image",
+                    "server_image"
+                  ],
+                  "properties": {
+                    "client_image": {
+                      "type": "string"
+                    },
+                    "server_image": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "previous": {
+                  "type": "object",
+                  "required": [
+                    "client_image",
+                    "server_image"
+                  ],
+                  "properties": {
+                    "client_image": {
+                      "type": "string"
+                    },
+                    "server_image": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "client_provenance_evidence": {
+                  "type": "string"
+                },
+                "server_provenance_evidence": {
+                  "type": "string"
+                },
+                "live_drill_evidence": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "live_readiness_drill_completed": {
+              "type": "boolean"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        },
+        "optional_ai_posture": {
+          "type": "object",
+          "required": [
+            "status",
+            "ai_enabled",
+            "no_ai_path_verified",
+            "server_ai_draft_enabled_false",
+            "no_gemini_api_key_provisioned",
+            "unpaid_provider_excluded",
+            "phase11_status",
+            "approver",
+            "evidence",
+            "notes"
+          ],
+          "properties": {
+            "status": {
+              "$ref": "#/definitions/sectionMetadata/properties/status"
+            },
+            "ai_enabled": {
+              "type": "boolean"
+            },
+            "no_ai_path_verified": {
+              "type": "boolean"
+            },
+            "server_ai_draft_enabled_false": {
+              "type": "boolean"
+            },
+            "no_gemini_api_key_provisioned": {
+              "type": "boolean"
+            },
+            "unpaid_provider_excluded": {
+              "type": "boolean"
+            },
+            "phase11_status": {
+              "type": "string"
+            },
+            "approver": {
+              "$ref": "#/definitions/sectionMetadata/properties/approver"
+            },
+            "evidence": {
+              "$ref": "#/definitions/sectionMetadata/properties/evidence"
+            },
+            "notes": {
+              "$ref": "#/definitions/sectionMetadata/properties/notes"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "sectionMetadata": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "unresolved",
+            "approved"
+          ]
+        },
+        "approver": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

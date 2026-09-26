@@ -783,12 +783,17 @@ bash scripts/ops/run-launch-drills.sh \
   --evidence-dir <restricted-evidence-directory>
 ```
 
-The template's `$schema` points to `infra/launch/readiness.schema.json`, which
-is absent in this checkout. The executable contract is the validator and the
-category child-report requirements above; prompt 201's schema-file reference
-is stale. This does not loosen any validator gate. Resolve documentation or
-schema expectations in a separate implementation prompt if operators require
-a standalone schema.
+The template's `$schema` now resolves to `infra/launch/readiness.schema.json`.
+The Draft 7 schema describes all eleven sections, twelve secret-source fields,
+eight retention-policy fields, and the nested release record. It accepts the
+unresolved template and rejects missing, misspelled, extra, or wrongly typed
+fields. New record fields require a schema revision. Run
+`npm run ops:readiness-schema-test` for this structural check. It does not
+approve a launch: `node scripts/ops/check-launch-readiness.js
+infra/launch/readiness.example.json` still fails closed. That validator owns
+placeholder and secret scans, evidence content and target binding, clocks,
+cross-category consistency, image environment checks, and approval gates;
+operators own authentic live evidence and human sign-off.
 
 ## 7. Formal Pre-Launch Sign-off Matrix
 
