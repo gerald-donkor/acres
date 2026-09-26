@@ -887,6 +887,21 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
 
 ## 22. Phase 12K verification record — 2026-09-09
 
+**Prompt 202 verification (2026-09-26):** The unified drill now forwards
+materialized Caddy/Compose paths and live benchmark/API targets as argument
+vectors, labels every dossier as a drill, and binds Stage 3/6 verdicts to
+validated child reports. Stage 6 no longer fabricates passing live PostgreSQL
+telemetry; a fresh, target-bound operator evidence file is required. The
+offline synthetic path remains deterministic for CI. The operator invocation,
+evidence schema, and remaining human gates are recorded in
+`docs/launch-checklist.md` §4 and `docs/operations.md` Phase 12K. Prompt 201
+continues to govern separate production sign-off.
+Verification: `ops:check` passed with 12/12 launch tests; the final focused
+launch suite passed 13/13 after adding the default-drill regression; helper tests
+passed 5/5; lint, typecheck, build, Bash syntax, and `git diff --check` passed.
+The deliberately missing-telemetry loopback run failed closed. Live operator
+targets and all eleven category approvals remain unverified.
+
 Records the Phase 12 exit gate: unified launch drill runner, operator launch
 checklist with incident runbooks, and readiness evidence cross-validation.
 

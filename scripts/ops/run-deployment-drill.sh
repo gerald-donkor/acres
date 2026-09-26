@@ -12,6 +12,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 DRY_RUN=0
+ALLOW_HSTS=0
 CONFIG_FILE="infra/caddy/Caddyfile.example"
 COMPOSE_FILE="infra/compose/docker-compose.production.example.yml"
 EVIDENCE_DIR="backups"
@@ -27,6 +28,10 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run)
       DRY_RUN=1
+      shift
+      ;;
+    --allow-hsts)
+      ALLOW_HSTS=1
       shift
       ;;
     --caddyfile)
@@ -59,6 +64,7 @@ readiness probes, and backward-compatible rollback procedures.
 
 Options:
   --dry-run                  Execute verification and preflight without mutating state (default: false)
+  --allow-hsts               Accept active approved HSTS in selected Caddyfile
   --caddyfile <file>         Path to Caddyfile template (default: infra/caddy/Caddyfile.example)
   --compose-file <file>      Path to production Compose template (default: infra/compose/docker-compose.production.example.yml)
   --evidence-dir <dir>       Directory for JSON drill evidence (default: backups)
@@ -110,7 +116,9 @@ printf '=================================================================\n\n'
 
 # 1. Ingress & Caddy Same-Origin Routing Verification
 printf '1. Verifying Caddy same-origin routing and edge security headers...\n'
-node scripts/ops/verify-caddy-routing.js "$CONFIG_FILE"
+hsts_args=()
+if [ "$ALLOW_HSTS" -eq 1 ]; then hsts_args=(--allow-hsts); fi
+node scripts/ops/verify-caddy-routing.js "$CONFIG_FILE" "${hsts_args[@]}"
 node --test scripts/ops/verify-caddy-routing.spec.js
 printf '   ✓ Caddy routing, S3 SigV4 preservation, and security headers verified.\n\n'
 
@@ -174,13 +182,15 @@ if ! grep -q "storage: 'ok'" server/src/health/health.controller.ts; then
 fi
 
 PROBE_LIVE_TESTED=false
-if curl -fsS -m 2 "${API_URL}/health" >/dev/null 2>&1; then
-  LIVENESS_RESP="$(curl -fsS -m 2 "${API_URL}/health")"
-  READINESS_RESP="$(curl -fsS -m 2 "${API_URL}/health/ready" 2>/dev/null || echo "")"
-  printf '   ✓ Live API probe responded: %s\n' "$LIVENESS_RESP"
-  if [ -n "$READINESS_RESP" ]; then
-    printf '   ✓ Live deep readiness probe responded: %s\n' "$READINESS_RESP"
-  fi
+if LIVENESS_RESP="$(curl -fsS -m 2 --max-filesize 4096 "${API_URL}/health" 2>/dev/null)" &&
+   READINESS_RESP="$(curl -fsS -m 2 --max-filesize 4096 "${API_URL}/health/ready" 2>/dev/null)" &&
+   printf '%s\0%s' "$LIVENESS_RESP" "$READINESS_RESP" | node -e '
+     const fs = require("node:fs");
+     const { validHealthProbes } = require("./scripts/ops/launch-target-evidence");
+     const [live, ready] = fs.readFileSync(0, "utf8").split("\0");
+     if (!validHealthProbes(live, ready)) process.exit(1);
+   ' 2>/dev/null; then
+  printf '   ✓ Live API liveness and deep readiness probes returned HTTP success.\n'
   PROBE_LIVE_TESTED=true
 else
   printf '   ✓ Health & readiness probe contracts verified statically against NestJS OpenAPI annotations.\n'
@@ -241,36 +251,23 @@ END_TIME_MS="$(get_time_ms)"
 DURATION_MS=$(( END_TIME_MS - START_TIME_MS ))
 DURATION_SEC=$(( DURATION_MS / 1000 ))
 
-cat > "$EVIDENCE_FILE" <<EOF
-{
-  "drill_timestamp": "${TIMESTAMP}",
-  "duration_ms": ${DURATION_MS},
-  "duration_seconds": ${DURATION_SEC},
-  "caddyfile": "${CONFIG_FILE}",
-  "compose_file": "${COMPOSE_FILE}",
-  "dry_run": $([ "$DRY_RUN" -eq 1 ] && echo "true" || echo "false"),
-  "caddy_routing_verified": true,
-  "caddy_routes_tested": 12,
-  "security_headers_verified": true,
-  "s3_sigv4_host_preserved": true,
-  "migrations_verified": true,
-  "migration_count": ${MIGRATION_COUNT},
-  "schema_backward_compatible": ${SCHEMA_BACKWARD_COMPATIBLE},
-  "operational_templates_verified": true,
-  "secrets_scan_verified": true,
-  "readiness_probes_verified": true,
-  "probe_live_tested": ${PROBE_LIVE_TESTED},
-  "graceful_drain_periods_verified": {
-    "caddy": "30s",
-    "next": "30s",
-    "api": "45s",
-    "worker": "60s"
-  },
-  "network_isolation_verified": true,
-  "rollback_procedure_verified": true,
-  "status": "${DRILL_STATUS}"
-}
-EOF
+node - "$EVIDENCE_FILE" "$TIMESTAMP" "$DURATION_MS" "$CONFIG_FILE" "$COMPOSE_FILE" "$DRY_RUN" "$MIGRATION_COUNT" "$SCHEMA_BACKWARD_COMPATIBLE" "$PROBE_LIVE_TESTED" "$DRILL_STATUS" "$API_URL" <<'NODE'
+const fs = require('node:fs');
+const { safeUrl, targetId } = require('./scripts/ops/launch-target-evidence');
+const [file, timestamp, duration, caddyfile, compose, dry, migrations, compatible, probe, status, apiUrl] = process.argv.slice(2);
+const evidence = {
+  drill_timestamp: timestamp, duration_ms: Number(duration), duration_seconds: Math.floor(Number(duration) / 1000),
+  caddyfile, compose_file: compose, dry_run: dry === '1',
+  caddy_routing_verified: true, caddy_routes_tested: 12, security_headers_verified: true,
+  s3_sigv4_host_preserved: true, migrations_verified: true, migration_count: Number(migrations),
+  schema_backward_compatible: compatible === 'true', operational_templates_verified: true,
+  secrets_scan_verified: true, readiness_probes_verified: true, probe_live_tested: probe === 'true',
+  api_target_id: targetId(safeUrl(apiUrl)),
+  graceful_drain_periods_verified: { caddy: '30s', next: '30s', api: '45s', worker: '60s' },
+  network_isolation_verified: true, rollback_procedure_verified: true, status,
+};
+fs.writeFileSync(file, JSON.stringify(evidence, null, 2) + '\n');
+NODE
 
 printf 'Structured drill evidence emitted to: %s\n\n' "$EVIDENCE_FILE"
 

@@ -1237,6 +1237,33 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 202 update (2026-09-26): target-bound launch drill evidence.**
+`run-launch-drills.sh` accepts `--caddyfile`, `--compose-file`, `--allow-hsts`,
+`--target-url`, `--api-url`, and `--database-telemetry-file`; the exact operator
+command and telemetry contract are in `docs/launch-checklist.md` §4. Stage
+commands execute as argument vectors, so operator paths are never parsed by
+`bash -c`. Stage 3 passes the selected Caddyfile through both verifiers and the
+Compose file to the deployment child. A targeted Stage 3 passes only with
+matching child files, at least 12 passing routes, approved HSTS and a domain
+matching the benchmark host, and the expected Acres liveness/readiness JSON
+from the selected API origin. Stage 6 passes its
+URLs through to the child and requires live capacity mode, matching hashed
+target identifiers, and fresh, independently supplied database telemetry with
+healthy exporter/server, bounded pool/query latency, no pool waiters, and no
+lock waits. The previous hard-coded passing database telemetry appears only in
+explicit synthetic offline evidence. A no-target run remains a default drill;
+the dossier always says `environment: "drill"` and records hashed `targets`
+identifiers. Missing or contradictory child content breaches the relevant
+stage and baseline even if a child process exited zero. Secret rotation remains
+dry-run and reconciliation read-only. The operator still owns live TLS, alert
+delivery, promotion/rollback, restore infrastructure, and approval.
+Verification: `npm run ops:check` exited 0 (launch suite 12/12), then the final
+launch suite passed 13/13 after the default-drill regression was added. The
+target/telemetry helper suite passed 5/5; lint, typecheck, build, Bash syntax,
+and `git diff --check` passed. A controlled loopback live-target run without a
+telemetry file exited 1 and emitted `databaseTelemetryBaseline.status:
+"breached"`. No operator environment or production load was exercised.
+
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.
 This is the Phase 12 exit gate: one orchestrator, one dossier, one checklist.
 

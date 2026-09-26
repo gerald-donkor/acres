@@ -425,7 +425,9 @@ async function evaluateCapacity(options = {}) {
   const report = {
     timestamp: new Date().toISOString(),
     mode: isSynthetic ? 'synthetic' : 'live',
-    targetUrl: options.targetUrl || 'synthetic://in-process-evaluation',
+    targetUrl: options.targetUrl
+      ? require('./launch-target-evidence').targetId(new URL(options.targetUrl).href)
+      : 'synthetic://in-process-evaluation',
     targets,
     distribution,
     compliance,

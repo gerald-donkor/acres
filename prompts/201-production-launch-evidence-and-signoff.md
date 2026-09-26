@@ -76,24 +76,23 @@ attestation.
    production API/worker no-AI inventories plus deterministic dashboard,
    report and export journeys. For each category attach its required child JSON
    report and independently inspect the underlying live source of truth.
-4. Run `bash scripts/ops/run-launch-drills.sh` with the operator-approved
-   live drill configuration (without `--dry-run`) in the designated drill
+4. Run `bash scripts/ops/run-launch-drills.sh --caddyfile
+   <materialized-production-Caddyfile> --compose-file <materialized-compose>
+   --allow-hsts --target-url <approved-benchmark-URL> --api-url
+   <approved-API-origin> --database-telemetry-file
+   <fresh-live-Prometheus-evidence.json> --evidence-dir
+   <restricted-evidence-directory>` (without `--dry-run`) in the designated drill
    environment. Note that secret rotation remains dry-run in the unified
    orchestrator and needs separate authorized live evidence. Require 7/7
    successful stages, review every child artifact and the dossier, and reject
    a dossier with a failed or missing stage. The restore drill must use an
    isolated database, not the production database as both source and target.
-   A 7/7 dossier alone is insufficient: the runner's Stage 3 uses the example
-   Caddyfile and default deployment configuration, while Stage 6 runs a
-   synthetic capacity check unless given a target that this runner does not
-   pass through. Verify the materialized production Caddyfile separately with
-   `node scripts/ops/verify-caddy-routing.js <production-Caddyfile>
-   --allow-hsts --output <restricted-child-report.json>` after HSTS approval.
-   Obtain separately targeted, operator-authorized live promotion/rollback,
-   capacity, DoS, telemetry and alert-routing evidence. Do not use the default
-   Stage 3 or Stage 6 child artifacts as production proof. If the deployment
-   drill cannot verify the approved production configuration, stop and plan a
-   reviewed runner fix before approving that category.
+   A 7/7 dossier is drill evidence, not production promotion or human approval.
+   Verify that Stage 3 and Stage 6 child reports match the approved target IDs,
+   HSTS/domain, live readiness probe, and fresh Prometheus telemetry. Obtain
+   separately authorized live promotion/rollback, secret rotation, production
+   TLS, and alert-delivery evidence. Default and synthetic child artifacts do
+   not qualify as production proof.
 5. Run `node scripts/ops/check-launch-readiness.js
    <operator-readiness.json>` and `npm run ops:launch-readiness --
    <operator-readiness.json>` with the approved release image pair exported in

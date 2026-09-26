@@ -405,6 +405,38 @@ Flags: `--dry-run` (offline where the underlying tool supports it),
 1 with the failing stage named in the dossier (`error_message`) and on the
 console. Stages 1–6 pass fully offline; stage 7 needs drill infra (§3.6).
 
+**Targeted drill invocation (prompt 202):** In a separately approved drill window,
+use `bash scripts/ops/run-launch-drills.sh --caddyfile <materialized-Caddyfile>
+--compose-file <materialized-compose> --allow-hsts --target-url
+<approved-benchmark-URL> --api-url <approved-API-origin>
+--database-telemetry-file <fresh-Prometheus-evidence.json> --evidence-dir
+<restricted-directory>`. The API URL must be an origin; both URLs must be HTTP(S)
+without userinfo, query, or fragment. `--dry-run` conflicts with live URL and
+telemetry arguments. A no-target run remains a default drill and cannot produce
+production-candidate Stage 6 evidence. `environment` remains `"drill"` in every
+dossier; `targets.mode` is `offline`, `default-drill`, or `live-target-drill`.
+`targets` stores SHA-256 identifiers for the selected files and URLs, without
+raw URL credentials or query strings. Stage 3 requires both child reports to
+bind to the same Caddyfile and selected Compose file, at least 12 passing routes,
+and, for targeted evidence, approved active HSTS, a non-example domain matching
+the benchmark URL host, and live API probes returning the Acres liveness and
+database/storage readiness envelopes for the selected API origin. Stage 6 requires live capacity
+mode and matching target identifiers. The supplied telemetry JSON must state
+`source: "prometheus-live-scrape"`, `probeHealthy: true`, a fresh ISO
+`timestamp`, and a matching `targetId` (SHA-256 of the normalized benchmark
+URL). Calculate that identifier with `node -e 'const {safeUrl,targetId}=
+require("./scripts/ops/launch-target-evidence"); console.log(targetId(safeUrl(
+process.argv[1])))' '<approved-benchmark-URL>'`. It must include
+`postgresExporter.up/lastScrapeError`,
+`postgresServer.pgUp/maxConnections/activeConnections`, API and worker
+`connectionPool` totals/idle/max/requestsWaiting,
+`poolAcquisitionLatency` and `queryExecutionDuration` p50Ms/p95Ms/p99Ms for
+both roles, and `serverActivity.lockWaits/maxTransactionDurationSec`.
+The file is capped at 64 KiB. Missing, stale, mismatched, nonfinite, or breached
+telemetry fails Stage 6. Alert rule simulation remains simulation; operator
+verification of alert delivery, live TLS, promotion/rollback, and sign-off is
+separate. A 7/7 drill dossier alone cannot approve production.
+
 The Unified Launch Evidence Dossier aggregates structured baselines from child evidence across all operational dimensions:
 - `staticIntegrityBaseline` (stage 1): the three fixed checks, their exit codes, and total/passed/failed counts; `summary.staticIntegrityCompliance` is passed only when the complete child evidence is valid and stage 1 passed;
 - `supplyChainBaseline` (stage 2): package inventory count, license compliance verification, license violations, SAST scanned files, findings count, triaged/expired/blocking findings, container security validity, and container security checks count;

@@ -19,6 +19,7 @@ EVIDENCE_DIR="backups"
 EVIDENCE_FILE=""
 TARGET_URL=""
 API_URL="${API_URL:-http://localhost:3001}"
+DATABASE_TELEMETRY_FILE=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -27,11 +28,18 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --target-url)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo 'Error: --target-url requires a value' >&2; exit 1; }
       TARGET_URL="$2"
       shift 2
       ;;
     --api-url)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo 'Error: --api-url requires a value' >&2; exit 1; }
       API_URL="$2"
+      shift 2
+      ;;
+    --database-telemetry-file)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo 'Error: --database-telemetry-file requires a value' >&2; exit 1; }
+      DATABASE_TELEMETRY_FILE="$2"
       shift 2
       ;;
     --evidence-dir)
@@ -52,6 +60,7 @@ Options:
   --dry-run                  Run offline synthetic drills without live HTTP traffic
   --target-url <url>         Live HTTP target for capacity benchmark (default: synthetic simulation)
   --api-url <url>            URL to target API instance for DoS drill (default: http://localhost:3001)
+  --database-telemetry-file <file>  Fresh live Prometheus telemetry JSON (required for live target)
   --evidence-dir <dir>       Directory for JSON drill evidence (default: backups)
   --evidence-file <file>     Exact destination path for JSON evidence file
   --help, -h                 Show this help message
@@ -59,11 +68,18 @@ EOF
       exit 0
       ;;
     *)
-      printf 'Error: Unknown option "%s"\n' "$1" >&2
+      printf 'Error: Unknown option\n' >&2
       exit 1
       ;;
   esac
 done
+
+if [ -n "$TARGET_URL" ] || [ -n "$DATABASE_TELEMETRY_FILE" ]; then
+  if [ "$DRY_RUN" -eq 1 ]; then echo 'Error: live target evidence conflicts with --dry-run' >&2; exit 1; fi
+fi
+if [ -n "$TARGET_URL" ]; then
+  node -e 'const {safeUrl}=require("./scripts/ops/launch-target-evidence"); safeUrl(process.argv[1]); const api=new URL(safeUrl(process.argv[2])); if(api.pathname!=="/") throw Error("API target must be an origin")' "$TARGET_URL" "$API_URL" || exit 1
+fi
 
 get_time_ms() {
   local ms
@@ -162,6 +178,11 @@ const capacityRaw = process.argv[5];
 const dosEvidencePath = process.argv[6];
 const failures = JSON.parse(process.argv[7]);
 const evidenceFile = process.argv[8];
+const dryRun = process.argv[9] === "1";
+const targetUrl = process.argv[10];
+const telemetryFile = process.argv[11];
+const startTime = Number(process.argv[12]);
+const { targetId, readBoundedJson, validDatabaseTelemetry } = require("./scripts/ops/launch-target-evidence");
 
 let alertData = {};
 try { alertData = JSON.parse(alertRaw); } catch {}
@@ -182,15 +203,25 @@ const dbLatency = capacityData?.distribution?.databaseLatency || {
   queryLatencyMs: { min: 1.0, p50: 8.2, p90: 18.5, p95: 24.1, p99: 42.0, max: 58.5, mean: 9.5, stddev: 5.2 },
 };
 
-const dbCompliancePassed = Boolean(
-  capacityData?.compliance?.databaseAcquisitionLatencyPassed !== false &&
-  capacityData?.compliance?.databaseQueryLatencyPassed !== false &&
-  capacityData?.compliance?.monotonicDbAcquisition !== false &&
-  capacityData?.compliance?.monotonicDbQuery !== false &&
-  capacityData?.compliance?.overallPassed !== false
-);
+let liveTelemetry = null;
+if (targetUrl && telemetryFile) {
+  try { liveTelemetry = readBoundedJson(telemetryFile); } catch {}
+}
+const liveTelemetryValid = Boolean(targetUrl &&
+  validDatabaseTelemetry(liveTelemetry, targetId(new URL(targetUrl).href), startTime, Date.now()));
+const roles = ["api", "worker"];
+const selectRoles = (section, fields) => Object.fromEntries(roles.map((role) => [role,
+  Object.fromEntries(fields.map((field) => [field, liveTelemetry[section][role][field]]))]));
+const dbCompliancePassed = dryRun ? Boolean(
+  capacityData?.mode === "synthetic" &&
+  capacityData?.compliance?.databaseAcquisitionLatencyPassed === true &&
+  capacityData?.compliance?.databaseQueryLatencyPassed === true &&
+  capacityData?.compliance?.monotonicDbAcquisition === true &&
+  capacityData?.compliance?.monotonicDbQuery === true &&
+  capacityData?.compliance?.overallPassed === true && capacityData?.distribution?.databaseLatency
+) : liveTelemetryValid;
 
-const databaseTelemetryBaseline = {
+const syntheticTelemetryBaseline = {
   status: dbCompliancePassed ? "verified" : "breached",
   postgresExporter: {
     job: "acres-postgres",
@@ -222,11 +253,31 @@ const databaseTelemetryBaseline = {
     maxTransactionDurationSec: 0.1,
   },
 };
+const databaseTelemetryBaseline = dryRun
+  ? { ...syntheticTelemetryBaseline, source: "synthetic", status: dbCompliancePassed ? "verified" : "breached" }
+  : liveTelemetryValid
+    ? {
+        status: "verified", source: liveTelemetry.source, timestamp: liveTelemetry.timestamp,
+        targetId: liveTelemetry.targetId, probeHealthy: true,
+        postgresExporter: { up: liveTelemetry.postgresExporter.up, lastScrapeError: liveTelemetry.postgresExporter.lastScrapeError },
+        postgresServer: { pgUp: liveTelemetry.postgresServer.pgUp, maxConnections: liveTelemetry.postgresServer.maxConnections, activeConnections: liveTelemetry.postgresServer.activeConnections },
+        connectionPool: selectRoles("connectionPool", ["totalConnections", "idleConnections", "maxConnections", "requestsWaiting"]),
+        poolAcquisitionLatency: selectRoles("poolAcquisitionLatency", ["p50Ms", "p95Ms", "p99Ms"]),
+        queryExecutionDuration: selectRoles("queryExecutionDuration", ["p50Ms", "p95Ms", "p99Ms"]),
+        serverActivity: { lockWaits: liveTelemetry.serverActivity.lockWaits, maxTransactionDurationSec: liveTelemetry.serverActivity.maxTransactionDurationSec },
+      }
+    : { status: "breached", source: "missing-or-invalid-live-telemetry" };
+
+if (!dbCompliancePassed) failures.push("Database telemetry baseline missing or invalid");
+const finalStatus = failures.length === 0 ? "success" : "failed";
 
 const unifiedEvidence = {
   timestamp,
   durationMs,
-  status: drillStatus,
+  status: finalStatus,
+  mode: dryRun ? "synthetic" : targetUrl ? "live" : "default",
+  targetId: targetUrl ? targetId(new URL(targetUrl).href) : null,
+  apiTargetId: targetUrl ? targetId(new URL(process.argv[13]).href) : null,
   summary: {
     alertVerification: alertData.valid === true ? "passed" : "failed",
     capacitySloCompliance: capacityData?.compliance?.overallPassed === true ? "passed" : "failed",
@@ -244,7 +295,12 @@ fs.writeFileSync(evidenceFile, JSON.stringify(unifiedEvidence, null, 2), "utf8")
 ' "$TIMESTAMP" "$DURATION_MS" "$DRILL_STATUS" "$ALERT_OUTPUT_JSON" \
   "$CAPACITY_OUTPUT_JSON" "$DOS_EVIDENCE_TMP" \
   "$FAILURES_JSON" \
-  "$EVIDENCE_FILE"
+  "$EVIDENCE_FILE" "$DRY_RUN" "$TARGET_URL" "$DATABASE_TELEMETRY_FILE" "$START_TIME_MS" "$API_URL"
+
+if [ "$(node -e 'const e=require(process.argv[1]); process.stdout.write(e.status)' "$(realpath "$EVIDENCE_FILE")")" != success ]; then
+  DRILL_STATUS=failed
+  FAILURES+=("Database telemetry baseline missing or invalid")
+fi
 
 printf '\n=================================================================\n'
 printf 'Unified Drill Evidence: %s\n' "$EVIDENCE_FILE"
