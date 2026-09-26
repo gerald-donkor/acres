@@ -743,6 +743,60 @@ function validateDataRetentionPolicyReport(report, now, approved) {
   });
 }
 
+function isValidGraphqlEndpoint(endpoint) {
+  if (typeof endpoint !== 'string' || !endpoint.trim()) return false;
+  if (endpoint === '/graphql') return true;
+  try {
+    const url = new URL(endpoint);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.pathname === '/graphql';
+  } catch {
+    return false;
+  }
+}
+
+function isGraphqlIntrospectionCandidate({ parsed } = {}) {
+  // A custom-named JSON file must be checked too; a dossier cannot qualify.
+  return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+}
+
+function validateGraphqlIntrospectionReport(report, now, approved) {
+  if (!isGraphqlIntrospectionCandidate({ parsed: report }) ||
+      report.drill_type !== 'graphql_introspection_probe' ||
+      report.status !== 'success' ||
+      !isValidGraphqlEndpoint(report.endpoint) ||
+      typeof report.production_introspection_enabled !== 'boolean' ||
+      !Array.isArray(report.errors) || report.errors.length !== 0) return false;
+  const timestamp = parseSmtpTimestamp(report.timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!timestamp || timestamp > evalNow ||
+      !report.probe_result || typeof report.probe_result !== 'object' || Array.isArray(report.probe_result) ||
+      !approved || typeof approved !== 'object') return false;
+  const secretMarkers = [];
+  checkPlaceholdersAndSecrets(report, 'graphql_probe_report', secretMarkers);
+  if (secretMarkers.length > 0) return false;
+  if (Object.keys(report).sort().join(',') !==
+      ['drill_type', 'endpoint', 'errors', 'probe_result', 'production_introspection_enabled', 'status', 'timestamp'].sort().join(',')) return false;
+  if (Object.keys(report.probe_result).sort().join(',') !==
+      ['introspection_permitted', 'response_summary', 'schema_exposed', 'status_code'].sort().join(',')) return false;
+
+  const probe = report.probe_result;
+  if (typeof probe.status_code !== 'number' || !Number.isInteger(probe.status_code) || probe.status_code <= 0 ||
+      typeof probe.introspection_permitted !== 'boolean' ||
+      typeof probe.schema_exposed !== 'boolean' ||
+      typeof probe.response_summary !== 'string' || !probe.response_summary.trim()) return false;
+
+  if (report.production_introspection_enabled !== approved.production_introspection_enabled) return false;
+  if (probe.introspection_permitted !== approved.production_introspection_enabled) return false;
+
+  if (approved.production_introspection_enabled === false) {
+    if (probe.schema_exposed !== false) return false;
+  } else if (approved.production_introspection_enabled === true) {
+    if (probe.schema_exposed !== true) return false;
+  }
+
+  return true;
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -1303,6 +1357,7 @@ function validateReadiness(record, _filePath, options = {}) {
   const smtpEvidence = [];
   const secretReferenceEvidence = [];
   const retentionEvidence = [];
+  const graphqlEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -1383,6 +1438,7 @@ function validateReadiness(record, _filePath, options = {}) {
             if (sectionName === 'smtp_delivery') smtpEvidence.push(...parsedFiles);
             if (sectionName === 'secret_references') secretReferenceEvidence.push(...parsedFiles);
             if (sectionName === 'data_retention_policy') retentionEvidence.push(...parsedFiles);
+            if (sectionName === 'graphql_introspection') graphqlEvidence.push(...parsedFiles);
           }
         });
       }
@@ -1764,8 +1820,14 @@ function validateReadiness(record, _filePath, options = {}) {
     if (typeof gqlSec.production_introspection_enabled !== 'boolean') {
       addBlocker('graphql_introspection', 'production_introspection_enabled must be a boolean');
     }
-    if (gqlSec.production_introspection_enabled === true && (!gqlSec.justification || typeof gqlSec.justification !== 'string')) {
+    if (gqlSec.production_introspection_enabled === true && (!gqlSec.justification || typeof gqlSec.justification !== 'string' || !gqlSec.justification.trim() || gqlSec.justification.includes('__REQUIRED_'))) {
       addBlocker('graphql_introspection', 'Production GraphQL introspection enabled requires justification');
+    }
+    const graphqlCandidates = graphqlEvidence.filter(isGraphqlIntrospectionCandidate);
+    if (graphqlCandidates.length === 0) {
+      addBlocker('graphql_introspection', 'A successful GraphQL introspection probe child JSON report is required');
+    } else if (graphqlCandidates.some(({ parsed }) => !validateGraphqlIntrospectionReport(parsed, now, gqlSec))) {
+      addBlocker('graphql_introspection', 'A referenced GraphQL introspection report is invalid or failed');
     }
   }
 
@@ -2048,4 +2110,6 @@ module.exports = {
   REQUIRED_RETENTION_KEYS,
   isDataRetentionPolicyCandidate,
   validateDataRetentionPolicyReport,
+  isGraphqlIntrospectionCandidate,
+  validateGraphqlIntrospectionReport,
 };

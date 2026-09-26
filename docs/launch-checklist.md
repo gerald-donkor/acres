@@ -294,9 +294,25 @@ do not report failure.
 ### 9. GraphQL Introspection (`graphql_introspection`)
 
 - Drill/verify: production route probe (introspection query must fail closed)
-- Evidence: probe transcript
+- Evidence: a redacted `graphql-introspection-probe-<timestamp>.json` child report
 - Accept: `production_introspection_enabled` boolean; enabling it in
   production requires a written security justification
+- An approved record must reference a concrete JSON report with
+  `drill_type: "graphql_introspection_probe"`, a real nonfuture ISO UTC
+  `timestamp`, `status: "success"`, `errors: []`, a valid `endpoint`
+  (`/graphql` or absolute HTTPS URL to `/graphql`),
+  `production_introspection_enabled` strictly matching the approved readiness value,
+  and a `probe_result` object containing exactly `status_code` (positive integer),
+  `introspection_permitted` (matching `production_introspection_enabled`),
+  `schema_exposed` (`false` when disabled, `true` when enabled), and non-empty
+  `response_summary`.
+  If `production_introspection_enabled: true`, the approved record requires a non-empty
+  `justification` string without unresolved placeholders.
+  Prose alone, a dossier alone, or a malformed/failed report cannot qualify, even beside
+  a valid child or in a wildcard expansion. Validate with
+  `node scripts/ops/check-launch-readiness.js <operator-readiness.json>`.
+  The operator conducts the live route probe against the production ingress; the validator
+  checks internal consistency, policy adherence, and child report validity.
 
 ### 10. Deployment & Rollback (`deployment_and_rollback`)
 

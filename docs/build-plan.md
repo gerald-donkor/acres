@@ -1114,3 +1114,20 @@ evidence blocks approval even beside a valid child. The readiness suite passed
 `git diff --check` passed. The unresolved example remained blocked (0 approved
 categories, 11 blocked, 70 blockers). Actual legal/operational retention sign-off
 and automated purge verification remain operator-owned launch work.
+
+**Prompt 199 verification (2026-09-26):** Approved Category 9 requires an
+internally consistent GraphQL introspection route probe child JSON report with
+`drill_type: "graphql_introspection_probe"`, nonfuture ISO UTC timestamp,
+`status: "success"`, empty errors, valid GraphQL endpoint (`/graphql`),
+`production_introspection_enabled` strictly matching the approved record, and a
+`probe_result` object containing positive integer `status_code` (e.g. 400 when
+disabled, 200 when enabled), matching `introspection_permitted`, `schema_exposed`
+(`false` when disabled, `true` when enabled), and non-empty `response_summary`.
+If `production_introspection_enabled: true`, non-empty `justification` without
+placeholders is strictly enforced. Malformed, failed, mismatched, or unrelated
+JSON evidence blocks approval even beside a valid child or in wildcard expansion.
+The readiness suite passed 100/100; `ops:templates`, `ops:check`, lint,
+typecheck, build, and `git diff --check` passed cleanly. The unresolved example
+remained blocked (0 approved categories, 11 blocked, 70 blockers). Actual
+production ingress probe execution and security audit remain operator-owned
+launch work.
