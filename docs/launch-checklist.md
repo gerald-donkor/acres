@@ -259,6 +259,156 @@ unresolved section status, empty evidence array).
   validator checks internal consistency and cannot authenticate a hand-authored
   report or prove live least-privilege access.
 
+**Prompt 208 Category 4 intake — 2026-09-26T22:24:17Z UTC.** Reviewed
+`d09b51f` on `main`; the only worktree change was this untracked prompt. The
+repository-visible Category 4 material is the unresolved
+`infra/launch/readiness.example.json`, `infra/launch/readiness.schema.json`, the
+twelve-field validator in `scripts/ops/check-launch-readiness.js`, its test
+fixtures, `scripts/ops/scan-secrets.sh`, `infra/env/production.env.example`,
+`infra/env/garage.production.env.example`, and
+`infra/compose/docker-compose.production.example.yml`. No materialized
+production readiness record and no `secret-reference-policy-*.json` child report
+exists in the repository: tracked matches are limited to the template, the
+schema, the validator and its specs, and the prompt that requested this
+assessment. The local `backups/` directory is gitignored (`.gitignore:74`) and
+contains only locally generated drill and dry-run artifacts — secret-rotation,
+capacity, deployment, SAST, SBOM, volume-encryption, dossiers and stage logs —
+with no secret-reference policy report among them. That is a repository
+observation, not a statement about an operator's restricted evidence store.
+Category 4 remains **unresolved**. No store access policy printout, runtime
+injection inventory, or dated security-lead decision was supplied for
+independent inspection. No secret value was requested, read, or printed, and no
+grant, injection mechanism, or credential was changed.
+
+Repository-verified consumer mapping, read from the checked-in templates and
+the server configuration, not from a running system. All twelve fields map to a
+distinct template name, and nine of those twelve have a verified consumer in
+this repository: `db_migrator_secret_source` → `ACRES_MIGRATOR_PASSWORD` /
+`DATABASE_MIGRATION_URL` (`server/prisma.config.ts:10`);
+`db_app_secret_source` →
+`ACRES_APP_PASSWORD` / `DATABASE_URL`
+(`server/src/config/env.validation.ts:89`);
+`db_monitor_secret_source` →
+`ACRES_MONITOR_PASSWORD_FILE`, mounted read-only at
+`/run/secrets/acres_monitor_password` and read by the `postgres-exporter`
+service through `DATA_SOURCE_PASS_FILE` rather than an environment value;
+`session_secret_source` → `SESSION_SECRET` (`env.validation.ts:89,217`);
+`valkey_secret_source` → `VALKEY_PASSWORD` / `VALKEY_URL`
+(`env.validation.ts:401`; the development default at `:111` is rejected in
+production by `:238`); `garage_rpc_secret_source` and
+`garage_admin_secret_source` → `rpc_secret` and `admin_token` in
+`infra/garage/garage.toml:8,22`, re-mapped to the `garage` service alone;
+`garage_s3_secret_source` → `STORAGE_ACCESS_KEY_ID` /
+`STORAGE_SECRET_ACCESS_KEY` (`env.validation.ts:420`);
+`grafana_admin_secret_source` → `GRAFANA_ADMIN_PASSWORD`
+(`docker-compose.production.example.yml:245`). The remaining three are recorded
+below. No `GEMINI_API_KEY` or other AI source name appears in any production
+template; the only Gemini strings under `infra/` are Category 11's no-AI posture
+fields. A clean `scripts/ops/scan-secrets.sh` run is one supporting repository
+check and is not evidence of production store policy or runtime injection.
+
+Four verified facts the operator's inventory and the security lead must
+resolve:
+
+- **`csrf_secret_source` has no distinct runtime consumer.**
+  `server/src/security/csrf.service.ts:30` supplies
+  `() => this.config.sessionSecret` as the double-submit CSRF secret, and no
+  `CSRF_SECRET` name exists in `client/`, `server/` or `packages/`. Category 4
+  still requires `csrf_secret_source` to be **distinct** from
+  `session_secret_source`: the validator rejects a child report unless all
+  twelve approved values are pairwise distinct
+  (`scripts/ops/check-launch-readiness.js:699`), and §3.4 states the same. A
+  record can therefore pass the validator with a `csrf_secret_source` that no
+  service reads. Approval requires the security lead to state which store source
+  backs the CSRF HMAC and how a distinct twelfth source reaches the runtime, or
+  to record that the twelfth field is a named derivation of
+  `session_secret_source` and have this checklist and the validator contract
+  corrected first.
+- **`smtp_secret_source` is injected under names the server does not read.**
+  `infra/env/production.env.example:54-55` defines `SMTP_USERNAME` and
+  `SMTP_PASSWORD`, while the server reads `SMTP_USER` and `SMTP_PASS`
+  (`server/src/config/env.validation.ts:318-319`, consumed through
+  `server/src/mail/adapters/smtp-mail.adapter.ts:28-29`). The Compose `api`
+  service adds no remapping and `scripts/ops/check-production-templates.sh`
+  asserts no SMTP name, so nothing closes the gap today. As checked in, the
+  injected SMTP credential would not reach the mail adapter. The operator's
+  inventory must show which name the production deployment actually injects, and
+  the template and server configuration must be reconciled before Category 2 or
+  Category 4 can rely on that source.
+- **`garage_metrics_secret_source` is injected but unconsumed.**
+  `GARAGE_METRICS_TOKEN` is mapped into the `garage` service
+  (`docker-compose.production.example.yml:165`), but `infra/garage/garage.toml`
+  defines only `rpc_secret` and `admin_token` — there is no `metrics_token` —
+  and `infra/prometheus/prometheus.yml` has no Garage scrape job, only
+  `prometheus`, `acres-api`, `acres-worker` and `acres-postgres`. The Garage
+  healthcheck targets `localhost:3903/health` unauthenticated. The operator
+  must state whether a Garage metrics credential and scrape target are in the
+  production design; if not, that source is provisioned without a consumer and
+  Category 4 would attest verified access to a secret nothing reads.
+- **The shared production env file is injected into four services.** `caddy`,
+  `next`, `api` and `worker` each load `../env/production.env.example` through
+  `env_file` (`infra/compose/docker-compose.production.example.yml:7,31,47,78`),
+  so every shared secret — including `POSTGRES_SUPERUSER_PASSWORD`,
+  `SESSION_SECRET`, `STORAGE_SECRET_ACCESS_KEY`, `SMTP_PASSWORD` and
+  `GRAFANA_ADMIN_PASSWORD` — is present in the Caddy and Next containers, which
+  consume none of it. The three Garage names are correctly service-scoped. The
+  operator's runtime injection inventory must show the scoping actually in force
+  in production, not this template's.
+
+Verified about the executable contract, for precision:
+`validSmtpSecretReference` is a regular expression only
+(`check-launch-readiness.js:635`), so a syntactically valid `env:NAME` or
+`file:/absolute/path` reference passes without proving protection,
+availability, separation or least privilege; the twelve-value distinctness rule
+runs only when the section status is `approved` and a child report is present
+(`:1647`); and the SMTP equality check against `credentials_source_reference`
+sits inside the `status === 'approved'` guard for Category 2 (`:1559`, `:1575`),
+so it does not run while Category 2 is unresolved. There is no executable
+cross-check between `secrets_management.injection_mechanism` and the twelve
+Category 4 sources; that alignment is operator-owned.
+
+The **security lead** must identify through the approved operator channel the
+designated production target, restricted evidence-store location, named
+security-lead approver, and the source and consumer of each of the twelve
+fields. Supply opaque identifiers for all twelve sources, a redacted
+secret-store access policy keyed to service identities, roles, least privilege
+and audit records, and a redacted runtime injection inventory for API, worker,
+migration job, PostgreSQL monitor, Valkey, Garage, SMTP and Grafana, plus a
+dated Category 4 decision. Read-only inspection of those sources is the next
+safe action, and every reference must be verified without fetching the
+underlying value. Never supply secret values, raw environment dumps, access
+tokens, signing keys, unredacted policies, recovery keys, or full connection
+strings. The migration,
+application and monitoring database identities must remain separate and the
+Garage RPC, admin, metrics and S3 sources must be scoped to their actual
+consumers, and the three source/consumer gaps recorded above must be answered —
+including which SMTP variable name production actually injects. Any plaintext
+exposure or invalid grant is routed through the operator's security and
+compromise procedure; grants and secrets are not changed under this assessment.
+Categories 1–3 and every other launch gate retain their prior unresolved state,
+and prompt 201 still governs the final eleven-category decision.
+
+Repository checks for this intake: `npm run ops:readiness-schema-test` passed
+(8/8); `node scripts/ops/check-launch-readiness.js
+infra/launch/readiness.example.json` exited 1 as designed with 11 required
+categories, 0 approved, 11 blocked and 70 blockers, including fourteen
+Category 4 blockers (twelve `__REQUIRED_SECRET_REF_*__` placeholders, the
+unresolved section status, and the empty evidence array);
+`sh scripts/ops/scan-secrets.sh` printed `secret/default scan passed`;
+`npm run ops:templates` printed `ops template check passed`;
+`npm run ops:check` exited 0 across all 19 script steps — `ops:templates` plus
+22 release-image tests, secret scan, Docker runtime, dependency audit with 0
+critical vulnerabilities and 16 reported (8 moderate, 8 high) in that run, 8
+schema tests, 103 readiness-validator tests, 10 reconciliation tests, 18 Caddy
+tests, 17 volume-encryption tests, 8 SBOM tests, SBOM license verification, 14
+SAST tests, a SAST gate reporting zero blockers and zero expired suppressions,
+11 container-security tests, container-security scan, 15 capacity tests, 23
+alert-rule tests and 13 launch-drill tests. `npm run lint`, `npm run typecheck`
+and `npm run build` (client Next and server Nest) exited 0,
+and `git diff --check` exited 0. No operator production source, secret store,
+granted access, or approval was inspected, and none of these repository results
+supplies Category 4 evidence.
+
 ### 5. SLOs, Alerting & Capacity (`slo_and_alerting`)
 
 - Drill/verify: `bash scripts/ops/run-capacity-alerting-drill.sh`,
