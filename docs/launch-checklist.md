@@ -81,6 +81,31 @@ do not report failure.
   - Requires `custom_certificates` to be an explicit boolean (`true` or `false`);
   - Rejects any malformed, future, or failed child report.
 
+**Prompt 205 Category 1 intake — 2026-09-26T20:23:52Z UTC.** Reviewed
+`dd1c933` on `main`. The repository contains only
+`infra/caddy/Caddyfile.example` and the unresolved
+`infra/launch/readiness.example.json`; no materialized production Caddyfile or
+Category 1 child report was available for this assessment. The schema test
+passed (1/1). The example readiness validator exited 1 as designed: 0 of 11
+categories approved, 11 blocked, 70 blockers. This is a repository assessment,
+not a claim about an operator's restricted evidence store. Category 1 remains
+**unresolved**; no Caddy verifier, public DNS, certificate, live HTTPS, or
+production readiness-record check was run against a real target.
+
+The ops lead must provide the selected FQDN, TLS contact, certificate mode,
+materialized Caddyfile path, public DNS and certificate evidence, observed live
+HTTPS headers, a dated HSTS decision with `max-age`, restricted evidence-store
+reference, and named Category 1 signer through the approved operator channel.
+Use opaque evidence references; do not place private keys, credentials, or raw
+host inventories in the repository. Read-only target access must be identified
+before live checks. HSTS activation requires a separate approved change window.
+Repository checks: `ops:templates`, lint, typecheck, and `git diff --check`
+passed. `ops:check` stopped at `ops:audit` because DNS resolution of
+`registry.npmjs.org` returned `EAI_AGAIN`; this is not an audit pass.
+`npm run build` failed in Next's TypeScript `--showConfig` parser, while the
+direct `tsc --showConfig` output parsed as JSON. Neither failure supplies
+production evidence or changes the unresolved Category 1 decision.
+
 ### 2. SMTP Delivery (`smtp_delivery`)
 
 - Drill/verify: test delivery via the configured provider, DKIM/SPF/DMARC DNS checks
