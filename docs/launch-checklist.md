@@ -447,6 +447,129 @@ supplies Category 4 evidence.
   - Validates child report `status: "success"`, valid nonfuture UTC `timestamp`, empty `failures` array, all summary flags `passed`, `alerts.valid: true`, `ruleCount >= 11`, all simulations `passed`, `capacity.compliance.overallPassed: true` with all individual compliance flags `true`, `databaseTelemetryBaseline.status: "verified"` with exporter/server up, zero waiting connections, acquisition p95 ≤ 50ms, query execution p95 ≤ 100ms, zero lock waits, and `dosResilience.status: "success"`;
   - Fails closed if approved evidence reports `summary.databaseBaselineCompliance: "failed"` or `databaseTelemetryBaseline.status: "breached"`.
 
+**Prompt 209 Category 5 intake — 2026-09-26T23:05:00Z UTC.** Reviewed
+`ff72920` on `main`; the only worktree change was this prompt. The
+repository-visible Category 5 material is the unresolved
+`infra/launch/readiness.example.json`, `infra/launch/readiness.schema.json`, the
+validator in `scripts/ops/check-launch-readiness.js:1657-1720` and `:457-545`,
+the 11 alert rules in `infra/prometheus/alerts.yml`, scrape configuration in
+`infra/prometheus/prometheus.yml`, the 28-panel operations dashboard in
+`infra/grafana/dashboards/acres-operations.json`,
+`scripts/ops/verify-alert-rules.js` and `scripts/ops/verify-capacity-load.js`
+with their test suites, `scripts/ops/run-capacity-alerting-drill.sh`, and
+`scripts/ops/launch-target-evidence.js`. No materialized production readiness
+record and no production `capacity-alerting-drill-evidence-*.json` child report
+exists in the repository: tracked files are limited to the template, schema,
+scripts, and tests. The local `backups/` directory is gitignored
+(`.gitignore:74`) and contains only locally generated dry-run and synthetic
+artifacts — including synthetic capacity reports running in `mode: "synthetic"`
+against `synthetic://in-process-evaluation`, simulated DoS exercises, and
+synthetic baseline database telemetry. That is a repository observation, not a
+statement about an operator's restricted evidence store. Category 5 remains
+**unresolved**. No live production benchmark, fresh production database
+telemetry extract, live Alertmanager routing evidence, or dated SRE-lead
+decision was supplied for independent inspection. No live traffic was sent, no
+alert was dispatched to on-call receivers, and no production monitoring
+configuration was modified.
+
+Four verified facts and architecture constraints the operator and the SRE lead
+must resolve:
+
+- **Alert rule simulation is not proof of live firing or on-call delivery.**
+  `infra/prometheus/alerts.yml` defines the 11 required alerts (`AcresApiDown`,
+  `AcresWorkerDown`, `PostgresDown`, `PostgresExporterDown`, `HighHttp5xxRate`,
+  `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`,
+  `OutboxDeliveryLag`, `HighHttpConcurrency`,
+  `DatabaseConnectionPoolSaturation`). All 11 rules pass static PromQL parsing,
+  duration format, label schema, metric identifier mapping, and breach/clear
+  simulations in `scripts/ops/verify-alert-rules.js`. However, simulation tests
+  expressions in-process against generated sample points; it does not prove
+  live Prometheus evaluation, scrape reachability, network connectivity to
+  Alertmanager, or delivery to an on-call human.
+- **No Alertmanager receiver or on-call route is configured in this repository.**
+  As noted in `docs/operations.md` §Phase 12E and prompt 167, the Compose profile
+  (`infra/compose/docker-compose.production.example.yml`) deploys Prometheus
+  and Grafana, but contains no Alertmanager service or receiver configuration.
+  Alert routing (PagerDuty, Opsgenie, webhook, or email) is an external,
+  operator-managed responsibility. Approval requires verified receipt evidence
+  from the actual on-call channel, not repository configuration alone.
+- **Database telemetry baseline isolates pool exhaustion from query execution bottlenecks.**
+  The required `databaseTelemetryBaseline` contract enforces PostgreSQL exporter
+  `up == 1`, `lastScrapeError == 0`, and database server `pgUp == 1`, zero
+  connection pool requests waiting (`requestsWaiting == 0`), acquisition p95
+  latency ≤ 50ms, query execution p95 latency ≤ 100ms, and zero lock waits
+  (`lockWaits == 0`). Elevated acquisition latency (Grafana panels 23 and 24,
+  `acres_postgres_pool_acquisition_duration_seconds`) indicates pool checkout
+  queueing or exhaustion, while elevated query execution latency (panels 25 and
+  26, `acres_database_query_duration_seconds`) with normal acquisition isolates
+  unoptimized queries, missing indexes, or table locks. Both signals must be
+  drawn from a live Prometheus scrape bound to the production target.
+- **Local drill runner defaults to synthetic mode and cannot be labeled production proof.**
+  When run without `--target-url` and `--database-telemetry-file`,
+  `scripts/ops/run-capacity-alerting-drill.sh` executes against in-process
+  synthetic workloads, emitting `mode: "synthetic"` and synthetic database
+  telemetry (`source: "synthetic"`). `scripts/ops/launch-target-evidence.js`
+  enforces that live target evidence must have `source: "prometheus-live-scrape"`,
+  match the expected target ID, carry a fresh nonfuture timestamp within the
+  drill window, and have `probeHealthy: true`. Synthetic or dry-run drill
+  success cannot support production launch approval.
+
+Verified about the executable contract, for precision:
+`scripts/ops/check-launch-readiness.js` validates that an approved
+`slo_and_alerting` section defines `availability_target_percent` between 99.9
+and 100.0%, `max_p95_latency_ms` > 0 and ≤ 500ms, `capacity_target_rps` ≥ 100
+RPS, `max_database_acquisition_p95_latency_ms` > 0 and ≤ 50ms, and
+`max_database_query_p95_latency_ms` > 0 and ≤ 100ms. It requires
+`alert_recipients` to be a non-empty array with no placeholders,
+`alert_thresholds_defined: true`, and a valid `escalation_runbook_ref`. For
+evidence, the validator requires at least one concrete child JSON report
+matching `isCapacityAlertingCandidate`, verifying `status: "success"`, real
+nonfuture UTC timestamp, empty `failures` array, all four summary flags
+`passed`, `alerts.valid: true`, `ruleCount >= 11`, 11 passing simulations,
+`capacity.compliance.overallPassed: true` with all seven individual compliance
+flags `true`, `databaseTelemetryBaseline.status: "verified"` with exporter and
+server up, zero waiting connections, acquisition p95 ≤ 50ms, query p95 ≤ 100ms,
+zero lock waits, and `dosResilience.status: "success"`. The validator checks
+internal structural consistency; it cannot authenticate live Prometheus scrapes
+or confirm that an on-call engineer received a test page.
+
+The **SRE lead** and **operations lead** must provide through the approved
+operator channel the designated production target URL, API origin, change
+window, and observer; the formally signed SLO policy (availability ≥ 99.9%,
+HTTP p95 ≤ 500ms, capacity ≥ 100 RPS, db acquisition p95 ≤ 50ms, db query
+p95 ≤ 100ms); the verified on-call recipient(s) and active escalation runbook
+reference (`docs/launch-checklist.md` §5); dated delivery and receipt evidence
+from the live alert routing channel; fresh, target-bound Prometheus database
+telemetry (`source: "prometheus-live-scrape"`); live capacity benchmark
+results; and a dated Category 5 approval signature on an operator readiness
+record. Read-only inspection of those safe sources in the restricted store is
+the next safe action. Any live load drill, DoS resilience test, or alert
+injection requires separate authorization specifying target, profile, ceilings,
+operator, window, abort criteria, and observer. Categories 1–4 and all other
+launch gates retain their prior unresolved state, and prompt 201 governs the
+final eleven-category sign-off.
+
+Repository checks for this intake: `npm run ops:readiness-schema-test` passed
+(8/8); `node scripts/ops/check-launch-readiness.js
+infra/launch/readiness.example.json` exited 1 as designed with 11 required
+categories, 0 approved, 11 blocked, and 70 blockers, including four Category 5
+blockers (unresolved `alert_recipients[0]` placeholder, unresolved
+`escalation_runbook_ref` placeholder, unresolved section status, and empty
+evidence array); `npm run ops:templates` printed `ops template check passed`;
+`npm run ops:alert-test` passed (23/23 tests); `npm run ops:capacity-test`
+passed (15/15 tests); `npm run ops:check` exited 0 across all 19 sub-suites —
+template check, 22 release-image tests, secret scan, Docker runtime, dependency
+audit with 0 critical vulnerabilities and 16 reported (8 moderate, 8 high), 8
+schema tests, 103 readiness-validator tests, 10 reconciliation tests, 18 Caddy
+tests, 17 volume-encryption tests, 8 SBOM tests, SBOM license verification, 14
+SAST tests, a SAST gate reporting zero blockers and zero expired suppressions,
+11 container-security tests, container-security scan, 15 capacity tests, 23
+alert-rule tests, and 13 launch-drill tests. `npm run lint`, `npm run typecheck`,
+and `npm run build` (client Next 16.3.4 webpack, NestJS, and shared) exited 0
+across all workspaces, and `git diff --check` exited 0. No operator production
+source, live scrape, benchmark, alert delivery, or approval was inspected, and
+none of these repository results supplies Category 5 evidence.
+
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
 - Drill/verify: `bash scripts/ops/run-restore-drill.sh --dry-run`,
