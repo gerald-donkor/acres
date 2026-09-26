@@ -182,3 +182,4 @@ The launch readiness validator (`scripts/ops/check-launch-readiness.js`) and its
   - `unpaid_provider_excluded: true`
   - `phase11_status: "implemented_unpaid_preview_excluded_from_launch"`
 - Any inclusion of `GEMINI_API_KEY` in production secret references or readiness records is rejected as a contradiction.
+- Approved no-AI launch posture also requires a structured production child JSON report with separate API and worker runtime inventory references, passing analytics/dashboard, governed-report, and export-download journey references, and an unpaid-provider exclusion policy reference. The validator checks schema and consistency, while the operator verifies the underlying live evidence.

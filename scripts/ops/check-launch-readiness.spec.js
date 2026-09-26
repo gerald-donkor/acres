@@ -30,6 +30,8 @@ const {
   validateDataRetentionPolicyReport,
   isGraphqlIntrospectionCandidate,
   validateGraphqlIntrospectionReport,
+  isNoAiPostureCandidate,
+  validateNoAiPostureReport,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -343,6 +345,26 @@ const validGraphqlIntrospectionReport = {
   },
 };
 fs.writeFileSync(graphqlIntrospectionFixturePath, JSON.stringify(validGraphqlIntrospectionReport));
+const noAiFixturePath = path.join(restoreFixtureDir, 'no-ai-posture-valid.json');
+const validNoAiReport = {
+  drill_type: 'no_ai_production_posture_verification',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  errors: [],
+  environment: 'production',
+  runtime: {
+    api: { ai_draft_enabled: false, gemini_api_key_present: false, inventory_reference: 'inventory:api-prod-2026-08-28' },
+    worker: { ai_draft_enabled: false, gemini_api_key_present: false, inventory_reference: 'inventory:worker-prod-2026-08-28' },
+  },
+  journeys: {
+    analytics_dashboard: { passed: true, test_reference: 'run:analytics-dashboard-2026-08-28' },
+    governed_report: { passed: true, test_reference: 'run:governed-report-2026-08-28' },
+    export_download: { passed: true, test_reference: 'run:export-download-2026-08-28' },
+  },
+  unpaid_provider_excluded: true,
+  provider_policy_reference: 'policy:production-no-ai-v1',
+};
+fs.writeFileSync(noAiFixturePath, JSON.stringify(validNoAiReport));
 test.after(() => fs.rmSync(restoreFixtureDir, { recursive: true, force: true }));
 
 function buildValidApprovedRecord() {
@@ -489,6 +511,7 @@ function buildValidApprovedRecord() {
         phase11_status: 'implemented_unpaid_preview_excluded_from_launch',
         approver: 'product-and-security-lead',
         evidence: [
+          noAiFixturePath,
           'Deterministic report authoring, exports, and analytics verified with AI_DRAFT_ENABLED=false',
           'Absence of GEMINI_API_KEY verified in production environment inventory and container images',
           'Unpaid Gemini Developer API preview confirmed excluded from production launch profile',
@@ -861,6 +884,72 @@ test('validateReadiness rejects ai_enabled: true with the launch-exclusion fatal
     ),
     `Expected launch exclusion fatal blocker, got: ${JSON.stringify(aiBlockers)}`
   );
+});
+
+test('approved no-AI posture requires a production child, not prose or a dossier', () => {
+  const record = buildValidApprovedRecord();
+  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.optional_ai_posture, undefined);
+  assert.equal(isNoAiPostureCandidate({ parsed: {} }), true);
+  assert.equal(isNoAiPostureCandidate({ parsed: [] }), false);
+  record.sections.optional_ai_posture.evidence = ['No-AI journeys and runtime inventory checked'];
+  assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /child JSON report is required/);
+  record.sections.optional_ai_posture.evidence = [deploymentDrillFixturePath];
+  assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
+});
+
+test('no-AI posture report rejects failed, incomplete, nonproduction and secret-bearing claims', () => {
+  const approved = buildValidApprovedRecord().sections.optional_ai_posture;
+  assert.equal(validateNoAiPostureReport(validNoAiReport, fixedNow, approved), true);
+  const mutations = [
+    (r) => { r.timestamp = '2026-02-30T12:00:00.000Z'; },
+    (r) => { r.timestamp = '2027-01-01T00:00:00.000Z'; },
+    (r) => { r.status = 'failed'; },
+    (r) => { r.errors = ['runtime inspection failed']; },
+    (r) => { r.environment = 'staging'; },
+    (r) => { r.runtime.api.ai_draft_enabled = true; },
+    (r) => { r.runtime.worker.gemini_api_key_present = true; },
+    (r) => { r.runtime.api.inventory_reference = ''; },
+    (r) => { delete r.runtime.worker; },
+    (r) => { r.runtime.client = r.runtime.api; },
+    (r) => { r.runtime['api,worker'] = r.runtime.api; delete r.runtime.api; delete r.runtime.worker; },
+    (r) => { r.journeys.analytics_dashboard.passed = false; },
+    (r) => { delete r.journeys.governed_report; },
+    (r) => { r.journeys.export_download.test_reference = ''; },
+    (r) => { r.journeys.extra = { passed: true, test_reference: 'run:extra' }; },
+    (r) => { r.unpaid_provider_excluded = false; },
+    (r) => { r.provider_policy_reference = ''; },
+    (r) => { r.provider_policy_reference = '__REQUIRED_POLICY__'; },
+    (r) => { r.runtime.api.gemini_api_key = 'vault:prod#gemini'; },
+    (r) => { delete r.drill_type; },
+    (r) => { r.extra = true; },
+    (r) => { r['drill_type,environment'] = r.drill_type; delete r.drill_type; delete r.environment; },
+  ];
+  for (const mutate of mutations) {
+    const report = structuredClone(validNoAiReport);
+    mutate(report);
+    assert.equal(validateNoAiPostureReport(report, fixedNow, approved), false, JSON.stringify(report));
+  }
+  approved.no_ai_path_verified = false;
+  assert.equal(validateNoAiPostureReport(validNoAiReport, fixedNow, approved), false);
+});
+
+test('no-AI approval accepts a custom child path and rejects mixed wildcard children', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-no-ai-'));
+  try {
+    const good = path.join(dir, 'custom.json');
+    const bad = path.join(dir, 'other.json');
+    fs.writeFileSync(good, JSON.stringify(validNoAiReport));
+    const record = buildValidApprovedRecord();
+    record.sections.optional_ai_posture.evidence = [good];
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.optional_ai_posture, undefined);
+    fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
+    record.sections.optional_ai_posture.evidence = [path.join(dir, '*.json')];
+    assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
+    fs.writeFileSync(bad, JSON.stringify({ ...validNoAiReport, status: 'failed' }));
+    assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('validateReadiness fails closed when no_ai_path_verified is false on approved record', () => {
@@ -2450,9 +2539,10 @@ test('static integrity child evidence accepts exact success and rejects contradi
     const file = path.join(dir, 'static-integrity-evidence-test.json');
     const good = runChecks(() => ({ status: 0 }));
     const record = buildValidApprovedRecord();
-    record.sections.optional_ai_posture.evidence = [file];
+    record.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, reconciliationFixturePath, file];
+    const readBlockers = () => validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
     fs.writeFileSync(file, JSON.stringify(good));
-    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.optional_ai_posture, undefined);
+    assert.deepEqual(readBlockers(), []);
 
     const mutations = [
       (value) => { value.checks[0].passed = false; },
@@ -2468,7 +2558,7 @@ test('static integrity child evidence accepts exact success and rejects contradi
       const changed = structuredClone(good);
       mutate(changed);
       fs.writeFileSync(file, JSON.stringify(changed));
-      const blockers = validateApprovedRecord(record).categoryBlockers.optional_ai_posture || [];
+      const blockers = readBlockers();
       assert.ok(blockers.some((blocker) => blocker.includes('invalid static integrity evidence')), JSON.stringify(blockers));
     }
   } finally {
@@ -2545,18 +2635,19 @@ test('static integrity dossier baseline and compliance must agree with approval'
   try {
     const file = path.join(dir, 'launch-evidence-dossier-static.json');
     const record = buildValidApprovedRecord();
-    record.sections.optional_ai_posture.evidence = [file];
+    record.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, reconciliationFixturePath, file];
+    const readBlockers = () => validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
     const good = { overall_status: 'PASSED', staticIntegrityBaseline: { status: 'verified' },
       summary: { staticIntegrity: 'passed', staticIntegrityCompliance: 'passed' } };
     fs.writeFileSync(file, JSON.stringify(good));
-    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.optional_ai_posture, undefined);
+    assert.deepEqual(readBlockers(), []);
     for (const changed of [
       { ...good, staticIntegrityBaseline: { status: 'breached' } },
       { ...good, summary: { ...good.summary, staticIntegrityCompliance: 'failed' } },
       { ...good, staticIntegrityBaseline: {} },
     ]) {
       fs.writeFileSync(file, JSON.stringify(changed));
-      assert.ok(validateApprovedRecord(record).categoryBlockers.optional_ai_posture?.length);
+      assert.ok(readBlockers().length);
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

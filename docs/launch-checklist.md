@@ -360,10 +360,29 @@ do not report failure.
 ### 11. No-AI Production Posture (`optional_ai_posture`)
 
 - Drill/verify: `node scripts/ops/check-launch-readiness.js <record>` (fail-closed AI gates)
-- Evidence: no-AI journey verification log, production env inventory showing no `GEMINI_API_KEY`
+- Evidence: reference a concrete no-AI production posture child JSON report in
+  `evidence`, with redacted API and worker runtime inventories, no-AI journey
+  test run references, and a production provider policy reference. The child has
+  exactly these top-level fields:
+  - `drill_type: "no_ai_production_posture_verification"`, real nonfuture ISO UTC
+    `timestamp`, `status: "success"`, `errors: []`, `environment: "production"`;
+  - `runtime.api` and `runtime.worker`, each containing exactly
+    `ai_draft_enabled: false`, `gemini_api_key_present: false`, and a nonempty
+    `inventory_reference` to a redacted live runtime inventory;
+  - `journeys.analytics_dashboard`, `journeys.governed_report`, and
+    `journeys.export_download`, each containing exactly `passed: true` and a
+    nonempty `test_reference` to the corresponding production no-AI run;
+  - `unpaid_provider_excluded: true` and a nonempty
+    `provider_policy_reference`.
 - Accept: `ai_enabled: false`, `no_ai_path_verified: true`,
   `server_ai_draft_enabled_false: true`, `no_gemini_api_key_provisioned: true`,
-  `unpaid_provider_excluded: true`, non-empty `phase11_status`
+  `unpaid_provider_excluded: true`, non-empty `phase11_status`, and all referenced
+  Category 11 JSON reports passing the child contract. A custom path is valid;
+  prose, a unified dossier alone, missing reports, and failed wildcard matches
+  do not qualify. The validator checks report consistency only. The operator
+  must inspect the referenced production API and worker inventories, verify
+  absence of `GEMINI_API_KEY` without exposing values, run the deterministic
+  journeys, and review the provider policy before approval.
 
 ## 4. Unified Drill Execution & Evidence Dossier
 

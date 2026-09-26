@@ -797,6 +797,53 @@ function validateGraphqlIntrospectionReport(report, now, approved) {
   return true;
 }
 
+const NO_AI_JOURNEYS = ['analytics_dashboard', 'governed_report', 'export_download'];
+
+function hasExactKeys(value, keys) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function isNoAiPostureCandidate({ parsed } = {}) {
+  // A custom-named child qualifies by content; a dossier remains invalid evidence.
+  return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+}
+
+function validateNoAiPostureReport(report, now, approved) {
+  if (!isNoAiPostureCandidate({ parsed: report }) ||
+      !hasExactKeys(report, ['drill_type', 'timestamp', 'status', 'errors', 'environment',
+        'runtime', 'journeys', 'unpaid_provider_excluded', 'provider_policy_reference']) ||
+      report.drill_type !== 'no_ai_production_posture_verification' ||
+      report.status !== 'success' || report.environment !== 'production' ||
+      !Array.isArray(report.errors) || report.errors.length !== 0 ||
+      report.unpaid_provider_excluded !== true ||
+      typeof report.provider_policy_reference !== 'string' || !report.provider_policy_reference.trim()) return false;
+
+  const timestamp = parseSmtpTimestamp(report.timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!timestamp || timestamp > evalNow ||
+      !approved || approved.status !== 'approved' || approved.ai_enabled !== false ||
+      approved.no_ai_path_verified !== true || approved.server_ai_draft_enabled_false !== true ||
+      approved.no_gemini_api_key_provisioned !== true || approved.unpaid_provider_excluded !== true ||
+      !hasExactKeys(report.runtime, ['api', 'worker']) ||
+      !hasExactKeys(report.journeys, NO_AI_JOURNEYS)) return false;
+
+  for (const service of ['api', 'worker']) {
+    const runtime = report.runtime[service];
+    if (!hasExactKeys(runtime, ['ai_draft_enabled', 'gemini_api_key_present', 'inventory_reference']) ||
+        runtime.ai_draft_enabled !== false || runtime.gemini_api_key_present !== false ||
+        typeof runtime.inventory_reference !== 'string' || !runtime.inventory_reference.trim()) return false;
+  }
+  for (const journey of NO_AI_JOURNEYS) {
+    const result = report.journeys[journey];
+    if (!hasExactKeys(result, ['passed', 'test_reference']) || result.passed !== true ||
+        typeof result.test_reference !== 'string' || !result.test_reference.trim()) return false;
+  }
+  const blockers = [];
+  checkPlaceholdersAndSecrets(report, 'no_ai_posture_report', blockers);
+  return blockers.length === 0;
+}
+
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -1358,6 +1405,7 @@ function validateReadiness(record, _filePath, options = {}) {
   const secretReferenceEvidence = [];
   const retentionEvidence = [];
   const graphqlEvidence = [];
+  const noAiEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -1439,6 +1487,7 @@ function validateReadiness(record, _filePath, options = {}) {
             if (sectionName === 'secret_references') secretReferenceEvidence.push(...parsedFiles);
             if (sectionName === 'data_retention_policy') retentionEvidence.push(...parsedFiles);
             if (sectionName === 'graphql_introspection') graphqlEvidence.push(...parsedFiles);
+            if (sectionName === 'optional_ai_posture') noAiEvidence.push(...parsedFiles);
           }
         });
       }
@@ -1998,6 +2047,12 @@ function validateReadiness(record, _filePath, options = {}) {
           "Field 'phase11_status' is required and must be a non-empty string"
         );
       }
+      const noAiCandidates = noAiEvidence.filter(isNoAiPostureCandidate);
+      if (noAiCandidates.length === 0) {
+        addBlocker('optional_ai_posture', 'A successful no-AI production posture child JSON report is required');
+      } else if (noAiCandidates.some(({ parsed }) => !validateNoAiPostureReport(parsed, now, aiSec))) {
+        addBlocker('optional_ai_posture', 'A referenced no-AI production posture report is invalid or failed');
+      }
     }
   }
 
@@ -2112,4 +2167,6 @@ module.exports = {
   validateDataRetentionPolicyReport,
   isGraphqlIntrospectionCandidate,
   validateGraphqlIntrospectionReport,
+  isNoAiPostureCandidate,
+  validateNoAiPostureReport,
 };

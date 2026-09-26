@@ -1131,3 +1131,20 @@ typecheck, build, and `git diff --check` passed cleanly. The unresolved example
 remained blocked (0 approved categories, 11 blocked, 70 blockers). Actual
 production ingress probe execution and security audit remain operator-owned
 launch work.
+
+**Prompt 200 verification (2026-09-26):** Approved Category 11 now requires a
+concrete `no_ai_production_posture_verification` child JSON report referenced in
+`evidence`. It must describe the production environment, have a real nonfuture
+UTC timestamp and successful status with no errors, and contain separate API and
+worker runtime assertions (`ai_draft_enabled: false`,
+`gemini_api_key_present: false`) with redacted inventory references. The
+analytics/dashboard, governed-report, and export-download journeys must each
+pass with a test-run reference, and unpaid-provider exclusion requires a policy
+reference. The validator rejects missing, extra, malformed, failed, or
+contradictory fields, prose/dossier-only evidence, and failed reports mixed
+into wildcard matches. The readiness suite passed 103/103; `ops:templates`,
+`ops:check`, lint, typecheck, build, and `git diff --check` passed. The
+checked-in example still failed closed (0 approved categories, 11 blocked,
+70 blockers). This child report records operator assertions and pointers;
+production runtime inventory inspection, actual journey execution, policy
+review, and launch sign-off remain operator-owned.
