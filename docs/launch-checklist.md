@@ -128,6 +128,40 @@ production evidence or changes the unresolved Category 1 decision.
   provider and public DNS. This validator checks the report's consistency;
   it cannot authenticate a hand-authored report or conduct a live mail test.
 
+**Prompt 206 Category 2 intake — 2026-09-26T20:35:04Z UTC.** Reviewed
+`8c3bb6c` on `main`. The repository-visible SMTP material is the unresolved
+`infra/launch/readiness.example.json` and validator fixtures; no materialized
+production readiness record or SMTP delivery child report was available for
+this assessment. This does not establish whether an operator's restricted
+evidence store contains either. Category 2 remains **unresolved**. No provider
+receipt, controlled-recipient delivery event, public SPF/DKIM/DMARC printout,
+message authentication result, runtime configuration, delivery/bounce policy,
+or dated ops-lead sign-off was supplied for independent inspection. No live
+mail was sent and no DNS or provider configuration was changed.
+
+The **ops lead** must identify the production provider and relay host, port,
+transport mode, sender/domain, controlled test recipient, delivery policy,
+bounce/abuse procedure, restricted evidence-store location, and named signer
+through the approved operator channel. Supply opaque references to a real
+delivered receipt, its authentication result, dated SPF/DKIM/DMARC printouts,
+the indirect credential source matching `secret_references.smtp_secret_source`,
+and dated Category 2 approval. Read-only inspection of those sources is the
+next safe action. A new test delivery requires separate authorization naming
+the provider, sender, recipient, operator, purpose, and time window. Category
+4 can remain unresolved during Category 2 inspection, but the SMTP reference
+must match across the two sections. Category 1 and all other launch gates
+retain their prior unresolved state.
+
+Repository checks for this intake: `ops:readiness-schema-test` passed (1/1),
+`ops:templates` passed, lint and typecheck exited 0, and `git diff --check`
+exited 0. The example readiness validator exited 1 as designed: 0 of 11
+categories approved, 11 blocked, 70 blockers, including eight Category 2
+blockers. `ops:check` stopped at `ops:audit` because DNS lookup of
+`registry.npmjs.org` returned `EAI_AGAIN`; the earlier template, image,
+secret/default and Docker checks passed. `npm run build` failed during the
+client Next 16.3.4 build with `Could not parse output from TypeScript's
+--showConfig`. Neither failed check supplies or invalidates live SMTP proof.
+
 ### 3. Secrets Management (`secrets_management`)
 
 - Drill/verify: `scripts/ops/scan-secrets.sh`, `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`
