@@ -700,6 +700,96 @@ parameters, credentials, or product user/tenant identifiers.
    `bash scripts/ops/run-restore-drill.sh`, reconcile objects with
    `node scripts/ops/reconcile-storage-objects.js`, then promote.
 
+## 6A. Production evidence preflight gap register — 2026-09-26
+
+Assessment: 2026-09-26T19:39:25Z UTC; reviewed source commit `3da8949` on
+`main`. This is a repository-visible assessment only. No operator-controlled
+production record, live source, restricted evidence store, or approver decision
+was inspected. The checked-in example is a template, not an operator record.
+`node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`
+exited 1 as designed: **11 required, 0 approved, 11 unresolved, 70 blockers**.
+Every category below retains launch status **unresolved**. "Available but
+unverified" refers only to repository scripts, templates, or policy text; it
+does not describe a live production condition. The missing production evidence
+is classified **missing** from the repository assessment, not asserted absent
+from an operator's private store.
+
+| category | repository-visible state and missing operator decision/value | required child artifact and independently checked live source | supplier / approver; next safe action |
+| --- | --- | --- | --- |
+| `production_domain_tls` | Available but unverified: Caddy example and verifier. Missing: selected FQDN, TLS contact, certificate mode, HSTS decision, approval. Unresolved. | Successful Caddy routing child JSON; inspect materialized Caddyfile, public DNS, issued certificate and live HTTPS headers. A template Stage 3 report is insufficient. | Ops lead; identify the approved target and provide redacted DNS/TLS and HSTS decision references for read-only inspection. |
+| `smtp_delivery` | Available but unverified: readiness contract. Missing: provider, host/port/TLS mode, sender, indirect SMTP secret reference, delivery and bounce policies, approval. Unresolved. | SMTP delivery child JSON; independently inspect provider delivery receipt and public SPF/DKIM/DMARC printouts. | Ops lead; provide opaque provider and policy references and authorize a later test delivery separately. |
+| `secrets_management` | Available but unverified: scan and rotation drill code. Missing: runtime injection mechanism, masking policy, cadence decision (≤90 days), compromise runbook, approval. Unresolved. | Successful secret rotation child JSON for seven classes and steps; inspect live injector policy, redacted audit, and separately authorized live rotation evidence. Stage 5 is dry-run only. | Security lead; provide policy and redacted injector/audit references for read-only inspection; arrange separate rotation authority. |
+| `secret_references` | Available but unverified: twelve-field validator. Missing: twelve distinct indirect references for session, CSRF, DB migrator/app/monitor, Valkey, Garage RPC/admin/metrics/S3, SMTP, Grafana; approval. Unresolved. | Secret-reference-policy child JSON; inspect redacted live store access policies and runtime injection inventory, never secret values. | Security lead; supply opaque store-reference identifiers and policy evidence. |
+| `slo_and_alerting` | Available but unverified: eleven alert rules, dashboards and threshold contract. Missing: operator adoption of ≥99.9% availability, ≤500 ms HTTP p95, ≥100 RPS, ≤50 ms DB acquisition p95, ≤100 ms DB query p95, recipients, escalation, alert delivery and approval. Unresolved. | Successful capacity-alerting child JSON with fresh target-bound Prometheus database telemetry; inspect live scrape/benchmark results, alert routes, delivery receipts and all eleven rules. Synthetic checks do not prove capacity. | SRE lead and on-call team; provide target/telemetry and routing references, then authorize any live load or DoS exercise separately. |
+| `backup_and_disaster_recovery` | Available but unverified: restore/reconciliation scripts and example one-hour/four-hour objectives. Missing: approved RPO ≤1h, RTO ≤4h, UTC schedule, encrypted off-host destination, isolated target, completed restore/reconciliation and approval. Unresolved. | Successful restore and object-reconciliation child JSON reports; independently inspect actual backup completion/freshness, encrypted transfer, PostgreSQL/Garage coverage, isolated restore parity and object inventory. | SRE lead; provide redacted backup and isolated-target references; authorize restore operation separately. |
+| `data_retention_policy` | Available but unverified: fixed example windows (7d quarantine, 1d rejected objects, 30d exports/backups, 15d telemetry). Missing: approved account, audit and report windows, scheduled cleanup verification, legal approval. Unresolved. | Retention-policy-review child JSON; inspect signed policy and live cleanup schedule/results for all eight fields. | Legal lead with operations; provide opaque policy and cleanup evidence references. |
+| `volume_encryption` | Available but unverified: mount verifier. Missing: selected LUKS2/CMEK-class mechanism, three encrypted mount paths, key separation, key-recovery owner and approval. Unresolved. | Successful volume-encryption child JSON; inspect live PostgreSQL, Valkey and Garage mount encryption plus separated key custody and recovery procedure. | Security lead and key-recovery owner; provide redacted mount and custody references for read-only inspection. |
+| `graphql_introspection` | Available but unverified: example says disabled. Missing: operator production policy decision, live route result and approval. Unresolved. | GraphQL-introspection-probe child JSON; independently probe the designated production `/graphql` ingress and inspect response without exposing schema data. | Security lead; provide policy reference and authorize a read-only route probe. |
+| `deployment_and_rollback` | Available but unverified: deployment drill and image checks. Missing: host profile, registry, deployment approver, rollback authority, provenance policy, reviewed 40-hex source commit, immutable current/previous client/server image pairs, provenance artifacts, live drill and approval. Unresolved. | Successful deployment child JSON and distinct client/server provenance evidence; inspect registry manifests, signatures, materialized Compose, release preflight, live promotion and rollback observations. | Release manager, deployment approver and rollback authority; provide opaque release/provenance references and approve any live change in a later window. |
+| `optional_ai_posture` | Available but unverified: example declares AI disabled and Phase 11A excluded. Missing: verified API/worker `AI_DRAFT_ENABLED=false`, absent `GEMINI_API_KEY`, unpaid-provider exclusion, three deterministic journeys and product/security approval. Unresolved. | No-AI production posture child JSON; inspect redacted live API/worker inventories, provider policy and analytics dashboard, governed report and export download run results. | Product and security leads; provide opaque inventory, policy and journey-run references. |
+
+### Shared prerequisites and stage binding
+
+- **Materialized Caddyfile and Compose file, approved domain/HSTS and host** block
+  Categories 1 and 10 and Stage 3 (`ingress_deployment`). Stage 3's routing
+  and deployment children must bind to the selected files and live API origin.
+- **Approved benchmark URL and API origin, fresh target-bound Prometheus
+  telemetry, on-call routing** block Category 5 and Stage 6
+  (`capacity_alerting`). The API URL is an origin. Stage 6 requires live
+  target IDs, scrape health and database baseline; its alert simulations do
+  not prove delivery. Live load and DoS need separate authorization.
+- **Isolated restore target, current encrypted off-host backups, and object
+  inventory** block Category 6 and Stage 7 (`disaster_recovery`). The restore
+  and reconciliation tools require reachable drill infrastructure even when
+  invoked with `--dry-run`.
+- **Immutable current/previous client and server image pairs, source commit,
+  signatures, provenance policy, and restricted evidence store** block
+  Category 10 and Stage 3. Runtime secret-store references block Categories 2,
+  3 and 4. Key-recovery custody blocks Category 8. Named deployment approver,
+  rollback authority, maintenance window and live-action approval block a
+  production promotion/rollback. Legal, SRE, security, ops and product/security
+  sign-off authorities remain required for their matrix rows below.
+- **Stage 5 (`secret_rotation`) runs with `--dry-run` even in a targeted
+  seven-stage drill.** Its report cannot establish a live rotation. The
+  operator must verify separate authorized rotation and compromise evidence
+  before Category 3 approval. A 7/7 dossier is drill evidence, not human
+  sign-off or proof of production promotion.
+
+### Operator handoff
+
+For prompt 201, request only the named role or team for each row, opaque
+references to the operator-controlled records and restricted evidence store,
+and read-only access to inspect those records and live sources. Request the
+selected target identifiers through an approved operator channel, without
+placing private hosts or credentials in chat or git. Do not send passwords,
+tokens, connection strings, raw inventories, key material, or unredacted
+reports. Separate authorizations must name the exact target, action, authority
+and window for any live benchmark/DoS, SMTP test, restore, HSTS activation,
+deployment, rollback, or secret rotation. No such authorization or target has
+been supplied by this preflight.
+
+**Parameterized targeted drill example — NOT EXECUTED:** flags checked against
+`scripts/ops/run-launch-drills.sh`; use only after the above target and
+live-action approvals.
+
+```bash
+bash scripts/ops/run-launch-drills.sh \
+  --caddyfile <materialized-production-Caddyfile> \
+  --compose-file <materialized-production-Compose-file> \
+  --allow-hsts \
+  --target-url <approved-benchmark-URL> \
+  --api-url <approved-API-origin> \
+  --database-telemetry-file <fresh-target-bound-Prometheus-evidence.json> \
+  --evidence-dir <restricted-evidence-directory>
+```
+
+The template's `$schema` points to `infra/launch/readiness.schema.json`, which
+is absent in this checkout. The executable contract is the validator and the
+category child-report requirements above; prompt 201's schema-file reference
+is stale. This does not loosen any validator gate. Resolve documentation or
+schema expectations in a separate implementation prompt if operators require
+a standalone schema.
+
 ## 7. Formal Pre-Launch Sign-off Matrix
 
 | # | category | verifier command | approved by | signature / date |
