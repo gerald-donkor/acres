@@ -1220,6 +1220,58 @@ of the repository checks proves a production promotion or rollback.
   absence of `GEMINI_API_KEY` without exposing values, run the deterministic
   journeys, and review the provider policy before approval.
 
+**Prompt 215 Category 11 intake — 2026-09-27T20:46:50Z UTC.** Reviewed
+`6f29a63` on `main`. The repository-visible readiness record is only the
+unresolved `infra/launch/readiness.example.json`: Category 11 has
+`no_ai_path_verified: false`, `server_ai_draft_enabled_false: false`,
+`no_gemini_api_key_provisioned: false`, `unpaid_provider_excluded: false`, no
+approver, and no evidence. No selected production deployment/release identity,
+operator-owned readiness record, restricted evidence-store location, redacted
+API or worker inventory, production provider-policy sign-off, production
+journey run, Category 11 child JSON report, or dated product/security decision
+was available in the approved repository paths for inspection. This does not
+establish what may exist in the operator's restricted store. Category 11 stays
+**unresolved**; the §7 product/security signature stays blank.
+
+The repository's `AI_DRAFT_ENABLED=false` default, Phase 11A policy text,
+and locally mocked Playwright journeys support the intended no-AI design,
+but do not prove the selected production API and worker runtime states or
+deployed tenant journeys. No production `AI_DRAFT_ENABLED=false` runtime
+assertion, `GEMINI_API_KEY` absence assertion for environments and secret
+mounts, unpaid-provider exclusion policy, or
+analytics/dashboard, governed-report, and export-download result was inspected.
+The Category 11 validator checks child-report structure and consistency; even
+a passing child would require independent inspection of its live sources.
+
+The **product and security leads** must provide opaque references and read-only
+access to the selected deployment/release and restricted evidence store; separate
+redacted API and worker runtime inventories showing the flag disabled and the
+key absent without exposing values; the approved provider policy; and three
+timestamped, target-bound deterministic journey records with runner, result,
+and redacted trace or request/artifact references. They must supply a successful
+`no_ai_production_posture_verification` child JSON report and a dated joint
+decision. Compare the release with Category 10, validate every referenced
+child report, inspect its sources, then update only the operator-owned record
+and run its schema/readiness checks. Any fresh report/export production writes
+or downloads need the named operator's target, account, permitted actions, and
+cleanup authorization. No raw environment dump, key, token, or tenant data
+belongs in Git. Categories 1–10 and prompt 201's final launch sign-off remain
+separate unresolved gates.
+
+Repository verification for this intake: `npm run ops:readiness-schema-test`
+passed (1/1); `npm run ops:templates` printed `ops template check passed`;
+`npm run lint`, `npm run typecheck`, and `git diff --check` exited 0.
+`node scripts/ops/check-launch-readiness.js
+infra/launch/readiness.example.json` exited 1 as designed: 11 required,
+0 approved, 11 blocked, 70 blockers. The readiness suite did not pass:
+`node --test scripts/ops/check-launch-readiness.spec.js` exited 1; its direct
+run reported 102/103 tests passing with `spawnSync ... EPERM` in the
+CLI/aggregate wrapper test. `npm run ops:check` stopped at `ops:audit` because
+DNS resolution of `registry.npmjs.org` returned `EAI_AGAIN`; subsequent checks
+in that command did not run. `npm run build` stopped in the Next 16.3.4 client
+build with `Could not parse output from TypeScript's --showConfig`. None of
+these repository checks establishes a production runtime or journey result.
+
 ## 4. Unified Drill Execution & Evidence Dossier
 
 `scripts/ops/run-launch-drills.sh` runs all 7 stages and writes
