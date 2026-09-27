@@ -34,7 +34,7 @@
     "geography:provider:review": "npm run geography:provider:review --workspace=@acres/server --",
     "geography:provider:import": "npm run geography:provider:import --workspace=@acres/server --",
     "ops:templates": "scripts/ops/check-production-templates.sh",
-    "ops:templates-test": "node --test scripts/ops/check-smtp-template-keys.spec.js scripts/ops/check-proxy-environment.spec.js",
+    "ops:templates-test": "node --test scripts/ops/check-smtp-template-keys.spec.js scripts/ops/check-proxy-environment.spec.js scripts/ops/check-application-environment.spec.js",
     "ops:scan-secrets": "scripts/ops/scan-secrets.sh",
     "ops:docker-runtime": "scripts/ops/check-docker-runtime.sh",
     "ops:audit": "scripts/ops/audit-dependencies.sh",

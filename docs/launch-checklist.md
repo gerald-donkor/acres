@@ -343,18 +343,25 @@ resolve:
   must state whether a Garage metrics credential and scrape target are in the
   production design; if not, that source is provisioned without a consumer and
   Category 4 would attest verified access to a secret nothing reads.
-- **The reference template now scopes Caddy and Next environment.** Prompt 219
+- **The reference template now scopes Caddy, Next, API and worker environment.** Prompt 219
   removes their shared `env_file`: Caddy receives the 13 names referenced by
   `Caddyfile.example` (including the commented HSTS setting), and Next receives
-  only `NODE_ENV` and its private `ACRES_API_ORIGIN`. `api` and `worker` still
-  load the shared production env file pending a separate consumer audit. The
-  parsed Compose preflight rejects extra Caddy/Next keys, either `env_file`,
-  missing or miswired Caddy inputs, and changed Next mode or API origin. This
+  only `NODE_ENV` and its private `ACRES_API_ORIGIN`. Prompt 220 removes the
+  shared `env_file` from API and worker too. The API receives its mail, auth,
+  GraphQL, rate-limit, queue, storage, parser and processing inputs. The worker
+  receives queue, storage, parser, scanner, outbox and metrics inputs; it does
+  not receive SMTP, database migration, superuser or observability-admin
+  credentials. Both retain `SESSION_SECRET` and `CLIENT_ORIGIN` because their
+  shared boot validator requires them; process-specific validation remains a
+  separate least-privilege improvement. Both explicitly disable AI and receive
+  no Gemini key. The parsed Compose preflight rejects extra service keys, `env_file`,
+  missing or miswired required inputs, duplicate or missing active operator
+  assignments, changed scheduler/worker metrics settings, and changed Next mode or API origin. This
   repository change does not establish the production container environment.
-  Operators using an older materialized Compose file must adopt the revised
+  Operators using an older materialized Compose file must adopt all four revised
   service maps, render and inspect the resulting Compose config, then inspect
   effective container **key names only** through a redacted inventory before
-  Category 4 approval. A scoped revert would restore unnecessary Caddy/Next
+  Category 4 approval. A scoped revert would restore unnecessary service
   secret exposure; treat that as a security regression. The three Garage names
   remain service-scoped.
 

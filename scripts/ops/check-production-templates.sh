@@ -28,6 +28,8 @@ require_file scripts/ops/check-smtp-template-keys.js
 require_file scripts/ops/check-smtp-template-keys.spec.js
 require_file scripts/ops/check-proxy-environment.js
 require_file scripts/ops/check-proxy-environment.spec.js
+require_file scripts/ops/check-application-environment.js
+require_file scripts/ops/check-application-environment.spec.js
 require_file scripts/ops/check-readiness-schema.spec.js
 require_file scripts/db/bootstrap-production-roles.sh
 require_file scripts/db/reconcile-production-monitor.sh
@@ -61,6 +63,7 @@ const { validateComposeImages } = require('./scripts/ops/check-release-images');
 const { parseBackupScheduleCron } = require('./scripts/ops/check-launch-readiness');
 const { checkSmtpTemplateKeys } = require('./scripts/ops/check-smtp-template-keys');
 const { checkProxyEnvironment } = require('./scripts/ops/check-proxy-environment');
+const { checkApplicationEnvironment } = require('./scripts/ops/check-application-environment');
 
 function readYaml(path) {
   try {
@@ -83,6 +86,14 @@ function readJson(path) {
 const compose = readYaml('infra/compose/docker-compose.production.example.yml');
 const localCompose = readYaml('docker-compose.yml');
 const services = compose && compose.services ? compose.services : {};
+const applicationEnvironmentErrors = checkApplicationEnvironment(
+  compose,
+  fs.readFileSync('infra/env/production.env.example', 'utf8'),
+);
+if (applicationEnvironmentErrors.length > 0) {
+  for (const error of applicationEnvironmentErrors) console.error(`ops template check failed: ${error}`);
+  process.exit(1);
+}
 const proxyEnvironmentErrors = checkProxyEnvironment(
   compose,
   fs.readFileSync('infra/caddy/Caddyfile.example', 'utf8'),

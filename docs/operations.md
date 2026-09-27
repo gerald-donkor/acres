@@ -1238,6 +1238,36 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 220 update (2026-09-27): production API/worker environment scope.**
+The API and worker production Compose services now use explicit environment
+maps. The API gets its runtime database URL, session and browser origin, SMTP,
+rate/GraphQL limits, queue, storage and processing settings. The worker
+gets its runtime database URL, queue, storage, scanner, parser, outbox, metrics
+and cleanup settings; no SMTP, database migration, superuser, Grafana or
+operator-control credentials are injected. Both set `AI_DRAFT_ENABLED=false`
+and exclude `GEMINI_API_KEY`. The worker still receives `SESSION_SECRET` and
+`CLIENT_ORIGIN` because the common `validateEnv` requires them at boot, even
+though its module graph has no session or browser-origin consumer. A separate
+process-specific validator change can remove that coupling. API SMTP security
+mode and sender identity now have operator placeholders so the production
+reference cannot silently take local development defaults. The parsed
+`check-application-environment` preflight verifies exact service key maps,
+required interpolation, and one active operator-template assignment per input,
+reporting key names only. Existing operators must replace older materialized
+Compose maps, materialize the two new SMTP settings, render without printing
+resolved values, and inspect redacted effective API/worker key inventories on
+the actual host. The checked-in reference does not prove live injection or
+Category 4 approval. CSRF source and Garage metrics consumer remain open.
+Verification on 2026-09-27: `npm run ops:templates-test` passed 25/25 cases,
+`npm run ops:templates` and `npm run ops:check` exited 0, and lint, typecheck,
+build and `git diff --check` passed. Docker Compose 5.5.1 rendered a fully
+synthetic input without printing values: API had 57 keys, worker 36, neither
+had `env_file`; the worker had no SMTP, migration, superuser, Grafana or Gemini
+key. The checked-in readiness example still failed closed with 70 blockers
+(exit 1). The first sandboxed `ops:check` could not reach the npm audit registry;
+the network-enabled rerun passed. The first sandboxed Next build failed at
+TypeScript `--showConfig`; the normal-process rerun passed.
+
 **Prompt 219 update (2026-09-27): production Caddy/Next environment scope.**
 The production Compose example no longer injects its shared env file into
 `caddy` or `next`. Caddy receives exactly the 13 current Caddyfile inputs,
@@ -1245,7 +1275,8 @@ including the reserved HSTS value; each uses required Compose interpolation.
 Next retains only `NODE_ENV=production` and its private API origin. The parsed
 template preflight and focused offline regression tests enforce those maps and
 reject shared injection, extra secrets, missing/miswired inputs and drift.
-`api` and `worker` remain on the shared env file pending a separate audit.
+At prompt 219, `api` and `worker` still used the shared env file; prompt 220
+completed that separate audit and scoped their maps above.
 Operators must migrate any older materialized Compose file, render and inspect
 the revised config, and confirm redacted effective container key inventories
 before Category 4 approval. Reverting this change restores Caddy/Next secret
