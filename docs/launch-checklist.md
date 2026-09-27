@@ -1645,6 +1645,20 @@ from an operator's private store.
 
 ### Operator handoff
 
+**Repository prefill — 2026-09-27T21:37:51Z UTC.** These values were checked
+locally before the operator handoff. They identify the implementation snapshot
+and reference material only; none identifies a deployed production release or
+an approved source commit.
+
+| handoff field | locally verified value and source | production verification still needed |
+| --- | --- | --- |
+| Source snapshot inspected | `efb36d5d028a0f2850e7f4199a715c7822336996` on `main` | Operator must identify the reviewed source commit actually built and deployed. |
+| Reference topology | `single-host-compose-caddy` in `infra/launch/readiness.example.json` | Confirm the selected production topology and materialized deployment. |
+| Reference deployment files | `infra/compose/docker-compose.production.example.yml` and `infra/caddy/Caddyfile.example` | Supply identifiers for the materialized Compose and Caddy files. |
+| Application image inputs | Compose requires `ACRES_CLIENT_IMAGE` and `ACRES_SERVER_IMAGE`; no application image digest values are checked in. | Supply immutable current and previous client/server image identities and registry provenance. |
+| Local unified dossiers | On this machine, the gitignored `backups/launch-evidence-dossier-20260924T171638Z.json` and `backups/launch-evidence-dossier-20260925T203206Z.json` both declare `environment: "drill"`; these files are absent from a fresh checkout. | Supply target-bound production child reports and independently inspectable live sources. These local dossiers do not satisfy that requirement. |
+| Readiness record | `infra/launch/readiness.example.json` has eleven `unresolved` sections and placeholder operator fields. | Supply the restricted operator-owned record, its location, and authorized read-only access. |
+
 **Prompt 216 shared handoff check — 2026-09-27T21:18:58Z UTC.** Reviewed
 `5a1cc5ea64ad1cccdaaf3d1eb366b90b71af2816` on `main`. The only
 worktree change at intake was the uncommitted prompt 216. The tracked
