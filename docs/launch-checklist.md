@@ -343,15 +343,20 @@ resolve:
   must state whether a Garage metrics credential and scrape target are in the
   production design; if not, that source is provisioned without a consumer and
   Category 4 would attest verified access to a secret nothing reads.
-- **The shared production env file is injected into four services.** `caddy`,
-  `next`, `api` and `worker` each load `../env/production.env.example` through
-  `env_file` (`infra/compose/docker-compose.production.example.yml:7,31,47,78`),
-  so every shared secret — including `POSTGRES_SUPERUSER_PASSWORD`,
-  `SESSION_SECRET`, `STORAGE_SECRET_ACCESS_KEY`, `SMTP_PASS` and
-  `GRAFANA_ADMIN_PASSWORD` — is present in the Caddy and Next containers, which
-  consume none of it. The three Garage names are correctly service-scoped. The
-  operator's runtime injection inventory must show the scoping actually in force
-  in production, not this template's.
+- **The reference template now scopes Caddy and Next environment.** Prompt 219
+  removes their shared `env_file`: Caddy receives the 13 names referenced by
+  `Caddyfile.example` (including the commented HSTS setting), and Next receives
+  only `NODE_ENV` and its private `ACRES_API_ORIGIN`. `api` and `worker` still
+  load the shared production env file pending a separate consumer audit. The
+  parsed Compose preflight rejects extra Caddy/Next keys, either `env_file`,
+  missing or miswired Caddy inputs, and changed Next mode or API origin. This
+  repository change does not establish the production container environment.
+  Operators using an older materialized Compose file must adopt the revised
+  service maps, render and inspect the resulting Compose config, then inspect
+  effective container **key names only** through a redacted inventory before
+  Category 4 approval. A scoped revert would restore unnecessary Caddy/Next
+  secret exposure; treat that as a security regression. The three Garage names
+  remain service-scoped.
 
 Verified about the executable contract, for precision:
 `validSmtpSecretReference` is a regular expression only

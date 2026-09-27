@@ -404,7 +404,11 @@ in [`operations.md`](operations.md).
 
 - `infra/compose/docker-compose.production.example.yml` keeps Postgres,
   Valkey, Garage, ClamAV, Prometheus, and Grafana private; only Caddy publishes
-  host ports.
+  host ports. Prompt 219 scopes Caddy to its 13 Caddyfile environment inputs
+  and Next to production mode plus the private API origin; the parsed template
+  preflight rejects shared `env_file` injection into those two services. API and
+  worker still receive the shared production env file, and live container
+  scoping remains unverified.
 - `infra/caddy/Caddyfile.example` models same-origin app/API/GraphQL routing,
   baseline security headers, path-style presigned object proxying for the
   current `acres-quarantine` bucket, request-size and timeout placeholders, and

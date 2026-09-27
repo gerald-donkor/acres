@@ -1238,6 +1238,28 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 219 update (2026-09-27): production Caddy/Next environment scope.**
+The production Compose example no longer injects its shared env file into
+`caddy` or `next`. Caddy receives exactly the 13 current Caddyfile inputs,
+including the reserved HSTS value; each uses required Compose interpolation.
+Next retains only `NODE_ENV=production` and its private API origin. The parsed
+template preflight and focused offline regression tests enforce those maps and
+reject shared injection, extra secrets, missing/miswired inputs and drift.
+`api` and `worker` remain on the shared env file pending a separate audit.
+Operators must migrate any older materialized Compose file, render and inspect
+the revised config, and confirm redacted effective container key inventories
+before Category 4 approval. Reverting this change restores Caddy/Next secret
+exposure. This is a repository template fix, not proof of production deployment;
+the CSRF-source and Garage-metrics gaps and Phase 12 sign-off remain open.
+Verification: `ops:templates-test` passed 15/15 focused cases;
+`ops:templates`, `ops:check`, lint, typecheck and the production build exited 0.
+Docker Compose 5.5.1 rendered a synthetic input file with Caddy's 13 expected
+keys and Next's two expected keys, neither with `env_file`; no resolved values
+were printed. The first sandboxed `ops:check` could not resolve the npm audit
+registry; the network-enabled rerun passed. The first sandboxed Next build
+stopped at TypeScript `--showConfig`; the normal-process rerun passed. No live
+container or operator secret store was inspected.
+
 **Prompt 218 update (2026-09-27): production SMTP credential names.**
 `infra/env/production.env.example` now uses `SMTP_USER` and `SMTP_PASS`, the
 names parsed by the server and consumed by the SMTP adapter. The production

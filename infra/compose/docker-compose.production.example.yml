@@ -4,8 +4,20 @@ services:
   caddy:
     image: caddy:2.10-alpine
     restart: unless-stopped
-    env_file:
-      - ../env/production.env.example
+    environment:
+      ACRES_TLS_CONTACT_EMAIL: ${ACRES_TLS_CONTACT_EMAIL:?set TLS contact email}
+      ACRES_PRODUCTION_DOMAIN: ${ACRES_PRODUCTION_DOMAIN:?set production domain}
+      ACRES_HSTS_MAX_AGE: ${ACRES_HSTS_MAX_AGE:?set operator-approved HSTS age}
+      ACRES_MAX_REQUEST_BODY: ${ACRES_MAX_REQUEST_BODY:?set request body limit}
+      ACRES_API_READ_TIMEOUT: ${ACRES_API_READ_TIMEOUT:?set API read timeout}
+      ACRES_API_WRITE_TIMEOUT: ${ACRES_API_WRITE_TIMEOUT:?set API write timeout}
+      ACRES_API_DIAL_TIMEOUT: ${ACRES_API_DIAL_TIMEOUT:?set API dial timeout}
+      ACRES_NEXT_READ_TIMEOUT: ${ACRES_NEXT_READ_TIMEOUT:?set Next read timeout}
+      ACRES_NEXT_WRITE_TIMEOUT: ${ACRES_NEXT_WRITE_TIMEOUT:?set Next write timeout}
+      ACRES_NEXT_DIAL_TIMEOUT: ${ACRES_NEXT_DIAL_TIMEOUT:?set Next dial timeout}
+      ACRES_OBJECT_READ_TIMEOUT: ${ACRES_OBJECT_READ_TIMEOUT:?set object read timeout}
+      ACRES_OBJECT_WRITE_TIMEOUT: ${ACRES_OBJECT_WRITE_TIMEOUT:?set object write timeout}
+      ACRES_OBJECT_DIAL_TIMEOUT: ${ACRES_OBJECT_DIAL_TIMEOUT:?set object dial timeout}
     ports:
       - "80:80"
       - "443:443"
@@ -28,8 +40,6 @@ services:
   next:
     image: ${ACRES_CLIENT_IMAGE:?inject pinned client image digest}
     restart: unless-stopped
-    env_file:
-      - ../env/production.env.example
     environment:
       NODE_ENV: production
       ACRES_API_ORIGIN: http://api:3001
