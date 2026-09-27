@@ -905,6 +905,123 @@ none of these repository results supplies Category 7 evidence.
   - Rejects volume encryption evidence reporting failure (`status !== 'success'`), invalid configuration (`valid: false`), any errors in `errors[]`, key separation violation (`keySeparation.verified: false`), detected keyfile violations in volume mounts or Git tracking, or any failed stateful storage mounts;
   - Rejects Unified Launch Evidence Dossiers reporting `volumeEncryptionBaseline.status: "breached"` or `summary.volumeEncryptionCompliance: "failed"`.
 
+**Prompt 212 Category 8 intake — 2026-09-27T15:45:00Z UTC.** Reviewed
+`5e176e4` on `main`; the only worktree change was this prompt. The
+repository-visible Category 8 material is the unresolved
+`infra/launch/readiness.example.json`, `infra/launch/readiness.schema.json`, the
+validator in `scripts/ops/check-launch-readiness.js:1843-1864` (including
+`isVolumeEncryptionCandidate:248-254` and `validateVolumeEncryptionReport:256-279`),
+the validator test suite in `scripts/ops/check-launch-readiness.spec.js:74-102,2045-2200,2680-2775`,
+`scripts/ops/verify-volume-encryption.js` (including mount array definition at lines 43-98) and
+`scripts/ops/verify-volume-encryption.spec.js` (17 unit tests), the 9 stateful
+container mount declarations in `infra/compose/docker-compose.production.example.yml:14-15,121,147,172-173,190,210,251`,
+the environment template variable definitions in
+`infra/env/production.env.example:18-26,71` (`ACRES_POSTGRES_ENCRYPTED_MOUNT`,
+`ACRES_VALKEY_ENCRYPTED_MOUNT`, `ACRES_GARAGE_META_ENCRYPTED_MOUNT`,
+`ACRES_GARAGE_DATA_ENCRYPTED_MOUNT`, `ACRES_CLAMAV_ENCRYPTED_MOUNT`,
+`ACRES_CADDY_DATA_MOUNT`, `ACRES_CADDY_CONFIG_MOUNT`,
+`ACRES_PROMETHEUS_ENCRYPTED_MOUNT`, `ACRES_GRAFANA_ENCRYPTED_MOUNT`,
+`PRODUCTION_KEY_RECOVERY_OWNER=__REQUIRED_OPERATOR_KEY_RECOVERY_OWNER__`),
+stage 4 of `scripts/ops/run-launch-drills.sh:245-247,599-642`, and
+`scripts/ops/check-production-templates.sh`.
+No materialized production readiness record and no production
+`volume-encryption-evidence-*.json` child report exists in the repository: tracked
+files are limited to the template, schema, scripts, and tests. The local
+`backups/` directory is gitignored (`.gitignore:74`) and contains only locally
+generated drill artifacts. That is a repository observation, not a statement
+about an operator's restricted evidence store. Category 8 remains **unresolved**.
+No selected host volume encryption mechanism (LUKS2/dm-crypt, AWS KMS, GCP CMEK,
+or Azure Key Vault), physical block device encryption verification on the production
+host, detached keyfile/KMS key separation audit, designated key recovery owner
+identity, or dated infrastructure/security lead decision was supplied for
+independent inspection. No storage volume was re-encrypted, no disk partition
+was formatted, and no host mount configuration was modified.
+
+Four verified facts and architecture constraints the operator and leads must
+resolve:
+
+- **All 9 stateful container mounts require encrypted host storage bindings.**
+  `infra/compose/docker-compose.production.example.yml` and
+  `scripts/ops/verify-volume-encryption.js:43-98` specify 9 distinct stateful
+  storage paths: PostgreSQL (`/var/lib/postgresql` -> `${ACRES_POSTGRES_ENCRYPTED_MOUNT}`),
+  Valkey (`/data` -> `${ACRES_VALKEY_ENCRYPTED_MOUNT}`), Garage metadata
+  (`/var/lib/garage/meta` -> `${ACRES_GARAGE_META_ENCRYPTED_MOUNT}`), Garage data
+  (`/var/lib/garage/data` -> `${ACRES_GARAGE_DATA_ENCRYPTED_MOUNT}`), ClamAV
+  (`/var/lib/clamav` -> `${ACRES_CLAMAV_ENCRYPTED_MOUNT}`), Caddy data
+  (`/data` -> `${ACRES_CADDY_DATA_MOUNT}`), Caddy config
+  (`/config` -> `${ACRES_CADDY_CONFIG_MOUNT}`), Prometheus
+  (`/prometheus` -> `${ACRES_PROMETHEUS_ENCRYPTED_MOUNT}`), and Grafana
+  (`/var/lib/grafana` -> `${ACRES_GRAFANA_ENCRYPTED_MOUNT}`). While Category 8
+  minimum validator requirement enforces at least 3 mounts (PostgreSQL, Valkey,
+  Garage), full production security compliance evaluates all 9 mounts.
+- **The Key Separation Invariant (TM-21) strictly forbids key material in mount paths, backup archives, or Git.**
+  Volume unlock passphrases, detached LUKS2 keyfiles, and KMS credentials must
+  NEVER be stored within the persistent storage volumes they unlock, in backup
+  archives (`backups/`), or tracked in Git. The engine strictly scans for
+  forbidden keyfile extensions (`*.key`, `*.keyfile`, `*.passphrase`, `id_rsa`,
+  `*luks*key*`, `*kms*creds*`) across mount paths and fails closed upon detection.
+- **Key recovery governance requires designated dual-custody parameters and recovery runbook references.**
+  Host encryption must establish split knowledge / dual control for recovery key
+  material (`PRODUCTION_KEY_RECOVERY_OWNER`, emergency escrow), avoiding single-person
+  dependency or automated plaintext escrow on the target host.
+- **Synthetic and template checks verify Compose syntax and key separation on local disk, not physical disk encryption in production.**
+  `scripts/ops/verify-volume-encryption.js` inspects Docker Compose volume
+  configurations, environment templates, and local repository paths; it cannot
+  verify that the production host hardware/hypervisor block devices actually have
+  active LUKS2 dm-crypt dm-table mappings or hardware-level encryption active
+  without operator audit.
+
+Verified about the executable contract, for precision:
+`scripts/ops/check-launch-readiness.js` validates that an approved
+`volume_encryption` section defines `encryption_mechanism` (string),
+`encrypted_mount_paths` (array with length >= 3, covering at least PostgreSQL,
+Valkey, Garage), `key_separation_confirmed: true`, a valid `key_recovery_owner`
+without placeholders, a valid approver, and at least one concrete child JSON
+report matching `isVolumeEncryptionCandidate`. The child report must have
+`drill_type: "production_volume_encryption_and_key_separation"`, nonfuture ISO UTC
+`timestamp`, `status: "success"`, `valid: true`, `errors: []`,
+`keySeparation.verified: true`, `keySeparation.detectedViolations: []`, and
+`evaluatedMounts` array containing at least 3 mounts with all items having
+`passed: true`. If total/valid counts are present, they must be equal positive
+safe integers >= 3. The validator checks internal structural consistency; it
+cannot verify physical disk encryption or detached KMS custody in production.
+
+The **security lead** and **infrastructure lead** (with the designated **key
+recovery owner**) must provide through the approved operator channel the
+production host volume encryption mechanism and implementation details; list of
+mounted encrypted host block devices and mount paths for all 9 stateful
+services; key separation confirmation verifying that detached keyfiles/KMS
+credentials reside in an external KMS / HSM / vault and are not present on
+volume filesystems or backup archives; designated key recovery owner and
+dual-custody parameters; restricted evidence-store location containing the child
+volume encryption report (`volume-encryption-evidence-<timestamp>.json`); and
+dated Category 8 approval signatures on an operator readiness record. Read-only
+inspection of those safe sources in the restricted store is the next safe action.
+Categories 1–7 and all other launch gates retain their prior unresolved state,
+and prompt 201 governs the final eleven-category sign-off.
+
+Repository checks for this intake: `npm run ops:readiness-schema-test` passed
+(8/8); `node scripts/ops/check-launch-readiness.js
+infra/launch/readiness.example.json` exited 1 as designed with 11 required
+categories, 0 approved, 11 blocked, and 70 blockers, including seven Category 8
+blockers (unresolved `encryption_mechanism`, three `encrypted_mount_paths`
+placeholders, unresolved `key_recovery_owner` placeholder, unresolved section
+status, and empty evidence array); `npm run ops:templates` printed `ops template
+check passed`; `npm run ops:volume-test` passed (17/17 tests); `node --test
+scripts/ops/check-launch-readiness.spec.js` passed (103/103 tests); `npm run
+ops:check` exited 0 across all 19 sub-suites — template check, 22 release-image
+tests, secret scan, Docker runtime, dependency audit with 0 critical
+vulnerabilities and 16 reported (8 moderate, 8 high), 8 schema tests, 103
+readiness-validator tests, 10 reconciliation tests, 18 Caddy tests, 17
+volume-encryption tests, 8 SBOM tests, SBOM license verification, 14 SAST
+tests, a SAST gate reporting zero blockers and zero expired suppressions, 11
+container-security tests, container-security scan, 15 capacity tests, 23
+alert-rule tests, and 13 launch-drill tests. `npm run lint`, `npm run
+typecheck`, and `npm run build` (client Next 16.3.4 webpack, NestJS, and
+shared) exited 0 across all workspaces, and `git diff --check` exited 0. No
+operator production source, disk encryption inspect, or approval was
+inspected, and none of these repository results supplies Category 8 evidence.
+
 ### 9. GraphQL Introspection (`graphql_introspection`)
 
 - Drill/verify: production route probe (introspection query must fail closed)
