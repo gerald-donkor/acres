@@ -753,13 +753,134 @@ inspected, and none of these repository results supplies Category 6 evidence.
   `export_retention_policy: "30d"`,
   `telemetry_retention_policy: "15d"`,
   `backup_retention_policy: "30d"`,
-  positive day windows (`^\d+d$`) for `audit_retention_policy`,
+  positive day windows (`^[1-9]\d*d$`) for `audit_retention_policy`,
   and `indefinite_until_tenant_deletion` or positive day duration for `account_retention_policy` and `report_retention_policy`.
   Prose alone, a dossier alone, or a malformed/failed report cannot qualify, even beside
   a valid one or in a wildcard expansion. Validate with
   `node scripts/ops/check-launch-readiness.js <operator-readiness.json>`.
   The operator conducts the formal legal and operational policy review; the validator
   checks internal consistency, window compliance, and child report validity.
+
+**Prompt 211 Category 7 intake — 2026-09-27T14:33:00Z UTC.** Reviewed
+`dc6670e` on `main`; the only worktree change was this prompt. The
+repository-visible Category 7 material is the unresolved
+`infra/launch/readiness.example.json`, `infra/launch/readiness.schema.json`, the
+validator in `scripts/ops/check-launch-readiness.js:1791-1841` (including
+`validateDataRetentionPolicyReport:716-744`, `REQUIRED_RETENTION_KEYS:46-55`,
+and `isDataRetentionPolicyCandidate:712-714`), the validator test suite in
+`scripts/ops/check-launch-readiness.spec.js:3446-3555` (with test fixtures at
+lines 310-332), the scheduled cleanup jobs in
+`server/src/jobs/retention-maintenance.job.ts:44-98,100-142,144-221,223-350`
+and `server/src/jobs/session-maintenance.job.ts:37-69` with their test suites,
+session service row reclamation in `server/src/sessions/sessions.service.ts:96-110`
+(`purgeExpired`), upload quarantine state lifecycle in
+`server/src/uploads/uploads.service.ts:212-219,347-349`, report export artifact
+lifecycle in `server/src/reports/reports.service.ts`, Prometheus TSDB retention
+flag `--storage.tsdb.retention.time=${PROMETHEUS_RETENTION}` in
+`infra/compose/docker-compose.production.example.yml:206`, environment template
+definitions in `infra/env/production.env.example:56,77`
+(`PROMETHEUS_RETENTION=__REQUIRED_OPERATOR_PROMETHEUS_RETENTION__` and
+`SCHEDULER_ENABLED=false`), and `scripts/ops/check-production-templates.sh`.
+No materialized production readiness record and no production
+`retention-policy-review-*.json` child report exists in the repository: tracked
+files are limited to the template, schema, scripts, backend jobs, and tests.
+That is a repository observation, not a statement about an operator's
+restricted evidence store. Category 7 remains **unresolved**. No approved
+legal/regulatory retention schedule, operator verification of
+`SCHEDULER_ENABLED=true` on the production worker instance, Prometheus
+`--storage.tsdb.retention.time=15d` runtime verification, off-host 30-day backup
+lifecycle verification, or dated legal/compliance/operations lead decision was
+supplied for independent inspection. No database records were purged, no
+storage objects were deleted, and no cron schedule was modified.
+
+Four verified facts and architecture constraints the operator and leads must
+resolve:
+
+- **Automated purge execution relies strictly on a single active scheduler instance (`SCHEDULER_ENABLED=true`).**
+  `server/src/jobs/retention-maintenance.job.ts:46,102,146,225` and
+  `server/src/jobs/session-maintenance.job.ts:39-41` gate all five purge paths
+  on `config.schedulerEnabled`. In `infra/env/production.env.example:77`,
+  `SCHEDULER_ENABLED=false` is default to prevent multi-instance race conditions
+  because `@nestjs/schedule` runs in-process without distributed locks
+  (`docs/backend.md` §scheduler). In production, exactly one worker instance
+  must run with `SCHEDULER_ENABLED=true`. If the scheduler is disabled or the
+  worker process crashes, expired sessions, uncompleted uploads, idempotency
+  records, auth tokens/invitations, and export artifacts accumulate indefinitely
+  without automatic pruning.
+- **Batch bounds (`RETENTION_PURGE_BATCH_LIMIT = 500`) protect against query timeouts and database locking during backlog drainage, but require multiple ticks.**
+  Purges execute hourly ticks claiming up to 500 records per category
+  (`orderBy: { expiresAt: 'asc' }, take: 500`). For a massive volume of
+  expired items, a single run does not purge everything; drainage requires
+  sustained hourly ticks across multiple hours.
+- **Export artifact purge reclaims S3 storage objects and soft-deletes `StoredObject` records while preserving `ExportRequest` audit history.**
+  `server/src/jobs/retention-maintenance.job.ts:327-341` deletes
+  `ExportArtifact` rows and transitions `StoredObject` to `deleted` (with
+  `deletedAt: now`), but deliberately preserves `ExportRequest` records for
+  governance auditability. Future download attempts for purged exports return
+  404 NOT FOUND.
+- **Telemetry and backup retention are governed out-of-band by Prometheus tsdb flags and off-host backup lifecycle policies.**
+  `infra/compose/docker-compose.production.example.yml:206` configures
+  Prometheus with `--storage.tsdb.retention.time=${PROMETHEUS_RETENTION}`,
+  which must match `telemetry_retention_policy: "15d"`. Backup retention
+  (30d) is enforced by off-host backup destination lifecycle rules, not
+  NestJS cron jobs.
+
+Verified about the executable contract, for precision:
+`scripts/ops/check-launch-readiness.js` validates that an approved
+`data_retention_policy` section defines all eight `REQUIRED_RETENTION_KEYS`:
+`upload_quarantine_retention_policy: "7d"`,
+`rejected_object_retention_policy: "1d"`,
+`export_retention_policy: "30d"`,
+`telemetry_retention_policy: "15d"`,
+`backup_retention_policy: "30d"`,
+`audit_retention_policy` matching `^[1-9]\d*d$`,
+and `account_retention_policy` and `report_retention_policy` matching
+`^[1-9]\d*d$` or `'indefinite_until_tenant_deletion'`. It requires a valid
+approver without placeholders and at least one concrete child JSON report
+matching `isDataRetentionPolicyCandidate`. The child report must have
+`drill_type: "data_retention_policy_verification"`, nonfuture ISO UTC
+`timestamp`, `status: "success"`, `errors: []`, non-empty `policy_reference`,
+`scheduled_cleanup_verified: true`, and all eight windows matching approved
+section values with `policy_verified: true` and exactly two properties. The
+report must contain exactly the seven required top-level keys (`drill_type`,
+`errors`, `policy_reference`, `retention_windows`,
+`scheduled_cleanup_verified`, `status`, `timestamp`) with zero placeholders
+and zero secrets. The validator checks internal structural consistency; it
+cannot verify legal compliance or active worker cron purging in production.
+
+The **legal lead**, **compliance lead**, and **operations lead** must provide
+through the approved operator channel the formal legal/regulatory retention
+schedule defining tenant account, audit log, and report lifecycles; verified
+production worker configuration with `SCHEDULER_ENABLED=true`; Prometheus
+runtime configuration verifying `--storage.tsdb.retention.time=15d`; off-host
+backup destination lifecycle policy verifying 30-day retention; restricted
+evidence-store location containing the child policy review report
+(`retention-policy-review-<timestamp>.json`); and dated Category 7 approval
+signatures on an operator readiness record. Read-only inspection of those safe
+sources in the restricted store is the next safe action. Categories 1–6 and
+all other launch gates retain their prior unresolved state, and prompt 201
+governs the final eleven-category sign-off.
+
+Repository checks for this intake: `npm run ops:readiness-schema-test` passed
+(8/8); `node scripts/ops/check-launch-readiness.js
+infra/launch/readiness.example.json` exited 1 as designed with 11 required
+categories, 0 approved, 11 blocked, and 70 blockers, including five Category 7
+blockers (unresolved `account_retention_policy`, `audit_retention_policy`, and
+`report_retention_policy` placeholders, unresolved section status, and empty
+evidence array); `npm run ops:templates` printed `ops template check passed`;
+`node --test scripts/ops/check-launch-readiness.spec.js` passed (103/103 tests);
+`npm run ops:check` exited 0 across all 19 sub-suites — template check, 22
+release-image tests, secret scan, Docker runtime, dependency audit with 0
+critical vulnerabilities and 16 reported (8 moderate, 8 high), 8 schema tests,
+103 readiness-validator tests, 10 reconciliation tests, 18 Caddy tests, 17
+volume-encryption tests, 8 SBOM tests, SBOM license verification, 14 SAST
+tests, a SAST gate reporting zero blockers and zero expired suppressions, 11
+container-security tests, container-security scan, 15 capacity tests, 23
+alert-rule tests, and 13 launch-drill tests. `npm run lint`, `npm run
+typecheck`, and `npm run build` (client Next 16.3.4 webpack, NestJS, and
+shared) exited 0 across all workspaces, and `git diff --check` exited 0. No
+operator production source, retention review, or approval was inspected, and
+none of these repository results supplies Category 7 evidence.
 
 ### 8. Volume Encryption (`volume_encryption`)
 
