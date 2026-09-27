@@ -24,6 +24,8 @@ require_file infra/grafana/dashboards/acres-operations.json
 require_file infra/launch/readiness.example.json
 require_file infra/launch/readiness.schema.json
 require_file scripts/ops/check-launch-readiness.js
+require_file scripts/ops/check-smtp-template-keys.js
+require_file scripts/ops/check-smtp-template-keys.spec.js
 require_file scripts/ops/check-readiness-schema.spec.js
 require_file scripts/db/bootstrap-production-roles.sh
 require_file scripts/db/reconcile-production-monitor.sh
@@ -55,6 +57,7 @@ const yaml = require('js-yaml');
 const { verifyPostgresDiagnostics } = require('./scripts/ops/verify-postgres-diagnostics');
 const { validateComposeImages } = require('./scripts/ops/check-release-images');
 const { parseBackupScheduleCron } = require('./scripts/ops/check-launch-readiness');
+const { checkSmtpTemplateKeys } = require('./scripts/ops/check-smtp-template-keys');
 
 function readYaml(path) {
   try {
@@ -192,14 +195,20 @@ for (const service of ['postgres', 'valkey', 'garage']) {
   }
 }
 
+const productionEnv = fs.readFileSync('infra/env/production.env.example', 'utf8');
 const envExample =
-  fs.readFileSync('infra/env/production.env.example', 'utf8') +
+  productionEnv +
   '\n' +
   fs.readFileSync('infra/env/garage.production.env.example', 'utf8');
 const envKeys = new Set();
 for (const line of envExample.split('\n')) {
   const match = line.match(/^([A-Z0-9_]+)=/);
   if (match) envKeys.add(match[1]);
+}
+const smtpKeyErrors = checkSmtpTemplateKeys(productionEnv);
+if (smtpKeyErrors.length > 0) {
+  for (const error of smtpKeyErrors) console.error(`ops template check failed: ${error}`);
+  process.exit(1);
 }
 const composeText = fs.readFileSync('infra/compose/docker-compose.production.example.yml', 'utf8');
 const interpolationKeys = new Set();

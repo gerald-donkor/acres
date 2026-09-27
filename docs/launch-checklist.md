@@ -324,17 +324,15 @@ resolve:
   to record that the twelfth field is a named derivation of
   `session_secret_source` and have this checklist and the validator contract
   corrected first.
-- **`smtp_secret_source` is injected under names the server does not read.**
-  `infra/env/production.env.example:54-55` defines `SMTP_USERNAME` and
-  `SMTP_PASSWORD`, while the server reads `SMTP_USER` and `SMTP_PASS`
-  (`server/src/config/env.validation.ts:318-319`, consumed through
-  `server/src/mail/adapters/smtp-mail.adapter.ts:28-29`). The Compose `api`
-  service adds no remapping and `scripts/ops/check-production-templates.sh`
-  asserts no SMTP name, so nothing closes the gap today. As checked in, the
-  injected SMTP credential would not reach the mail adapter. The operator's
-  inventory must show which name the production deployment actually injects, and
-  the template and server configuration must be reconciled before Category 2 or
-  Category 4 can rely on that source.
+- **`smtp_secret_source` runtime injection is unverified.** The repository
+  production env template now defines `SMTP_USER` and `SMTP_PASS`, matching
+  `server/src/config/env.validation.ts` and the mail adapter. The template
+  preflight requires each key exactly once and rejects active assignments to
+  `SMTP_USERNAME` or `SMTP_PASSWORD`. This repairs the checked-in naming
+  mismatch only. The operator's redacted inventory must show the names actually
+  injected into the production API and worker; any materialized env file using
+  the former names must be migrated before deployment. Category 2 and 4 still
+  require a verified credential source, runtime injection, and delivery evidence.
 - **`garage_metrics_secret_source` is injected but unconsumed.**
   `GARAGE_METRICS_TOKEN` is mapped into the `garage` service
   (`docker-compose.production.example.yml:165`), but `infra/garage/garage.toml`
@@ -349,7 +347,7 @@ resolve:
   `next`, `api` and `worker` each load `../env/production.env.example` through
   `env_file` (`infra/compose/docker-compose.production.example.yml:7,31,47,78`),
   so every shared secret — including `POSTGRES_SUPERUSER_PASSWORD`,
-  `SESSION_SECRET`, `STORAGE_SECRET_ACCESS_KEY`, `SMTP_PASSWORD` and
+  `SESSION_SECRET`, `STORAGE_SECRET_ACCESS_KEY`, `SMTP_PASS` and
   `GRAFANA_ADMIN_PASSWORD` — is present in the Caddy and Next containers, which
   consume none of it. The three Garage names are correctly service-scoped. The
   operator's runtime injection inventory must show the scoping actually in force

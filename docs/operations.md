@@ -1238,6 +1238,27 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 218 update (2026-09-27): production SMTP credential names.**
+`infra/env/production.env.example` now uses `SMTP_USER` and `SMTP_PASS`, the
+names parsed by the server and consumed by the SMTP adapter. The production
+template preflight requires each assignment exactly once and rejects active
+`SMTP_USERNAME`/`SMTP_PASSWORD` assignments; the focused offline regression
+test is `npm run ops:templates-test` and runs in `ops:check`. No credential
+value or provider decision is stored here. Operators who already materialized
+the former names must map them to `SMTP_USER`/`SMTP_PASS` before deployment and
+verify the actual runtime injection and a delivered receipt. The shared
+`env_file`, CSRF-source and Garage-metrics findings in the launch checklist
+remain open; Categories 2 and 4 and Phase 12 sign-off remain unresolved.
+Verification: `ops:templates-test` passed 5/5, `ops:templates` passed,
+`ops:readiness-schema-test` passed 8/8, `ops:readiness-test` passed 103/103,
+`ops:check` exited 0, and lint, typecheck, build and `git diff --check`
+passed. The unresolved readiness example still exited 1 with 0/11 approved
+categories and 70 blockers. The sandboxed readiness test and build could not
+spawn their child processes; both passed when rerun with execution permission.
+The sandboxed `ops:check` stopped at npm audit DNS resolution, then the full
+gate passed with registry access. This check establishes repository behavior,
+not production injection or delivered mail.
+
 Prompt 204 (2026-09-26) adds `infra/launch/readiness.schema.json` and
 `npm run ops:readiness-schema-test` to the operational gate. Ajv compiles the
 Draft 7 schema and checks the unresolved example plus representative malformed
