@@ -621,6 +621,119 @@ none of these repository results supplies Category 5 evidence.
   for reconciliation. Without them the unified orchestrator records stage 7
   `disaster_recovery` as FAILED (fail-closed); see §6.
 
+**Prompt 210 Category 6 intake — 2026-09-26T23:55:37Z UTC.** Reviewed
+`a3c4d9b` on `main`; the only worktree change was this prompt. The
+repository-visible Category 6 material is the unresolved
+`infra/launch/readiness.example.json`, `infra/launch/readiness.schema.json`, the
+validator in `scripts/ops/check-launch-readiness.js:1722-1789` (including
+`validateRestoreReport:194-210` and `validateReconciliationReport:227-246`),
+the validator test suite in `tests/ops/launch-readiness-validator.spec.js`,
+`scripts/ops/run-restore-drill.sh`, `scripts/ops/restore-postgres.sh`,
+`scripts/ops/backup-postgres.sh`, `scripts/ops/reconcile-storage-objects.js`
+with `tests/ops/reconcile-storage-objects.spec.js`, and stage 7 of
+`scripts/ops/run-launch-drills.sh:228-231,264-275,387-463`. No materialized production readiness
+record and no production `restore-drill-evidence-*.json` or
+`reconciliation-report.json` child report exists in the repository: tracked
+files are limited to the template, schema, scripts, and tests. The local
+`backups/` directory is gitignored (`.gitignore:74`) and contains only locally
+generated drill and dry-run artifacts — including synthetic and local test
+runs. That is a repository observation, not a statement about an operator's
+restricted evidence store. Category 6 remains **unresolved**. No live
+production restore drill log, storage reconciliation report against production
+buckets, off-host encrypted backup archive verification, or dated
+operations/database lead decision was supplied for independent inspection. No
+database backup was restored, no storage bucket was scanned, and no backup
+cron schedule was modified.
+
+Four verified facts and architecture constraints the operator and the database/operations leads must resolve:
+
+- **Both sub-drills require live drill infrastructure even under `--dry-run`.**
+  `scripts/ops/run-restore-drill.sh:106-109,148-153` requires `pg_isready` and database
+  connectivity (`PGPASSWORD`), failing immediately if the database server is
+  unreachable. Similarly, `scripts/ops/reconcile-storage-objects.js:375-395`
+  connects to PostgreSQL via the `pg` client to query `StoredObject`, `Upload`, and
+  `ExportArtifact` (`queryDatabaseStoredObjects:243-268`), and connects to Garage/S3 via `@aws-sdk/client-s3`. In an offline
+  environment without database access and bucket credentials, `--dry-run` fails
+  closed (`scripts/ops/run-launch-drills.sh:264-275` records stage 7
+  `disaster_recovery` as `FAILED`).
+- **UTC hourly cron schedule (`0 * * * *`) aligns with RPO ≤ 1h, but schedule syntax alone does not prove recovery.**
+  `scripts/ops/check-launch-readiness.js:66-99` (`parseBackupScheduleCron`) parses 5-field UTC cron
+  expressions and validates that `maxGapMinutes <= rpo_hours * 60`. While
+  `0 * * * *` provides a theoretical 60-minute window matching `rpo_hours: 1.0`,
+  a valid cron string does not prove active cron execution, off-host encrypted
+  transfer, archive integrity, or backup consistency under production write load.
+- **Dual machine-readable child evidence artifacts are mandatory for Category 6 approval.**
+  `scripts/ops/check-launch-readiness.js:1722-1789` requires both a valid
+  PostgreSQL restore drill report (`validateRestoreReport`) and a valid storage
+  reconciliation report (`validateReconciliationReport`). The restore drill
+  report requires `status: "success"`, strict basic UTC timestamp
+  (`YYYYMMDDTHHMMSSZ`), `rto_compliant: true`, parity of public tables
+  (`tables_source === tables_restored`), parity of migrations
+  (`migrations_source === migrations_restored`), `postgis_verified: true`,
+  `foreign_keys_verified: true`, `backup_bytes > 0`, and non-negative
+  `duration_ms`. The reconciliation report requires strict ISO UTC timestamp, 8
+  summary integer counts matching child array lengths, `missingObjects === 0`
+  (zero data loss), `mismatchedObjects === 0` (zero checksum/size drift),
+  `exitCode === 0`, and status `clean` (or `warning` when orphans are
+  cataloged). Unified dossier summaries, prose declarations, or placeholder
+  files cannot substitute for verified child artifacts.
+- **Storage reconciliation distinguishes benign orphans from fatal missing or corrupted objects.**
+  In `scripts/ops/reconcile-storage-objects.js:141-177`, orphan objects (files in
+  storage without active database records) yield status `warning` unless
+  `--fail-on-orphans` is specified, accommodating aborted multipart uploads or
+  pending deletions. In contrast, missing objects (`missingObjects > 0`) or
+  checksum/size discrepancies (`mismatchedObjects > 0`) indicate permanent data
+  loss or corruption, triggering exit code 1 and failing closed to block launch
+  approval unconditionally.
+
+Verified about the executable contract, for precision:
+`scripts/ops/check-launch-readiness.js` validates that an approved
+`backup_and_disaster_recovery` section defines `rpo_hours` > 0 and ≤ 1.0 hour,
+`rto_hours` > 0 and ≤ 4.0 hours, a non-empty `backup_destination` without
+placeholders, a valid UTC every-hour `backup_schedule_cron`,
+`restore_drill_completed: true` with `restore_drill_date` strictly matching the
+UTC date of the referenced restore drill report,
+`db_object_reconciliation_tested: true`, a valid approver, and dual child
+evidence reports passing all schema and consistency checks. The validator checks
+internal structural consistency; it cannot verify that an off-host encrypted
+archive actually exists or that a production restore will succeed.
+
+The **operations lead** and **database lead** must provide through the approved
+operator channel the designated production backup destination and encryption
+mechanism (off-host, encrypted target distinct from primary hosts); active cron
+runner verification and schedule; restricted evidence-store location containing
+raw backup archives and drill execution logs; controlled read-only access to
+target database metadata and Garage/S3 bucket object listings; dual verified
+child reports (PostgreSQL restore drill report and storage reconciliation
+report); and a dated Category 6 approval signature on an operator readiness
+record. Read-only inspection of those safe sources in the restricted store is
+the next safe action. Any live restore drill requires separate authorization
+specifying target database, isolated drill database, operator, maintenance
+window, abort criteria, and observer. Categories 1–5 and all other launch gates
+retain their prior unresolved state, and prompt 201 governs the final
+eleven-category sign-off.
+
+Repository checks for this intake: `npm run ops:readiness-schema-test` passed
+(8/8); `node scripts/ops/check-launch-readiness.js
+infra/launch/readiness.example.json` exited 1 as designed with 11 required
+categories, 0 approved, 11 blocked, and 70 blockers, including three Category 6
+blockers (unresolved `backup_destination` placeholder, unresolved section
+status, and empty evidence array); `npm run ops:templates` printed `ops
+template check passed`; `bash scripts/ops/run-restore-drill.sh --help` and
+`node scripts/ops/reconcile-storage-objects.js --help` exited 0; `npm run
+ops:check` exited 0 across all 19 sub-suites — template check, 22 release-image
+tests, secret scan, Docker runtime, dependency audit with 0 critical
+vulnerabilities and 16 reported (8 moderate, 8 high), 8 schema tests, 103
+readiness-validator tests, 10 reconciliation tests, 18 Caddy tests, 17
+volume-encryption tests, 8 SBOM tests, SBOM license verification, 14 SAST
+tests, a SAST gate reporting zero blockers and zero expired suppressions, 11
+container-security tests, container-security scan, 15 capacity tests, 23
+alert-rule tests, and 13 launch-drill tests. `npm run lint`, `npm run
+typecheck`, and `npm run build` (client Next 16.3.4 webpack, NestJS, and
+shared) exited 0 across all workspaces, and `git diff --check` exited 0. No
+operator production source, backup archive, restore drill, or approval was
+inspected, and none of these repository results supplies Category 6 evidence.
+
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table
