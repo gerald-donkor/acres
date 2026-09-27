@@ -1645,6 +1645,36 @@ from an operator's private store.
 
 ### Operator handoff
 
+**Prompt 216 shared handoff check — 2026-09-27T21:18:58Z UTC.** Reviewed
+`5a1cc5ea64ad1cccdaaf3d1eb366b90b71af2816` on `main`. The only
+worktree change at intake was the uncommitted prompt 216. The tracked
+`infra/launch/` files are the unresolved example and schema; no tracked
+operator readiness record or production evidence pointer was found in the
+repository. Local `backups/` contains generated artifacts, but its contents
+were not accepted as production evidence. No restricted operator store, live
+source, or operator channel was available for inspection, so this finding says
+nothing about whether private evidence exists. The eleven rows above remain
+unresolved; no category has been reassessed or approved by this handoff check.
+
+One consolidated request for the operations lead, to be fulfilled through the
+approved operator channel: provide the designated production environment ID;
+the reviewed 40-character source SHA; immutable current and previous client
+and server image identifiers; identifiers for the materialized Caddyfile and
+Compose deployment; the restricted evidence-store and operator readiness-record
+locations; and the named deployment approver and rollback authority. For each
+of the eleven category rows above, name the evidence supplier and signer and
+provide an opaque child-report reference plus the independently inspectable
+live source reference. Name the person who can arrange scoped read-only access
+to those sources, the access procedure, and the approved target and fields for
+inspection. Date the handoff in UTC and bind every reference to the same
+production environment and release. Do not include credentials, secret values,
+private host inventories, tenant data, key material, or unredacted reports in
+chat or git; keep the signed record and raw evidence in the restricted store.
+References received later remain **supplied, unverified** until their sources
+are inspected. Prompt 201 owns the eventual eleven-row decision. Live drills
+and production changes require separate target, authority, action, window and
+recovery approval.
+
 For prompt 201, request only the named role or team for each row, opaque
 references to the operator-controlled records and restricted evidence store,
 and read-only access to inspect those records and live sources. Request the
