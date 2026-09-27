@@ -1045,6 +1045,54 @@ inspected, and none of these repository results supplies Category 8 evidence.
   The operator conducts the live route probe against the production ingress; the validator
   checks internal consistency, policy adherence, and child report validity.
 
+**Prompt 213 Category 9 intake — 2026-09-27T19:21:47Z UTC.** Reviewed
+`c97abba` on `main`. Repository inspection found only the unresolved
+`infra/launch/readiness.example.json` and test fixtures; no materialized
+production readiness record or redacted production GraphQL probe report was
+available in the approved repository paths. This does not establish what may
+exist in an operator's restricted evidence store. Category 9 remains
+**unresolved**. No selected production policy, public HTTPS ingress and release
+identity, authorized probe window/authentication context, live response
+transcript, matching child report, independent ordinary GraphQL route check, or
+dated security-lead approval was supplied. No production route was probed.
+
+The checked-in example sets `production_introspection_enabled: false`, but it is
+a template decision. The server source configures `/graphql` with
+`introspection: !config.isProduction`, and the production Compose example sets
+`NODE_ENV: production`; neither proves the deployed process or ingress behaves
+that way. Caddy's example proxies `/graphql` to `api:3001`. The readiness
+validator accepts a structurally consistent child report, including an enabled
+policy with written justification, but neither authenticates the report's
+provenance nor issues a live probe. The current server implementation supports
+the disabled production policy; enabling it would need a separate approved
+server/configuration change and deployment verification.
+
+The **security lead**, with the operations lead, must identify the selected
+policy, deployment/release, HTTPS `/graphql` ingress, permitted read-only probe
+window and authentication method, and restricted evidence-store reference.
+Supply a redacted response receipt that distinguishes introspection rejection
+from an unrelated 401, proxy failure, timeout, or outage; an ordinary authorized
+GraphQL response confirming route health; a matching
+`graphql_introspection_probe` child JSON report; and a dated security-lead
+decision. Use opaque references only, without cookies, tokens, raw credentials,
+or schema contents. Once available, independently compare the transcript,
+deployment, policy, and child fields, then validate the materialized readiness
+record. Categories 1–8 and 10–11 remain unresolved, and prompt 201 governs the
+final eleven-category sign-off.
+
+Repository checks for this intake: `npm run ops:readiness-schema-test`
+passed (1/1); `node --test scripts/ops/check-launch-readiness.spec.js`
+passed (103/103) outside the sandbox after its in-sandbox child-process test
+failed with `spawnSync ... EPERM`; `npm run ops:templates` printed `ops template
+check passed`; and `npm run ops:check`, lint, typecheck, and `git diff --check`
+exited 0. The example readiness validator exited 1 as designed: 11 required,
+0 approved, 11 blocked, 70 blockers, including the unresolved Category 9
+placeholder, section status, and empty evidence. `npm run build` first failed
+inside the sandbox with Next's `Could not parse output from TypeScript's
+--showConfig`; the same command passed outside the sandbox with client Next
+16.3.4 and server Nest builds. None of these repository checks supplies a live
+production GraphQL response or security approval.
+
 ### 10. Deployment & Rollback (`deployment_and_rollback`)
 
 - Drill/verify: `bash scripts/ops/run-deployment-drill.sh --dry-run`
