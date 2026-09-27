@@ -1136,6 +1136,63 @@ production GraphQL response or security approval.
   - Rejects deployment drill evidence reporting failure (`status !== 'success'`), schema backward compatibility failure (`schema_backward_compatible: false`), rollback procedure verification failure, Caddy routing verification failure, network isolation verification failure, missing security headers or S3 sigv4 verification, untested routes (< 12), invalid migration counts, or invalid graceful drain periods;
   - Rejects Unified Launch Evidence Dossiers reporting `deploymentBaseline.status: "breached"`, `summary.deploymentCompliance: "failed"`, or `summary.rollbackCompliance: "failed"`.
 
+**Prompt 214 Category 10 intake — 2026-09-27T19:53:01Z UTC.** Reviewed
+`353748a` on `main`. The repository-visible readiness file is only the
+unresolved `infra/launch/readiness.example.json`: Category 10 has
+`__REQUIRED_*__` release fields, `live_readiness_drill_completed: false`, no
+approver and no evidence. No materialized production readiness record, pinned
+current or previous image pair, registry manifest, signature or provenance
+receipt, protected promotion record, materialized production Caddy/Compose
+configuration, live promotion or rollback transcript, or dated release-manager
+decision was available for inspection in the repository. This does not establish
+what may exist in the operator's restricted evidence store. Category 10 remains
+**unresolved**; the §7 release-manager signature stays blank.
+
+The repository has eight local `backups/deployment-drill-evidence-*.json`
+reports dated 2026-09-09 through 2026-09-25. Each inspected report says
+`status: "success"`, `dry_run: true`, and `probe_live_tested: false`, and names
+`infra/compose/docker-compose.production.example.yml`; the latest names
+`infra/caddy/Caddyfile.example`. Their `rollback_procedure_verified: true` and
+`readiness_probes_verified: true` describe static procedure/readiness checks,
+not an observed production rollback or live API probe. No production target or
+release identity is bound to these reports. The validator's child-report checks
+can establish report consistency, but cannot authenticate an image digest,
+attestation, approval, promotion, or rollback. A locally successful drill or
+seven-stage dossier therefore supplies no Category 10 production approval.
+
+The **release manager**, **deployment approver**, and **rollback authority**
+must supply, through the approved operator channel, the selected target host
+profile and registry prefix; reviewed 40-hex source commit; distinct pinned
+current and previous client/server image references with matching registry
+manifests; separate verification receipts binding each current digest to that
+source; approved provenance policy; materialized Caddy/Compose references;
+release-shell image export, release-image checker and Compose `config --quiet`
+results; successful target-bound deployment child JSON report and operator
+transcript showing live ingress, readiness, migration compatibility, promotion,
+drain, rollback and post-rollback health; restricted evidence location; and a
+dated Category 10 sign-off. Read-only inspection of redacted or opaque
+references is the next safe action. Any production promotion, rollback,
+migration or traffic switch requires a separately authorized maintenance
+window and named operator. Do not place credentials, keys, or unredacted host
+inventory in Git. Categories 1–9 and 11, and prompt 201's final launch sign-off,
+remain separate unresolved gates.
+
+Repository verification for this intake: `npm run ops:readiness-schema-test`
+passed (1/1); `node --test scripts/ops/check-release-images.spec.js` passed
+(1/1); `npm run ops:templates` printed `ops template check passed`; `npm run
+lint` and `npm run typecheck` exited 0; and `git diff --check` exited 0.
+`node scripts/ops/check-launch-readiness.js
+infra/launch/readiness.example.json` exited 1 as designed with 11 required,
+0 approved, 11 blocked and 70 blockers. The readiness suite did not pass:
+its direct run reported 102/103 tests passing and one `spawnSync ... EPERM`
+failure in the CLI/aggregate wrapper test; the `node --test` parent reported
+the file failed without a test-level diagnostic. `npm run ops:check` stopped
+at `ops:audit` because DNS resolution of `registry.npmjs.org` returned
+`EAI_AGAIN`, so later sub-suites did not run in that command. `npm run build`
+stopped in the Next 16.3.4 client build with `Could not parse output from
+TypeScript's --showConfig`. These environment failures are not passes and none
+of the repository checks proves a production promotion or rollback.
+
 ### 11. No-AI Production Posture (`optional_ai_posture`)
 
 - Drill/verify: `node scripts/ops/check-launch-readiness.js <record>` (fail-closed AI gates)
