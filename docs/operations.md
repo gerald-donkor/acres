@@ -1238,6 +1238,30 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 225 update (2026-09-28): authenticate the production Valkey probe.**
+The production Compose example now injects the mandatory `VALKEY_PASSWORD` into
+the Valkey container as well as its `--requirepass` command. Its healthcheck
+reads that in-container variable through `VALKEYCLI_AUTH` and requires an exact
+`PONG` line. The container-security validator checks that the unrendered server,
+environment and probe sources match; mutation tests reject a missing binding,
+an unbound probe variable and a different server source. The credential was
+already present in the server command and is now also visible in the Valkey
+container environment, so operators must restrict container-inspection access
+to the same authorized identities. This template change does not prove a live
+container is healthy, that an operator injected a production credential, or
+that Category 4 is approved.
+Verification: Docker Compose 5.5.1 rendered a synthetic input; the Valkey
+environment had only `VALKEY_PASSWORD`, its server command used the same value,
+the probe retained its escaped container variable, and no port was published.
+`ops:container-test` passed 13/13, `ops:container-security`, `ops:templates`,
+`ops:check`, lint, typecheck, the production build and `git diff --check` passed.
+The checked-in readiness example still failed closed with 0 approved categories,
+11 blocked and 70 blockers. A local Docker daemon was reachable, but the pinned
+`valkey/valkey:9` image was not installed, so live container probe behavior was
+not verified. The first sandboxed container test was denied subprocess execution
+(`EPERM`), and the first sandboxed Next build failed while parsing TypeScript
+`--showConfig`; both checks passed on the permitted rerun.
+
 **Prompt 220 update (2026-09-27): production API/worker environment scope.**
 The API and worker production Compose services now use explicit environment
 maps. The API gets its runtime database URL, session and browser origin, SMTP,

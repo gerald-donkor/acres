@@ -224,6 +224,8 @@ services:
   valkey:
     image: valkey/valkey:9
     restart: unless-stopped
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?inject Valkey password}
     command:
       - valkey-server
       - --requirepass
@@ -237,7 +239,7 @@ services:
     volumes:
       - ${ACRES_VALKEY_ENCRYPTED_MOUNT:?set encrypted Valkey mount path}:/data
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli -a \"$${VALKEY_PASSWORD}\" ping | grep PONG"]
+      test: ["CMD-SHELL", "VALKEYCLI_AUTH=\"$${VALKEY_PASSWORD}\" valkey-cli ping | grep -qx PONG"]
       interval: 10s
       timeout: 5s
       retries: 10

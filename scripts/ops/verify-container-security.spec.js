@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
+const yaml = require('js-yaml');
 
 const {
   parseDockerfile,
@@ -14,6 +15,25 @@ const ROOT_DIR = path.resolve(__dirname, '../..');
 const SERVER_DOCKERFILE = path.join(ROOT_DIR, 'server/Dockerfile');
 const CLIENT_DOCKERFILE = path.join(ROOT_DIR, 'infra/docker/client.Dockerfile.example');
 const COMPOSE_FILE = path.join(ROOT_DIR, 'infra/compose/docker-compose.production.example.yml');
+
+test('validateComposeConfig: Valkey probe requires the same injected password as the server', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'valkey-authenticated-healthcheck';
+  assert.equal(validateComposeConfig(original).checks.find((item) => item.check === check)?.passed, true);
+
+  const mutations = [
+    (doc) => { delete doc.services.valkey.environment.VALKEY_PASSWORD; },
+    (doc) => { doc.services.valkey.healthcheck.test[1] = 'VALKEYCLI_AUTH="$${UNBOUND_PASSWORD}" valkey-cli ping | grep -qx PONG'; },
+    (doc) => { doc.services.valkey.command[2] = '${OTHER_PASSWORD:?inject other password}'; },
+  ];
+  for (const mutate of mutations) {
+    const doc = structuredClone(original);
+    mutate(doc);
+    const result = validateComposeConfig(doc);
+    assert.equal(result.valid, false);
+    assert.ok(result.errors.some((error) => error.includes(check) && error.includes('VALKEY_PASSWORD')));
+  }
+});
 
 test('verifyContainerSecurity: production reference files pass 100% of container security checks', () => {
   const result = verifyContainerSecurity();

@@ -312,6 +312,14 @@ check and is not evidence of production store policy or runtime injection.
 
 Repository facts the operator's inventory and the security lead must track:
 
+- **`valkey_secret_source` must reach Valkey's own healthcheck.** The
+  production Compose template binds mandatory `VALKEY_PASSWORD` to both the
+  server's `--requirepass` argument and the Valkey container environment. The
+  probe uses that in-container value and accepts only `PONG`; API and worker
+  startup depend on Valkey becoming healthy. Inspect the redacted live Valkey
+  environment key inventory and an authenticated probe result before Category 4
+  approval. The repository template alone proves neither live injection nor
+  health.
 - **`csrf_secret_source` now has a distinct API consumer.**
   `CsrfService` reads the validated `CSRF_SECRET`; the production API Compose
   map requires that input and the worker map excludes it. The application

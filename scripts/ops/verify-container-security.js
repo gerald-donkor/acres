@@ -272,6 +272,29 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
       : 'Hardcoded secrets detected in compose services'
   );
 
+  // The server and its in-container probe must share one mandatory source.
+  // Compare the unrendered template so neither diagnostics nor evidence expose it.
+  if (services.valkey) {
+    const valkey = services.valkey;
+    const passwordSource = '${VALKEY_PASSWORD:?inject Valkey password}';
+    const environmentBound = !Array.isArray(valkey.environment) &&
+      valkey.environment?.VALKEY_PASSWORD === passwordSource;
+    const requirepassIndex = Array.isArray(valkey.command)
+      ? valkey.command.indexOf('--requirepass') : -1;
+    const serverBound = requirepassIndex >= 0 &&
+      valkey.command[requirepassIndex + 1] === passwordSource;
+    const probe = valkey.healthcheck?.test;
+    const probeBound = Array.isArray(probe) && probe[0] === 'CMD-SHELL' &&
+      probe[1] === 'VALKEYCLI_AUTH="$${VALKEY_PASSWORD}" valkey-cli ping | grep -qx PONG';
+    record(
+      'valkey-authenticated-healthcheck',
+      environmentBound && serverBound && probeBound,
+      environmentBound && serverBound && probeBound
+        ? 'Valkey server and exact-PONG healthcheck use the same injected container password'
+        : 'Valkey must inject VALKEY_PASSWORD, use it for --requirepass, and probe with the escaped in-container variable and exact PONG'
+    );
+  }
+
   // 4. Healthcheck enforcement on critical services
   const requiredHealthcheckServices = ['api', 'postgres', 'valkey', 'garage', 'clamav'];
   let allHealthchecksPresent = true;
