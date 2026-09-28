@@ -351,7 +351,40 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
     );
   }
 
-  // 6. Container process signal supervision (init: true)
+  // 6. Observability dependencies and healthchecks
+  if (services.prometheus || services['postgres-exporter'] || services.grafana) {
+    let obsValid = true;
+    if (services.prometheus) {
+      const promHc = services.prometheus.healthcheck;
+      if (!promHc || !JSON.stringify(promHc.test || '').includes('/-/healthy')) {
+        obsValid = false;
+        errors.push("Service 'prometheus' must define bounded healthcheck on /-/healthy");
+      }
+    }
+    if (services['postgres-exporter']) {
+      const pgDep = services['postgres-exporter']?.depends_on?.postgres;
+      if (pgDep?.condition !== 'service_healthy') {
+        obsValid = false;
+        errors.push("Service 'postgres-exporter' must depend on postgres with condition: service_healthy");
+      }
+    }
+    if (services.grafana) {
+      const promDep = services.grafana?.depends_on?.prometheus;
+      if (promDep?.condition !== 'service_healthy') {
+        obsValid = false;
+        errors.push("Service 'grafana' must depend on prometheus with condition: service_healthy");
+      }
+    }
+    record(
+      'observability-dependencies-healthy',
+      obsValid,
+      obsValid
+        ? 'Observability services configure bounded healthchecks and require healthy upstream dependencies'
+        : 'Observability services missing healthchecks or healthy upstream dependencies'
+    );
+  }
+
+  // 7. Container process signal supervision (init: true)
   const appServices = ['api', 'worker', 'next'];
   let initConfigured = true;
   for (const svcName of appServices) {

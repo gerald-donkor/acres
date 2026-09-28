@@ -310,6 +310,12 @@ services:
       - ${ACRES_GARAGE_METRICS_TOKEN_FILE:?inject Garage metrics token file path}:/run/secrets/garage_metrics_token:ro
     expose:
       - "9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     networks:
       - private
     stop_grace_period: 45s
@@ -325,6 +331,9 @@ services:
       PG_EXPORTER_COLLECTION_TIMEOUT: 10s
     volumes:
       - ${ACRES_MONITOR_PASSWORD_FILE:?inject monitor password file path}:/run/secrets/acres_monitor_password:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
     expose:
       - "9187"
     healthcheck:
@@ -349,6 +358,9 @@ services:
       - ../grafana/provisioning:/etc/grafana/provisioning:ro
       - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ${ACRES_GRAFANA_ENCRYPTED_MOUNT:?set Grafana data mount path}:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
     expose:
       - "3000"
     networks:

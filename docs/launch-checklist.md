@@ -1174,6 +1174,17 @@ production GraphQL response or security approval.
   `valkey`, `garage`, `clamav`), verifies that all ten internal services attach exclusively
   to the private internal network, and enforces that all Caddy backend dependencies require
   `condition: service_healthy`.
+- **Observability health & dependency gating (Prompt 227, 2026-09-28):**
+  The production Compose template defines an explicit bounded healthcheck for
+  `prometheus` (`wget -qO- http://127.0.0.1:9090/-/healthy || exit 1`, interval: 30s,
+  timeout: 5s, start_period: 15s, retries: 3). `postgres-exporter` defines
+  `depends_on.postgres: condition: service_healthy`, preventing unready database
+  scrape connection failures. `grafana` defines `depends_on.prometheus: condition: service_healthy`,
+  preventing dashboard queries against an unready Prometheus server. `run-deployment-drill.sh`
+  and `verify-container-security.js` enforce private network isolation across all ten internal
+  services (`next`, `api`, `worker`, `postgres`, `valkey`, `garage`, `clamav`, `prometheus`,
+  `postgres-exporter`, `grafana`), and container security audits verify observability health
+  and dependency gating fail-closed.
 
 **Prompt 214 Category 10 intake — 2026-09-27T19:53:01Z UTC.** Reviewed
 `353748a` on `main`. The repository-visible readiness file is only the

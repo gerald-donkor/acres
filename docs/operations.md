@@ -1238,6 +1238,22 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 227 update (2026-09-28): harden observability container healthchecks and dependencies.**
+The production Compose template now explicitly declares `depends_on: postgres: condition: service_healthy`
+for `postgres-exporter`, ensuring the database metrics exporter does not attempt connections before
+PostgreSQL role initialization and healthchecks complete. `prometheus` now defines an explicit bounded
+healthcheck (`wget -qO- http://127.0.0.1:9090/-/healthy || exit 1`, interval: 30s, timeout: 5s,
+start_period: 15s, retries: 3). `grafana` explicitly defines `depends_on: prometheus: condition: service_healthy`,
+ensuring the Grafana UI does not attempt dashboard queries against an unready Prometheus server.
+In `scripts/ops/run-deployment-drill.sh`, the step 5 network isolation check expands to inspect all ten
+internal services (`next`, `api`, `worker`, `postgres`, `valkey`, `garage`, `clamav`, `prometheus`,
+`postgres-exporter`, `grafana`), ensuring none joins the public network. In `scripts/ops/verify-container-security.js`,
+a new `observability-dependencies-healthy` check enforces that `prometheus` defines its bounded healthcheck,
+`postgres-exporter` requires `postgres: condition: service_healthy`, and `grafana` requires `prometheus: condition: service_healthy`.
+Production template validation in `scripts/ops/check-production-templates.sh` asserts all three invariants.
+Verification: `ops:container-test` passed 19/19; `ops:container-security` passed 20/20 checks;
+`ops:templates`, `ops:deployment-drill -- --dry-run`, `ops:check`, lint, typecheck, build, and `git diff --check` passed cleanly.
+
 **Prompt 226 update (2026-09-28): strengthen container healthchecks and internal network isolation.**
 The production Compose template now explicitly defines a bounded healthcheck for the
 `next` service (`wget -qO- http://127.0.0.1:3000/ || exit 1`, interval: 30s, timeout: 5s,

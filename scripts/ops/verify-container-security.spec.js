@@ -327,6 +327,48 @@ test('validateComposeConfig: detects missing Caddy depends_on or omitted upstrea
   }
 });
 
+test('validateComposeConfig: detects missing observability dependencies or unhealthchecked Prometheus', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'observability-dependencies-healthy';
+  assert.equal(validateComposeConfig(original).checks.find((item) => item.check === check)?.passed, true);
+
+  // 1. Prometheus missing healthcheck
+  const docNoPromHc = structuredClone(original);
+  delete docNoPromHc.services.prometheus.healthcheck;
+  const resNoPromHc = validateComposeConfig(docNoPromHc);
+  assert.equal(resNoPromHc.valid, false);
+  assert.equal(resNoPromHc.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resNoPromHc.errors.some((err) => err.includes("Service 'prometheus' must define bounded healthcheck on /-/healthy")));
+
+  // 2. postgres-exporter missing depends_on postgres or permitting unready condition
+  const docNoExporterDep = structuredClone(original);
+  delete docNoExporterDep.services['postgres-exporter'].depends_on;
+  const resNoExporterDep = validateComposeConfig(docNoExporterDep);
+  assert.equal(resNoExporterDep.valid, false);
+  assert.equal(resNoExporterDep.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resNoExporterDep.errors.some((err) => err.includes("Service 'postgres-exporter' must depend on postgres with condition: service_healthy")));
+
+  const docExporterStarted = structuredClone(original);
+  docExporterStarted.services['postgres-exporter'].depends_on.postgres.condition = 'service_started';
+  const resExporterStarted = validateComposeConfig(docExporterStarted);
+  assert.equal(resExporterStarted.valid, false);
+  assert.equal(resExporterStarted.checks.find((item) => item.check === check)?.passed, false);
+
+  // 3. grafana missing depends_on prometheus or permitting unready condition
+  const docNoGrafanaDep = structuredClone(original);
+  delete docNoGrafanaDep.services.grafana.depends_on;
+  const resNoGrafanaDep = validateComposeConfig(docNoGrafanaDep);
+  assert.equal(resNoGrafanaDep.valid, false);
+  assert.equal(resNoGrafanaDep.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resNoGrafanaDep.errors.some((err) => err.includes("Service 'grafana' must depend on prometheus with condition: service_healthy")));
+
+  const docGrafanaStarted = structuredClone(original);
+  docGrafanaStarted.services.grafana.depends_on.prometheus.condition = 'service_started';
+  const resGrafanaStarted = validateComposeConfig(docGrafanaStarted);
+  assert.equal(resGrafanaStarted.valid, false);
+  assert.equal(resGrafanaStarted.checks.find((item) => item.check === check)?.passed, false);
+});
+
 test('verifyContainerSecurity CLI: --output and -o create structured JSON evidence file matching schema', () => {
   const os = require('node:os');
   const { execFileSync } = require('node:child_process');

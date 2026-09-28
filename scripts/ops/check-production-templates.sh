@@ -316,6 +316,7 @@ if (JSON.stringify(exporter.profiles) !== JSON.stringify(['observability']) ||
     JSON.stringify(exporter.networks) !== JSON.stringify(['private']) ||
     !exporter.expose?.includes('9187') || exporter.ports?.length ||
     !JSON.stringify(exporter.healthcheck?.test).includes('127.0.0.1:9187/') ||
+    exporter.depends_on?.postgres?.condition !== 'service_healthy' ||
     exporter.environment?.DATA_SOURCE_URI !== 'postgres:5432/acres?sslmode=disable' ||
     exporter.environment?.DATA_SOURCE_USER !== 'acres_monitor' ||
     exporter.environment?.DATA_SOURCE_PASS_FILE !== '/run/secrets/acres_monitor_password' ||
@@ -359,6 +360,21 @@ for (const [name, service] of Object.entries(services)) {
     console.error(`ops template check failed: monitor bootstrap password must not reach ${name}`);
     process.exit(1);
   }
+}
+
+const prometheusSvc = services.prometheus;
+if (!prometheusSvc ||
+    !JSON.stringify(prometheusSvc.healthcheck?.test).includes('127.0.0.1:9090/-/healthy') ||
+    prometheusSvc.healthcheck?.interval !== '30s' ||
+    prometheusSvc.healthcheck?.timeout !== '5s') {
+  console.error('ops template check failed: Prometheus service must define bounded healthcheck on /-/healthy');
+  process.exit(1);
+}
+
+const grafanaSvc = services.grafana;
+if (!grafanaSvc || grafanaSvc.depends_on?.prometheus?.condition !== 'service_healthy') {
+  console.error('ops template check failed: Grafana service must depend on healthy Prometheus');
+  process.exit(1);
 }
 
 const alerts = readYaml('infra/prometheus/alerts.yml');

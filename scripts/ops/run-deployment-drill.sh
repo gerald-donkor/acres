@@ -232,8 +232,8 @@ if (!services.caddy.networks.includes('public') || !services.caddy.networks.incl
   process.exit(1);
 }
 
-for (const svc of ['next', 'api', 'worker', 'postgres', 'valkey', 'garage']) {
-  if (services[svc].networks.includes('public')) {
+for (const svc of ['next', 'api', 'worker', 'postgres', 'valkey', 'garage', 'clamav', 'prometheus', 'postgres-exporter', 'grafana']) {
+  if (services[svc]?.networks?.includes('public')) {
     console.error(`Error: Service "${svc}" must not join the public network!`);
     process.exit(1);
   }
