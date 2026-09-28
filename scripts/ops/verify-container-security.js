@@ -191,16 +191,15 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
       : 'Private network must be configured with internal: true'
   );
 
-  // 2. Data store network isolation
-  const isolatedServices = ['postgres', 'valkey', 'garage', 'clamav', 'prometheus'];
+  // 2. Data store & internal service network isolation
   let datastoreIsolated = true;
-  for (const svcName of isolatedServices) {
-    const svc = services[svcName];
+  for (const [svcName, svc] of Object.entries(services)) {
+    if (svcName === 'caddy') continue;
     if (svc) {
       const netList = Array.isArray(svc.networks) ? svc.networks : [];
       if (netList.includes('public')) {
         datastoreIsolated = false;
-        errors.push(`Data store service '${svcName}' must not attach to public network`);
+        errors.push(`Data store or internal service '${svcName}' must not attach to public network`);
       }
     }
   }
@@ -208,8 +207,8 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
     'datastore-network-isolation',
     datastoreIsolated,
     datastoreIsolated
-      ? 'Internal stateful services (postgres, valkey, garage, clamav, prometheus) attached only to private network'
-      : 'Stateful services leaked onto public network'
+      ? 'Internal stateful and application services attached only to private network'
+      : 'Internal services leaked onto public network'
   );
 
   // 3. No plaintext passwords in environment definitions or command flags
@@ -296,11 +295,15 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
   }
 
   // 4. Healthcheck enforcement on critical services
-  const requiredHealthcheckServices = ['api', 'postgres', 'valkey', 'garage', 'clamav'];
+  const requiredHealthcheckServices = ['api', 'worker', 'next', 'postgres', 'valkey', 'garage', 'clamav'];
+  const isFullStack = Object.keys(services).length > 3 || filePath.includes('docker-compose.production');
   let allHealthchecksPresent = true;
   for (const svcName of requiredHealthcheckServices) {
     const svc = services[svcName];
-    if (svc && !svc.healthcheck) {
+    if (isFullStack && !svc) {
+      allHealthchecksPresent = false;
+      errors.push(`Required service '${svcName}' is not defined in Compose configuration`);
+    } else if (svc && !svc.healthcheck) {
       allHealthchecksPresent = false;
       errors.push(`Service '${svcName}' is missing healthcheck configuration`);
     }
@@ -309,11 +312,46 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
     'service-healthchecks-defined',
     allHealthchecksPresent,
     allHealthchecksPresent
-      ? 'Critical services (api, postgres, valkey, garage, clamav) define bounded healthchecks'
+      ? 'Critical services (api, worker, next, postgres, valkey, garage, clamav) define bounded healthchecks'
       : 'Missing healthchecks on critical services'
   );
 
-  // 5. Container process signal supervision (init: true)
+  // 5. Caddy backend dependencies require verified health
+  if (isFullStack || services.caddy) {
+    const expectedCaddyBackends = ['next', 'api', 'garage'];
+    const caddyDeps = services.caddy?.depends_on;
+    let depsHealthy = true;
+    if (!services.caddy) {
+      depsHealthy = false;
+      errors.push("Missing Caddy reverse proxy service definition in Compose configuration");
+    } else if (!caddyDeps || typeof caddyDeps !== 'object' || Array.isArray(caddyDeps)) {
+      depsHealthy = false;
+      errors.push("Caddy service must define 'depends_on' object specifying upstream readiness conditions");
+    } else {
+      for (const backend of expectedCaddyBackends) {
+        if (!caddyDeps[backend]) {
+          depsHealthy = false;
+          errors.push(`Caddy depends_on is missing expected backend '${backend}'`);
+        }
+      }
+      for (const [depName, depConfig] of Object.entries(caddyDeps)) {
+        const condition = depConfig?.condition;
+        if (condition !== 'service_healthy') {
+          depsHealthy = false;
+          errors.push(`Caddy dependency '${depName}' must require condition: service_healthy (found: ${condition || 'none'})`);
+        }
+      }
+    }
+    record(
+      'caddy-dependencies-healthy',
+      depsHealthy,
+      depsHealthy
+        ? 'Caddy reverse proxy gates ingress on backend health (all depends_on require service_healthy)'
+        : 'Caddy depends_on permits unready backend services'
+    );
+  }
+
+  // 6. Container process signal supervision (init: true)
   const appServices = ['api', 'worker', 'next'];
   let initConfigured = true;
   for (const svcName of appServices) {

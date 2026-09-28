@@ -1163,6 +1163,17 @@ production GraphQL response or security approval.
   - Requires at least one concrete, successful deployment drill child report in `evidence` or `release.live_drill_evidence` for approved status;
   - Rejects deployment drill evidence reporting failure (`status !== 'success'`), schema backward compatibility failure (`schema_backward_compatible: false`), rollback procedure verification failure, Caddy routing verification failure, network isolation verification failure, missing security headers or S3 sigv4 verification, untested routes (< 12), invalid migration counts, or invalid graceful drain periods;
   - Rejects Unified Launch Evidence Dossiers reporting `deploymentBaseline.status: "breached"`, `summary.deploymentCompliance: "failed"`, or `summary.rollbackCompliance: "failed"`.
+- **Container health & edge ingress gating (Prompt 226, 2026-09-28):**
+  The production Compose template defines an explicit bounded healthcheck for
+  `next` (`wget -qO- http://127.0.0.1:3000/ || exit 1`, interval: 30s, timeout: 5s,
+  start_period: 15s, retries: 3) matching `infra/docker/client.Dockerfile.example`.
+  `caddy.depends_on.next` enforces `condition: service_healthy`, eliminating edge
+  routing to unready frontend instances. `clamav` healthcheck adds `start_period: 30s`.
+  The container security auditor (`scripts/ops/verify-container-security.js`) enforces
+  bounded healthchecks across all seven core services (`api`, `worker`, `next`, `postgres`,
+  `valkey`, `garage`, `clamav`), verifies that all ten internal services attach exclusively
+  to the private internal network, and enforces that all Caddy backend dependencies require
+  `condition: service_healthy`.
 
 **Prompt 214 Category 10 intake — 2026-09-27T19:53:01Z UTC.** Reviewed
 `353748a` on `main`. The repository-visible readiness file is only the

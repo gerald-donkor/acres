@@ -248,6 +248,85 @@ test('validateComposeConfig: detects missing internal: true on private network r
   assert.ok(res.errors.some((e) => e.includes('private-network-internal-isolation')));
 });
 
+test('validateComposeConfig: detects missing healthcheck on worker or next service regression', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'service-healthchecks-defined';
+  assert.equal(validateComposeConfig(original).checks.find((item) => item.check === check)?.passed, true);
+
+  for (const svc of ['worker', 'next']) {
+    const doc = structuredClone(original);
+    delete doc.services[svc].healthcheck;
+    const result = validateComposeConfig(doc);
+    assert.equal(result.valid, false);
+    assert.equal(result.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(result.errors.some((error) => error.includes(svc)));
+  }
+});
+
+test('validateComposeConfig: detects internal observability and worker services leaked onto public network', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'datastore-network-isolation';
+  assert.equal(validateComposeConfig(original).checks.find((item) => item.check === check)?.passed, true);
+
+  for (const svc of ['postgres-exporter', 'grafana', 'worker', 'next']) {
+    const doc = structuredClone(original);
+    doc.services[svc].networks = ['public', 'private'];
+    const result = validateComposeConfig(doc);
+    assert.equal(result.valid, false);
+    assert.equal(result.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(result.errors.some((error) => error.includes(svc)));
+  }
+});
+
+test('validateComposeConfig: detects Caddy backend dependencies permitting unready condition', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'caddy-dependencies-healthy';
+  assert.equal(validateComposeConfig(original).checks.find((item) => item.check === check)?.passed, true);
+
+  for (const dep of ['next', 'api', 'garage']) {
+    const doc = structuredClone(original);
+    doc.services.caddy.depends_on[dep] = { condition: 'service_started' };
+    const result = validateComposeConfig(doc);
+    assert.equal(result.valid, false);
+    assert.equal(result.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(result.errors.some((error) => error.includes(dep)));
+  }
+});
+
+test('validateComposeConfig: detects omitted critical service definition (worker, next) from full compose stack', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'service-healthchecks-defined';
+
+  for (const svc of ['worker', 'next']) {
+    const doc = structuredClone(original);
+    delete doc.services[svc];
+    const result = validateComposeConfig(doc);
+    assert.equal(result.valid, false);
+    assert.equal(result.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(result.errors.some((error) => error.includes(`Required service '${svc}' is not defined`)));
+  }
+});
+
+test('validateComposeConfig: detects missing Caddy depends_on or omitted upstream backend', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'caddy-dependencies-healthy';
+
+  const docNoDependsOn = structuredClone(original);
+  delete docNoDependsOn.services.caddy.depends_on;
+  const resNoDependsOn = validateComposeConfig(docNoDependsOn);
+  assert.equal(resNoDependsOn.valid, false);
+  assert.equal(resNoDependsOn.checks.find((item) => item.check === check)?.passed, false);
+
+  for (const backend of ['next', 'api', 'garage']) {
+    const doc = structuredClone(original);
+    delete doc.services.caddy.depends_on[backend];
+    const result = validateComposeConfig(doc);
+    assert.equal(result.valid, false);
+    assert.equal(result.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(result.errors.some((error) => error.includes(`missing expected backend '${backend}'`)));
+  }
+});
+
 test('verifyContainerSecurity CLI: --output and -o create structured JSON evidence file matching schema', () => {
   const os = require('node:os');
   const { execFileSync } = require('node:child_process');

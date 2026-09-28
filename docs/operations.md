@@ -1238,6 +1238,25 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 226 update (2026-09-28): strengthen container healthchecks and internal network isolation.**
+The production Compose template now explicitly defines a bounded healthcheck for the
+`next` service (`wget -qO- http://127.0.0.1:3000/ || exit 1`, interval: 30s, timeout: 5s,
+start_period: 15s, retries: 3) matching `infra/docker/client.Dockerfile.example`.
+Caddy's `depends_on.next` condition is tightened from `service_started` to
+`service_healthy`, ensuring Caddy does not route edge traffic before Next.js is
+ready. The `clamav` healthcheck adds `start_period: 30s` to prevent premature retry
+exhaustion during signature initialization. In `scripts/ops/verify-container-security.js`,
+`service-healthchecks-defined` enforces bounded healthchecks across all seven core
+application and datastore services (`api`, `worker`, `next`, `postgres`, `valkey`,
+`garage`, `clamav`). `datastore-network-isolation` is expanded to verify that all ten
+internal services (`next`, `api`, `worker`, `postgres`, `valkey`, `garage`, `clamav`,
+`prometheus`, `postgres-exporter`, `grafana`) attach exclusively to the private network.
+A new `caddy-dependencies-healthy` check enforces that all Caddy backend dependencies
+require `condition: service_healthy`.
+Verification: `ops:container-test` passed 16/16 with focused regression mutations;
+`ops:container-security` passed 19/19 checks; `ops:templates`, `ops:deployment-drill -- --dry-run`,
+`ops:check`, lint, typecheck, build, and `git diff --check` passed cleanly.
+
 **Prompt 225 update (2026-09-28): authenticate the production Valkey probe.**
 The production Compose example now injects the mandatory `VALKEY_PASSWORD` into
 the Valkey container as well as its `--requirepass` command. Its healthcheck
