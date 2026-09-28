@@ -1185,6 +1185,13 @@ production GraphQL response or security approval.
   services (`next`, `api`, `worker`, `postgres`, `valkey`, `garage`, `clamav`, `prometheus`,
   `postgres-exporter`, `grafana`), and container security audits verify observability health
   and dependency gating fail-closed.
+- **Application container dependencies & shutdown lifecycle (Prompt 228, 2026-09-28):**
+  Static preflight and container security audits (`verify-container-security.js` and `check-production-templates.sh`)
+  strictly validate that `api` gates on healthy `postgres`, `valkey`, and `garage`, and `worker` gates on healthy
+  `postgres`, `valkey`, `garage`, and `clamav`. `process-init-supervision` enforces both `init: true` and `stop_signal: SIGTERM`
+  on `api`, `worker`, and `next`. `graceful-shutdown-lifecycle` verifies `restart: unless-stopped` and bounded `stop_grace_period`
+  across all eleven production services, asserting expected application drain timeouts (`caddy: 30s`, `next: 30s`, `api: 45s`, `worker: 60s`).
+
 
 **Prompt 214 Category 10 intake — 2026-09-27T19:53:01Z UTC.** Reviewed
 `353748a` on `main`. The repository-visible readiness file is only the

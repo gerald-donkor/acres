@@ -384,14 +384,74 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
     );
   }
 
-  // 7. Container process signal supervision (init: true)
+  // 7. Application dependencies on healthy datastores
+  if (services.api || services.worker) {
+    let appDepsValid = true;
+    if (services.api) {
+      const apiDeps = services.api.depends_on;
+      const requiredApiDeps = ['postgres', 'valkey', 'garage'];
+      if (!apiDeps || typeof apiDeps !== 'object' || Array.isArray(apiDeps)) {
+        appDepsValid = false;
+        errors.push("Service 'api' must define 'depends_on' object specifying upstream datastore conditions");
+      } else {
+        for (const dep of requiredApiDeps) {
+          if (!apiDeps[dep]) {
+            appDepsValid = false;
+            errors.push(`Service 'api' depends_on is missing expected backend '${dep}'`);
+          }
+        }
+        for (const [depName, depConfig] of Object.entries(apiDeps)) {
+          if (depConfig?.condition !== 'service_healthy') {
+            appDepsValid = false;
+            errors.push(`Service 'api' dependency '${depName}' must require condition: service_healthy (found: ${depConfig?.condition || 'none'})`);
+          }
+        }
+      }
+    }
+    if (services.worker) {
+      const workerDeps = services.worker.depends_on;
+      const requiredWorkerDeps = ['postgres', 'valkey', 'garage', 'clamav'];
+      if (!workerDeps || typeof workerDeps !== 'object' || Array.isArray(workerDeps)) {
+        appDepsValid = false;
+        errors.push("Service 'worker' must define 'depends_on' object specifying upstream datastore conditions");
+      } else {
+        for (const dep of requiredWorkerDeps) {
+          if (!workerDeps[dep]) {
+            appDepsValid = false;
+            errors.push(`Service 'worker' depends_on is missing expected backend '${dep}'`);
+          }
+        }
+        for (const [depName, depConfig] of Object.entries(workerDeps)) {
+          if (depConfig?.condition !== 'service_healthy') {
+            appDepsValid = false;
+            errors.push(`Service 'worker' dependency '${depName}' must require condition: service_healthy (found: ${depConfig?.condition || 'none'})`);
+          }
+        }
+      }
+    }
+    record(
+      'application-dependencies-healthy',
+      appDepsValid,
+      appDepsValid
+        ? 'Application services (api, worker) gate startup on healthy datastore dependencies'
+        : 'Application services missing datastore dependencies or permit unready conditions'
+    );
+  }
+
+  // 8. Container process signal supervision (init: true and stop_signal: SIGTERM)
   const appServices = ['api', 'worker', 'next'];
   let initConfigured = true;
   for (const svcName of appServices) {
     const svc = services[svcName];
-    if (svc && svc.init !== true) {
-      initConfigured = false;
-      errors.push(`Service '${svcName}' should configure init: true for signal supervision`);
+    if (svc) {
+      if (svc.init !== true) {
+        initConfigured = false;
+        errors.push(`Service '${svcName}' should configure init: true for signal supervision`);
+      }
+      if (svc.stop_signal !== 'SIGTERM') {
+        initConfigured = false;
+        errors.push(`Service '${svcName}' should configure stop_signal: SIGTERM (found: ${svc.stop_signal || 'none'})`);
+      }
     }
   }
   record(
@@ -399,8 +459,46 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
     initConfigured,
     initConfigured
       ? 'Application services (api, worker, next) configure init: true and stop_signal: SIGTERM'
-      : 'Application services missing init: true'
+      : 'Application services missing init: true or stop_signal: SIGTERM'
   );
+
+  // 9. Graceful shutdown lifecycle and restart policy
+  if (isFullStack) {
+    const expectedGracePeriods = {
+      caddy: '30s',
+      next: '30s',
+      api: '45s',
+      worker: '60s',
+    };
+    let shutdownValid = true;
+    for (const [svcName, svc] of Object.entries(services)) {
+      if (!svc) continue;
+      if (svc.restart !== 'unless-stopped') {
+        shutdownValid = false;
+        errors.push(`Service '${svcName}' must configure restart: unless-stopped (found: ${svc.restart || 'none'})`);
+      }
+      if (!svc.stop_grace_period || typeof svc.stop_grace_period !== 'string' || !/^[1-9]\d*s$/.test(svc.stop_grace_period)) {
+        shutdownValid = false;
+        errors.push(`Service '${svcName}' must define a positive bounded stop_grace_period (e.g. '30s')`);
+      }
+    }
+    for (const [appSvc, expectedGrace] of Object.entries(expectedGracePeriods)) {
+      if (services[appSvc]) {
+        const actual = services[appSvc]?.stop_grace_period;
+        if (actual !== expectedGrace) {
+          shutdownValid = false;
+          errors.push(`Service '${appSvc}' stop_grace_period is '${actual}', expected '${expectedGrace}'`);
+        }
+      }
+    }
+    record(
+      'graceful-shutdown-lifecycle',
+      shutdownValid,
+      shutdownValid
+        ? 'All services configure restart: unless-stopped and bounded stop_grace_period matching operational drain contracts'
+        : 'Services missing restart policy or bounded stop_grace_period'
+    );
+  }
 
   return {
     valid: errors.length === 0,

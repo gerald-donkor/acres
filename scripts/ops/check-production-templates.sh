@@ -377,6 +377,61 @@ if (!grafanaSvc || grafanaSvc.depends_on?.prometheus?.condition !== 'service_hea
   process.exit(1);
 }
 
+for (const dep of ['postgres', 'valkey', 'garage']) {
+  if (services.api?.depends_on?.[dep]?.condition !== 'service_healthy') {
+    console.error(`ops template check failed: api service must depend on ${dep} with condition: service_healthy`);
+    process.exit(1);
+  }
+}
+for (const [dep, config] of Object.entries(services.api?.depends_on || {})) {
+  if (config?.condition !== 'service_healthy') {
+    console.error(`ops template check failed: api service dependency ${dep} must require condition: service_healthy`);
+    process.exit(1);
+  }
+}
+for (const dep of ['postgres', 'valkey', 'garage', 'clamav']) {
+  if (services.worker?.depends_on?.[dep]?.condition !== 'service_healthy') {
+    console.error(`ops template check failed: worker service must depend on ${dep} with condition: service_healthy`);
+    process.exit(1);
+  }
+}
+for (const [dep, config] of Object.entries(services.worker?.depends_on || {})) {
+  if (config?.condition !== 'service_healthy') {
+    console.error(`ops template check failed: worker service dependency ${dep} must require condition: service_healthy`);
+    process.exit(1);
+  }
+}
+
+for (const appSvc of ['api', 'worker', 'next']) {
+  const svc = services[appSvc];
+  if (!svc || svc.init !== true || svc.stop_signal !== 'SIGTERM') {
+    console.error(`ops template check failed: ${appSvc} service must configure init: true and stop_signal: SIGTERM`);
+    process.exit(1);
+  }
+}
+
+const expectedDrainPeriods = {
+  caddy: '30s',
+  next: '30s',
+  api: '45s',
+  worker: '60s',
+};
+for (const [name, service] of Object.entries(services)) {
+  if (!service || typeof service !== 'object') continue;
+  if (service.restart !== 'unless-stopped') {
+    console.error(`ops template check failed: ${name} must configure restart: unless-stopped`);
+    process.exit(1);
+  }
+  if (!service.stop_grace_period || !/^[1-9]\d*s$/.test(service.stop_grace_period)) {
+    console.error(`ops template check failed: ${name} must configure a positive bounded stop_grace_period`);
+    process.exit(1);
+  }
+  if (expectedDrainPeriods[name] && service.stop_grace_period !== expectedDrainPeriods[name]) {
+    console.error(`ops template check failed: ${name} stop_grace_period must be ${expectedDrainPeriods[name]}`);
+    process.exit(1);
+  }
+}
+
 const alerts = readYaml('infra/prometheus/alerts.yml');
 const alertNames = (alerts.groups || []).flatMap((g) => (g.rules || []).map((r) => r.alert));
 const requiredAlerts = [

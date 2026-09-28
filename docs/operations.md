@@ -1238,6 +1238,18 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 228 update (2026-09-28): harden application container dependencies and shutdown lifecycle.**
+Static verification in `scripts/ops/verify-container-security.js` and `scripts/ops/check-production-templates.sh`
+now strictly validates application service dependencies, complete signal supervision, and graceful shutdown drain periods.
+`api` is verified to gate startup on healthy datastores (`postgres`, `valkey`, `garage`), and `worker` is verified to gate
+startup on healthy `postgres`, `valkey`, `garage`, and `clamav`, eliminating race conditions during cold boots.
+`process-init-supervision` now strictly enforces both `init: true` and `stop_signal: SIGTERM` across `api`, `worker`, and `next`.
+A new `graceful-shutdown-lifecycle` check enforces that all eleven production services declare `restart: unless-stopped`
+and explicit bounded `stop_grace_period` durations, specifically verifying application drain contracts (`caddy: 30s`, `next: 30s`,
+`api: 45s`, `worker: 60s`).
+Verification: `ops:container-test` passed 22/22; `ops:container-security` passed 22/22 checks; `ops:templates`,
+`ops:deployment-drill -- --dry-run`, `ops:check`, lint, typecheck, build, and `git diff --check` passed cleanly.
+
 **Prompt 227 update (2026-09-28): harden observability container healthchecks and dependencies.**
 The production Compose template now explicitly declares `depends_on: postgres: condition: service_healthy`
 for `postgres-exporter`, ensuring the database metrics exporter does not attempt connections before

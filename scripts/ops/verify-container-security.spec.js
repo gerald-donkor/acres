@@ -369,6 +369,115 @@ test('validateComposeConfig: detects missing observability dependencies or unhea
   assert.equal(resGrafanaStarted.checks.find((item) => item.check === check)?.passed, false);
 });
 
+test('validateComposeConfig: detects missing or unready application datastore dependencies', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'application-dependencies-healthy';
+  assert.equal(validateComposeConfig(original).checks.find((item) => item.check === check)?.passed, true);
+
+  // 1. API missing required dependencies
+  for (const dep of ['postgres', 'valkey', 'garage']) {
+    const doc = structuredClone(original);
+    delete doc.services.api.depends_on[dep];
+    const result = validateComposeConfig(doc);
+    assert.equal(result.valid, false);
+    assert.equal(result.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(result.errors.some((err) => err.includes(`Service 'api' depends_on is missing expected backend '${dep}'`)));
+  }
+
+  // 2. API dependency permits unready condition
+  const docApiStarted = structuredClone(original);
+  docApiStarted.services.api.depends_on.postgres.condition = 'service_started';
+  const resApiStarted = validateComposeConfig(docApiStarted);
+  assert.equal(resApiStarted.valid, false);
+  assert.equal(resApiStarted.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resApiStarted.errors.some((err) => err.includes("Service 'api' dependency 'postgres' must require condition: service_healthy")));
+
+  // 3. Worker missing required dependencies
+  for (const dep of ['postgres', 'valkey', 'garage', 'clamav']) {
+    const doc = structuredClone(original);
+    delete doc.services.worker.depends_on[dep];
+    const result = validateComposeConfig(doc);
+    assert.equal(result.valid, false);
+    assert.equal(result.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(result.errors.some((err) => err.includes(`Service 'worker' depends_on is missing expected backend '${dep}'`)));
+  }
+
+  // 4. Worker dependency permits unready condition
+  const docWorkerStarted = structuredClone(original);
+  docWorkerStarted.services.worker.depends_on.clamav.condition = 'service_started';
+  const resWorkerStarted = validateComposeConfig(docWorkerStarted);
+  assert.equal(resWorkerStarted.valid, false);
+  // 5. API extra dependency permits unready condition
+  const docApiExtraUnready = structuredClone(original);
+  docApiExtraUnready.services.api.depends_on.unready_backend = { condition: 'service_started' };
+  const resApiExtra = validateComposeConfig(docApiExtraUnready);
+  assert.equal(resApiExtra.valid, false);
+  assert.equal(resApiExtra.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resApiExtra.errors.some((err) => err.includes("Service 'api' dependency 'unready_backend' must require condition: service_healthy")));
+});
+
+test('validateComposeConfig: detects missing init: true or stop_signal: SIGTERM on application services', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'process-init-supervision';
+  assert.equal(validateComposeConfig(original).checks.find((item) => item.check === check)?.passed, true);
+
+  for (const svc of ['api', 'worker', 'next']) {
+    // Missing init: true
+    const docNoInit = structuredClone(original);
+    delete docNoInit.services[svc].init;
+    const resNoInit = validateComposeConfig(docNoInit);
+    assert.equal(resNoInit.valid, false);
+    assert.equal(resNoInit.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(resNoInit.errors.some((err) => err.includes(`Service '${svc}' should configure init: true`)));
+
+    // Missing or invalid stop_signal
+    const docBadSignal = structuredClone(original);
+    docBadSignal.services[svc].stop_signal = 'SIGKILL';
+    const resBadSignal = validateComposeConfig(docBadSignal);
+    assert.equal(resBadSignal.valid, false);
+    assert.equal(resBadSignal.checks.find((item) => item.check === check)?.passed, false);
+    assert.ok(resBadSignal.errors.some((err) => err.includes(`Service '${svc}' should configure stop_signal: SIGTERM`)));
+  }
+});
+
+test('validateComposeConfig: detects missing restart policy or drifted stop_grace_period', () => {
+  const original = yaml.load(fs.readFileSync(COMPOSE_FILE, 'utf8'));
+  const check = 'graceful-shutdown-lifecycle';
+  assert.equal(validateComposeConfig(original).checks.find((item) => item.check === check)?.passed, true);
+
+  // 1. Missing restart: unless-stopped on a service
+  const docNoRestart = structuredClone(original);
+  delete docNoRestart.services.postgres.restart;
+  const resNoRestart = validateComposeConfig(docNoRestart);
+  assert.equal(resNoRestart.valid, false);
+  assert.equal(resNoRestart.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resNoRestart.errors.some((err) => err.includes("Service 'postgres' must configure restart: unless-stopped")));
+
+  // 2. Drifted stop_grace_period on application service
+  const docDriftGrace = structuredClone(original);
+  docDriftGrace.services.worker.stop_grace_period = '10s';
+  const resDriftGrace = validateComposeConfig(docDriftGrace);
+  assert.equal(resDriftGrace.valid, false);
+  assert.equal(resDriftGrace.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resDriftGrace.errors.some((err) => err.includes("Service 'worker' stop_grace_period is '10s', expected '60s'")));
+
+  // 3. Missing stop_grace_period on a stateful service
+  const docNoGrace = structuredClone(original);
+  delete docNoGrace.services.garage.stop_grace_period;
+  const resNoGrace = validateComposeConfig(docNoGrace);
+  assert.equal(resNoGrace.valid, false);
+  assert.equal(resNoGrace.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resNoGrace.errors.some((err) => err.includes("Service 'garage' must define a positive bounded stop_grace_period")));
+
+  // 4. Zero stop_grace_period ('0s') rejected
+  const docZeroGrace = structuredClone(original);
+  docZeroGrace.services.postgres.stop_grace_period = '0s';
+  const resZeroGrace = validateComposeConfig(docZeroGrace);
+  assert.equal(resZeroGrace.valid, false);
+  assert.equal(resZeroGrace.checks.find((item) => item.check === check)?.passed, false);
+  assert.ok(resZeroGrace.errors.some((err) => err.includes("Service 'postgres' must define a positive bounded stop_grace_period")));
+});
+
 test('verifyContainerSecurity CLI: --output and -o create structured JSON evidence file matching schema', () => {
   const os = require('node:os');
   const { execFileSync } = require('node:child_process');
