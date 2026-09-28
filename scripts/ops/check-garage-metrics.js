@@ -90,6 +90,9 @@ function checkGarageMetrics(compose, productionEnv, garageEnv, garageToml, prom,
     }
   }
   const garage = services.garage || {};
+  if (Object.hasOwn(garage, 'env_file')) {
+    errors.push('garage must not declare env_file');
+  }
   const garageEnvironment = Object.fromEntries(environmentEntries(garage.environment));
   if (garageEnvironment.GARAGE_METRICS_TOKEN_FILE !== TOKEN_PATH ||
       Object.hasOwn(garageEnvironment, 'GARAGE_METRICS_TOKEN') ||

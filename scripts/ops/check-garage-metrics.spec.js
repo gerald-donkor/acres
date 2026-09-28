@@ -51,6 +51,7 @@ const mutations = [
   ['array environment legacy token', (f) => { f.compose.services.grafana.environment = ['GARAGE_METRICS_TOKEN=${GARAGE_METRICS_TOKEN:?required}']; }, 'grafana must not receive'],
   ['Compose secret redistributes file', (f) => { f.compose.secrets = { leaked: { file: '${ACRES_GARAGE_METRICS_TOKEN_FILE:?inject Garage metrics token file path}' } }; f.compose.services.api.secrets = ['leaked']; }, 'Compose secrets'],
   ['leaked Next env file', (f) => { f.compose.services.next.env_file = ['../env/garage.production.env.example']; }, 'next must not receive'],
+  ['garage env_file declared', (f) => { f.compose.services.garage.env_file = ['../env/garage.production.env.example']; }, 'garage must not declare env_file'],
   ['leaked Caddy route', (f) => { f.compose.services.caddy.environment.METRICS_ROUTE = 'garage:3903'; }, 'Caddy'],
   ['leaked Caddyfile route', (f) => { f.caddyText += '\nreverse_proxy garage:3903\n'; }, 'Caddy'],
 ];

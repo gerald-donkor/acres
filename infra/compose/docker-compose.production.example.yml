@@ -248,8 +248,6 @@ services:
   garage:
     image: dxflrs/garage:v2.1.0
     restart: unless-stopped
-    env_file:
-      - ../env/garage.production.env.example
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?inject Garage RPC secret}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?inject Garage admin token}

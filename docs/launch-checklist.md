@@ -359,12 +359,17 @@ Repository facts the operator's inventory and the security lead must track:
   required inputs, duplicate or missing active operator assignments, changed
   scheduler/worker metrics settings, and changed Next mode or API origin. This
   repository change does not establish the production container environment.
-  Operators using an older materialized Compose file must adopt all four revised
+  Operators using an older materialized Compose file must adopt all revised
   service maps, render and inspect the resulting Compose config, then inspect
   effective container **key names only** through a redacted inventory before
   Category 4 approval. A scoped revert would restore unnecessary service
-  secret exposure; treat that as a security regression. The three Garage names
-  remain service-scoped.
+  secret exposure; treat that as a security regression. Prompt 224 removes the
+  redundant `env_file` from `garage`, ensuring all three Garage environment
+  variables (`GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`, and `GARAGE_METRICS_TOKEN_FILE`)
+  are strictly mapped via explicit `environment:` entries. Across all 11 production
+  services in `docker-compose.production.example.yml`, zero services now declare
+  `env_file`. The parsed Compose preflight and template tests enforce that no
+  service in the production manifest may declare `env_file`.
 
 Verified about the executable contract, for precision:
 `validSmtpSecretReference` is a regular expression only

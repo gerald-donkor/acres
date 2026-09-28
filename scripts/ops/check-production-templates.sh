@@ -252,10 +252,17 @@ if (composeText.includes('ACRES_TEST_PASSWORD') || composeText.includes('bootstr
   process.exit(1);
 }
 
+for (const [name, service] of Object.entries(services)) {
+  if (Object.hasOwn(service, 'env_file')) {
+    console.error(`ops template check failed: ${name} must not declare env_file`);
+    process.exit(1);
+  }
+}
+
 const garageEnv = services.garage.environment || {};
 for (const key of ['GARAGE_RPC_SECRET', 'GARAGE_ADMIN_TOKEN']) {
   if (!String(garageEnv[key] || '').includes(key)) {
-    console.error(`ops template check failed: production Garage must override ${key}`);
+    console.error(`ops template check failed: production Garage must explicitly define ${key}`);
     process.exit(1);
   }
 }

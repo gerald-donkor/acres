@@ -1500,3 +1500,26 @@ Verification on 2026-09-28: focused config/env validation unit tests passed
 `sh scripts/ops/scan-secrets.sh`, `npm run ops:check`, `npm run lint`,
 `npm run typecheck`, `npm run build`, and `git diff --check` passed.
 The checked-in launch readiness example remains unresolved and fails closed.
+
+## Prompt 224 — scope production Garage environment and eliminate residual env_file
+
+The production Garage service definition in
+`infra/compose/docker-compose.production.example.yml` no longer declares
+`env_file: - ../env/garage.production.env.example`. Garage explicitly specifies
+its three required runtime variables (`GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`,
+and `GARAGE_METRICS_TOKEN_FILE`) via required Compose interpolation in its
+`environment:` map. Removing the redundant `env_file` eliminates unnecessary
+file injection and ensures that no unresolved sentinel placeholders
+(`__REQUIRED_SECRET_*__`) enter the container environment.
+
+With this change, zero services across the entire production Compose manifest
+declare `env_file`. Every container uses strictly explicit `environment:` maps
+or command flags with required interpolation. The parsed template verifier in
+`scripts/ops/check-garage-metrics.js` and `scripts/ops/check-production-templates.sh`
+enforces that `garage` and all other services in production Compose must not
+declare `env_file`.
+
+Verification on 2026-09-28: focused template preflight tests passed 57/57;
+`npm run ops:templates`, `npm run ops:check`, `npm run lint`, `npm run typecheck`,
+`npm run build`, and `git diff --check` passed. The checked-in launch readiness
+example remains unresolved and fails closed.

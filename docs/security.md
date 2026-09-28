@@ -413,7 +413,11 @@ in [`operations.md`](operations.md).
   superuser or Grafana credentials. Prompt 223 decouples `SESSION_SECRET`
   and `CLIENT_ORIGIN` from worker boot validation and removes both from the
   worker Compose environment map, leaving the worker with zero web session, CSRF,
-  or browser-origin inputs.
+  or browser-origin inputs. Prompt 224 removes the redundant `env_file` from
+  `garage`, ensuring that across all 11 production services in
+  `docker-compose.production.example.yml`, zero services declare `env_file`; all
+  services use explicit `environment` maps or command flags with required
+  interpolation.
   Live container key inventories and secret-source grants remain unverified.
   Prompt 221 gives the API a distinct `CSRF_SECRET` HMAC input and a separate
   worker validation path that needs no CSRF key. Production boot rejects a
