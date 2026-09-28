@@ -37,32 +37,20 @@ while [ $# -gt 0 ]; do
       DRY_RUN=1
       shift
       ;;
-    --evidence-dir)
-      EVIDENCE_DIR="$2"
-      shift 2
-      ;;
-    --evidence-file)
-      EVIDENCE_FILE="$2"
-      shift 2
-      ;;
-    --api-url)
-      API_URL="$2"
-      shift 2
-      ;;
-    --pghost)
-      PGHOST="$2"
-      shift 2
-      ;;
-    --pgport)
-      PGPORT="$2"
-      shift 2
-      ;;
-    --valkey-host)
-      VALKEY_HOST="$2"
-      shift 2
-      ;;
-    --valkey-port)
-      VALKEY_PORT="$2"
+    --evidence-dir|--evidence-file|--api-url|--pghost|--pgport|--valkey-host|--valkey-port)
+      if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
+        printf 'Error: %s requires a non-empty value\n' "$1" >&2
+        exit 1
+      fi
+      case "$1" in
+        --evidence-dir) EVIDENCE_DIR="$2" ;;
+        --evidence-file) EVIDENCE_FILE="$2" ;;
+        --api-url) API_URL="$2" ;;
+        --pghost) PGHOST="$2" ;;
+        --pgport) PGPORT="$2" ;;
+        --valkey-host) VALKEY_HOST="$2" ;;
+        --valkey-port) VALKEY_PORT="$2" ;;
+      esac
       shift 2
       ;;
     --help|-h)
@@ -125,9 +113,10 @@ printf '=================================================================\n\n'
 
 # 1. Pre-rotation Validation & Operational Baseline Check
 printf '1. Validating secret configuration baseline & operational templates...\n'
+scripts/ops/check-production-templates.sh
 scripts/ops/scan-secrets.sh
 node scripts/ops/verify-volume-encryption.js >/dev/null
-printf '   ✓ No raw credentials detected in workspace; templates clean.\n\n'
+printf '   ✓ Operational templates, secrets scan, and volume encryption verified.\n\n'
 
 # 2. Check Live Service Reachability (Non-blocking)
 printf '2. Checking environment topology & live service reachability...\n'

@@ -1238,6 +1238,20 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 230 update (2026-09-28): secret rotation drill hardening and automated test suite.**
+The dedicated zero-downtime secret rotation and compromise response drill runner (`scripts/ops/run-secret-rotation-drill.sh`)
+CLI option parsing is now hardened with fail-closed non-empty value validation for `--evidence-dir`, `--evidence-file`,
+`--api-url`, `--pghost`, `--pgport`, `--valkey-host`, and `--valkey-port`. Step 1 ("Pre-rotation Validation & Operational Baseline Check")
+now runs `scripts/ops/check-production-templates.sh` alongside `scripts/ops/scan-secrets.sh` and `verify-volume-encryption.js`,
+ensuring operational templates and environment definitions are clean before secret rotation simulations begin.
+A dedicated automated unit test suite (`scripts/ops/run-secret-rotation-drill.spec.js`) validates `--help`/`-h` usage,
+unknown option rejection, missing/flag-like argument guards, clean `--dry-run` execution with full Category 3 evidence emission,
+custom target parameters, custom `--evidence-dir` and `--evidence-file` routing, and strict compliance with `check-launch-readiness.js`'s
+`validateSecretRotationReport` contract (all 7 secret classes, 7 verified steps, and redaction audit invariants).
+`ops:rotation-test` is integrated into root `package.json` and the `npm run ops:check` gate, and `check-production-templates.sh`
+statically verifies runner option validation and pre-rotation template checks.
+Verification: `ops:rotation-test` passed 7/7; `ops:templates`, `ops:rotation-drill -- --dry-run`, `ops:check`, lint, typecheck, build, and `git diff --check` passed cleanly.
+
 **Prompt 229 update (2026-09-28): deployment promotion drill hardening and automated test suite.**
 The dedicated deployment promotion and rollback drill runner (`scripts/ops/run-deployment-drill.sh`) step 5
 evaluation now validates full operational container lifecycle requirements fail-closed during deployment preflights:

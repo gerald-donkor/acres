@@ -42,6 +42,7 @@ require_file scripts/ops/run-deployment-drill.spec.js
 require_file scripts/ops/verify-volume-encryption.js
 require_file scripts/ops/verify-volume-encryption.spec.js
 require_file scripts/ops/run-secret-rotation-drill.sh
+require_file scripts/ops/run-secret-rotation-drill.spec.js
 require_file scripts/ops/verify-alert-rules.js
 require_file scripts/ops/verify-alert-rules.spec.js
 require_file scripts/ops/verify-capacity-load.js
@@ -620,6 +621,15 @@ if (!deploymentDrillScript.includes('restart: unless-stopped') ||
     !deploymentDrillScript.includes('condition: service_healthy') ||
     !deploymentDrillScript.includes('graceful_drain_periods_verified')) {
   console.error('ops template check failed: scripts/ops/run-deployment-drill.sh missing restart, signal supervision, or dependency health verification');
+  process.exit(1);
+}
+
+const secretRotationScript = fs.readFileSync('scripts/ops/run-secret-rotation-drill.sh', 'utf8');
+if (!secretRotationScript.includes('requires a non-empty value') ||
+    !secretRotationScript.includes('scripts/ops/check-production-templates.sh') ||
+    !secretRotationScript.includes('tested_secret_classes') ||
+    !secretRotationScript.includes('redaction_audit')) {
+  console.error('ops template check failed: scripts/ops/run-secret-rotation-drill.sh missing option validation, template check, or redaction audit');
   process.exit(1);
 }
 

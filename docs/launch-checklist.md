@@ -1199,6 +1199,14 @@ production GraphQL response or security approval.
   `stop_signal: SIGTERM`). CLI arguments are protected with non-empty value guards. Automated regression suite
   `scripts/ops/run-deployment-drill.spec.js` covers CLI flags, argument parsing, fail-closed Compose validation, and
   structured evidence emission under `npm run ops:deployment-test` and `npm run ops:check`.
+- **Secret rotation drill runner hardening & test suite (Prompt 230, 2026-09-28):**
+  `scripts/ops/run-secret-rotation-drill.sh` validates CLI options fail-closed with non-empty argument guards for
+  `--evidence-dir`, `--evidence-file`, `--api-url`, `--pghost`, `--pgport`, `--valkey-host`, and `--valkey-port`.
+  Step 1 executes `scripts/ops/check-production-templates.sh`, `scripts/ops/scan-secrets.sh`, and `verify-volume-encryption.js`
+  to guarantee template and secret integrity before drill execution. Automated regression suite
+  (`scripts/ops/run-secret-rotation-drill.spec.js`, 7/7 passed) tests CLI usage, argument guards, `--dry-run` execution,
+  custom file/dir destinations, and strict compliance with Category 3 (`secrets_management`) validation rules.
+  `ops:rotation-test` is integrated into `npm run ops:check`.
 
 
 **Prompt 214 Category 10 intake — 2026-09-27T19:53:01Z UTC.** Reviewed
