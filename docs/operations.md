@@ -1433,3 +1433,48 @@ advisories (16 lower-severity advisories remain). The checked-in readiness
 example still failed closed with 11 blocked categories and 70 blockers. The
 full build and operations gate required execution outside the sandbox because
 the sandbox suppressed Node child stdout and registry DNS respectively.
+
+## Prompt 222 — Garage metrics credential and private scrape
+
+The production template replaces the unused `GARAGE_METRICS_TOKEN` environment
+value with an operator-owned absolute `ACRES_GARAGE_METRICS_TOKEN_FILE` path.
+The same host file is mounted read-only in Garage and Prometheus at
+`/run/secrets/garage_metrics_token`. Garage reads `GARAGE_METRICS_TOKEN_FILE`;
+its shared TOML requires token authentication for `/metrics` on private admin
+port 3903. Prometheus's `acres-garage` job reads that file through
+`authorization.credentials_file` and scrapes `garage:3903/metrics` at the
+existing 30-second global cadence. The Garage `/health` probe remains
+unauthenticated. Local Compose shares the TOML but supplies no token, so local
+`/metrics` is deliberately inaccessible while local `/health` still works.
+
+The operator must provision one restricted file matching the approved indirect
+`garage_metrics_secret_source`. Use ownership and mode 0400 or 0440 only after
+confirming both running container UIDs/GIDs can read it; the pinned Garage
+image's UID was not verified here because Docker daemon access was denied.
+Deploy the materialized Garage and Prometheus Compose/config changes together,
+remove the old plaintext Garage metrics environment input, and restart or reload
+both consumers in the deployment window. Verify `/metrics` rejects missing and
+wrong bearers, succeeds with the file's bearer, and that the private Prometheus
+target reports `up{job="acres-garage"} == 1`. Avoid printing the token in shell
+history, logs or evidence. Rotation updates the same source and restarts or
+reloads both readers before repeating those checks. Rollback restores the old
+Garage and Prometheus configs and removes both mounts and scrape together;
+protect and revoke the old file through the operator procedure.
+
+Static template checks and synthetic configuration evidence do not prove the
+production secret-store grant, live file readability, authorization responses,
+scrape health, or Category 4/5 approval. No Garage-specific metric series or
+capacity threshold is asserted until observed from the pinned runtime. Garage
+metrics cardinality and retention impact require operator measurement.
+
+Verification on 2026-09-28: the 55 production-template tests, `npm run
+ops:templates`, `npm run ops:check`, lint, typecheck, build, and `git diff
+--check` passed. Docker Compose 5.5.1 rendered one read-only token mount in
+each intended service without interpolation. The operations audit found zero
+critical advisories (16 moderate/high remain under the existing gate). The
+checked-in launch-readiness example still failed closed with 11 blocked
+categories and 70 blockers. The sandboxed Next build could not parse
+TypeScript `--showConfig`, and sandboxed npm audit could not reach the registry;
+both gates passed on rerun with the approved execution mode. `promtool` was not
+installed; Docker daemon access was denied, so pinned-image UID and live Garage
+authorization/Prometheus scrape behavior remain unverified.

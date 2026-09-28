@@ -419,7 +419,11 @@ in [`operations.md`](operations.md).
   credential reuse path in TM-03/TM-04; it does not prove live operator grants.
   Existing deployed env and Compose files need a distinct store value before
   rollout. Rotation or cutover invalidates prior CSRF tokens, so clients fetch
-  a fresh `GET /auth/csrf` token. Garage metrics consumption remains open.
+  a fresh `GET /auth/csrf` token. The subsequent Garage metrics change mounts
+  one read-only operator token file in Garage and Prometheus, requires a token
+  on `/metrics`, and keeps `/health` unauthenticated. Static checks reject
+  leaked mounts, inline bearer material and public metrics ports; live grants,
+  endpoint authorization and scrape health remain operator gates.
 - `infra/caddy/Caddyfile.example` models same-origin app/API/GraphQL routing,
   baseline security headers, path-style presigned object proxying for the
   current `acres-quarantine` bucket, request-size and timeout placeholders, and

@@ -242,10 +242,15 @@ function validateComposeConfig(composeDoc, filePath = 'docker-compose.yml') {
         // database volume starts; reconciliation injects it explicitly.
         if (svcName === 'postgres' && k === 'ACRES_MONITOR_BOOTSTRAP_PASSWORD' &&
             strVal === '${ACRES_MONITOR_BOOTSTRAP_PASSWORD-}') continue;
+        // Garage receives a file path, not token material. Require its
+        // read-only mount here; the template checker validates both readers.
+        if (svcName === 'garage' && k === 'GARAGE_METRICS_TOKEN_FILE' &&
+            strVal === '/run/secrets/garage_metrics_token' &&
+            (svc.volumes || []).includes('${ACRES_GARAGE_METRICS_TOKEN_FILE:?inject Garage metrics token file path}:/run/secrets/garage_metrics_token:ro')) continue;
         // Must use variable expansion syntax e.g. ${VAR:?msg}
         if (!strVal.startsWith('${') || !strVal.includes(':?')) {
           hardcodedSecretsFound = true;
-          errors.push(`Service '${svcName}' environment '${k}' must use mandatory injected variable expansion (\${VAR:?msg}), got '${strVal}'`);
+          errors.push(`Service '${svcName}' environment '${k}' must use mandatory injected variable expansion (\${VAR:?msg})`);
         }
       }
     }

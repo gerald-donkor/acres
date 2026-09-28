@@ -125,6 +125,22 @@ test('validateComposeConfig: detects hardcoded plaintext password regression', (
   const res = validateComposeConfig(insecureCompose);
   assert.equal(res.valid, false);
   assert.ok(res.errors.some((e) => e.includes('mandatory-secret-injection-syntax')));
+  assert.equal(res.errors.join(' ').includes('plainTextUnsafePassword123'), false);
+});
+
+test('validateComposeConfig: accepts Garage metrics file path only with read-only source mount', () => {
+  const fileMount = '${ACRES_GARAGE_METRICS_TOKEN_FILE:?inject Garage metrics token file path}:/run/secrets/garage_metrics_token:ro';
+  const compose = {
+    services: { garage: {
+      environment: { GARAGE_METRICS_TOKEN_FILE: '/run/secrets/garage_metrics_token' },
+      volumes: [fileMount], networks: ['private'],
+      healthcheck: { test: ['CMD', 'true'] },
+    } },
+    networks: { private: { internal: true } },
+  };
+  assert.equal(validateComposeConfig(compose).valid, true);
+  compose.services.garage.volumes = [fileMount.replace(':ro', ':rw')];
+  assert.ok(validateComposeConfig(compose).errors.some((e) => e.includes('mandatory-secret-injection-syntax')));
 });
 
 test('validateComposeConfig: detects datastore leaked onto public network regression', () => {

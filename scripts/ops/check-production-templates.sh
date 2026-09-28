@@ -26,6 +26,8 @@ require_file infra/launch/readiness.schema.json
 require_file scripts/ops/check-launch-readiness.js
 require_file scripts/ops/check-smtp-template-keys.js
 require_file scripts/ops/check-smtp-template-keys.spec.js
+require_file scripts/ops/check-garage-metrics.js
+require_file scripts/ops/check-garage-metrics.spec.js
 require_file scripts/ops/check-proxy-environment.js
 require_file scripts/ops/check-proxy-environment.spec.js
 require_file scripts/ops/check-application-environment.js
@@ -64,6 +66,7 @@ const { parseBackupScheduleCron } = require('./scripts/ops/check-launch-readines
 const { checkSmtpTemplateKeys } = require('./scripts/ops/check-smtp-template-keys');
 const { checkProxyEnvironment } = require('./scripts/ops/check-proxy-environment');
 const { checkApplicationEnvironment } = require('./scripts/ops/check-application-environment');
+const { checkGarageMetrics } = require('./scripts/ops/check-garage-metrics');
 
 function readYaml(path) {
   try {
@@ -250,7 +253,7 @@ if (composeText.includes('ACRES_TEST_PASSWORD') || composeText.includes('bootstr
 }
 
 const garageEnv = services.garage.environment || {};
-for (const key of ['GARAGE_RPC_SECRET', 'GARAGE_ADMIN_TOKEN', 'GARAGE_METRICS_TOKEN']) {
+for (const key of ['GARAGE_RPC_SECRET', 'GARAGE_ADMIN_TOKEN']) {
   if (!String(garageEnv[key] || '').includes(key)) {
     console.error(`ops template check failed: production Garage must override ${key}`);
     process.exit(1);
@@ -260,7 +263,7 @@ for (const key of ['GARAGE_RPC_SECRET', 'GARAGE_ADMIN_TOKEN', 'GARAGE_METRICS_TO
 for (const [name, service] of Object.entries(services)) {
   if (name === 'garage') continue;
   const env = service.environment || {};
-  for (const key of ['GARAGE_ADMIN_TOKEN', 'GARAGE_METRICS_TOKEN']) {
+  for (const key of ['GARAGE_ADMIN_TOKEN', 'GARAGE_METRICS_TOKEN', 'GARAGE_METRICS_TOKEN_FILE']) {
     if (Object.prototype.hasOwnProperty.call(env, key)) {
       console.error(`ops template check failed: ${key} must be scoped to Garage only, not ${name}`);
       process.exit(1);
@@ -269,6 +272,16 @@ for (const [name, service] of Object.entries(services)) {
 }
 
 const prom = readYaml('infra/prometheus/prometheus.yml');
+const garageMetricsErrors = checkGarageMetrics(
+  compose, productionEnv,
+  fs.readFileSync('infra/env/garage.production.env.example', 'utf8'),
+  fs.readFileSync('infra/garage/garage.toml', 'utf8'), prom,
+  fs.readFileSync('infra/caddy/Caddyfile.example', 'utf8'),
+);
+if (garageMetricsErrors.length > 0) {
+  for (const error of garageMetricsErrors) console.error(`ops template check failed: ${error}`);
+  process.exit(1);
+}
 const scrapeJobs = (prom.scrape_configs || []).map((c) => c.job_name);
 if (!scrapeJobs.includes('acres-api')) {
   console.error('ops template check failed: Prometheus config missing acres-api scrape target');

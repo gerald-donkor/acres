@@ -25,6 +25,16 @@ scrape_configs:
       - targets:
           - worker:3002
 
+  - job_name: acres-garage
+    metrics_path: /metrics
+    scheme: http
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/garage_metrics_token
+    static_configs:
+      - targets:
+          - garage:3903
+
   - job_name: acres-postgres
     metrics_path: /metrics
     scheme: http

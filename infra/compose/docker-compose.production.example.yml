@@ -255,7 +255,7 @@ services:
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?inject Garage RPC secret}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?inject Garage admin token}
-      GARAGE_METRICS_TOKEN: ${GARAGE_METRICS_TOKEN:?inject Garage metrics token}
+      GARAGE_METRICS_TOKEN_FILE: /run/secrets/garage_metrics_token
     expose:
       - "3900"
       - "3901"
@@ -265,6 +265,7 @@ services:
       - ${ACRES_GARAGE_META_ENCRYPTED_MOUNT:?set encrypted Garage metadata mount path}:/var/lib/garage/meta
       - ${ACRES_GARAGE_DATA_ENCRYPTED_MOUNT:?set encrypted Garage data mount path}:/var/lib/garage/data
       - ../garage/garage.toml:/etc/garage.toml:ro
+      - ${ACRES_GARAGE_METRICS_TOKEN_FILE:?inject Garage metrics token file path}:/run/secrets/garage_metrics_token:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3903/health || exit 1"]
       interval: 15s
@@ -301,6 +302,7 @@ services:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ../prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - ${ACRES_PROMETHEUS_ENCRYPTED_MOUNT:?set Prometheus data mount path}:/prometheus
+      - ${ACRES_GARAGE_METRICS_TOKEN_FILE:?inject Garage metrics token file path}:/run/secrets/garage_metrics_token:ro
     expose:
       - "9090"
     networks:

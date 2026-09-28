@@ -282,8 +282,8 @@ grant, injection mechanism, or credential was changed.
 
 Repository-verified consumer mapping, read from the checked-in templates and
 the server configuration, not from a running system. All twelve fields map to a
-distinct template name, and ten of those twelve have a verified consumer in
-this repository: `db_migrator_secret_source` → `ACRES_MIGRATOR_PASSWORD` /
+distinct template name, and eleven of those twelve have a verified repository
+consumer: `db_migrator_secret_source` → `ACRES_MIGRATOR_PASSWORD` /
 `DATABASE_MIGRATION_URL` (`server/prisma.config.ts:10`);
 `db_app_secret_source` →
 `ACRES_APP_PASSWORD` / `DATABASE_URL`
@@ -302,7 +302,9 @@ production by `:238`); `garage_rpc_secret_source` and
 `garage_s3_secret_source` → `STORAGE_ACCESS_KEY_ID` /
 `STORAGE_SECRET_ACCESS_KEY` (`env.validation.ts:420`);
 `grafana_admin_secret_source` → `GRAFANA_ADMIN_PASSWORD`
-(`docker-compose.production.example.yml:245`). The remaining three are recorded
+(`docker-compose.production.example.yml:245`); `garage_metrics_secret_source`
+maps to the shared file-backed Garage and Prometheus configuration below. The
+remaining runtime uncertainty and the metrics live-proof requirement are recorded
 below. No `GEMINI_API_KEY` or other AI source name appears in any production
 template; the only Gemini strings under `infra/` are Category 11's no-AI posture
 fields. A clean `scripts/ops/scan-secrets.sh` run is one supporting repository
@@ -328,16 +330,20 @@ Repository facts the operator's inventory and the security lead must track:
   injected into the production API and worker; any materialized env file using
   the former names must be migrated before deployment. Category 2 and 4 still
   require a verified credential source, runtime injection, and delivery evidence.
-- **`garage_metrics_secret_source` is injected but unconsumed.**
-  `GARAGE_METRICS_TOKEN` is mapped into the `garage` service
-  (`docker-compose.production.example.yml:165`), but `infra/garage/garage.toml`
-  defines only `rpc_secret` and `admin_token` — there is no `metrics_token` —
-  and `infra/prometheus/prometheus.yml` has no Garage scrape job, only
-  `prometheus`, `acres-api`, `acres-worker` and `acres-postgres`. The Garage
-  healthcheck targets `localhost:3903/health` unauthenticated. The operator
-  must state whether a Garage metrics credential and scrape target are in the
-  production design; if not, that source is provisioned without a consumer and
-  Category 4 would attest verified access to a secret nothing reads.
+- **`garage_metrics_secret_source` has a repository consumer, pending live proof.**
+  The production template requires one operator-owned absolute
+  `ACRES_GARAGE_METRICS_TOKEN_FILE` path, mounted read-only in Garage and
+  Prometheus at `/run/secrets/garage_metrics_token`. Garage reads it through
+  `GARAGE_METRICS_TOKEN_FILE`, and `[admin].metrics_require_token = true` protects
+  private `:3903/metrics`. Prometheus `acres-garage` uses Bearer
+  `authorization.credentials_file` for that endpoint; `up{job="acres-garage"}`
+  distinguishes scrape reachability. `/health` remains an unauthenticated
+  readiness probe. The former plaintext `GARAGE_METRICS_TOKEN` injection is
+  removed. Static configuration does not prove the live store grant, file
+  readability, HTTP authorization behavior, or a healthy target. The operator
+  must map the approved indirect source to the file, verify denial with no or
+  a wrong token and success with the correct token, then inspect the private
+  Prometheus target before Category 4 or 5 approval.
 - **The reference template now scopes Caddy, Next, API and worker environment.** Prompt 219
   removes their shared `env_file`: Caddy receives the 13 names referenced by
   `Caddyfile.example` (including the commented HSTS setting), and Next receives
@@ -386,8 +392,12 @@ tokens, signing keys, unredacted policies, recovery keys, or full connection
 strings. The migration,
 application and monitoring database identities must remain separate and the
 Garage RPC, admin, metrics and S3 sources must be scoped to their actual
-consumers, and the three source/consumer gaps recorded above must be answered —
-including which SMTP variable name production actually injects. Any plaintext
+consumers, and the remaining SMTP runtime source uncertainty must be answered,
+including which variable name production actually injects. For Garage metrics,
+the single host token file must be readable by both container identities;
+verify the pinned Garage image's runtime UID/GID on the target host rather than
+assuming one. Restrict ownership and mode to those readers and record the
+source grant without revealing contents. Any plaintext
 exposure or invalid grant is routed through the operator's security and
 compromise procedure; grants and secrets are not changed under this assessment.
 Categories 1–3 and every other launch gate retain their prior unresolved state,
