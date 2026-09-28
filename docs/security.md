@@ -410,8 +410,10 @@ in [`operations.md`](operations.md).
   220 scopes API and worker to explicit audited runtime key maps, also rejecting
   `env_file`, inherited service settings and added operator credentials. API
   alone receives SMTP credentials; neither Node process receives migration,
-  superuser or Grafana credentials. The worker still needs `SESSION_SECRET`
-  and `CLIENT_ORIGIN` for its shared boot validator, a residual coupling.
+  superuser or Grafana credentials. Prompt 223 decouples `SESSION_SECRET`
+  and `CLIENT_ORIGIN` from worker boot validation and removes both from the
+  worker Compose environment map, leaving the worker with zero web session, CSRF,
+  or browser-origin inputs.
   Live container key inventories and secret-source grants remain unverified.
   Prompt 221 gives the API a distinct `CSRF_SECRET` HMAC input and a separate
   worker validation path that needs no CSRF key. Production boot rejects a

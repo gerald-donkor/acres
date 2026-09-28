@@ -1245,10 +1245,9 @@ rate/GraphQL limits, queue, storage and processing settings. The worker
 gets its runtime database URL, queue, storage, scanner, parser, outbox, metrics
 and cleanup settings; no SMTP, database migration, superuser, Grafana or
 operator-control credentials are injected. Both set `AI_DRAFT_ENABLED=false`
-and exclude `GEMINI_API_KEY`. The worker still receives `SESSION_SECRET` and
-`CLIENT_ORIGIN` because the common `validateEnv` requires them at boot, even
-though its module graph has no session or browser-origin consumer. A separate
-process-specific validator change can remove that coupling. API SMTP security
+and exclude `GEMINI_API_KEY`. Prompt 223 decouples `SESSION_SECRET` and
+`CLIENT_ORIGIN` from worker boot validation and removes both from the worker
+Compose environment map, eliminating that residual coupling. API SMTP security
 mode and sender identity now have operator placeholders so the production
 reference cannot silently take local development defaults. The parsed
 `check-application-environment` preflight verifies exact service key maps,
@@ -1478,3 +1477,26 @@ TypeScript `--showConfig`, and sandboxed npm audit could not reach the registry;
 both gates passed on rerun with the approved execution mode. `promtool` was not
 installed; Docker daemon access was denied, so pinned-image UID and live Garage
 authorization/Prometheus scrape behavior remain unverified.
+
+## Prompt 223 — worker process environment narrowing
+
+The worker process environment is now fully decoupled from web session, CSRF,
+and browser-origin secrets. `validateEnv` requires only `DATABASE_URL` for the
+worker, defaulting `sessionSecret`, `clientOrigin`, and `csrfSecret` to empty
+strings when absent. Production `SESSION_SECRET` placeholder and length guards
+apply only to the API, allowing the worker to boot without session secrets.
+`infra/compose/docker-compose.production.example.yml` removes `CLIENT_ORIGIN`
+and `SESSION_SECRET` from the `worker` service environment map.
+
+The parsed `check-application-environment` validator and its specs classify
+both `CLIENT_ORIGIN` and `SESSION_SECRET` as API-only, rejecting them if
+injected into the worker service. Operators deploying this version can safely
+remove `CLIENT_ORIGIN` and `SESSION_SECRET` from their production worker
+definitions. Live container inventories and operator secret grants remain
+unverified.
+
+Verification on 2026-09-28: focused config/env validation unit tests passed
+57/57; template preflight tests passed 56/56; `npm run ops:templates`,
+`sh scripts/ops/scan-secrets.sh`, `npm run ops:check`, `npm run lint`,
+`npm run typecheck`, `npm run build`, and `git diff --check` passed.
+The checked-in launch readiness example remains unresolved and fails closed.

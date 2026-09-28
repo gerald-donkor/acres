@@ -18,7 +18,7 @@ import { validateEnv } from './env.validation';
 })
 export class AcresConfigModule {}
 
-/** Worker has no CSRF routes and must not receive the API signing key. */
+/** Worker has no browser sessions, origin, or CSRF routes and must not receive browser-facing secrets. */
 @Global()
 @Module({
   imports: [

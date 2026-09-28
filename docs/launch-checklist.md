@@ -349,15 +349,15 @@ Repository facts the operator's inventory and the security lead must track:
   `Caddyfile.example` (including the commented HSTS setting), and Next receives
   only `NODE_ENV` and its private `ACRES_API_ORIGIN`. Prompt 220 removes the
   shared `env_file` from API and worker too. The API receives its mail, auth,
-  GraphQL, rate-limit, queue, storage, parser and processing inputs. The worker
-  receives queue, storage, parser, scanner, outbox and metrics inputs; it does
-  not receive SMTP, database migration, superuser or observability-admin
-  credentials. Both retain `SESSION_SECRET` and `CLIENT_ORIGIN` because their
-  shared boot validator requires them; process-specific validation remains a
-  separate least-privilege improvement. Both explicitly disable AI and receive
-  no Gemini key. The parsed Compose preflight rejects extra service keys, `env_file`,
-  missing or miswired required inputs, duplicate or missing active operator
-  assignments, changed scheduler/worker metrics settings, and changed Next mode or API origin. This
+  GraphQL, rate-limit, queue, storage, parser and processing inputs. Prompt 223
+  decouples `SESSION_SECRET` and `CLIENT_ORIGIN` from worker boot validation and
+  removes both from the worker Compose service environment map. The worker receives
+  only its database, queue, storage, scanner, outbox and metrics inputs; it does
+  not receive browser-facing CSRF, session or mail secrets or client origin. Both
+  API and worker explicitly disable AI and receive no Gemini key. The parsed
+  Compose preflight rejects extra service keys, `env_file`, missing or miswired
+  required inputs, duplicate or missing active operator assignments, changed
+  scheduler/worker metrics settings, and changed Next mode or API origin. This
   repository change does not establish the production container environment.
   Operators using an older materialized Compose file must adopt all four revised
   service maps, render and inspect the resulting Compose config, then inspect

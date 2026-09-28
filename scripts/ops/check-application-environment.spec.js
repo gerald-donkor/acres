@@ -14,11 +14,12 @@ const check = (value = compose(), text = input) => checkApplicationEnvironment(v
 
 test('production API and worker use the audited key maps', () => {
   assert.deepEqual(check(), []);
-  for (const name of ['api', 'worker']) {
-    assert.equal(compose().services[name].environment.AI_DRAFT_ENABLED, 'false');
-    assert.ok(compose().services[name].environment.SESSION_SECRET);
-    assert.ok(compose().services[name].environment.CLIENT_ORIGIN);
-  }
+  assert.equal(compose().services.api.environment.AI_DRAFT_ENABLED, 'false');
+  assert.equal(compose().services.worker.environment.AI_DRAFT_ENABLED, 'false');
+  assert.ok(compose().services.api.environment.SESSION_SECRET);
+  assert.ok(compose().services.api.environment.CLIENT_ORIGIN);
+  assert.equal(Object.hasOwn(compose().services.worker.environment, 'SESSION_SECRET'), false);
+  assert.equal(Object.hasOwn(compose().services.worker.environment, 'CLIENT_ORIGIN'), false);
   assert.match(compose().services.api.environment.CSRF_SECRET, /^\$\{CSRF_SECRET:\?/);
   assert.equal(Object.hasOwn(compose().services.worker.environment, 'CSRF_SECRET'), false);
   for (const key of ['CLAMAV_HOST', 'CLAMAV_PORT', 'CLAMAV_SCAN_TIMEOUT_MS',
@@ -44,22 +45,22 @@ for (const name of ['api', 'worker']) {
     const value = compose();
     delete value.services[name].environment.DATABASE_URL;
     value.services[name].environment.GEMINI_API_KEY = 'synthetic-secret-value';
-    value.services[name].environment.SESSION_SECRET = '${DATABASE_URL:?wrong source}';
+    value.services[name].environment.VALKEY_URL = '${DATABASE_URL:?wrong source}';
     const errors = check(value);
     assert.ok(errors.includes(`${name} missing environment key DATABASE_URL`));
     assert.ok(errors.includes(`${name} has unexpected environment key GEMINI_API_KEY`));
-    assert.ok(errors.includes(`${name} must require SESSION_SECRET from the matching Compose input`));
+    assert.ok(errors.includes(`${name} must require VALKEY_URL from the matching Compose input`));
     assert.equal(errors.join(' ').includes('synthetic-secret-value'), false);
   });
 
   test(`${name} rejects optional interpolation and duplicate or missing input assignments`, () => {
     const value = compose();
-    value.services[name].environment.SESSION_SECRET = '${SESSION_SECRET-}';
-    const changed = input.replace(/^SESSION_SECRET=.*$/m, '# SESSION_SECRET removed') +
+    value.services[name].environment.VALKEY_URL = '${VALKEY_URL-}';
+    const changed = input.replace(/^VALKEY_URL=.*$/m, '# VALKEY_URL removed') +
       '\nDATABASE_URL=synthetic-duplicate\n';
     const errors = check(value, changed);
-    assert.ok(errors.includes(`${name} must require SESSION_SECRET from the matching Compose input`));
-    assert.ok(errors.includes('production.env.example must define SESSION_SECRET exactly once'));
+    assert.ok(errors.includes(`${name} must require VALKEY_URL from the matching Compose input`));
+    assert.ok(errors.includes('production.env.example must define VALKEY_URL exactly once'));
     assert.ok(errors.includes('production.env.example must define DATABASE_URL exactly once'));
     assert.equal(errors.join(' ').includes('synthetic-duplicate'), false);
   });
@@ -74,13 +75,22 @@ test('API rejects worker-only, migration and operator credentials', () => {
     'GRAFANA_ADMIN_PASSWORD'].map((key) => `api has unexpected environment key ${key}`));
 });
 
-test('worker rejects API mail credentials and operator credentials', () => {
+test('worker rejects API mail credentials, auth/session secrets and operator credentials', () => {
   const value = compose();
-  for (const key of ['CSRF_SECRET', 'SMTP_PASS', 'POSTGRES_SUPERUSER_PASSWORD', 'ACRES_MIGRATOR_PASSWORD']) {
+  for (const key of ['SESSION_SECRET', 'CLIENT_ORIGIN', 'CSRF_SECRET', 'SMTP_PASS', 'POSTGRES_SUPERUSER_PASSWORD', 'ACRES_MIGRATOR_PASSWORD']) {
     value.services.worker.environment[key] = 'synthetic-private';
   }
-  assert.deepEqual(check(value), ['CSRF_SECRET', 'SMTP_PASS', 'POSTGRES_SUPERUSER_PASSWORD',
+  assert.deepEqual(check(value), ['SESSION_SECRET', 'CLIENT_ORIGIN', 'CSRF_SECRET', 'SMTP_PASS', 'POSTGRES_SUPERUSER_PASSWORD',
     'ACRES_MIGRATOR_PASSWORD'].map((key) => `worker has unexpected environment key ${key}`));
+});
+
+test('API requires matching, mandatory SESSION_SECRET and CLIENT_ORIGIN sources', () => {
+  const value = compose();
+  delete value.services.api.environment.SESSION_SECRET;
+  delete value.services.api.environment.CLIENT_ORIGIN;
+  const errors = check(value);
+  assert.ok(errors.includes('api missing environment key SESSION_SECRET'));
+  assert.ok(errors.includes('api missing environment key CLIENT_ORIGIN'));
 });
 
 test('API requires a matching, mandatory CSRF source and one operator assignment', () => {

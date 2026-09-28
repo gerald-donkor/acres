@@ -87,7 +87,12 @@ export interface AcresEnv {
   mailFrom: string;
 }
 
-const REQUIRED = ['DATABASE_URL', 'CLIENT_ORIGIN', 'SESSION_SECRET'] as const;
+const SHARED_REQUIRED = ['DATABASE_URL'] as const;
+const API_REQUIRED = [
+  'CLIENT_ORIGIN',
+  'SESSION_SECRET',
+  'CSRF_SECRET',
+] as const;
 
 const DEFAULTS = {
   PORT: '3001',
@@ -203,7 +208,7 @@ export function validateEnv(
 ): AcresEnv {
   const env = raw as Record<string, string | undefined>;
 
-  const missing = [...REQUIRED, ...(worker ? [] : ['CSRF_SECRET'])].filter(
+  const missing = [...SHARED_REQUIRED, ...(worker ? [] : API_REQUIRED)].filter(
     (key) => !env[key],
   );
   if (missing.length > 0) {
@@ -220,45 +225,53 @@ export function validateEnv(
     );
   }
 
-  const sessionSecret = env.SESSION_SECRET as string;
+  const sessionSecret = worker
+    ? ((env.SESSION_SECRET as string) ?? '')
+    : (env.SESSION_SECRET as string);
+  const clientOrigin = worker
+    ? ((env.CLIENT_ORIGIN as string) ?? '')
+    : (env.CLIENT_ORIGIN as string);
   const csrfSecret = worker ? '' : (env.CSRF_SECRET as string);
-  if (nodeEnv === 'production' && sessionSecret.startsWith('change-me')) {
-    throw new Error(
-      'SESSION_SECRET is still the placeholder from server/.env.example. ' +
-        'Generate one per environment before running in production.',
-    );
-  }
-  if (nodeEnv === 'production' && sessionSecret.length < 32) {
-    throw new Error(
-      'SESSION_SECRET must be at least 32 characters in production.',
-    );
-  }
-  if (sessionSecret.length < 32) {
-    new Logger('Config').warn(
-      'SESSION_SECRET is shorter than 32 characters; the cursor HMAC is weaker than intended.',
-    );
-  }
-  if (
-    !worker &&
-    nodeEnv === 'production' &&
-    (csrfSecret.startsWith('change-me') || csrfSecret.startsWith('__REQUIRED_'))
-  ) {
-    throw new Error('CSRF_SECRET cannot use a placeholder in production.');
-  }
-  if (!worker && nodeEnv === 'production' && csrfSecret.length < 32) {
-    throw new Error(
-      'CSRF_SECRET must be at least 32 characters in production.',
-    );
-  }
-  if (!worker && nodeEnv === 'production' && csrfSecret === sessionSecret) {
-    throw new Error(
-      'CSRF_SECRET must differ from SESSION_SECRET in production.',
-    );
-  }
-  if (!worker && csrfSecret.length < 32) {
-    new Logger('Config').warn(
-      'CSRF_SECRET is shorter than 32 characters; the CSRF HMAC is weaker than intended.',
-    );
+
+  if (!worker) {
+    if (nodeEnv === 'production' && sessionSecret.startsWith('change-me')) {
+      throw new Error(
+        'SESSION_SECRET is still the placeholder from server/.env.example. ' +
+          'Generate one per environment before running in production.',
+      );
+    }
+    if (nodeEnv === 'production' && sessionSecret.length < 32) {
+      throw new Error(
+        'SESSION_SECRET must be at least 32 characters in production.',
+      );
+    }
+    if (sessionSecret.length < 32) {
+      new Logger('Config').warn(
+        'SESSION_SECRET is shorter than 32 characters; the cursor HMAC is weaker than intended.',
+      );
+    }
+    if (
+      nodeEnv === 'production' &&
+      (csrfSecret.startsWith('change-me') ||
+        csrfSecret.startsWith('__REQUIRED_'))
+    ) {
+      throw new Error('CSRF_SECRET cannot use a placeholder in production.');
+    }
+    if (nodeEnv === 'production' && csrfSecret.length < 32) {
+      throw new Error(
+        'CSRF_SECRET must be at least 32 characters in production.',
+      );
+    }
+    if (nodeEnv === 'production' && csrfSecret === sessionSecret) {
+      throw new Error(
+        'CSRF_SECRET must differ from SESSION_SECRET in production.',
+      );
+    }
+    if (csrfSecret.length < 32) {
+      new Logger('Config').warn(
+        'CSRF_SECRET is shorter than 32 characters; the CSRF HMAC is weaker than intended.',
+      );
+    }
   }
   if (
     nodeEnv === 'production' &&
@@ -358,7 +371,7 @@ export function validateEnv(
     workerMetricsPort: workerMetricsPort(
       env.WORKER_METRICS_PORT ?? DEFAULTS.WORKER_METRICS_PORT,
     ),
-    clientOrigin: env.CLIENT_ORIGIN as string,
+    clientOrigin,
     databaseUrl: env.DATABASE_URL as string,
     sessionCookieName: env.SESSION_COOKIE_NAME ?? DEFAULTS.SESSION_COOKIE_NAME,
     sessionTtlDays: positiveInt(

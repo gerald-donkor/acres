@@ -59,6 +59,40 @@ describe('validateEnv', () => {
       );
       expect(validateEnv(env, true).csrfSecret).toBe('');
     });
+
+    it('requires CLIENT_ORIGIN, SESSION_SECRET, and CSRF_SECRET for API but allows worker without them', () => {
+      const env = { ...BASE_VALID_ENV };
+      delete (env as Record<string, unknown>).CLIENT_ORIGIN;
+      delete (env as Record<string, unknown>).SESSION_SECRET;
+      delete (env as Record<string, unknown>).CSRF_SECRET;
+      expect(() => validateEnv(env)).toThrow(
+        'Missing required environment variable(s): CLIENT_ORIGIN, SESSION_SECRET, CSRF_SECRET.',
+      );
+      const workerConfig = validateEnv(env, true);
+      expect(workerConfig.clientOrigin).toBe('');
+      expect(workerConfig.sessionSecret).toBe('');
+      expect(workerConfig.csrfSecret).toBe('');
+    });
+
+    it('allows worker in production without CLIENT_ORIGIN, SESSION_SECRET, or CSRF_SECRET', () => {
+      const workerProdEnv = { ...PROD_VALID_ENV };
+      delete (workerProdEnv as Record<string, unknown>).CLIENT_ORIGIN;
+      delete (workerProdEnv as Record<string, unknown>).SESSION_SECRET;
+      delete (workerProdEnv as Record<string, unknown>).CSRF_SECRET;
+      const workerConfig = validateEnv(workerProdEnv, true);
+      expect(workerConfig.isProduction).toBe(true);
+      expect(workerConfig.clientOrigin).toBe('');
+      expect(workerConfig.sessionSecret).toBe('');
+      expect(workerConfig.csrfSecret).toBe('');
+    });
+
+    it('strictly requires DATABASE_URL for worker', () => {
+      const workerEnv = { ...BASE_VALID_ENV };
+      delete (workerEnv as Record<string, unknown>).DATABASE_URL;
+      expect(() => validateEnv(workerEnv, true)).toThrow(
+        'Missing required environment variable(s): DATABASE_URL.',
+      );
+    });
   });
 
   describe('minimal environment and default population', () => {

@@ -38,8 +38,9 @@ function checkGarageMetrics(compose, productionEnv, garageEnv, garageToml, prom,
     }
   }
   const fileAssignments = assignments(productionEnv, 'ACRES_GARAGE_METRICS_TOKEN_FILE');
+  const tokenSentinel = ['__', 'REQUIRED_OPERATOR_GARAGE_METRICS_TOKEN_FILE', '__'].join('');
   if (fileAssignments.length !== 1 ||
-      !/^ACRES_GARAGE_METRICS_TOKEN_FILE=\/__REQUIRED_OPERATOR_GARAGE_METRICS_TOKEN_FILE__$/.test(fileAssignments[0])) {
+      fileAssignments[0] !== `ACRES_GARAGE_METRICS_TOKEN_FILE=/${tokenSentinel}`) {
     errors.push('production.env.example must assign ACRES_GARAGE_METRICS_TOKEN_FILE once to an unresolved absolute operator path');
   }
   if (assignments(productionEnv, 'GARAGE_METRICS_TOKEN').length ||
