@@ -1191,6 +1191,14 @@ production GraphQL response or security approval.
   `postgres`, `valkey`, `garage`, and `clamav`. `process-init-supervision` enforces both `init: true` and `stop_signal: SIGTERM`
   on `api`, `worker`, and `next`. `graceful-shutdown-lifecycle` verifies `restart: unless-stopped` and bounded `stop_grace_period`
   across all eleven production services, asserting expected application drain timeouts (`caddy: 30s`, `next: 30s`, `api: 45s`, `worker: 60s`).
+- **Deployment promotion drill runner hardening & test suite (Prompt 229, 2026-09-28):**
+  `scripts/ops/run-deployment-drill.sh` step 5 validates full operational container lifecycle requirements
+  fail-closed during deployment preflights: `restart: unless-stopped` and bounded `stop_grace_period` across all 11
+  services, application drain timeouts (`caddy: 30s`, `next: 30s`, `api: 45s`, `worker: 60s`), application dependency
+  health gating (`api`, `worker`, `caddy`, `grafana`, `postgres-exporter`), and process signal supervision (`init: true`,
+  `stop_signal: SIGTERM`). CLI arguments are protected with non-empty value guards. Automated regression suite
+  `scripts/ops/run-deployment-drill.spec.js` covers CLI flags, argument parsing, fail-closed Compose validation, and
+  structured evidence emission under `npm run ops:deployment-test` and `npm run ops:check`.
 
 
 **Prompt 214 Category 10 intake — 2026-09-27T19:53:01Z UTC.** Reviewed

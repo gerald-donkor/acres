@@ -38,6 +38,7 @@ require_file scripts/db/reconcile-production-monitor.sh
 require_file scripts/ops/verify-caddy-routing.js
 require_file scripts/ops/verify-caddy-routing.spec.js
 require_file scripts/ops/run-deployment-drill.sh
+require_file scripts/ops/run-deployment-drill.spec.js
 require_file scripts/ops/verify-volume-encryption.js
 require_file scripts/ops/verify-volume-encryption.spec.js
 require_file scripts/ops/run-secret-rotation-drill.sh
@@ -609,6 +610,16 @@ if (!launchDrillsScript.includes('run-static-integrity-checks.js --output') ||
     !launchDrillsScript.includes('sastCompliance') ||
     !launchDrillsScript.includes('containerSecurityCompliance')) {
   console.error('ops template check failed: scripts/ops/run-launch-drills.sh missing static integrity or other baseline dossier integration');
+  process.exit(1);
+}
+
+const deploymentDrillScript = fs.readFileSync('scripts/ops/run-deployment-drill.sh', 'utf8');
+if (!deploymentDrillScript.includes('restart: unless-stopped') ||
+    !deploymentDrillScript.includes('init: true for signal supervision') ||
+    !deploymentDrillScript.includes('stop_signal: SIGTERM') ||
+    !deploymentDrillScript.includes('condition: service_healthy') ||
+    !deploymentDrillScript.includes('graceful_drain_periods_verified')) {
+  console.error('ops template check failed: scripts/ops/run-deployment-drill.sh missing restart, signal supervision, or dependency health verification');
   process.exit(1);
 }
 

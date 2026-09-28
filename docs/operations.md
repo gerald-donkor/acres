@@ -1238,6 +1238,20 @@ window compliance, and child report validity.
 
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
+**Prompt 229 update (2026-09-28): deployment promotion drill hardening and automated test suite.**
+The dedicated deployment promotion and rollback drill runner (`scripts/ops/run-deployment-drill.sh`) step 5
+evaluation now validates full operational container lifecycle requirements fail-closed during deployment preflights:
+all eleven production services must declare `restart: unless-stopped` and a positive bounded `stop_grace_period` matching
+`/^[1-9]\d*s$/`, with application services verified against verified drain contracts (`caddy: 30s`, `next: 30s`, `api: 45s`, `worker: 60s`).
+Dependency health gating asserts that `api` requires healthy `postgres`, `valkey`, and `garage`; `worker` requires healthy `postgres`,
+`valkey`, `garage`, and `clamav`; `caddy` requires healthy `next`, `api`, and `garage`; `grafana` requires healthy `prometheus`; and
+`postgres-exporter` requires healthy `postgres`. Process signal supervision verifies `init: true` and `stop_signal: SIGTERM` across `api`,
+`worker`, and `next`. CLI option parsing is hardened with non-empty argument value guards.
+A dedicated unit test suite (`scripts/ops/run-deployment-drill.spec.js`) tests CLI usage, argument validation, fail-closed handling on missing/corrupted
+Compose files, drifted grace periods, unready dependencies, missing init/signal supervision, network isolation leaks, and Category 10 structured evidence emission.
+`ops:deployment-test` is integrated into root `package.json` and the `npm run ops:check` gate, and `check-production-templates.sh` asserts its presence and checks.
+Verification: `ops:deployment-test` passed 12/12; `ops:templates`, `ops:deployment-drill -- --dry-run`, `ops:check`, lint, typecheck, build, and `git diff --check` passed cleanly.
+
 **Prompt 228 update (2026-09-28): harden application container dependencies and shutdown lifecycle.**
 Static verification in `scripts/ops/verify-container-security.js` and `scripts/ops/check-production-templates.sh`
 now strictly validates application service dependencies, complete signal supervision, and graceful shutdown drain periods.

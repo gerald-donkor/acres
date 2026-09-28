@@ -34,24 +34,18 @@ while [ $# -gt 0 ]; do
       ALLOW_HSTS=1
       shift
       ;;
-    --caddyfile)
-      CONFIG_FILE="$2"
-      shift 2
-      ;;
-    --compose-file)
-      COMPOSE_FILE="$2"
-      shift 2
-      ;;
-    --evidence-dir)
-      EVIDENCE_DIR="$2"
-      shift 2
-      ;;
-    --evidence-file)
-      EVIDENCE_FILE="$2"
-      shift 2
-      ;;
-    --api-url)
-      API_URL="$2"
+    --caddyfile|--compose-file|--evidence-dir|--evidence-file|--api-url)
+      if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
+        printf 'Error: %s requires a non-empty value\n' "$1" >&2
+        exit 1
+      fi
+      case "$1" in
+        --caddyfile) CONFIG_FILE="$2" ;;
+        --compose-file) COMPOSE_FILE="$2" ;;
+        --evidence-dir) EVIDENCE_DIR="$2" ;;
+        --evidence-file) EVIDENCE_FILE="$2" ;;
+        --api-url) API_URL="$2" ;;
+      esac
       shift 2
       ;;
     --help|-h)
@@ -204,9 +198,27 @@ const fs = require('fs');
 const yaml = require('js-yaml');
 
 const composeFile = process.argv[2] || 'infra/compose/docker-compose.production.example.yml';
+if (!fs.existsSync(composeFile)) {
+  console.error(`Error: Compose file does not exist at "${composeFile}"`);
+  process.exit(1);
+}
 const compose = yaml.load(fs.readFileSync(composeFile, 'utf8'));
-const services = compose.services || {};
+const services = compose?.services || {};
 
+// 1. Verify restart policy and bounded stop_grace_period across all services
+for (const [name, service] of Object.entries(services)) {
+  if (!service || typeof service !== 'object') continue;
+  if (service.restart !== 'unless-stopped') {
+    console.error(`Error: Service "${name}" must configure restart: unless-stopped (found: ${service.restart || 'none'})`);
+    process.exit(1);
+  }
+  if (!service.stop_grace_period || typeof service.stop_grace_period !== 'string' || !/^[1-9]\d*s$/.test(service.stop_grace_period)) {
+    console.error(`Error: Service "${name}" must configure a positive bounded stop_grace_period (e.g. '30s')`);
+    process.exit(1);
+  }
+}
+
+// 2. Expected application drain periods
 const expectedGracePeriods = {
   caddy: '30s',
   next: '30s',
@@ -215,19 +227,74 @@ const expectedGracePeriods = {
 };
 
 for (const [svc, expectedGrace] of Object.entries(expectedGracePeriods)) {
-  const actual = services[svc]?.stop_grace_period;
-  if (!actual) {
-    console.error(`Error: Service "${svc}" missing stop_grace_period in production compose!`);
+  if (!services[svc]) {
+    console.error(`Error: Required service "${svc}" is missing from Compose services!`);
     process.exit(1);
   }
+  const actual = services[svc]?.stop_grace_period;
   if (actual !== expectedGrace) {
     console.error(`Error: Service "${svc}" stop_grace_period is "${actual}", expected "${expectedGrace}"`);
     process.exit(1);
   }
 }
 
-// Check networks isolation: caddy on public and private, internal services on private
-if (!services.caddy.networks.includes('public') || !services.caddy.networks.includes('private')) {
+// 3. Process signal supervision (init: true and stop_signal: SIGTERM on api, worker, next)
+for (const appSvc of ['api', 'worker', 'next']) {
+  const svc = services[appSvc];
+  if (!svc) continue;
+  if (svc.init !== true) {
+    console.error(`Error: Service "${appSvc}" must configure init: true for signal supervision`);
+    process.exit(1);
+  }
+  if (svc.stop_signal !== 'SIGTERM') {
+    console.error(`Error: Service "${appSvc}" must configure stop_signal: SIGTERM (found: ${svc.stop_signal || 'none'})`);
+    process.exit(1);
+  }
+}
+
+// 4. Application dependency health gating
+if (services.api) {
+  const apiDeps = services.api.depends_on || {};
+  for (const dep of ['postgres', 'valkey', 'garage']) {
+    if (apiDeps[dep]?.condition !== 'service_healthy') {
+      console.error(`Error: Service "api" must depend on healthy "${dep}" (condition: service_healthy)`);
+      process.exit(1);
+    }
+  }
+}
+
+if (services.worker) {
+  const workerDeps = services.worker.depends_on || {};
+  for (const dep of ['postgres', 'valkey', 'garage', 'clamav']) {
+    if (workerDeps[dep]?.condition !== 'service_healthy') {
+      console.error(`Error: Service "worker" must depend on healthy "${dep}" (condition: service_healthy)`);
+      process.exit(1);
+    }
+  }
+}
+
+if (services.caddy) {
+  const caddyDeps = services.caddy.depends_on || {};
+  for (const dep of ['next', 'api', 'garage']) {
+    if (caddyDeps[dep]?.condition !== 'service_healthy') {
+      console.error(`Error: Service "caddy" must depend on healthy "${dep}" (condition: service_healthy)`);
+      process.exit(1);
+    }
+  }
+}
+
+if (services.grafana && services.grafana.depends_on?.prometheus?.condition !== 'service_healthy') {
+  console.error('Error: Service "grafana" must depend on prometheus with condition: service_healthy');
+  process.exit(1);
+}
+
+if (services['postgres-exporter'] && services['postgres-exporter'].depends_on?.postgres?.condition !== 'service_healthy') {
+  console.error('Error: Service "postgres-exporter" must depend on postgres with condition: service_healthy');
+  process.exit(1);
+}
+
+// 5. Network isolation: caddy on public and private, internal services strictly private
+if (!services.caddy || !services.caddy.networks || !services.caddy.networks.includes('public') || !services.caddy.networks.includes('private')) {
   console.error('Error: Caddy must join both public and private networks');
   process.exit(1);
 }
@@ -240,6 +307,7 @@ for (const svc of ['next', 'api', 'worker', 'postgres', 'valkey', 'garage', 'cla
 }
 
 console.log('   ✓ Verified graceful drain configuration (Caddy: 30s, Next: 30s, API: 45s, Worker: 60s).');
+console.log('   ✓ Verified application dependency health gating and process signal supervision.');
 console.log('   ✓ Verified network isolation (public edge strictly restricted to Caddy ingress).');
 NODE
 
