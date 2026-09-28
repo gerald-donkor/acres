@@ -9,7 +9,7 @@ PARSER_MAX_CELL_CHARS PARSER_MAX_SAMPLE_ROWS PARSER_MAX_GEOJSON_FEATURES
 PARSER_MAX_GEOJSON_COORDINATES PARSER_CHILD_TIMEOUT_MS PARSER_CHILD_MAX_OLD_SPACE_MB
 OUTBOX_CLAIM_BATCH_SIZE OUTBOX_CLAIM_LEASE_MS OUTBOX_MAX_ATTEMPTS`.trim().split(/\s+/);
 const API_ONLY = `TENANCY_ENABLED
-SESSION_COOKIE_NAME SESSION_TTL_DAYS CSRF_COOKIE_NAME
+SESSION_COOKIE_NAME SESSION_TTL_DAYS CSRF_SECRET CSRF_COOKIE_NAME
 RATE_LIMIT_TTL_MS RATE_LIMIT_DEFAULT_LIMIT RATE_LIMIT_STRICT_LIMIT
 INVITATION_TTL_HOURS ACCOUNT_TOKEN_TTL_MINUTES GRAPHQL_MAX_BYTES
 GRAPHQL_MAX_DEPTH GRAPHQL_MAX_ALIASES GRAPHQL_MAX_COST GRAPHQL_MAX_FIRST
@@ -30,6 +30,10 @@ function checkApplicationEnvironment(compose, inputText) {
   for (const line of inputText.split(/\r?\n/)) {
     const match = line.match(/^([A-Z][A-Z0-9_]*)=/);
     if (match) counts.set(match[1], (counts.get(match[1]) || 0) + 1);
+  }
+  const csrfPlaceholder = ['__', 'REQUIRED_SECRET_CSRF_SECRET_32_BYTES_MINIMUM', '__'].join('');
+  if (!inputText.split(/\r?\n/).includes(`CSRF_SECRET=${csrfPlaceholder}`)) {
+    errors.push('production.env.example must retain the unresolved CSRF_SECRET placeholder');
   }
   for (const name of ['api', 'worker']) {
     const service = compose?.services?.[name];

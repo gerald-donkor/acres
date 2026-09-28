@@ -21,6 +21,7 @@ export interface AcresEnv {
   sessionCookieName: string;
   sessionTtlDays: number;
   sessionSecret: string;
+  csrfSecret: string;
   csrfCookieName: string;
   schedulerEnabled: boolean;
   rateLimitTtlMs: number;
@@ -196,10 +197,15 @@ function workerMetricsPort(raw: string): number {
   return port;
 }
 
-export function validateEnv(raw: Record<string, unknown>): AcresEnv {
+export function validateEnv(
+  raw: Record<string, unknown>,
+  worker = false,
+): AcresEnv {
   const env = raw as Record<string, string | undefined>;
 
-  const missing = REQUIRED.filter((key) => !env[key]);
+  const missing = [...REQUIRED, ...(worker ? [] : ['CSRF_SECRET'])].filter(
+    (key) => !env[key],
+  );
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variable(s): ${missing.join(', ')}. ` +
@@ -215,6 +221,7 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
   }
 
   const sessionSecret = env.SESSION_SECRET as string;
+  const csrfSecret = worker ? '' : (env.CSRF_SECRET as string);
   if (nodeEnv === 'production' && sessionSecret.startsWith('change-me')) {
     throw new Error(
       'SESSION_SECRET is still the placeholder from server/.env.example. ' +
@@ -228,7 +235,29 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
   }
   if (sessionSecret.length < 32) {
     new Logger('Config').warn(
-      'SESSION_SECRET is shorter than 32 characters; the CSRF HMAC is weaker than intended.',
+      'SESSION_SECRET is shorter than 32 characters; the cursor HMAC is weaker than intended.',
+    );
+  }
+  if (
+    !worker &&
+    nodeEnv === 'production' &&
+    (csrfSecret.startsWith('change-me') || csrfSecret.startsWith('__REQUIRED_'))
+  ) {
+    throw new Error('CSRF_SECRET cannot use a placeholder in production.');
+  }
+  if (!worker && nodeEnv === 'production' && csrfSecret.length < 32) {
+    throw new Error(
+      'CSRF_SECRET must be at least 32 characters in production.',
+    );
+  }
+  if (!worker && nodeEnv === 'production' && csrfSecret === sessionSecret) {
+    throw new Error(
+      'CSRF_SECRET must differ from SESSION_SECRET in production.',
+    );
+  }
+  if (!worker && csrfSecret.length < 32) {
+    new Logger('Config').warn(
+      'CSRF_SECRET is shorter than 32 characters; the CSRF HMAC is weaker than intended.',
     );
   }
   if (
@@ -337,6 +366,7 @@ export function validateEnv(raw: Record<string, unknown>): AcresEnv {
       env.SESSION_TTL_DAYS ?? DEFAULTS.SESSION_TTL_DAYS,
     ),
     sessionSecret,
+    csrfSecret,
     csrfCookieName: env.CSRF_COOKIE_NAME ?? DEFAULTS.CSRF_COOKIE_NAME,
     schedulerEnabled: boolean(
       'SCHEDULER_ENABLED',

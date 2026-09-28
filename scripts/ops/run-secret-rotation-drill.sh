@@ -216,7 +216,7 @@ try {
   // Step 3A: Dual-Secret Session Rollover Drill (SESSION_SECRET)
   // Note: In Acres, user authentication sessions utilize server-side opaque tokens
   // stored as SHA-256 digests in PostgreSQL (as verified in Step 3F).
-  // SESSION_SECRET is used to seed double-submit CSRF HMACs and cursor encryption.
+  // SESSION_SECRET remains the cursor HMAC input. CSRF uses separate CSRF_SECRET.
   // This step verifies the generalized dual-key HMAC rollover algorithm to guarantee
   // that secret rotation causes zero dropped active sessions or in-flight requests.
   // ============================================================================
@@ -296,6 +296,8 @@ console.log('      ✓ Dual-key rollover succeeded: 0 sessions dropped during tr
 
 // ============================================================================
 // Step 3B: CSRF Secret Rollover & Cookie Synchronization
+// Offline algorithm check for the API's independent CSRF_SECRET input; this does
+// not rotate a running API or model csrf-csrf's exact token wire format.
 // Invariant: CSRF token is HMAC bound to session cookie identifier;
 // rotation cleanly mints fresh token and rejects mismatched secrets.
 // ============================================================================

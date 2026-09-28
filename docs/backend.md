@@ -488,7 +488,7 @@ successful forgery:
 2. **Double-submit CSRF via `csrf-csrf@4`**, which is the actual defence.
    `doubleCsrf({ getSecret, getSessionIdentifier, … })` was verified from
    `node_modules/csrf-csrf/dist/index.d.cts`, not from memory. The token is
-   HMAC'd with `SESSION_SECRET` and bound to the session cookie's value, sent
+   HMAC'd with the independent `CSRF_SECRET` and bound to the session cookie's value, sent
    back in `x-csrf-token`, and checked against the `acres_csrf` cookie.
 
 **Because the token is bound to the session cookie's value, a client must
@@ -579,7 +579,8 @@ through a package script, so a container whose entrypoint is
 | `DATABASE_URL`             | **yes**  | —                            | the running API's non-owner `acres_app` connection (§8.1); read by `AcresConfigService`/`PrismaService`                                                                                                        |
 | `DATABASE_MIGRATION_URL`   | no       | falls back to `DATABASE_URL` | owner `acres_migrator` connection. CLI-only — read directly by `server/prisma.config.ts`, never by `AcresConfigService`, so `prisma migrate`/`validate`/`status` never share a connection with the running app |
 | `CLIENT_ORIGIN`            | **yes**  | —                            | CORS origin, credentials enabled                                                                                                                                                                               |
-| `SESSION_SECRET`           | **yes**  | —                            | CSRF HMAC secret. Boot **fails** in production if it is still the `change-me…` placeholder or shorter than 32 characters; warns below 32 characters in development/test                                      |
+| `SESSION_SECRET`           | **yes**  | —                            | GraphQL cursor HMAC input. Boot **fails** in production if it is still the `change-me…` placeholder or shorter than 32 characters; warns below 32 characters in development/test                                      |
+| `CSRF_SECRET`              | **yes for API** | —                     | Independent double-submit CSRF HMAC input. API boot fails for missing values in every environment and for placeholders, fewer than 32 characters, or equality with `SESSION_SECRET` in production. Worker validation does not require it; production worker Compose does not inject it. |
 | `PORT`                     | no       | `3001`                       | never 3000, so it cannot collide with the client                                                                                                                                                               |
 | `SESSION_COOKIE_NAME`      | no       | `acres_session`              |                                                                                                                                                                                                                |
 | `SESSION_TTL_DAYS`         | no       | `30`                         | positive integer                                                                                                                                                                                               |

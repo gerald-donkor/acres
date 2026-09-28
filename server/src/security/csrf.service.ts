@@ -27,7 +27,7 @@ export class CsrfService {
 
   constructor(private readonly config: AcresConfigService) {
     this.utilities = doubleCsrf({
-      getSecret: () => this.config.sessionSecret,
+      getSecret: () => this.config.csrfSecret,
       getSessionIdentifier: (request: Request) =>
         (request.cookies as Record<string, string> | undefined)?.[
           this.config.sessionCookieName

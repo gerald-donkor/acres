@@ -6,6 +6,7 @@ describe('validateEnv', () => {
     DATABASE_URL: 'postgresql://acres:acres@localhost:5432/acres?schema=public',
     CLIENT_ORIGIN: 'http://localhost:3000',
     SESSION_SECRET: 'test-secret-that-is-at-least-32-characters',
+    CSRF_SECRET: 'test-csrf-secret-distinct-and-at-least-32-characters',
     INVITATION_TTL_HOURS: '24',
     ACCOUNT_TOKEN_TTL_MINUTES: '30',
   };
@@ -21,7 +22,7 @@ describe('validateEnv', () => {
   describe('required variables', () => {
     it('throws error listing all missing required variables when absent', () => {
       expect(() => validateEnv({})).toThrow(
-        'Missing required environment variable(s): DATABASE_URL, CLIENT_ORIGIN, SESSION_SECRET. ' +
+        'Missing required environment variable(s): DATABASE_URL, CLIENT_ORIGIN, SESSION_SECRET, CSRF_SECRET. ' +
           'Copy server/.env.example to server/.env and fill them in.',
       );
     });
@@ -49,6 +50,15 @@ describe('validateEnv', () => {
         'Missing required environment variable(s): SESSION_SECRET.',
       );
     });
+
+    it('requires CSRF_SECRET for the API but not the worker', () => {
+      const env = { ...BASE_VALID_ENV };
+      delete (env as Record<string, unknown>).CSRF_SECRET;
+      expect(() => validateEnv(env)).toThrow(
+        'Missing required environment variable(s): CSRF_SECRET.',
+      );
+      expect(validateEnv(env, true).csrfSecret).toBe('');
+    });
   });
 
   describe('minimal environment and default population', () => {
@@ -65,6 +75,7 @@ describe('validateEnv', () => {
       expect(config.sessionCookieName).toBe('acres_session');
       expect(config.sessionTtlDays).toBe(30);
       expect(config.sessionSecret).toBe(BASE_VALID_ENV.SESSION_SECRET);
+      expect(config.csrfSecret).toBe(BASE_VALID_ENV.CSRF_SECRET);
       expect(config.csrfCookieName).toBe('acres_csrf');
       expect(config.schedulerEnabled).toBe(true);
       expect(config.rateLimitTtlMs).toBe(60000);
@@ -174,6 +185,32 @@ describe('validateEnv', () => {
   });
 
   describe('production session secret and credentials validation', () => {
+    it('enforces a distinct production CSRF signing key with value-safe errors', () => {
+      for (const [csrfSecret, message] of [
+        ['', 'Missing required environment variable(s): CSRF_SECRET.'],
+        ['short', 'CSRF_SECRET must be at least 32 characters in production.'],
+        [
+          'change-me-csrf-secret-longer-than-32-characters',
+          'CSRF_SECRET cannot use a placeholder in production.',
+        ],
+        [
+          '__REQUIRED_SECRET_CSRF_SECRET_32_BYTES_MINIMUM__',
+          'CSRF_SECRET cannot use a placeholder in production.',
+        ],
+        [
+          PROD_VALID_ENV.SESSION_SECRET,
+          'CSRF_SECRET must differ from SESSION_SECRET in production.',
+        ],
+      ]) {
+        expect(() =>
+          validateEnv({ ...PROD_VALID_ENV, CSRF_SECRET: csrfSecret }),
+        ).toThrow(message);
+      }
+      expect(validateEnv(PROD_VALID_ENV).csrfSecret).toBe(
+        PROD_VALID_ENV.CSRF_SECRET,
+      );
+    });
+
     it('enforces production session secret minimum length of 32 characters', () => {
       expect(() =>
         validateEnv({

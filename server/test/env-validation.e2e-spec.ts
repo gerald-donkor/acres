@@ -8,6 +8,7 @@ const BASE_ENV = {
   SESSION_COOKIE_NAME: 'acres_session',
   SESSION_TTL_DAYS: '30',
   SESSION_SECRET: 'test-secret-that-is-at-least-32-characters',
+  CSRF_SECRET: 'test-csrf-secret-distinct-and-at-least-32-characters',
   CSRF_COOKIE_NAME: 'acres_csrf',
   SCHEDULER_ENABLED: 'false',
   TENANCY_ENABLED: 'true',

@@ -282,7 +282,7 @@ grant, injection mechanism, or credential was changed.
 
 Repository-verified consumer mapping, read from the checked-in templates and
 the server configuration, not from a running system. All twelve fields map to a
-distinct template name, and nine of those twelve have a verified consumer in
+distinct template name, and ten of those twelve have a verified consumer in
 this repository: `db_migrator_secret_source` → `ACRES_MIGRATOR_PASSWORD` /
 `DATABASE_MIGRATION_URL` (`server/prisma.config.ts:10`);
 `db_app_secret_source` →
@@ -293,6 +293,7 @@ this repository: `db_migrator_secret_source` → `ACRES_MIGRATOR_PASSWORD` /
 `/run/secrets/acres_monitor_password` and read by the `postgres-exporter`
 service through `DATA_SOURCE_PASS_FILE` rather than an environment value;
 `session_secret_source` → `SESSION_SECRET` (`env.validation.ts:89,217`);
+`csrf_secret_source` → API `CSRF_SECRET` (`CsrfService`);
 `valkey_secret_source` → `VALKEY_PASSWORD` / `VALKEY_URL`
 (`env.validation.ts:401`; the development default at `:111` is rejected in
 production by `:238`); `garage_rpc_secret_source` and
@@ -307,23 +308,17 @@ template; the only Gemini strings under `infra/` are Category 11's no-AI posture
 fields. A clean `scripts/ops/scan-secrets.sh` run is one supporting repository
 check and is not evidence of production store policy or runtime injection.
 
-Four verified facts the operator's inventory and the security lead must
-resolve:
+Repository facts the operator's inventory and the security lead must track:
 
-- **`csrf_secret_source` has no distinct runtime consumer.**
-  `server/src/security/csrf.service.ts:30` supplies
-  `() => this.config.sessionSecret` as the double-submit CSRF secret, and no
-  `CSRF_SECRET` name exists in `client/`, `server/` or `packages/`. Category 4
-  still requires `csrf_secret_source` to be **distinct** from
-  `session_secret_source`: the validator rejects a child report unless all
-  twelve approved values are pairwise distinct
-  (`scripts/ops/check-launch-readiness.js:699`), and §3.4 states the same. A
-  record can therefore pass the validator with a `csrf_secret_source` that no
-  service reads. Approval requires the security lead to state which store source
-  backs the CSRF HMAC and how a distinct twelfth source reaches the runtime, or
-  to record that the twelfth field is a named derivation of
-  `session_secret_source` and have this checklist and the validator contract
-  corrected first.
+- **`csrf_secret_source` now has a distinct API consumer.**
+  `CsrfService` reads the validated `CSRF_SECRET`; the production API Compose
+  map requires that input and the worker map excludes it. The application
+  rejects equal CSRF and session values in production. Operators must provision
+  a separate store value and inject it into any already materialized API env
+  and Compose files before rollout. Old CSRF tokens become invalid at cutover
+  and after CSRF key rotation; clients fetch a new token via `GET /auth/csrf`.
+  Repository wiring does not prove a live store grant or policy. The twelve
+  distinct indirect references and Category 4 operator evidence remain required.
 - **`smtp_secret_source` runtime injection is unverified.** The repository
   production env template now defines `SMTP_USER` and `SMTP_PASS`, matching
   `server/src/config/env.validation.ts` and the mail adapter. The template

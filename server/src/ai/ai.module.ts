@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AcresConfigModule } from '../config/config.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -12,7 +11,6 @@ import { AiDraftController } from './ai-draft.controller';
 
 @Module({
   imports: [
-    AcresConfigModule,
     PrismaModule,
     SecurityModule,
     SessionsModule,

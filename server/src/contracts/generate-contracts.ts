@@ -117,6 +117,7 @@ export function ensureContractEnv(): void {
     SESSION_COOKIE_NAME: 'acres_session',
     SESSION_TTL_DAYS: '30',
     SESSION_SECRET: 'contract-secret-that-is-at-least-32-characters',
+    CSRF_SECRET: 'contract-csrf-secret-that-is-at-least-32-characters',
     CSRF_COOKIE_NAME: 'acres_csrf',
     SCHEDULER_ENABLED: 'false',
     RATE_LIMIT_TTL_MS: '60000',

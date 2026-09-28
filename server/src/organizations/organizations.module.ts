@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AcresConfigModule } from '../config/config.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { MailModule } from '../mail/mail.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -10,7 +9,7 @@ import { OrganizationsService } from './organizations.service';
 import { PermissionGuard } from './permission.guard';
 
 @Module({
-  imports: [AcresConfigModule, IdempotencyModule, MailModule, PrismaModule],
+  imports: [IdempotencyModule, MailModule, PrismaModule],
   controllers: [OrganizationsController],
   providers: [
     AuditService,

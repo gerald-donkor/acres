@@ -450,6 +450,9 @@ function configDouble(
     get sessionSecret() {
       return envValue(envOverrides, 'SESSION_SECRET');
     },
+    get csrfSecret() {
+      return envValue(envOverrides, 'CSRF_SECRET');
+    },
     get csrfCookieName() {
       return envValue(envOverrides, 'CSRF_COOKIE_NAME');
     },

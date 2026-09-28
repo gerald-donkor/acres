@@ -17,6 +17,7 @@ describe('AcresConfigService', () => {
     sessionCookieName: 'acres_session',
     sessionTtlDays: 30,
     sessionSecret: 'test-session-secret-32-characters-minimum',
+    csrfSecret: 'test-csrf-secret-32-characters-minimum',
     csrfCookieName: 'acres_csrf',
     schedulerEnabled: true,
     rateLimitTtlMs: 60000,
@@ -123,6 +124,7 @@ describe('AcresConfigService', () => {
       expect(service.sessionSecret).toBe(
         'test-session-secret-32-characters-minimum',
       );
+      expect(service.csrfSecret).toBe('test-csrf-secret-32-characters-minimum');
       expect(service.csrfCookieName).toBe('acres_csrf');
     });
 

@@ -489,7 +489,7 @@ error text stays server-log-only).
 1. **Automated Secret Rotation Drill**:
    Execute `npm run ops:rotation-drill` (or `scripts/ops/run-secret-rotation-drill.sh [options]`). Validates zero-downtime rotation procedures across all 7 production secret classes:
    - **Session Secret Rollover (`SESSION_SECRET`)**: Evaluates dual-key rollover window. Primary Key A signs session tokens; Key B rotated to Primary with Key A retained as Secondary during grace window. Verifies 0 dropped active sessions, and asserts that expired/retired Key A tokens are rejected after grace window.
-   - **CSRF Secret Rollover (`CSRF_SECRET`)**: Evaluates token re-issuance and cookie synchronization. Stale CSRF tokens rejected fail-closed with `CSRF_INVALID`.
+   - **CSRF Secret Rollover (`CSRF_SECRET`)**: Offline HMAC simulation of token re-issuance and stale-token rejection. This does not rotate a running API; live clients must obtain a new `GET /auth/csrf` token after rotation.
    - **Database Passwords (`ACRES_APP_PASSWORD`, `ACRES_MIGRATOR_PASSWORD`)**: Validates zero-downtime PostgreSQL role password rotation. Connection pool drains idle connections; in-flight queries complete safely; new connections authenticate with rotated credentials; stale passwords rejected with `28P01`.
    - **Valkey Authentication (`VALKEY_PASSWORD`)**: Evaluates dynamic runtime reload via `CONFIG SET requirepass`. Ingestion queues maintain zero message drops; stale connections rejected with `-WRONGPASS`.
    - **Storage Access Keys (`STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`)**: Evaluates S3 SigV4 signature derivation and dual-key overlap window for Garage / S3 presigned operations.
@@ -1401,3 +1401,35 @@ This is the Phase 12 exit gate: one orchestrator, one dossier, one checklist.
    - Integrated `npm run ops:launch-drill-test` into `npm run ops:check`;
    - `scripts/ops/launch-readiness.sh` accepts `--with-drills` (runs the
      unified orchestrator before the readiness check) and `--help`.
+
+## Prompt 221 — separate CSRF signing source
+
+The production API template now requires a distinct `CSRF_SECRET` input. The
+worker's separate validation path neither requires nor receives that key. The
+API rejects missing values at boot in every environment and rejects placeholders,
+short values and equality with `SESSION_SECRET` in production. The template
+preflight checks the API-only Compose mapping, matching required interpolation,
+single operator assignment and unresolved example placeholder. Before deploying
+this version, operators must update already materialized production env/Compose
+files and grant the API a separate CSRF store value. Cutover and subsequent key
+rotation invalidate prior CSRF tokens; clients obtain a fresh token from
+`GET /auth/csrf`. The offline rotation drill models independent CSRF rollover
+but does not rotate a live API. Garage metrics consumption, live secret grants
+and Category 4/Phase 12 approval remain open.
+
+The CI Docker smoke container and Playwright API web server also inject distinct
+synthetic CSRF keys so their API boot paths satisfy the new requirement. The
+CI smoke environment additionally supplies its already-required synthetic
+Valkey URL and token lifetimes; its parsed environment passes `validateEnv`.
+The workflow YAML parsed, the secret scan passed, and Playwright listed its 74
+configured tests. The browser suite was not run here because local PostgreSQL
+on port 5432 did not respond.
+
+Verification on 2026-09-28: focused config/CSRF Jest suites passed 151/151;
+environment-validation e2e passed 16/16; `npm run ops:templates`,
+`npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and
+`git diff --check` passed. The dependency audit gate reported zero critical
+advisories (16 lower-severity advisories remain). The checked-in readiness
+example still failed closed with 11 blocked categories and 70 blockers. The
+full build and operations gate required execution outside the sandbox because
+the sandbox suppressed Node child stdout and registry DNS respectively.

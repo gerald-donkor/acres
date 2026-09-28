@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { AcresConfigModule } from '../config/config.module';
+import { AcresWorkerConfigModule } from '../config/config.module';
 import { IngestionModule } from '../ingestion/ingestion.module';
 import { MetricsModule } from '../metrics/metrics.module';
 import { OutboxModule } from '../outbox/outbox.module';
@@ -12,7 +12,7 @@ import { UploadWorkerService } from './upload-worker.service';
 
 @Module({
   imports: [
-    AcresConfigModule,
+    AcresWorkerConfigModule,
     PrismaModule,
     OutboxModule,
     QueueModule,

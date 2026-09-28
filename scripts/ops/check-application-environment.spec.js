@@ -19,6 +19,8 @@ test('production API and worker use the audited key maps', () => {
     assert.ok(compose().services[name].environment.SESSION_SECRET);
     assert.ok(compose().services[name].environment.CLIENT_ORIGIN);
   }
+  assert.match(compose().services.api.environment.CSRF_SECRET, /^\$\{CSRF_SECRET:\?/);
+  assert.equal(Object.hasOwn(compose().services.worker.environment, 'CSRF_SECRET'), false);
   for (const key of ['CLAMAV_HOST', 'CLAMAV_PORT', 'CLAMAV_SCAN_TIMEOUT_MS',
     'UPLOAD_CLEANUP_INTERVAL_MS', 'QUEUE_SHUTDOWN_MS']) {
     assert.equal(Object.hasOwn(compose().services.api.environment, key), false);
@@ -74,11 +76,30 @@ test('API rejects worker-only, migration and operator credentials', () => {
 
 test('worker rejects API mail credentials and operator credentials', () => {
   const value = compose();
-  for (const key of ['SMTP_PASS', 'POSTGRES_SUPERUSER_PASSWORD', 'ACRES_MIGRATOR_PASSWORD']) {
+  for (const key of ['CSRF_SECRET', 'SMTP_PASS', 'POSTGRES_SUPERUSER_PASSWORD', 'ACRES_MIGRATOR_PASSWORD']) {
     value.services.worker.environment[key] = 'synthetic-private';
   }
-  assert.deepEqual(check(value), ['SMTP_PASS', 'POSTGRES_SUPERUSER_PASSWORD',
+  assert.deepEqual(check(value), ['CSRF_SECRET', 'SMTP_PASS', 'POSTGRES_SUPERUSER_PASSWORD',
     'ACRES_MIGRATOR_PASSWORD'].map((key) => `worker has unexpected environment key ${key}`));
+});
+
+test('API requires a matching, mandatory CSRF source and one operator assignment', () => {
+  const value = compose();
+  delete value.services.api.environment.CSRF_SECRET;
+  assert.ok(check(value).includes('api missing environment key CSRF_SECRET'));
+  value.services.api.environment.CSRF_SECRET = '${SESSION_SECRET:?wrong source}';
+  assert.ok(check(value).includes('api must require CSRF_SECRET from the matching Compose input'));
+  value.services.api.environment.CSRF_SECRET = '${CSRF_SECRET-}';
+  assert.ok(check(value).includes('api must require CSRF_SECRET from the matching Compose input'));
+  value.services.api.environment.CSRF_SECRET = '${CSRF_SECRET:?inject CSRF_SECRET}';
+  for (const text of [input.replace(/^CSRF_SECRET=.*$/m, ''), input + '\nCSRF_SECRET=synthetic-duplicate\n']) {
+    const errors = check(value, text);
+    assert.ok(errors.includes('production.env.example must define CSRF_SECRET exactly once'));
+    assert.equal(errors.join(' ').includes('synthetic-duplicate'), false);
+  }
+  const rendered = input.replace(/^CSRF_SECRET=.*$/m, 'CSRF_SECRET=synthetic-runtime-secret');
+  assert.ok(check(value, rendered).includes('production.env.example must retain the unresolved CSRF_SECRET placeholder'));
+  assert.equal(check(value, rendered).join(' ').includes('synthetic-runtime-secret'), false);
 });
 
 test('scheduler, worker metrics and no-AI constants are fixed', () => {

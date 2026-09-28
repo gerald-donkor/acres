@@ -54,6 +54,10 @@ export class AcresConfigService {
     return this.get('sessionSecret');
   }
 
+  get csrfSecret(): string {
+    return this.get('csrfSecret');
+  }
+
   get csrfCookieName(): string {
     return this.get('csrfCookieName');
   }

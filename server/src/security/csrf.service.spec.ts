@@ -10,9 +10,14 @@ import type { AcresConfigService } from '../config/acres-config.service';
 describe('CsrfService', () => {
   const secret = '12345678901234567890123456789012'; // 32 chars
 
-  function createMockConfig(isProduction = false): AcresConfigService {
+  function createMockConfig(
+    isProduction = false,
+    csrfSecret = secret,
+    sessionSecret = secret,
+  ): AcresConfigService {
     return {
-      sessionSecret: secret,
+      sessionSecret,
+      csrfSecret,
       sessionCookieName: 'acres_session',
       csrfCookieName: 'acres_csrf',
       isProduction,
@@ -125,6 +130,67 @@ describe('CsrfService', () => {
   });
 
   describe('protection middleware', () => {
+    it('rejects a token under another CSRF key while the session key stays fixed', () => {
+      const first = new CsrfService(
+        createMockConfig(false, 'first-distinct-csrf-key-32-characters'),
+      );
+      const second = new CsrfService(
+        createMockConfig(false, 'second-distinct-csrf-key-32-characters'),
+      );
+      const issueReq = {
+        cookies: { acres_session: 'session-abc' },
+        headers: {},
+      } as unknown as Request;
+      const issued = createMockResponse();
+      const token = first.issueToken(issueReq, issued.res);
+      const cookie =
+        (issued.cookie.mock.calls as [string, string, unknown][])[0]?.[1] ?? '';
+      const post = {
+        method: 'POST',
+        headers: { [CSRF_HEADER_NAME]: token },
+        cookies: { acres_session: 'session-abc', acres_csrf: cookie },
+      } as unknown as Request;
+      const accepted = createMockResponse();
+      const acceptedNext = jest.fn();
+      first.protection(post, accepted.res, acceptedNext);
+      expect(acceptedNext).toHaveBeenCalledWith();
+      const rejected = createMockResponse();
+      const rejectedNext = jest.fn();
+      second.protection(post, rejected.res, rejectedNext);
+      expect(rejectedNext).not.toHaveBeenCalled();
+      expect(rejected.status).toHaveBeenCalledWith(403);
+    });
+
+    it('keeps CSRF validation when only SESSION_SECRET changes', () => {
+      const csrfKey = 'independent-csrf-key-32-characters-long';
+      const first = new CsrfService(
+        createMockConfig(false, csrfKey, 'session-key-one-32-characters-long'),
+      );
+      const second = new CsrfService(
+        createMockConfig(false, csrfKey, 'session-key-two-32-characters-long'),
+      );
+      const issued = createMockResponse();
+      const token = first.issueToken(
+        {
+          cookies: { acres_session: 'session-abc' },
+          headers: {},
+        } as unknown as Request,
+        issued.res,
+      );
+      const cookie =
+        (issued.cookie.mock.calls as [string, string, unknown][])[0]?.[1] ?? '';
+      const post = {
+        method: 'POST',
+        headers: { [CSRF_HEADER_NAME]: token },
+        cookies: { acres_session: 'session-abc', acres_csrf: cookie },
+      } as unknown as Request;
+      const response = createMockResponse();
+      const next = jest.fn();
+      second.protection(post, response.res, next);
+      expect(next).toHaveBeenCalledWith();
+      expect(response.status).not.toHaveBeenCalled();
+    });
+
     it('allows safe HTTP GET requests through without CSRF validation', () => {
       const config = createMockConfig(false);
       const service = new CsrfService(config);

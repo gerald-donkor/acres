@@ -17,3 +17,19 @@ import { validateEnv } from './env.validation';
   exports: [AcresConfigService],
 })
 export class AcresConfigModule {}
+
+/** Worker has no CSRF routes and must not receive the API signing key. */
+@Global()
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      envFilePath: ['.env'],
+      validate: (raw) => validateEnv(raw, true),
+    }),
+  ],
+  providers: [AcresConfigService],
+  exports: [AcresConfigService],
+})
+export class AcresWorkerConfigModule {}

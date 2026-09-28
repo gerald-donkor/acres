@@ -413,6 +413,13 @@ in [`operations.md`](operations.md).
   superuser or Grafana credentials. The worker still needs `SESSION_SECRET`
   and `CLIENT_ORIGIN` for its shared boot validator, a residual coupling.
   Live container key inventories and secret-source grants remain unverified.
+  Prompt 221 gives the API a distinct `CSRF_SECRET` HMAC input and a separate
+  worker validation path that needs no CSRF key. Production boot rejects a
+  missing, placeholder, short, or session-equal CSRF key. This narrows a
+  credential reuse path in TM-03/TM-04; it does not prove live operator grants.
+  Existing deployed env and Compose files need a distinct store value before
+  rollout. Rotation or cutover invalidates prior CSRF tokens, so clients fetch
+  a fresh `GET /auth/csrf` token. Garage metrics consumption remains open.
 - `infra/caddy/Caddyfile.example` models same-origin app/API/GraphQL routing,
   baseline security headers, path-style presigned object proxying for the
   current `acres-quarantine` bucket, request-size and timeout placeholders, and

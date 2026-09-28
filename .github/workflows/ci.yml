@@ -105,6 +105,10 @@ jobs:
             -e CLIENT_ORIGIN=http://localhost:3000 \
             -e DATABASE_URL="postgresql://acres:acres@localhost:5432/acres?schema=public" \
             -e SESSION_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd \
+            -e CSRF_SECRET=abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789 \
+            -e VALKEY_URL=redis://:synthetic-ci-password@localhost:6379/0 \
+            -e INVITATION_TTL_HOURS=24 \
+            -e ACCOUNT_TOKEN_TTL_MINUTES=30 \
             -e SCHEDULER_ENABLED=false \
             acres-server:ci
       - name: Wait for /health

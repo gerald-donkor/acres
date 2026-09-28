@@ -1,0 +1,45 @@
+# 221 — distinct CSRF signing secret
+
+## Scope and why this is next
+
+Phase 12K is the earliest unfinished build phase. Prompt 220 scoped the production API and worker environment maps, but Category 4 still has a repository-verifiable contradiction: the launch readiness contract requires twelve distinct secret references, including `csrf_secret_source`, while `server/src/security/csrf.service.ts` signs with `AcresConfigService.sessionSecret`. No application `CSRF_SECRET` input exists. Add an independent CSRF signing input and make the production API consume it. Keep the worker free of the new secret. This is one dependency-safe repository step toward Category 4; the Garage metrics consumer, process-specific worker validation, actual operator secret grants and launch sign-off remain separate.
+
+## Sources and baseline to inspect on approval
+
+- Re-read `AGENTS.md` §§2–7 and 10; `docs/build-plan.md` §§13–14 and 22; `docs/launch-checklist.md` §6A Category 4; `docs/operations.md` Phase 12K; `docs/security.md` TM-03/TM-04 and production topology; `docs/backend.md` §§5–6 and its current config record; `docs/skills.md`.
+- Inspect `server/src/config/{env.validation.ts,env.validation.spec.ts,acres-config.service.ts,acres-config.service.spec.ts,config.module.ts}`, `server/src/security/{csrf.service.ts,csrf.service.spec.ts}`, `server/src/graphql/cursor-codec.ts`, `server/test/{setup-env.ts,env-validation.e2e-spec.ts}`, `server/.env.example`, `infra/env/production.env.example`, `infra/compose/docker-compose.production.example.yml`, `scripts/ops/{check-application-environment.js,check-application-environment.spec.js,check-production-templates.sh,run-secret-rotation-drill.sh}`, root scripts and all other environment fixtures that supply `SESSION_SECRET`. Follow consumer references before editing. Record `git status --short --branch`, base SHA and current diff; preserve unrelated changes.
+- Verify the used `@nestjs/config` and `csrf-csrf` APIs in installed `node_modules`, including custom validation and `getSecret`, before changing behavior. The `ConfigModuleOptions.validate` signature was present in `node_modules/@nestjs/config/dist/interfaces/config-module-options.interface.d.ts` during prompt preparation; re-check at execution.
+- No visual surface is involved. The static design references, comp measurements and breakpoint contract do not apply. The exact measurable contract is the set of environment **key names** and the token behavior under two different secrets. Do not log real or rendered secret values.
+
+## Implementation contract
+
+1. Add `csrfSecret` to `AcresEnv` and its typed `AcresConfigService` getter. Require `CSRF_SECRET` at API boot in all environments, including test; do not silently alias or fall back to `SESSION_SECRET`. Retain existing `SESSION_SECRET` validation and GraphQL cursor use. Apply the production placeholder and minimum-length checks to `CSRF_SECRET`, with key-name-only errors. Reject equality of the two secrets in production so distinct references cannot silently resolve to one value. Decide whether equality should also fail in development/test after checking existing fixtures; document the chosen behavior. Avoid echoing raw secret values in diagnostics. Update server environment examples and synthetic test setup with distinct nonproduction values; no actual credential goes in Git.
+2. Change `CsrfService` to supply the validated `csrfSecret` through `doubleCsrf.getSecret`; keep session-cookie identifier binding, cookie policy, token refresh after login, error envelope and safe-method exemptions intact. Add focused service tests proving a token issued under one CSRF secret fails under a second while `SESSION_SECRET` stays fixed, and that changing only `SESSION_SECRET` does not change the CSRF HMAC for a fixed session identifier. Preserve the existing login/session-id change behavior. Account for the library's token format using verified API behavior rather than an invented assertion.
+3. Add `CSRF_SECRET=__REQUIRED_SECRET_CSRF_SECRET_32_BYTES_MINIMUM__` to `infra/env/production.env.example` and a required `${CSRF_SECRET:?...}` input to the **API** production Compose environment. Do not inject it into `worker`, `next`, `caddy` or any public client value. Update the independent API key inventory in `scripts/ops/check-application-environment.js` and focused negative tests for a missing key, wrong/optional interpolation, worker injection, missing/duplicate operator assignment and value-safe errors. Ensure the existing template preflight also detects an unresolved CSRF placeholder and source mismatch. Reconcile any other production preflight that inventories required secrets, without relaxing its existing checks.
+4. Check `scripts/ops/run-secret-rotation-drill.sh` against the new real runtime contract. Its synthetic CSRF rollover already uses two independent CSRF seeds; make its documentation and assertions explicitly match the new `CSRF_SECRET` consumer, without claiming the offline drill rotates a live API. Preserve the separate session rollover and the seven-class report schema. Do not alter the Category 4 twelve-distinct-reference validator or claim a derived secret source.
+5. Update `docs/backend.md` CSRF and environment sections, `docs/launch-checklist.md` §6A Category 4, `docs/operations.md` Phase 12K, and `docs/security.md` with the exact new consumer, operator migration, tests and remaining evidence gaps. Replace the stale statement that CSRF uses `SESSION_SECRET`. Explain that older materialized production env/Compose files need a separate CSRF store value and API injection before rollout, and that a CSRF key rotation invalidates prior tokens, requiring clients to obtain a fresh token. If additional documentation is touched, keep its claims aligned with code. Do not approve Category 4 or Phase 12 from repository checks.
+
+## Expected impact, limits and rollback
+
+- API startup now needs a second secret. Existing deployments and local setups need `CSRF_SECRET` provisioned before restarting the API. CSRF token format, cookie name and browser route remain the same; tokens signed with the prior `SESSION_SECRET` become invalid at cutover and clients refresh through `GET /auth/csrf`.
+- No database migration, schema, UI, GraphQL contract, role change or worker job change. `SESSION_SECRET` remains the session/cursor input. The worker's existing `SESSION_SECRET`/`CLIENT_ORIGIN` validator coupling is outside this prompt. Garage metrics consumption and live store policy stay unresolved.
+- Rollback to the previous app signing source would also invalidate freshly signed tokens and restore the Category 4 mismatch. If rollout fails, restore the prior app image and source together, reissue CSRF tokens, and keep Category 4 blocked; never invent a production secret or copy the session secret to fill the new key.
+
+## Verification, review and commit on approval
+
+1. Run focused config/CSRF unit and relevant server e2e tests, `npm run ops:templates-test`, `npm run ops:templates`, `npm run ops:check`, `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check`; quote actual outputs. Exercise production validation with two synthetic distinct 32+ character secrets and with missing, placeholder, short and equal CSRF values. Verify the API Compose key is present and the worker key absent through parsed configuration; if Docker Compose is available, render only synthetic inputs and inspect key names, never values. Confirm the checked-in readiness example remains unresolved and fails closed. Do not report an unavailable test as passing.
+2. Inspect the full diff for leaked values, accidental client exposure, changes to session/GraphQL behavior and unrelated files. Dispatch an independent reviewer subagent using `requesting-code-review` with requirements, `BASE_SHA`/`HEAD_SHA`, changed paths and real checks. Evaluate feedback with `receiving-code-review`, verify claims against code, fix valid issues, rerun affected checks and re-review material changes.
+3. Record the actual implemented state and checks in the owning docs. Stage only scoped changes, inspect the staged diff, and commit locally to `main` with `caveman-commit`. Do not push. Report exact setup/run instructions and remaining operator/Phase 12 gates.
+
+## SKILLS USED
+
+- `nestjs-best-practices` — preserve the typed Nest configuration and middleware boundary.
+- `auth-implementation-patterns` — preserve cookie session and CSRF behavior.
+- `security-best-practices` — review secure defaults and secret handling in TypeScript.
+- `security-threat-model` — reconcile the changed signing-secret trust boundary.
+- `secrets-management` — define distinct runtime source and safe rotation/migration.
+- `deployment-pipeline-design` — keep the production template and rollout gate consistent.
+- `javascript-testing-patterns` — test secret separation and negative configuration cases.
+- `requesting-code-review` — dispatch the required independent implementation review.
+- `receiving-code-review` — verify and resolve review findings.
+- `caveman-commit` — write the required local commit message after execution.

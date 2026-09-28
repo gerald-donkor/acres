@@ -30,6 +30,7 @@ export default defineConfig({
             `PORT=${apiPort} CLIENT_ORIGIN=${baseURL} ` +
             "DATABASE_URL='postgresql://acres_app:acres_app_dev_password@localhost:5432/acres?schema=public' " +
             "SESSION_SECRET='test-secret-that-is-at-least-32-characters' " +
+            "CSRF_SECRET='test-distinct-csrf-secret-at-least-32-characters' " +
             "SCHEDULER_ENABLED=false TENANCY_ENABLED=true " +
             "RATE_LIMIT_STRICT_LIMIT=1000 RATE_LIMIT_DEFAULT_LIMIT=5000 " +
             "INVITATION_TTL_HOURS=24 ACCOUNT_TOKEN_TTL_MINUTES=30 " +
