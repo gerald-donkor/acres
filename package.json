@@ -67,7 +67,7 @@
     "ops:dos-drill": "bash scripts/ops/run-dos-resilience-drill.sh",
     "ops:capacity-alerting-drill": "bash scripts/ops/run-capacity-alerting-drill.sh",
     "ops:launch-drill": "bash scripts/ops/run-launch-drills.sh --dry-run",
-    "ops:launch-drill-test": "node --test scripts/ops/run-launch-drills.spec.js",
+    "ops:launch-drill-test": "node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js",
     "ops:check": "npm run ops:templates && npm run ops:templates-test && npm run ops:release-images-test && npm run ops:scan-secrets && npm run ops:docker-runtime && npm run ops:audit && npm run ops:readiness-schema-test && npm run ops:readiness-test && npm run ops:reconcile-test && npm run ops:restore-drill-test && npm run ops:caddy-test && npm run ops:deployment-test && npm run ops:volume-test && npm run ops:rotation-test && npm run ops:sbom-test && npm run ops:sbom && npm run ops:sast-test && npm run ops:sast && npm run ops:container-test && npm run ops:container-security && npm run ops:capacity-test && npm run ops:alert-test && npm run ops:dos-test && npm run ops:capacity-alerting-test && npm run ops:launch-drill-test",
     "ops:launch-readiness": "scripts/ops/launch-readiness.sh",
     "db:up": "docker compose up -d postgres",

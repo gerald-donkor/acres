@@ -1,406 +1,904 @@
-const test = require('node:test');
-const assert = require('node:assert');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { spawnSync, spawn } = require("node:child_process");
 
-const ROOT = path.resolve(__dirname, '../..');
-const SCRIPT = path.join(__dirname, 'run-launch-drills.sh');
-const BACKUPS_DIR = path.join(ROOT, 'backups');
+const children = {
+  "run-static-integrity-checks.js": "static",
+  "generate-sbom.js": "sbom",
+  "run-sast-scan.js": "sast",
+  "verify-container-security.js": "container",
+  "verify-caddy-routing.js": "caddy",
+  "run-deployment-drill.sh": "deployment",
+  "verify-volume-encryption.js": "volume",
+  "run-secret-rotation-drill.sh": "rotation",
+  "run-capacity-alerting-drill.sh": "capacity",
+  "run-restore-drill.sh": "restore",
+  "reconcile-storage-objects.js": "reconcile",
+};
 
-const EXPECTED_STAGE_IDS = [
-  'static_templates',
-  'supply_chain_sast',
-  'ingress_deployment',
-  'volume_encryption',
-  'secret_rotation',
-  'capacity_alerting',
-  'disaster_recovery',
-];
+// This function is serialized into the disposable repository. All children are
+// deterministic stubs; none delegates to Docker, curl, databases, storage, or npm.
+function stub(key, args) {
+  const fs = require("node:fs"),
+    path = require("node:path");
+  const { targetId } = require("./launch-target-evidence");
+  const val = (flag) =>
+    args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
+  const file = val(args.includes("--output") ? "--output" : "--evidence-file");
+  fs.appendFileSync(
+    process.env.CHILD_LOG,
+    JSON.stringify({ key, args, file }) + "\n",
+  );
+  const now = new Date().toISOString();
+  const success = {
+    timestamp: now,
+    status: "success",
+    valid: true,
+    errors: [],
+  };
+  const pool = {
+    totalConnections: 2,
+    idleConnections: 1,
+    maxConnections: 10,
+    requestsWaiting: 0,
+  };
+  const latency = { p50Ms: 1, p95Ms: 2, p99Ms: 3 };
+  const db = {
+    status: "verified",
+    source: "synthetic",
+    postgresExporter: { up: 1, lastScrapeError: 0 },
+    postgresServer: { pgUp: 1, maxConnections: 100, activeConnections: 2 },
+    connectionPool: { api: pool, worker: pool },
+    poolAcquisitionLatency: { api: latency, worker: latency },
+    queryExecutionDuration: { api: latency, worker: latency },
+    serverActivity: { lockWaits: 0, maxTransactionDurationSec: 0 },
+  };
+  const { REQUIRED_ALERTS } = require("./verify-alert-rules");
+  const {
+    DEFAULT_SLO_TARGETS,
+    evaluateSloCompliance,
+  } = require("./verify-capacity-load");
+  const distribution = {
+    availabilityPercent: 100,
+    throughputRps: 150,
+    latencyMs: { min: 1, p50: 2, p90: 3, p95: 4, p99: 5, max: 6 },
+    databaseLatency: {
+      acquisitionLatencyMs: {
+        min: 0,
+        p50: 1,
+        p90: 1.5,
+        p95: 2,
+        p99: 3,
+        max: 4,
+      },
+      queryLatencyMs: { min: 0, p50: 1, p90: 1.5, p95: 2, p99: 3, max: 4 },
+    },
+  };
+  const simulatedDos = {
+    drill_type: "dos_resilience_drill",
+    timestamp: now,
+    durationMs: 0,
+    status: "success",
+    mode: "simulated",
+    apiTargetId: null,
+    failures: [],
+    layers: Object.fromEntries(
+      [
+        "layer1_edge_ingress",
+        "layer2_in_process_throttling",
+        "layer3_graphql_bounds",
+        "layer4_storage_bounds",
+        "layer5_anti_enumeration",
+      ].map((k) => [k, { passed: true }]),
+    ),
+  };
+  simulatedDos.layers.layer6_rate_limiter_burst = {
+    passed: null,
+    burstTestMode: "skipped",
+    attemptedRequests: 0,
+    throttledRequests: 0,
+    authRejectedRequests: 0,
+    unexpectedResponses: 0,
+    transportFailures: 0,
+    preHealthPassed: false,
+    csrfHandshakePassed: false,
+    postHealthPassed: false,
+  };
+  const reports = {
+    static: {
+      ...success,
+      drill_type: "static_integrity_verification",
+      totalChecks: 3,
+      passedChecks: 3,
+      failedChecks: 0,
+      checks: ["production_templates", "docker_runtime", "secret_defaults"].map(
+        (id) => ({ id, passed: true, exitCode: 0 }),
+      ),
+    },
+    sbom: {
+      bomFormat: "CycloneDX",
+      specVersion: "1.5",
+      metadata: { timestamp: now },
+      components: [{}],
+      licenseCompliance: { compliant: true, violations: [] },
+    },
+    sast: {
+      ...success,
+      drill_type: "sast_security_scan",
+      passed: true,
+      scannedFilesCount: 1,
+      totalFindingsCount: 0,
+      triagedFindings: [],
+      expiredFindings: [],
+      blockingActiveFindings: [],
+    },
+    container: {
+      ...success,
+      drill_type: "container_security_verification",
+      checks: [{ passed: true }],
+      totalChecks: 1,
+      passedChecks: 1,
+      failedChecks: 0,
+    },
+    caddy: {
+      ...success,
+      drill_type: "caddy_routing_and_tls_verification",
+      targetPath: args[0],
+      securityHeadersVerified: true,
+      s3SigV4HostPreserved: true,
+      proxyHeadersVerified: true,
+      routesPassed: 12,
+      routesEvaluated: 12,
+      domain: "launch.example.test",
+      hstsApproved: args.includes("--allow-hsts"),
+    },
+    deployment: {
+      ...success,
+      drill_timestamp: now,
+      caddyfile: val("--caddyfile"),
+      compose_file: val("--compose-file"),
+      schema_backward_compatible: true,
+      caddy_routing_verified: true,
+      rollback_procedure_verified: true,
+      network_isolation_verified: true,
+      migration_count: 1,
+      caddy_routes_tested: 12,
+      probe_live_tested: !args.includes("--dry-run"),
+      dry_run: args.includes("--dry-run"),
+      api_target_id: targetId(
+        new URL(val("--api-url") || "http://localhost:3001").href,
+      ),
+    },
+    volume: {
+      ...success,
+      drill_type: "production_volume_encryption_and_key_separation",
+      totalRequiredMounts: 9,
+      validMountsCount: 9,
+      evaluatedMounts: Array.from({ length: 9 }, () => ({ passed: true })),
+      keySeparation: {
+        verified: true,
+        detectedViolations: [],
+        scannedPaths: [],
+      },
+    },
+    rotation: {
+      ...success,
+      drill_type: "zero_downtime_secret_rotation_and_compromise_response",
+      steps: Object.fromEntries(
+        [
+          "session_rollover",
+          "csrf_rollover",
+          "database_rotation",
+          "valkey_rotation",
+          "storage_rotation",
+          "compromise_response",
+          "redaction_audit",
+        ].map((k) => [
+          k,
+          {
+            status: "passed",
+            raw_secrets_masked: true,
+            zero_dev_passwords_detected: true,
+          },
+        ]),
+      ),
+    },
+    capacity: {
+      ...success,
+      mode: "synthetic",
+      durationMs: 0,
+      alerts: {
+        valid: true,
+        errors: [],
+        checks: [{ passed: true }],
+        requiredRulesCount: REQUIRED_ALERTS.length,
+        totalRulesCount: REQUIRED_ALERTS.length,
+        alerts: REQUIRED_ALERTS.map((alert) => ({
+          alert,
+          valid: true,
+          errors: [],
+        })),
+        simulations: REQUIRED_ALERTS.map((alert) => ({
+          alert,
+          passed: true,
+          firesOnBreach: true,
+          clearsOnNormal: true,
+          ignoresOther4xx: true,
+        })),
+      },
+      capacity: {
+        mode: "synthetic",
+        targets: DEFAULT_SLO_TARGETS,
+        distribution,
+        compliance: evaluateSloCompliance(distribution),
+      },
+      dosResilience: simulatedDos,
+      failures: [],
+      summary: {
+        capacitySloCompliance: "passed",
+        alertVerification: "passed",
+        dosResilience: "passed",
+        databaseBaselineCompliance: "passed",
+      },
+      databaseTelemetryBaseline: db,
+    },
+    restore: {
+      ...success,
+      drill_timestamp: now,
+      duration_seconds: 1,
+      rto_target_seconds: 900,
+      rto_compliant: true,
+      record_parity_verified: true,
+      postgis_verified: true,
+      foreign_keys_verified: true,
+      tables_source: 3,
+      tables_restored: 3,
+      migrations_source: 1,
+      migrations_restored: 1,
+    },
+    reconcile: {
+      timestamp: now,
+      summary: {
+        status: "clean",
+        exitCode: 0,
+        totalDatabaseObjects: 1,
+        totalBucketObjects: 1,
+        matchedObjects: 1,
+        missingObjects: 0,
+        orphanObjects: 0,
+        mismatchedObjects: 0,
+      },
+    },
+  };
+  if (key === "capacity" && args.includes("--target-url")) {
+    reports.capacity.mode = "live";
+    reports.capacity.targetId = targetId(new URL(val("--target-url")).href);
+    reports.capacity.apiTargetId = targetId(
+      new URL(val("--api-url") || "http://localhost:3001").href,
+    );
+    delete reports.capacity.capacity.distribution.databaseLatency;
+    Object.assign(reports.capacity.capacity, {
+      mode: "live",
+      targetUrl: reports.capacity.targetId,
+    });
+    Object.assign(simulatedDos, {
+      mode: "live",
+      apiTargetId: targetId(new URL(val("--api-url")).origin),
+    });
+    Object.assign(simulatedDos.layers.layer6_rate_limiter_burst, {
+      passed: true,
+      burstTestMode: "live",
+      attemptedRequests: 15,
+      throttledRequests: 5,
+      authRejectedRequests: 10,
+      preHealthPassed: true,
+      csrfHandshakePassed: true,
+      postHealthPassed: true,
+    });
+    Object.assign(db, {
+      source: "prometheus-live-scrape",
+      timestamp: now,
+      probeHealthy: true,
+      targetId: reports.capacity.targetId,
+    });
+  }
+  const e = reports[key];
+  const [selected, scenario] = (process.env.SCENARIO || "").split(":");
+  if (selected === key) {
+    if (scenario === "missing") process.exit(0);
+    if (scenario === "malformed") {
+      fs.writeFileSync(file, "{ private-secret");
+      process.exit(0);
+    }
+    if (scenario === "oversized") {
+      fs.writeFileSync(
+        file,
+        "x".repeat(
+          key === "sbom"
+            ? 16 * 1024 * 1024 + 1
+            : key === "capacity"
+              ? 65537
+              : 1024 * 1024 + 1,
+        ),
+      );
+      process.exit(0);
+    }
+    if (scenario === "symlink") {
+      const other = file + ".other";
+      fs.writeFileSync(other, JSON.stringify(e));
+      fs.symlinkSync(other, file);
+      process.exit(0);
+    }
+    if (scenario === "fifo") {
+      require("node:child_process").execFileSync("mkfifo", [file]);
+      process.exit(0);
+    }
+    if (
+      scenario === "stale" ||
+      scenario === "future" ||
+      scenario === "calendar"
+    ) {
+      const time =
+        scenario === "calendar"
+          ? "2026-02-30T00:00:00.000Z"
+          : new Date(
+              Date.now() + (scenario === "stale" ? -120000 : 120000),
+            ).toISOString();
+      if (key === "sbom") e.metadata.timestamp = time;
+      else if (["deployment", "restore"].includes(key))
+        e.drill_timestamp = time;
+      else e.timestamp = time;
+    }
+    if (scenario === "type") e.drill_type = "private-secret";
+    if (scenario === "null-check") {
+      if (key === "container") e.checks = [null];
+      if (key === "volume") e.evaluatedMounts[0] = null;
+    }
+    if (scenario === "baseline") {
+      if (key === "static") e.valid = false;
+      if (key === "sbom") delete e.licenseCompliance;
+      if (key === "sast") e.passed = false;
+      if (key === "container") e.checks[0].passed = false;
+      if (key === "caddy") e.securityHeadersVerified = false;
+      if (key === "deployment") e.rollback_procedure_verified = false;
+      if (key === "volume") e.keySeparation.verified = false;
+      if (key === "rotation") e.steps.csrf_rollover.status = "failed";
+      if (key === "capacity") e.summary.databaseBaselineCompliance = "failed";
+      if (key === "restore") e.tables_restored = 2;
+      if (key === "reconcile") e.summary.missingObjects = 1;
+    }
+    if (scenario === "nested-missing") {
+      delete e.alerts;
+      delete e.capacity;
+      delete e.dosResilience;
+    }
+    if (scenario === "nested-alert") e.alerts.simulations[0].passed = false;
+    if (scenario === "nested-capacity")
+      e.capacity.distribution.latencyMs.p95 = 501;
+    if (scenario === "nested-dos")
+      e.dosResilience.layers.layer4_storage_bounds.passed = false;
+    if (scenario === "nested-targets")
+      e.capacity.targets = { ...e.capacity.targets, maxP95LatencyMs: 999 };
+    if (scenario === "db-threshold")
+      e.databaseTelemetryBaseline.poolAcquisitionLatency.api.p95Ms = 51;
+    if (scenario === "db-private")
+      e.databaseTelemetryBaseline.privateField = "private-secret";
+    if (scenario === "summary-private") e.scannedFilesCount = "private-secret";
+    if (scenario === "target") e.apiTargetId = "wrong";
+    if (scenario === "config") e.compose_file = "/missing";
+    if (scenario === "contradictory") {
+      e.status = "failed";
+      e.valid = true;
+    }
+    if (scenario === "duplicate")
+      fs.writeFileSync(file + ".duplicate.json", JSON.stringify(e));
+    if (scenario === "delay") {
+      fs.writeFileSync(process.env.MARKER, file);
+      setTimeout(() => {
+        fs.writeFileSync(file, JSON.stringify(e));
+      }, 5000);
+      return;
+    }
+    if (scenario === "publish-blocked") fs.mkdirSync(process.env.OUTPUT_DEST);
+  }
+  fs.writeFileSync(file, JSON.stringify(e));
+  if (selected === key && scenario === "failed-exit") process.exit(1);
+}
 
-function run(args, options = {}) {
-  return execFileSync('bash', [SCRIPT, ...args], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    timeout: 300000,
-    ...options,
+function fixture(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-launch ' paths-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const ops = path.join(dir, "scripts/ops");
+  fs.mkdirSync(ops, { recursive: true });
+  for (const file of [
+    "run-launch-drills.sh",
+    "assemble-launch-dossier.js",
+    "launch-target-evidence.js",
+    "verify-capacity-load.js",
+    "verify-alert-rules.js",
+  ])
+    fs.copyFileSync(path.join(__dirname, file), path.join(ops, file));
+  const yamlDir = path.join(dir, "node_modules/js-yaml");
+  fs.mkdirSync(yamlDir, { recursive: true });
+  // Only the pure alert-name export is used; parser execution is prohibited in fixtures.
+  fs.writeFileSync(
+    path.join(yamlDir, "index.js"),
+    'module.exports={load(){throw Error("fixture parser prohibited")}};',
+  );
+  fs.copyFileSync(
+    path.join(__dirname, "run-static-integrity-checks.js"),
+    path.join(ops, "static-validator.js"),
+  );
+  fs.writeFileSync(
+    path.join(ops, "stub.js"),
+    `module.exports=${stub.toString()};`,
+  );
+  for (const [name, key] of Object.entries(children)) {
+    const script = name.endsWith(".sh")
+      ? `#!/usr/bin/env bash\nexec node "$(dirname "$0")/entry.js" ${key} "$@"\n`
+      : `${key === "static" ? "module.exports=require('./static-validator');" : ""} if(require.main===module)require('./stub')('${key}',process.argv.slice(2));`;
+    fs.writeFileSync(path.join(ops, name), script);
+  }
+  fs.writeFileSync(
+    path.join(ops, "entry.js"),
+    "require('./stub')(process.argv[2],process.argv.slice(3));",
+  );
+  fs.mkdirSync(path.join(dir, "infra/caddy"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "infra/compose"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "infra/caddy/Caddyfile.example"), "fixture");
+  fs.writeFileSync(
+    path.join(dir, "infra/compose/docker-compose.production.example.yml"),
+    "fixture",
+  );
+  const log = path.join(dir, "child-calls.jsonl");
+  const output = path.join(dir, "evidence/dossier.json");
+  // Allow-list environment: no inherited service credentials, NODE_OPTIONS or test context.
+  const env = (scenario) => ({
+    PATH: process.env.PATH,
+    TMPDIR: os.tmpdir(),
+    SCENARIO: scenario || "",
+    CHILD_LOG: log,
+    MARKER: path.join(dir, "marker"),
+    OUTPUT_DEST: output,
+  });
+  const run = (args = [], scenario = "") =>
+    spawnSync("bash", [path.join(ops, "run-launch-drills.sh"), ...args], {
+      cwd: dir,
+      env: env(scenario),
+      encoding: "utf8",
+      timeout: 15000,
+      maxBuffer: 2 * 1024 * 1024,
+    });
+  const execute = (scenario = "", extra = []) => {
+    const result = run(
+      [
+        "--dry-run",
+        "--evidence-dir",
+        path.dirname(output),
+        "--output",
+        output,
+        ...extra,
+      ],
+      scenario,
+    );
+    assert.ifError(result.error);
+    return {
+      ...result,
+      dossier:
+        fs.existsSync(output) && fs.statSync(output).isFile()
+          ? JSON.parse(fs.readFileSync(output))
+          : null,
+    };
+  };
+  return {
+    dir,
+    ops,
+    log,
+    output,
+    env,
+    run,
+    execute,
+    calls: () =>
+      fs.existsSync(log)
+        ? fs.readFileSync(log, "utf8").trim().split("\n").map(JSON.parse)
+        : [],
+  };
+}
+function invariant(d) {
+  assert.equal(d.total_stages, 7);
+  assert.equal(
+    d.passed_stages,
+    d.stages.filter((s) => s.status === "PASSED").length,
+  );
+  assert.equal(d.failed_stages, 7 - d.passed_stages);
+  assert.equal(d.overall_status, d.failed_stages ? "FAILED" : "PASSED");
+  const keys = [
+    "staticIntegrity",
+    "supplyChainSecurity",
+    "ingressDeployment",
+    "volumeEncryption",
+    "secretRotation",
+    "capacityAlerting",
+    "disasterRecovery",
+  ];
+  d.stages.forEach((s, i) =>
+    assert.equal(
+      d.summary[keys[i]],
+      s.status
+        .toLowerCase()
+        .replace("passed", "passed")
+        .replace("failed", "failed"),
+    ),
+  );
+}
+
+test("help and invalid inputs have zero child calls and no evidence side effects", (t) => {
+  const f = fixture(t);
+  for (const args of [["--help"], ["-h"]]) assert.equal(f.run(args).status, 0);
+  for (const flag of [
+    "--output",
+    "--evidence-dir",
+    "--caddyfile",
+    "--compose-file",
+    "--target-url",
+    "--api-url",
+    "--database-telemetry-file",
+  ]) {
+    for (const value of [null, "", "-x", "--json", "bad\nvalue"]) {
+      const args = [flag];
+      if (value !== null) args.push(value);
+      assert.notEqual(f.run(args).status, 0);
+    }
+  }
+  for (const args of [
+    ["--unknown"],
+    ["--dry-run", "--allow-hsts"],
+    ["--target-url", "https://x.test/"],
+    [
+      "--target-url",
+      "https://u:private-secret@x.test",
+      "--api-url",
+      "https://x.test",
+    ],
+  ]) {
+    const result = f.run(args);
+    assert.notEqual(result.status, 0);
+    assert.ok(!result.stderr.includes("private-secret"));
+  }
+  assert.equal(f.calls().length, 0);
+  assert.ok(!fs.existsSync(path.join(f.dir, "backups")));
+});
+
+test("full fixture publishes consistent private evidence, ordered calls and identical JSON", (t) => {
+  const f = fixture(t);
+  const r = f.execute("", ["--json"]);
+  assert.equal(r.status, 0, r.stderr);
+  invariant(r.dossier);
+  assert.equal(r.dossier.environment, "drill");
+  assert.equal(r.dossier.targets.mode, "offline");
+  assert.deepEqual(
+    f.calls().map((c) => c.key),
+    Object.values(children),
+  );
+  const printed = JSON.parse(
+    r.stdout.slice(r.stdout.indexOf("{"), r.stdout.lastIndexOf("}") + 1),
+  );
+  assert.deepEqual(printed, r.dossier);
+  assert.equal(fs.statSync(f.output).mode & 0o777, 0o600);
+  for (const s of r.dossier.stages) {
+    assert.equal(fs.statSync(path.dirname(s.artifacts[0])).mode & 0o777, 0o700);
+    for (const file of s.artifacts)
+      assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  }
+  assert.ok(
+    f
+      .calls()
+      .find((c) => c.key === "rotation")
+      .args.includes("--dry-run"),
+  );
+  assert.ok(
+    f
+      .calls()
+      .find((c) => c.key === "reconcile")
+      .args.includes("--dry-run"),
+  );
+  assert.ok(
+    f
+      .calls()
+      .find((c) => c.key === "sbom")
+      .args.includes("--verify-licenses"),
+  );
+  assert.ok(!fs.existsSync(f.output + ".lock"));
+});
+
+const stageFor = {
+  static: 0,
+  sbom: 1,
+  sast: 1,
+  container: 1,
+  caddy: 2,
+  deployment: 2,
+  volume: 3,
+  rotation: 4,
+  capacity: 5,
+  restore: 6,
+  reconcile: 6,
+};
+for (const key of Object.values(children)) {
+  test(`${key} baseline breach fails its stage and overall verdict`, (t) => {
+    const r = fixture(t).execute(`${key}:baseline`);
+    assert.equal(r.status, 1, r.stderr);
+    invariant(r.dossier);
+    assert.equal(r.dossier.stages[stageFor[key]].status, "FAILED");
   });
 }
-
-/** Run ignoring non-zero exit (stage 7 fails closed without drill infra). */
-function runTolerant(args, options = {}) {
-  try {
-    return { output: run(args, options), exitCode: 0 };
-  } catch (err) {
-    return { output: (err.stdout || '') + (err.stderr || ''), exitCode: err.status };
-  }
+for (const scenario of [
+  "missing",
+  "malformed",
+  "oversized",
+  "symlink",
+  "fifo",
+  "stale",
+  "future",
+  "calendar",
+  "type",
+  "contradictory",
+  "failed-exit",
+]) {
+  test(`zero exit invalid static receipt or failed process: ${scenario}`, (t) => {
+    const r = fixture(t).execute(`static:${scenario}`);
+    assert.equal(r.status, 1, r.stderr);
+    invariant(r.dossier);
+    assert.equal(r.dossier.staticIntegrityBaseline.status, "breached");
+    assert.ok(!JSON.stringify(r.dossier).includes("private-secret"));
+  });
 }
-
-function assertDossierSchema(dossier) {
-  assert.strictEqual(typeof dossier.version, 'string');
-  assert.match(dossier.timestamp, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
-  assert.ok(['production', 'drill'].includes(dossier.environment));
-  assert.ok(['PASSED', 'FAILED'].includes(dossier.overall_status));
-  assert.strictEqual(dossier.total_stages, 7);
-  assert.strictEqual(dossier.passed_stages + dossier.failed_stages, 7);
-  assert.strictEqual(typeof dossier.duration_seconds, 'number');
-
-  assert.strictEqual(dossier.stages.length, 7);
-  assert.deepStrictEqual(
-    dossier.stages.map((s) => s.stage_id),
-    EXPECTED_STAGE_IDS
+for (const scenario of [
+  "sbom:oversized",
+  "capacity:oversized",
+  "deployment:config",
+  "restore:missing",
+  "sast:contradictory",
+  "sast:summary-private",
+  "container:null-check",
+  "volume:null-check",
+  "capacity:db-threshold",
+  "capacity:nested-missing",
+  "capacity:nested-alert",
+  "capacity:nested-capacity",
+  "capacity:nested-dos",
+  "capacity:nested-targets",
+]) {
+  test(`mandatory receipt rejects ${scenario}`, (t) => {
+    const r = fixture(t).execute(scenario);
+    assert.equal(r.status, 1, r.stderr);
+    invariant(r.dossier);
+  });
+}
+test("duplicate/unregistered files do not become receipts or artifacts", (t) => {
+  const f = fixture(t);
+  const r = f.execute("static:duplicate");
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!JSON.stringify(r.dossier).includes("duplicate.json"));
+});
+test("default paths are unique and default mode fails synthetic capacity", (t) => {
+  const f = fixture(t);
+  const r = f.run();
+  assert.equal(r.status, 1, r.stderr);
+  const dossiers = fs
+    .readdirSync(path.join(f.dir, "backups"))
+    .filter((n) => n.startsWith("launch-evidence-dossier-"));
+  assert.equal(dossiers.length, 1);
+  const d = JSON.parse(
+    fs.readFileSync(path.join(f.dir, "backups", dossiers[0])),
   );
-  for (const stage of dossier.stages) {
-    assert.strictEqual(typeof stage.description, 'string');
-    assert.ok(['PASSED', 'FAILED'].includes(stage.status));
-    assert.strictEqual(typeof stage.duration_ms, 'number');
-    assert.ok(Array.isArray(stage.artifacts));
-    assert.ok(stage.artifacts.length >= 1, `stage ${stage.stage_id} must list artifacts`);
-    for (const a of stage.artifacts) assert.strictEqual(typeof a, 'string');
-    assert.ok(stage.error_message === null || typeof stage.error_message === 'string');
-  }
+  invariant(d);
+  assert.equal(d.targets.mode, "default-drill");
+  assert.equal(d.stages[5].status, "FAILED");
+});
+test("live fixture preserves target/config/HSTS forwarding and rejects wrong target", (t) => {
+  const f = fixture(t);
+  const caddy = path.join(f.dir, "production.Caddyfile");
+  fs.writeFileSync(caddy, "fixture");
+  const args = [
+    "--output",
+    f.output,
+    "--evidence-dir",
+    path.dirname(f.output),
+    "--caddyfile",
+    caddy,
+    "--allow-hsts",
+    "--target-url",
+    "https://launch.example.test/path",
+    "--api-url",
+    "https://api.example.test",
+    "--database-telemetry-file",
+    path.join(f.dir, "telemetry"),
+  ];
+  const good = f.run(args);
+  assert.equal(good.status, 0, good.stderr);
+  for (const key of ["deployment", "capacity"])
+    assert.ok(
+      f
+        .calls()
+        .find((c) => c.key === key)
+        .args.includes("--api-url"),
+    );
+  const bad = f.run(args, "capacity:target");
+  assert.equal(bad.status, 1, bad.stderr);
+  const d = JSON.parse(fs.readFileSync(f.output));
+  assert.equal(d.stages[5].status, "FAILED");
+});
+test("production candidate remains fail-closed without explicit live ingress", (t) => {
+  const f = fixture(t),
+    caddy = path.join(f.dir, "production.Caddyfile");
+  fs.writeFileSync(caddy, "fixture");
+  const r = f.execute("", ["--caddyfile", caddy]);
+  assert.equal(r.status, 1);
+  assert.equal(r.dossier.stages[2].status, "FAILED");
+});
 
-  assert.strictEqual(typeof dossier.summary, 'object');
-  assert.strictEqual(typeof dossier.staticIntegrityBaseline, 'object');
-  assert.ok(['verified', 'breached'].includes(dossier.staticIntegrityBaseline.status));
-  assert.ok(['passed', 'failed'].includes(dossier.summary.staticIntegrityCompliance));
-  assert.strictEqual(typeof dossier.summary.databaseBaselineCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.databaseBaselineCompliance));
-  assert.strictEqual(typeof dossier.summary.alertVerification, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.alertVerification));
-  assert.strictEqual(typeof dossier.summary.dosResilience, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.dosResilience));
-  assert.strictEqual(typeof dossier.databaseTelemetryBaseline, 'object');
-  assert.ok(['verified', 'breached'].includes(dossier.databaseTelemetryBaseline.status));
-  assert.strictEqual(typeof dossier.disasterRecoveryBaseline, 'object');
-  assert.ok(['verified', 'breached'].includes(dossier.disasterRecoveryBaseline.status));
-  assert.strictEqual(typeof dossier.summary.restoreCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.restoreCompliance));
-  assert.strictEqual(typeof dossier.summary.reconcileCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.reconcileCompliance));
-  assert.strictEqual(typeof dossier.deploymentBaseline, 'object');
-  assert.ok(['verified', 'breached'].includes(dossier.deploymentBaseline.status));
-  assert.strictEqual(typeof dossier.secretRotationBaseline, 'object');
-  assert.ok(['verified', 'breached'].includes(dossier.secretRotationBaseline.status));
-  assert.strictEqual(typeof dossier.summary.deploymentCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.deploymentCompliance));
-  assert.strictEqual(typeof dossier.summary.rollbackCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.rollbackCompliance));
-  assert.strictEqual(typeof dossier.summary.secretRotationCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.secretRotationCompliance));
-  assert.strictEqual(typeof dossier.volumeEncryptionBaseline, 'object');
-  assert.ok(['verified', 'breached'].includes(dossier.volumeEncryptionBaseline.status));
-  assert.strictEqual(typeof dossier.summary.volumeEncryptionCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.volumeEncryptionCompliance));
-  assert.strictEqual(typeof dossier.supplyChainBaseline, 'object');
-  assert.ok(['verified', 'breached'].includes(dossier.supplyChainBaseline.status));
-  assert.strictEqual(typeof dossier.summary.supplyChainCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.supplyChainCompliance));
-  assert.strictEqual(typeof dossier.summary.sastCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.sastCompliance));
-  assert.strictEqual(typeof dossier.summary.containerSecurityCompliance, 'string');
-  assert.ok(['passed', 'failed'].includes(dossier.summary.containerSecurityCompliance));
+function asynchronous(f, args, scenario = "") {
+  const child = spawn(
+    "bash",
+    [path.join(f.ops, "run-launch-drills.sh"), ...args],
+    { cwd: f.dir, env: f.env(scenario), detached: true },
+  );
+  let stdout = "",
+    stderr = "";
+  child.stdout.on("data", (data) => {
+    stdout += data;
+  });
+  child.stderr.on("data", (data) => {
+    stderr += data;
+  });
+  const done = new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (status, signal) =>
+      resolve({ status, signal, stdout, stderr }),
+    );
+  });
+  return { child, done };
 }
-
-/**
- * The nested capacity evaluator (invoked inside run-capacity-alerting-drill.sh)
- * always writes its report to the repo backups/ dir. Everything else honors
- * the orchestrator's --evidence-dir. Remove only those residuals created after
- * `sinceMs` so parallel runs cannot lose files.
- */
-function cleanNestedResiduals(sinceMs) {
-  for (const f of fs.readdirSync(BACKUPS_DIR)) {
-    if (!f.startsWith('capacity-load-report-') || !f.endsWith('.json')) continue;
-    const full = path.join(BACKUPS_DIR, f);
-    try {
-      if (fs.statSync(full).mtimeMs >= sinceMs) fs.unlinkSync(full);
-    } catch {
-      // Already gone — nothing to clean.
-    }
+async function marker(file) {
+  for (let i = 0; i < 200; i++) {
+    if (fs.existsSync(file)) return;
+    await new Promise((r) => setTimeout(r, 20));
   }
+  throw Error("fixture marker timeout");
 }
-
-test('orchestrator script exists and is executable', () => {
-  assert.ok(fs.existsSync(SCRIPT), 'run-launch-drills.sh must exist');
-  fs.accessSync(SCRIPT, fs.constants.X_OK);
+test("concurrent default runs share parent but never consume or delete unrelated evidence", async (t) => {
+  const f = fixture(t),
+    parent = path.join(f.dir, "shared");
+  fs.mkdirSync(parent);
+  const unrelated = path.join(
+    parent,
+    "static-integrity-evidence-unrelated.json",
+  );
+  fs.writeFileSync(unrelated, '{"status":"success"}');
+  const a = asynchronous(f, ["--dry-run", "--evidence-dir", parent]);
+  const b = asynchronous(f, ["--dry-run", "--evidence-dir", parent]);
+  const later = path.join(parent, "launch-drill-stage-static_templates.log");
+  fs.writeFileSync(later, "unrelated");
+  for (const r of await Promise.all([a.done, b.done]))
+    assert.equal(r.status, 0, r.stderr);
+  const names = fs
+    .readdirSync(parent)
+    .filter((n) => n.startsWith("launch-evidence-dossier-"));
+  assert.equal(names.length, 2);
+  const [x, y] = names.map((n) =>
+    JSON.parse(fs.readFileSync(path.join(parent, n))),
+  );
+  const paths = new Set(x.stages.flatMap((s) => s.artifacts));
+  assert.ok(y.stages.flatMap((s) => s.artifacts).every((p) => !paths.has(p)));
+  assert.equal(fs.readFileSync(later, "utf8"), "unrelated");
+  assert.equal(fs.readFileSync(unrelated, "utf8"), '{"status":"success"}');
+  assert.ok(!JSON.stringify([x, y]).includes("unrelated"));
+});
+test("explicit output rejects second writer; interruption removes old success and owned lock", async (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.dirname(f.output));
+  fs.writeFileSync(f.output, '{"overall_status":"PASSED"}');
+  const args = [
+    "--dry-run",
+    "--output",
+    f.output,
+    "--evidence-dir",
+    path.dirname(f.output),
+  ];
+  const a = asynchronous(f, args, "static:delay");
+  await marker(path.join(f.dir, "marker"));
+  assert.ok(!fs.existsSync(f.output));
+  const before = f.calls().length;
+  const b = f.run(args);
+  assert.equal(b.status, 1);
+  assert.equal(f.calls().length, before);
+  assert.ok(fs.existsSync(f.output + ".lock"));
+  a.child.kill("SIGTERM");
+  const result = await a.done;
+  assert.equal(result.status, 143);
+  assert.ok(!fs.existsSync(f.output));
+  assert.ok(!fs.existsSync(f.output + ".lock"));
+  assert.ok(
+    fs
+      .readdirSync(path.dirname(f.output))
+      .every((name) => !name.startsWith(".launch-dossier-")),
+  );
+  assert.ok(
+    fs.existsSync(
+      path.dirname(fs.readFileSync(path.join(f.dir, "marker"), "utf8")),
+    ),
+  );
+});
+test("nonregular output and symlink evidence destinations reject before child calls", (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.dirname(f.output));
+  fs.mkdirSync(f.output);
+  assert.equal(f.execute().status, 1);
+  assert.equal(f.calls().length, 0);
+  fs.rmdirSync(f.output);
+  fs.symlinkSync(path.join(f.dir, "missing"), f.output);
+  assert.equal(f.execute().status, 1);
+  assert.equal(f.calls().length, 0);
+  fs.unlinkSync(f.output);
+  fs.symlinkSync(path.dirname(f.output), path.join(f.dir, "link"));
+  assert.equal(f.run(["--evidence-dir", path.join(f.dir, "link")]).status, 1);
+  assert.equal(f.calls().length, 0);
+});
+test("publication rename failure exits nonzero and leaves no temporary dossier or lock", (t) => {
+  const f = fixture(t),
+    r = f.execute("reconcile:publish-blocked");
+  assert.equal(r.status, 1);
+  assert.equal(r.dossier, null);
+  assert.ok(!fs.existsSync(f.output + ".lock"));
+  assert.ok(
+    fs
+      .readdirSync(path.dirname(f.output))
+      .every((n) => !n.startsWith(".launch-dossier-")),
+  );
 });
 
-test('--help displays usage and options', () => {
-  const out = run(['--help']);
-  assert.match(out, /Unified Launch Drill Orchestrator/);
-  assert.match(out, /--dry-run/);
-  assert.match(out, /--json/);
-  assert.match(out, /--output <path>/);
-  assert.match(out, /--verbose/);
-  assert.match(out, /--caddyfile/);
-  assert.match(out, /--compose-file/);
-  assert.match(out, /--target-url/);
-  assert.match(out, /--database-telemetry-file/);
+test("unknown database metadata is excluded from a validated dossier", (t) => {
+  const r = fixture(t).execute("capacity:db-private");
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!JSON.stringify(r.dossier).includes("private-secret"));
 });
 
-test('options requiring a value fail with usage instead of crashing', () => {
-  assert.throws(() => run(['--output']), /--output requires a value/);
-  assert.throws(() => run(['--evidence-dir']), /--evidence-dir requires a value/);
-  for (const flag of ['--caddyfile', '--compose-file', '--target-url', '--api-url', '--database-telemetry-file']) {
-    assert.throws(() => run([flag]), new RegExp(`${flag} requires a value`));
-    assert.throws(() => run([flag, '']), new RegExp(`${flag} requires a value`));
-  }
+test("live missing Caddy receipt publishes a complete failed dossier", (t) => {
+  const f = fixture(t),
+    caddy = path.join(f.dir, "production.Caddyfile");
+  fs.writeFileSync(caddy, "fixture");
+  const r = f.run(
+    [
+      "--output",
+      f.output,
+      "--evidence-dir",
+      path.dirname(f.output),
+      "--caddyfile",
+      caddy,
+      "--allow-hsts",
+      "--target-url",
+      "https://launch.example.test/path",
+      "--api-url",
+      "https://api.example.test",
+    ],
+    "caddy:missing",
+  );
+  assert.equal(r.status, 1);
+  const d = JSON.parse(fs.readFileSync(f.output));
+  invariant(d);
+  assert.equal(d.stages[2].status, "FAILED");
 });
 
-test('target validation fails before creating the evidence directory', () => {
-  const tmpDir = path.join(os.tmpdir(), `launch-invalid-${process.pid}-${Date.now()}`);
-  try {
-    assert.notStrictEqual(runTolerant(['--dry-run', '--target-url', 'https://example.com/', '--api-url', 'https://example.com/', '--evidence-dir', tmpDir]).exitCode, 0);
-    assert.notStrictEqual(runTolerant(['--target-url', 'https://user:pass@example.com/', '--api-url', 'https://example.com/', '--evidence-dir', tmpDir]).exitCode, 0);
-    assert.notStrictEqual(runTolerant(['--target-url', 'https://example.com/?token=x', '--api-url', 'https://example.com/', '--evidence-dir', tmpDir]).exitCode, 0);
-    assert.ok(!fs.existsSync(tmpDir));
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('unknown option exits non-zero', () => {
-  assert.throws(() => run(['--bogus-flag']), /Unknown option|Command failed/);
-});
-
-test('stage 3 binds the same literal paths through both child reports', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'launch paths ; '));
-  const sinceMs = Date.now();
-  try {
-    const caddy = path.join(tmpDir, 'Caddyfile.example');
-    const compose = path.join(tmpDir, 'compose file.yml');
-    fs.copyFileSync(path.join(ROOT, 'infra/caddy/Caddyfile.example'), caddy);
-    fs.copyFileSync(path.join(ROOT, 'infra/compose/docker-compose.production.example.yml'), compose);
-    const dossierPath = path.join(tmpDir, 'dossier.json');
-    runTolerant(['--dry-run', '--caddyfile', caddy, '--compose-file', compose,
-      '--output', dossierPath, '--evidence-dir', tmpDir]);
-    const dossier = JSON.parse(fs.readFileSync(dossierPath, 'utf8'));
-    const stage = dossier.stages.find((s) => s.stage_id === 'ingress_deployment');
-    assert.strictEqual(stage.status, 'PASSED');
-    const caddyReport = JSON.parse(fs.readFileSync(stage.artifacts.find((a) => path.basename(a).startsWith('caddy-routing-evidence-'))));
-    const deploymentReport = JSON.parse(fs.readFileSync(stage.artifacts.find((a) => path.basename(a).startsWith('deployment-drill-evidence-'))));
-    assert.strictEqual(caddyReport.targetPath, caddy);
-    assert.strictEqual(deploymentReport.caddyfile, caddy);
-    assert.strictEqual(deploymentReport.compose_file, compose);
-    assert.match(dossier.targets.caddyfile, /^sha256:/);
-    assert.ok(!JSON.stringify(dossier.targets).includes(tmpDir));
-  } finally {
-    cleanNestedResiduals(sinceMs);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('an example Caddyfile copied as a production candidate fails Stage 3', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'launch-candidate-'));
-  const sinceMs = Date.now();
-  try {
-    const caddy = path.join(tmpDir, 'production.Caddyfile');
-    fs.copyFileSync(path.join(ROOT, 'infra/caddy/Caddyfile.example'), caddy);
-    const dossierPath = path.join(tmpDir, 'dossier.json');
-    runTolerant(['--dry-run', '--caddyfile', caddy, '--evidence-dir', tmpDir, '--output', dossierPath]);
-    const dossier = JSON.parse(fs.readFileSync(dossierPath, 'utf8'));
-    const stage = dossier.stages.find((s) => s.stage_id === 'ingress_deployment');
-    assert.strictEqual(dossier.environment, 'drill');
-    assert.strictEqual(stage.status, 'FAILED');
-    assert.strictEqual(dossier.deploymentBaseline.status, 'breached');
-    assert.strictEqual(dossier.summary.deploymentCompliance, 'failed');
-  } finally {
-    cleanNestedResiduals(sinceMs);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('no-target non-dry-run remains a drill and breaches synthetic Stage 6', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'launch-default-'));
-  const sinceMs = Date.now();
-  try {
-    const dossierPath = path.join(tmpDir, 'dossier.json');
-    runTolerant(['--evidence-dir', tmpDir, '--output', dossierPath], {
-      env: { ...process.env, SOURCE_DB: 'same_db_name', DRILL_DB: 'same_db_name' },
-    });
-    const dossier = JSON.parse(fs.readFileSync(dossierPath, 'utf8'));
-    assert.strictEqual(dossier.environment, 'drill');
-    assert.strictEqual(dossier.targets.mode, 'default-drill');
-    assert.strictEqual(dossier.overall_status, 'FAILED');
-    assert.strictEqual(dossier.stages.find((s) => s.stage_id === 'capacity_alerting').status, 'FAILED');
-    assert.strictEqual(dossier.databaseTelemetryBaseline.status, 'breached');
-    assert.strictEqual(dossier.summary.databaseBaselineCompliance, 'failed');
-  } finally {
-    cleanNestedResiduals(sinceMs);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('--dry-run executes all 7 stages and emits a schema-compliant dossier', () => {
-  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'launch-drill-'));
-  const sinceMs = Date.now();
-  try {
-    const dossierPath = path.join(tmpDir, 'dossier.json');
-    // NOTE: exit code depends on stage 7 drill infra (Postgres/Garage);
-    // the dossier schema must hold either way (fail-closed still emits it).
-    // --evidence-dir keeps child evidence out of the repo backups/ dir.
-    runTolerant(['--dry-run', '--output', dossierPath, '--evidence-dir', tmpDir, '--json']);
-
-    assert.ok(fs.existsSync(dossierPath), 'dossier JSON file must be created');
-    const dossier = JSON.parse(fs.readFileSync(dossierPath, 'utf8'));
-    assertDossierSchema(dossier);
-    assert.strictEqual(dossier.environment, 'drill');
-    assert.strictEqual(dossier.targets.mode, 'offline');
-    assert.match(dossier.targets.caddyfile, /^sha256:/);
-
-    // Stages 1–6 are fully offline and must pass without live infra.
-    for (const stage of dossier.stages.slice(0, 6)) {
-      assert.strictEqual(stage.status, 'PASSED', `offline stage ${stage.stage_id} must pass`);
-      assert.strictEqual(stage.error_message, null);
-    }
-
-    // Stage artifacts must reference real child evidence, not just the dossier.
-    const staticStage = dossier.stages.find((s) => s.stage_id === 'static_templates');
-    const staticFile = staticStage.artifacts.find((a) => a.includes('static-integrity-evidence-'));
-    assert.ok(staticFile && fs.existsSync(staticFile));
-    const staticEvidence = JSON.parse(fs.readFileSync(staticFile, 'utf8'));
-    assert.deepStrictEqual(staticEvidence.checks.map((check) => check.id), [
-      'production_templates', 'docker_runtime', 'secret_defaults',
-    ]);
-    assert.ok(staticEvidence.checks.every((check) => check.passed && check.exitCode === 0));
-    assert.strictEqual(dossier.staticIntegrityBaseline.status, 'verified');
-    assert.strictEqual(dossier.staticIntegrityBaseline.passedChecks, 3);
-    assert.strictEqual(dossier.summary.staticIntegrityCompliance, 'passed');
-    const scStage = dossier.stages.find((s) => s.stage_id === 'supply_chain_sast');
-    assert.ok(
-      scStage.artifacts.some((a) => a.includes('sbom-inventory-')),
-      `expected sbom child evidence in artifacts, got: ${JSON.stringify(scStage.artifacts)}`
-    );
-    assert.ok(
-      scStage.artifacts.some((a) => a.includes('sast-scan-evidence-')),
-      `expected sast child evidence in artifacts, got: ${JSON.stringify(scStage.artifacts)}`
-    );
-    assert.ok(
-      scStage.artifacts.some((a) => a.includes('container-security-evidence-')),
-      `expected container security child evidence in artifacts, got: ${JSON.stringify(scStage.artifacts)}`
-    );
-    assert.strictEqual(dossier.summary.supplyChainCompliance, 'passed');
-    assert.strictEqual(dossier.summary.sastCompliance, 'passed');
-    assert.strictEqual(dossier.summary.containerSecurityCompliance, 'passed');
-    assert.strictEqual(dossier.supplyChainBaseline.status, 'verified');
-    assert.strictEqual(dossier.supplyChainBaseline.sbom.licenseComplianceVerified, true);
-    assert.strictEqual(dossier.supplyChainBaseline.sast.passed, true);
-    assert.strictEqual(dossier.supplyChainBaseline.containerSecurity.valid, true);
-
-    const capacityStage = dossier.stages.find((s) => s.stage_id === 'capacity_alerting');
-    assert.ok(
-      capacityStage.artifacts.some((a) => a.includes('capacity-alerting-drill-evidence-')),
-      `expected child evidence in artifacts, got: ${JSON.stringify(capacityStage.artifacts)}`
-    );
-    assert.strictEqual(dossier.summary.databaseBaselineCompliance, 'passed');
-    assert.strictEqual(dossier.stages.find((s) => s.stage_id === 'capacity_alerting').status, 'PASSED');
-    assert.strictEqual(dossier.databaseTelemetryBaseline.status, 'verified');
-    assert.strictEqual(dossier.databaseTelemetryBaseline.postgresExporter.up, 1);
-    assert.strictEqual(dossier.databaseTelemetryBaseline.postgresServer.pgUp, 1);
-    assert.strictEqual(dossier.summary.alertVerification, 'passed');
-    assert.strictEqual(dossier.summary.dosResilience, 'passed');
-    assert.strictEqual(dossier.disasterRecoveryBaseline.status, 'breached');
-    assert.strictEqual(dossier.summary.restoreCompliance, 'failed');
-    assert.strictEqual(dossier.summary.reconcileCompliance, 'failed');
-    assert.strictEqual(dossier.summary.recoveryCompliance, 'restore_reconcile_failed');
-    for (const stage of dossier.stages) {
-      assert.ok(
-        stage.artifacts.some((a) => a.includes(`launch-drill-stage-${stage.stage_id}.log`)),
-        `expected stage log in artifacts for ${stage.stage_id}`
-      );
-    }
-  } finally {
-    cleanNestedResiduals(sinceMs);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('--json prints the identical dossier to stdout', () => {
-  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'launch-drill-'));
-  const sinceMs = Date.now();
-  try {
-    const dossierPath = path.join(tmpDir, 'dossier.json');
-    const { output } = runTolerant(['--dry-run', '--output', dossierPath, '--evidence-dir', tmpDir, '--json']);
-    // stdout carries the tabular summary around the dossier; the dossier is
-    // the only JSON blob, spanning the first '{' to the last '}'.
-    const printed = JSON.parse(output.slice(output.indexOf('{'), output.lastIndexOf('}') + 1));
-    const dossier = JSON.parse(fs.readFileSync(dossierPath, 'utf8'));
-    assert.deepStrictEqual(printed, dossier);
-  } finally {
-    cleanNestedResiduals(sinceMs);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('--evidence-dir redirects the default dossier path out of backups/', () => {
-  const sinceMs = Date.now();
-  const before = new Set(fs.readdirSync(BACKUPS_DIR));
-  // --evidence-dir intentionally omitted: the dossier must land in backups/.
-  // Child evidence is still redirected to tmp to avoid litter.
-  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'launch-drill-'));
-  try {
-    runTolerant(['--dry-run', '--evidence-dir', tmpDir]);
-  } finally {
-    cleanNestedResiduals(sinceMs);
-  }
-  try {
-    const after = fs.readdirSync(BACKUPS_DIR);
-    const created = after.filter((f) => !before.has(f) && f.startsWith('launch-evidence-dossier-') && f.endsWith('.json'));
-    // No dossier expected in backups/ here because --evidence-dir redirects the
-    // default dossier path too; assert the invariant explicitly instead.
-    assert.strictEqual(created.length, 0);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('default evidence dir receives the dossier when no flags are given', () => {
-  const sinceMs = Date.now();
-  const before = new Set(fs.readdirSync(BACKUPS_DIR));
-  runTolerant(['--dry-run']);
-  try {
-    const after = fs.readdirSync(BACKUPS_DIR);
-    const created = after.filter((f) => !before.has(f) && f.startsWith('launch-evidence-dossier-') && f.endsWith('.json'));
-    assert.strictEqual(created.length, 1, `expected one new dossier, got: ${JSON.stringify(created)}`);
-    const dossier = JSON.parse(fs.readFileSync(path.join(BACKUPS_DIR, created[0]), 'utf8'));
-    assertDossierSchema(dossier);
-  } finally {
-    // Remove everything this run created (dossier, stage logs, child evidence).
-    for (const f of fs.readdirSync(BACKUPS_DIR)) {
-      if (before.has(f)) continue;
-      try {
-        if (fs.statSync(path.join(BACKUPS_DIR, f)).mtimeMs >= sinceMs) {
-          fs.unlinkSync(path.join(BACKUPS_DIR, f));
-        }
-      } catch {
-        // Already gone — nothing to clean.
-      }
-    }
-    cleanNestedResiduals(sinceMs);
-  }
-});
-
-test('orchestrator fails closed when a child drill fails', () => {
-  // run-restore-drill.sh deterministically rejects SOURCE_DB == DRILL_DB
-  // before touching any infrastructure, so this exercises the genuine
-  // fail-closed path without mutating tracked files or needing live infra.
-  const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'launch-drill-'));
-  const sinceMs = Date.now();
-  try {
-    const dossierPath = path.join(tmpDir, 'dossier.json');
-    const { exitCode } = runTolerant(['--dry-run', '--output', dossierPath, '--evidence-dir', tmpDir], {
-      env: { ...process.env, SOURCE_DB: 'same_db_name', DRILL_DB: 'same_db_name' },
-    });
-    assert.notStrictEqual(exitCode, 0, 'orchestrator must exit non-zero when a stage fails');
-    const dossier = JSON.parse(fs.readFileSync(dossierPath, 'utf8'));
-    assert.strictEqual(dossier.overall_status, 'FAILED');
-    assert.ok(dossier.failed_stages >= 1);
-    const dr = dossier.stages.find((s) => s.stage_id === 'disaster_recovery');
-    assert.strictEqual(dr.status, 'FAILED');
-    assert.strictEqual(typeof dr.error_message, 'string');
-  } finally {
-    cleanNestedResiduals(sinceMs);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
+test("custom output is exact even without a JSON extension", (t) => {
+  const f = fixture(t),
+    output = path.join(f.dir, "custom.receipt");
+  const r = f.run(["--dry-run", "--output", output, "--json"]);
+  assert.equal(r.status, 0, r.stderr);
+  const d = JSON.parse(fs.readFileSync(output));
+  invariant(d);
+  assert.equal(d.overall_status, "PASSED");
 });

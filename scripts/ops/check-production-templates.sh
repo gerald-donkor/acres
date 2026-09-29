@@ -58,6 +58,8 @@ require_file scripts/ops/check-release-images.spec.js
 require_file scripts/ops/verify-postgres-diagnostics.js
 require_file scripts/ops/run-launch-drills.sh
 require_file scripts/ops/run-launch-drills.spec.js
+require_file scripts/ops/assemble-launch-dossier.js
+require_file scripts/ops/assemble-launch-dossier.spec.js
 require_file scripts/ops/run-static-integrity-checks.js
 require_file scripts/ops/run-static-integrity-checks.spec.js
 require_file scripts/ops/launch-readiness.sh
@@ -593,7 +595,12 @@ for (const rule of alertRules) {
   }
 }
 
-const launchDrillsScript = fs.readFileSync('scripts/ops/run-launch-drills.sh', 'utf8');
+const launchRunner = fs.readFileSync('scripts/ops/run-launch-drills.sh', 'utf8');
+if (!launchRunner.includes('assemble-launch-dossier.js assemble')) {
+  console.error('ops template check failed: launch runner missing dossier assembler');
+  process.exit(1);
+}
+const launchDrillsScript = launchRunner + fs.readFileSync('scripts/ops/assemble-launch-dossier.js', 'utf8');
 if (!launchDrillsScript.includes('run-static-integrity-checks.js --output') ||
     !launchDrillsScript.includes('static-integrity-evidence-') ||
     !launchDrillsScript.includes('staticIntegrityBaseline') ||

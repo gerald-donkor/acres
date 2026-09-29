@@ -1387,7 +1387,7 @@ these repository checks establishes a production runtime or journey result.
 ## 4. Unified Drill Execution & Evidence Dossier
 
 `scripts/ops/run-launch-drills.sh` runs all 7 stages and writes
-`backups/launch-evidence-dossier-<timestamp>.json`:
+`backups/launch-evidence-dossier-<timestamp>-<run-id>.json`:
 
 | # | `stage_id` | covers |
 | --- | --- | --- |
@@ -1403,7 +1403,9 @@ Flags: `--dry-run` (offline where the underlying tool supports it),
 `--json` (print dossier to stdout), `--output <path>`, `--evidence-dir <dir>`,
 `--verbose`, `--help`. Exit 0 only when every stage passes; any failure exits
 1 with the failing stage named in the dossier (`error_message`) and on the
-console. Stages 1–6 pass fully offline; stage 7 needs drill infra (§3.6).
+console. The real static-integrity child may contact npm; Stage 7 needs drill
+infra and complete recovery evidence (§3.6). Only the fixture test suite is
+fully isolated from live services.
 
 **Targeted drill invocation (prompt 202):** In a separately approved drill window,
 use `bash scripts/ops/run-launch-drills.sh --caddyfile <materialized-Caddyfile>
@@ -1447,19 +1449,43 @@ The Unified Launch Evidence Dossier aggregates structured baselines from child e
 - `disasterRecoveryBaseline` (stage 7): restore drill RTO, table parity, migration parity, PostGIS/foreign-key verification, and storage object reconciliation;
 - `summary`: compliance flags across static integrity, supply chain security, supply chain compliance, SAST compliance, container security compliance, ingress/deployment, volume encryption, secret rotation, capacity alerting, disaster recovery, SLO compliance, recovery compliance, alert verification, DoS resilience, database baseline compliance, restore compliance, reconcile compliance, deployment compliance, rollback compliance, secret rotation compliance, volume encryption compliance, and no-AI posture.
 
-Implementation notes: the orchestrator is bash (arrays, `[[ ]]`), matching the
-sibling drill runners. Each stage's full child output is captured to
-`launch-drill-stage-<stage_id>.log` in the evidence dir, and every dossier
-`artifacts` entry lists that log plus the child evidence files the stage
-emitted, closed by the dossier path itself. The dossier `timestamp` is extended
-ISO-8601 (`Date.parse`-compatible); the filename stamp stays basic
-(`launch-evidence-dossier-YYYYMMDDTHHMMSSZ.json`). Secret rotation always runs
-`--dry-run` — live rotation stays an explicit operator action even when the
-orchestrator itself runs without `--dry-run` (reconciliation reporting likewise
-stays `--dry-run`; it is read-only but still requires live drill infra).
+Implementation notes (prompt 233): Bash allocates a private
+`launch-drill-run-<unique-id>/<stage_id>/` tree under `--evidence-dir`. Stage
+logs are `launch-drill-stage-<stage_id>.log` inside those directories; each
+child receives its exact registered receipt path. Dossiers list absolute
+registered paths, including expected missing receipts for diagnosis; no
+unexpected/intermediate file is selected. New directories are 0700 and files
+0600, with existing parent permissions preserved. Symlink/nonregular paths,
+missing, malformed, stale/future, oversized or changing receipts fail closed.
+Limits are 16 MiB SBOM, 64 KiB capacity aggregate, and 1 MiB other reports.
+Every required baseline/compliance failure updates its stage and the final
+counts/summary before `overall_status` is computed.
+
+Selected output destinations have exclusive invocation locks. Existing regular
+output is invalidated before children start, then complete JSON is published by
+an atomic rename from an owned temporary file. `--output` keeps its exact name,
+including non-JSON extensions; `--json` prints that published dossier. Normal
+failed drills publish complete failed dossiers. Catchable interruption removes
+only the owned publication temp/lock and terminates its stage group; retained
+run trees/logs remain available. A SIGKILL or host loss can leave a lock/temp:
+confirm its owner is stopped before operator cleanup; the runner never steals
+it. Preserve trees referenced by active evidence and dispose only explicitly
+selected inactive runs, never a shared-directory sweep. Controlled filesystem
+access is required; freshness/private paths do not prove cryptographic
+provenance or production acceptance.
+
+Secret rotation always runs `--dry-run`; reconciliation remains read-only and
+requires live services. Dry restore preflight supplies no successful receipt,
+so missing recovery evidence still fails Stage 7. Stage 6 validates actual
+nested capacity, alert, DoS, and database gates. The readiness Category 5 child
+validator has an existing shape mismatch with actual producer fields; see
+`docs/operations.md` prompt 233. Its separate production gate stays fail-closed.
+Safe inspection is `npm run ops:launch-drill-test` (57/57 hermetic tests),
+not an unstubbed unified dry run. The real runner may audit dependencies and
+read drill services. Operator sign-off remains required.
 
 Reference a dossier from an approved readiness section by placing its
-`backups/launch-evidence-dossier-<timestamp>.json` path in that section's
+`backups/launch-evidence-dossier-<timestamp>-<run-id>.json` path in that section's
 `evidence` array; the validator confirms the file exists, parses as JSON, and
 rejects dossiers whose `overall_status`/`status` is `"FAILED"`, or whose
 underlying baselines report breach or compliance failure.
@@ -1856,7 +1882,7 @@ operators own authentic live evidence and human sign-off.
 | 11 | optional_ai_posture | `node scripts/ops/check-launch-readiness.js <record>` | product-and-security-lead | |
 
 Launch is approved only when all 11 rows are signed, the unified dossier
-(`backups/launch-evidence-dossier-<timestamp>.json`) reports `PASSED`, and
+(`backups/launch-evidence-dossier-<timestamp>-<run-id>.json`) reports `PASSED`, and
 `node scripts/ops/check-launch-readiness.js <operator-readiness.json>` exits 0.
 Category 5 (`slo_and_alerting`) approval requires operator confirmation of all
 11 operational alert rules, availability target ≥ 99.9%, HTTP p95 latency ≤ 500ms,

@@ -1457,31 +1457,28 @@ This is the Phase 12 exit gate: one orchestrator, one dossier, one checklist.
      `supply_chain_sast`, `ingress_deployment`, `volume_encryption`,
      `secret_rotation`, `capacity_alerting`, `disaster_recovery`) and emits the
      Unified Launch Evidence Dossier
-     (`backups/launch-evidence-dossier-<timestamp>.json`) with `version`,
+     (`backups/launch-evidence-dossier-<timestamp>-<run-id>.json`) with `version`,
      extended-ISO `timestamp`, `environment`, `overall_status`,
      `total/passed/failed_stages`, `duration_seconds`, per-stage
      `stage_id`/`status`/`duration_ms`/`artifacts`/`error_message`, and a
      `summary` across integrity, security, SLO, recovery, and no-AI posture.
-   - Each stage captures child output to
-     `launch-drill-stage-<stage_id>.log`; dossier `artifacts` list that log
-     plus discovered child evidence, closed by the dossier path.
+   - Each invocation owns `launch-drill-run-<unique-id>/<stage_id>/` under
+     the selected evidence parent. Stage logs and exact registered child receipts
+     live there; dossier `artifacts` list absolute registered paths and the
+     final dossier. Directory discovery is removed (prompt 233).
    - Flags: `--dry-run`, `--json`, `--output <path>`, `--evidence-dir <dir>`,
      `--verbose`, `--help`. Without `--dry-run`, children run live against
      drill infra — except secret rotation, which stays `--dry-run` by design.
      Exit 0 only when every stage passes.
-   - Unit suite (`scripts/ops/run-launch-drills.spec.js`): 9/9 tests
-     (executable bit, help text, missing-value guards, unknown-option
-     rejection, schema-compliant dossier with offline stages 1–6 passing plus
-     real child-evidence/log artifact links, `--json` stdout identity,
-     `--evidence-dir` redirection, default `backups/` output, fail-closed via
-     deterministic `SOURCE_DB == DRILL_DB` rejection). Full runs pass
-     `--evidence-dir` to a temp dir so the repo `backups/` stays clean.
-   - Known constraint (judgement, verified): stages 1–6 run fully offline;
-     stage 7 `disaster_recovery` requires live drill infra even in `--dry-run`
-     (PGPASSWORD + reachable Postgres for the restore drill; authenticated
-     Postgres + reachable Garage/S3 for reconciliation) and fails closed
-     otherwise. `npm run ops:launch-drill` therefore exits 1 until drill infra
-     is present — that is the gate working, not a defect.
+   - `ops:launch-drill-test` runs the real Bash runner in disposable repository
+     fixtures with all service/audit children stubbed, plus pure assembly tests.
+     It does not read live services or sweep repository `backups/`.
+   - The real runner's static-integrity child can contact npm. Restore dry-run
+     preflight and read-only reconciliation require live drill infrastructure;
+     a successful dry restore preflight emits no recovery receipt, so Stage 7
+     remains failed without complete restore/reconciliation evidence. Synthetic
+     capacity is accepted only in explicit `--dry-run` rehearsal. Default mode
+     fails synthetic Stage 6. These are drill gates, not production approval.
 2. **Operator Launch Checklist (`docs/launch-checklist.md`)**: 11-category
    verification matrix (drill command, evidence artifact, acceptance criteria
    per category), 11 Prometheus alert runbooks with PromQL, triage,
@@ -1707,3 +1704,140 @@ npm run ops:dos-test
 npm run ops:capacity-alerting-test
 bash scripts/ops/run-dos-resilience-drill.sh --dry-run --evidence-file /tmp/acres-dos-offline.json
 ```
+
+
+## Prompt 233 — invocation-owned launch evidence (2026-09-29)
+
+The public Bash runner retains its seven ordered stages, flags, and mode/target
+forwarding. It rejects missing, empty, single/double-dash values, controls, and
+live/dry conflicts before child execution. Invalid target errors do not echo
+arguments. Help creates no artifacts. No child runner was redesigned, and no
+live unified drill or production acceptance occurred in this implementation.
+
+Each run uses exclusive `mktemp -d` allocation under the evidence parent:
+`launch-drill-run-<unique-id>/<stage-id>/`. New directories are 0700 and files
+0600 through umask 077; existing parent permissions are preserved. Symlink or
+non-directory ancestors are rejected. Stage functions pass each exact receipt
+through the child's verified `--output` or `--evidence-file`; no `ls`/`comm`,
+substring selection, timestamp sweep, or shared-directory cleanup remains.
+Intermediate files stay private and are not selected. Stage logs remain named
+`launch-drill-stage-<stage-id>.log` inside their unique stage directories.
+Artifacts include absolute log/registered receipt paths even when a required
+receipt is unavailable, so failure diagnosis retains the expected location.
+
+`scripts/ops/assemble-launch-dossier.js` owns all receipt interpretation and
+publication. Reads require a regular file in its exact stage directory and
+reject symlinks, FIFOs, escaping paths, malformed JSON, growth/replacement, and
+oversize evidence. The byte loop itself is bounded, with descriptor and named
+file checks before/after reading. Limits are 16 MiB for CycloneDX SBOMs, 64 KiB
+for capacity aggregates, and 1 MiB for other reports. These are engineering
+choices, not production measurements. A local serialized SBOM measured 707481
+bytes for 708 components; existing capacity aggregates measured at most 16719
+bytes, volume 3117, SAST 10983, and container security 3964. These examples fit
+the ceilings; larger reconciliation reports fail closed and require an explicit
+future bound decision rather than silent relaxation.
+
+Receipt time must fall within the parent start/end interval. Producer ISO UTC
+with/without milliseconds and basic UTC forms are canonicalized and round-trip
+checked for real calendar dates. Only second-precision producers get 999 ms
+of truncation allowance at the beginning. Defined discriminators are required.
+Child nonzero exit, missing/invalid mandatory receipt, failed/contradictory
+verdict, or breached baseline fails its stage. License compliance is mandatory
+for the SBOM child. Counts and stage summaries are computed after validation.
+Raw invalid fields are excluded, and valid database summaries select only
+validated fields. A dossier cannot report passed overall beside a required
+baseline breach or compliance failure.
+
+The existing seven rotation steps, recovery parity/RTO, config/target binding,
+Caddy route/HSTS production-candidate rule, and database telemetry thresholds
+remain. Stage 6 also validates nested named alert rules/simulations, re-evaluates
+HTTP capacity distributions and target limits through the producer's exported
+`evaluateSloCompliance`, and validates nested DoS evidence through
+`validDosEvidence`. Live HTTP benchmarks omit DB latency distributions; the
+separately bound live telemetry supplies the database gate. Synthetic capacity
+requires its DB distributions. Aggregate API hashes still use URL `href`,
+whereas DoS child hashes use URL `origin`. Secret rotation always stays dry-run
+and reconciliation stays read-only.
+
+Every selected dossier destination has an exclusively created `.lock` containing
+its invocation token. A second writer fails before child execution and cannot
+remove the active owner's lock. Regular existing output is invalidated only
+after destination validation and exclusive ownership, before children start.
+An exclusively owned 0600 temporary file in the final directory is allocated
+before work; complete JSON is written there and renamed atomically. Normal
+stage failures publish complete failed dossiers. Serialization/write/rename
+failure exits nonzero with a generic error. Catchable interruption terminates
+only the invocation's stage process group, bounds termination cleanup, and
+removes only its temporary publication file/lock. Run directories and logs are
+retained. No stale previous success or partially written public dossier remains.
+Default dossiers add the unique run suffix; `--output` remains exact and works
+with arbitrary extensions. `--json` prints the published JSON, and success text
+explicitly separates drill completion from operator production sign-off.
+
+Evidence directories must be controlled by the operator. Private ownership and
+fresh timestamps are attribution checks, not cryptographic provenance or proof
+of production scope; another process with the same OS identity can tamper with
+files. Uncatchable SIGKILL/host loss can leave a lock/temp; the runner never
+steals it. Confirm the owning process has stopped before operator cleanup.
+Retain every run tree referenced by active evidence; dispose only an explicitly
+selected inactive tree and its dossier after retention/review requirements are
+met. Never sweep the shared evidence parent by name, age, or directory difference.
+
+An existing readiness-consumer limitation is unchanged: its
+`validateCapacityAlertingReport` expects `capacity.status`, `alerts.ruleCount`,
+and `alerts.rules`, while actual producers emit no capacity status and use
+`alerts.totalRulesCount/requiredRulesCount/alerts`. The new assembler validates
+actual producer contracts; it does not change or bypass Category 5's separate
+fail-closed readiness validator. Aligning that child-readiness contract is
+future work. No seven-stage rehearsal alone approves production.
+
+Verification output:
+
+- `npm run ops:launch-drill-test`: `tests 57`, `pass 57`, `fail 0`.
+  The follow-up live-shape/custom-output suite: `tests 3`, `pass 3`, `fail 0`.
+  Fixtures scrub service credentials and never delegate to real probes,
+  databases, storage, Docker, scanners, or npm. They clean only their own
+  disposable root. Concurrency proves disjoint registered paths/default
+  outputs and preservation of unrelated files; exclusive-output interruption
+  proves removal of old success, owned lock, and temporary publication file.
+- Existing suites reported `fail 0`: DoS 39/39, capacity-alerting 16/16,
+  restore 28/28, deployment 12/12, rotation 7/7, readiness 103/103,
+  readiness-schema 8/8, reconciliation 10/10, Caddy 18/18, volume 17/17,
+  SBOM 8/8, SAST 14/14, container 22/22, capacity 15/15, alerts 23/23.
+- Templates printed `ops template check passed`. SBOM printed
+  `License Compliance: PASSED (100% compliant with approved permissive licenses)`;
+  SAST printed `SAST Gate: PASSED (Zero unreviewed blockers and zero expired suppressions)`;
+  container checks printed `Container Security Gate: PASSED (All Dockerfiles and Compose templates verified)`.
+- Prettier printed `All matched files use Prettier code style!` for all three
+  new/changed JavaScript files. Bash syntax and `git diff --check` exited 0.
+  Root lint, typecheck, and production build exited 0; build reported
+  `Generated Prisma Client (7.9.1)` and completed Next/Nest builds.
+- The checked-in readiness example exited 1 and reported
+  `Approved Categories: 0`, `Unresolved / Blocked: 11`,
+  `Total Blockers Detected: 70`, and `FAIL-CLOSED`.
+- `npm run ops:check` passed its local pre-audit gates but stopped with
+  `getaddrinfo EAI_AGAIN registry.npmjs.org`. Automatic approval review rejected
+  the unsandboxed retry because npm audit sends potentially private dependency
+  metadata to the public registry without explicit user payload/destination
+  authorization. No alternate audit route or bypass was attempted. All
+  remaining local gate commands were run separately and passed; the aggregate
+  gate and fresh dependency audit remain incomplete pending authorization.
+  Sandbox process tests initially reported `spawnSync bash EPERM`; approved
+  local-process permission enabled the hermetic checks.
+
+Independent read-only review found two issues: Stage 6 nested contradictions
+were not yet checked, and `require()` misread custom non-JSON output extensions.
+Both claims were verified, fixed, and regression-tested. Follow-up review
+reported no remaining findings and cleared documentation/commit. Rollback is
+reverting this implementation commit; retained child paths must stay available
+while referenced by active evidence.
+
+Safe inspection from the repository root:
+
+```bash
+npm run ops:launch-drill-test
+node --test scripts/ops/assemble-launch-dossier.spec.js
+```
+
+These tests are hermetic. The real `ops:launch-drill` command is not network-free
+and is not an inspection shortcut.

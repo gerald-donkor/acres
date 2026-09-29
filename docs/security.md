@@ -657,10 +657,17 @@ As of 2026-09-09, automated performance capacity evaluation, multi-layer DoS res
 
 Implemented from `prompts/67-unified-launch-drill-runner-and-operator-launch-checklist.md`.
 No new trust boundary is introduced: the unified orchestrator
-(`scripts/ops/run-launch-drills.sh`) only shells out to the already-reviewed
-Phase 12A–12J drill runners, writes one JSON dossier under the gitignored
-`backups/`, and never handles secret values (child drills receive only
-references; `scan-secrets.sh` remains a gating stage).
+(`scripts/ops/run-launch-drills.sh`) invokes the existing Phase 12A–12J child
+runners and assembles their registered reports. Prompt 233 gives each invocation
+private run/stage directories, bounded regular-file reads, canonical receipt
+freshness, consistent stage/baseline verdicts, an exclusive selected-output lock,
+and atomic publication. Invalid raw evidence is excluded from baseline summaries;
+private child logs and reports still require operator access controls and may
+contain sensitive diagnostic data. Secret-bearing service environments remain
+inherited by real operational children; the hermetic tests scrub them. Freshness
+and filesystem ownership do not prove production scope or cryptographic
+provenance and do not defend against a process with the same OS identity.
+`scan-secrets.sh` remains a gating stage; no production sign-off was granted.
 
 - **TM-01 through TM-22 verification**: every threat with an automated drill
   (supply-chain/SAST/container, ingress/deployment, volume/key separation,
