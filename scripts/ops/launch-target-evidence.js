@@ -85,4 +85,32 @@ function validDatabaseTelemetry(evidence, expectedTarget, startedAt, endedAt) {
   return true;
 }
 
-module.exports = { targetId, safeUrl, fileId, readBoundedJson, validHealthProbes, validDatabaseTelemetry };
+// Validate the narrow child receipt at the invocation boundary, not just its status.
+function validDosEvidence(e, dryRun, expectedTarget, startedAt, endedAt) {
+  if (!e || e.drill_type !== 'dos_resilience_drill' || e.status !== 'success' ||
+      !Array.isArray(e.failures) || e.failures.length ||
+      !Number.isSafeInteger(e.durationMs) || e.durationMs < 0 ||
+      e.durationMs > endedAt - startedAt || typeof e.timestamp !== 'string') return false;
+  const timestamp = Date.parse(e.timestamp);
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== e.timestamp ||
+      timestamp < startedAt || timestamp > endedAt) return false;
+  for (const name of ['layer1_edge_ingress', 'layer2_in_process_throttling',
+    'layer3_graphql_bounds', 'layer4_storage_bounds', 'layer5_anti_enumeration']) {
+    if (e.layers?.[name]?.passed !== true) return false;
+  }
+  const b = e.layers?.layer6_rate_limiter_burst;
+  if (!b) return false;
+  const counts = ['attemptedRequests', 'throttledRequests', 'authRejectedRequests',
+    'unexpectedResponses', 'transportFailures'];
+  if (!counts.every(k => Number.isSafeInteger(b[k]) && b[k] >= 0 && b[k] <= 15)) return false;
+  if (dryRun) return e.mode === 'simulated' && e.apiTargetId === null &&
+    b.burstTestMode === 'skipped' && b.passed === null && counts.every(k => b[k] === 0) &&
+    b.preHealthPassed === false && b.csrfHandshakePassed === false && b.postHealthPassed === false;
+  return e.mode === 'live' && e.apiTargetId === expectedTarget &&
+    b.burstTestMode === 'live' && b.passed === true && b.attemptedRequests > 0 &&
+    b.throttledRequests > 0 && b.authRejectedRequests + b.throttledRequests === b.attemptedRequests &&
+    b.unexpectedResponses === 0 && b.transportFailures === 0 &&
+    b.preHealthPassed === true && b.csrfHandshakePassed === true && b.postHealthPassed === true;
+}
+
+module.exports = { targetId, safeUrl, fileId, readBoundedJson, validHealthProbes, validDatabaseTelemetry, validDosEvidence };

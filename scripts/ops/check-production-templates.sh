@@ -48,6 +48,9 @@ require_file scripts/ops/verify-alert-rules.js
 require_file scripts/ops/verify-alert-rules.spec.js
 require_file scripts/ops/verify-capacity-load.js
 require_file scripts/ops/verify-capacity-load.spec.js
+require_file scripts/ops/run-dos-resilience-drill.spec.js
+require_file scripts/ops/run-capacity-alerting-drill.spec.js
+require_file scripts/ops/launch-target-evidence.spec.js
 require_file scripts/ops/run-dos-resilience-drill.sh
 require_file scripts/ops/run-capacity-alerting-drill.sh
 require_file scripts/ops/check-release-images.js

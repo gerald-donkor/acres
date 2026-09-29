@@ -532,15 +532,41 @@ must resolve:
   26, `acres_database_query_duration_seconds`) with normal acquisition isolates
   unoptimized queries, missing indexes, or table locks. Both signals must be
   drawn from a live Prometheus scrape bound to the production target.
-- **Local drill runner defaults to synthetic mode and cannot be labeled production proof.**
-  When run without `--target-url` and `--database-telemetry-file`,
-  `scripts/ops/run-capacity-alerting-drill.sh` executes against in-process
-  synthetic workloads, emitting `mode: "synthetic"` and synthetic database
-  telemetry (`source: "synthetic"`). `scripts/ops/launch-target-evidence.js`
-  enforces that live target evidence must have `source: "prometheus-live-scrape"`,
-  match the expected target ID, carry a fresh nonfuture timestamp within the
-  drill window, and have `probeHealthy: true`. Synthetic or dry-run drill
-  success cannot support production launch approval.
+- **Offline drills require explicit `--dry-run` and cannot be labeled production proof.**
+  Run `npm run ops:capacity-alerting-drill -- --dry-run` for synthetic capacity
+  and database telemetry plus zero-network DoS repository assertions. Without
+  `--dry-run`, the DoS child performs a live exercise even when no benchmark
+  target was supplied. An invocation without a benchmark target emits aggregate
+  `mode: "default"` and fails database acceptance rather than inventing telemetry.
+  Live target evidence must have `source: "prometheus-live-scrape"`, match the
+  benchmark target, and pass the existing freshness/health checks. Synthetic or
+  dry-run success cannot support production launch approval.
+
+**Prompt 232 DoS child contract (2026-09-29):** Stage 6 now validates an owned,
+bounded child report rather than accepting its success status alone. The child
+must identify `dos_resilience_drill`, have empty failures, all five repository
+assertions passing, a safe duration and UTC timestamp within this invocation,
+and a mode-consistent burst. Offline mode is `simulated` with null target,
+`skipped` burst, null verdict, zero observed counters, and false probe flags.
+Live mode hashes the normalized API origin, requires positive attempts and
+validated throttles within the 15-request bound, consistent response totals,
+zero unexpected/transport failures, and passing pre-health/CSRF/post-health
+checks. Nonzero exit, invalid JSON, stale or mismatched evidence fails Stage 6.
+The parent cleans its unique child temporary directory on all exits.
+
+A separately authorized live invocation performs the existing CSRF cookie/header
+handshake and observes invalid-login throttling and liveness only. It cannot
+prove deployed protection across all five layers, constant-time behavior, or
+sustained DoS capacity. Operator inspection and Category 5 sign-off remain
+mandatory. Default child files use `dos-resilience-evidence-<uuid>.json` and
+atomic publication. Safe tests: `npm run ops:dos-test` (39 passed) and
+`npm run ops:capacity-alerting-test` (16 passed), with no real traffic. Local
+lint/typecheck/build and offline regressions passed after subprocess permission;
+after explicit user authorization of registry egress, the audit passed its
+zero-critical gate (12 moderate and 8 high findings) and the launch suite passed
+13/13. The full `ops:check` exited 0. The unapproved example remains fail-closed with 0/11
+approved categories and 70 blockers. See `docs/operations.md` Prompt 232 for
+exact observed outputs and limits.
 
 Verified about the executable contract, for precision:
 `scripts/ops/check-launch-readiness.js` validates that an approved

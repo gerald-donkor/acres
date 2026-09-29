@@ -70,3 +70,51 @@ test('live readiness requires the Acres liveness and dependency envelope', () =>
   assert.equal(validHealthProbes(live, JSON.stringify({ ok: true, data: { status: 'ok', database: 'ok' } })), false);
   assert.equal(validHealthProbes(JSON.stringify({ ok: true, data: { status: 'ok', service: 'other', uptimeSeconds: 3 } }), ready), false);
 });
+
+function dosReceipt(dryRun = false) {
+  return {
+    timestamp: new Date(now).toISOString(), durationMs: 0, drill_type: 'dos_resilience_drill',
+    status: 'success', failures: [], mode: dryRun ? 'simulated' : 'live',
+    apiTargetId: dryRun ? null : target,
+    layers: Object.fromEntries([
+      ...['layer1_edge_ingress', 'layer2_in_process_throttling', 'layer3_graphql_bounds',
+        'layer4_storage_bounds', 'layer5_anti_enumeration'].map(k => [k, { passed: true }]),
+      ['layer6_rate_limiter_burst', { passed: dryRun ? null : true,
+        burstTestMode: dryRun ? 'skipped' : 'live', attemptedRequests: dryRun ? 0 : 15,
+        throttledRequests: dryRun ? 0 : 5, authRejectedRequests: dryRun ? 0 : 10,
+        unexpectedResponses: 0, transportFailures: 0, preHealthPassed: !dryRun,
+        csrfHandshakePassed: !dryRun, postHealthPassed: !dryRun }],
+    ]),
+  };
+}
+
+test('DoS receipts require complete invocation-bound live or skipped offline observations', () => {
+  const { validDosEvidence } = require('./launch-target-evidence');
+  assert.equal(validDosEvidence(dosReceipt(), false, target, now, now), true);
+  assert.equal(validDosEvidence(dosReceipt(true), true, null, now, now), true);
+  for (const mutation of [e => e.status = 'failed', e => e.drill_type = 'other',
+    e => e.failures = ['failed'], e => e.failures = null, e => e.durationMs = -1,
+    e => e.durationMs = 0.5, e => e.durationMs = 1, e => e.timestamp = '2026-02-30T00:00:00.000Z',
+    e => e.timestamp = new Date(now - 1).toISOString(), e => e.timestamp = new Date(now + 1).toISOString(),
+    e => e.apiTargetId = 'wrong', e => e.layers.layer1_edge_ingress.passed = false,
+    e => e.layers.layer6_rate_limiter_burst.burstTestMode = 'skipped',
+    e => e.layers.layer6_rate_limiter_burst.throttledRequests = 0,
+    e => e.layers.layer6_rate_limiter_burst.authRejectedRequests = 11,
+    e => e.layers.layer6_rate_limiter_burst.unexpectedResponses = 1,
+    e => e.layers.layer6_rate_limiter_burst.transportFailures = 1,
+    e => e.layers.layer6_rate_limiter_burst.preHealthPassed = false,
+    e => e.layers.layer6_rate_limiter_burst.csrfHandshakePassed = false,
+    e => e.layers.layer6_rate_limiter_burst.postHealthPassed = false,
+    e => e.layers.layer6_rate_limiter_burst.attemptedRequests = 16,
+    e => e.layers.layer6_rate_limiter_burst.attemptedRequests = '15']) {
+    const e = dosReceipt(); mutation(e);
+    assert.equal(validDosEvidence(e, false, target, now, now), false);
+  }
+  for (const mutation of [e => e.apiTargetId = target, e => e.mode = 'live',
+    e => e.layers.layer6_rate_limiter_burst.passed = true,
+    e => e.layers.layer6_rate_limiter_burst.attemptedRequests = 1,
+    e => e.layers.layer6_rate_limiter_burst.csrfHandshakePassed = true]) {
+    const e = dosReceipt(true); mutation(e);
+    assert.equal(validDosEvidence(e, true, null, now, now), false);
+  }
+});

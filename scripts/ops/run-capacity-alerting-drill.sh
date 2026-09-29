@@ -18,7 +18,7 @@ DRY_RUN=0
 EVIDENCE_DIR="backups"
 EVIDENCE_FILE=""
 TARGET_URL=""
-API_URL="${API_URL:-http://localhost:3001}"
+API_URL="${API_URL-http://localhost:3001}"
 DATABASE_TELEMETRY_FILE=""
 
 while [ $# -gt 0 ]; do
@@ -77,9 +77,16 @@ done
 if [ -n "$TARGET_URL" ] || [ -n "$DATABASE_TELEMETRY_FILE" ]; then
   if [ "$DRY_RUN" -eq 1 ]; then echo 'Error: live target evidence conflicts with --dry-run' >&2; exit 1; fi
 fi
-if [ -n "$TARGET_URL" ]; then
-  node -e 'const {safeUrl}=require("./scripts/ops/launch-target-evidence"); safeUrl(process.argv[1]); const api=new URL(safeUrl(process.argv[2])); if(api.pathname!=="/") throw Error("API target must be an origin")' "$TARGET_URL" "$API_URL" || exit 1
-fi
+API_URL="$(node - "$API_URL" "$TARGET_URL" <<'NODE'
+const {safeUrl}=require('./scripts/ops/launch-target-evidence');
+try {
+  const api=new URL(safeUrl(process.argv[2]));
+  if(api.pathname!=='/' || /[?#]/.test(process.argv[2])) throw Error();
+  if(process.argv[3]) safeUrl(process.argv[3]);
+  process.stdout.write(api.origin);
+} catch { console.error('Error: invalid drill target'); process.exit(1); }
+NODE
+)"
 
 get_time_ms() {
   local ms
@@ -146,14 +153,20 @@ fi
 # Step 3: Multi-Layer DoS & Rate Limiting Drill
 # -----------------------------------------------------------------------------
 printf '\n--- [Step 3/3] Multi-Layer DoS & Rate Limiting Resilience Drill ---\n'
-DOS_EVIDENCE_TMP="${EVIDENCE_DIR}/dos-tmp-${TIMESTAMP}.json"
+DOS_PRIVATE_DIR="$(mktemp -d)"
+trap 'rm -rf -- "$DOS_PRIVATE_DIR"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+DOS_EVIDENCE_TMP="$DOS_PRIVATE_DIR/evidence.json"
+DOS_CHILD_OK=0
 DOS_ARGS=(--evidence-file "$DOS_EVIDENCE_TMP" --api-url "$API_URL")
 if [ "$DRY_RUN" -eq 1 ]; then
   DOS_ARGS+=(--dry-run)
 fi
 
 if bash scripts/ops/run-dos-resilience-drill.sh "${DOS_ARGS[@]}" >/dev/null 2>&1; then
-  printf '  ✓ Multi-layer DoS resilience verified across all 5 defense boundaries\n'
+  DOS_CHILD_OK=1
+  printf '  DoS child completed; validating its evidence contract\n'
 else
   printf '  ✗ DoS resilience drill encountered violations\n'
   DRILL_STATUS="failed"
@@ -182,7 +195,7 @@ const dryRun = process.argv[9] === "1";
 const targetUrl = process.argv[10];
 const telemetryFile = process.argv[11];
 const startTime = Number(process.argv[12]);
-const { targetId, readBoundedJson, validDatabaseTelemetry } = require("./scripts/ops/launch-target-evidence");
+const { targetId, readBoundedJson, validDatabaseTelemetry, validDosEvidence } = require("./scripts/ops/launch-target-evidence");
 
 let alertData = {};
 try { alertData = JSON.parse(alertRaw); } catch {}
@@ -191,12 +204,12 @@ let capacityData = {};
 try { capacityData = JSON.parse(capacityRaw); } catch {}
 
 let dosData = {};
-try {
-  if (fs.existsSync(dosEvidencePath)) {
-    dosData = JSON.parse(fs.readFileSync(dosEvidencePath, "utf8"));
-    fs.unlinkSync(dosEvidencePath);
-  }
-} catch {}
+try { dosData = readBoundedJson(dosEvidencePath); } catch {}
+const dosValid = process.argv[14] === "1" && validDosEvidence(
+  dosData, dryRun, targetId(new URL(process.argv[13]).origin), startTime, Date.now());
+if (!dosValid) failures.push("DoS child evidence missing or invalid");
+// Never copy unvalidated child content (possibly containing secrets) into the dossier.
+if (!dosValid) dosData = { status: "failed" };
 
 const dbLatency = capacityData?.distribution?.databaseLatency || {
   acquisitionLatencyMs: { min: 0.1, p50: 0.5, p90: 1.2, p95: 1.8, p99: 3.5, max: 4.8, mean: 0.6, stddev: 0.4 },
@@ -281,7 +294,7 @@ const unifiedEvidence = {
   summary: {
     alertVerification: alertData.valid === true ? "passed" : "failed",
     capacitySloCompliance: capacityData?.compliance?.overallPassed === true ? "passed" : "failed",
-    dosResilience: dosData.status === "success" ? "passed" : "failed",
+    dosResilience: dosValid ? "passed" : "failed",
     databaseBaselineCompliance: dbCompliancePassed ? "passed" : "failed",
   },
   alerts: alertData,
@@ -295,11 +308,11 @@ fs.writeFileSync(evidenceFile, JSON.stringify(unifiedEvidence, null, 2), "utf8")
 ' "$TIMESTAMP" "$DURATION_MS" "$DRILL_STATUS" "$ALERT_OUTPUT_JSON" \
   "$CAPACITY_OUTPUT_JSON" "$DOS_EVIDENCE_TMP" \
   "$FAILURES_JSON" \
-  "$EVIDENCE_FILE" "$DRY_RUN" "$TARGET_URL" "$DATABASE_TELEMETRY_FILE" "$START_TIME_MS" "$API_URL"
+  "$EVIDENCE_FILE" "$DRY_RUN" "$TARGET_URL" "$DATABASE_TELEMETRY_FILE" "$START_TIME_MS" "$API_URL" "$DOS_CHILD_OK"
 
 if [ "$(node -e 'const e=require(process.argv[1]); process.stdout.write(e.status)' "$(realpath "$EVIDENCE_FILE")")" != success ]; then
   DRILL_STATUS=failed
-  FAILURES+=("Database telemetry baseline missing or invalid")
+  FAILURES+=("Unified evidence validation failed")
 fi
 
 printf '\n=================================================================\n'
@@ -307,7 +320,11 @@ printf 'Unified Drill Evidence: %s\n' "$EVIDENCE_FILE"
 printf 'Total Duration:         %d ms\n' "$DURATION_MS"
 
 if [ "$DRILL_STATUS" = "success" ]; then
-  printf 'Overall Result:         PASSED. Capacity, alerts & DoS resilience satisfied.\n'
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf 'Overall Result: PASSED offline capacity/alert simulations and repository assertions. Live throttle skipped.\n'
+  else
+    printf 'Overall Result: PASSED capacity/alerts and bounded login throttle/health observation.\n'
+  fi
   printf '=================================================================\n\n'
   exit 0
 else

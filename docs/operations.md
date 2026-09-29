@@ -724,13 +724,13 @@ Implemented in Prompt 66:
    - Emits structured JSON audit evidence reports (`backups/capacity-load-report-<timestamp>.json`).
    - Unit test suite (`verify-capacity-load.spec.js`): 9/9 unit tests passing in 90ms.
 2. **Automated Multi-Layer DoS & Rate Limiting Drill Runner (`scripts/ops/run-dos-resilience-drill.sh`)**:
-   - Automated drill runner asserting defense-in-depth DoS resilience across all 5 protection boundaries (TM-05, TM-20):
+   - Offline repository pattern assertions for five protection boundaries (TM-05, TM-20); these do not measure deployed behavior:
      - **Layer 1: Edge Ingress Bounds (Caddy)**: Request body limit (`$ACRES_MAX_REQUEST_BODY`) and transport timeouts (`read_timeout`, `write_timeout`, `dial_timeout`);
      - **Layer 2: In-Process Rate Limiting & Throttling (NestJS)**: RateLimitGuard enforcing `RATE_LIMIT_DEFAULT_LIMIT` (120 req/min) and `RATE_LIMIT_STRICT_LIMIT` (10 req/min). `@StrictThrottle` decorator verified on sensitive endpoints (`POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/forgot-password`, `POST /api/v1/forms/contact`) asserting fail-closed HTTP 429 `RATE_LIMITED`. `@SkipThrottle` verified on `/health` and `/metrics` preventing DoS starvation of liveness/readiness probes;
      - **Layer 3: GraphQL Resource Bounds**: Pre-parse 12KB ceiling (`GRAPHQL_MAX_BYTES`), max depth 8 (`GRAPHQL_MAX_DEPTH`), max aliases (`GRAPHQL_MAX_ALIASES`), complexity ceiling 250 (`GRAPHQL_MAX_COST`), and node ceiling 250 (`GRAPHQL_MAX_NODES`), with strict single-operation enforcement;
      - **Layer 4: Storage & Upload Bounds**: 50MB streaming ceiling (`UPLOAD_MAX_BYTES`) and ClamAV quarantine scanning isolation prior to S3 bucket publication;
      - **Layer 5: Anti-Enumeration Timing Defense**: Constant-time bcrypt execution via dummy password verification on missing accounts (`accounts.verifyPassword(null, 'dummy-password-check')`).
-   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<timestamp>.json`).
+   - Emits structured JSON audit evidence reports (`backups/dos-resilience-evidence-<uuid>.json`).
 3. **Prometheus Alerting Rule Expansion & Synthetic Simulation Engine (`scripts/ops/verify-alert-rules.js` & `.spec.js`)**:
    - Expands `infra/prometheus/alerts.yml` to 7 golden signal and threat detection rules:
      1. `AcresApiDown` (Availability: `up{job="acres-api"} == 0`, for 1m, critical);
@@ -749,14 +749,14 @@ Implemented in Prompt 66:
    - Unified drill orchestrator executing alert verification, capacity evaluation, and DoS resilience checks.
    - Emits consolidated JSON audit evidence reports (`backups/capacity-alerting-drill-evidence-<timestamp>.json`).
 5. **Capacity, Load & Alerting Drill Runbook**:
-   - Command: `npm run ops:capacity-alerting-drill` (or `npm run ops:capacity-drill`, `npm run ops:alert-drill`, `npm run ops:dos-drill`).
-   - Criteria: All 7 alert rules valid and simulated, Availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS, and all 5 DoS defense layers verified.
+   - Offline command: `npm run ops:capacity-alerting-drill -- --dry-run` (or `npm run ops:dos-drill -- --dry-run`). Non-dry DoS invocations require separate operator authorization.
+   - Offline criteria: alert rules valid and simulated, synthetic capacity SLOs satisfied, and five repository protection assertions passing. Live acceptance still requires operator evidence; the bounded DoS exercise observes login throttling and liveness only.
    - Evidence: Inspect generated report in `backups/capacity-alerting-drill-evidence-<timestamp>.json`.
 6. **Operations & CI Integration**:
    - Added root package scripts: `npm run ops:capacity-test`, `npm run ops:capacity-drill`, `npm run ops:alert-test`, `npm run ops:alert-drill`, `npm run ops:dos-drill`, `npm run ops:capacity-alerting-drill`.
    - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`.
    - Updated `scripts/ops/check-production-templates.sh` requiring all 7 alerts, alert rule verification, and capacity evaluation.
-   - Closes TM-05, TM-16, TM-20, and Category 5 launch readiness requirements.
+   - Supplies repository checks for TM-05, TM-16, and TM-20. Category 5 and production threat acceptance remain open pending operator evidence and sign-off.
 
 **Prompt 166 verification (2026-09-23):** `High429Rate` now reads only
 `acres_http_429_responses_total`, over the unchanged total-request rate and
@@ -1625,3 +1625,85 @@ Verification on 2026-09-28: focused template preflight tests passed 57/57;
 `npm run ops:templates`, `npm run ops:check`, `npm run lint`, `npm run typecheck`,
 `npm run build`, and `git diff --check` passed. The checked-in launch readiness
 example remains unresolved and fails closed.
+
+
+## Prompt 232 — DoS evidence boundary hardening (2026-09-29)
+
+The DoS runner now validates CLI/environment origins before side effects and
+normalizes them to `URL.origin`. Help is side-effect-free; `--dry-run` performs
+zero curl calls, including health probes. Its five layers are repository pattern
+assertions, not observations of live Caddy, GraphQL, upload scanning, or timing.
+Static failures block traffic. Non-dry execution requires separate operator
+authorization and never falls back to simulated success when a target is down.
+
+The live path uses a private temporary cookie jar, bounded Acres `/health`
+probes, and `GET /api/v1/auth/csrf` before the synthetic invalid login burst.
+The returned token and paired cookie are required; only validated
+`401 INVALID_CREDENTIALS` and `429 RATE_LIMITED` error envelopes count. It rejects
+contradictory envelopes, redirects, unexpected statuses, and transport failures
+immediately. At most 15 sequential login requests are attempted. At least one
+validated throttle and a successful final liveness probe are required. No
+registration or real account/session is used. Curl ignores ambient `.curlrc`,
+keeps TLS verification enabled, and uses a 2-second connect timeout, 5-second
+total timeout, and 64 KiB response ceiling. These bounds are operational choices,
+not production measurements. Tokens, cookies, and raw bodies stay in private
+files and are removed on exit or catchable interruption.
+
+Reports preserve the six layer names and use `drill_type: "dos_resilience_drill"`.
+Offline reports have `mode: "simulated"`, null target, a skipped burst with null
+verdict, zero counters, and false probe flags. Live reports bind
+`apiTargetId` to SHA-256 of the normalized origin (no trailing slash) and record
+attempted/throttled/auth-rejected/unexpected/transport counts plus pre-health,
+CSRF, and post-health booleans. Failed live runs cannot report a passing burst.
+Evidence publication serializes JSON to an owned temporary file in the destination
+directory and renames it atomically; UUID default names retain the discoverable
+`dos-resilience-evidence-` prefix. Existing destination receipts are invalidated
+before work so an interruption cannot reuse stale success.
+
+The capacity-alerting consumer allocates a unique owned child directory, reads
+at most 64 KiB of regular JSON, and validates report type, empty failures, all
+five static layer verdicts, duration, exact UTC timestamp within the invocation,
+mode/target, and the complete burst contract. A nonzero child exit remains
+failure even beside success JSON. Invalid child content is not copied into the
+aggregate. Missing, stale, oversized, contradictory, and mismatched receipts
+set `summary.dosResilience: "failed"` and fail the parent. The existing aggregate
+API target hash still uses normalized URL `href` (with trailing slash) for
+compatibility with the launch orchestrator; the child origin hash is distinct.
+Database telemetry, capacity, and alert acceptance gates are unchanged.
+
+Verification output: `ops:dos-test` reported `tests 39`, `pass 39`, `fail 0`;
+`ops:capacity-alerting-test` reported `tests 16`, `pass 16`, `fail 0`. The isolated
+fixtures never delegate to real curl; they cover success and failure responses,
+CSRF propagation, privacy, cleanup, stale receipts, and concurrent ownership.
+Both scripts are included in `ops:check` and required by the production template
+check. Bash syntax and `git diff --check` exited 0. Prettier reported
+`All matched files use Prettier code style!` for the new process specs. Lint and
+typecheck exited 0 across all workspaces. The production build exited 0 and
+reported `Generated Prisma Client (7.9.1)` followed by a successful Nest build.
+The sandbox initially blocked Node subprocesses with `spawnSync node EPERM`
+(and empty output); local-process permission allowed the build and offline
+regressions to run correctly. Independent review found no code blockers and the
+planned documentation corrections were applied.
+
+The first sandbox aggregate attempt stopped with
+`getaddrinfo EAI_AGAIN registry.npmjs.org`. Automatic approval review initially
+rejected registry egress. The user then explicitly authorized dependency metadata
+to be sent to npm. The authorized audit reported `Production dependency security
+audit passed (0 critical vulnerabilities)` and `20 vulnerabilities (12 moderate,
+8 high)`; no dependency changes were made in this prompt. The authorized
+`ops:launch-drill-test` reported `tests 13`, `pass 13`, `fail 0`. The final
+authorized `npm run ops:check` exited 0, including both new suites and the
+13/13 launch suite. `ops:templates` printed `ops template check passed`;
+capacity and alert suites passed. The audit gate accepts zero critical findings,
+not zero findings at every severity.
+The example readiness check still reported `Approved Categories: 0`,
+`Unresolved / Blocked: 11`, `Total Blockers Detected: 70`, and `FAIL-CLOSED`.
+No live drill, production acceptance, or launch approval occurred.
+
+Safe inspection from the repository root:
+
+```bash
+npm run ops:dos-test
+npm run ops:capacity-alerting-test
+bash scripts/ops/run-dos-resilience-drill.sh --dry-run --evidence-file /tmp/acres-dos-offline.json
+```
