@@ -1820,8 +1820,14 @@ Verification output:
   the unsandboxed retry because npm audit sends potentially private dependency
   metadata to the public registry without explicit user payload/destination
   authorization. No alternate audit route or bypass was attempted. All
-  remaining local gate commands were run separately and passed; the aggregate
-  gate and fresh dependency audit remain incomplete pending authorization.
+  remaining local gate commands were initially run separately and passed.
+  The user then explicitly authorized the disclosed npm metadata/destination
+  retry with “Try again”. The authorized `npm run ops:check` completed with
+  exit code 0, including `tests 57`, `pass 57`, `fail 0` in the launch suite.
+  npm reported `20 vulnerabilities (11 moderate, 9 high)` and
+  `Production dependency security audit passed (0 critical vulnerabilities)`.
+  The gate accepts zero critical findings, not zero findings at every severity.
+  No dependency changes, live unified drill, or production approval occurred.
   Sandbox process tests initially reported `spawnSync bash EPERM`; approved
   local-process permission enabled the hermetic checks.
 
