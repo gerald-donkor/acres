@@ -383,13 +383,16 @@ PostgreSQL and Garage coverage, freshness, and restore under actual load.
    Use `scripts/ops/restore-postgres.sh <backup-file.dump>` to restore into a target database (`PGDATABASE=<target>`). Restores run using `pg_restore --clean --if-exists`, verify connection readiness, and assert public schema table counts.
 2. **Automated Restore Drill**:
    Execute `npm run ops:restore-drill` (or `scripts/ops/run-restore-drill.sh [options]`). The runner:
-   - Takes a fresh timestamped PostgreSQL backup using `backup-postgres.sh`;
+   - Authenticates to the source and `postgres` maintenance database and rejects an existing drill target before taking a dump;
+   - Takes a fresh PostgreSQL custom archive at a unique, private path under `--backup-dir`;
    - Validates archive integrity with `pg_restore --list`;
-   - Recreates an isolated drill database (`acres_restore_drill`);
+   - Creates a previously absent isolated drill database (`acres_restore_drill` by default), never drops or terminates a pre-existing target;
    - Restores the archive using `restore-postgres.sh`;
-   - Asserts table count parity, applied migration parity (`_prisma_migrations`), PostGIS spatial extension presence, foreign key integrity (`pg_constraint`), and record count invariants (`Account`, `Organization`, `Dataset`);
-   - Measures elapsed time against the Recovery Time Objective (default 300s) and emits structured JSON evidence (`backups/restore-drill-evidence-<timestamp>.json`);
-   - Cleans up ephemeral drill databases and archives cleanly on exit.
+   - Asserts table and applied migration parity (`_prisma_migrations`), PostGIS presence, zero unvalidated foreign keys, and record count parity (`Account`, `Organization`, `StoredObject`, `Dataset`, `Region`);
+   - Measures elapsed milliseconds against the Recovery Time Objective (default 300s). A miss exits nonzero;
+   - Removes the database and archive created by this invocation, unless `--keep-drill-db` or `--keep-backup` explicitly retains them. Before deletion, it confirms the target's database OID and owner OID still match those recorded after creation. It publishes JSON success evidence atomically only after required cleanup succeeds (`backups/restore-drill-evidence-<timestamp>-<pid>.json` by default).
+   A cleanup failure returns nonzero, leaves the archive for investigation when database removal is uncertain, and names the target. An interruption also attempts owned-resource cleanup. A blocked database drop does not terminate sessions or retry against an arbitrary target; the operator must investigate it manually. The identity check and `DROP DATABASE` are separate PostgreSQL commands, so the operator must isolate the drill from privileged processes that could replace the target between those commands. An existing evidence destination is rejected rather than overwritten. `--dry-run` checks authentication and target absence without dumping or creating a database.
+   The isolated command suite is `npm run ops:restore-drill-test`; its PostgreSQL commands are stubbed, and `ops:check` includes it. This test does not establish a successful live restore.
    Approved Category 6 records must reference at least one concrete child JSON
    report in `evidence`; prose, a dossier alone, and `restore_drill_completed: true`
    do not establish this gate. The validator accepts a report at the runner's

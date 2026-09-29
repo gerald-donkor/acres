@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# scripts/ops/run-restore-drill.sh
-#
-# Automated Disaster Recovery Restore Drill Runner for Acres.
-# Executes an automated end-to-end backup and restore verification against an
-# isolated target drill database, verifying table counts, migration parity,
-# PostGIS extensions, foreign key constraints, and record invariants.
-
+# Restores a fresh source dump into a database created and owned by this run.
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
 PGUSER="${PGUSER:-${POSTGRES_USER:-postgres}}"
@@ -20,325 +14,189 @@ KEEP_DRILL_DB=0
 KEEP_BACKUP=0
 DRY_RUN=0
 
-# Password resolution
-if [ -z "${PGPASSWORD:-}" ]; then
-  if [ -n "${POSTGRES_PASSWORD:-}" ]; then
-    PGPASSWORD="$POSTGRES_PASSWORD"
-  elif [ -n "${POSTGRES_SUPERUSER_PASSWORD:-}" ]; then
-    PGPASSWORD="$POSTGRES_SUPERUSER_PASSWORD"
-  elif [ -n "${ACRES_MIGRATOR_PASSWORD:-}" ]; then
-    PGPASSWORD="$ACRES_MIGRATOR_PASSWORD"
-  fi
-fi
-
-# Parse command line options
-while [ $# -gt 0 ]; do
+while (($#)); do
   case "$1" in
-    --source-db)
-      SOURCE_DB="$2"
-      shift 2
-      ;;
-    --drill-db)
-      DRILL_DB="$2"
-      shift 2
-      ;;
-    --backup-dir)
-      BACKUP_DIR="$2"
-      shift 2
-      ;;
-    --evidence-file)
-      EVIDENCE_FILE="$2"
-      shift 2
-      ;;
-    --rto-target-seconds)
-      RTO_TARGET_SECONDS="$2"
-      shift 2
-      ;;
-    --keep-drill-db)
-      KEEP_DRILL_DB=1
-      shift
-      ;;
-    --keep-backup)
-      KEEP_BACKUP=1
-      shift
-      ;;
-    --dry-run)
-      DRY_RUN=1
-      shift
-      ;;
+    --source-db|--drill-db|--backup-dir|--evidence-file|--rto-target-seconds)
+      option="$1"
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        printf 'drill error: %s requires a nonempty value\n' "$option" >&2
+        exit 1
+      fi
+      case "$option" in
+        --source-db) SOURCE_DB="$2" ;;
+        --drill-db) DRILL_DB="$2" ;;
+        --backup-dir) BACKUP_DIR="$2" ;;
+        --evidence-file) EVIDENCE_FILE="$2" ;;
+        --rto-target-seconds) RTO_TARGET_SECONDS="$2" ;;
+      esac
+      shift 2 ;;
+    --keep-drill-db) KEEP_DRILL_DB=1; shift ;;
+    --keep-backup) KEEP_BACKUP=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
     --help|-h)
-      cat <<'EOF'
+      cat <<'HELP'
 Usage: scripts/ops/run-restore-drill.sh [options]
-
-Automated disaster recovery drill runner verifying backup, restore, schema parity,
-and RTO compliance against an isolated database.
-
-Options:
-  --source-db <name>           Source database to back up (default: acres)
-  --drill-db <name>            Target drill database for restore (default: acres_restore_drill)
-  --backup-dir <dir>           Directory for temporary backup archive (default: backups)
-  --evidence-file <file>       Path to output JSON evidence report (default: backups/restore-drill-evidence-<timestamp>.json)
-  --rto-target-seconds <sec>   Target Recovery Time Objective in seconds (default: 300)
-  --keep-drill-db              Preserve target drill database after verification
-  --keep-backup                Preserve generated backup dump file after verification
-  --dry-run                    Verify configuration without executing backup/restore
-  --help, -h                   Show this help message
-EOF
-      exit 0
-      ;;
-    *)
-      printf 'Error: Unknown option "%s"\n' "$1" >&2
-      exit 1
-      ;;
+  --source-db <name>           Source database (default: acres)
+  --drill-db <name>            New, absent target database (default: acres_restore_drill)
+  --backup-dir <dir>           Private archive directory (default: backups)
+  --evidence-file <file>       Success JSON destination (default: backup-dir/restore-drill-evidence-<timestamp>-<pid>.json)
+  --rto-target-seconds <sec>   Positive integer target (default: 300)
+  --keep-drill-db              Retain the database created by this invocation
+  --keep-backup                Retain the archive created by this invocation
+  --dry-run                    Check input and server readiness; no dump or restore
+  --help, -h                   Show this help
+HELP
+      exit 0 ;;
+    *) printf 'drill error: unknown option %s\n' "$1" >&2; exit 1 ;;
   esac
 done
 
-get_time_ms() {
-  local ms
-  ms="$(date +%s%3N 2>/dev/null || true)"
-  if [[ "$ms" =~ ^[0-9]+$ ]]; then
-    echo "$ms"
-  else
-    echo "$(( $(date +%s) * 1000 ))"
+for db in "$SOURCE_DB" "$DRILL_DB"; do
+  if [[ ! "$db" =~ ^[A-Za-z_][A-Za-z_0-9]{0,62}$ ]]; then
+    printf 'drill error: invalid database identifier: %s\n' "$db" >&2
+    exit 1
   fi
-}
-
-if [ -z "${PGPASSWORD:-}" ]; then
-  printf 'drill error: PGPASSWORD environment variable is required\n' >&2
+done
+if [[ "$SOURCE_DB" == "$DRILL_DB" ]]; then
+  printf 'drill error: source and drill databases must differ\n' >&2
   exit 1
 fi
-
-if [[ ! "$DRILL_DB" =~ ^[a-zA-Z0-9_]+$ ]]; then
-  printf 'drill error: invalid database identifier "%s"\n' "$DRILL_DB" >&2
+case "$DRILL_DB" in
+  postgres|template0|template1|acres)
+    printf 'drill error: protected drill database: %s\n' "$DRILL_DB" >&2
+    exit 1 ;;
+esac
+if [[ ! "$RTO_TARGET_SECONDS" =~ ^[1-9][0-9]*$ ]] || (( ${#RTO_TARGET_SECONDS} > 9 )) || (( RTO_TARGET_SECONDS > 2147483 )); then
+  printf 'drill error: RTO target must be a positive integer no greater than 2147483\n' >&2
   exit 1
 fi
-
-if [ "$DRILL_DB" = "postgres" ] || [ "$DRILL_DB" = "template0" ] || [ "$DRILL_DB" = "template1" ] || [ "$DRILL_DB" = "acres" ]; then
-  printf 'drill error: cannot use protected system or primary database "%s" as drill target\n' "$DRILL_DB" >&2
+PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-${POSTGRES_SUPERUSER_PASSWORD:-${ACRES_MIGRATOR_PASSWORD:-}}}}"
+if [[ -z "$PGPASSWORD" ]]; then
+  printf 'drill error: PGPASSWORD is required\n' >&2
   exit 1
 fi
-
-if [ "$SOURCE_DB" = "$DRILL_DB" ]; then
-  printf 'drill error: SOURCE_DB ("%s") and DRILL_DB ("%s") cannot be the same database!\n' "$SOURCE_DB" "$DRILL_DB" >&2
-  exit 1
-fi
-
 export PGHOST PGPORT PGUSER PGPASSWORD
-
-TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
-mkdir -p "$BACKUP_DIR"
-chmod 700 "$BACKUP_DIR"
-
-if [ -z "$EVIDENCE_FILE" ]; then
-  EVIDENCE_FILE="${BACKUP_DIR}/restore-drill-evidence-${TIMESTAMP}.json"
+TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+if [[ -z "$EVIDENCE_FILE" ]]; then
+  EVIDENCE_FILE="$BACKUP_DIR/restore-drill-evidence-$TIMESTAMP-$$.json"
+fi
+if [[ -e "$EVIDENCE_FILE" || -L "$EVIDENCE_FILE" ]]; then
+  printf 'drill error: evidence destination already exists: %s\n' "$EVIDENCE_FILE" >&2
+  exit 1
 fi
 
-printf '=================================================================\n'
-printf '           Acres Disaster Recovery Restore Drill Runner          \n'
-printf '=================================================================\n'
-printf 'Timestamp:           %s\n' "$TIMESTAMP"
-printf 'Host:                %s:%s\n' "$PGHOST" "$PGPORT"
-printf 'User:                %s\n' "$PGUSER"
-printf 'Source Database:     %s\n' "$SOURCE_DB"
-printf 'Target Drill DB:     %s\n' "$DRILL_DB"
-printf 'RTO Target:          %s seconds\n' "$RTO_TARGET_SECONDS"
-printf 'Evidence Destination:%s\n' "$EVIDENCE_FILE"
-printf '=================================================================\n\n'
+sql() { psql -X -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$1" -v ON_ERROR_STOP=1 -t -A -c "$2"; }
+fail() { printf 'drill error: %s\n' "$*" >&2; exit 1; }
+count() {
+  local result
+  result="$(sql "$1" "$2")" || fail "count query failed on $1"
+  [[ "$result" =~ ^(0|[1-9][0-9]*)$ && ${#result} -le 15 ]] || fail "invalid count result on $1"
+  printf '%s' "$result"
+}
+records() {
+  local result
+  result="$(sql "$1" "SELECT json_build_object('accounts',(SELECT count(*) FROM \"Account\"),'organizations',(SELECT count(*) FROM \"Organization\"),'stored_objects',(SELECT count(*) FROM \"StoredObject\"),'datasets',(SELECT count(*) FROM \"Dataset\"),'regions',(SELECT count(*) FROM \"Region\"));")" || fail "record query failed on $1"
+  [[ -n "$result" && "$result" != '{}' ]] || fail "empty record counts on $1"
+  # Compare parsed JSON values so whitespace and key order cannot cause false parity.
+  node -e 'const v=JSON.parse(process.argv[1]); const keys=["accounts","organizations","stored_objects","datasets","regions"]; if(keys.some(k=>!Number.isSafeInteger(v[k])||v[k]<0))process.exit(1); process.stdout.write(JSON.stringify(keys.map(k=>v[k])))' "$result" || fail "invalid record counts on $1"
+}
+get_time_ms() { date +%s%3N; }
 
-if [ "$DRY_RUN" -eq 1 ]; then
-  printf '[DRY RUN] Preflight verification only.\n'
-  pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null
-  printf '[DRY RUN] PostgreSQL ready. Configuration valid.\n'
+pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null || fail "PostgreSQL is not ready"
+# pg_isready alone does not authenticate. Both connections must succeed.
+sql postgres 'SELECT 1;' >/dev/null || fail 'maintenance database authentication failed'
+sql "$SOURCE_DB" 'SELECT 1;' >/dev/null || fail 'source database authentication failed'
+existing="$(count postgres "SELECT count(*) FROM pg_database WHERE datname = '$DRILL_DB';")"
+[[ "$existing" == 0 ]] || fail "drill database already exists: $DRILL_DB"
+if ((DRY_RUN)); then
+  printf '[DRY RUN] Validated credentials, source and absent target.\n'
   exit 0
 fi
 
-# Track created backup file and drill db for cleanup
-CREATED_BACKUP=""
+CREATED_BACKUP=''
 DRILL_DB_CREATED=0
-
+CREATED_DB_ID=''
 cleanup() {
-  local exit_status=$?
-  if [ "$exit_status" -ne 0 ]; then
-    printf '\n[DRILL FAILURE] Drill failed with exit code %s. Initiating cleanup...\n' "$exit_status" >&2
+  local prior=$? cleanup_failed=0
+  trap - EXIT INT TERM HUP
+  if ((DRILL_DB_CREATED && !KEEP_DRILL_DB)); then
+    # Never terminate other sessions. If a session blocks DROP, leave the target for operator review.
+    current_db_id="$(sql postgres "SELECT oid::text || ':' || datdba::text FROM pg_database WHERE datname = '$DRILL_DB';")" || current_db_id=''
+    if [[ -z "$CREATED_DB_ID" || "$current_db_id" != "$CREATED_DB_ID" ]]; then
+      printf 'drill error: owned drill database identity changed or could not be checked: %s\n' "$DRILL_DB" >&2
+      cleanup_failed=1
+    elif ! sql postgres "DROP DATABASE \"$DRILL_DB\";" >/dev/null; then
+      printf 'drill error: could not remove owned drill database %s; investigate manually\n' "$DRILL_DB" >&2
+      cleanup_failed=1
+    fi
   fi
-
-  if [ "$KEEP_DRILL_DB" -eq 0 ] && [ "$DRILL_DB_CREATED" -eq 1 ]; then
-    printf 'Cleaning up drill database "%s"...\n' "$DRILL_DB"
-    psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" -v ON_ERROR_STOP=0 <<EOSQL >/dev/null 2>&1 || true
-SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DRILL_DB' AND pid <> pg_backend_pid();
-DROP DATABASE IF EXISTS "$DRILL_DB";
-EOSQL
+  if [[ -n "$CREATED_BACKUP" && -f "$CREATED_BACKUP" ]]; then
+    if ((KEEP_BACKUP || cleanup_failed)); then
+      printf 'drill archive retained: %s\n' "$CREATED_BACKUP" >&2
+    elif ! rm -f -- "$CREATED_BACKUP"; then
+      printf 'drill error: could not remove owned archive %s\n' "$CREATED_BACKUP" >&2
+      cleanup_failed=1
+    fi
   fi
-
-  if [ "$KEEP_BACKUP" -eq 0 ] && [ -n "$CREATED_BACKUP" ] && [ -f "$CREATED_BACKUP" ]; then
-    printf 'Removing drill backup archive "%s"...\n' "$CREATED_BACKUP"
-    rm -f "$CREATED_BACKUP"
+  if ((prior == 0 && cleanup_failed == 0)); then
+    if ! write_evidence; then
+      printf 'drill error: could not publish success evidence\n' >&2
+      prior=1
+    fi
   fi
+  if ((cleanup_failed)); then prior=1; fi
+  exit "$prior"
+}
+write_evidence() {
+  local parent temp
+  parent="$(dirname -- "$EVIDENCE_FILE")"
+  mkdir -p -- "$parent" || return 1
+  temp="$(mktemp "$parent/.restore-drill-evidence.XXXXXXXX")" || return 1
+  if ! TIMESTAMP="$TIMESTAMP" SOURCE_DB="$SOURCE_DB" DRILL_DB="$DRILL_DB" BACKUP_FILE="$CREATED_BACKUP" BACKUP_BYTES="$BACKUP_BYTES" DURATION_MS="$DURATION_MS" RTO_TARGET_SECONDS="$RTO_TARGET_SECONDS" TABLES_SOURCE="$TABLES_SOURCE" TABLES_RESTORED="$TABLES_RESTORED" MIGRATIONS_SOURCE="$MIGRATIONS_SOURCE" MIGRATIONS_RESTORED="$MIGRATIONS_RESTORED" node -e '
+const e=process.env;
+const n=k=>Number(e[k]);
+const report={drill_timestamp:e.TIMESTAMP,source_db:e.SOURCE_DB,drill_db:e.DRILL_DB,backup_file:e.BACKUP_FILE,backup_bytes:n("BACKUP_BYTES"),duration_ms:n("DURATION_MS"),duration_seconds:Math.floor(n("DURATION_MS")/1000),rto_target_seconds:n("RTO_TARGET_SECONDS"),rto_compliant:true,tables_source:n("TABLES_SOURCE"),tables_restored:n("TABLES_RESTORED"),migrations_source:n("MIGRATIONS_SOURCE"),migrations_restored:n("MIGRATIONS_RESTORED"),postgis_verified:true,foreign_keys_verified:true,record_parity_verified:true,status:"success"};
+process.stdout.write(JSON.stringify(report,null,2)+"\n");' > "$temp"; then
+    rm -f -- "$temp"; return 1
+  fi
+  if [[ -e "$EVIDENCE_FILE" || -L "$EVIDENCE_FILE" ]]; then rm -f -- "$temp"; return 1; fi
+  if ! ln -- "$temp" "$EVIDENCE_FILE"; then rm -f -- "$temp"; return 1; fi
+  rm -f -- "$temp"
+  printf 'Drill evidence saved to: %s\n' "$EVIDENCE_FILE"
+  printf 'DISASTER RECOVERY RESTORE DRILL PASSED\n'
 }
 trap cleanup EXIT
-
-# 1. Verify PostgreSQL ready
-printf '1. Checking PostgreSQL readiness...\n'
-pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null || {
-  printf 'drill error: PostgreSQL is not ready on %s:%s\n' "$PGHOST" "$PGPORT" >&2
-  exit 1
-}
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 START_TIME_MS="$(get_time_ms)"
-
-# 2. Inspect source database baseline
-printf '2. Inspecting source database "%s" baseline...\n' "$SOURCE_DB"
-TABLES_SOURCE="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';")"
-MIGRATIONS_SOURCE="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM \"_prisma_migrations\" WHERE rolled_back_at IS NULL;" 2>/dev/null || echo 0)"
-RECORDS_SOURCE="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" -v ON_ERROR_STOP=1 -t -A -c "
-SELECT json_build_object(
-  'accounts', (SELECT count(*) FROM \"Account\"),
-  'organizations', (SELECT count(*) FROM \"Organization\"),
-  'stored_objects', (SELECT count(*) FROM \"StoredObject\"),
-  'datasets', (SELECT count(*) FROM \"Dataset\"),
-  'regions', (SELECT count(*) FROM \"Region\")
-);")"
-
-if [ -z "$RECORDS_SOURCE" ] || [ "$RECORDS_SOURCE" = "{}" ]; then
-  printf 'drill error: source database record count inspection query returned empty result\n' >&2
-  exit 1
-fi
-
-printf '   Source public tables:      %s\n' "$TABLES_SOURCE"
-printf '   Source applied migrations: %s\n' "$MIGRATIONS_SOURCE"
-printf '   Source record counts:      %s\n' "$RECORDS_SOURCE"
-
-# 3. Create fresh timestamped backup
-printf '\n3. Generating PostgreSQL backup archive...\n'
-BACKUP_FILE="${BACKUP_DIR}/acres-drill-${TIMESTAMP}.dump"
-CREATED_BACKUP="$BACKUP_FILE"
-
-PGDATABASE="$SOURCE_DB" BACKUP_DIR="$BACKUP_DIR" \
-  pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" \
-  --format=custom --no-owner --no-privileges --file="$BACKUP_FILE"
-
-if [ ! -s "$BACKUP_FILE" ]; then
-  printf 'drill error: generated backup file is missing or empty: %s\n' "$BACKUP_FILE" >&2
-  exit 1
-fi
-
-chmod 600 "$BACKUP_FILE"
-BACKUP_BYTES="$(wc -c < "$BACKUP_FILE" | tr -d ' ')"
-printf '   Backup created: %s (%s bytes)\n' "$BACKUP_FILE" "$BACKUP_BYTES"
-
-# Verify archive integrity
-printf '   Verifying dump archive integrity...\n'
-pg_restore --list "$BACKUP_FILE" >/dev/null || {
-  printf 'drill error: backup archive failed pg_restore --list verification: %s\n' "$BACKUP_FILE" >&2
-  exit 1
-}
-
-# 4. Prepare target isolated drill database
-printf '\n4. Preparing isolated drill database "%s"...\n' "$DRILL_DB"
-psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" <<EOSQL >/dev/null
-SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DRILL_DB' AND pid <> pg_backend_pid();
-DROP DATABASE IF EXISTS "$DRILL_DB";
-CREATE DATABASE "$DRILL_DB" OWNER "$PGUSER";
-EOSQL
+TABLES_SOURCE="$(count "$SOURCE_DB" "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';")"
+MIGRATIONS_SOURCE="$(count "$SOURCE_DB" 'SELECT count(*) FROM "_prisma_migrations" WHERE rolled_back_at IS NULL;')"
+RECORDS_SOURCE="$(records "$SOURCE_DB")"
+mkdir -p -m 700 -- "$BACKUP_DIR"
+CREATED_BACKUP="$(mktemp "$BACKUP_DIR/acres-drill-$TIMESTAMP-XXXXXXXX.dump")"
+chmod 600 "$CREATED_BACKUP"
+pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" --format=custom --no-owner --no-privileges --file="$CREATED_BACKUP" || fail 'backup creation failed'
+[[ -s "$CREATED_BACKUP" ]] || fail 'backup is empty'
+BACKUP_BYTES="$(wc -c < "$CREATED_BACKUP" | tr -d ' ')"
+pg_restore --list "$CREATED_BACKUP" >/dev/null || fail 'backup archive validation failed'
+# CREATE DATABASE is a single checked statement; an existence race fails safely.
+sql postgres "CREATE DATABASE \"$DRILL_DB\";" >/dev/null || fail "could not create drill database $DRILL_DB"
 DRILL_DB_CREATED=1
-
-# 5. Execute restore into drill database
-printf '\n5. Restoring backup archive into "%s" using restore-postgres.sh...\n' "$DRILL_DB"
-PGDATABASE="$DRILL_DB" scripts/ops/restore-postgres.sh "$BACKUP_FILE"
-
-# 6. Verify schema parity and invariants
-printf '\n6. Verifying restored database integrity and parity...\n'
-
-TABLES_RESTORED="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$DRILL_DB" -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';")"
-MIGRATIONS_RESTORED="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$DRILL_DB" -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM \"_prisma_migrations\" WHERE rolled_back_at IS NULL;" 2>/dev/null || echo 0)"
-POSTGIS_COUNT="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$DRILL_DB" -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM pg_extension WHERE extname = 'postgis';")"
-UNVALIDATED_FKS="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$DRILL_DB" -v ON_ERROR_STOP=1 -t -A -c "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated;")"
-RECORDS_RESTORED="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$DRILL_DB" -v ON_ERROR_STOP=1 -t -A -c "
-SELECT json_build_object(
-  'accounts', (SELECT count(*) FROM \"Account\"),
-  'organizations', (SELECT count(*) FROM \"Organization\"),
-  'stored_objects', (SELECT count(*) FROM \"StoredObject\"),
-  'datasets', (SELECT count(*) FROM \"Dataset\"),
-  'regions', (SELECT count(*) FROM \"Region\")
-);")"
-
-if [ -z "$RECORDS_RESTORED" ] || [ "$RECORDS_RESTORED" = "{}" ]; then
-  printf 'drill error: restored database record count inspection query returned empty result\n' >&2
-  exit 1
-fi
-
-printf '   Restored public tables:      %s (source: %s)\n' "$TABLES_RESTORED" "$TABLES_SOURCE"
-printf '   Restored applied migrations: %s (source: %s)\n' "$MIGRATIONS_RESTORED" "$MIGRATIONS_SOURCE"
-printf '   PostGIS extension present:   %s\n' "$POSTGIS_COUNT"
-printf '   Unvalidated foreign keys:    %s\n' "$UNVALIDATED_FKS"
-printf '   Restored record counts:      %s\n' "$RECORDS_RESTORED"
-
-# Assertions
-if [ "$TABLES_SOURCE" -ne "$TABLES_RESTORED" ]; then
-  printf 'drill error: Table count mismatch! Source: %s, Restored: %s\n' "$TABLES_SOURCE" "$TABLES_RESTORED" >&2
-  exit 1
-fi
-
-if [ "$MIGRATIONS_SOURCE" -ne "$MIGRATIONS_RESTORED" ]; then
-  printf 'drill error: Migration count mismatch! Source: %s, Restored: %s\n' "$MIGRATIONS_SOURCE" "$MIGRATIONS_RESTORED" >&2
-  exit 1
-fi
-
-if [ "$POSTGIS_COUNT" -lt 1 ]; then
-  printf 'drill error: PostGIS spatial extension missing from restored database!\n' >&2
-  exit 1
-fi
-
-if [ "$UNVALIDATED_FKS" -ne 0 ]; then
-  printf 'drill error: Found %s unvalidated foreign key constraints in restored database!\n' "$UNVALIDATED_FKS" >&2
-  exit 1
-fi
-
-if [ "$RECORDS_SOURCE" != "$RECORDS_RESTORED" ]; then
-  printf 'drill error: Record invariants mismatch! Source: %s, Restored: %s\n' "$RECORDS_SOURCE" "$RECORDS_RESTORED" >&2
-  exit 1
-fi
-
-# 7. Measure RTO Compliance
-END_TIME_MS="$(get_time_ms)"
-DURATION_MS=$(( END_TIME_MS - START_TIME_MS ))
-DURATION_SEC=$(( DURATION_MS / 1000 ))
-
-RTO_COMPLIANT=false
-if [ "$DURATION_SEC" -le "$RTO_TARGET_SECONDS" ]; then
-  RTO_COMPLIANT=true
-fi
-
-printf '\n7. RTO (Recovery Time Objective) Evaluation:\n'
-printf '   Elapsed Time:     %s ms (%s seconds)\n' "$DURATION_MS" "$DURATION_SEC"
-printf '   Target Threshold: %s seconds\n' "$RTO_TARGET_SECONDS"
-printf '   RTO Compliant:    %s\n' "$RTO_COMPLIANT"
-
-# 8. Emit Structured JSON Evidence Report
-mkdir -p "$(dirname "$EVIDENCE_FILE")"
-cat > "$EVIDENCE_FILE" <<EOF
-{
-  "drill_timestamp": "${TIMESTAMP}",
-  "source_db": "${SOURCE_DB}",
-  "drill_db": "${DRILL_DB}",
-  "backup_file": "${BACKUP_FILE}",
-  "backup_bytes": ${BACKUP_BYTES},
-  "duration_ms": ${DURATION_MS},
-  "duration_seconds": ${DURATION_SEC},
-  "rto_target_seconds": ${RTO_TARGET_SECONDS},
-  "rto_compliant": ${RTO_COMPLIANT},
-  "tables_source": ${TABLES_SOURCE},
-  "tables_restored": ${TABLES_RESTORED},
-  "migrations_source": ${MIGRATIONS_SOURCE},
-  "migrations_restored": ${MIGRATIONS_RESTORED},
-  "postgis_verified": true,
-  "foreign_keys_verified": true,
-  "record_parity_verified": true,
-  "status": "success"
-}
-EOF
-
-printf '\nDrill evidence saved to: %s\n' "$EVIDENCE_FILE"
-printf '\n=================================================================\n'
-printf '             DISASTER RECOVERY RESTORE DRILL PASSED              \n'
-printf '=================================================================\n'
+CREATED_DB_ID="$(sql postgres "SELECT oid::text || ':' || datdba::text FROM pg_database WHERE datname = '$DRILL_DB';")" || fail "could not confirm created database identity: $DRILL_DB"
+[[ "$CREATED_DB_ID" =~ ^[0-9]+:[0-9]+$ ]] || fail "invalid created database identity: $DRILL_DB"
+PGDATABASE="$DRILL_DB" scripts/ops/restore-postgres.sh "$CREATED_BACKUP" || fail 'restore failed'
+TABLES_RESTORED="$(count "$DRILL_DB" "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';")"
+MIGRATIONS_RESTORED="$(count "$DRILL_DB" 'SELECT count(*) FROM "_prisma_migrations" WHERE rolled_back_at IS NULL;')"
+POSTGIS_COUNT="$(count "$DRILL_DB" "SELECT count(*) FROM pg_extension WHERE extname = 'postgis';")"
+UNVALIDATED_FKS="$(count "$DRILL_DB" "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated;")"
+RECORDS_RESTORED="$(records "$DRILL_DB")"
+[[ "$TABLES_SOURCE" == "$TABLES_RESTORED" ]] || fail 'table count mismatch'
+[[ "$MIGRATIONS_SOURCE" == "$MIGRATIONS_RESTORED" ]] || fail 'migration count mismatch'
+((POSTGIS_COUNT >= 1)) || fail 'PostGIS missing'
+((UNVALIDATED_FKS == 0)) || fail 'unvalidated foreign keys present'
+[[ "$RECORDS_SOURCE" == "$RECORDS_RESTORED" ]] || fail 'record count mismatch'
+DURATION_MS=$(( $(get_time_ms) - START_TIME_MS ))
+((DURATION_MS >= 0)) || fail 'invalid elapsed time'
+((DURATION_MS <= RTO_TARGET_SECONDS * 1000)) || fail "RTO exceeded: ${DURATION_MS}ms > ${RTO_TARGET_SECONDS}s"

@@ -649,6 +649,19 @@ none of these repository results supplies Category 5 evidence.
   for reconciliation. Without them the unified orchestrator records stage 7
   `disaster_recovery` as FAILED (fail-closed); see §6.
 
+**Restore runner safety (prompt 231).** The Stage 7 restore child now rejects
+an existing drill database before creating an archive, validates input and
+authenticated access, and creates only a previously absent target. It never
+terminates sessions or drops a target whose recorded OID and owner have changed. A failed restore,
+parity check, millisecond RTO check, or required cleanup exits nonzero without
+success evidence. The archive is retained when target cleanup cannot be
+confirmed, and the operator investigates the named target manually. Success
+JSON is published atomically after cleanup; explicit keep flags retain the
+created database or archive for an authorized drill. The stubbed
+`ops:restore-drill-test` suite exercises this command behavior without a live
+database. Category 6 still requires the separately authorized live restore,
+Garage reconciliation, and operator sign-off described below.
+
 **Prompt 210 Category 6 intake — 2026-09-26T23:55:37Z UTC.** Reviewed
 `a3c4d9b` on `main`; the only worktree change was this prompt. The
 repository-visible Category 6 material is the unresolved
