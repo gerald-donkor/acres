@@ -1194,6 +1194,9 @@ Approved Category 3 (`secrets_management`) records now require a concrete secret
 Approved Category 10 (`deployment_and_rollback`) records now require a concrete deployment drill child JSON report in `evidence` or `release.live_drill_evidence` alongside target host profile, image registry path, deployment approver, rollback authority, image provenance policy, live drill completion declaration, and an immutable release record. A custom path qualifies by report structure and content; declaration, prose, a plausible filename alone, or the unified dossier does not. The validator requires a valid, nonfuture UTC `timestamp` (basic `YYYYMMDDTHHMMSSZ` or ISO 8601), `status: "success"`, `schema_backward_compatible: true`, `rollback_procedure_verified: true`, `caddy_routing_verified: true`, integer `caddy_routes_tested >= 12`, `security_headers_verified: true`, `s3_sigv4_host_preserved: true`, `migrations_verified: true`, integer `migration_count >= 0`, `operational_templates_verified: true`, `secrets_scan_verified: true`, `readiness_probes_verified: true`, `network_isolation_verified: true`, and matching `graceful_drain_periods_verified` (`caddy: '30s'`, `next: '30s'`, `api: '45s'`, `worker: '60s'`). Every referenced child report, including wildcard matches, must pass; a malformed or failing report blocks approval even beside a valid one. The readiness test suite passed 74/74 tests, `npm run ops:templates` passed, `npm run ops:check` passed, and lint, typecheck, build, and `git diff --check` passed cleanly. The unapproved example failed closed with 11 blocked categories and 70 blockers. Report consistency does not prove production container registry integrity or live deployment executions: the operator remains responsible for managing production hosts, OCI registry credentials, and live rollbacks before approving launch.
 
 **Prompt 194 update (2026-09-25): bind capacity alerting approval to child evidence.**
+Historical record: the producer-field and success-only requirements below were
+superseded by prompt 234 on 2026-09-30; see its current contract record.
+
 Approved Category 5 (`slo_and_alerting`) records now require a concrete capacity and alerting drill child JSON report in `evidence` alongside declared SLO targets, alert recipients, defined thresholds, and escalation runbook reference. A custom path qualifies by report structure and content; declaration, prose, a plausible filename alone, or the unified dossier does not. The validator requires a valid, nonfuture UTC `timestamp` (basic `YYYYMMDDTHHMMSSZ` or ISO 8601), `status: "success"`, empty `failures` array, all 4 summary compliance flags (`alertVerification`, `capacitySloCompliance`, `dosResilience`, `databaseBaselineCompliance`) reporting `"passed"`, `alerts.valid: true`, `alerts.ruleCount >= 11`, all simulations reporting `passed: true`, empty `alerts.errors` array, `capacity.compliance.overallPassed: true` with all individual compliance flags (`availabilityPassed`, `latencyPassed`, `throughputPassed`, `databaseAcquisitionLatencyPassed`, `databaseQueryLatencyPassed`, `monotonicDbAcquisition`, `monotonicDbQuery`) reporting `true`, `databaseTelemetryBaseline.status: "verified"` with exporter/server reporting up, zero connection pool waiting requests, acquisition p95 ≤ 50ms, query execution p95 ≤ 100ms, zero lock waits, and `dosResilience.status: "success"`. Every referenced child report, including wildcard matches, must pass; a malformed or failing report blocks approval even beside a valid one. The readiness test suite passed 78/78 tests, `npm run ops:templates` passed, `npm run ops:check` passed, and lint, typecheck, build, and `git diff --check` passed cleanly. The unapproved example failed closed with 11 blocked categories and 70 blockers. Report consistency does not prove production monitoring connectivity or live alert dispatch: the operator remains responsible for configuring live Prometheus/Alertmanager endpoints, PagerDuty/on-call routing, and maintaining active runbooks before approving launch.
 
 **Prompt 195 update (2026-09-25): bind production domain and TLS approval to child evidence.**
@@ -1783,13 +1786,12 @@ Retain every run tree referenced by active evidence; dispose only an explicitly
 selected inactive tree and its dossier after retention/review requirements are
 met. Never sweep the shared evidence parent by name, age, or directory difference.
 
-An existing readiness-consumer limitation is unchanged: its
-`validateCapacityAlertingReport` expects `capacity.status`, `alerts.ruleCount`,
-and `alerts.rules`, while actual producers emit no capacity status and use
-`alerts.totalRulesCount/requiredRulesCount/alerts`. The new assembler validates
-actual producer contracts; it does not change or bypass Category 5's separate
-fail-closed readiness validator. Aligning that child-readiness contract is
-future work. No seven-stage rehearsal alone approves production.
+**Resolved by prompt 234 (2026-09-30):** This implementation originally left
+Category 5's producer/consumer shape mismatch open. The readiness consumer now
+validates actual producer measurements, named alerts, bound live telemetry and
+the complete DoS receipt. See the prompt-234 record below for the contract and
+approved API origin-hash correction. No seven-stage rehearsal alone approves
+production.
 
 Verification output:
 
@@ -1847,3 +1849,103 @@ node --test scripts/ops/assemble-launch-dossier.spec.js
 
 These tests are hermetic. The real `ops:launch-drill` command is not network-free
 and is not an inspection shortcut.
+
+## Prompt 234 — producer-aligned capacity readiness (2026-09-30)
+
+Category 5 now consumes the actual alert and capacity contracts rather than
+requiring nonexistent `alerts.ruleCount`, `alerts.rules`, `capacity.status` or
+`capacity.sloTargets`. Each required alert has one valid evaluation with empty
+errors and one passing breach/clear simulation; `High429Rate` must ignore other
+4xx responses. All checks pass, `requiredRulesCount` is eleven, and a safe
+integer `totalRulesCount` covers the required set. The producer evaluates only
+the required set; extra YAML rules may increase its total count.
+
+The consumer requires success, empty failures, four passing summary flags,
+a real nonfuture UTC start timestamp, and safe nonnegative integer duration.
+Nested capacity/DoS dates fit that run; the second-precision parent timestamp
+allows 999 ms at the end. Telemetry retains its existing 60-second scrape
+tolerance. Evidence is retained for later review, so there is no new review-time
+TTL or filesystem ownership test in the readiness consumer.
+
+Request totals, three-decimal derived availability, positive throughput, all
+latency statistics and percentile order are validated before SLO evaluation.
+All eight individual compliance flags plus `overallPassed` must match passing
+recomputed measurements, with empty violations. Child targets meet baseline
+policy and measurements must also satisfy the approved section's stricter
+policy. Synthetic reports require complete DB distributions; live HTTP reports
+may omit them because the bound live telemetry supplies database acceptance.
+Included DB distributions must be complete and passing. The telemetry checker
+validates exporter/server health, pool consistency, nonnegative monotonic
+latencies, zero waiting requests and lock waits. Its acquisition/query p95
+values meet both child and approved-section ceilings.
+
+`validateCapacityAlertingReport(report, now)` remains a structural rehearsal
+helper. The readiness call supplies `{ section, requireLive: true }`: only
+aggregate/child live mode, SHA-256 benchmark identities matching capacity and
+telemetry, and a complete bound live DoS receipt can support Category 5.
+Synthetic rehearsal uses explicit synthetic mode/source, null target hashes
+and the producer marker, with simulated zero-counter DoS evidence. Its numeric
+baseline is checked through a local metadata copy; no report is altered and
+this path cannot approve production. Default/missing modes fail. Every child,
+including wildcard matches, must pass; dossiers cannot replace the child.
+All Category 5 evidence-file diagnostics use a fixed reason, including malformed
+JSON and failed non-child dossiers, so private child text is not echoed.
+
+Execution review disproved the prompt's original API hash assumption: URL
+`href` includes a root trailing slash while `origin` does not. The user approved
+the narrow producer correction. The capacity parent and its capacity-specific
+dossier comparison now use the DoS child's `origin` hash; benchmark and other
+dossier/deployment identity contracts retain their existing `href` hashes.
+Parent and dossier regressions prove normalized API acceptance and reject the
+old trailing-slash identity. This is a compatibility change: regenerate old
+live aggregates and their dossiers, and regenerate success-only/fictional
+reports lacking required measurements. Retained operator evidence is preserved;
+no migration, live benchmark, traffic burst, alert delivery or deployment ran.
+
+Verification output:
+
+- Readiness: `tests 161`, `pass 161`, `fail 0`; actual isolated parent output
+  validates as rehearsal and blocks production, while stubbed live-shaped
+  actual parent output clears the fixture's Category 5 gate. Test environments
+  omit inherited service credentials; only owned temporary roots are removed.
+- Readiness schema 8/8, capacity 15/15, alerts 23/23, DoS 39/39, capacity-parent
+  16/16, launch-drill 57/57, all `fail 0`. After the dependent dossier alignment,
+  launch-drill again reported 57/57; the additional legacy-hash live regression
+  reported `tests 1`, `pass 1`, `fail 0`.
+- `ops:templates`: `ops template check passed`. Root lint, typecheck and build
+  exited 0; build printed `Generated Prisma Client (7.9.1)` and completed the
+  Next and Nest production builds. Initial sandbox build failed with
+  `Could not parse output from TypeScript's --showConfig`; local-process
+  permission enabled the successful retry.
+- Changed JS regions and the parent/dossier specs passed Prettier checks:
+  `All matched files use Prettier code style!`. Existing formatting elsewhere
+  was preserved. Bash syntax and `git diff --check` exited 0.
+- `ops:check` initially stopped at npm audit with
+  `getaddrinfo EAI_AGAIN registry.npmjs.org`. Automatic approval review rejected
+  an unsandboxed attempt because dependency metadata transfer lacked accepted
+  payload/destination authorization. The user explicitly authorized the disclosed
+  retry. The retry and the full follow-up gate exited 0, reporting
+  `21 vulnerabilities (10 moderate, 11 high)` and
+  `Production dependency security audit passed (0 critical vulnerabilities)`.
+  Dependencies were not changed. The later capacity-only dossier correction
+  was verified by the related launch tests rather than another registry audit.
+- The unchanged readiness example exited 1: `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`, `FAIL-CLOSED`.
+
+Independent review found the API hash mismatch and the noncandidate diagnostic
+leak. The approved hash correction then required alignment of the existing
+capacity-specific dossier consumer. Verified fixes and follow-up review cleared
+all findings. Rollback is reverting this commit; there is no product data or
+persistent infrastructure change.
+
+Hash/date consistency is not cryptographic provenance or proof of production
+scope. Static alert simulation does not prove live Prometheus firing, receiver
+routing or human receipt. Target/monitoring inspection, delivery evidence,
+operator policy, all eleven decisions and prompt 201 remain separate launch gates.
+
+Safe inspection from the repository root:
+
+```bash
+npm run ops:readiness-test
+npm run ops:capacity-alerting-test
+```

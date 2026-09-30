@@ -277,7 +277,7 @@ function stub(key, args) {
     reports.capacity.mode = "live";
     reports.capacity.targetId = targetId(new URL(val("--target-url")).href);
     reports.capacity.apiTargetId = targetId(
-      new URL(val("--api-url") || "http://localhost:3001").href,
+      new URL(val("--api-url") || "http://localhost:3001").origin,
     );
     delete reports.capacity.capacity.distribution.databaseLatency;
     Object.assign(reports.capacity.capacity, {
@@ -388,6 +388,8 @@ function stub(key, args) {
       e.databaseTelemetryBaseline.privateField = "private-secret";
     if (scenario === "summary-private") e.scannedFilesCount = "private-secret";
     if (scenario === "target") e.apiTargetId = "wrong";
+    if (scenario === "legacy-api-hash")
+      e.apiTargetId = targetId(new URL(val("--api-url")).href);
     if (scenario === "config") e.compose_file = "/missing";
     if (scenario === "contradictory") {
       e.status = "failed";
@@ -727,10 +729,12 @@ test("live fixture preserves target/config/HSTS forwarding and rejects wrong tar
         .find((c) => c.key === key)
         .args.includes("--api-url"),
     );
-  const bad = f.run(args, "capacity:target");
-  assert.equal(bad.status, 1, bad.stderr);
-  const d = JSON.parse(fs.readFileSync(f.output));
-  assert.equal(d.stages[5].status, "FAILED");
+  for (const scenario of ["capacity:target", "capacity:legacy-api-hash"]) {
+    const bad = f.run(args, scenario);
+    assert.equal(bad.status, 1, bad.stderr);
+    const d = JSON.parse(fs.readFileSync(f.output));
+    assert.equal(d.stages[5].status, "FAILED");
+  }
 });
 test("production candidate remains fail-closed without explicit live ingress", (t) => {
   const f = fixture(t),

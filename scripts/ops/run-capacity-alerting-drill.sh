@@ -290,7 +290,7 @@ const unifiedEvidence = {
   status: finalStatus,
   mode: dryRun ? "synthetic" : targetUrl ? "live" : "default",
   targetId: targetUrl ? targetId(new URL(targetUrl).href) : null,
-  apiTargetId: targetUrl ? targetId(new URL(process.argv[13]).href) : null,
+  apiTargetId: targetUrl ? targetId(new URL(process.argv[13]).origin) : null,
   summary: {
     alertVerification: alertData.valid === true ? "passed" : "failed",
     capacitySloCompliance: capacityData?.compliance?.overallPassed === true ? "passed" : "failed",

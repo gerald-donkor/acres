@@ -624,7 +624,7 @@ function assemble(config) {
       : explicitLiveTargets &&
         capEvidence.mode === "live" &&
         capEvidence.targetId === targetId(new URL(targetUrl).href) &&
-        capEvidence.apiTargetId === targetId(new URL(apiUrl).href) &&
+        capEvidence.apiTargetId === targetId(new URL(apiUrl).origin) &&
         capEvidence.capacity?.mode === "live" &&
         capEvidence.capacity?.targetUrl === targetId(new URL(targetUrl).href) &&
         capEvidence.databaseTelemetryBaseline?.source ===

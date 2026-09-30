@@ -174,6 +174,11 @@ test('parent accepts complete offline child and fresh target-bound live child', 
     assert.equal(r.status, 0, r.output);
     assert.equal(r.evidence.summary.dosResilience, 'passed');
     assert.equal(r.evidence.failures.length, 0);
+    assert.equal(
+      r.evidence.apiTargetId,
+      dry ? null : targetId('https://private.example'),
+    );
+    assert.equal(r.evidence.apiTargetId, r.evidence.dosResilience.apiTargetId);
     assert.equal(r.children.at(-1).args.includes('--dry-run'), dry);
   }
 });

@@ -887,6 +887,23 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
 
 ## 22. Phase 12K verification record — 2026-09-09
 
+**Prompt 234 producer-aligned readiness (2026-09-30):** Category 5 now validates
+actual alert identities/counts/evaluations and measured capacity distributions,
+recomputes SLOs against child and approved policy, requires bound live database
+and full DoS evidence for production, and keeps synthetic structural rehearsal
+separate. Private child diagnostics are excluded from Category 5 blockers. Review
+found the prompt's incorrect assumption that API `href` and `origin` hashes were
+equal; the user approved the parent origin-hash correction, with its dependent
+capacity-specific dossier comparison and regressions. Old live hash receipts and
+fictional/success-only reports require regeneration. Readiness passed 161/161,
+capacity-parent 16/16, launch-drill 57/57 and the final targeted live regression
+1/1. Root lint/typecheck/build, local gates, format and diff checks passed;
+`ops:check` passed after the user authorized the disclosed registry audit retry
+(0 critical, 21 reported moderate/high vulnerabilities). The example remains
+0 approved, 11 blocked, 70 blockers. No live operation or production approval
+occurred; prompt 201 and Phase 12 remain open. Full evidence is recorded in
+`docs/operations.md` prompt 234 and Category 5 in `docs/launch-checklist.md`.
+
 **Prompt 204 structural record schema (2026-09-26):** The readiness example's
 local `$schema` now resolves to a Draft 7 schema covering all eleven launch
 categories, twelve secret references, eight retention policies, and the

@@ -14,6 +14,10 @@ const path = require('path');
 const { validateImageReference } = require('./check-release-images');
 const { validateStaticEvidence } = require('./run-static-integrity-checks');
 
+const { REQUIRED_ALERTS } = require('./verify-alert-rules');
+const { DEFAULT_SLO_TARGETS, evaluateSloCompliance } = require('./verify-capacity-load');
+const { validDatabaseTelemetry, validDosEvidence } = require('./launch-target-evidence');
+
 const REQUIRED_SECTIONS = [
   'production_domain_tls',
   'smtp_delivery',
@@ -454,94 +458,249 @@ function parseCapacityAlertingTimestamp(value) {
   return null;
 }
 
-function validateCapacityAlertingReport(report, now) {
-  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
-  const timestamp = parseCapacityAlertingTimestamp(report.timestamp || report.drill_timestamp);
-  const evalNow = now instanceof Date ? now : new Date();
-  if (!timestamp || timestamp.getTime() > evalNow.getTime()) return false;
-  if (report.status !== 'success') return false;
-  if (report.durationMs !== undefined) {
-    if (typeof report.durationMs !== 'number' || !Number.isFinite(report.durationMs) || report.durationMs < 0) {
-      return false;
-    }
-  }
-  if (!Array.isArray(report.failures) || report.failures.length > 0) return false;
-
-  const summary = report.summary;
-  if (!summary || typeof summary !== 'object' || Array.isArray(summary)) return false;
-  if (summary.alertVerification !== 'passed') return false;
-  if (summary.capacitySloCompliance !== 'passed') return false;
-  if (summary.dosResilience !== 'passed') return false;
-  if (summary.databaseBaselineCompliance !== 'passed') return false;
+// Reports are retained evidence: validate their execution interval, not a new TTL.
+function validateCapacityAlertingReport(report, now, context = {}) {
+  const object = (v) =>
+    v !== null && typeof v === 'object' && !Array.isArray(v);
+  const empty = (v) => Array.isArray(v) && v.length === 0;
+  const finite = (v, min = 0) =>
+    typeof v === 'number' && Number.isFinite(v) && v >= min;
+  const canonical = (v) => {
+    if (
+      typeof v !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)
+    )
+      return null;
+    const ms = Date.parse(v);
+    return Number.isFinite(ms) && new Date(ms).toISOString() === v ? ms : null;
+  };
+  if (!object(report)) return false;
+  const timestamp = parseCapacityAlertingTimestamp(report.timestamp);
+  const evaluation = (now instanceof Date ? now : new Date()).getTime();
+  const start = timestamp?.getTime();
+  if (
+    !timestamp ||
+    !Number.isFinite(evaluation) ||
+    start > evaluation ||
+    report.status !== 'success' ||
+    !empty(report.failures) ||
+    !Number.isSafeInteger(report.durationMs) ||
+    report.durationMs < 0
+  )
+    return false;
+  // The parent records its start to seconds; its duration retains milliseconds.
+  const end = start + report.durationMs + 999;
+  if (
+    !Number.isSafeInteger(end) ||
+    !Number.isFinite(new Date(end).getTime()) ||
+    start + report.durationMs > evaluation
+  )
+    return false;
+  if (
+    !['synthetic', 'live'].includes(report.mode) ||
+    (context.requireLive === true && report.mode !== 'live')
+  )
+    return false;
+  const synthetic = report.mode === 'synthetic';
+  if (
+    !object(report.summary) ||
+    ![
+      'alertVerification',
+      'capacitySloCompliance',
+      'dosResilience',
+      'databaseBaselineCompliance',
+    ].every((k) => report.summary[k] === 'passed')
+  )
+    return false;
 
   const alerts = report.alerts;
-  if (!alerts || typeof alerts !== 'object' || Array.isArray(alerts)) return false;
-  if (alerts.valid !== true) return false;
-  if (typeof alerts.ruleCount !== 'number' || !Number.isInteger(alerts.ruleCount) || alerts.ruleCount < 11) return false;
-  if (!Array.isArray(alerts.errors) || alerts.errors.length > 0) return false;
-  if (!Array.isArray(alerts.rules) || alerts.rules.length < 11) return false;
-  if (!Array.isArray(alerts.simulations) || alerts.simulations.length < 11) return false;
-  if (alerts.simulations.some((s) => !s || typeof s !== 'object' || s.passed !== true)) return false;
-
-  const capacity = report.capacity;
-  if (!capacity || typeof capacity !== 'object' || Array.isArray(capacity)) return false;
-  if (capacity.status !== 'passed') return false;
-  const comp = capacity.compliance;
-  if (!comp || typeof comp !== 'object' || Array.isArray(comp)) return false;
   if (
-    comp.availabilityPassed !== true ||
-    comp.latencyPassed !== true ||
-    comp.throughputPassed !== true ||
-    comp.databaseAcquisitionLatencyPassed !== true ||
-    comp.databaseQueryLatencyPassed !== true ||
-    comp.monotonicDbAcquisition !== true ||
-    comp.monotonicDbQuery !== true ||
-    comp.overallPassed !== true
-  ) {
+    !object(alerts) ||
+    alerts.valid !== true ||
+    !empty(alerts.errors) ||
+    alerts.requiredRulesCount !== REQUIRED_ALERTS.length ||
+    !Number.isSafeInteger(alerts.totalRulesCount) ||
+    alerts.totalRulesCount < REQUIRED_ALERTS.length ||
+    !Array.isArray(alerts.alerts) ||
+    alerts.alerts.length !== REQUIRED_ALERTS.length ||
+    !Array.isArray(alerts.simulations) ||
+    alerts.simulations.length !== REQUIRED_ALERTS.length ||
+    !Array.isArray(alerts.checks) ||
+    !alerts.checks.length ||
+    !alerts.checks.every((c) => object(c) && c.passed === true)
+  )
     return false;
-  }
-  if (capacity.sloTargets !== undefined) {
-    if (!capacity.sloTargets || typeof capacity.sloTargets !== 'object' || Array.isArray(capacity.sloTargets)) {
-      return false;
-    }
-    const targets = capacity.sloTargets;
-    if (typeof targets.availabilityTargetPercent === 'number' && targets.availabilityTargetPercent < 99.9) return false;
-    if (typeof targets.maxP95LatencyMs === 'number' && (targets.maxP95LatencyMs <= 0 || targets.maxP95LatencyMs > 500)) return false;
-    if (typeof targets.capacityTargetRps === 'number' && targets.capacityTargetRps < 100) return false;
+  // The producer evaluates the required set only; extra YAML rules affect totalRulesCount.
+  for (const name of REQUIRED_ALERTS) {
+    const rules = alerts.alerts.filter((r) => object(r) && r.alert === name);
+    const sims = alerts.simulations.filter(
+      (r) => object(r) && r.alert === name,
+    );
     if (
-      typeof targets.maxDatabaseAcquisitionP95LatencyMs === 'number' &&
-      (targets.maxDatabaseAcquisitionP95LatencyMs <= 0 || targets.maxDatabaseAcquisitionP95LatencyMs > 50)
-    ) {
+      rules.length !== 1 ||
+      rules[0].valid !== true ||
+      !empty(rules[0].errors) ||
+      sims.length !== 1 ||
+      sims[0].passed !== true ||
+      sims[0].firesOnBreach !== true ||
+      sims[0].clearsOnNormal !== true ||
+      (name === 'High429Rate' && sims[0].ignoresOther4xx !== true)
+    )
       return false;
-    }
-    if (
-      typeof targets.maxDatabaseQueryP95LatencyMs === 'number' &&
-      (targets.maxDatabaseQueryP95LatencyMs <= 0 || targets.maxDatabaseQueryP95LatencyMs > 100)
-    ) {
-      return false;
-    }
   }
 
+  const validTargets = (t) =>
+    object(t) &&
+    Object.keys(DEFAULT_SLO_TARGETS).every((k) =>
+      finite(t[k], Number.MIN_VALUE),
+    ) &&
+    t.availabilityTargetPercent >=
+      DEFAULT_SLO_TARGETS.availabilityTargetPercent &&
+    t.availabilityTargetPercent <= 100 &&
+    t.maxP95LatencyMs <= DEFAULT_SLO_TARGETS.maxP95LatencyMs &&
+    t.capacityTargetRps >= DEFAULT_SLO_TARGETS.capacityTargetRps &&
+    t.maxDatabaseAcquisitionP95LatencyMs <=
+      DEFAULT_SLO_TARGETS.maxDatabaseAcquisitionP95LatencyMs &&
+    t.maxDatabaseQueryP95LatencyMs <=
+      DEFAULT_SLO_TARGETS.maxDatabaseQueryP95LatencyMs;
+  const latency = (v) =>
+    object(v) &&
+    ['min', 'p50', 'p90', 'p95', 'p99', 'max', 'mean', 'stddev'].every((k) =>
+      finite(v[k]),
+    ) &&
+    ['min', 'p50', 'p90', 'p95', 'p99'].every(
+      (k, i) => v[k] <= v[['p50', 'p90', 'p95', 'p99', 'max'][i]],
+    ) &&
+    v.mean >= v.min &&
+    v.mean <= v.max;
+  const capacity = report.capacity;
+  if (
+    !object(capacity) ||
+    capacity.mode !== report.mode ||
+    !validTargets(capacity.targets)
+  )
+    return false;
+  const sampledAt = canonical(capacity.timestamp);
+  if (
+    sampledAt === null ||
+    sampledAt < start ||
+    sampledAt > end ||
+    sampledAt > evaluation
+  )
+    return false;
+  const d = capacity.distribution;
+  if (
+    !object(d) ||
+    !Number.isSafeInteger(d.totalRequests) ||
+    d.totalRequests <= 0 ||
+    !Number.isSafeInteger(d.successfulRequests) ||
+    d.successfulRequests < 0 ||
+    !Number.isSafeInteger(d.failedRequests) ||
+    d.failedRequests < 0 ||
+    d.successfulRequests > d.totalRequests ||
+    d.failedRequests !== d.totalRequests - d.successfulRequests ||
+    !finite(d.availabilityPercent) ||
+    d.availabilityPercent > 100 ||
+    d.availabilityPercent !==
+      Number(((d.successfulRequests / d.totalRequests) * 100).toFixed(3)) ||
+    !finite(d.throughputRps, Number.MIN_VALUE) ||
+    !latency(d.latencyMs)
+  )
+    return false;
+  if (
+    (synthetic || d.databaseLatency !== undefined) &&
+    (!object(d.databaseLatency) ||
+      !latency(d.databaseLatency.acquisitionLatencyMs) ||
+      !latency(d.databaseLatency.queryLatencyMs))
+  )
+    return false;
+  const computed = evaluateSloCompliance(d, capacity.targets);
+  if (
+    !object(capacity.compliance) ||
+    !empty(capacity.compliance.violations) ||
+    !Object.keys(computed)
+      .filter((k) => typeof computed[k] === 'boolean')
+      .every(
+        (k) => computed[k] === true && capacity.compliance[k] === computed[k],
+      )
+  )
+    return false;
+
+  const section = context.section;
+  const policy = section
+    ? {
+        availabilityTargetPercent: section.availability_target_percent,
+        maxP95LatencyMs: section.max_p95_latency_ms,
+        capacityTargetRps: section.capacity_target_rps,
+        maxDatabaseAcquisitionP95LatencyMs:
+          section.max_database_acquisition_p95_latency_ms,
+        maxDatabaseQueryP95LatencyMs: section.max_database_query_p95_latency_ms,
+      }
+    : capacity.targets;
+  if (!validTargets(policy) || !evaluateSloCompliance(d, policy).overallPassed)
+    return false;
+  const hash = (v) => typeof v === 'string' && /^sha256:[a-f0-9]{64}$/.test(v);
+  if (
+    synthetic
+      ? report.targetId !== null ||
+        report.apiTargetId !== null ||
+        capacity.targetUrl !== 'synthetic://in-process-evaluation'
+      : !hash(report.targetId) ||
+        !hash(report.apiTargetId) ||
+        capacity.targetUrl !== report.targetId
+  )
+    return false;
   const db = report.databaseTelemetryBaseline;
-  if (!db || typeof db !== 'object' || Array.isArray(db)) return false;
-  if (db.status !== 'verified') return false;
-  if (!db.postgresExporter || db.postgresExporter.up !== 1 || db.postgresExporter.lastScrapeError !== 0) return false;
-  if (!db.postgresServer || db.postgresServer.pgUp !== 1) return false;
-  if (!db.connectionPool || typeof db.connectionPool !== 'object') return false;
-  if (!db.connectionPool.api || db.connectionPool.api.requestsWaiting !== 0) return false;
-  if (!db.connectionPool.worker || db.connectionPool.worker.requestsWaiting !== 0) return false;
-  if (!db.poolAcquisitionLatency || typeof db.poolAcquisitionLatency !== 'object') return false;
-  if (!db.poolAcquisitionLatency.api || typeof db.poolAcquisitionLatency.api.p95Ms !== 'number' || db.poolAcquisitionLatency.api.p95Ms > 50) return false;
-  if (!db.poolAcquisitionLatency.worker || typeof db.poolAcquisitionLatency.worker.p95Ms !== 'number' || db.poolAcquisitionLatency.worker.p95Ms > 50) return false;
-  if (!db.queryExecutionDuration || typeof db.queryExecutionDuration !== 'object') return false;
-  if (!db.queryExecutionDuration.api || typeof db.queryExecutionDuration.api.p95Ms !== 'number' || db.queryExecutionDuration.api.p95Ms > 100) return false;
-  if (!db.queryExecutionDuration.worker || typeof db.queryExecutionDuration.worker.p95Ms !== 'number' || db.queryExecutionDuration.worker.p95Ms > 100) return false;
-  if (!db.serverActivity || typeof db.serverActivity !== 'object' || db.serverActivity.lockWaits !== 0) return false;
-
-  const dos = report.dosResilience;
-  if (!dos || typeof dos !== 'object' || Array.isArray(dos) || dos.status !== 'success') return false;
-
-  return true;
+  if (
+    !object(db) ||
+    db.status !== 'verified' ||
+    db.source !== (synthetic ? 'synthetic' : 'prometheus-live-scrape')
+  )
+    return false;
+  // Adapt only a local rehearsal copy to the numeric checker; production cannot use this path.
+  const telemetry = synthetic
+    ? {
+        ...db,
+        source: 'prometheus-live-scrape',
+        targetId: null,
+        probeHealthy: true,
+        timestamp: new Date(start).toISOString(),
+      }
+    : db;
+  if (!validDatabaseTelemetry(telemetry, report.targetId, start, end))
+    return false;
+  if (
+    !synthetic &&
+    (canonical(db.timestamp) === null || Date.parse(db.timestamp) > evaluation)
+  )
+    return false;
+  for (const role of ['api', 'worker']) {
+    if (
+      db.poolAcquisitionLatency[role].p95Ms >
+        Math.min(
+          policy.maxDatabaseAcquisitionP95LatencyMs,
+          capacity.targets.maxDatabaseAcquisitionP95LatencyMs,
+        ) ||
+      db.queryExecutionDuration[role].p95Ms >
+        Math.min(
+          policy.maxDatabaseQueryP95LatencyMs,
+          capacity.targets.maxDatabaseQueryP95LatencyMs,
+        )
+    )
+      return false;
+  }
+  const dosTimestamp = canonical(report.dosResilience?.timestamp);
+  return (
+    dosTimestamp !== null &&
+    dosTimestamp <= evaluation &&
+    validDosEvidence(
+      report.dosResilience,
+      synthetic,
+      report.apiTargetId,
+      start,
+      end,
+    )
+  );
 }
 
 function isCaddyRoutingCandidate({ file, parsed } = {}) {
@@ -845,6 +1004,11 @@ function validateNoAiPostureReport(report, now, approved) {
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
+  if (category === 'slo_and_alerting') {
+    const emit = addBlocker;
+    // Even non-child dossiers and malformed custom files can contain private diagnostics.
+    addBlocker = (key) => emit(key, 'A referenced capacity and alerting report is invalid or failed');
+  }
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
   if (matches.length === 0) {
@@ -864,6 +1028,13 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
       continue;
     }
     parsedFiles.push({ file, parsed });
+    // Category 5 child failures use fixed reasons, never untrusted child diagnostics.
+    if (category === 'slo_and_alerting' && isCapacityAlertingCandidate({ file, parsed })) {
+      if (!validateCapacityAlertingReport(parsed)) {
+        addBlocker(category, 'A referenced capacity and alerting report is invalid or failed');
+      }
+      continue;
+    }
     const status = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : null;
     const overall = typeof parsed.overall_status === 'string' ? parsed.overall_status.toLowerCase() : null;
     if (status === 'failed' || status === 'failure' || status === 'error') {
@@ -1714,7 +1885,7 @@ function validateReadiness(record, _filePath, options = {}) {
     const capacityCandidates = capacityEvidence.filter(isCapacityAlertingCandidate);
     if (capacityCandidates.length === 0) {
       addBlocker('slo_and_alerting', 'A successful capacity and alerting drill child JSON report is required');
-    } else if (capacityCandidates.some(({ parsed }) => !validateCapacityAlertingReport(parsed, now))) {
+    } else if (capacityCandidates.some(({ parsed }) => !validateCapacityAlertingReport(parsed, now, { section: sloSec, requireLive: true }))) {
       addBlocker('slo_and_alerting', 'A referenced capacity and alerting report is invalid or failed');
     }
   }

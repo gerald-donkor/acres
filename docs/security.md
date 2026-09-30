@@ -669,6 +669,18 @@ and filesystem ownership do not prove production scope or cryptographic
 provenance and do not defend against a process with the same OS identity.
 `scan-secrets.sh` remains a gating stage; no production sign-off was granted.
 
+**Prompt 234 evidence integrity (2026-09-30):** Category 5 now rejects fabricated
+alert names, contradictory/invalid numeric measurements, false SLO flags,
+synthetic production claims, mismatched target hashes and incomplete DoS
+receipts. Validation recomputes acceptance against operator policy and bound
+healthy telemetry. Category 5 evidence-file failures use fixed messages rather
+than echoing private JSON/child diagnostics. The approved parent API identity
+correction and capacity-specific dossier comparison both use the DoS `origin`
+hash; old trailing-slash live receipts require regeneration. Internal hashes,
+mode declarations and dates are consistency checks, not authenticated production
+provenance. Live target/monitoring inspection and receiver delivery remain
+operator-owned; no new trust boundary, live exercise or launch approval occurred.
+
 - **TM-01 through TM-22 verification**: every threat with an automated drill
   (supply-chain/SAST/container, ingress/deployment, volume/key separation,
   rotation/compromise, capacity/DoS/alerts, restore/reconcile) is re-executed

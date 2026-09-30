@@ -167,73 +167,100 @@ const validDeploymentDrillReport = {
 };
 fs.writeFileSync(deploymentDrillFixturePath, JSON.stringify(validDeploymentDrillReport));
 const capacityAlertingFixturePath = path.join(restoreFixtureDir, 'capacity-alerting-drill-evidence-valid.json');
+const { verifyAlertRules } = require('./verify-alert-rules');
+const {
+  DEFAULT_SLO_TARGETS,
+  generateSyntheticWorkload,
+  evaluateSloCompliance,
+} = require('./verify-capacity-load');
+const { targetId, safeUrl } = require('./launch-target-evidence');
+// Test-only retained live-shaped receipt; never production evidence.
+const capacityDistribution = generateSyntheticWorkload();
+delete capacityDistribution.databaseLatency; // Real live HTTP benchmarks omit DB measurements.
 const validCapacityAlertingReport = {
   timestamp: '20260828T120000Z',
   durationMs: 4500,
   status: 'success',
+  mode: 'live',
+  targetId: targetId('https://fixture.example/health'),
+  apiTargetId: targetId('https://fixture.example'),
   summary: {
     alertVerification: 'passed',
     capacitySloCompliance: 'passed',
     dosResilience: 'passed',
     databaseBaselineCompliance: 'passed',
   },
-  alerts: {
-    valid: true,
-    ruleCount: 11,
-    errors: [],
-    rules: Array.from({ length: 11 }, (_, i) => ({ alert: `Rule${i + 1}`, expr: 'up == 1' })),
-    simulations: Array.from({ length: 11 }, (_, i) => ({ rule: `Rule${i + 1}`, passed: true })),
-  },
+  alerts: verifyAlertRules(),
   capacity: {
-    status: 'passed',
-    compliance: {
-      availabilityPassed: true,
-      latencyPassed: true,
-      throughputPassed: true,
-      databaseAcquisitionLatencyPassed: true,
-      databaseQueryLatencyPassed: true,
-      monotonicDbAcquisition: true,
-      monotonicDbQuery: true,
-      overallPassed: true,
-    },
-    sloTargets: {
-      availabilityTargetPercent: 99.9,
-      maxP95LatencyMs: 500,
-      capacityTargetRps: 100,
-      maxDatabaseAcquisitionP95LatencyMs: 50,
-      maxDatabaseQueryP95LatencyMs: 100,
-    },
+    timestamp: '2026-08-28T12:00:02.000Z',
+    mode: 'live',
+    targetUrl: targetId('https://fixture.example/health'),
+    targets: { ...DEFAULT_SLO_TARGETS },
+    distribution: capacityDistribution,
+    compliance: evaluateSloCompliance(capacityDistribution),
   },
   databaseTelemetryBaseline: {
     status: 'verified',
-    postgresExporter: {
-      up: 1,
-      lastScrapeError: 0,
-    },
-    postgresServer: {
-      pgUp: 1,
-    },
-    connectionPool: {
-      api: { requestsWaiting: 0 },
-      worker: { requestsWaiting: 0 },
-    },
-    poolAcquisitionLatency: {
-      api: { p95Ms: 1.8 },
-      worker: { p95Ms: 1.8 },
-    },
-    queryExecutionDuration: {
-      api: { p95Ms: 24.1 },
-      worker: { p95Ms: 24.1 },
-    },
-    serverActivity: {
-      lockWaits: 0,
-    },
+    source: 'prometheus-live-scrape',
+    timestamp: '2026-08-28T12:00:02.000Z',
+    targetId: targetId('https://fixture.example/health'),
+    probeHealthy: true,
+    postgresExporter: { up: 1, lastScrapeError: 0 },
+    postgresServer: { pgUp: 1, maxConnections: 100, activeConnections: 6 },
+    connectionPool: Object.fromEntries(
+      ['api', 'worker'].map((k) => [
+        k,
+        {
+          totalConnections: 10,
+          idleConnections: 8,
+          maxConnections: 20,
+          requestsWaiting: 0,
+        },
+      ]),
+    ),
+    poolAcquisitionLatency: Object.fromEntries(
+      ['api', 'worker'].map((k) => [k, { p50Ms: 1, p95Ms: 1.8, p99Ms: 3 }]),
+    ),
+    queryExecutionDuration: Object.fromEntries(
+      ['api', 'worker'].map((k) => [k, { p50Ms: 5, p95Ms: 24.1, p99Ms: 30 }]),
+    ),
+    serverActivity: { lockWaits: 0, maxTransactionDurationSec: 0.1 },
   },
   dosResilience: {
+    drill_type: 'dos_resilience_drill',
+    timestamp: '2026-08-28T12:00:03.000Z',
+    durationMs: 1000,
     status: 'success',
+    failures: [],
+    mode: 'live',
+    apiTargetId: targetId('https://fixture.example'),
+    layers: {
+      ...Object.fromEntries(
+        [
+          'layer1_edge_ingress',
+          'layer2_in_process_throttling',
+          'layer3_graphql_bounds',
+          'layer4_storage_bounds',
+          'layer5_anti_enumeration',
+        ].map((k) => [k, { passed: true }]),
+      ),
+      layer6_rate_limiter_burst: {
+        passed: true,
+        burstTestMode: 'live',
+        attemptedRequests: 15,
+        throttledRequests: 5,
+        authRejectedRequests: 10,
+        unexpectedResponses: 0,
+        transportFailures: 0,
+        preHealthPassed: true,
+        csrfHandshakePassed: true,
+        postHealthPassed: true,
+      },
+    },
   },
   failures: [],
 };
+
 fs.writeFileSync(capacityAlertingFixturePath, JSON.stringify(validCapacityAlertingReport));
 const caddyRoutingFixturePath = path.join(restoreFixtureDir, 'caddy-routing-evidence-valid.json');
 const validCaddyRoutingReport = {
@@ -1152,7 +1179,7 @@ test('validateReadiness blocks approval when referenced evidence is not valid JS
     const result = validateApprovedRecord(record);
     const blockers = result.categoryBlockers.slo_and_alerting || [];
     assert.ok(
-      blockers.some((b) => b.includes('is not valid JSON')),
+      blockers.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed')),
       `Expected invalid-JSON blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
@@ -1284,11 +1311,11 @@ test('validateReadiness blocks approval when evidence reports database baseline 
       'utf8'
     );
     const rec1 = buildValidApprovedRecord();
-    rec1.sections.slo_and_alerting.evidence = [failedSummaryPath];
+    rec1.sections.slo_and_alerting.evidence = [failedSummaryPath, capacityAlertingFixturePath];
     const res1 = validateApprovedRecord(rec1);
     const blockers1 = res1.categoryBlockers.slo_and_alerting || [];
     assert.ok(
-      blockers1.some((b) => b.includes('reports database baseline failure (summary.databaseBaselineCompliance: "failed")')),
+      blockers1.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed')),
       `Expected baseline compliance failure blocker, got: ${JSON.stringify(blockers1)}`
     );
 
@@ -1299,11 +1326,11 @@ test('validateReadiness blocks approval when evidence reports database baseline 
       'utf8'
     );
     const rec2 = buildValidApprovedRecord();
-    rec2.sections.slo_and_alerting.evidence = [breachedBaselinePath];
+    rec2.sections.slo_and_alerting.evidence = [breachedBaselinePath, capacityAlertingFixturePath];
     const res2 = validateApprovedRecord(rec2);
     const blockers2 = res2.categoryBlockers.slo_and_alerting || [];
     assert.ok(
-      blockers2.some((b) => b.includes('reports database baseline breach (databaseTelemetryBaseline.status: "breached")')),
+      blockers2.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed')),
       `Expected baseline breach blocker, got: ${JSON.stringify(blockers2)}`
     );
   } finally {
@@ -1361,19 +1388,19 @@ test('validateReadiness blocks approval when evidence dossier reports sloComplia
       'utf8'
     );
     const rec = buildValidApprovedRecord();
-    rec.sections.slo_and_alerting.evidence = [failedSloDossierPath];
+    rec.sections.slo_and_alerting.evidence = [failedSloDossierPath, capacityAlertingFixturePath];
     const res = validateApprovedRecord(rec);
     const blockers = res.categoryBlockers.slo_and_alerting || [];
     assert.ok(
-      blockers.some((b) => b.includes('reports SLO compliance failure (summary.sloCompliance: "capacity_alerts_failed")')),
+      blockers.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed')),
       `Expected sloCompliance blocker, got: ${JSON.stringify(blockers)}`
     );
     assert.ok(
-      blockers.some((b) => b.includes('reports recovery compliance failure (summary.recoveryCompliance: "restore_reconcile_failed")')),
+      blockers.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed')),
       `Expected recoveryCompliance blocker, got: ${JSON.stringify(blockers)}`
     );
     assert.ok(
-      blockers.some((b) => b.includes('reports stage summary failure (summary.staticIntegrity: "failed")')),
+      blockers.some((b) => b.includes('A referenced capacity and alerting report is invalid or failed')),
       `Expected staticIntegrity blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
@@ -3087,10 +3114,10 @@ test('capacity alerting child report validates producer fields, timestamps, aler
       (s) => { s.summary.dosResilience = 'failed'; },
       (s) => { s.summary.databaseBaselineCompliance = 'failed'; },
       (s) => { s.alerts.valid = false; },
-      (s) => { s.alerts.ruleCount = 10; },
+      (s) => { s.alerts.totalRulesCount = 10; },
       (s) => { s.alerts.errors = ['rule error']; },
       (s) => { s.alerts.simulations[0].passed = false; },
-      (s) => { s.capacity.status = 'failed'; },
+      (s) => { s.capacity.mode = 'synthetic'; },
       (s) => { s.capacity.compliance.overallPassed = false; },
       (s) => { s.capacity.compliance.availabilityPassed = false; },
       (s) => { s.capacity.compliance.latencyPassed = false; },
@@ -3172,7 +3199,7 @@ test('capacity alerting helper functions handle edge cases and missing parameter
   assert.strictEqual(isCapacityAlertingCandidate({ file: 'launch-evidence-dossier.json', parsed: { stages: [] } }), false);
   assert.strictEqual(validateCapacityAlertingReport(null), false);
   assert.strictEqual(validateCapacityAlertingReport(validCapacityAlertingReport), true);
-  assert.strictEqual(validateCapacityAlertingReport({ ...validCapacityAlertingReport, capacity: { ...validCapacityAlertingReport.capacity, sloTargets: ['invalid'] } }), false);
+  assert.strictEqual(validateCapacityAlertingReport({ ...validCapacityAlertingReport, capacity: { ...validCapacityAlertingReport.capacity, targets: ['invalid'] } }), false);
   assert.strictEqual(parseCapacityAlertingTimestamp('invalid-date'), null);
   assert.ok(parseCapacityAlertingTimestamp('20260828T120000Z') instanceof Date);
 });
@@ -3677,5 +3704,467 @@ test('GraphQL introspection approval rejects custom-path failures and mixed wild
     assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /invalid or failed/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// These mutations leave success flags intact to prove they cannot override measurements.
+const capacityMutations = {
+  'array report': () => [],
+  'missing duration': (r) => {
+    delete r.durationMs;
+  },
+  'unsafe duration': (r) => {
+    r.durationMs = Number.MAX_SAFE_INTEGER;
+  },
+  'nonfinite duration': (r) => {
+    r.durationMs = Infinity;
+  },
+  'impossible date': (r) => {
+    r.timestamp = '20260230T120000Z';
+  },
+  'end after evaluation': (r) => {
+    r.durationMs = 86400000000;
+  },
+  'capacity outside interval': (r) => {
+    r.capacity.timestamp = '2026-08-28T12:00:06.000Z';
+  },
+  'DoS outside interval': (r) => {
+    r.dosResilience.timestamp = '2026-08-28T11:59:59.000Z';
+  },
+  'duplicate alert': (r) => {
+    r.alerts.alerts[1] = r.alerts.alerts[0];
+  },
+  'fake alert': (r) => {
+    r.alerts.alerts[0].alert = 'Rule1';
+  },
+  'missing simulation': (r) => {
+    r.alerts.simulations.pop();
+  },
+  'duplicate simulation': (r) => {
+    r.alerts.simulations[1] = r.alerts.simulations[0];
+  },
+  'failed evaluated rule': (r) => {
+    r.alerts.alerts[0].valid = false;
+  },
+  'rule errors': (r) => {
+    r.alerts.alerts[0].errors = ['private-error'];
+  },
+  'failed check': (r) => {
+    r.alerts.checks[0].passed = false;
+  },
+  'missing checks': (r) => {
+    r.alerts.checks = [];
+  },
+  'required count': (r) => {
+    r.alerts.requiredRulesCount = 10;
+  },
+  'fractional total count': (r) => {
+    r.alerts.totalRulesCount = 11.5;
+  },
+  'failed breach': (r) => {
+    r.alerts.simulations[0].firesOnBreach = false;
+  },
+  'failed clearing': (r) => {
+    r.alerts.simulations[0].clearsOnNormal = false;
+  },
+  '429 counts other 4xx': (r) => {
+    r.alerts.simulations.find(
+      (s) => s.alert === 'High429Rate',
+    ).ignoresOther4xx = false;
+  },
+  'string target': (r) => {
+    r.capacity.targets.capacityTargetRps = '100';
+  },
+  'null target': (r) => {
+    r.capacity.targets.maxP95LatencyMs = null;
+  },
+  'weak target': (r) => {
+    r.capacity.targets.capacityTargetRps = 99;
+  },
+  'availability above 100': (r) => {
+    r.capacity.distribution.availabilityPercent = 101;
+  },
+  'inconsistent totals': (r) => {
+    r.capacity.distribution.failedRequests = 1;
+  },
+  'fractional totals': (r) => {
+    r.capacity.distribution.totalRequests = 1000.5;
+  },
+  'zero requests': (r) => {
+    r.capacity.distribution.totalRequests = 0;
+  },
+  'negative latency': (r) => {
+    r.capacity.distribution.latencyMs.min = -1;
+  },
+  'null latency': (r) => {
+    r.capacity.distribution.latencyMs.mean = null;
+  },
+  'string latency': (r) => {
+    r.capacity.distribution.latencyMs.p95 = '2';
+  },
+  'inverted percentile': (r) => {
+    r.capacity.distribution.latencyMs.p50 = 1000;
+  },
+  'measured breach': (r) => {
+    r.capacity.distribution.latencyMs.p95 = 501;
+    r.capacity.distribution.latencyMs.p99 = 502;
+    r.capacity.distribution.latencyMs.max = 503;
+  },
+  'throughput breach': (r) => {
+    r.capacity.distribution.throughputRps = 99;
+  },
+  'forged availability': (r) => {
+    r.capacity.distribution.successfulRequests -= 2;
+    r.capacity.distribution.failedRequests = 2;
+    r.capacity.distribution.availabilityPercent = 99.8;
+  },
+  'missing monotonic verdict': (r) => {
+    delete r.capacity.compliance.monotonicLatency;
+  },
+  'nonempty violations': (r) => {
+    r.capacity.compliance.violations = ['private-error'];
+  },
+  'partial database distribution': (r) => {
+    r.capacity.distribution.databaseLatency = {};
+  },
+  'default mode': (r) => {
+    r.mode = 'default';
+  },
+  'missing mode': (r) => {
+    delete r.mode;
+  },
+  'benchmark hash mismatch': (r) => {
+    r.capacity.targetUrl = targetId('other');
+  },
+  'raw target': (r) => {
+    r.targetId = 'https://private.example/';
+  },
+  'telemetry hash mismatch': (r) => {
+    r.databaseTelemetryBaseline.targetId = targetId('other');
+  },
+  'telemetry source': (r) => {
+    r.databaseTelemetryBaseline.source = 'synthetic';
+  },
+  'unhealthy probe': (r) => {
+    r.databaseTelemetryBaseline.probeHealthy = false;
+  },
+  'stale scrape': (r) => {
+    r.databaseTelemetryBaseline.timestamp = '2026-08-28T11:58:59.000Z';
+  },
+  'pool counts': (r) => {
+    r.databaseTelemetryBaseline.connectionPool.api.idleConnections = 11;
+  },
+  'negative DB latency': (r) => {
+    r.databaseTelemetryBaseline.poolAcquisitionLatency.api.p50Ms = -1;
+  },
+  'DB percentile order': (r) => {
+    r.databaseTelemetryBaseline.queryExecutionDuration.worker.p50Ms = 50;
+  },
+  'DoS identity': (r) => {
+    r.dosResilience.apiTargetId = targetId('other');
+  },
+  'DoS simulated in live': (r) => {
+    r.dosResilience.mode = 'simulated';
+  },
+  'DoS counters': (r) => {
+    r.dosResilience.layers.layer6_rate_limiter_burst.authRejectedRequests = 11;
+  },
+  'DoS CSRF': (r) => {
+    r.dosResilience.layers.layer6_rate_limiter_burst.csrfHandshakePassed = false;
+  },
+  'DoS static assertion': (r) => {
+    r.dosResilience.layers.layer3_graphql_bounds.passed = false;
+  },
+};
+for (const [name, mutate] of Object.entries(capacityMutations)) {
+  test(`capacity retained receipt rejects ${name}`, () => {
+    const report = structuredClone(validCapacityAlertingReport);
+    const replacement = mutate(report);
+    assert.strictEqual(
+      validateCapacityAlertingReport(replacement || report),
+      false,
+    );
+  });
+}
+
+test('capacity acceptance enforces declared policy and producer rounding', () => {
+  const report = structuredClone(validCapacityAlertingReport);
+  const section = buildValidApprovedRecord().sections.slo_and_alerting;
+  assert.strictEqual(
+    validateCapacityAlertingReport(report, undefined, {
+      section,
+      requireLive: true,
+    }),
+    true,
+  );
+  for (const [key, value] of Object.entries({
+    max_p95_latency_ms: 1,
+    capacity_target_rps: 10000,
+    max_database_acquisition_p95_latency_ms: 1,
+    max_database_query_p95_latency_ms: 20,
+  })) {
+    assert.strictEqual(
+      validateCapacityAlertingReport(report, undefined, {
+        section: { ...section, [key]: value },
+        requireLive: true,
+      }),
+      false,
+    );
+  }
+  report.capacity.distribution.totalRequests = 3000;
+  report.capacity.distribution.successfulRequests = 2999;
+  report.capacity.distribution.failedRequests = 1;
+  report.capacity.distribution.availabilityPercent = 99.967;
+  report.capacity.compliance = evaluateSloCompliance(
+    report.capacity.distribution,
+  );
+  assert.strictEqual(validateCapacityAlertingReport(report), true);
+  assert.strictEqual(
+    validateCapacityAlertingReport(report, undefined, {
+      section: { ...section, availability_target_percent: 100 },
+    }),
+    false,
+  );
+  report.alerts.totalRulesCount = 12; // Producer may count an extra YAML rule without evaluating it.
+  assert.strictEqual(validateCapacityAlertingReport(report), true);
+  assert.strictEqual(
+    targetId(new URL(safeUrl('HTTPS://FIXTURE.EXAMPLE:443/')).origin),
+    report.apiTargetId,
+  );
+  assert.strictEqual(
+    targetId(safeUrl('HTTPS://FIXTURE.EXAMPLE:443/health')),
+    report.targetId,
+  );
+});
+
+test('actual capacity parent output separates rehearsal from bound live-shaped acceptance', (t) => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'acres-readiness-producer-'),
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const ops = path.join(dir, 'scripts/ops');
+  fs.mkdirSync(ops, { recursive: true });
+  for (const file of [
+    'run-capacity-alerting-drill.sh',
+    'launch-target-evidence.js',
+    'verify-capacity-load.js',
+    'verify-alert-rules.js',
+  ]) {
+    fs.copyFileSync(path.join(__dirname, file), path.join(ops, file));
+  }
+  // Resolve the installed YAML parser without installing or inheriting service credentials.
+  fs.symlinkSync(
+    path.resolve(__dirname, '../../node_modules'),
+    path.join(dir, 'node_modules'),
+    'dir',
+  );
+  fs.mkdirSync(path.join(dir, 'infra/prometheus'), { recursive: true });
+  for (const file of ['alerts.yml', 'prometheus.yml']) {
+    fs.copyFileSync(
+      path.resolve(__dirname, '../../infra/prometheus', file),
+      path.join(dir, 'infra/prometheus', file),
+    );
+  }
+  const dos = structuredClone(validCapacityAlertingReport.dosResilience);
+  dos.mode = 'simulated';
+  dos.apiTargetId = null;
+  dos.durationMs = 0;
+  dos.layers.layer6_rate_limiter_burst = {
+    passed: null,
+    burstTestMode: 'skipped',
+    attemptedRequests: 0,
+    throttledRequests: 0,
+    authRejectedRequests: 0,
+    unexpectedResponses: 0,
+    transportFailures: 0,
+    preHealthPassed: false,
+    csrfHandshakePassed: false,
+    postHealthPassed: false,
+  };
+  fs.writeFileSync(
+    path.join(ops, 'run-dos-resilience-drill.sh'),
+    '#!/usr/bin/env bash\nexec node "$(dirname "$0")/stub.js" "$@"\n',
+  );
+  fs.writeFileSync(
+    path.join(ops, 'stub.js'),
+    `const fs=require('node:fs');const e=${JSON.stringify(dos)};
+    e.timestamp=new Date().toISOString();fs.writeFileSync(process.argv[process.argv.indexOf('--evidence-file')+1], JSON.stringify(e));`,
+  );
+  const file = path.join(dir, 'custom-rehearsal.json');
+  const result = spawnSync(
+    'bash',
+    [
+      path.join(ops, 'run-capacity-alerting-drill.sh'),
+      '--dry-run',
+      '--evidence-file',
+      file,
+    ],
+    {
+      env: { PATH: process.env.PATH, LANG: 'C.UTF-8', TMPDIR: dir },
+      encoding: 'utf8',
+      timeout: 10000,
+    },
+  );
+  assert.strictEqual(result.error, undefined);
+  assert.strictEqual(result.status, 0, result.stdout + result.stderr);
+  const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.strictEqual(validateCapacityAlertingReport(report), true);
+  assert.strictEqual(
+    isCapacityAlertingCandidate({ file, parsed: report }),
+    true,
+  );
+  const record = buildValidApprovedRecord();
+  record.sections.slo_and_alerting.evidence = [file];
+  assert.ok(
+    validateApprovedRecord(record).categoryBlockers.slo_and_alerting.some((b) =>
+      b.includes('invalid or failed'),
+    ),
+  );
+  const missingDb = structuredClone(report);
+  delete missingDb.capacity.distribution.databaseLatency;
+  assert.strictEqual(validateCapacityAlertingReport(missingDb), false);
+  const observed = structuredClone(report);
+  observed.dosResilience.layers.layer6_rate_limiter_burst.attemptedRequests = 1;
+  assert.strictEqual(validateCapacityAlertingReport(observed), false);
+  // Run the actual live parent with offline children: no HTTP requests or service credentials.
+  const telemetryFile = path.join(dir, 'fixture-telemetry.json');
+  const telemetry = structuredClone(
+    validCapacityAlertingReport.databaseTelemetryBaseline,
+  );
+  telemetry.timestamp = new Date().toISOString();
+  fs.writeFileSync(telemetryFile, JSON.stringify(telemetry));
+  const liveDos = structuredClone(validCapacityAlertingReport.dosResilience);
+  liveDos.durationMs = 0;
+  fs.writeFileSync(
+    path.join(ops, 'stub.js'),
+    `const fs=require('node:fs');
+    const {targetId}=require('./launch-target-evidence');
+    const e=${JSON.stringify(liveDos)};
+    e.apiTargetId=targetId(new URL(process.argv[process.argv.indexOf('--api-url')+1]).origin);
+    e.timestamp=new Date().toISOString();
+    fs.writeFileSync(process.argv[process.argv.indexOf('--evidence-file')+1],JSON.stringify(e));`,
+  );
+  const liveCapacity = structuredClone(validCapacityAlertingReport.capacity);
+  fs.writeFileSync(
+    path.join(ops, 'verify-capacity-load.js'),
+    `const e=${JSON.stringify(liveCapacity)};
+    e.timestamp=new Date().toISOString();process.stdout.write(JSON.stringify(e));`,
+  );
+  const producedPath = path.join(dir, 'actual-parent-live.json');
+  const liveResult = spawnSync(
+    'bash',
+    [
+      path.join(ops, 'run-capacity-alerting-drill.sh'),
+      '--target-url',
+      'HTTPS://FIXTURE.EXAMPLE:443/health',
+      '--api-url',
+      'HTTPS://FIXTURE.EXAMPLE:443/',
+      '--database-telemetry-file',
+      telemetryFile,
+      '--evidence-file',
+      producedPath,
+    ],
+    {
+      env: { PATH: process.env.PATH, LANG: 'C.UTF-8', TMPDIR: dir },
+      encoding: 'utf8',
+      timeout: 10000,
+    },
+  );
+  assert.strictEqual(liveResult.error, undefined);
+  assert.strictEqual(
+    liveResult.status,
+    0,
+    liveResult.stdout + liveResult.stderr,
+  );
+  const produced = JSON.parse(fs.readFileSync(producedPath, 'utf8'));
+  assert.strictEqual(produced.apiTargetId, targetId('https://fixture.example'));
+  assert.strictEqual(produced.apiTargetId, produced.dosResilience.apiTargetId);
+  assert.notStrictEqual(
+    targetId('https://fixture.example/'),
+    produced.apiTargetId,
+  );
+  assert.strictEqual(validateCapacityAlertingReport(produced), true);
+  record.sections.slo_and_alerting.evidence = [producedPath];
+  assert.strictEqual(
+    validateReadiness(record, 'test.json', {
+      env: expectedImageEnv(record),
+      now: new Date(),
+    }).categoryBlockers.slo_and_alerting,
+    undefined,
+  );
+  const legacyHash = structuredClone(produced);
+  legacyHash.apiTargetId = targetId('https://fixture.example/');
+  assert.strictEqual(validateCapacityAlertingReport(legacyHash), false);
+  const livePath = path.join(dir, 'custom-live.json');
+  fs.writeFileSync(livePath, JSON.stringify(validCapacityAlertingReport));
+  record.sections.slo_and_alerting.evidence = [livePath];
+  assert.strictEqual(
+    validateApprovedRecord(record).categoryBlockers.slo_and_alerting,
+    undefined,
+  );
+});
+
+test('capacity child blockers exclude raw report diagnostics and JSON exception content', (t) => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'acres-capacity-redaction-'),
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'capacity-alerting-test.json');
+  const record = buildValidApprovedRecord();
+  record.sections.slo_and_alerting.evidence = [
+    file,
+    capacityAlertingFixturePath,
+  ];
+  const report = structuredClone(validCapacityAlertingReport);
+  report.status = 'private-diagnostic';
+  report.alerts.errors = ['private-diagnostic'];
+  const dossier = {
+    dossier_version: '1.0',
+    stages: [
+      {
+        status: 'FAILED',
+        stage_id: 'test',
+        error_message: 'private-diagnostic',
+      },
+    ],
+  };
+  for (const body of [
+    JSON.stringify(report),
+    '{"private-diagnostic":',
+    JSON.stringify(dossier),
+  ]) {
+    fs.writeFileSync(file, body);
+    const blockers =
+      validateApprovedRecord(record).categoryBlockers.slo_and_alerting;
+    assert.ok(blockers.length > 0);
+    assert.doesNotMatch(JSON.stringify(blockers), /private-diagnostic/);
+  }
+});
+
+test('capacity report rejects malformed nested objects and stricter child DB ceilings', () => {
+  for (const key of [
+    'summary',
+    'alerts',
+    'capacity',
+    'databaseTelemetryBaseline',
+    'dosResilience',
+  ]) {
+    for (const value of [null, [], undefined]) {
+      const report = structuredClone(validCapacityAlertingReport);
+      report[key] = value;
+      assert.strictEqual(validateCapacityAlertingReport(report), false, key);
+    }
+  }
+  for (const key of [
+    'maxDatabaseAcquisitionP95LatencyMs',
+    'maxDatabaseQueryP95LatencyMs',
+  ]) {
+    const report = structuredClone(validCapacityAlertingReport);
+    report.capacity.targets[key] = 1;
+    report.capacity.compliance = evaluateSloCompliance(
+      report.capacity.distribution,
+      report.capacity.targets,
+    );
+    assert.strictEqual(validateCapacityAlertingReport(report), false);
   }
 });

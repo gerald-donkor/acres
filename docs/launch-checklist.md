@@ -472,7 +472,14 @@ supplies Category 4 evidence.
   - Requires `max_database_acquisition_p95_latency_ms` to be a positive number ≤ 50ms;
   - Requires `max_database_query_p95_latency_ms` to be a positive number ≤ 100ms;
   - Requires a referenced, valid, successful capacity alerting child JSON report in `evidence`;
-  - Validates child report `status: "success"`, valid nonfuture UTC `timestamp`, empty `failures` array, all summary flags `passed`, `alerts.valid: true`, `ruleCount >= 11`, all simulations `passed`, `capacity.compliance.overallPassed: true` with all individual compliance flags `true`, `databaseTelemetryBaseline.status: "verified"` with exporter/server up, zero waiting connections, acquisition p95 ≤ 50ms, query execution p95 ≤ 100ms, zero lock waits, and `dosResilience.status: "success"`;
+  - Validates actual producer fields: success, nonfuture UTC run dates, safe
+    duration, empty failures and four passing summary flags; eleven uniquely named
+    valid alert evaluations and breach/clear simulations, including 429 isolation;
+    passing checks and consistent producer counts; valid measured distributions
+    with recomputed SLO verdicts against child and approved-section policy;
+    target-bound healthy live database telemetry and the complete live DoS receipt.
+    Synthetic/default/missing modes cannot approve this category. See prompt 234
+    in `docs/operations.md` for timestamp precision and compatibility details;
   - Fails closed if approved evidence reports `summary.databaseBaselineCompliance: "failed"` or `databaseTelemetryBaseline.status: "breached"`.
 
 **Prompt 209 Category 5 intake — 2026-09-26T23:05:00Z UTC.** Reviewed
@@ -577,15 +584,21 @@ RPS, `max_database_acquisition_p95_latency_ms` > 0 and ≤ 50ms, and
 `alert_recipients` to be a non-empty array with no placeholders,
 `alert_thresholds_defined: true`, and a valid `escalation_runbook_ref`. For
 evidence, the validator requires at least one concrete child JSON report
-matching `isCapacityAlertingCandidate`, verifying `status: "success"`, real
-nonfuture UTC timestamp, empty `failures` array, all four summary flags
-`passed`, `alerts.valid: true`, `ruleCount >= 11`, 11 passing simulations,
-`capacity.compliance.overallPassed: true` with all seven individual compliance
-flags `true`, `databaseTelemetryBaseline.status: "verified"` with exporter and
-server up, zero waiting connections, acquisition p95 ≤ 50ms, query p95 ≤ 100ms,
-zero lock waits, and `dosResilience.status: "success"`. The validator checks
-internal structural consistency; it cannot authenticate live Prometheus scrapes
-or confirm that an on-call engineer received a test page.
+matching `isCapacityAlertingCandidate`. As corrected by prompt 234 on 2026-09-30,
+that child must use actual producer fields (`alerts.totalRulesCount`,
+`requiredRulesCount`, `alerts`, `checks`, `simulations`; `capacity.targets`,
+`distribution`, `compliance`) and live mode with internally consistent run dates
+and bound benchmark/API identities. The capacity/API hash is the DoS `origin`
+hash; benchmark identity remains URL `href`. Measurements, percentile order,
+request counts, health/pool invariants and the complete DoS receipt are checked;
+all eight individual SLO flags and overall acceptance are recomputed, including
+stricter declared targets. Live HTTP capacity need not include DB distributions
+because the live telemetry baseline supplies that gate. Synthetic evidence may
+validate structurally as rehearsal but cannot approve the production section.
+Every referenced child must pass; failures use safe fixed diagnostics. Old live
+aggregates using the API trailing-slash hash must be regenerated. The validator
+checks internal consistency; it cannot authenticate live Prometheus scrapes or
+confirm that an on-call engineer received a test page.
 
 The **SRE lead** and **operations lead** must provide through the approved
 operator channel the designated production target URL, API origin, change
@@ -1477,9 +1490,10 @@ provenance or production acceptance.
 Secret rotation always runs `--dry-run`; reconciliation remains read-only and
 requires live services. Dry restore preflight supplies no successful receipt,
 so missing recovery evidence still fails Stage 7. Stage 6 validates actual
-nested capacity, alert, DoS, and database gates. The readiness Category 5 child
-validator has an existing shape mismatch with actual producer fields; see
-`docs/operations.md` prompt 233. Its separate production gate stays fail-closed.
+nested capacity, alert, DoS, and database gates. Prompt 234 (2026-09-30) resolves
+the readiness Category 5 producer-field mismatch and aligns the capacity-specific
+API identity with the DoS origin hash; see `docs/operations.md`. Its separate
+production gate stays fail-closed.
 Safe inspection is `npm run ops:launch-drill-test` (57/57 hermetic tests),
 not an unstubbed unified dry run. The real runner may audit dependencies and
 read drill services. Operator sign-off remains required.
