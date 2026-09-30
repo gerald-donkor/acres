@@ -5,7 +5,6 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-const ROOT = path.resolve(__dirname, '../..');
 const SCRIPT = path.join(__dirname, 'run-secret-rotation-drill.sh');
 
 const REQUIRED_SECRET_CLASSES = [
@@ -28,16 +27,56 @@ const REQUIRED_STEPS = [
   'redaction_audit',
 ];
 
-function run(args, options = {}) {
-  const env = { ...process.env, ...options.env };
-  delete env.NODE_TEST_CONTEXT;
-  return execFileSync('bash', [SCRIPT, ...args], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    timeout: 60000,
-    ...options,
-    env,
-  });
+// Disposable repository with static preflights and every reachability command stubbed.
+// Only the runner's real inline cryptographic/state-machine code executes.
+function run(args, { failAlgorithm = false, ...options } = {}) {
+  const root = makeTempDir();
+  try {
+    const ops = path.join(root, 'scripts/ops');
+    const bin = path.join(root, 'bin');
+    fs.mkdirSync(ops, { recursive: true });
+    fs.mkdirSync(bin);
+    fs.copyFileSync(SCRIPT, path.join(ops, 'run-secret-rotation-drill.sh'));
+    for (const name of ['check-production-templates.sh', 'scan-secrets.sh']) {
+      fs.writeFileSync(path.join(ops, name), '#!/bin/sh\nexit 0\n', {
+        mode: 0o755
+      });
+    }
+    fs.writeFileSync(
+      path.join(ops, 'verify-volume-encryption.js'),
+      'process.exit(0);\n'
+    );
+    for (const name of ['curl', 'pg_isready', 'valkey-cli']) {
+      fs.writeFileSync(path.join(bin, name), '#!/bin/sh\nexit 1\n', {
+        mode: 0o755
+      });
+    }
+    const preload = path.join(root, 'fail-algorithm.js');
+    if (failAlgorithm) {
+      fs.writeFileSync(
+        preload,
+        "require('crypto').createHmac = () => { throw new Error('fixture algorithm failure'); };\n"
+      );
+    }
+    return execFileSync(
+      'bash',
+      [path.join(ops, 'run-secret-rotation-drill.sh'), ...args],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        timeout: 60000,
+        ...options,
+        env: {
+          PATH: `${bin}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+          LANG: 'C',
+          TZ: 'UTC',
+          ...(failAlgorithm ? { NODE_OPTIONS: `--require=${preload}` } : {})
+        }
+      }
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 }
 
 function runTolerant(args, options = {}) {
@@ -108,7 +147,7 @@ test('run-secret-rotation-drill: rejects missing or flag-like option argument va
   }
 });
 
-test('run-secret-rotation-drill: executes cleanly in --dry-run and emits valid Category 3 evidence', () => {
+test('run-secret-rotation-drill: executes cleanly in --dry-run and emits structural simulation evidence', () => {
   const tmpDir = makeTempDir();
   try {
     const evidenceFile = path.join(tmpDir, 'custom-secret-evidence.json');
@@ -119,13 +158,14 @@ test('run-secret-rotation-drill: executes cleanly in --dry-run and emits valid C
     ]);
 
     assert.strictEqual(exitCode, 0, `Drill failed unexpectedly: ${output}`);
-    assert.ok(output.includes('Result: PASSED. Automated secret rotation and compromise drill verified.'));
+    assert.ok(output.includes('Result: PASSED. Secret rotation simulation rehearsal verified; separate live operator receipt required.'));
     assert.ok(fs.existsSync(evidenceFile), 'Evidence file was not created');
 
     const evidence = JSON.parse(fs.readFileSync(evidenceFile, 'utf8'));
     assert.strictEqual(evidence.drill_type, 'zero_downtime_secret_rotation_and_compromise_response');
     assert.strictEqual(evidence.status, 'success');
     assert.strictEqual(evidence.dry_run, true);
+    assert.strictEqual(evidence.execution_mode, 'simulation');
     assert.ok(Array.isArray(evidence.errors));
     assert.strictEqual(evidence.errors.length, 0);
 
@@ -218,7 +258,7 @@ test('run-secret-rotation-drill: accepts custom target parameters without error'
   }
 });
 
-test('run-secret-rotation-drill: emitted evidence strictly satisfies check-launch-readiness validation', () => {
+test('run-secret-rotation-drill: emitted rehearsal satisfies structural validation and cannot approve live rotation', () => {
   const { validateSecretRotationReport } = require('./check-launch-readiness.js');
   const tmpDir = makeTempDir();
   try {
@@ -232,6 +272,7 @@ test('run-secret-rotation-drill: emitted evidence strictly satisfies check-launc
     assert.strictEqual(exitCode, 0);
     const evidence = JSON.parse(fs.readFileSync(evidenceFile, 'utf8'));
     assert.strictEqual(validateSecretRotationReport(evidence, new Date()), true);
+    assert.strictEqual(validateSecretRotationReport(evidence, new Date(), { requireLive: true }), false);
 
     // Corrupted evidence (missing step) fails validation
     const missingStepEvidence = {
@@ -265,3 +306,51 @@ test('run-secret-rotation-drill: emitted evidence strictly satisfies check-launc
   }
 });
 
+for (const dryRun of [true, false]) {
+  test(`actual runner remains simulation with dry_run=${dryRun}`, () => {
+    const {
+      validateSecretRotationReport
+    } = require('./check-launch-readiness');
+    const dir = makeTempDir();
+    try {
+      const file = path.join(dir, 'receipt.json');
+      run([...(dryRun ? ['--dry-run'] : []), '--evidence-file', file]);
+      const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+      assert.strictEqual(report.execution_mode, 'simulation');
+      assert.strictEqual(report.dry_run, dryRun);
+      assert.deepStrictEqual(report.environment_topology, {
+        live_postgres: false,
+        live_valkey: false,
+        live_api: false
+      });
+      assert.strictEqual(
+        validateSecretRotationReport(report, new Date()),
+        true
+      );
+      assert.strictEqual(
+        validateSecretRotationReport(report, new Date(), { requireLive: true }),
+        false
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('failed algorithm receipt remains simulation', () => {
+  const dir = makeTempDir();
+  try {
+    const file = path.join(dir, 'failed-receipt.json');
+    const result = runTolerant(['--evidence-file', file], {
+      failAlgorithm: true
+    });
+    assert.strictEqual(result.exitCode, 1);
+    const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.strictEqual(report.status, 'failed');
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.dry_run, false);
+    assert.deepStrictEqual(report.errors, ['fixture algorithm failure']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

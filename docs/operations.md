@@ -490,7 +490,7 @@ error text stays server-log-only).
 ### Secret Rotation & Emergency Compromise Response Runbook
 
 1. **Automated Secret Rotation Drill**:
-   Execute `npm run ops:rotation-drill` (or `scripts/ops/run-secret-rotation-drill.sh [options]`). Validates zero-downtime rotation procedures across all 7 production secret classes:
+   Execute `npm run ops:rotation-drill` (or `scripts/ops/run-secret-rotation-drill.sh [options]`) only as rehearsal. Prompt 235 classifies every receipt as simulation; the seven-class list is intended coverage, and SMTP/Grafana are not independently exercised. The following historical algorithm descriptions are mock/local exercises, not production rotation or zero-downtime evidence:
    - **Session Secret Rollover (`SESSION_SECRET`)**: Evaluates dual-key rollover window. Primary Key A signs session tokens; Key B rotated to Primary with Key A retained as Secondary during grace window. Verifies 0 dropped active sessions, and asserts that expired/retired Key A tokens are rejected after grace window.
    - **CSRF Secret Rollover (`CSRF_SECRET`)**: Offline HMAC simulation of token re-issuance and stale-token rejection. This does not rotate a running API; live clients must obtain a new `GET /auth/csrf` token after rotation.
    - **Database Passwords (`ACRES_APP_PASSWORD`, `ACRES_MIGRATOR_PASSWORD`)**: Validates zero-downtime PostgreSQL role password rotation. Connection pool drains idle connections; in-flight queries complete safely; new connections authenticate with rotated credentials; stale passwords rejected with `28P01`.
@@ -644,6 +644,11 @@ Implemented in Prompt 63:
    - Closes the open Phase 5 Caddy ingress routing item in `docs/authenticated-app.md` and `docs/build-plan.md`.
 
 ## Phase 12H Production Volume Encryption Key Separation & Secret Rotation Drill
+
+**Current rotation qualification (prompt 235, 2026-09-30):** The dated rotation
+results below describe local algorithms and mock services. No live service
+rotation, SMTP/Grafana verification or zero-downtime guarantee is established.
+Opaque Acres sessions are not proven signed by the generalized HMAC example.
 
 Implemented in Prompt 64:
 1. **Production Volume Encryption & Key Separation Engine (`scripts/ops/verify-volume-encryption.js` & `.spec.js`)**:
@@ -1188,6 +1193,9 @@ The launch orchestrator links that child artifact in stage 1 and derives `static
 Approved Category 8 (`volume_encryption`) records now require a concrete volume encryption child JSON report in `evidence`. A custom path qualifies by report structure and content; declaration, prose, a plausible filename alone, or the unified dossier does not. The validator requires a valid, nonfuture ISO UTC `timestamp`, `status: "success"`, `valid: true`, empty `errors` array, `keySeparation.verified: true`, empty `keySeparation.detectedViolations` array, and an `evaluatedMounts` array containing all items with `passed: true` covering at least 3 stateful mounts (PostgreSQL, Valkey, Garage). If total/valid mount counts are declared, they must be equal positive integers. Every referenced child report, including wildcard matches, must pass; a malformed or failing report blocks approval even beside a valid one. The readiness test suite passed 64/64 tests, `npm run ops:volume-test` passed 17/17, `npm run ops:templates` passed, `npm run ops:check` passed, and lint, typecheck, build, and `git diff --check` passed cleanly. The unapproved example failed closed with 11 blocked categories and 70 blockers. Report consistency does not prove physical host encryption or out-of-band KMS custody: the operator remains responsible for verifying detached key management, dual custody, and production volume mounts before approving launch.
 
 **Prompt 192 update (2026-09-25): bind secret rotation approval to child evidence.**
+**Superseded for production acceptance by prompt 235:** Structural success alone
+no longer approves Category 3; the explicit live operator receipt is required.
+
 Approved Category 3 (`secrets_management`) records now require a concrete secret rotation child JSON report in `evidence` alongside runtime injection, masking policy, compromise runbook references, and a rotation cadence not exceeding 90 days. A custom path qualifies by report structure and content; declaration, prose, a plausible filename alone, or the unified dossier does not. The validator requires a valid, nonfuture UTC `timestamp` (basic `YYYYMMDDTHHMMSSZ` or ISO 8601), `status: "success"`, empty `errors` array, all 7 tested secret classes (`session_secret`, `csrf_secret`, `postgres_passwords`, `valkey_password`, `storage_s3_keys`, `smtp_credentials`, `grafana_admin_password`), and all 7 verified steps (`session_rollover`, `csrf_rollover`, `database_rotation`, `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`) reporting `status: "passed"` with secret redaction audit confirmation (`raw_secrets_masked: true`, `zero_dev_passwords_detected: true`). In addition, `rotation_cadence_days` is validated as a positive number ≤ 90 days. Every referenced child report, including wildcard matches, must pass; a malformed or failing report blocks approval even beside a valid one. The readiness test suite passed 70/70 tests, `npm run ops:templates` passed, `npm run ops:check` passed, and lint, typecheck, build, and `git diff --check` passed cleanly. The unapproved example failed closed with 11 blocked categories and 70 blockers. Report consistency does not prove production secret injection or actual KMS credentials: the operator remains responsible for managing production Vault/AWS SM instances, executing live rotations, and verifying out-of-band credential hygiene before approving launch.
 
 **Prompt 193 update (2026-09-25): bind deployment drill approval to child evidence.**
@@ -1245,6 +1253,10 @@ window compliance, and child report validity.
 ## Phase 12K Unified Launch Drill, Checklist & Runbooks
 
 **Prompt 230 update (2026-09-28): secret rotation drill hardening and automated test suite.**
+**Current qualification (prompt 235):** These runner receipts are simulation
+rehearsal, not production approval evidence. The current child contract follows
+in the prompt-235 record.
+
 The dedicated zero-downtime secret rotation and compromise response drill runner (`scripts/ops/run-secret-rotation-drill.sh`)
 CLI option parsing is now hardened with fail-closed non-empty value validation for `--evidence-dir`, `--evidence-file`,
 `--api-url`, `--pghost`, `--pgport`, `--valkey-host`, and `--valkey-port`. Step 1 ("Pre-rotation Validation & Operational Baseline Check")
@@ -1948,4 +1960,103 @@ Safe inspection from the repository root:
 ```bash
 npm run ops:readiness-test
 npm run ops:capacity-alerting-test
+```
+
+## Prompt 235 — rotation rehearsal and live approval evidence (2026-09-30)
+
+`run-secret-rotation-drill.sh` always emits `execution_mode: "simulation"`,
+including algorithm failure receipts. `dry_run` remains boolean invocation
+metadata; reachability never changes the evidence kind. Help and summaries
+identify rehearsal. Local HMAC/SigV4 examples and mock PostgreSQL/Valkey/session
+state machines remain unchanged. The seven-class list is intended coverage,
+not actual SMTP/Grafana credential verification. The session example models
+HMAC rollover, not opaque Acres session signing or live application behavior.
+
+`validateSecretRotationReport(report, now, { requireLive: true })` selects live
+approval evidence; the two-argument helper validates structural rehearsal.
+Both reject invalid evaluation clocks, malformed/future timestamps, missing or
+unknown modes, wrong drill types, nonboolean `dry_run`, duplicate/extra/missing
+classes, incorrect step status/shape, errors and failed redaction assertions.
+A simulation can structurally pass with either boolean invocation flag but
+never satisfy live approval. A live label always requires its full contract,
+even when the helper is called without `requireLive`.
+
+The new operator-supplied live receipt requires `execution_mode: "live"`,
+`dry_run: false`, `environment: "production"`, `environment_reference`,
+`authorization_reference`, and `operator_reference`. `class_verification` must
+have exactly the seven existing secret-class keys, each with canonical
+`status: "passed"`, `rotation_verified: true`, `stale_credential_rejected: true`,
+`fresh_credential_accepted: true` and `evidence_reference`. Each of the seven
+existing steps also requires `evidence_reference`. References must be opaque,
+trimmed nonempty strings without control characters. Existing placeholder,
+literal-secret and development-password rejection applies to the whole live
+receipt. The complete class and step names are listed in Category 3 of
+`docs/launch-checklist.md`.
+
+Approved Category 3 requires every referenced child to pass structural checks
+and at least one complete live receipt. A valid simulation may accompany live
+evidence; failed simulations or live children block even beside a valid receipt
+or in wildcard matches. Custom filenames qualify by content; prose and dossiers
+cannot replace a live child. All Category 3 evidence-file failures emit a fixed
+reason, including missing files, parse errors, failed dossiers and exceptions
+while formatting malformed nested diagnostics. Other category diagnostics,
+injection/masking/cadence/runbook gates and the parent readiness schema remain
+unchanged. The dossier's Stage 5 baseline still summarizes rehearsal only.
+
+Compatibility: regenerate legacy unclassified simulation receipts or provide
+separately inspected live evidence; never relabel retained private files.
+No live receipt generator, provider operation, credential rotation, deployment
+or launch approval was added or executed. References are not dereferenced here.
+Mode labels and source assertions do not authenticate a production target,
+prove zero downtime or replace independent operator inspection of application
+behavior, credential retirement, compromise response and recovery policy.
+Prompt 201, Category 3 and Phase 12 sign-off remain open. Rollback is reverting
+this implementation commit; there are no persistence or product-data changes.
+
+Verification and review:
+
+- `npm run ops:rotation-test`: `ℹ tests 10`, `ℹ pass 10`, `ℹ fail 0`.
+  Real runner output with both CLI flags and injected algorithm failure remained
+  simulation; inherited credentials and all reachability commands were removed.
+- `npm run ops:readiness-test`: `ℹ tests 410`, `ℹ pass 410`, `ℹ fail 0`.
+  Includes helper and full approval rejection cases, mixed simulation/live
+  evidence, wildcards, private canaries and malformed nested dossier diagnostics.
+- `npm run ops:readiness-schema-test`: `ℹ pass 8`, `ℹ fail 0`;
+  `npm run ops:launch-drill-test`: `ℹ pass 57`, `ℹ fail 0`.
+  Stage 5 simulation still produces a verified rehearsal baseline.
+- `npm run ops:templates`: `ops template check passed`. The local operational
+  suites and scanners following the audit in `ops:check` also exited 0 when
+  invoked separately (reconciliation, restore, Caddy, deployment, volume,
+  rotation, SBOM, SAST, container, capacity, alerts, DoS and capacity parent).
+  This is not a successful full `ops:check` result.
+- Root `npm run lint` and `npm run typecheck` exited 0 across the three
+  workspaces. `npm run build` exited 0 on the unsandboxed retry, including
+  `✓ Compiled successfully` and `✓ Generating static pages using 7 workers (22/22)`.
+  The initial sandboxed build failed with
+  `Could not parse output from TypeScript's --showConfig`; initial sandboxed
+  subprocess test invocations also failed before the successful local retries.
+- Changed JS and Markdown regions were formatted and checked locally with
+  Prettier, preserving existing formatting elsewhere. Bash/JS syntax checks
+  and `git diff --check` exited 0.
+- The unchanged readiness example exited 1 as intended:
+  `Approved Categories: 0`, `Unresolved / Blocked: 11`,
+  `Total Blockers Detected: 70`, `FAIL-CLOSED`.
+- `npm run ops:check` stopped at the external dependency audit:
+  `getaddrinfo EAI_AGAIN registry.npmjs.org`. Automatic approval review rejected
+  the unsandboxed retry because sending production dependency names and
+  versions to npm's advisory endpoint lacked explicit authorization for that
+  payload and destination. Authorization was requested; no workaround or
+  indirect audit request was executed. The external audit and full gate remain
+  unverified pending that authorization.
+- Independent review found that generic diagnostic interpolation could throw
+  before message suppression on malformed nested JSON. A narrow Category 3
+  exception boundary and regressions fixed the verified issue. Follow-up review
+  cleared all Critical/Important findings; its minor coercion-fixture comment
+  was also addressed with a recognized child type.
+
+Safe inspection from the repository root:
+
+```bash
+npm run ops:rotation-test
+npm run ops:readiness-test
 ```

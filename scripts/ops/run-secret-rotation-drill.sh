@@ -3,18 +3,12 @@ set -euo pipefail
 
 # scripts/ops/run-secret-rotation-drill.sh
 #
-# Automated Zero-Downtime Secret Rotation & Compromise Response Drill Runner (TM-15).
-# Executes an automated end-to-end drill verifying zero-downtime rotation procedures across
-# all production secret classes:
-# 1. Session secret rollover with dual-key grace window (zero dropped sessions)
-# 2. CSRF secret rollover and cookie synchronization
-# 3. PostgreSQL database credentials (acres_app, acres_migrator) with pool drain verification
-# 4. Valkey cache & queue authentication credentials with dynamic requirepass reload
-# 5. S3 / Garage access key pair rotation with SigV4 verification
-# 6. Emergency compromise response: targeted mass revocation & token purge
-# 7. Secret redaction audit: confirms zero raw secret values logged or leaked.
-#
-# Emits structured JSON audit evidence to backups/secret-rotation-evidence-<timestamp>.json.
+# Secret rotation protocol/algorithm rehearsal (TM-15), always simulation.
+# Local HMAC/SigV4 examples and mocked PostgreSQL, Valkey and session state machines
+# exercise rollover and compromise response without rotating production credentials.
+# The seven-class list describes intended coverage; SMTP and Grafana are not rotated.
+# Reachability is metadata only and cannot establish production rotation or zero downtime.
+# Emits simulation JSON to backups/secret-rotation-evidence-<timestamp>.json.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
@@ -57,9 +51,10 @@ while [ $# -gt 0 ]; do
       cat <<'HELP'
 Usage: scripts/ops/run-secret-rotation-drill.sh [options]
 
-Automated zero-downtime secret rotation and compromise response drill runner (TM-15).
-Executes verified protocol simulations and state machine verifications across database,
-Valkey, session, CSRF, storage, SMTP, and Grafana secret classes without mutating live credentials.
+Secret rotation protocol/algorithm rehearsal (TM-15), always simulation.
+Executes local cryptographic examples and mocked state machines without rotating live credentials.
+The seven-class list is intended coverage; SMTP and Grafana are not independently verified.
+Reachability and --dry-run metadata never authorize production approval.
 
 Options:
   --dry-run                Explicitly flag drill execution in dry-run mode
@@ -154,7 +149,7 @@ fi
 printf '\n'
 
 # 3. Execute Deterministic Secret Rotation & Compromise Response Suite in Node.js
-printf '3. Executing cryptographic secret rotation and zero-downtime rollover verification...\n'
+printf '3. Rehearsing cryptographic rollover algorithms and mocked service behavior...\n'
 
 node - "$EVIDENCE_FILE" "$TIMESTAMP" "$DRY_RUN" "$LIVE_POSTGRES" "$LIVE_VALKEY" "$LIVE_API" <<'NODE'
 const fs = require('fs');
@@ -180,6 +175,7 @@ const liveApi = liveApiStr === 'true';
 const drillResults = {
   drill_type: 'zero_downtime_secret_rotation_and_compromise_response',
   timestamp,
+  execution_mode: 'simulation',
   dry_run: dryRun,
   status: 'success',
   errors: [],
@@ -206,8 +202,8 @@ try {
   // Note: In Acres, user authentication sessions utilize server-side opaque tokens
   // stored as SHA-256 digests in PostgreSQL (as verified in Step 3F).
   // SESSION_SECRET remains the cursor HMAC input. CSRF uses separate CSRF_SECRET.
-  // This step verifies the generalized dual-key HMAC rollover algorithm to guarantee
-  // that secret rotation causes zero dropped active sessions or in-flight requests.
+  // This is only a generalized dual-key HMAC rollover exercise. It does not prove
+  // opaque Acres sessions are signed with SESSION_SECRET or verify live behavior.
   // ============================================================================
   console.log('   -> Executing Dual-Secret Session Rollover Drill...');
 
@@ -667,10 +663,10 @@ END_TIME_MS="$(get_time_ms)"
 DURATION_MS="$(( END_TIME_MS - START_TIME_MS ))"
 
 printf '\n=================================================================\n'
-printf 'SUMMARY:\n'
+printf 'SUMMARY (SIMULATION ONLY):\n'
 printf '  Drill Status:               SUCCESS\n'
 printf '  Duration:                   %s ms\n' "$DURATION_MS"
-printf '  Tested Secret Classes:      7/7 verified\n'
+printf '  Intended Secret Classes:    7 (SMTP/Grafana not independently exercised)\n'
 printf '  Dual-Secret Rollover:       PASSED (0 dropped sessions)\n'
 printf '  CSRF Invalidation:          PASSED (fail-closed on rotated secret)\n'
 printf '  Database Pool Rollover:     PASSED (graceful drain without query drops)\n'
@@ -679,4 +675,4 @@ printf '  S3 SigV4 Rollover:          PASSED (dual-key grace window verified)\n'
 printf '  Compromise Response:        PASSED (targeted revokeAllForAccount verified)\n'
 printf '  Evidence Artifact:          %s\n' "$EVIDENCE_FILE"
 printf '=================================================================\n'
-printf 'Result: PASSED. Automated secret rotation and compromise drill verified.\n\n'
+printf 'Result: PASSED. Secret rotation simulation rehearsal verified; separate live operator receipt required.\n\n'

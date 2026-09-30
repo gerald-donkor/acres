@@ -324,28 +324,102 @@ function parseSecretRotationTimestamp(value) {
   return null;
 }
 
-function validateSecretRotationReport(report, now) {
-  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
-  const timestamp = parseSecretRotationTimestamp(report.timestamp);
-  const evalNow = now instanceof Date ? now : new Date();
-  if (!timestamp || timestamp.getTime() > evalNow.getTime()) return false;
-  if (report.status !== 'success') return false;
-  if (!Array.isArray(report.errors) || report.errors.length > 0) return false;
-  if (!Array.isArray(report.tested_secret_classes) ||
-      !SECRET_ROTATION_CLASSES.every((cls) => report.tested_secret_classes.includes(cls))) {
+// References are private source pointers, never paths to dereference or print.
+function isRotationReference(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value === value.trim() &&
+    !/[\x00-\x1f\x7f-\x9f]/.test(value)
+  );
+}
+
+function validateSecretRotationReport(
+  report,
+  now,
+  { requireLive = false } = {}
+) {
+  const object = (value) =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (
+    !object(report) ||
+    !(now instanceof Date) ||
+    !Number.isFinite(now.getTime())
+  )
     return false;
-  }
-  if (!report.steps || typeof report.steps !== 'object' || Array.isArray(report.steps)) return false;
+  const timestamp = parseSecretRotationTimestamp(report.timestamp);
+  if (!timestamp || timestamp.getTime() > now.getTime()) return false;
+  if (
+    report.drill_type !==
+      'zero_downtime_secret_rotation_and_compromise_response' ||
+    report.status !== 'success' ||
+    typeof report.dry_run !== 'boolean' ||
+    !['simulation', 'live'].includes(report.execution_mode)
+  )
+    return false;
+  if (!Array.isArray(report.errors) || report.errors.length > 0) return false;
+  if (
+    !Array.isArray(report.tested_secret_classes) ||
+    report.tested_secret_classes.length !== SECRET_ROTATION_CLASSES.length ||
+    new Set(report.tested_secret_classes).size !==
+      SECRET_ROTATION_CLASSES.length ||
+    !SECRET_ROTATION_CLASSES.every((cls) =>
+      report.tested_secret_classes.includes(cls)
+    )
+  )
+    return false;
+  if (!object(report.steps)) return false;
   for (const step of SECRET_ROTATION_STEPS) {
-    const s = report.steps[step];
-    if (!s || typeof s !== 'object' || Array.isArray(s)) return false;
-    if (typeof s.status !== 'string' || s.status.toLowerCase() !== 'passed') return false;
+    if (!object(report.steps[step]) || report.steps[step].status !== 'passed')
+      return false;
   }
   const redaction = report.steps.redaction_audit;
-  if (!redaction || redaction.raw_secrets_masked !== true || redaction.zero_dev_passwords_detected !== true) {
+  if (
+    redaction.raw_secrets_masked !== true ||
+    redaction.zero_dev_passwords_detected !== true
+  )
     return false;
+  if (report.execution_mode === 'simulation') return !requireLive;
+
+  // A live label always requires the full operator contract, even in structural mode.
+  if (
+    report.dry_run !== false ||
+    report.environment !== 'production' ||
+    ![
+      'environment_reference',
+      'authorization_reference',
+      'operator_reference'
+    ].every((key) => isRotationReference(report[key]))
+  )
+    return false;
+  const verification = report.class_verification;
+  if (
+    !object(verification) ||
+    Object.keys(verification).length !== SECRET_ROTATION_CLASSES.length
+  )
+    return false;
+  for (const cls of SECRET_ROTATION_CLASSES) {
+    const entry = verification[cls];
+    if (
+      !Object.hasOwn(verification, cls) ||
+      !object(entry) ||
+      entry.status !== 'passed' ||
+      entry.rotation_verified !== true ||
+      entry.stale_credential_rejected !== true ||
+      entry.fresh_credential_accepted !== true ||
+      !isRotationReference(entry.evidence_reference)
+    )
+      return false;
   }
-  return true;
+  if (
+    !SECRET_ROTATION_STEPS.every((step) =>
+      isRotationReference(report.steps[step].evidence_reference)
+    )
+  )
+    return false;
+  const blockers = [];
+  checkPlaceholdersAndSecrets(report, 'secret_rotation_report', blockers);
+  return blockers.length === 0;
 }
 
 const DEPLOYMENT_DRAIN_PERIODS = {
@@ -1004,6 +1078,25 @@ function validateNoAiPostureReport(report, now, approved) {
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
+  if (category !== 'secrets_management') {
+    return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
+  }
+  const fail = () =>
+    addBlocker(
+      category,
+      'A referenced secret rotation report is invalid or failed'
+    );
+  try {
+    // Formatting unexpected nested JSON values can itself throw. Neither the
+    // exception nor any child/path diagnostic may escape the Category 3 boundary.
+    return checkEvidenceFileContents(ref, category, fail, baseDirs);
+  } catch {
+    fail();
+    return [];
+  }
+}
+
+function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
   if (category === 'slo_and_alerting') {
     const emit = addBlocker;
     // Even non-child dossiers and malformed custom files can contain private diagnostics.
@@ -1033,6 +1126,10 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
       if (!validateCapacityAlertingReport(parsed)) {
         addBlocker(category, 'A referenced capacity and alerting report is invalid or failed');
       }
+      continue;
+    }
+    if (category === 'secrets_management' && isSecretRotationCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock.
       continue;
     }
     const status = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : null;
@@ -1787,8 +1884,13 @@ function validateReadiness(record, _filePath, options = {}) {
     const secretCandidates = secretEvidence.filter(isSecretRotationCandidate);
     if (secretCandidates.length === 0) {
       addBlocker('secrets_management', 'A successful secret rotation child JSON report is required');
-    } else if (secretCandidates.some(({ parsed }) => !validateSecretRotationReport(parsed, now))) {
-      addBlocker('secrets_management', 'A referenced secret rotation report is invalid or failed');
+    } else {
+      if (secretCandidates.some(({ parsed }) => !validateSecretRotationReport(parsed, now))) {
+        addBlocker('secrets_management', 'A referenced secret rotation report is invalid or failed');
+      }
+      if (!secretCandidates.some(({ parsed }) => validateSecretRotationReport(parsed, now, { requireLive: true }))) {
+        addBlocker('secrets_management', 'A live production secret rotation operator receipt is required');
+      }
     }
   }
 

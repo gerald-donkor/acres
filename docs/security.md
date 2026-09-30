@@ -521,6 +521,11 @@ As of 2026-09-09, production Caddy same-origin routing and deployment promotion/
 
 ## 19. Phase 12H volume encryption key separation and secret rotation drill update
 
+**Current rotation qualification (prompt 235, 2026-09-30):** The dated
+rotation results below are local cryptographic/mock exercises. They do not
+prove live credential rotation or zero downtime; SMTP/Grafana are not exercised.
+TM-15 production rotation acceptance still requires independent operator evidence.
+
 As of 2026-09-09, production volume encryption, key separation invariants, and zero-downtime secret rotation drills are implemented and verified:
 
 - **Stateful Volume Encryption & Key Separation Invariant (TM-21)**:
@@ -668,6 +673,27 @@ inherited by real operational children; the hermetic tests scrub them. Freshness
 and filesystem ownership do not prove production scope or cryptographic
 provenance and do not defend against a process with the same OS identity.
 `scan-secrets.sh` remains a gating stage; no production sign-off was granted.
+
+**Prompt 235 rotation evidence integrity (2026-09-30):** Category 3 now
+requires at least one explicit live operator receipt with production target,
+authorization and operator references; exact seven-class confirmations of
+rotation, stale rejection and fresh acceptance; and seven step source pointers.
+The local runner always reports simulation, with either CLI dry-run flag and
+regardless of reachability. Structural rehearsal remains valid in Stage 5 but
+cannot approve production. Legacy/missing modes, malformed assertions/references,
+failed children and failed dossiers block. Fixed Category 3 file diagnostics and
+a narrow exception boundary prevent private paths, child errors and unexpected
+nested JSON values from escaping into blockers. Tests scrub service environments
+and stub reachability while executing the real local algorithms.
+
+Source pointers and mode flags are assertions, not signatures or target proof;
+inspect actual SMTP/Grafana credential retirement, cursor/session behavior,
+independent CSRF, compromise response and recovery policy through separately
+authorized operator sources. The generalized HMAC example does not prove opaque
+Acres sessions are signed with `SESSION_SECRET`. No production action or new
+runtime boundary was introduced. TM-15 production acceptance, prompt 201 and
+Phase 12 sign-off remain open. The owning contract is recorded in
+`docs/operations.md` prompt 235 and Category 3 of `docs/launch-checklist.md`.
 
 **Prompt 234 evidence integrity (2026-09-30):** Category 5 now rejects fabricated
 alert names, contradictory/invalid numeric measurements, false SLO flags,

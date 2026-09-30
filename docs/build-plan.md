@@ -706,6 +706,10 @@ Records the complete Phase 12 Caddy same-origin ingress routing verification and
 
 ## 19. Phase 12H verification record — 2026-09-09
 
+**Current rotation qualification (prompt 235, 2026-09-30):** The dated rotation
+results below are simulation rehearsal, not proof of production credential
+rotation or zero downtime. TM-15 production acceptance remains operator-owned.
+
 Records the complete Phase 12 production volume encryption key separation verification and zero-downtime secret rotation drill:
 
 - **Volume Encryption & Key Separation Engine**:
@@ -886,6 +890,18 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
   - Closes TM-05, TM-16, TM-20, and Category 5 launch readiness requirements.
 
 ## 22. Phase 12K verification record — 2026-09-09
+
+**Prompt 235 rotation evidence separation (2026-09-30):** Category 3 now requires
+an explicit live operator child receipt with production/authorization/operator
+references, seven credential-class confirmations and seven step source pointers.
+Every referenced child must pass strict structural validation. The existing
+runner always emits simulation; Stage 5 remains rehearsal and the parent schema
+and assembler baseline are unchanged. Legacy unclassified reports need
+regeneration or separate inspected live evidence, never automatic relabeling.
+Private Category 3 file diagnostics are suppressed, including malformed nested
+values that throw during formatting. Full contract and check results are in
+`docs/operations.md` prompt 235. No production rotation or launch approval ran;
+prompt 201 and Phase 12 remain open.
 
 **Prompt 234 producer-aligned readiness (2026-09-30):** Category 5 now validates
 actual alert identities/counts/evaluations and measured capacity distributions,

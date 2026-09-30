@@ -186,6 +186,8 @@ function stub(key, args) {
     },
     rotation: {
       ...success,
+      execution_mode: "simulation",
+      dry_run: true,
       drill_type: "zero_downtime_secret_rotation_and_compromise_response",
       steps: Object.fromEntries(
         [
@@ -580,6 +582,8 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
   assert.equal(r.status, 0, r.stderr);
   invariant(r.dossier);
   assert.equal(r.dossier.environment, "drill");
+  assert.equal(r.dossier.secretRotationBaseline.status, "verified");
+  assert.equal(r.dossier.summary.secretRotationCompliance, "passed");
   assert.equal(r.dossier.targets.mode, "offline");
   assert.deepEqual(
     f.calls().map((c) => c.key),

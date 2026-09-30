@@ -101,10 +101,11 @@ const validVolumeEncryptionReport = {
 };
 fs.writeFileSync(volumeEncryptionFixturePath, JSON.stringify(validVolumeEncryptionReport));
 const secretRotationFixturePath = path.join(restoreFixtureDir, 'secret-rotation-evidence-valid.json');
-const validSecretRotationReport = {
+const simulationSecretRotationReport = {
   drill_type: 'zero_downtime_secret_rotation_and_compromise_response',
   timestamp: '20260828T120000Z',
   dry_run: true,
+  execution_mode: 'simulation',
   status: 'success',
   errors: [],
   environment_topology: {
@@ -135,6 +136,32 @@ const validSecretRotationReport = {
     },
   },
 };
+// Test-only operator assertions: these source pointers are not production evidence.
+const validSecretRotationReport = {
+  ...structuredClone(simulationSecretRotationReport),
+  execution_mode: 'live',
+  dry_run: false,
+  environment: 'production',
+  environment_reference: 'fixture-target-01',
+  authorization_reference: 'fixture-change-01',
+  operator_reference: 'fixture-operator-01',
+  class_verification: Object.fromEntries(
+    simulationSecretRotationReport.tested_secret_classes.map((cls) => [
+      cls,
+      {
+        status: 'passed',
+        rotation_verified: true,
+        stale_credential_rejected: true,
+        fresh_credential_accepted: true,
+        evidence_reference: `fixture-observation-${cls}`
+      }
+    ])
+  )
+};
+for (const [step, entry] of Object.entries(validSecretRotationReport.steps)) {
+  entry.evidence_reference = `fixture-observation-${step}`;
+}
+
 fs.writeFileSync(secretRotationFixturePath, JSON.stringify(validSecretRotationReport));
 const deploymentDrillFixturePath = path.join(restoreFixtureDir, 'deployment-drill-evidence-valid.json');
 const validDeploymentDrillReport = {
@@ -1863,11 +1890,8 @@ test('validateReadiness blocks approval when secret rotation evidence reports fa
     rec.sections.secrets_management.evidence = [secFailPath];
     const res = validateApprovedRecord(rec);
     const b = res.categoryBlockers.secrets_management || [];
-    assert.ok(b.some((msg) => msg.includes('reports secret rotation drill failure (status: "failed")')));
-    assert.ok(b.some((msg) => msg.includes('reports secret rotation drill error(s): database credential rotation error')));
-    assert.ok(b.some((msg) => msg.includes("reports secret rotation step 'csrf_rollover' failure (status: \"failed\")")));
-    assert.ok(b.some((msg) => msg.includes("reports secret rotation step 'database_rotation' failure (status: \"failed\")")));
-    assert.ok(b.some((msg) => msg.includes('reports secret redaction or leak audit failure')));
+    assert.ok(b.includes('A referenced secret rotation report is invalid or failed'));
+    assert.ok(!JSON.stringify(b).includes('database credential rotation error'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -1915,8 +1939,7 @@ test('validateReadiness blocks approval when evidence dossier reports deployment
     rec2.sections.secrets_management.evidence = [breachDossierPath];
     const res2 = validateApprovedRecord(rec2);
     const b2 = res2.categoryBlockers.secrets_management || [];
-    assert.ok(b2.some((msg) => msg.includes('reports secret rotation baseline breach (secretRotationBaseline.status: "breached")')));
-    assert.ok(b2.some((msg) => msg.includes('reports secret rotation compliance failure (summary.secretRotationCompliance: "failed")')));
+    assert.ok(b2.includes('A referenced secret rotation report is invalid or failed'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -1958,34 +1981,7 @@ test('validateReadiness accepts valid passed deployment & secret rotation eviden
     const passedSecPath = path.join(tmpDir, 'secret-rotation-evidence-pass.json');
     fs.writeFileSync(
       passedSecPath,
-      JSON.stringify({
-        drill_type: 'zero_downtime_secret_rotation_and_compromise_response',
-        timestamp: '2026-08-28T12:00:00.000Z',
-        status: 'success',
-        errors: [],
-        tested_secret_classes: [
-          'session_secret',
-          'csrf_secret',
-          'postgres_passwords',
-          'valkey_password',
-          'storage_s3_keys',
-          'smtp_credentials',
-          'grafana_admin_password',
-        ],
-        steps: {
-          session_rollover: { status: 'passed' },
-          csrf_rollover: { status: 'passed' },
-          database_rotation: { status: 'passed' },
-          valkey_rotation: { status: 'passed' },
-          storage_rotation: { status: 'passed' },
-          compromise_response: { status: 'passed' },
-          redaction_audit: {
-            status: 'passed',
-            raw_secrets_masked: true,
-            zero_dev_passwords_detected: true,
-          },
-        },
-      }),
+      JSON.stringify(validSecretRotationReport),
       'utf8'
     );
     const passedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-pass.json');
@@ -2261,20 +2257,8 @@ test('validateReadiness blocks approval when SAST drill evidence reports failure
     const blockers = res.categoryBlockers.secrets_management || [];
 
     assert.ok(
-      blockers.some((b) => b.includes('reports SAST scan verification failure (status: "failed")')),
+      blockers.some((b) => b.includes('A referenced secret rotation report is invalid or failed')),
       `Expected status blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports SAST scan failure (passed: false)')),
-      `Expected passed: false blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports 1 active unreviewed SAST blocker finding(s)')),
-      `Expected active blockers finding, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports 1 expired SAST suppression(s) (fail-closed)')),
-      `Expected expired suppression blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -2310,16 +2294,8 @@ test('validateReadiness blocks approval when SBOM drill evidence reports license
     const blockers = res.categoryBlockers.secrets_management || [];
 
     assert.ok(
-      blockers.some((b) => b.includes('reports SBOM license compliance failure (licenseCompliance.compliant: false)')),
+      blockers.some((b) => b.includes('A referenced secret rotation report is invalid or failed')),
       `Expected compliant: false blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports 1 SBOM license compliance violation(s): viral-pkg@1.0.0 (AGPL-3.0-only)')),
-      `Expected license violation details blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports 1 SBOM license violation(s)')),
-      `Expected licenseViolations count blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -2347,7 +2323,7 @@ test('validateReadiness blocks approval when SBOM drill evidence is missing lice
     const blockers = res.categoryBlockers.secrets_management || [];
 
     assert.ok(
-      blockers.some((b) => b.includes('missing license compliance verification (licenseCompliance object required)')),
+      blockers.some((b) => b.includes('A referenced secret rotation report is invalid or failed')),
       `Expected missing license compliance blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
@@ -2380,20 +2356,8 @@ test('validateReadiness blocks approval when container security drill evidence r
     const blockers = res.categoryBlockers.secrets_management || [];
 
     assert.ok(
-      blockers.some((b) => b.includes('reports container security verification failure (status: "failed")')),
+      blockers.some((b) => b.includes('A referenced secret rotation report is invalid or failed')),
       `Expected status blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports invalid container security configuration (valid: false)')),
-      `Expected valid: false blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports container security error(s): [Dockerfile] non-root-runtime-user: root user detected')),
-      `Expected errors blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports 1 failed container security check(s): [Dockerfile] non-root-runtime-user')),
-      `Expected failed check blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -2431,20 +2395,8 @@ test('validateReadiness blocks approval when evidence dossier reports supplyChai
     const blockers = res.categoryBlockers.secrets_management || [];
 
     assert.ok(
-      blockers.some((b) => b.includes('reports supply chain security baseline breach (supplyChainBaseline.status: "breached")')),
+      blockers.some((b) => b.includes('A referenced secret rotation report is invalid or failed')),
       `Expected supplyChainBaseline breach blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports supply chain security compliance failure (summary.supplyChainCompliance: "failed")')),
-      `Expected supplyChainCompliance failure blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports SAST scan compliance failure (summary.sastCompliance: "failed")')),
-      `Expected sastCompliance failure blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports container security compliance failure (summary.containerSecurityCompliance: "failed")')),
-      `Expected containerSecurityCompliance failure blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -2926,7 +2878,7 @@ test('secret rotation helper functions handle edge cases and missing parameters 
   assert.strictEqual(isSecretRotationCandidate({ parsed: null }), false);
   assert.strictEqual(isSecretRotationCandidate({ parsed: { drill_type: 'zero_downtime_secret_rotation_and_compromise_response' } }), true);
   assert.strictEqual(validateSecretRotationReport(null), false);
-  assert.strictEqual(validateSecretRotationReport(validSecretRotationReport), true);
+  assert.strictEqual(validateSecretRotationReport(validSecretRotationReport, fixedNow), true);
 });
 
 test('approved deployment_and_rollback requires a child report beyond prose, declaration, or dossier', () => {
@@ -4167,4 +4119,428 @@ test('capacity report rejects malformed nested objects and stricter child DB cei
     );
     assert.strictEqual(validateCapacityAlertingReport(report), false);
   }
+});
+
+const rotationMutations = [
+  [
+    'legacy mode',
+    (s) => {
+      delete s.execution_mode;
+    }
+  ],
+  [
+    'unknown mode',
+    (s) => {
+      s.execution_mode = 'automatic';
+    }
+  ],
+  [
+    'wrong drill type',
+    (s) => {
+      s.drill_type = 'unrelated';
+    }
+  ],
+  ...[true, 'false', null, undefined].map((value) => [
+    `live dry_run ${value}`,
+    (s) => {
+      s.dry_run = value;
+    }
+  ]),
+  [
+    'nonproduction',
+    (s) => {
+      s.environment = 'staging';
+    }
+  ],
+  [
+    'invalid timestamp',
+    (s) => {
+      s.timestamp = '20260230T120000Z';
+    }
+  ],
+  [
+    'future timestamp',
+    (s) => {
+      s.timestamp = new Date(fixedNow.getTime() + 1).toISOString();
+    }
+  ],
+  [
+    'duplicate class',
+    (s) => {
+      s.tested_secret_classes.push(s.tested_secret_classes[0]);
+    }
+  ],
+  [
+    'extra class',
+    (s) => {
+      s.tested_secret_classes.push('other');
+    }
+  ],
+  [
+    'missing class',
+    (s) => {
+      s.tested_secret_classes.pop();
+    }
+  ],
+  [
+    'null classes',
+    (s) => {
+      s.tested_secret_classes = null;
+    }
+  ],
+  [
+    'null verification',
+    (s) => {
+      s.class_verification = null;
+    }
+  ],
+  [
+    'array verification',
+    (s) => {
+      s.class_verification = [];
+    }
+  ],
+  [
+    'extra verification',
+    (s) => {
+      s.class_verification.other = {};
+    }
+  ],
+  [
+    'null steps',
+    (s) => {
+      s.steps = null;
+    }
+  ],
+  [
+    'array steps',
+    (s) => {
+      s.steps = [];
+    }
+  ],
+  [
+    'failed status',
+    (s) => {
+      s.status = 'failed';
+    }
+  ],
+  [
+    'errors',
+    (s) => {
+      s.errors = ['PRIVATE_ROTATION_CANARY'];
+    }
+  ],
+  [
+    'incorrect errors type',
+    (s) => {
+      s.errors = {};
+    }
+  ],
+  [
+    'redaction',
+    (s) => {
+      s.steps.redaction_audit.raw_secrets_masked = false;
+    }
+  ],
+  [
+    'dev password audit',
+    (s) => {
+      s.steps.redaction_audit.zero_dev_passwords_detected = false;
+    }
+  ],
+  [
+    'placeholder extra text',
+    (s) => {
+      s.notes = '__REQUIRED_LIVE__';
+    }
+  ],
+  [
+    'development secret',
+    (s) => {
+      s.notes = 'acres_app_dev_password';
+    }
+  ]
+];
+for (const key of [
+  'environment_reference',
+  'authorization_reference',
+  'operator_reference'
+]) {
+  for (const value of [
+    undefined,
+    '',
+    ' ',
+    ' leading',
+    'trailing ',
+    'private\nsource',
+    'private\u007fsource',
+    'change-me'
+  ]) {
+    rotationMutations.push([
+      `${key}=${JSON.stringify(value)}`,
+      (s) => {
+        s[key] = value;
+      }
+    ]);
+  }
+}
+for (const cls of simulationSecretRotationReport.tested_secret_classes) {
+  rotationMutations.push([
+    `missing ${cls}`,
+    (s) => {
+      delete s.class_verification[cls];
+    }
+  ]);
+  for (const value of [null, [], 'passed']) {
+    rotationMutations.push([
+      `invalid ${cls} entry ${JSON.stringify(value)}`,
+      (s) => {
+        s.class_verification[cls] = value;
+      }
+    ]);
+  }
+  for (const key of [
+    'rotation_verified',
+    'stale_credential_rejected',
+    'fresh_credential_accepted'
+  ]) {
+    for (const value of [false, 'true', undefined]) {
+      rotationMutations.push([
+        `${cls}.${key}=${value}`,
+        (s) => {
+          s.class_verification[cls][key] = value;
+        }
+      ]);
+    }
+  }
+  for (const value of [undefined, '', '\n', '__REQUIRED_SOURCE__']) {
+    rotationMutations.push([
+      `${cls} source ${JSON.stringify(value)}`,
+      (s) => {
+        s.class_verification[cls].evidence_reference = value;
+      }
+    ]);
+  }
+  rotationMutations.push([
+    `${cls} failed`,
+    (s) => {
+      s.class_verification[cls].status = 'failed';
+    }
+  ]);
+}
+for (const step of Object.keys(simulationSecretRotationReport.steps)) {
+  for (const value of [
+    null,
+    [],
+    'passed',
+    { status: 'PASSED' },
+    { status: false }
+  ]) {
+    rotationMutations.push([
+      `${step} shape ${JSON.stringify(value)}`,
+      (s) => {
+        s.steps[step] = value;
+      }
+    ]);
+  }
+  for (const value of [
+    undefined,
+    '',
+    ' ',
+    'private\nsource',
+    '__REQUIRED_SOURCE__'
+  ]) {
+    rotationMutations.push([
+      `${step} source ${JSON.stringify(value)}`,
+      (s) => {
+        s.steps[step].evidence_reference = value;
+      }
+    ]);
+  }
+}
+for (const [label, mutate] of rotationMutations) {
+  test(`live rotation helper and Category 3 reject ${label}`, (t) => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'readiness-live-rotation-')
+    );
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const report = structuredClone(validSecretRotationReport);
+    mutate(report);
+    assert.strictEqual(validateSecretRotationReport(report, fixedNow), false);
+    assert.strictEqual(
+      validateSecretRotationReport(report, fixedNow, { requireLive: true }),
+      false
+    );
+    const file = path.join(dir, 'custom-operator-receipt.json');
+    fs.writeFileSync(file, JSON.stringify(report));
+    const record = buildValidApprovedRecord();
+    record.sections.secrets_management.evidence = [file];
+    const blockers =
+      validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+    assert.ok(
+      blockers.includes(
+        'A referenced secret rotation report is invalid or failed'
+      ),
+      label
+    );
+    assert.ok(!JSON.stringify(blockers).includes('PRIVATE_ROTATION_CANARY'));
+  });
+}
+
+test('rotation helpers reject invalid evaluation clocks and malformed reports', () => {
+  for (const now of [undefined, null, '2026-09-30', new Date('invalid')]) {
+    assert.strictEqual(
+      validateSecretRotationReport(validSecretRotationReport, now),
+      false
+    );
+  }
+  for (const report of [null, [], 'success', 1]) {
+    assert.strictEqual(validateSecretRotationReport(report, fixedNow), false);
+  }
+  const record = buildValidApprovedRecord();
+  assert.ok(
+    validateReadiness(record, undefined, { now: new Date('invalid') })
+      .categoryBlockers.secrets_management
+  );
+});
+
+test('simulations pass rehearsal with either dry_run boolean but never Category 3 alone', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-simulation-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'rehearsal.json');
+  const record = buildValidApprovedRecord();
+  record.sections.secrets_management.evidence = [file];
+  for (const dry_run of [true, false]) {
+    const simulation = {
+      ...structuredClone(simulationSecretRotationReport),
+      dry_run,
+      environment_topology: {
+        live_postgres: true,
+        live_valkey: true,
+        live_api: true
+      }
+    };
+    assert.strictEqual(
+      validateSecretRotationReport(simulation, fixedNow),
+      true
+    );
+    assert.strictEqual(
+      validateSecretRotationReport(simulation, fixedNow, { requireLive: true }),
+      false
+    );
+    fs.writeFileSync(file, JSON.stringify(simulation));
+    assert.ok(
+      validateApprovedRecord(
+        record
+      ).categoryBlockers.secrets_management.includes(
+        'A live production secret rotation operator receipt is required'
+      )
+    );
+    simulation.execution_mode = 'live';
+    assert.strictEqual(
+      validateSecretRotationReport(simulation, fixedNow),
+      false
+    );
+  }
+  for (const dry_run of [undefined, 'true', null]) {
+    assert.strictEqual(
+      validateSecretRotationReport(
+        { ...simulationSecretRotationReport, dry_run },
+        fixedNow
+      ),
+      false
+    );
+  }
+  fs.writeFileSync(file, JSON.stringify(simulationSecretRotationReport));
+  record.sections.secrets_management.evidence.push(secretRotationFixturePath);
+  assert.strictEqual(
+    validateApprovedRecord(record).categoryBlockers.secrets_management,
+    undefined
+  );
+  const failedSimulation = structuredClone(simulationSecretRotationReport);
+  failedSimulation.steps.database_rotation.status = 'failed';
+  fs.writeFileSync(file, JSON.stringify(failedSimulation));
+  assert.ok(
+    validateApprovedRecord(record).categoryBlockers.secrets_management.includes(
+      'A referenced secret rotation report is invalid or failed'
+    )
+  );
+});
+
+test('Category 3 hides private child, parse, path and dossier failure diagnostics', (t) => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'readiness-private-rotation-')
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'PRIVATE_ROTATION_CANARY.json');
+  const record = buildValidApprovedRecord();
+  record.sections.secrets_management.evidence = [
+    secretRotationFixturePath,
+    file
+  ];
+  const assertPrivate = () => {
+    const blockers =
+      validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+    assert.ok(
+      blockers.includes(
+        'A referenced secret rotation report is invalid or failed'
+      )
+    );
+    assert.ok(!JSON.stringify(blockers).includes('PRIVATE_ROTATION_CANARY'));
+    assert.ok(!JSON.stringify(blockers).includes(dir));
+  };
+  assertPrivate(); // Missing private path.
+  fs.writeFileSync(file, '{"PRIVATE_ROTATION_CANARY": invalid}');
+  assertPrivate();
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      ...validSecretRotationReport,
+      errors: ['PRIVATE_ROTATION_CANARY']
+    })
+  );
+  assertPrivate();
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      overall_status: 'FAILED',
+      stages: [
+        {
+          stage_id: 'PRIVATE_ROTATION_CANARY',
+          status: 'FAILED',
+          error_message: 'PRIVATE_ROTATION_CANARY'
+        }
+      ],
+      secretRotationBaseline: { status: 'breached' },
+      summary: { secretRotationCompliance: 'failed' }
+    })
+  );
+  assertPrivate();
+  for (const dossier of [
+    {
+      stages: [
+        {
+          status: 'FAILED',
+          stage_id: { toString: null },
+          error_message: 'PRIVATE_ROTATION_CANARY'
+        }
+      ]
+    },
+    {
+      drill_type: 'caddy_routing_and_tls_verification',
+      errors: [{ toString: null }],
+      status: 'failed'
+    },
+    {
+      secretRotationBaseline: {
+        status: 'breached',
+        error_message: { toString: null }
+      }
+    }
+  ]) {
+    fs.writeFileSync(file, JSON.stringify(dossier));
+    assertPrivate();
+  }
+  fs.writeFileSync(file, JSON.stringify(['PRIVATE_ROTATION_CANARY']));
+  assertPrivate();
 });

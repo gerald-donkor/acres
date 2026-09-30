@@ -164,28 +164,54 @@ client Next 16.3.4 build with `Could not parse output from TypeScript's
 
 ### 3. Secrets Management (`secrets_management`)
 
-- Drill/verify: `scripts/ops/scan-secrets.sh`, `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`
-- Evidence: `backups/secret-rotation-evidence-<timestamp>.json`
-- Accept: runtime injection mechanism (Vault/AWS SM/Infisical), log masking
-  policy, 90-day rotation cadence (≤ 90 days), compromise response runbook reference
-- An approved record must reference a concrete, successful secret rotation
-  child JSON report in `evidence`. A custom path is accepted by report content,
-  not name. Its UTC timestamp (basic `YYYYMMDDTHHMMSSZ` or ISO 8601) must be real
-  and no later than validation time. Every referenced secret rotation report must
-  pass: `status: "success"`, empty `errors` array, all 7 tested secret classes
-  (`session_secret`, `csrf_secret`, `postgres_passwords`, `valkey_password`,
-  `storage_s3_keys`, `smtp_credentials`, `grafana_admin_password`), all 7
-  verified steps (`session_rollover`, `csrf_rollover`, `database_rotation`,
-  `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`)
-  with `status: "passed"`, and secret redaction audit confirmation
-  (`raw_secrets_masked: true`, `zero_dev_passwords_detected: true`). A failed or
-  malformed report blocks even alongside a valid one. The unified dossier alone,
-  prose, and declarations without child evidence are insufficient.
-- Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
-  - Requires at least one concrete, successful secret rotation child report in `evidence` for approved status;
-  - Requires `rotation_cadence_days` to be a positive number ≤ 90 days;
-  - Rejects secret rotation drill evidence reporting failure (`status !== 'success'`), any errors in `errors[]`, missing secret classes or steps, any failed rotation step among the 7 verified steps (`session_rollover`, `csrf_rollover`, `database_rotation`, `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`), or secret redaction / leak audit failure (`raw_secrets_masked: false`, `zero_dev_passwords_detected: false`);
-  - Rejects Unified Launch Evidence Dossiers reporting `secretRotationBaseline.status: "breached"` or `summary.secretRotationCompliance: "failed"`.
+- Rehearsal only: `scripts/ops/scan-secrets.sh` and
+  `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`. The runner always
+  emits `execution_mode: "simulation"`, even without `--dry-run` or with
+  successful service reachability. Stage 5 remains a drill, never live approval.
+- Approval evidence: separately authorized, operator-supplied live child JSON
+  plus independently inspected production sources. No repository command
+  produces the live receipt or performs the production rotation.
+- Retain runtime injection mechanism, masking policy, positive cadence ≤90 days,
+  compromise response runbook and named approver.
+- Every referenced rotation child must be structurally valid: exact
+  `drill_type: "zero_downtime_secret_rotation_and_compromise_response"`,
+  `status: "success"`, empty `errors`, valid nonfuture basic or canonical ISO UTC
+  timestamp, boolean `dry_run`, and exact `execution_mode` (`simulation` or `live`).
+  `tested_secret_classes` contains exactly seven unique names: `session_secret`,
+  `csrf_secret`, `postgres_passwords`, `valkey_password`, `storage_s3_keys`,
+  `smtp_credentials`, `grafana_admin_password`. Seven steps must each have
+  canonical `status: "passed"`: `session_rollover`, `csrf_rollover`,
+  `database_rotation`, `valkey_rotation`, `storage_rotation`,
+  `compromise_response`, `redaction_audit`. The redaction step requires
+  `raw_secrets_masked: true` and `zero_dev_passwords_detected: true`.
+- At least one child must satisfy the complete live contract:
+  `execution_mode: "live"`, `dry_run: false`, `environment: "production"`,
+  and `environment_reference`, `authorization_reference`, `operator_reference`.
+  `class_verification` has exactly the seven class keys above; every entry has
+  `status: "passed"`, `rotation_verified: true`,
+  `stale_credential_rejected: true`, `fresh_credential_accepted: true`, and
+  `evidence_reference`. Every existing step also has `evidence_reference`.
+  References are opaque, trimmed nonempty strings without control characters;
+  existing placeholder/development-secret checks apply to all live receipt text.
+  Private paths need not exist here and references are never dereferenced.
+- Simulation alone, legacy unclassified receipts, dossier alone, prose and
+  declarations cannot approve Category 3. A valid simulation may accompany a
+  valid live receipt; any invalid child blocks, including wildcard matches.
+  Custom filenames qualify by content. Failed dossiers and unreadable/malformed
+  files still block with fixed messages that exclude child text, paths and
+  exceptions, including unexpected nested diagnostic values.
+- These mode flags, assertions and source pointers do not authenticate the
+  target, prove zero downtime or replace independent operator inspection.
+  Inspect actual credential retirement, SMTP/Grafana confirmations, compromise
+  response, application behavior and recovery policy. The session example is
+  generalized HMAC rollover; it does not prove opaque Acres sessions are signed
+  with `SESSION_SECRET`. Existing local mocks do not rotate production services.
+
+**Prompt 235 compatibility update (2026-09-30):** Legacy reports need
+regeneration for rehearsal or a separately inspected live receipt. Retained
+private evidence is not relabeled. The receipt is a child JSON contract;
+`readiness.schema.json` and assembler baselines are unchanged. Category 3,
+prompt 201 and Phase 12 operator sign-off remain unresolved.
 
 **Prompt 207 Category 3 intake — 2026-09-26T20:41:49Z UTC.** Reviewed
 `f2f0e1b` on `main`. The repository-visible secrets management material is the
@@ -1252,6 +1278,8 @@ production GraphQL response or security approval.
   `scripts/ops/run-deployment-drill.spec.js` covers CLI flags, argument parsing, fail-closed Compose validation, and
   structured evidence emission under `npm run ops:deployment-test` and `npm run ops:check`.
 - **Secret rotation drill runner hardening & test suite (Prompt 230, 2026-09-28):**
+  **Current qualification (prompt 235):** Those results are rehearsal only;
+  production approval requires the explicit live operator receipt in Category 3.
   `scripts/ops/run-secret-rotation-drill.sh` validates CLI options fail-closed with non-empty argument guards for
   `--evidence-dir`, `--evidence-file`, `--api-url`, `--pghost`, `--pgport`, `--valkey-host`, and `--valkey-port`.
   Step 1 executes `scripts/ops/check-production-templates.sh`, `scripts/ops/scan-secrets.sh`, and `verify-volume-encryption.js`
@@ -1457,7 +1485,7 @@ The Unified Launch Evidence Dossier aggregates structured baselines from child e
 - `supplyChainBaseline` (stage 2): package inventory count, license compliance verification, license violations, SAST scanned files, findings count, triaged/expired/blocking findings, container security validity, and container security checks count;
 - `deploymentBaseline` (stage 3): schema backward compatibility, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
 - `volumeEncryptionBaseline` (stage 4): stateful mount evaluation, required mount counts, and Key Separation Invariant verification;
-- `secretRotationBaseline` (stage 5): verified 7-step zero-downtime rotation (session, CSRF, database, Valkey, storage, compromise response, and credential redaction audit);
+- `secretRotationBaseline` (stage 5): verified 7-step simulation rehearsal (session, CSRF, database, Valkey, storage, compromise response, and credential redaction audit);
 - `databaseTelemetryBaseline` (stage 6): exporter health, database ping, connection pool saturation metrics, pool acquisition p95 latency, SQL query execution p95 latency, lock waits, and transaction age;
 - `disasterRecoveryBaseline` (stage 7): restore drill RTO, table parity, migration parity, PostGIS/foreign-key verification, and storage object reconciliation;
 - `summary`: compliance flags across static integrity, supply chain security, supply chain compliance, SAST compliance, container security compliance, ingress/deployment, volume encryption, secret rotation, capacity alerting, disaster recovery, SLO compliance, recovery compliance, alert verification, DoS resilience, database baseline compliance, restore compliance, reconcile compliance, deployment compliance, rollback compliance, secret rotation compliance, volume encryption compliance, and no-AI posture.
@@ -1758,7 +1786,7 @@ from an operator's private store.
 | --- | --- | --- | --- |
 | `production_domain_tls` | Available but unverified: Caddy example and verifier. Missing: selected FQDN, TLS contact, certificate mode, HSTS decision, approval. Unresolved. | Successful Caddy routing child JSON; inspect materialized Caddyfile, public DNS, issued certificate and live HTTPS headers. A template Stage 3 report is insufficient. | Ops lead; identify the approved target and provide redacted DNS/TLS and HSTS decision references for read-only inspection. |
 | `smtp_delivery` | Available but unverified: readiness contract. Missing: provider, host/port/TLS mode, sender, indirect SMTP secret reference, delivery and bounce policies, approval. Unresolved. | SMTP delivery child JSON; independently inspect provider delivery receipt and public SPF/DKIM/DMARC printouts. | Ops lead; provide opaque provider and policy references and authorize a later test delivery separately. |
-| `secrets_management` | Available but unverified: scan and rotation drill code. Missing: runtime injection mechanism, masking policy, cadence decision (≤90 days), compromise runbook, approval. Unresolved. | Successful secret rotation child JSON for seven classes and steps; inspect live injector policy, redacted audit, and separately authorized live rotation evidence. Stage 5 is dry-run only. | Security lead; provide policy and redacted injector/audit references for read-only inspection; arrange separate rotation authority. |
+| `secrets_management` | Available but unverified: scan and rotation drill code. Missing: runtime injection mechanism, masking policy, cadence decision (≤90 days), compromise runbook, approval. Unresolved. | Explicit live operator child receipt with seven class confirmations and seven step sources; independently inspect injector policy, redacted audit, credential retirement and compromise response. Stage 5 is simulation only and cannot approve Category 3. | Security lead; provide policy and redacted injector/audit references for read-only inspection; arrange separate rotation authority. |
 | `secret_references` | Available but unverified: twelve-field validator. Missing: twelve distinct indirect references for session, CSRF, DB migrator/app/monitor, Valkey, Garage RPC/admin/metrics/S3, SMTP, Grafana; approval. Unresolved. | Secret-reference-policy child JSON; inspect redacted live store access policies and runtime injection inventory, never secret values. | Security lead; supply opaque store-reference identifiers and policy evidence. |
 | `slo_and_alerting` | Available but unverified: eleven alert rules, dashboards and threshold contract. Missing: operator adoption of ≥99.9% availability, ≤500 ms HTTP p95, ≥100 RPS, ≤50 ms DB acquisition p95, ≤100 ms DB query p95, recipients, escalation, alert delivery and approval. Unresolved. | Successful capacity-alerting child JSON with fresh target-bound Prometheus database telemetry; inspect live scrape/benchmark results, alert routes, delivery receipts and all eleven rules. Synthetic checks do not prove capacity. | SRE lead and on-call team; provide target/telemetry and routing references, then authorize any live load or DoS exercise separately. |
 | `backup_and_disaster_recovery` | Available but unverified: restore/reconciliation scripts and example one-hour/four-hour objectives. Missing: approved RPO ≤1h, RTO ≤4h, UTC schedule, encrypted off-host destination, isolated target, completed restore/reconciliation and approval. Unresolved. | Successful restore and object-reconciliation child JSON reports; independently inspect actual backup completion/freshness, encrypted transfer, PostgreSQL/Garage coverage, isolated restore parity and object inventory. | SRE lead; provide redacted backup and isolated-target references; authorize restore operation separately. |
@@ -1885,7 +1913,7 @@ operators own authentic live evidence and human sign-off.
 | --- | --- | --- | --- | --- |
 | 1 | production_domain_tls | `node scripts/ops/verify-caddy-routing.js` | ops-lead | |
 | 2 | smtp_delivery | provider delivery receipt + DNS check | ops-lead | |
-| 3 | secrets_management | `bash scripts/ops/run-secret-rotation-drill.sh --dry-run` | security-lead | |
+| 3 | secrets_management | Rehearsal: `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`; separately supplied live operator receipt required | security-lead | |
 | 4 | secret_references | `scripts/ops/scan-secrets.sh` | security-lead | |
 | 5 | slo_and_alerting | `bash scripts/ops/run-capacity-alerting-drill.sh` | sre-lead | |
 | 6 | backup_and_disaster_recovery | `bash scripts/ops/run-restore-drill.sh` | sre-lead | |
