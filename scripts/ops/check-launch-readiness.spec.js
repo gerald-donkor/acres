@@ -164,13 +164,14 @@ for (const [step, entry] of Object.entries(validSecretRotationReport.steps)) {
 
 fs.writeFileSync(secretRotationFixturePath, JSON.stringify(validSecretRotationReport));
 const deploymentDrillFixturePath = path.join(restoreFixtureDir, 'deployment-drill-evidence-valid.json');
-const validDeploymentDrillReport = {
+const simulationDeploymentDrillReport = {
   drill_timestamp: '20260828T120000Z',
   duration_ms: 1200,
   duration_seconds: 1,
   caddyfile: 'infra/caddy/Caddyfile.example',
   compose_file: 'infra/compose/docker-compose.production.example.yml',
   dry_run: true,
+  execution_mode: 'simulation',
   caddy_routing_verified: true,
   caddy_routes_tested: 12,
   security_headers_verified: true,
@@ -192,7 +193,54 @@ const validDeploymentDrillReport = {
   rollback_procedure_verified: true,
   status: 'success',
 };
-fs.writeFileSync(deploymentDrillFixturePath, JSON.stringify(validDeploymentDrillReport));
+// Test-only operator-shaped evidence, never a production sign-off artifact.
+const fixtureDeploymentRelease = {
+  reviewed_source_commit: "a".repeat(40),
+  current: {
+    client_image: `registry.example.com/acres/app/client@sha256:${"a".repeat(64)}`,
+    server_image: `registry.example.com/acres/app/server@sha256:${"b".repeat(64)}`,
+  },
+  previous: {
+    client_image: `old.example.com/acres/client@sha256:${"c".repeat(64)}`,
+    server_image: `old.example.com/acres/server@sha256:${"d".repeat(64)}`,
+  },
+};
+const deploymentObservations = [
+  "promotion",
+  "rollback",
+  "ingress",
+  "migration_compatibility",
+  "readiness",
+  "graceful_drain",
+  "network_isolation",
+  "image_provenance",
+];
+const validDeploymentDrillReport = {
+  ...simulationDeploymentDrillReport,
+  execution_mode: "live",
+  dry_run: false,
+  probe_live_tested: true,
+  environment: "production",
+  environment_reference: "fixture-environment",
+  authorization_reference: "fixture-authorization",
+  operator_reference: "fixture-operator",
+  release: fixtureDeploymentRelease,
+  live_verification: Object.fromEntries(
+    deploymentObservations.map((key) => [
+      key,
+      {
+        status: "passed",
+        verified: true,
+        evidence_reference: `fixture-observation-${key}`,
+      },
+    ]),
+  ),
+};
+fs.writeFileSync(
+  deploymentDrillFixturePath,
+  JSON.stringify(validDeploymentDrillReport),
+);
+
 const capacityAlertingFixturePath = path.join(restoreFixtureDir, 'capacity-alerting-drill-evidence-valid.json');
 const { verifyAlertRules } = require('./verify-alert-rules');
 const {
@@ -1384,11 +1432,11 @@ test('validateReadiness blocks approval when evidence dossier reports failed sta
     const res = validateApprovedRecord(rec);
     const blockers = res.categoryBlockers.deployment_and_rollback || [];
     assert.ok(
-      blockers.some((b) => b.includes('reports 1 failed drill stage(s)')),
+      blockers.includes('A referenced deployment drill report is invalid or failed'),
       `Expected failed stages blocker, got: ${JSON.stringify(blockers)}`
     );
     assert.ok(
-      blockers.some((b) => b.includes("reports stage 'ingress_deployment' failed: Caddy routing error")),
+      !JSON.stringify(blockers).includes('Caddy routing error'),
       `Expected stage failure blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
@@ -1849,11 +1897,7 @@ test('validateReadiness blocks approval when deployment drill evidence reports f
     rec.sections.deployment_and_rollback.release.live_drill_evidence = depFailPath;
     const res = validateApprovedRecord(rec);
     const b = res.categoryBlockers.deployment_and_rollback || [];
-    assert.ok(b.some((msg) => msg.includes('reports deployment drill failure (status: "failed")')));
-    assert.ok(b.some((msg) => msg.includes('reports schema backward compatibility failure (schema_backward_compatible: false)')));
-    assert.ok(b.some((msg) => msg.includes('reports rollback procedure verification failure (rollback_procedure_verified: false)')));
-    assert.ok(b.some((msg) => msg.includes('reports Caddy routing verification failure (caddy_routing_verified: false)')));
-    assert.ok(b.some((msg) => msg.includes('reports network isolation verification failure (network_isolation_verified: false)')));
+    assert.ok(b.includes('A referenced deployment drill report is invalid or failed'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -1931,9 +1975,7 @@ test('validateReadiness blocks approval when evidence dossier reports deployment
     rec1.sections.deployment_and_rollback.release.live_drill_evidence = breachDossierPath;
     const res1 = validateApprovedRecord(rec1);
     const b1 = res1.categoryBlockers.deployment_and_rollback || [];
-    assert.ok(b1.some((msg) => msg.includes('reports deployment baseline breach (deploymentBaseline.status: "breached")')));
-    assert.ok(b1.some((msg) => msg.includes('reports deployment compliance failure (summary.deploymentCompliance: "failed")')));
-    assert.ok(b1.some((msg) => msg.includes('reports rollback compliance failure (summary.rollbackCompliance: "failed")')));
+    assert.ok(b1.includes('A referenced deployment drill report is invalid or failed'));
 
     const rec2 = buildValidApprovedRecord();
     rec2.sections.secrets_management.evidence = [breachDossierPath];
@@ -1952,30 +1994,7 @@ test('validateReadiness accepts valid passed deployment & secret rotation eviden
     const passedDepPath = path.join(tmpDir, 'deployment-drill-evidence-pass.json');
     fs.writeFileSync(
       passedDepPath,
-      JSON.stringify({
-        drill_timestamp: '20260828T120000Z',
-        duration_ms: 1200,
-        duration_seconds: 1,
-        status: 'success',
-        schema_backward_compatible: true,
-        rollback_procedure_verified: true,
-        caddy_routing_verified: true,
-        network_isolation_verified: true,
-        migration_count: 23,
-        caddy_routes_tested: 12,
-        security_headers_verified: true,
-        s3_sigv4_host_preserved: true,
-        migrations_verified: true,
-        operational_templates_verified: true,
-        secrets_scan_verified: true,
-        readiness_probes_verified: true,
-        graceful_drain_periods_verified: {
-          caddy: '30s',
-          next: '30s',
-          api: '45s',
-          worker: '60s',
-        },
-      }),
+      JSON.stringify(validDeploymentDrillReport),
       'utf8'
     );
     const passedSecPath = path.join(tmpDir, 'secret-rotation-evidence-pass.json');
@@ -4543,4 +4562,572 @@ test('Category 3 hides private child, parse, path and dossier failure diagnostic
   }
   fs.writeFileSync(file, JSON.stringify(['PRIVATE_ROTATION_CANARY']));
   assertPrivate();
+});
+
+
+// Exercise structural and approval paths against the same independently supplied receipts.
+function deploymentReceiptCase(t, report, extra = []) {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "readiness-deployment-contract-"),
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "custom-observation.json");
+  fs.writeFileSync(file, JSON.stringify(report));
+  const record = buildValidApprovedRecord();
+  record.sections.deployment_and_rollback.evidence = [file, ...extra];
+  record.sections.deployment_and_rollback.release.live_drill_evidence = file;
+  return record;
+}
+const invalidDeploymentMutations = [
+  [
+    "missing mode",
+    (s) => {
+      delete s.execution_mode;
+    },
+  ],
+  [
+    "unknown mode",
+    (s) => {
+      s.execution_mode = "observed";
+    },
+  ],
+  [
+    "nonboolean dry flag",
+    (s) => {
+      s.dry_run = "false";
+    },
+  ],
+  [
+    "nonboolean preflight flag",
+    (s) => {
+      s.caddy_routing_verified = "true";
+    },
+  ],
+  [
+    "nonboolean probe flag",
+    (s) => {
+      s.probe_live_tested = "true";
+    },
+  ],
+  [
+    "live dry run",
+    (s) => {
+      s.dry_run = true;
+    },
+  ],
+  [
+    "live untested probe",
+    (s) => {
+      s.probe_live_tested = false;
+    },
+  ],
+  [
+    "nonproduction",
+    (s) => {
+      s.environment = "staging";
+    },
+  ],
+  [
+    "missing release",
+    (s) => {
+      delete s.release;
+    },
+  ],
+  [
+    "release array",
+    (s) => {
+      s.release = [];
+    },
+  ],
+  [
+    "extra release key",
+    (s) => {
+      s.release.extra = true;
+    },
+  ],
+  [
+    "invalid source commit",
+    (s) => {
+      s.release.reviewed_source_commit = "x".repeat(40);
+    },
+  ],
+  [
+    "missing observations",
+    (s) => {
+      delete s.live_verification;
+    },
+  ],
+  [
+    "null observations",
+    (s) => {
+      s.live_verification = null;
+    },
+  ],
+  [
+    "array observations",
+    (s) => {
+      s.live_verification = [];
+    },
+  ],
+  [
+    "extra observation",
+    (s) => {
+      s.live_verification.other = {};
+    },
+  ],
+  [
+    "contradictory dates",
+    (s) => {
+      s.timestamp = "2026-08-28T13:00:00Z";
+    },
+  ],
+  [
+    "invalid alternate date",
+    (s) => {
+      s.timestamp = "bad";
+    },
+  ],
+  [
+    "invalid primary with valid alternate",
+    (s) => {
+      s.drill_timestamp = "";
+      s.timestamp = "2026-08-28T12:00:00Z";
+    },
+  ],
+  [
+    "impossible date",
+    (s) => {
+      s.drill_timestamp = "20260230T120000Z";
+    },
+  ],
+  [
+    "future date",
+    (s) => {
+      s.drill_timestamp = "20990101T120000Z";
+    },
+  ],
+  [
+    "unsafe routes",
+    (s) => {
+      s.caddy_routes_tested = Number.MAX_SAFE_INTEGER + 1;
+    },
+  ],
+  [
+    "unsafe migrations",
+    (s) => {
+      s.migration_count = Number.MAX_SAFE_INTEGER + 1;
+    },
+  ],
+  [
+    "negative seconds",
+    (s) => {
+      s.duration_seconds = -1;
+    },
+  ],
+  [
+    "string seconds",
+    (s) => {
+      s.duration_seconds = "1";
+    },
+  ],
+  [
+    "placeholder diagnostic",
+    (s) => {
+      s.private_note = "change-me";
+    },
+  ],
+  [
+    "literal secret",
+    (s) => {
+      s.private_note = "ghp_" + "z".repeat(25);
+    },
+  ],
+];
+for (const key of [
+  "environment_reference",
+  "authorization_reference",
+  "operator_reference",
+]) {
+  for (const value of [
+    "",
+    "  ",
+    " ref ",
+    "ref\n",
+    "ref\u007f",
+    null,
+    [],
+    "change-me",
+    "acres_app_dev_password",
+  ])
+    invalidDeploymentMutations.push([
+      `${key} rejects ${JSON.stringify(value)}`,
+      (s) => {
+        s[key] = value;
+      },
+    ]);
+}
+for (const key of deploymentObservations) {
+  invalidDeploymentMutations.push([
+    `missing ${key}`,
+    (s) => {
+      delete s.live_verification[key];
+    },
+  ]);
+  for (const value of [
+    null,
+    [],
+    {},
+    { status: "failed", verified: true, evidence_reference: "fixture" },
+    { status: "passed", verified: false, evidence_reference: "fixture" },
+    { status: "passed", verified: "true", evidence_reference: "fixture" },
+    { status: "passed", verified: true, evidence_reference: "" },
+    { status: "passed", verified: true, evidence_reference: " ref " },
+    { status: "passed", verified: true, evidence_reference: "ref\n" },
+    { status: "passed", verified: true, evidence_reference: "change-me" },
+    {
+      status: "passed",
+      verified: true,
+      evidence_reference: "fixture",
+      extra: true,
+    },
+  ])
+    invalidDeploymentMutations.push([
+      `malformed ${key}: ${JSON.stringify(value)}`,
+      (s) => {
+        s.live_verification[key] = value;
+      },
+    ]);
+}
+for (const pair of ["current", "previous"]) {
+  invalidDeploymentMutations.push([
+    `${pair} array`,
+    (s) => {
+      s.release[pair] = [];
+    },
+  ]);
+  invalidDeploymentMutations.push([
+    `${pair} extra key`,
+    (s) => {
+      s.release[pair].extra = true;
+    },
+  ]);
+  invalidDeploymentMutations.push([
+    `${pair} identical roles`,
+    (s) => {
+      s.release[pair].server_image = s.release[pair].client_image;
+    },
+  ]);
+  for (const role of ["client_image", "server_image"]) {
+    invalidDeploymentMutations.push([
+      `${pair}.${role} missing`,
+      (s) => {
+        delete s.release[pair][role];
+      },
+    ]);
+    invalidDeploymentMutations.push([
+      `${pair}.${role} unpinned`,
+      (s) => {
+        s.release[pair][role] = "registry.example.test/app:latest";
+      },
+    ]);
+  }
+}
+invalidDeploymentMutations.push([
+  "same release pairs",
+  (s) => {
+    s.release.previous = structuredClone(s.release.current);
+  },
+]);
+for (const [name, mutate] of invalidDeploymentMutations) {
+  test(`deployment receipt fails structural and approval checks: ${name}`, (t) => {
+    const receipt = structuredClone(validDeploymentDrillReport);
+    mutate(receipt);
+    assert.equal(validateDeploymentDrillReport(receipt, fixedNow), false);
+    const result = validateApprovedRecord(deploymentReceiptCase(t, receipt));
+    assert.ok(
+      result.categoryBlockers.deployment_and_rollback?.includes(
+        "A referenced deployment drill report is invalid or failed",
+      ),
+    );
+  });
+}
+
+test("deployment rehearsal never grants approval, including live probes and relabeling", (t) => {
+  for (const dry of [true, false])
+    for (const probe of [true, false]) {
+      const receipt = {
+        ...simulationDeploymentDrillReport,
+        dry_run: dry,
+        probe_live_tested: probe,
+      };
+      assert.equal(validateDeploymentDrillReport(receipt, fixedNow), true);
+      assert.equal(
+        validateDeploymentDrillReport(receipt, fixedNow, { requireLive: true }),
+        false,
+      );
+      assert.ok(
+        validateApprovedRecord(deploymentReceiptCase(t, receipt))
+          .categoryBlockers.deployment_and_rollback,
+      );
+      assert.equal(
+        validateDeploymentDrillReport(
+          { ...receipt, execution_mode: "live" },
+          fixedNow,
+        ),
+        false,
+      );
+    }
+});
+test("live deployment validates standalone, matching release, date aliases and commit case", (t) => {
+  const receipt = structuredClone(validDeploymentDrillReport);
+  receipt.timestamp = "2026-08-28T12:00:00.000Z";
+  receipt.release.reviewed_source_commit =
+    receipt.release.reviewed_source_commit.toUpperCase();
+  assert.equal(validateDeploymentDrillReport(receipt, fixedNow), true);
+  assert.equal(
+    validateDeploymentDrillReport(receipt, fixedNow, {
+      requireLive: true,
+      expectedRelease: fixtureDeploymentRelease,
+    }),
+    true,
+  );
+  assert.equal(
+    validateApprovedRecord(deploymentReceiptCase(t, receipt)).categoryBlockers
+      .deployment_and_rollback,
+    undefined,
+  );
+  const unchanged = structuredClone(receipt);
+  unchanged.release.previous.client_image =
+    unchanged.release.current.client_image;
+  assert.equal(validateDeploymentDrillReport(unchanged, fixedNow), true);
+});
+test("deployment explicit invalid clocks and malformed expected releases fail closed", () => {
+  for (const clock of [null, "2026-09-01", new Date(NaN), 0])
+    assert.equal(
+      validateDeploymentDrillReport(validDeploymentDrillReport, clock),
+      false,
+    );
+  for (const expectedRelease of [
+    null,
+    [],
+    {},
+    { ...fixtureDeploymentRelease, current: [] },
+    { ...fixtureDeploymentRelease, reviewed_source_commit: "" },
+  ])
+    assert.equal(
+      validateDeploymentDrillReport(validDeploymentDrillReport, fixedNow, {
+        expectedRelease,
+      }),
+      false,
+    );
+  for (const field of ["duration_ms", "duration_seconds"])
+    for (const value of [Infinity, NaN])
+      assert.equal(
+        validateDeploymentDrillReport(
+          { ...validDeploymentDrillReport, [field]: value },
+          fixedNow,
+        ),
+        false,
+      );
+});
+for (const key of [
+  "source",
+  "current.client_image",
+  "current.server_image",
+  "previous.client_image",
+  "previous.server_image",
+]) {
+  test(`deployment rejects unrelated release beside matching child: ${key}`, (t) => {
+    const receipt = structuredClone(validDeploymentDrillReport);
+    if (key === "source")
+      receipt.release.reviewed_source_commit = "b".repeat(40);
+    else {
+      const [pair, role] = key.split(".");
+      receipt.release[pair][role] =
+        `other.example.test/fixture/${role}@sha256:${"e".repeat(64)}`;
+    }
+    assert.equal(validateDeploymentDrillReport(receipt, fixedNow), true);
+    assert.equal(
+      validateDeploymentDrillReport(receipt, fixedNow, {
+        expectedRelease: fixtureDeploymentRelease,
+      }),
+      false,
+    );
+    const record = deploymentReceiptCase(t, receipt, [
+      deploymentDrillFixturePath,
+    ]);
+    record.sections.deployment_and_rollback.release.live_drill_evidence =
+      deploymentDrillFixturePath;
+    assert.ok(
+      validateApprovedRecord(record).categoryBlockers.deployment_and_rollback,
+    );
+  });
+}
+test("valid deployment simulation may accompany a matching live child", (t) => {
+  const record = deploymentReceiptCase(t, simulationDeploymentDrillReport, [
+    deploymentDrillFixturePath,
+  ]);
+  record.sections.deployment_and_rollback.release.live_drill_evidence =
+    deploymentDrillFixturePath;
+  assert.equal(
+    validateApprovedRecord(record).categoryBlockers.deployment_and_rollback,
+    undefined,
+  );
+});
+test("deployment dossier cannot impersonate a live child by filename or copied fields", (t) => {
+  for (const dossier of [
+    { stages: [] },
+    { dossier_version: "1" },
+    { deploymentBaseline: { status: "verified" } },
+  ]) {
+    const report = { ...validDeploymentDrillReport, ...dossier };
+    assert.equal(
+      isDeploymentDrillCandidate({
+        file: "deployment-drill-evidence-test.json",
+        parsed: report,
+      }),
+      false,
+    );
+    assert.ok(
+      validateApprovedRecord(deploymentReceiptCase(t, report)).categoryBlockers
+        .deployment_and_rollback,
+    );
+  }
+});
+test("deployment private diagnostics and formatting exceptions never escape into blockers", (t) => {
+  const canary = "PRIVATE_DEPLOYMENT_CANARY";
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deployment-private-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, canary + ".json");
+  for (const content of [
+    null,
+    "{" + canary,
+    JSON.stringify({ status: "failed", errors: [canary] }),
+    JSON.stringify({
+      stages: [{ status: "FAILED", error_message: canary, stage_id: canary }],
+    }),
+    JSON.stringify({
+      stages: [
+        {
+          status: "FAILED",
+          error_message: { toString: canary },
+          stage_id: canary,
+        },
+      ],
+    }),
+    JSON.stringify({
+      deploymentBaseline: { status: "breached", error_message: canary },
+    }),
+    JSON.stringify({
+      ...validDeploymentDrillReport,
+      status: "failed",
+      errors: [canary],
+    }),
+  ]) {
+    if (content === null) {
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+    } else fs.writeFileSync(file, content);
+    const record = buildValidApprovedRecord();
+    record.sections.deployment_and_rollback.evidence = [
+      file,
+      deploymentDrillFixturePath,
+    ];
+    const result = validateApprovedRecord(record);
+    const blockers = result.categoryBlockers.deployment_and_rollback;
+    assert.ok(
+      blockers?.includes(
+        "A referenced deployment drill report is invalid or failed",
+      ),
+    );
+    assert.equal(JSON.stringify(blockers).includes(canary), false);
+    assert.equal(JSON.stringify(blockers).includes(dir), false);
+  }
+});
+
+test("deployment wildcard rejects malformed custom child beside matching live receipt", (t) => {
+  const record = deploymentReceiptCase(
+    t,
+    { ...validDeploymentDrillReport, caddy_routing_verified: "true" },
+    [deploymentDrillFixturePath],
+  );
+  record.sections.deployment_and_rollback.evidence[0] = path.join(
+    path.dirname(record.sections.deployment_and_rollback.evidence[0]),
+    "custom-*.json",
+  );
+  record.sections.deployment_and_rollback.release.live_drill_evidence =
+    deploymentDrillFixturePath;
+  assert.ok(
+    validateApprovedRecord(record).categoryBlockers.deployment_and_rollback,
+  );
+});
+test("deployment each breached dossier verdict blocks beside live evidence", (t) => {
+  for (const report of [
+    { deploymentBaseline: { status: "breached" } },
+    { summary: { deploymentCompliance: "failed" } },
+    { summary: { rollbackCompliance: "failed" } },
+  ]) {
+    const record = deploymentReceiptCase(t, report, [
+      deploymentDrillFixturePath,
+    ]);
+    record.sections.deployment_and_rollback.release.live_drill_evidence =
+      deploymentDrillFixturePath;
+    assert.ok(
+      validateApprovedRecord(
+        record,
+      ).categoryBlockers.deployment_and_rollback?.includes(
+        "A referenced deployment drill report is invalid or failed",
+      ),
+    );
+  }
+});
+
+test("deployment sparse execution claims cannot hide beside matching evidence", (t) => {
+  for (const report of [
+    {
+      execution_mode: "live",
+      dry_run: false,
+      probe_live_tested: true,
+      environment: "production",
+      status: "success",
+      release: { reviewed_source_commit: "b".repeat(40) },
+    },
+    { execution_mode: "live" },
+    { execution_mode: "simulation" },
+    { execution_mode: "unknown" },
+    { dry_run: true },
+    { probe_live_tested: false },
+    { live_verification: {} },
+  ]) {
+    assert.equal(
+      isDeploymentDrillCandidate({
+        file: "custom-observation.json",
+        parsed: report,
+      }),
+      true,
+    );
+    assert.equal(validateDeploymentDrillReport(report, fixedNow), false);
+    const record = deploymentReceiptCase(t, report, [
+      deploymentDrillFixturePath,
+    ]);
+    record.sections.deployment_and_rollback.release.live_drill_evidence =
+      deploymentDrillFixturePath;
+    assert.ok(
+      validateApprovedRecord(
+        record,
+      ).categoryBlockers.deployment_and_rollback?.includes(
+        "A referenced deployment drill report is invalid or failed",
+      ),
+    );
+    record.sections.deployment_and_rollback.evidence[0] = path.join(
+      path.dirname(record.sections.deployment_and_rollback.evidence[0]),
+      "custom-*.json",
+    );
+    assert.ok(
+      validateApprovedRecord(
+        record,
+      ).categoryBlockers.deployment_and_rollback?.includes(
+        "A referenced deployment drill report is invalid or failed",
+      ),
+    );
+  }
 });

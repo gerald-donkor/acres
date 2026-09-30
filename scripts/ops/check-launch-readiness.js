@@ -430,14 +430,30 @@ const DEPLOYMENT_DRAIN_PERIODS = {
 };
 
 function isDeploymentDrillCandidate({ file, parsed } = {}) {
-  const name = typeof file === 'string' ? path.basename(file) : '';
-  if (name.includes('deployment-drill-evidence-') || name.includes('deployment-drill')) return true;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-  return (
-    typeof parsed.schema_backward_compatible === 'boolean' &&
-    typeof parsed.caddy_routing_verified === 'boolean' &&
-    typeof parsed.rollback_procedure_verified === 'boolean'
-  );
+  const name = typeof file === "string" ? path.basename(file) : "";
+  if (
+    parsed &&
+    (Array.isArray(parsed.stages) ||
+      parsed.dossier_version !== undefined ||
+      parsed.deploymentBaseline !== undefined)
+  )
+    return false;
+  if (
+    name.includes("deployment-drill-evidence-") ||
+    name.includes("deployment-drill")
+  )
+    return true;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    return false;
+  return [
+    "schema_backward_compatible",
+    "caddy_routing_verified",
+    "rollback_procedure_verified",
+    "live_verification",
+    "execution_mode",
+    "dry_run",
+    "probe_live_tested",
+  ].some((key) => Object.hasOwn(parsed, key));
 }
 
 function parseDeploymentDrillTimestamp(value) {
@@ -454,18 +470,82 @@ function parseDeploymentDrillTimestamp(value) {
   return null;
 }
 
-function validateDeploymentDrillReport(report, now) {
-  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
-  const timestamp = parseDeploymentDrillTimestamp(report.drill_timestamp || report.timestamp);
-  const evalNow = now instanceof Date ? now : new Date();
-  if (!timestamp || timestamp.getTime() > evalNow.getTime()) return false;
-  if (report.status !== 'success') return false;
+const DEPLOYMENT_OBSERVATIONS = [
+  "promotion",
+  "rollback",
+  "ingress",
+  "migration_compatibility",
+  "readiness",
+  "graceful_drain",
+  "network_isolation",
+  "image_provenance",
+];
+
+function validDeploymentRelease(release, exact = false) {
+  if (
+    !release ||
+    typeof release !== "object" ||
+    Array.isArray(release) ||
+    (exact &&
+      !hasExactKeys(release, [
+        "reviewed_source_commit",
+        "current",
+        "previous",
+      ])) ||
+    typeof release.reviewed_source_commit !== "string" ||
+    !/^[a-fA-F0-9]{40}$/.test(release.reviewed_source_commit)
+  )
+    return false;
+  for (const pair of ["current", "previous"]) {
+    if (!hasExactKeys(release[pair], ["client_image", "server_image"]))
+      return false;
+    for (const role of ["client_image", "server_image"]) {
+      try {
+        validateImageReference(release[pair][role], "image");
+      } catch {
+        return false;
+      }
+    }
+    if (release[pair].client_image === release[pair].server_image) return false;
+  }
+  return (
+    release.current.client_image !== release.previous.client_image ||
+    release.current.server_image !== release.previous.server_image
+  );
+}
+
+function validateDeploymentDrillReport(
+  report,
+  now = new Date(),
+  { requireLive = false, expectedRelease } = {},
+) {
+  if (!report || typeof report !== "object" || Array.isArray(report))
+    return false;
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) return false;
+  const timestamps = ["drill_timestamp", "timestamp"]
+    .filter((key) => Object.hasOwn(report, key))
+    .map((key) => parseDeploymentDrillTimestamp(report[key]));
+  if (
+    !timestamps.length ||
+    timestamps.some((date) => !date || date > now) ||
+    timestamps.some((date) => date.getTime() !== timestamps[0].getTime())
+  )
+    return false;
+  if (
+    typeof report.dry_run !== "boolean" ||
+    typeof report.probe_live_tested !== "boolean" ||
+    !["simulation", "live"].includes(report.execution_mode)
+  )
+    return false;
+  if (expectedRelease !== undefined && !validDeploymentRelease(expectedRelease))
+    return false;
+  if (report.status !== "success") return false;
   if (report.schema_backward_compatible !== true) return false;
   if (report.rollback_procedure_verified !== true) return false;
   if (report.caddy_routing_verified !== true) return false;
   if (
-    typeof report.caddy_routes_tested !== 'number' ||
-    !Number.isInteger(report.caddy_routes_tested) ||
+    typeof report.caddy_routes_tested !== "number" ||
+    !Number.isSafeInteger(report.caddy_routes_tested) ||
     report.caddy_routes_tested < 12
   ) {
     return false;
@@ -474,8 +554,8 @@ function validateDeploymentDrillReport(report, now) {
   if (report.s3_sigv4_host_preserved !== true) return false;
   if (report.migrations_verified !== true) return false;
   if (
-    typeof report.migration_count !== 'number' ||
-    !Number.isInteger(report.migration_count) ||
+    typeof report.migration_count !== "number" ||
+    !Number.isSafeInteger(report.migration_count) ||
     report.migration_count < 0
   ) {
     return false;
@@ -486,7 +566,7 @@ function validateDeploymentDrillReport(report, now) {
   if (report.network_isolation_verified !== true) return false;
   if (
     !report.graceful_drain_periods_verified ||
-    typeof report.graceful_drain_periods_verified !== 'object' ||
+    typeof report.graceful_drain_periods_verified !== "object" ||
     Array.isArray(report.graceful_drain_periods_verified)
   ) {
     return false;
@@ -495,11 +575,65 @@ function validateDeploymentDrillReport(report, now) {
     if (report.graceful_drain_periods_verified[svc] !== expected) return false;
   }
   if (report.duration_ms !== undefined) {
-    if (typeof report.duration_ms !== 'number' || !Number.isFinite(report.duration_ms) || report.duration_ms < 0) {
+    if (
+      typeof report.duration_ms !== "number" ||
+      !Number.isFinite(report.duration_ms) ||
+      report.duration_ms < 0
+    ) {
       return false;
     }
   }
-  return true;
+  if (
+    report.duration_seconds !== undefined &&
+    (typeof report.duration_seconds !== "number" ||
+      !Number.isFinite(report.duration_seconds) ||
+      report.duration_seconds < 0)
+  )
+    return false;
+  if (report.execution_mode === "simulation") return !requireLive;
+  if (
+    report.dry_run !== false ||
+    report.probe_live_tested !== true ||
+    report.environment !== "production" ||
+    ![
+      "environment_reference",
+      "authorization_reference",
+      "operator_reference",
+    ].every((key) => isRotationReference(report[key])) ||
+    !validDeploymentRelease(report.release, true) ||
+    !hasExactKeys(report.live_verification, DEPLOYMENT_OBSERVATIONS)
+  )
+    return false;
+  for (const key of DEPLOYMENT_OBSERVATIONS) {
+    const observation = report.live_verification[key];
+    if (
+      !hasExactKeys(observation, [
+        "status",
+        "verified",
+        "evidence_reference",
+      ]) ||
+      observation.status !== "passed" ||
+      observation.verified !== true ||
+      !isRotationReference(observation.evidence_reference)
+    )
+      return false;
+  }
+  if (expectedRelease !== undefined) {
+    if (
+      report.release.reviewed_source_commit.toLowerCase() !==
+      expectedRelease.reviewed_source_commit.toLowerCase()
+    )
+      return false;
+    for (const pair of ["current", "previous"]) {
+      for (const role of ["client_image", "server_image"]) {
+        if (report.release[pair][role] !== expectedRelease[pair][role])
+          return false;
+      }
+    }
+  }
+  const blockers = [];
+  checkPlaceholdersAndSecrets(report, "deployment_report", blockers);
+  return blockers.length === 0;
 }
 
 function isCapacityAlertingCandidate({ file, parsed } = {}) {
@@ -1078,17 +1212,19 @@ function validateNoAiPostureReport(report, now, approved) {
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
-  if (category !== 'secrets_management') {
+  if (!['secrets_management', 'deployment_and_rollback'].includes(category)) {
     return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
   }
   const fail = () =>
     addBlocker(
       category,
-      'A referenced secret rotation report is invalid or failed'
+      category === 'secrets_management'
+        ? 'A referenced secret rotation report is invalid or failed'
+        : 'A referenced deployment drill report is invalid or failed'
     );
   try {
     // Formatting unexpected nested JSON values can itself throw. Neither the
-    // exception nor any child/path diagnostic may escape the Category 3 boundary.
+    // exception nor any child/path diagnostic may escape this evidence boundary.
     return checkEvidenceFileContents(ref, category, fail, baseDirs);
   } catch {
     fail();
@@ -2257,8 +2393,10 @@ function validateReadiness(record, _filePath, options = {}) {
     const deploymentCandidates = deploymentEvidence.filter(isDeploymentDrillCandidate);
     if (deploymentCandidates.length === 0) {
       addBlocker('deployment_and_rollback', 'A successful deployment drill child JSON report is required');
-    } else if (deploymentCandidates.some(({ parsed }) => !validateDeploymentDrillReport(parsed, now))) {
+    } else if (deploymentCandidates.some(({ parsed }) => !validateDeploymentDrillReport(parsed, now, { expectedRelease: release }))) {
       addBlocker('deployment_and_rollback', 'A referenced deployment drill report is invalid or failed');
+    } else if (!deploymentCandidates.some(({ parsed }) => validateDeploymentDrillReport(parsed, now, { requireLive: true, expectedRelease: release }))) {
+      addBlocker('deployment_and_rollback', 'A live deployment drill child bound to the approved release is required');
     }
   }
 

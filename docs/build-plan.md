@@ -891,6 +891,19 @@ Records the complete Phase 12 capacity, load resilience, DoS mitigation, and Pro
 
 ## 22. Phase 12K verification record — 2026-09-09
 
+**Prompt 236 deployment evidence separation (2026-09-30):** Category 10 requires
+strictly validated live production operator evidence with eight independent
+observation pointers and source/current/previous image identity bound to the
+approved release. The existing producer always emits simulation; Stage 3 and
+dossier baselines remain configuration preflight/rehearsal even when targeted
+health probes pass. Malformed/failed children or unrelated live receipts block
+beside matching evidence. Fixed Category 10 file diagnostics suppress private
+paths/errors and nested formatting exceptions. Legacy reports need regeneration
+or separate inspected live receipts; no automatic relabeling. Parent schema,
+assembler and live-ingress target binding are unchanged. Contract/check results
+are in `docs/operations.md` prompt 236. No promotion, rollback, drain or launch
+approval ran; prompt 201 and Phase 12 remain open.
+
 **Prompt 235 rotation evidence separation (2026-09-30):** Category 3 now requires
 an explicit live operator child receipt with production/authorization/operator
 references, seven credential-class confirmations and seven step source pointers.

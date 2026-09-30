@@ -7,20 +7,93 @@ const { execFileSync } = require('node:child_process');
 const yaml = require('js-yaml');
 
 const ROOT = path.resolve(__dirname, '../..');
-const SCRIPT = path.join(__dirname, 'run-deployment-drill.sh');
 const DEFAULT_COMPOSE = path.join(ROOT, 'infra/compose/docker-compose.production.example.yml');
-const DEFAULT_CADDY = path.join(ROOT, 'infra/caddy/Caddyfile.example');
 
+// Execute the real runner and Compose checks in a disposable repository. All
+// probes/preflight children are stubs and service environments are never inherited.
 function run(args, options = {}) {
-  const env = { ...process.env, ...options.env };
-  delete env.NODE_TEST_CONTEXT;
-  return execFileSync('bash', [SCRIPT, ...args], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    timeout: 60000,
-    ...options,
-    env,
-  });
+  const fixture = makeTempDir();
+  try {
+    for (const dir of [
+      "scripts/ops",
+      "server/src/health",
+      "server/prisma/migrations/fixture",
+      "infra/caddy",
+      "infra/compose",
+      "bin",
+    ])
+      fs.mkdirSync(path.join(fixture, dir), { recursive: true });
+    for (const file of [
+      "scripts/ops/run-deployment-drill.sh",
+      "scripts/ops/launch-target-evidence.js",
+      "server/src/health/health.controller.ts",
+      "infra/caddy/Caddyfile.example",
+      "infra/compose/docker-compose.production.example.yml",
+    ])
+      fs.copyFileSync(path.join(ROOT, file), path.join(fixture, file));
+    fs.symlinkSync(
+      path.join(ROOT, "node_modules"),
+      path.join(fixture, "node_modules"),
+    );
+    fs.writeFileSync(
+      path.join(fixture, "server/prisma/migrations/fixture/migration.sql"),
+      options.destructive
+        ? "DROP TABLE fixture;"
+        : "CREATE TABLE fixture (id int);",
+    );
+    for (const name of [
+      "check-production-templates.sh",
+      "scan-secrets.sh",
+      "check-docker-runtime.sh",
+    ])
+      fs.writeFileSync(
+        path.join(fixture, "scripts/ops", name),
+        "#!/bin/bash\nexit 0\n",
+        { mode: 0o700 },
+      );
+    fs.writeFileSync(
+      path.join(fixture, "scripts/ops/verify-caddy-routing.js"),
+      "",
+    );
+    fs.writeFileSync(
+      path.join(fixture, "scripts/ops/verify-caddy-routing.spec.js"),
+      "",
+    );
+    fs.writeFileSync(
+      path.join(fixture, "bin/curl"),
+      `#!/bin/bash
+case "$*" in
+  *health/ready*) printf '%s' '{"ok":true,"data":{"status":"ok","database":"ok","storage":"ok"}}' ;;
+  *) printf '%s' '{"ok":true,"data":{"status":"ok","service":"acres-api","uptimeSeconds":1}}' ;;
+esac
+`,
+      { mode: 0o700 },
+    );
+    for (const name of ["pg_isready", "psql"])
+      fs.writeFileSync(
+        path.join(fixture, "bin", name),
+        '#!/bin/bash\nprintf "0\\n"\n',
+        { mode: 0o700 },
+      );
+    return execFileSync(
+      "bash",
+      [path.join(fixture, "scripts/ops/run-deployment-drill.sh"), ...args],
+      {
+        cwd: fixture,
+        encoding: "utf8",
+        timeout: 60000,
+        stdio: "pipe",
+        env: {
+          PATH: `${path.join(fixture, "bin")}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
+          HOME: fixture,
+          PGPASSWORD: "fixture-only-password",
+          API_URL: "http://fixture.invalid:3001",
+        },
+      },
+    );
+  } finally {
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
 }
 
 function runTolerant(args, options = {}) {
@@ -70,12 +143,17 @@ test('run-deployment-drill: executes cleanly in --dry-run and emits valid eviden
       evidenceFile,
     ]);
     assert.strictEqual(exitCode, 0, `Drill failed: ${output}`);
-    assert.ok(output.includes('DEPLOYMENT PROMOTION & ROLLBACK DRILL COMPLETED'));
+    assert.ok(output.includes('DEPLOYMENT CONFIGURATION PREFLIGHT COMPLETED'));
     assert.ok(fs.existsSync(evidenceFile));
 
     const evidence = JSON.parse(fs.readFileSync(evidenceFile, 'utf8'));
     assert.strictEqual(evidence.status, 'success');
     assert.strictEqual(evidence.dry_run, true);
+    assert.strictEqual(evidence.execution_mode, 'simulation');
+    assert.strictEqual(evidence.probe_live_tested, true);
+    const { validateDeploymentDrillReport } = require('./check-launch-readiness');
+    assert.strictEqual(validateDeploymentDrillReport(evidence), true);
+    assert.strictEqual(validateDeploymentDrillReport(evidence, new Date(), { requireLive: true }), false);
     assert.strictEqual(evidence.schema_backward_compatible, true);
     assert.strictEqual(evidence.rollback_procedure_verified, true);
     assert.strictEqual(evidence.caddy_routing_verified, true);
@@ -268,5 +346,42 @@ test('run-deployment-drill: fails closed when an internal service joins public n
     assert.ok(output.includes('Error: Service "api" must not join the public network!'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("real deployment runner remains simulation without --dry-run despite successful probes", () => {
+  const dir = makeTempDir();
+  try {
+    const file = path.join(dir, "receipt.json");
+    run(["--evidence-file", file]);
+    const receipt = JSON.parse(fs.readFileSync(file));
+    const {
+      validateDeploymentDrillReport,
+    } = require("./check-launch-readiness");
+    assert.strictEqual(receipt.dry_run, false);
+    assert.strictEqual(receipt.probe_live_tested, true);
+    assert.strictEqual(receipt.execution_mode, "simulation");
+    assert.strictEqual(validateDeploymentDrillReport(receipt), true);
+    assert.strictEqual(
+      validateDeploymentDrillReport(receipt, new Date(), { requireLive: true }),
+      false,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+test("schema-failure receipt is still classified simulation", () => {
+  const dir = makeTempDir();
+  try {
+    const file = path.join(dir, "receipt.json");
+    const result = runTolerant(["--evidence-file", file], {
+      destructive: true,
+    });
+    assert.strictEqual(result.exitCode, 1);
+    const receipt = JSON.parse(fs.readFileSync(file));
+    assert.strictEqual(receipt.status, "failed");
+    assert.strictEqual(receipt.execution_mode, "simulation");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });

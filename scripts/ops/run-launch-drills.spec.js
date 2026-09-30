@@ -157,6 +157,7 @@ function stub(key, args) {
     },
     deployment: {
       ...success,
+      execution_mode: "simulation",
       drill_timestamp: now,
       caddyfile: val("--caddyfile"),
       compose_file: val("--compose-file"),

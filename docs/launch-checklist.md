@@ -1201,8 +1201,10 @@ production GraphQL response or security approval.
 
 ### 10. Deployment & Rollback (`deployment_and_rollback`)
 
-- Drill/verify: `bash scripts/ops/run-deployment-drill.sh --dry-run`
-- Evidence: `backups/deployment-drill-evidence-<timestamp>.json`
+- Preflight/rehearsal: `bash scripts/ops/run-deployment-drill.sh --dry-run`;
+  separately supplied live, release-bound operator child receipt is required.
+- Preflight evidence: `backups/deployment-drill-evidence-<timestamp>.json`
+  always declares `execution_mode: "simulation"`, regardless of dry-run/probe flags.
 - Release evidence: reviewed source commit, client and server manifest digests,
   approved provenance verification for each, and both previous known-good
   digests. Include the release-image preflight and Compose `config --quiet`
@@ -1222,23 +1224,39 @@ production GraphQL response or security approval.
 - Accept: target host profile, pinned OCI registry path, named
   `deployment_approver` and `rollback_authority`, image provenance policy
   (signed, additive migrations only), `live_readiness_drill_completed: true`
-- An approved record must reference a concrete, successful deployment drill
+- An approved record must reference a concrete, successful **live**, release-bound deployment drill
   child JSON report in `evidence` or `release.live_drill_evidence`. A custom
   path is accepted by report content, not name. Its UTC timestamp (basic
   `YYYYMMDDTHHMMSSZ` or ISO 8601) must be real and no later than validation
   time. Every referenced deployment drill report must pass: `status: "success"`,
   `schema_backward_compatible: true`, `rollback_procedure_verified: true`,
-  `caddy_routing_verified: true`, integer `caddy_routes_tested >= 12`,
+  `caddy_routing_verified: true`, safe integer `caddy_routes_tested >= 12`,
   `security_headers_verified: true`, `s3_sigv4_host_preserved: true`,
-  `migrations_verified: true`, integer `migration_count >= 0`,
+  `migrations_verified: true`, safe integer `migration_count >= 0`,
   `operational_templates_verified: true`, `secrets_scan_verified: true`,
   `readiness_probes_verified: true`, `network_isolation_verified: true`,
   and matching `graceful_drain_periods_verified` (`caddy: '30s'`, `next: '30s'`,
   `api: '45s'`, `worker: '60s'`). A failed or malformed report blocks even
   alongside a valid one. The unified dossier alone, prose, and
   `live_readiness_drill_completed: true` without child evidence are insufficient.
+- **Live child contract (prompt 236):** See the complete operator receipt fields
+  and independent inspection requirements in `docs/operations.md` prompt 236.
+  Requires explicit live mode, false dry-run, true probe flag, production scope,
+  environment/authorization/operator references, an exact release identity and
+  eight exact passed/verified/source-pointer observations: promotion, rollback,
+  ingress, migration compatibility, readiness, graceful drain, network isolation
+  and image provenance. Every live child must match the parent's source commit
+  and all four image references. Invalid explicit clocks, contradictory timestamps,
+  unsafe counts, malformed maps/references and placeholder/secret text fail closed.
+  Valid simulation can accompany a live child but cannot clear approval alone.
+  Dossiers are excluded regardless of filename; failed/malformed children still block.
+  Fixed evidence-file blockers suppress private paths, diagnostics and nested
+  formatting exceptions. Source pointers are never fetched: assertions do not
+  prove execution, authenticated provenance or downtime; operator inspection remains mandatory.
+  The DDL heuristic and configured drain strings establish only preflight shape.
+  Regenerate legacy receipts as simulation or supply separate inspected live evidence.
 - Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
-  - Requires at least one concrete, successful deployment drill child report in `evidence` or `release.live_drill_evidence` for approved status;
+  - Requires at least one concrete, successful live release-bound deployment drill child report in `evidence` or `release.live_drill_evidence` for approved status;
   - Rejects deployment drill evidence reporting failure (`status !== 'success'`), schema backward compatibility failure (`schema_backward_compatible: false`), rollback procedure verification failure, Caddy routing verification failure, network isolation verification failure, missing security headers or S3 sigv4 verification, untested routes (< 12), invalid migration counts, or invalid graceful drain periods;
   - Rejects Unified Launch Evidence Dossiers reporting `deploymentBaseline.status: "breached"`, `summary.deploymentCompliance: "failed"`, or `summary.rollbackCompliance: "failed"`.
 - **Container health & edge ingress gating (Prompt 226, 2026-09-28):**
@@ -1434,7 +1452,7 @@ these repository checks establishes a production runtime or journey result.
 | --- | --- | --- |
 | 1 | `static_templates` | production templates, docker runtime, secret scan; `static-integrity-evidence-<timestamp>.json` |
 | 2 | `supply_chain_sast` | SBOM + licenses, SAST scan, container security |
-| 3 | `ingress_deployment` | Caddy routing verify, deployment drill |
+| 3 | `ingress_deployment` | Caddy routing verify, deployment configuration preflight/rehearsal |
 | 4 | `volume_encryption` | volume encryption + key separation |
 | 5 | `secret_rotation` | secret rotation drill |
 | 6 | `capacity_alerting` | capacity benchmark, DoS resilience, alert simulation |
@@ -1459,7 +1477,9 @@ telemetry arguments. A no-target run remains a default drill and cannot produce
 production-candidate Stage 6 evidence. `environment` remains `"drill"` in every
 dossier; `targets.mode` is `offline`, `default-drill`, or `live-target-drill`.
 `targets` stores SHA-256 identifiers for the selected files and URLs, without
-raw URL credentials or query strings. Stage 3 requires both child reports to
+raw URL credentials or query strings. Stage 3 summarizes deployment preflight;
+its targeted health observations do not exercise promotion, drain or rollback
+and cannot satisfy Category 10 live approval. Stage 3 requires both child reports to
 bind to the same Caddyfile and selected Compose file, at least 12 passing routes,
 and, for targeted evidence, approved active HSTS, a non-example domain matching
 the benchmark URL host, and live API probes returning the Acres liveness and
@@ -1483,7 +1503,7 @@ separate. A 7/7 drill dossier alone cannot approve production.
 The Unified Launch Evidence Dossier aggregates structured baselines from child evidence across all operational dimensions:
 - `staticIntegrityBaseline` (stage 1): the three fixed checks, their exit codes, and total/passed/failed counts; `summary.staticIntegrityCompliance` is passed only when the complete child evidence is valid and stage 1 passed;
 - `supplyChainBaseline` (stage 2): package inventory count, license compliance verification, license violations, SAST scanned files, findings count, triaged/expired/blocking findings, container security validity, and container security checks count;
-- `deploymentBaseline` (stage 3): schema backward compatibility, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
+- `deploymentBaseline` (stage 3, preflight/rehearsal only): schema compatibility heuristic, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
 - `volumeEncryptionBaseline` (stage 4): stateful mount evaluation, required mount counts, and Key Separation Invariant verification;
 - `secretRotationBaseline` (stage 5): verified 7-step simulation rehearsal (session, CSRF, database, Valkey, storage, compromise response, and credential redaction audit);
 - `databaseTelemetryBaseline` (stage 6): exporter health, database ping, connection pool saturation metrics, pool acquisition p95 latency, SQL query execution p95 latency, lock waits, and transaction age;
@@ -1920,7 +1940,7 @@ operators own authentic live evidence and human sign-off.
 | 7 | data_retention_policy | policy review sign-off | legal-lead | |
 | 8 | volume_encryption | `node scripts/ops/verify-volume-encryption.js` | security-lead | |
 | 9 | graphql_introspection | production probe transcript | security-lead | |
-| 10 | deployment_and_rollback | `bash scripts/ops/run-deployment-drill.sh --dry-run` | release-manager | |
+| 10 | deployment_and_rollback | Preflight: `bash scripts/ops/run-deployment-drill.sh --dry-run`; separately inspected live release-bound operator receipt | release-manager | |
 | 11 | optional_ai_posture | `node scripts/ops/check-launch-readiness.js <record>` | product-and-security-lead | |
 
 Launch is approved only when all 11 rows are signed, the unified dossier

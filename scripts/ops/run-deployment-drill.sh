@@ -3,10 +3,11 @@ set -euo pipefail
 
 # scripts/ops/run-deployment-drill.sh
 #
-# Automated Deployment Promotion & Rollback Drill Runner for Acres.
+# Deployment configuration preflight/rehearsal runner for Acres.
 # Executes an automated promotion preflight, Caddy same-origin routing verification,
 # database migration backward-compatibility inspection, operational template and secret checks,
-# readiness probe simulation, and backward-compatible rollback drill.
+# optional health observations, and a suggested rollback command.
+# Never promotes, drains or rolls back a release; receipts always describe simulation.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
@@ -52,12 +53,12 @@ while [ $# -gt 0 ]; do
       cat <<'EOF'
 Usage: scripts/ops/run-deployment-drill.sh [options]
 
-Automated deployment promotion and rollback drill runner for Acres.
-Verifies Caddy edge routing, database migration compatibility, operational templates,
-readiness probes, and backward-compatible rollback procedures.
+Deployment configuration preflight/rehearsal runner for Acres.
+Checks Caddy/Compose configuration, a migration DDL heuristic and operational templates.
+Optionally observes health and displays a suggested rollback command; never deploys or rolls back.
 
 Options:
-  --dry-run                  Execute verification and preflight without mutating state (default: false)
+  --dry-run                  Record dry-run invocation metadata (default: false; always preflight)
   --allow-hsts               Accept active approved HSTS in selected Caddyfile
   --caddyfile <file>         Path to Caddyfile template (default: infra/caddy/Caddyfile.example)
   --compose-file <file>      Path to production Compose template (default: infra/compose/docker-compose.production.example.yml)
@@ -98,7 +99,7 @@ DRILL_STATUS="success"
 SCHEMA_BACKWARD_COMPATIBLE=true
 
 printf '=================================================================\n'
-printf '        Acres Deployment Promotion & Rollback Drill Runner       \n'
+printf '        Acres Deployment Configuration Preflight Runner       \n'
 printf '=================================================================\n'
 printf 'Timestamp:           %s\n' "$TIMESTAMP"
 printf 'Dry Run Mode:        %s\n' "$([ "$DRY_RUN" -eq 1 ] && echo "YES" || echo "NO")"
@@ -127,14 +128,14 @@ fi
 MIGRATION_COUNT="$(find "$MIGRATIONS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)"
 printf '   Found %s migration directories in %s\n' "$MIGRATION_COUNT" "$MIGRATIONS_DIR"
 
-# Inspect migration files for destructive statements that would break backward compatibility on rollback
+# Heuristic search only: absence does not prove full migration backward compatibility
 DESTRUCTIVE_DDL="$(grep -riE 'DROP\s+(TABLE|DATABASE|SCHEMA)|ALTER\s+TABLE.*DROP\s+COLUMN' "$MIGRATIONS_DIR" || true)"
 if [ -n "$DESTRUCTIVE_DDL" ]; then
   printf '   Error: Destructive DDL statements detected in migrations:\n%s\n' "$DESTRUCTIVE_DDL" >&2
   SCHEMA_BACKWARD_COMPATIBLE=false
   DRILL_STATUS="failed"
 else
-  printf '   ✓ Zero destructive DDL statements detected across migrations (additive-only schema changes).\n'
+  printf '   ✓ No destructive DDL matched by the heuristic (compatibility still needs live inspection).\n'
 fi
 
 # Optional live database check if credentials exist and pg_isready succeeds
@@ -192,7 +193,7 @@ fi
 printf '\n'
 
 # 5. Rollback Procedure & Graceful Drain Verification
-printf '5. Evaluating rollback readiness and graceful shutdown drain periods...\n'
+printf '5. Checking rollback configuration and configured graceful shutdown periods...\n'
 node - "$COMPOSE_FILE" <<'NODE'
 const fs = require('fs');
 const yaml = require('js-yaml');
@@ -311,7 +312,7 @@ console.log('   ✓ Verified application dependency health gating and process si
 console.log('   ✓ Verified network isolation (public edge strictly restricted to Caddy ingress).');
 NODE
 
-printf '   ✓ Verified rollback command sequence:\n'
+printf '   ✓ Suggested rollback command (not executed):\n'
 printf '       docker compose -f %s up -d --no-deps --build=never <service>\n\n' "$COMPOSE_FILE"
 
 # 6. Structured Evidence Generation
@@ -325,7 +326,7 @@ const { safeUrl, targetId } = require('./scripts/ops/launch-target-evidence');
 const [file, timestamp, duration, caddyfile, compose, dry, migrations, compatible, probe, status, apiUrl] = process.argv.slice(2);
 const evidence = {
   drill_timestamp: timestamp, duration_ms: Number(duration), duration_seconds: Math.floor(Number(duration) / 1000),
-  caddyfile, compose_file: compose, dry_run: dry === '1',
+  caddyfile, compose_file: compose, dry_run: dry === '1', execution_mode: 'simulation',
   caddy_routing_verified: true, caddy_routes_tested: 12, security_headers_verified: true,
   s3_sigv4_host_preserved: true, migrations_verified: true, migration_count: Number(migrations),
   schema_backward_compatible: compatible === 'true', operational_templates_verified: true,
@@ -345,6 +346,6 @@ if [ "$DRILL_STATUS" != "success" ]; then
 fi
 
 printf '=================================================================\n'
-printf '        DEPLOYMENT PROMOTION & ROLLBACK DRILL COMPLETED          \n'
+printf '        DEPLOYMENT CONFIGURATION PREFLIGHT COMPLETED          \n'
 printf '=================================================================\n'
 exit 0

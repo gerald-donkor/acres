@@ -120,7 +120,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `scripts/ops/reconcile-storage-objects.js` | Object storage reconciliation utility comparing PostgreSQL stored objects against bucket keys, detecting leaks, missing objects, and mismatches |
 | `scripts/ops/verify-caddy-routing.js` | Pure Node.js Caddyfile parser and route evaluator validating same-origin ingress dispatching, proxy headers, S3 SigV4 preservation, and security headers |
 | `scripts/ops/verify-caddy-routing.spec.js` | Unit test suite (10/10 tests) asserting Caddy routing rules, SigV4 host preservation, security headers, timeouts, and HSTS gate invariants |
-| `scripts/ops/run-deployment-drill.sh` | Automated deployment promotion preflight and rollback drill runner validating Caddy routing, additive migrations, readiness probes, graceful drain, and evidence emission |
+| `scripts/ops/run-deployment-drill.sh` | Configuration preflight/rehearsal: Caddy/Compose checks, migration heuristic, optional health observations and simulation evidence |
 | `scripts/ops/audit-dependencies.sh` | Deterministic dependency security audit script for production dependencies |
 | `scripts/ops/generate-sbom.js` & `.spec.js` | Deterministic CycloneDX v1.5 JSON SBOM generator and license compliance validator (purls, hashes, permissive allowlist, copyleft rejection) |
 | `scripts/ops/run-sast-scan.js` & `.spec.js` | Pure Node.js static application security testing (SAST) engine evaluating SAST-01 through SAST-08 across source trees with triage policy enforcement |
@@ -623,6 +623,13 @@ Implemented in Prompt 62:
 
 ## Phase 12G Caddy Same-Origin Ingress & Deployment Promotion/Rollback Drill
 
+**Current deployment qualification (prompt 236, 2026-09-30):** The dated
+results below are configuration preflight/rehearsal, not exercised promotion,
+rollback or service draining. The DDL search is a heuristic: absence of its
+patterns does not prove every migration backward-compatible. Configured drain
+periods do not prove requests/jobs drained. Optional successful health/database
+observations do not elevate the runner's simulation receipts to live evidence.
+
 Implemented in Prompt 63:
 1. **Production Caddy Configuration & Same-Origin Routing Verification Engine (`scripts/ops/verify-caddy-routing.js` & `.spec.js`)**:
    - Pure Node.js Caddyfile parser and route evaluation engine.
@@ -633,10 +640,10 @@ Implemented in Prompt 63:
    - Enforces transport timeouts across API, Garage, and Next (`read_timeout`, `write_timeout`, `dial_timeout`) and request body limits (`{$ACRES_MAX_REQUEST_BODY}`).
    - Enforces HSTS gate invariant (Strict-Transport-Security remains commented out pending operator domain/cert approval).
    - Unit test suite (`verify-caddy-routing.spec.js`): 10/10 tests passing in 70ms.
-2. **Automated Deployment Promotion & Rollback Drill Runner (`scripts/ops/run-deployment-drill.sh`)**:
-   - Automated drill runner verifying Caddy ingress, database migration backward compatibility, operational templates, secret scans, readiness probes, and rollback procedures.
-   - Verifies zero destructive DDL statements across migrations (additive-only schema changes).
-   - Validates service `stop_grace_period` (Caddy: 30s, Next: 30s, API: 45s, Worker: 60s) and network isolation.
+2. **Deployment Configuration Preflight/Rehearsal Runner (`scripts/ops/run-deployment-drill.sh`)**:
+   - Checks Caddy/Compose configuration, migration heuristics, operational templates, secret scans and readiness contracts; optionally observes health and displays a suggested rollback command.
+   - Searches for selected destructive DDL patterns; compatibility requires independent inspection.
+   - Validates configured `stop_grace_period` (Caddy: 30s, Next: 30s, API: 45s, Worker: 60s) and network membership, without exercising draining.
    - Emits structured JSON evidence reports (`backups/deployment-drill-evidence-<timestamp>.json`).
 3. **Operations & CI Integration**:
    - Added root package scripts `npm run ops:caddy-drill` and `npm run ops:deployment-drill`.
@@ -2060,3 +2067,104 @@ Safe inspection from the repository root:
 npm run ops:rotation-test
 npm run ops:readiness-test
 ```
+
+## Prompt 236 — deployment preflight and live receipt separation (2026-09-30)
+
+`run-deployment-drill.sh` always emits `execution_mode: "simulation"`, including
+its schema-failure receipt, with either CLI dry-run flag and regardless of probe
+reachability. CLI flags/output naming and optional probes remain compatible.
+Stage 3 and the dossier deployment baseline summarize preflight/rehearsal;
+targeted non-dry runs retain their file/health identity checks. Neither a passed
+Stage 3 nor `deploymentCompliance`/`rollbackCompliance` proves live promotion
+or rollback. No assembler or top-level readiness schema changed.
+
+Category 10 requires every referenced deployment child to pass structural
+validation and at least one live child bound to `release`. Both mode flags
+(`dry_run`, `probe_live_tested`) must be booleans; mode is exactly simulation or
+live. Routes/migration counts are safe integers (at least 12/nonnegative).
+Optional duration fields are finite/nonnegative. Basic UTC and canonical ISO UTC
+dates must be real/nonfuture; two timestamp fields must agree. Explicit invalid
+clocks fail closed. Dossiers cannot impersonate children, even by filename or
+copied fields. A malformed/failed wildcard child or unrelated live child blocks
+beside a matching one; valid simulation may accompany live evidence. External
+release pointers remain supported but cannot replace an inspectable live JSON
+child in `evidence` or `release.live_drill_evidence`.
+
+A separately supplied live receipt preserves all structural success booleans
+and configured drain strings and additionally requires:
+
+- `execution_mode: "live"`, `dry_run: false`, `probe_live_tested: true`,
+  `environment: "production"`;
+- trimmed nonempty opaque `environment_reference`, `authorization_reference`
+  and `operator_reference`, without control characters;
+- `release` with exactly `reviewed_source_commit`, `current`, `previous`;
+  a 40 ASCII hex commit and exact client/server immutable image pairs. Roles
+  must differ within each pair; current/previous pairs must differ (one unchanged
+  image is permitted). Prior images may use a former registry. Commit comparison
+  ignores hex casing; all four image comparisons with the approved parent are exact;
+- `live_verification` with exactly `promotion`, `rollback`, `ingress`,
+  `migration_compatibility`, `readiness`, `graceful_drain`, `network_isolation`
+  and `image_provenance`. Each observation has exactly `status: "passed"`,
+  `verified: true`, and a trimmed nonempty, control-free `evidence_reference`.
+
+Inspect each source independently: current image promotion, previous image
+rollback/recovery, actual edge routing/headers/SigV4, deployed schema compatible
+with both pairs, live/deep readiness, bounded service/request/job draining,
+deployed exposure and source/image provenance. Existing placeholder/dev-secret
+and literal-secret rejection applies without echoing child diagnostics.
+References are private pointers; validators never fetch them. Mode flags,
+confirmations and references are unauthenticated assertions, not proof an
+operation occurred, cryptographic provenance or measured downtime guarantees.
+The parent provenance references and approvers remain independently required.
+
+Category 10 file failures use the fixed message `A referenced deployment drill
+report is invalid or failed`, including missing/invalid JSON, failed dossier
+checks and nested formatting exceptions. Private paths, diagnostics and scan
+results are suppressed. Existing safe field/image mismatch blockers remain.
+Legacy unclassified receipts need regeneration as simulation or separately
+inspected live evidence; never automatically relabel retained evidence.
+
+No deployment, rollback, drain, registry access, production receipt generation
+or launch approval ran. Live exercises require separate operator authorization.
+Prompt 201 and Phase 12 sign-off remain open. Safe inspection commands:
+`npm run ops:deployment-test` and `npm run ops:readiness-test`.
+
+Verification and review (2026-09-30):
+
+- `npm run ops:deployment-test`: `ℹ tests 14`, `ℹ pass 14`, `ℹ fail 0`.
+- Final `npm run ops:readiness-test`: `ℹ tests 589`, `ℹ pass 589`, `ℹ fail 0`.
+- `npm run ops:readiness-schema-test`: `ℹ tests 8`, `ℹ pass 8`, `ℹ fail 0`.
+- `npm run ops:launch-drill-test`: `ℹ tests 57`, `ℹ pass 57`, `ℹ fail 0`.
+- `npm run ops:templates`: `ops template check passed`. Aggregate `npm run ops:check`
+  exited 0; its final launch suite also reported `ℹ pass 57`, `ℹ fail 0`.
+  Audit output: `21 vulnerabilities (10 moderate, 11 high)` and
+  `Production dependency security audit passed (0 critical vulnerabilities)`.
+- Root `npm run lint` exited 0 across all three ESLint workspaces. Root
+  `npm run typecheck` exited 0 with shared/client/server TypeScript checks and
+  `✔ Generated Prisma Client (7.9.1)`. Root `npm run build` exited 0 across
+  shared/client/server; Next reported `✓ Compiled successfully in 2.7s` and
+  `✓ Generating static pages using 7 workers (22/22) in 605ms`.
+- Changed JS blocks and new Markdown sections: `Prettier check passed`;
+  existing unrelated formatting preserved. JS syntax checks, `bash -n
+scripts/ops/run-deployment-drill.sh` and `git diff --check` exited 0 with
+  no diagnostic output.
+- The unchanged example exited 1: `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`,
+  `Result: FAIL-CLOSED`.
+
+Initial sandbox test subprocesses reported `spawnSync EPERM`; Next build reported
+`Could not parse output from TypeScript's --showConfig`. Allowed elevated
+retries passed. The initial aggregate gate stopped at registry `EAI_AGAIN`;
+its allowed elevated retry passed. An initial concurrent typecheck encountered
+Next-generated files being removed by build; sequential build then typecheck
+passed. No dependency, configuration or check bypass was introduced.
+
+Independent review found an incomplete custom receipt classification bypass:
+a sparse live claim could be ignored beside matching evidence. Verified and
+fixed by recognizing mode/dry/probe execution markers after dossier exclusion.
+Final direct and wildcard regressions cover those sparse claims and unrelated
+source identity. The full final readiness suite passed 589/589; follow-up review
+reported `Ready to commit: Yes`, with focused regression `tests 1`, `pass 1`,
+`fail 0` and no remaining findings. Other required gates passed before this
+focused classifier fix; affected readiness, syntax, format and diff checks were
+rerun afterward. Source records and production sign-off remain operator-owned.

@@ -505,7 +505,10 @@ validator (`scripts/ops/check-launch-readiness.js`) are implemented:
 
 ## 18. Phase 12G Caddy same-origin ingress and deployment drill update
 
-As of 2026-09-09, production Caddy same-origin routing and deployment promotion/rollback drills are implemented and verified:
+As of 2026-09-09, Caddy routing verification and deployment configuration preflight
+were implemented and verified. Prompt 236 qualifies the dated claims below:
+no live promotion, rollback or service draining was exercised; the DDL search is
+a heuristic and configured drain strings do not prove actual bounded shutdown.
 
 - **Edge Ingress and S3 SigV4 Integrity (TM-08, TM-20)**:
   - `scripts/ops/verify-caddy-routing.js` deterministically verifies that Caddy acts as the single edge ingress.
@@ -515,7 +518,7 @@ As of 2026-09-09, production Caddy same-origin routing and deployment promotion/
   - Request body limits (`request_body max_size {$ACRES_MAX_REQUEST_BODY}`) and transport timeouts (`read_timeout`, `write_timeout`, `dial_timeout`) are enforced across all three upstream transports.
   - HSTS gate invariant verified (Strict-Transport-Security remains commented out pending operator approval).
 - **Controlled Deployment Promotion & Backward-Compatible Rollback (TM-18, TM-19)**:
-  - `scripts/ops/run-deployment-drill.sh` executes automated promotion preflights, validates that all 17 migrations are additive with zero destructive DDL statements (`DROP TABLE`, `DROP COLUMN`), checks operational templates and secret hygiene, and verifies liveness and deep readiness probes.
+  - `scripts/ops/run-deployment-drill.sh` executes automated promotion preflights, searches 17 migrations for selected destructive DDL patterns (`DROP TABLE`, `DROP COLUMN`), checks operational templates and secret hygiene, and optionally observes liveness and deep readiness probes.
   - Verifies service graceful shutdown drain periods (`stop_grace_period`: Caddy 30s, Next 30s, API 45s, Worker 60s) and network isolation (public network restricted to Caddy ingress).
   - Emits auditable JSON evidence reports to `backups/deployment-drill-evidence-<timestamp>.json`.
 
@@ -722,3 +725,25 @@ operator-owned; no new trust boundary, live exercise or launch approval occurred
   path, so a firing alert maps to an operator action rather than a dashboard.
 
 **2026-09-23 worker telemetry boundary:** The worker also exposes unauthenticated `GET /metrics` and `GET /health` on a separate Node listener. Its local default is loopback; production binds port 3002 only on the internal Compose network, with no host publication or Caddy route. Metrics responses contain bounded process/queue labels, and collector errors return an empty 503. Private-network access is the control; a compromised private peer could read operational metrics or repeatedly scrape, so operators must preserve network isolation.
+
+**Prompt 236 deployment evidence integrity (2026-09-30):** Category 10 requires
+at least one explicit live production operator receipt with environment,
+authorization and operator references, exact eight observation confirmations
+and source pointers, and source commit/current/previous image pairs matching the
+approved release. All referenced children must structurally pass; unrelated live
+children cannot hide beside matching ones. The existing producer always declares
+simulation, including schema failures, with either dry-run flag and successful
+health probes. Stage 3/dossier deployment baselines remain preflight/rehearsal.
+Legacy modes, malformed maps/assertions/references, impossible/future/conflicting
+dates, unsafe counts, failed children and failed dossiers block approval. The
+Category 10 narrow evidence-file boundary suppresses private paths, raw errors,
+scan results and exceptions from formatting malformed nested JSON.
+
+Independent inspection of actual promotion, known-good rollback/recovery,
+edge/SigV4, deployed migration compatibility, readiness, bounded draining,
+network exposure and provenance remains mandatory. Mode flags and opaque pointers
+are unauthenticated assertions, never fetched by the validator; they do not prove
+execution, cryptographic provenance or downtime. The migration grep is a heuristic
+and drain periods are configuration only. No new runtime boundary or production
+operation was introduced. TM-18/TM-19 live acceptance, prompt 201 and Phase 12
+sign-off remain open. Hermetic tests scrub service environments and stub probes.
