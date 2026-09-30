@@ -11,6 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { REQUIRED_STATEFUL_MOUNTS, isApprovedMechanism } = require('./verify-volume-encryption');
 const { validateImageReference } = require('./check-release-images');
 const { validateStaticEvidence } = require('./run-static-integrity-checks');
 
@@ -250,34 +251,222 @@ function validateReconciliationReport(report, now) {
 }
 
 function isVolumeEncryptionCandidate({ file, parsed } = {}) {
+  // A dossier cannot become a child through a plausible filename.
+  if (
+    parsed &&
+    (Object.hasOwn(parsed, 'stages') ||
+      parsed.dossier_version !== undefined ||
+      parsed.volumeEncryptionBaseline !== undefined)
+  )
+    return false;
   const name = typeof file === 'string' ? path.basename(file) : '';
-  if (name.includes('volume-encryption-evidence-') || name.includes('volume-encryption')) return true;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-  return parsed.drill_type === 'production_volume_encryption_and_key_separation' ||
-    (parsed.keySeparation && typeof parsed.keySeparation === 'object' && Array.isArray(parsed.evaluatedMounts));
+  if (name.includes('volume-encryption')) return true;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    return false;
+  return (
+    parsed.drill_type === 'production_volume_encryption_and_key_separation' ||
+    (parsed.keySeparation &&
+      typeof parsed.keySeparation === 'object' &&
+      Array.isArray(parsed.evaluatedMounts))
+  );
 }
 
-function validateVolumeEncryptionReport(report, now) {
-  if (!report || typeof report !== 'object' || Array.isArray(report) ||
-      typeof report.timestamp !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(report.timestamp)) return false;
-  const timestamp = new Date(report.timestamp);
-  const evalNow = now instanceof Date ? now : new Date();
-  if (!Number.isFinite(timestamp.getTime()) || timestamp.toISOString() !== report.timestamp ||
-      timestamp.getTime() > evalNow.getTime()) return false;
-  if (report.status !== 'success' || report.valid !== true) return false;
-  if (!Array.isArray(report.errors) || report.errors.length > 0) return false;
+// Only Category 8 uses this narrow dossier check; a dossier never supplies live acceptance.
+function validVolumeDossier(report) {
+  const baseline = report.volumeEncryptionBaseline;
+  return (
+    report.overall_status === 'PASSED' &&
+    Number.isSafeInteger(report.total_stages) &&
+    report.total_stages === 7 &&
+    report.passed_stages === 7 &&
+    report.failed_stages === 0 &&
+    Array.isArray(report.stages) &&
+    report.stages.length === 7 &&
+    report.stages.every(
+      (stage) =>
+        stage &&
+        typeof stage === 'object' &&
+        !Array.isArray(stage) &&
+        typeof stage.stage_id === 'string' &&
+        stage.status === 'PASSED',
+    ) &&
+    new Set(report.stages.map((stage) => stage.stage_id)).size === 7 &&
+    report.stages.some((stage) => stage.stage_id === 'volume_encryption') &&
+    baseline &&
+    typeof baseline === 'object' &&
+    !Array.isArray(baseline) &&
+    baseline.status === 'verified' &&
+    baseline.totalRequiredMounts === REQUIRED_STATEFUL_MOUNTS.length &&
+    baseline.validMountsCount === REQUIRED_STATEFUL_MOUNTS.length &&
+    baseline.keySeparationVerified === true &&
+    baseline.violationsDetected === 0 &&
+    report.summary?.volumeEncryptionCompliance === 'passed'
+  );
+}
+
+function validVolumeReference(value) {
+  if (!isRotationReference(value)) return false;
+  const blockers = [];
+  checkPlaceholdersAndSecrets(value, 'volume_reference', blockers);
+  return blockers.length === 0;
+}
+
+function validVolumePath(value) {
+  return (
+    validVolumeReference(value) &&
+    value.startsWith('/') &&
+    value !== '/' &&
+    !value.includes('\\') &&
+    value
+      .slice(1)
+      .split('/')
+      .every((part) => part !== '' && part !== '.' && part !== '..')
+  );
+}
+
+function validVolumePaths(paths) {
+  return (
+    Array.isArray(paths) &&
+    paths.length >= 3 &&
+    paths.every(validVolumePath) &&
+    new Set(paths).size === paths.length
+  );
+}
+
+function validVolumeSection(section) {
+  return (
+    section !== null &&
+    typeof section === 'object' &&
+    !Array.isArray(section) &&
+    validVolumeReference(section.encryption_mechanism) &&
+    isApprovedMechanism(section.encryption_mechanism) &&
+    validVolumeReference(section.key_recovery_owner) &&
+    validVolumePaths(section.encrypted_mount_paths)
+  );
+}
+
+function validateVolumeEncryptionReport(report, now, context = {}) {
+  const object = (value) =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (
+    !object(context) ||
+    !object(report) ||
+    !['simulation', 'live'].includes(report.execution_mode) ||
+    report.drill_type !== 'production_volume_encryption_and_key_separation' ||
+    typeof report.timestamp !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(report.timestamp)
+  )
+    return false;
+  const timestamp = parseCaddyRoutingTimestamp(report.timestamp);
+  const evalNow = now === undefined ? new Date() : now;
+  if (
+    !(evalNow instanceof Date) ||
+    !Number.isFinite(evalNow.getTime()) ||
+    !timestamp ||
+    timestamp > evalNow
+  )
+    return false;
+  if (
+    Object.hasOwn(context, 'expectedSection') &&
+    !validVolumeSection(context.expectedSection)
+  )
+    return false;
+  if (
+    report.status !== 'success' ||
+    report.valid !== true ||
+    !Array.isArray(report.errors) ||
+    report.errors.length !== 0
+  )
+    return false;
   const keySep = report.keySeparation;
-  if (!keySep || typeof keySep !== 'object' || Array.isArray(keySep)) return false;
-  if (keySep.verified !== true) return false;
-  if (!Array.isArray(keySep.detectedViolations) || keySep.detectedViolations.length > 0) return false;
-  if (!Array.isArray(report.evaluatedMounts) || report.evaluatedMounts.length < 3) return false;
-  if (report.evaluatedMounts.some((m) => !m || typeof m !== 'object' || m.passed !== true)) return false;
-  if (report.totalRequiredMounts !== undefined || report.validMountsCount !== undefined) {
-    if (!Number.isSafeInteger(report.totalRequiredMounts) || report.totalRequiredMounts < 3 ||
-        !Number.isSafeInteger(report.validMountsCount) || report.validMountsCount !== report.totalRequiredMounts) {
+  if (
+    !object(keySep) ||
+    keySep.verified !== true ||
+    !Array.isArray(keySep.detectedViolations) ||
+    keySep.detectedViolations.length !== 0
+  )
+    return false;
+  const mounts = report.evaluatedMounts;
+  const count = REQUIRED_STATEFUL_MOUNTS.length;
+  if (
+    !Array.isArray(mounts) ||
+    mounts.length !== count ||
+    !Number.isSafeInteger(report.totalRequiredMounts) ||
+    report.totalRequiredMounts !== count ||
+    !Number.isSafeInteger(report.validMountsCount) ||
+    report.validMountsCount !== count ||
+    !mounts.every((mount) => object(mount) && mount.passed === true)
+  )
+    return false;
+  if (
+    !REQUIRED_STATEFUL_MOUNTS.every(
+      (required) =>
+        mounts.filter(
+          (mount) =>
+            mount.service === required.service &&
+            mount.containerPath === required.containerPath,
+        ).length === 1,
+    )
+  )
+    return false;
+  if (report.execution_mode === 'simulation')
+    return context.requireLive !== true;
+
+  // Live is a separately inspected operator assertion, never a CLI capability.
+  if (
+    report.environment !== 'production' ||
+    ![
+      'environment_reference',
+      'authorization_reference',
+      'operator_reference',
+    ].every((key) => validVolumeReference(report[key])) ||
+    !validVolumeSection(report)
+  )
+    return false;
+  const paths = report.encrypted_mount_paths;
+  const covers = (root, source) =>
+    source === root || source.startsWith(root + '/');
+  if (
+    !mounts.every(
+      (mount) =>
+        validVolumePath(mount.host_path) &&
+        validVolumeReference(mount.evidence_reference) &&
+        paths.some((root) => covers(root, mount.host_path)),
+    ) ||
+    !paths.every((root) =>
+      mounts.some((mount) => covers(root, mount.host_path)),
+    )
+  )
+    return false;
+  const verification = report.live_verification;
+  const observations = [
+    'host_encryption',
+    'key_separation',
+    'dual_custody',
+    'recovery_procedure',
+  ];
+  if (
+    !hasExactKeys(verification, observations) ||
+    !observations.every((key) => {
+      const entry = verification[key];
+      return (
+        hasExactKeys(entry, ['status', 'verified', 'evidence_reference']) &&
+        entry.status === 'passed' &&
+        entry.verified === true &&
+        validVolumeReference(entry.evidence_reference)
+      );
+    })
+  )
+    return false;
+  if (Object.hasOwn(context, 'expectedSection')) {
+    const expected = context.expectedSection;
+    if (
+      report.encryption_mechanism !== expected.encryption_mechanism ||
+      report.key_recovery_owner !== expected.key_recovery_owner ||
+      paths.length !== expected.encrypted_mount_paths.length ||
+      !paths.every((root) => expected.encrypted_mount_paths.includes(root))
+    )
       return false;
-    }
   }
   return true;
 }
@@ -1212,13 +1401,15 @@ function validateNoAiPostureReport(report, now, approved) {
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
-  if (!['secrets_management', 'deployment_and_rollback'].includes(category)) {
+  if (!['secrets_management', 'deployment_and_rollback', 'volume_encryption'].includes(category)) {
     return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
   }
   const fail = () =>
     addBlocker(
       category,
-      category === 'secrets_management'
+      category === 'volume_encryption'
+        ? 'A referenced volume encryption report is invalid or failed'
+        : category === 'secrets_management'
         ? 'A referenced secret rotation report is invalid or failed'
         : 'A referenced deployment drill report is invalid or failed'
     );
@@ -1257,6 +1448,10 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
       continue;
     }
     parsedFiles.push({ file, parsed });
+    if (category === 'volume_encryption' && !isVolumeEncryptionCandidate({ file, parsed }) &&
+        !validVolumeDossier(parsed)) {
+      addBlocker(category, 'A referenced volume encryption report is invalid or failed');
+    }
     // Category 5 child failures use fixed reasons, never untrusted child diagnostics.
     if (category === 'slo_and_alerting' && isCapacityAlertingCandidate({ file, parsed })) {
       if (!validateCapacityAlertingReport(parsed)) {
@@ -2252,23 +2447,59 @@ function validateReadiness(record, _filePath, options = {}) {
   // 3.8 volume_encryption
   const encSec = sections.volume_encryption;
   if (encSec && encSec.status === 'approved') {
-    if (!encSec.encryption_mechanism || typeof encSec.encryption_mechanism !== 'string') {
-      addBlocker('volume_encryption', 'Production volume encryption mechanism is required');
+    if (
+      !validVolumeReference(encSec.encryption_mechanism) ||
+      !isApprovedMechanism(encSec.encryption_mechanism)
+    ) {
+      addBlocker(
+        'volume_encryption',
+        'Production volume encryption mechanism must be concrete and approved',
+      );
     }
-    if (!Array.isArray(encSec.encrypted_mount_paths) || encSec.encrypted_mount_paths.length < 3) {
-      addBlocker('volume_encryption', 'Encrypted mount paths must include at least 3 stateful mounts (PostgreSQL, Valkey, Garage)');
+    if (!validVolumePaths(encSec.encrypted_mount_paths)) {
+      addBlocker(
+        'volume_encryption',
+        'Encrypted mount paths must include at least 3 unique concrete absolute directory paths',
+      );
     }
     if (encSec.key_separation_confirmed !== true) {
-      addBlocker('volume_encryption', 'Key separation from data/backups must be explicitly confirmed (key_separation_confirmed: true)');
+      addBlocker(
+        'volume_encryption',
+        'Key separation from data/backups must be explicitly confirmed (key_separation_confirmed: true)',
+      );
     }
-    if (!encSec.key_recovery_owner || typeof encSec.key_recovery_owner !== 'string') {
-      addBlocker('volume_encryption', 'Key recovery owner must be designated');
+    if (!validVolumeReference(encSec.key_recovery_owner)) {
+      addBlocker(
+        'volume_encryption',
+        'Key recovery owner must be concrete and designated',
+      );
     }
     const volumeCandidates = volumeEvidence.filter(isVolumeEncryptionCandidate);
-    if (volumeCandidates.length === 0) {
-      addBlocker('volume_encryption', 'A successful volume encryption child JSON report is required');
-    } else if (volumeCandidates.some(({ parsed }) => !validateVolumeEncryptionReport(parsed, now))) {
-      addBlocker('volume_encryption', 'A referenced volume encryption report is invalid or failed');
+    if (
+      volumeCandidates.some(
+        ({ parsed }) =>
+          !validateVolumeEncryptionReport(parsed, now, {
+            expectedSection: encSec,
+          }),
+      )
+    ) {
+      addBlocker(
+        'volume_encryption',
+        'A referenced volume encryption report is invalid or failed',
+      );
+    }
+    if (
+      !volumeCandidates.some(({ parsed }) =>
+        validateVolumeEncryptionReport(parsed, now, {
+          requireLive: true,
+          expectedSection: encSec,
+        }),
+      )
+    ) {
+      addBlocker(
+        'volume_encryption',
+        'A successful live volume encryption child JSON report matching the approved configuration is required',
+      );
     }
   }
 

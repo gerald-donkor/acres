@@ -3,18 +3,10 @@
 /**
  * scripts/ops/verify-volume-encryption.js
  *
- * Deterministic, pure Node.js validator and evaluation engine for Acres production
- * volume encryption, key separation, and key recovery governance (TM-21).
- *
- * Enforces that:
- * 1. All stateful services (PostgreSQL, Valkey, Garage, ClamAV, Caddy, Prometheus, Grafana)
- *    declare explicit encrypted mount paths rather than unencrypted host binds.
- * 2. Host-level encryption mechanisms match approved FOSS/cloud standards
- *    (LUKS2/dm-crypt, aws:kms, gcp:cmek, azure:keyvault).
- * 3. Key Separation Invariant: volume unlock material, passphrases, and keyfiles
- *    are NEVER co-located with persistent data, backup archives, or tracked in git.
- * 4. Key Recovery Governance: designated recovery owner, dual-custody parameters,
- *    and operational recovery runbook references are defined.
+ * Configuration preflight for declared mounts, encryption mechanism and recovery
+ * owner, with limited local filename scans (TM-21). Every CLI receipt is simulation.
+ * It does not inspect host encryption, establish absence of all unlock material,
+ * verify dual custody, or test recovery. The verified fields qualify preflight only.
  */
 
 const fs = require('fs');
@@ -192,7 +184,9 @@ function parseVolumeEntry(entry) {
 
 /**
  * Scans a filesystem directory recursively for files matching key/passphrase patterns.
- * Resolves symlinks safely to prevent keyfile evasion and handles recursion limits.
+ * Follows symlinks with cycle/depth limits; missing/inaccessible paths and Git
+ * failures are skipped. Filename patterns also match TLS keys/certificates.
+ * A clean scan is not proof of separated volume-unlock custody.
  * Returns array of detected violations.
  */
 function scanDirectoryForKeys(dirPath, maxDepth = 4, currentDepth = 0, visitedRealPaths = new Set()) {
@@ -240,7 +234,7 @@ function scanDirectoryForKeys(dirPath, maxDepth = 4, currentDepth = 0, visitedRe
       }
     }
   } catch (_err) {
-    // Permission errors or inaccessible directories are treated safely
+    // Preflight limitation: filesystem errors are suppressed, not proof of custody
   }
 
   return violations;
@@ -523,7 +517,7 @@ function validateVolumeEncryption({ compose, env, readiness = null, options = {}
         }
       }
     } catch (_err) {
-      // Git command failure in environments without git is ignored safely
+      // Preflight limitation: Git failures are ignored, not proof of custody
     }
   }
 
@@ -569,15 +563,16 @@ function runCli() {
       console.log(`
 Usage: node scripts/ops/verify-volume-encryption.js [options]
 
-Evaluates production volume encryption declarations, key separation, and recovery governance.
+Preflight: validates declarations and performs limited local filename scans.
+Does not inspect host encryption, dual custody or recovery; receipts are simulation.
 
 Options:
   --compose <file>     Path to docker-compose file (default: infra/compose/docker-compose.production.example.yml)
   --env <file>         Path to environment template (default: infra/env/production.env.example)
   --readiness <file>   Path to launch readiness JSON (default: infra/launch/readiness.example.json)
   --mount-path <dir>   Explicit host directory path to scan for key separation (repeatable)
-  --output, -o <file>  Write structured JSON drill evidence to target file path
-  --json               Output structured JSON report
+  --output, -o <file>  Write structured JSON simulation preflight evidence to target file path
+  --json               Output structured JSON simulation preflight report
   --help, -h           Show this help message
 `);
       process.exit(0);
@@ -618,6 +613,7 @@ Options:
   });
 
   const payload = {
+    execution_mode: 'simulation',
     drill_type: 'production_volume_encryption_and_key_separation',
     timestamp: new Date().toISOString(),
     status: result.valid ? 'success' : 'failed',
@@ -642,7 +638,7 @@ Options:
   }
 
   console.log('=================================================================');
-  console.log('    Acres Production Volume Encryption & Key Separation Engine   ');
+  console.log('    Acres Volume Encryption Configuration Preflight   ');
   console.log('=================================================================');
   console.log(`Compose Template:    ${composePath}`);
   console.log(`Env Template:        ${envPath}`);
@@ -658,7 +654,7 @@ Options:
   }
 
   console.log('-----------------------------------------------------------------');
-  console.log(`Key Separation Invariant: ${result.keySeparation.verified ? 'PASSED (0 keyfiles detected in data/git)' : 'VIOLATED'}`);
+  console.log(`Local filename scan:      ${result.keySeparation.verified ? 'PASSED (no matching filenames detected in scanned paths/git)' : 'VIOLATED'}`);
   console.log(`Approved Mechanisms:      LUKS2/dm-crypt, AWS KMS, GCP CMEK, Azure Key Vault`);
   console.log('-----------------------------------------------------------------');
 
@@ -668,11 +664,11 @@ Options:
       console.log(`  ✗ ${err}`);
     }
     console.log('=================================================================');
-    console.log('Result: FAILED. Production volume encryption requirements unmet.\n');
+    console.log('Result: FAILED. Volume encryption configuration preflight failed.\n');
     process.exit(1);
   }
 
-  console.log('Result: PASSED. All stateful service encrypted mounts & key separation verified.\n');
+  console.log('Result: PASSED. Declarations and limited local filename scans passed; live inspection required.\n');
   process.exit(0);
 }
 

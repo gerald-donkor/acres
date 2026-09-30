@@ -544,7 +544,7 @@ As of 2026-09-09, production volume encryption, key separation invariants, and z
     - `grafana`: `/var/lib/grafana` -> `${ACRES_GRAFANA_ENCRYPTED_MOUNT}`
   - Evaluates host volume encryption mechanisms against approved standards (`LUKS2/dm-crypt`, `aws:kms`, `gcp:cmek`, `azure:keyvault`).
   - Key Separation Invariant: strictly enforces that volume unlock material, passphrases, and keyfiles are never co-located inside stateful volume mounts, backup archives (`backups/`), or tracked in Git. Scans for forbidden patterns (`*.key`, `*.keyfile`, `*.passphrase`, `id_rsa`, `*luks*key*`, `*kms*creds*`) and fails closed upon detection.
-  - Key Recovery Governance: validates designated recovery owner (`PRODUCTION_KEY_RECOVERY_OWNER`), dual-custody verification, and recovery runbook references.
+  - Key Recovery Governance: preflight validates owner declarations only; separately inspected live Category 8 evidence must attest dual custody and tested recovery.
   - Test suite (`scripts/ops/verify-volume-encryption.spec.js`): 12/12 unit tests passing in 90ms. Integrated into `npm run ops:check`.
 - **Zero-Downtime Secret Rotation & Emergency Compromise Response (TM-15)**:
   - `scripts/ops/run-secret-rotation-drill.sh` executes automated zero-downtime rotation and compromise response drills across all 7 production secret classes:
@@ -747,3 +747,30 @@ execution, cryptographic provenance or downtime. The migration grep is a heurist
 and drain periods are configuration only. No new runtime boundary or production
 operation was introduced. TM-18/TM-19 live acceptance, prompt 201 and Phase 12
 sign-off remain open. Hermetic tests scrub service environments and stub probes.
+
+
+**Prompt 237 volume evidence integrity (2026-09-30):** TM-21's producer is
+configuration/local-filename-scan preflight and always emits simulation. Historical
+engine claims above do not establish deployed block/cloud encryption, absence
+of unlock material, external custody, dual control or recovery. Missing paths,
+depth limits, suppressed filesystem/Git errors and broad TLS-key/certificate
+patterns limit the scanner; its traversal behavior is unchanged.
+
+Category 8 requires a separately supplied live production receipt with all nine
+exact service/container identities, nonfuture canonical UTC date, safe counts,
+explicit host/custody/dual-control/recovery confirmations and private source
+pointers. Mechanism/owner exactly match the approved parent; unique concrete
+POSIX root sets match irrespective of ordering. Every mount is covered on a
+directory boundary and every root covers a mount. Shared roots are permitted.
+All children must pass, every live child must bind, and malformed/failed children
+or failed dossiers block beside valid evidence. Dossiers cannot become children
+through filenames. Category 8 file failures suppress private paths, errors,
+scan diagnostics and nested formatting exceptions with one fixed reason.
+
+No key bytes or credentials belong in receipts. Paths and opaque references are
+sensitive metadata; validators neither dereference pointers nor stat/resolve
+symlinks. Physical identity, live production scope, custody, dual control and
+tested recovery require independent operator inspection. Content consistency,
+mode flags and confirmations are unauthenticated assertions. Stage 4/dossier
+baselines remain preflight, and TM-21, prompt 201 and Phase 12 live sign-off
+remain open. No production action or new runtime trust boundary was introduced.

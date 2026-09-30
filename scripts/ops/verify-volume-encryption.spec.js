@@ -379,71 +379,123 @@ test('Key Separation Invariant: fails closed when keyfile is detected in backups
   }
 });
 
-test('Key Separation Invariant: checkGit clean repository validation', () => {
-  const composeText = fs.readFileSync(REFERENCE_COMPOSE_PATH, 'utf8');
-  const envText = fs.readFileSync(REFERENCE_ENV_PATH, 'utf8');
-
-  const result = validateVolumeEncryption({
-    compose: composeText,
-    env: envText,
-    options: {
-      checkGit: true,
-      scanBackups: false,
+// Isolate the script location too: its default repo/backups roots must be test-owned.
+function cliFixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-volume-cli-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const ops = path.join(root, 'scripts/ops');
+  fs.mkdirSync(ops, { recursive: true });
+  const script = path.join(ops, 'verify-volume-encryption.js');
+  fs.copyFileSync(path.join(__dirname, 'verify-volume-encryption.js'), script);
+  fs.mkdirSync(path.join(root, 'node_modules'));
+  fs.symlinkSync(
+    path.dirname(require.resolve('js-yaml/package.json')),
+    path.join(root, 'node_modules/js-yaml'),
+  );
+  fs.mkdirSync(path.join(root, '.git'));
+  fs.mkdirSync(path.join(root, 'backups'));
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(bin);
+  fs.writeFileSync(
+    path.join(bin, 'git'),
+    '#!/bin/sh\nprintf "dataset.csv\\n"\n',
+    { mode: 0o700 },
+  );
+  const compose = path.join(root, 'compose.yml');
+  const envFile = path.join(root, 'production.env');
+  const readiness = path.join(root, 'readiness.json');
+  const output = path.join(root, 'receipt.json');
+  fs.copyFileSync(REFERENCE_COMPOSE_PATH, compose);
+  fs.copyFileSync(REFERENCE_ENV_PATH, envFile);
+  fs.copyFileSync(REFERENCE_READINESS_PATH, readiness);
+  return {
+    root,
+    compose,
+    envFile,
+    output,
+    run(args = []) {
+      return require('node:child_process').spawnSync(
+        process.execPath,
+        [
+          script,
+          '--compose',
+          compose,
+          '--env',
+          envFile,
+          '--readiness',
+          readiness,
+          '--output',
+          output,
+          ...args,
+        ],
+        {
+          cwd: root,
+          env: { PATH: bin, TMPDIR: root },
+          encoding: 'utf8',
+          timeout: 10000,
+        },
+      );
     },
+  };
+}
+
+for (const scenario of ['sentinels', 'concrete', 'failed']) {
+  test(`volume CLI emits simulation preflight for ${scenario} configuration`, (t) => {
+    const f = cliFixture(t);
+    if (scenario === 'concrete') {
+      const env = parseEnv(fs.readFileSync(f.envFile, 'utf8'));
+      env.PRODUCTION_VOLUME_ENCRYPTION = 'LUKS2';
+      env.PRODUCTION_KEY_RECOVERY_OWNER = 'fixture-custodian';
+      for (const [index, mount] of REQUIRED_STATEFUL_MOUNTS.entries()) {
+        env[mount.envVar] = path.join(f.root, `storage-${index}`);
+        fs.mkdirSync(env[mount.envVar]);
+      }
+      fs.writeFileSync(
+        f.envFile,
+        Object.entries(env)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n'),
+      );
+    }
+    if (scenario === 'failed') fs.writeFileSync(f.compose, 'services: {}');
+    const result = f.run(['--json']);
+    assert.ifError(result.error);
+    assert.equal(result.status, scenario === 'failed' ? 1 : 0, result.stderr);
+    const receipt = JSON.parse(fs.readFileSync(f.output, 'utf8'));
+    assert.deepEqual(JSON.parse(result.stdout), receipt);
+    assert.equal(receipt.execution_mode, 'simulation');
+    assert.equal(receipt.status, scenario === 'failed' ? 'failed' : 'success');
+    const {
+      validateVolumeEncryptionReport,
+    } = require('./check-launch-readiness');
+    assert.equal(
+      validateVolumeEncryptionReport(receipt),
+      scenario !== 'failed',
+    );
+    assert.equal(
+      validateVolumeEncryptionReport(receipt, undefined, { requireLive: true }),
+      false,
+    );
+    assert.ok(
+      receipt.keySeparation.scannedPaths.every((source) =>
+        source.startsWith(f.root + '/'),
+      ),
+    );
+    if (scenario === 'concrete')
+      assert.equal(receipt.keySeparation.scannedPaths.length, 10);
   });
+}
 
-  // Since current repo git does not track any keyfiles, checkGit must succeed
-  assert.equal(result.keySeparation.verified, true);
-});
-
-test('verifyVolumeEncryption: CLI --output writes structured JSON drill evidence', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-vol-output-test-'));
-  const outputFile = path.join(tmpDir, 'volume-encryption-evidence.json');
-  try {
-    const { execFileSync } = require('node:child_process');
-    execFileSync(process.execPath, [
-      path.resolve(__dirname, 'verify-volume-encryption.js'),
-      '--output',
-      outputFile,
-    ], { encoding: 'utf8' });
-
-    assert.ok(fs.existsSync(outputFile), 'Expected output file to be created');
-    const parsed = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
-
-    assert.equal(parsed.drill_type, 'production_volume_encryption_and_key_separation');
-    assert.equal(parsed.status, 'success');
-    assert.equal(parsed.valid, true);
-    assert.deepEqual(parsed.errors, []);
-    assert.equal(parsed.totalRequiredMounts, 9);
-    assert.equal(parsed.validMountsCount, 9);
-    assert.equal(parsed.evaluatedMounts.length, 9);
-    assert.ok(parsed.evaluatedMounts.every((m) => m.passed === true));
-    assert.equal(parsed.keySeparation.verified, true);
-    assert.deepEqual(parsed.keySeparation.detectedViolations, []);
-    assert.ok(typeof parsed.timestamp === 'string');
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('verifyVolumeEncryption: CLI -o alias writes structured JSON drill evidence', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-vol-output-test-short-'));
-  const outputFile = path.join(tmpDir, 'volume-encryption-evidence-short.json');
-  try {
-    const { execFileSync } = require('node:child_process');
-    execFileSync(process.execPath, [
-      path.resolve(__dirname, 'verify-volume-encryption.js'),
-      '-o',
-      outputFile,
-    ], { encoding: 'utf8' });
-
-    assert.ok(fs.existsSync(outputFile), 'Expected output file to be created');
-    const parsed = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
-
-    assert.equal(parsed.drill_type, 'production_volume_encryption_and_key_separation');
-    assert.equal(parsed.status, 'success');
-    assert.equal(parsed.valid, true);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
+test('volume CLI -o alias and human text describe preflight only', (t) => {
+  const f = cliFixture(t);
+  const result = f.run(['-o', f.output]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    JSON.parse(fs.readFileSync(f.output)).execution_mode,
+    'simulation',
+  );
+  assert.match(
+    result.stdout,
+    /limited local filename scans passed; live inspection required/,
+  );
 });

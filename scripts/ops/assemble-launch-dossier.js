@@ -876,6 +876,7 @@ function assemble(config) {
   const volPassed = Boolean(
     volStage?.status === "PASSED" &&
     volEvidence &&
+    volEvidence.execution_mode === "simulation" &&
     volEvidence.status === "success" &&
     volEvidence.valid === true &&
     Array.isArray(volEvidence.errors) &&
@@ -888,6 +889,7 @@ function assemble(config) {
     volEvidence.keySeparation.detectedViolations.length === 0,
   );
 
+  // Compatibility fields summarize declaration/local-scan preflight, not live inspection.
   let volumeEncryptionBaseline;
   if (volPassed) {
     volumeEncryptionBaseline = {

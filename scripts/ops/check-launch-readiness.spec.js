@@ -72,7 +72,8 @@ const validReconciliationReport = {
 };
 fs.writeFileSync(reconciliationFixturePath, JSON.stringify(validReconciliationReport));
 const volumeEncryptionFixturePath = path.join(restoreFixtureDir, 'volume-encryption-evidence-valid.json');
-const validVolumeEncryptionReport = {
+const simulationVolumeEncryptionReport = {
+  execution_mode: 'simulation',
   drill_type: 'production_volume_encryption_and_key_separation',
   timestamp: '2026-08-28T12:00:00.000Z',
   status: 'success',
@@ -99,6 +100,50 @@ const validVolumeEncryptionReport = {
   },
   readinessEvaluated: null,
 };
+// Test-only live inspection fixture; no production evidence or approvals.
+const validVolumeEncryptionReport = {
+  ...structuredClone(simulationVolumeEncryptionReport),
+  execution_mode: 'live',
+  environment: 'production',
+  environment_reference: 'inspection:environment',
+  authorization_reference: 'inspection:authorization',
+  operator_reference: 'inspection:operator',
+  encryption_mechanism: 'luks2-dm-crypt',
+  key_recovery_owner: 'infra-security-team',
+  encrypted_mount_paths: [
+    '/mnt/encrypted/postgres',
+    '/mnt/encrypted/valkey',
+    '/mnt/encrypted/garage',
+  ],
+  evaluatedMounts: simulationVolumeEncryptionReport.evaluatedMounts.map(
+    (mount, index) => ({
+      ...mount,
+      host_path:
+        index === 0
+          ? '/mnt/encrypted/postgres'
+          : index === 1
+            ? '/mnt/encrypted/valkey'
+            : `/mnt/encrypted/garage/storage-${index}`,
+      evidence_reference: `inspection:mount-${index}`,
+    }),
+  ),
+  live_verification: Object.fromEntries(
+    [
+      'host_encryption',
+      'key_separation',
+      'dual_custody',
+      'recovery_procedure',
+    ].map((key) => [
+      key,
+      {
+        status: 'passed',
+        verified: true,
+        evidence_reference: `inspection:${key}`,
+      },
+    ]),
+  ),
+};
+
 fs.writeFileSync(volumeEncryptionFixturePath, JSON.stringify(validVolumeEncryptionReport));
 const secretRotationFixturePath = path.join(restoreFixtureDir, 'secret-rotation-evidence-valid.json');
 const simulationSecretRotationReport = {
@@ -2107,30 +2152,7 @@ test('validateReadiness blocks approval when volume encryption evidence reports 
     const res = validateApprovedRecord(rec);
     const blockers = res.categoryBlockers.volume_encryption || [];
 
-    assert.ok(
-      blockers.some((b) => b.includes('reports volume encryption verification failure (status: "failed")')),
-      `Expected status blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports invalid volume encryption configuration (valid: false)')),
-      `Expected valid: false blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports volume encryption error(s): Mount missing')),
-      `Expected error message blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports Key Separation Invariant violation (keySeparation.verified: false)')),
-      `Expected key separation verified blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports 1 detected keyfile violation(s) in volume mounts or repository')),
-      `Expected detected keyfile blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports 1 failed stateful storage mount(s): postgres:/var/lib/postgresql')),
-      `Expected failed mount blocker, got: ${JSON.stringify(blockers)}`
-    );
+    assert.ok(blockers.includes('A referenced volume encryption report is invalid or failed'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -2162,14 +2184,7 @@ test('validateReadiness blocks approval when evidence dossier reports volume enc
     const res = validateApprovedRecord(rec);
     const blockers = res.categoryBlockers.volume_encryption || [];
 
-    assert.ok(
-      blockers.some((b) => b.includes('reports volume encryption baseline breach (volumeEncryptionBaseline.status: "breached")')),
-      `Expected baseline breach blocker, got: ${JSON.stringify(blockers)}`
-    );
-    assert.ok(
-      blockers.some((b) => b.includes('reports volume encryption compliance failure (summary.volumeEncryptionCompliance: "failed")')),
-      `Expected compliance failure blocker, got: ${JSON.stringify(blockers)}`
-    );
+    assert.ok(blockers.includes('A referenced volume encryption report is invalid or failed'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -2182,32 +2197,7 @@ test('validateReadiness accepts valid passed volume encryption evidence and comp
     const passedVolPath = path.join(tmpDir, 'volume-encryption-evidence-pass.json');
     fs.writeFileSync(
       passedVolPath,
-      JSON.stringify({
-        drill_type: 'production_volume_encryption_and_key_separation',
-        timestamp: '2026-08-28T12:00:00.000Z',
-        status: 'success',
-        valid: true,
-        errors: [],
-        warnings: [],
-        totalRequiredMounts: 9,
-        validMountsCount: 9,
-        evaluatedMounts: [
-          { service: 'postgres', containerPath: '/var/lib/postgresql', passed: true },
-          { service: 'valkey', containerPath: '/data', passed: true },
-          { service: 'garage', containerPath: '/var/lib/garage/meta', passed: true },
-          { service: 'garage', containerPath: '/var/lib/garage/data', passed: true },
-          { service: 'clamav', containerPath: '/var/lib/clamav', passed: true },
-          { service: 'caddy', containerPath: '/data', passed: true },
-          { service: 'caddy', containerPath: '/config', passed: true },
-          { service: 'prometheus', containerPath: '/prometheus', passed: true },
-          { service: 'grafana', containerPath: '/var/lib/grafana', passed: true },
-        ],
-        keySeparation: {
-          verified: true,
-          scannedPaths: ['/backups'],
-          detectedViolations: [],
-        },
-      }),
+      JSON.stringify(validVolumeEncryptionReport),
       'utf8'
     );
     const passedDossierPath = path.join(tmpDir, 'launch-evidence-dossier-pass.json');
@@ -2221,7 +2211,8 @@ test('validateReadiness accepts valid passed volume encryption evidence and comp
         passed_stages: 7,
         failed_stages: 0,
         stages: [
-          { stage_id: 'volume_encryption', status: 'PASSED' },
+          ...['static_templates', 'supply_chain_sast', 'ingress_deployment', 'volume_encryption',
+            'secret_rotation', 'capacity_alerting', 'disaster_recovery'].map((stage_id) => ({ stage_id, status: 'PASSED' })),
         ],
         volumeEncryptionBaseline: {
           status: 'verified',
@@ -2660,7 +2651,7 @@ test('approved volume encryption requires a child report beyond declaration, pro
     // 1. Prose only
     record.sections.volume_encryption.evidence = ['LUKS2 block device encryption verified'];
     let blockers = validateApprovedRecord(record).categoryBlockers.volume_encryption || [];
-    assert.ok(blockers.some((b) => b.includes('A successful volume encryption child JSON report is required')));
+    assert.ok(blockers.some((b) => b.includes('A successful live volume encryption child JSON report matching the approved configuration is required')));
 
     // 2. Dossier only
     const dossierPath = path.join(dir, 'launch-evidence-dossier-only.json');
@@ -2678,7 +2669,7 @@ test('approved volume encryption requires a child report beyond declaration, pro
     );
     record.sections.volume_encryption.evidence = [dossierPath];
     blockers = validateApprovedRecord(record).categoryBlockers.volume_encryption || [];
-    assert.ok(blockers.some((b) => b.includes('A successful volume encryption child JSON report is required')));
+    assert.ok(blockers.some((b) => b.includes('A successful live volume encryption child JSON report matching the approved configuration is required')));
 
     // 3. Arbitrary JSON with plausible name
     const arbitraryPath = path.join(dir, 'volume-encryption-evidence-fake.json');
@@ -5130,4 +5121,350 @@ test("deployment sparse execution claims cannot hide beside matching evidence", 
       ),
     );
   }
+});
+
+const volumeFailure =
+  'A referenced volume encryption report is invalid or failed';
+const volumeLiveRequired =
+  'A successful live volume encryption child JSON report matching the approved configuration is required';
+const {
+  validateVolumeEncryptionReport: validateVolumeReport,
+  isVolumeEncryptionCandidate: volumeCandidate,
+} = require('./check-launch-readiness');
+
+test('volume structural preflight cannot approve launch and live always requires observations', () => {
+  assert.equal(
+    validateVolumeReport(simulationVolumeEncryptionReport, fixedNow),
+    true,
+  );
+  assert.equal(
+    validateVolumeReport(simulationVolumeEncryptionReport, fixedNow, {
+      requireLive: true,
+    }),
+    false,
+  );
+  assert.equal(
+    validateVolumeReport(
+      { ...simulationVolumeEncryptionReport, execution_mode: 'live' },
+      fixedNow,
+    ),
+    false,
+  );
+  assert.equal(
+    validateVolumeReport(validVolumeEncryptionReport, fixedNow),
+    true,
+  );
+  for (const clock of [null, '2026-09-30', new Date(NaN), 0, []]) {
+    assert.equal(
+      validateVolumeReport(validVolumeEncryptionReport, clock),
+      false,
+    );
+  }
+  for (const timestamp of [
+    '2026-08-28T12:00:00Z',
+    '2026-08-28T12:00:00.000Z',
+  ]) {
+    assert.equal(
+      validateVolumeReport(
+        { ...validVolumeEncryptionReport, timestamp },
+        fixedNow,
+      ),
+      true,
+    );
+  }
+  for (const context of [
+    null,
+    [],
+    { expectedSection: null },
+    { expectedSection: {} },
+  ]) {
+    assert.equal(
+      validateVolumeReport(validVolumeEncryptionReport, fixedNow, context),
+      false,
+    );
+  }
+});
+
+test('volume rejects malformed modes, exact mount identities, counts and live observation contracts', () => {
+  const mutations = [
+    (r) => {
+      delete r.execution_mode;
+    },
+    (r) => {
+      r.execution_mode = 'unknown';
+    },
+    (r) => {
+      r.drill_type = 'other';
+    },
+    (r) => {
+      r.timestamp = '2026-02-30T00:00:00Z';
+    },
+    (r) => {
+      r.timestamp = '2099-01-01T00:00:00Z';
+    },
+    (r) => {
+      r.evaluatedMounts[1] = { ...r.evaluatedMounts[0] };
+    },
+    (r) => {
+      r.evaluatedMounts[0].service = 'unknown';
+    },
+    (r) => {
+      r.evaluatedMounts[0].containerPath = '/data';
+    },
+    (r) => {
+      r.evaluatedMounts.pop();
+    },
+    (r) => {
+      r.evaluatedMounts[0] = null;
+    },
+    (r) => {
+      r.evaluatedMounts[0] = [];
+    },
+    (r) => {
+      r.evaluatedMounts[0].passed = 'true';
+    },
+    ...['totalRequiredMounts', 'validMountsCount'].flatMap((key) =>
+      [undefined, '9', 9.1, Number.MAX_SAFE_INTEGER + 1, 8, 10].map(
+        (value) => (r) => {
+          r[key] = value;
+        },
+      ),
+    ),
+    (r) => {
+      r.environment = 'drill';
+    },
+    (r) => {
+      r.live_verification = null;
+    },
+    (r) => {
+      r.live_verification = [];
+    },
+    (r) => {
+      delete r.live_verification.host_encryption;
+    },
+    (r) => {
+      r.live_verification.extra = {};
+    },
+    (r) => {
+      r.live_verification.host_encryption.extra = true;
+    },
+    (r) => {
+      r.live_verification.dual_custody.verified = 'true';
+    },
+    (r) => {
+      r.live_verification.recovery_procedure.status = 'failed';
+    },
+    (r) => {
+      r.live_verification.key_separation = null;
+    },
+    (r) => {
+      r.live_verification.key_separation = [];
+    },
+    (r) => {
+      r.encryption_mechanism = 'plaintext';
+    },
+    ...[
+      '',
+      ' ',
+      ' padded ',
+      'private\ncanary',
+      '__REQUIRED_SOURCE__',
+      'change-me',
+      'acres_app_dev_password',
+      'sk-' + 'a'.repeat(24),
+    ].flatMap((value) =>
+      [
+        'environment_reference',
+        'authorization_reference',
+        'operator_reference',
+        'key_recovery_owner',
+      ].map((key) => (r) => {
+        r[key] = value;
+      }),
+    ),
+    ...[
+      '',
+      ' ',
+      '\u0000',
+      '__REQUIRED_SOURCE__',
+      'sk-' + 'a'.repeat(24),
+    ].flatMap((value) => [
+      (r) => {
+        r.evaluatedMounts[0].evidence_reference = value;
+      },
+      (r) => {
+        r.live_verification.host_encryption.evidence_reference = value;
+      },
+    ]),
+  ];
+  for (const [index, mutate] of mutations.entries()) {
+    const receipt = structuredClone(validVolumeEncryptionReport);
+    mutate(receipt);
+    assert.equal(
+      validateVolumeReport(receipt, fixedNow),
+      false,
+      `mutation ${index}`,
+    );
+  }
+});
+
+test('volume roots use directory boundaries, cover all mounts, and bind exactly to approved parent', () => {
+  const expected = buildValidApprovedRecord().sections.volume_encryption;
+  const validate = (r, parent = expected) =>
+    validateVolumeReport(r, fixedNow, {
+      requireLive: true,
+      expectedSection: parent,
+    });
+  assert.equal(validate(validVolumeEncryptionReport), true);
+  assert.equal(
+    validate(validVolumeEncryptionReport, {
+      ...expected,
+      encrypted_mount_paths: [...expected.encrypted_mount_paths].reverse(),
+    }),
+    true,
+  );
+  for (const change of [
+    { encryption_mechanism: 'LUKS2' },
+    { key_recovery_owner: 'another-owner' },
+    {
+      encrypted_mount_paths: [
+        '/mnt/encrypted/postgres',
+        '/mnt/encrypted/valkey',
+        '/another',
+      ],
+    },
+    { encrypted_mount_paths: expected.encrypted_mount_paths.slice(1) },
+    { encryption_mechanism: 'rot13' },
+    { key_recovery_owner: ' ' },
+  ])
+    assert.equal(
+      validate(validVolumeEncryptionReport, { ...expected, ...change }),
+      false,
+    );
+  for (const badPath of [
+    '/',
+    'relative',
+    '/data/',
+    '/data//db',
+    '/data/./db',
+    '/data/../db',
+    '/data\\db',
+    '/data\nprivate',
+    '__REQUIRED_PATH__',
+  ]) {
+    const receipt = structuredClone(validVolumeEncryptionReport);
+    receipt.encrypted_mount_paths[0] = badPath;
+    assert.equal(validateVolumeReport(receipt, fixedNow), false, badPath);
+    receipt.encrypted_mount_paths = [...expected.encrypted_mount_paths];
+    receipt.evaluatedMounts[0].host_path = badPath;
+    assert.equal(validateVolumeReport(receipt, fixedNow), false, badPath);
+    assert.equal(
+      validate(validVolumeEncryptionReport, {
+        ...expected,
+        encrypted_mount_paths: [
+          badPath,
+          ...expected.encrypted_mount_paths.slice(1),
+        ],
+      }),
+      false,
+    );
+  }
+  for (const mutate of [
+    (r) => {
+      r.encrypted_mount_paths[1] = r.encrypted_mount_paths[0];
+    },
+    (r) => {
+      r.encrypted_mount_paths.push('/unused');
+    },
+    (r) => {
+      r.evaluatedMounts[0].host_path = '/mnt/encrypted/postgres2';
+    },
+    (r) => {
+      r.evaluatedMounts[0].host_path = '/elsewhere';
+    },
+  ]) {
+    const receipt = structuredClone(validVolumeEncryptionReport);
+    mutate(receipt);
+    assert.equal(validateVolumeReport(receipt, fixedNow), false);
+  }
+});
+
+test('Category 8 requires bound live child and suppresses private evidence failures including globs', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'volume-private-canary-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const good = path.join(dir, 'custom-inspection.json');
+  const other = path.join(dir, 'volume-encryption-private-canary.json');
+  fs.writeFileSync(good, JSON.stringify(validVolumeEncryptionReport));
+  const record = buildValidApprovedRecord();
+  const blockers = (evidence) => {
+    record.sections.volume_encryption.evidence = evidence;
+    return (
+      validateApprovedRecord(record).categoryBlockers.volume_encryption || []
+    );
+  };
+  fs.writeFileSync(other, JSON.stringify(simulationVolumeEncryptionReport));
+  assert.ok(blockers([other]).includes(volumeLiveRequired));
+  assert.deepEqual(blockers([good, other]), []);
+  assert.deepEqual(blockers([path.join(dir, '*.json')]), []);
+  for (const bad of [
+    { ...validVolumeEncryptionReport, key_recovery_owner: 'different-owner' },
+    {
+      ...validVolumeEncryptionReport,
+      status: 'private-canary',
+      errors: ['private-canary'],
+    },
+    {
+      ...validVolumeEncryptionReport,
+      keySeparation: {
+        verified: false,
+        detectedViolations: [{ path: '/private-canary' }],
+      },
+    },
+    {
+      ...validVolumeEncryptionReport,
+      errors: [{ toString: null, valueOf: null, private: 'private-canary' }],
+    },
+    {
+      ...validVolumeEncryptionReport,
+      evaluatedMounts: [
+        { passed: false, service: { toString: null, valueOf: null } },
+      ],
+    },
+    {
+      dossier_version: '1.0.0',
+      overall_status: 'FAILED',
+      stages: [],
+      error_message: 'private-canary',
+    },
+    {
+      overall_status: 'PASSED',
+      stages: [],
+      volumeEncryptionBaseline: { status: 'breached' },
+    },
+    { arbitrary: 'private-canary' },
+    { stages: null, overall_status: 'PASSED', volumeEncryptionBaseline: {} },
+    { stages: [], overall_status: 'PASSED' },
+  ]) {
+    fs.writeFileSync(other, JSON.stringify(bad));
+    for (const evidence of [[good, other], [path.join(dir, '*.json')]]) {
+      const result = blockers(evidence);
+      assert.ok(result.includes(volumeFailure), JSON.stringify(result));
+      assert.ok(!JSON.stringify(result).includes('private-canary'));
+      assert.ok(!JSON.stringify(result).includes(dir));
+    }
+  }
+  fs.writeFileSync(other, '{private-canary');
+  assert.ok(blockers([good, other]).includes(volumeFailure));
+  fs.unlinkSync(other);
+  assert.ok(blockers([good, other]).includes(volumeFailure));
+  for (const evidence of [['inspection:external'], ['encryption inspected']])
+    assert.ok(blockers(evidence).includes(volumeLiveRequired));
+  const dossier = {
+    ...validVolumeEncryptionReport,
+    dossier_version: '1.0.0',
+    stages: [],
+  };
+  fs.writeFileSync(other, JSON.stringify(dossier));
+  assert.equal(volumeCandidate({ file: other, parsed: dossier }), false);
+  assert.ok(blockers([other]).includes(volumeLiveRequired));
 });

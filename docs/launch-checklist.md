@@ -990,26 +990,50 @@ none of these repository results supplies Category 7 evidence.
 
 ### 8. Volume Encryption (`volume_encryption`)
 
-- Drill/verify: `node scripts/ops/verify-volume-encryption.js --output backups/volume-encryption-evidence-<timestamp>.json`
-- Evidence: `backups/volume-encryption-evidence-<timestamp>.json`
-- Accept: LUKS2/CMEK-class mechanism, ≥3 encrypted stateful mounts
-  (PostgreSQL, Valkey, Garage), `key_separation_confirmed: true` (zero keys in
-  mounts/backups/git), designated `key_recovery_owner`
-- An approved record must reference a concrete, successful volume encryption
-  child JSON report in `evidence`. A custom path is accepted by report content,
-  not name. Its ISO UTC `timestamp` must be real and no later than validation
-  time. Every referenced volume encryption report must pass: `status: "success"`,
-  `valid: true`, empty `errors` array, `keySeparation.verified: true`, empty
-  `keySeparation.detectedViolations` array, and `evaluatedMounts` array containing
-  all items with `passed: true` covering at least the 3 required stateful mounts
-  (PostgreSQL, Valkey, Garage). If total/valid mount counts are present, they
-  must be equal positive integers. A failed or malformed report blocks even
-  alongside a valid one. The unified dossier alone, prose, and
-  `key_separation_confirmed: true` without child evidence are insufficient.
-- Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
-  - Requires at least one concrete, successful volume encryption child report in `evidence` for approved status;
-  - Rejects volume encryption evidence reporting failure (`status !== 'success'`), invalid configuration (`valid: false`), any errors in `errors[]`, key separation violation (`keySeparation.verified: false`), detected keyfile violations in volume mounts or Git tracking, or any failed stateful storage mounts;
-  - Rejects Unified Launch Evidence Dossiers reporting `volumeEncryptionBaseline.status: "breached"` or `summary.volumeEncryptionCompliance: "failed"`.
+- Preflight: `node scripts/ops/verify-volume-encryption.js --output <restricted-preflight.json>`.
+  Every CLI receipt is `execution_mode: "simulation"`, including concrete paths.
+  It checks declarations and limited local filenames; no host/custody/recovery
+  inspection is performed. Legacy receipts need regeneration, never relabeling.
+- Accept: approved mechanism, at least three unique concrete absolute POSIX
+  root paths, `key_separation_confirmed: true`, designated recovery owner,
+  approver and at least one separately supplied live production child matching
+  the approved mechanism, owner and root path set. All nine exact required
+  service/container identities must appear once with `passed: true`, safe
+  total/valid counts equal to nine, and valid nonfuture canonical ISO UTC date.
+  Success, valid, empty errors, `keySeparation.verified: true` and empty detected
+  violations remain required for both classified simulation and live children.
+- Live adds `environment: "production"`, trimmed opaque environment,
+  authorization and operator references; mechanism, recovery owner and root
+  inventory; `host_path` / `evidence_reference` for every mount; and exactly four
+  `live_verification` entries: `host_encryption`, `key_separation`, `dual_custody`,
+  `recovery_procedure`. Each entry has exactly `status: "passed"`,
+  `verified: true`, `evidence_reference`. References/strings reject controls,
+  placeholders, dev passwords and literal secrets. Never include secret bytes.
+- Roots match the parent as an unordered set; mechanism/owner spelling matches
+  exactly. Mount paths equal or descend from a root on directory boundaries;
+  every root covers an inspected mount. Shared roots are allowed, including
+  Garage metadata/data. Paths reject `/`, trailing slashes, empty/dot/dot-dot
+  segments, backslashes and controls. No path normalization, stat/symlink
+  resolution or pointer dereference is performed by the validator.
+- Every referenced child must pass, and every live child must bind to the
+  approved section, even beside a matching one or in a glob. Valid simulation
+  may accompany live evidence. Dossiers are excluded before filename checks;
+  failed dossiers block. Simulation-only, dossier-only, legacy-only, prose-only
+  and external-pointer-only evidence cannot approve. Category 8 evidence-file
+  failures use the fixed message `A referenced volume encryption report is
+  invalid or failed`, without private paths, child errors or formatting exceptions.
+- Independently inspect all nine deployed mounts and underlying device/cloud
+  encryption policy, separated unlock-material custody, dual control and the
+  approved owner's documented tested recovery. Paths and opaque pointers are
+  private metadata. Assertions and mode flags do not authenticate provenance
+  or production scope. See the current volume runbook in `docs/operations.md`.
+  Stage 4/7-stage dossier baselines remain preflight, not Category 8 approval.
+
+**Historical intake qualification (prompt 237):** The prompt-212 record below
+accurately records the then-current weaker contract (three arbitrary passing
+mounts and optional counts). The contract above supersedes it; local filename
+scans do not prove key absence or actual custody. Historical test results remain
+as recorded. No live inspection or launch approval occurred in prompt 237.
 
 **Prompt 212 Category 8 intake — 2026-09-27T15:45:00Z UTC.** Reviewed
 `5e176e4` on `main`; the only worktree change was this prompt. The
@@ -1453,7 +1477,7 @@ these repository checks establishes a production runtime or journey result.
 | 1 | `static_templates` | production templates, docker runtime, secret scan; `static-integrity-evidence-<timestamp>.json` |
 | 2 | `supply_chain_sast` | SBOM + licenses, SAST scan, container security |
 | 3 | `ingress_deployment` | Caddy routing verify, deployment configuration preflight/rehearsal |
-| 4 | `volume_encryption` | volume encryption + key separation |
+| 4 | `volume_encryption` | volume declarations + limited local filename scan preflight |
 | 5 | `secret_rotation` | secret rotation drill |
 | 6 | `capacity_alerting` | capacity benchmark, DoS resilience, alert simulation |
 | 7 | `disaster_recovery` | restore drill + storage reconciliation |
@@ -1504,7 +1528,7 @@ The Unified Launch Evidence Dossier aggregates structured baselines from child e
 - `staticIntegrityBaseline` (stage 1): the three fixed checks, their exit codes, and total/passed/failed counts; `summary.staticIntegrityCompliance` is passed only when the complete child evidence is valid and stage 1 passed;
 - `supplyChainBaseline` (stage 2): package inventory count, license compliance verification, license violations, SAST scanned files, findings count, triaged/expired/blocking findings, container security validity, and container security checks count;
 - `deploymentBaseline` (stage 3, preflight/rehearsal only): schema compatibility heuristic, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
-- `volumeEncryptionBaseline` (stage 4): stateful mount evaluation, required mount counts, and Key Separation Invariant verification;
+- `volumeEncryptionBaseline` (stage 4): stateful declaration evaluation, required mount counts, and limited local filename-scan preflight;
 - `secretRotationBaseline` (stage 5): verified 7-step simulation rehearsal (session, CSRF, database, Valkey, storage, compromise response, and credential redaction audit);
 - `databaseTelemetryBaseline` (stage 6): exporter health, database ping, connection pool saturation metrics, pool acquisition p95 latency, SQL query execution p95 latency, lock waits, and transaction age;
 - `disasterRecoveryBaseline` (stage 7): restore drill RTO, table parity, migration parity, PostGIS/foreign-key verification, and storage object reconciliation;
@@ -1811,7 +1835,7 @@ from an operator's private store.
 | `slo_and_alerting` | Available but unverified: eleven alert rules, dashboards and threshold contract. Missing: operator adoption of ≥99.9% availability, ≤500 ms HTTP p95, ≥100 RPS, ≤50 ms DB acquisition p95, ≤100 ms DB query p95, recipients, escalation, alert delivery and approval. Unresolved. | Successful capacity-alerting child JSON with fresh target-bound Prometheus database telemetry; inspect live scrape/benchmark results, alert routes, delivery receipts and all eleven rules. Synthetic checks do not prove capacity. | SRE lead and on-call team; provide target/telemetry and routing references, then authorize any live load or DoS exercise separately. |
 | `backup_and_disaster_recovery` | Available but unverified: restore/reconciliation scripts and example one-hour/four-hour objectives. Missing: approved RPO ≤1h, RTO ≤4h, UTC schedule, encrypted off-host destination, isolated target, completed restore/reconciliation and approval. Unresolved. | Successful restore and object-reconciliation child JSON reports; independently inspect actual backup completion/freshness, encrypted transfer, PostgreSQL/Garage coverage, isolated restore parity and object inventory. | SRE lead; provide redacted backup and isolated-target references; authorize restore operation separately. |
 | `data_retention_policy` | Available but unverified: fixed example windows (7d quarantine, 1d rejected objects, 30d exports/backups, 15d telemetry). Missing: approved account, audit and report windows, scheduled cleanup verification, legal approval. Unresolved. | Retention-policy-review child JSON; inspect signed policy and live cleanup schedule/results for all eight fields. | Legal lead with operations; provide opaque policy and cleanup evidence references. |
-| `volume_encryption` | Available but unverified: mount verifier. Missing: selected LUKS2/CMEK-class mechanism, three encrypted mount paths, key separation, key-recovery owner and approval. Unresolved. | Successful volume-encryption child JSON; inspect live PostgreSQL, Valkey and Garage mount encryption plus separated key custody and recovery procedure. | Security lead and key-recovery owner; provide redacted mount and custody references for read-only inspection. |
+| `volume_encryption` | Available: simulation declaration/local-scan preflight. Missing: independently inspected live child, approved mechanism/root inventory/owner and sign-off. Unresolved. | Bound live production child covering all nine required service mounts; inspect encryption, separated custody, dual control and tested recovery. | Security/infrastructure leads and key-recovery owner; restricted mount/custody source pointers and dated approval. |
 | `graphql_introspection` | Available but unverified: example says disabled. Missing: operator production policy decision, live route result and approval. Unresolved. | GraphQL-introspection-probe child JSON; independently probe the designated production `/graphql` ingress and inspect response without exposing schema data. | Security lead; provide policy reference and authorize a read-only route probe. |
 | `deployment_and_rollback` | Available but unverified: deployment drill and image checks. Missing: host profile, registry, deployment approver, rollback authority, provenance policy, reviewed 40-hex source commit, immutable current/previous client/server image pairs, provenance artifacts, live drill and approval. Unresolved. | Successful deployment child JSON and distinct client/server provenance evidence; inspect registry manifests, signatures, materialized Compose, release preflight, live promotion and rollback observations. | Release manager, deployment approver and rollback authority; provide opaque release/provenance references and approve any live change in a later window. |
 | `optional_ai_posture` | Available but unverified: example declares AI disabled and Phase 11A excluded. Missing: verified API/worker `AI_DRAFT_ENABLED=false`, absent `GEMINI_API_KEY`, unpaid-provider exclusion, three deterministic journeys and product/security approval. Unresolved. | No-AI production posture child JSON; inspect redacted live API/worker inventories, provider policy and analytics dashboard, governed report and export download run results. | Product and security leads; provide opaque inventory, policy and journey-run references. |
@@ -1938,7 +1962,7 @@ operators own authentic live evidence and human sign-off.
 | 5 | slo_and_alerting | `bash scripts/ops/run-capacity-alerting-drill.sh` | sre-lead | |
 | 6 | backup_and_disaster_recovery | `bash scripts/ops/run-restore-drill.sh` | sre-lead | |
 | 7 | data_retention_policy | policy review sign-off | legal-lead | |
-| 8 | volume_encryption | `node scripts/ops/verify-volume-encryption.js` | security-lead | |
+| 8 | volume_encryption | Bound live operator receipt + independent nine-mount/custody/dual-control/recovery inspection; CLI is preflight only | security-lead + key-recovery owner | |
 | 9 | graphql_introspection | production probe transcript | security-lead | |
 | 10 | deployment_and_rollback | Preflight: `bash scripts/ops/run-deployment-drill.sh --dry-run`; separately inspected live release-bound operator receipt | release-manager | |
 | 11 | optional_ai_posture | `node scripts/ops/check-launch-readiness.js <record>` | product-and-security-lead | |

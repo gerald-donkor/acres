@@ -175,6 +175,7 @@ function stub(key, args) {
     },
     volume: {
       ...success,
+      execution_mode: "simulation",
       drill_type: "production_volume_encryption_and_key_separation",
       totalRequiredMounts: 9,
       validMountsCount: 9,
@@ -355,6 +356,8 @@ function stub(key, args) {
         e.drill_timestamp = time;
       else e.timestamp = time;
     }
+    if (scenario === "legacy-mode") delete e.execution_mode;
+    if (scenario === "live-mode") e.execution_mode = "live";
     if (scenario === "type") e.drill_type = "private-secret";
     if (scenario === "null-check") {
       if (key === "container") e.checks = [null];
@@ -586,6 +589,16 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
   assert.equal(r.dossier.secretRotationBaseline.status, "verified");
   assert.equal(r.dossier.summary.secretRotationCompliance, "passed");
   assert.equal(r.dossier.targets.mode, "offline");
+  assert.equal(r.dossier.volumeEncryptionBaseline.status, "verified");
+  assert.equal(r.dossier.summary.volumeEncryptionCompliance, "passed");
+  const volumeChild = JSON.parse(
+    fs.readFileSync(
+      r.dossier.stages[3].artifacts.find((file) =>
+        file.endsWith("volume-encryption-evidence-receipt.json"),
+      ),
+    ),
+  );
+  assert.equal(volumeChild.execution_mode, "simulation");
   assert.deepEqual(
     f.calls().map((c) => c.key),
     Object.values(children),
@@ -672,6 +685,8 @@ for (const scenario of [
   "sast:summary-private",
   "container:null-check",
   "volume:null-check",
+  "volume:legacy-mode",
+  "volume:live-mode",
   "capacity:db-threshold",
   "capacity:nested-missing",
   "capacity:nested-alert",

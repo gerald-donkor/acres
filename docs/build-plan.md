@@ -710,6 +710,9 @@ Records the complete Phase 12 Caddy same-origin ingress routing verification and
 results below are simulation rehearsal, not proof of production credential
 rotation or zero downtime. TM-15 production acceptance remains operator-owned.
 
+**Current volume qualification (prompt 237):** Historical volume results below
+are declaration/local-scan preflight, not TM-21 production acceptance.
+
 Records the complete Phase 12 production volume encryption key separation verification and zero-downtime secret rotation drill:
 
 - **Volume Encryption & Key Separation Engine**:
@@ -1229,3 +1232,48 @@ checked-in example still failed closed (0 approved categories, 11 blocked,
 70 blockers). This child report records operator assertions and pointers;
 production runtime inventory inspection, actual journey execution, policy
 review, and launch sign-off remain operator-owned.
+
+**Prompt 237 Phase 12K volume evidence separation (2026-09-30):** The existing
+volume CLI now classifies every emitted receipt as simulation declaration/local
+filename-scan preflight. Category 8 requires a separate live operator inspection
+child bound to its approved mechanism, recovery owner and unordered concrete
+root inventory. Both modes require exactly nine known service/container
+identities, true assertions, consistent safe counts and canonical nonfuture UTC
+dates. Live additionally requires production/operator/authorization references,
+per-mount host paths/source pointers and exact host-encryption, key-separation,
+dual-custody and tested-recovery observations. Every root covers a mount and
+every mount lies within an approved root on directory boundaries; shared roots
+remain permitted. Every live child must bind; malformed/failed children and
+malformed/failed dossiers block even beside good evidence or in a glob.
+
+The narrow Category 8 evidence boundary suppresses private paths/errors/scan
+results/formatting exceptions. Stage 4 and existing dossier baseline/compliance
+fields remain preflight; legacy modes need regeneration or independently
+inspected live evidence, never relabeling. Scanner traversal/limitations and
+unauthenticated provenance are documented in the current volume runbook and
+Category 8 contract. Hermetic producer tests isolate the script's default roots,
+scrub inherited environment and stub Git. No production mount, key retrieval,
+recovery exercise or approval occurred; prompt 201 and Phase 12 remain open.
+
+Verification output: `ops:volume-test` reported `tests 18`, `pass 18`, `fail 0`;
+`ops:readiness-test` reported `tests 593`, `pass 593`, `fail 0`;
+`ops:launch-drill-test` reported `tests 59`, `pass 59`, `fail 0`.
+`ops:readiness-schema-test` in the full operations suite reported `tests 8`,
+`pass 8`, `fail 0`; `ops:templates` printed `ops template check passed`.
+`ops:check`, lint, typecheck and build exited 0. The existing dependency audit
+printed `21 vulnerabilities (10 moderate, 11 high)` and `Production dependency
+security audit passed (0 critical vulnerabilities)` under its current threshold;
+no dependency changes were made. Initial sandbox child-process checks failed
+with `EPERM`; permitted normal-execution reruns passed. Scoped Prettier checks
+printed `Scoped Prettier checks passed (4 changed blocks and launch fixture)`;
+changed JavaScript syntax, Bash syntax and `git diff --check` exited 0.
+The unresolved example exited 1 and printed `Approved Categories: 0`,
+`Unresolved / Blocked: 11`, `Total Blockers Detected: 70` and
+`Result: FAIL-CLOSED`. The later narrow malformed-dossier check was covered by
+an additional passing readiness rerun. These are repository/test results, not
+production evidence or human sign-off.
+
+Independent read-only review of the working-tree implementation and final
+records against the approved prompt returned `No critical, important or minor
+findings` and `Ready to commit: Yes`. Feedback was evaluated against the code,
+contract and recorded checks; no fixes or follow-up review were required.

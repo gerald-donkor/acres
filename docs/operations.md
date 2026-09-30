@@ -460,32 +460,67 @@ error text stays server-log-only).
 
 ### Volume Encryption, Key Separation & Recovery Inspection Runbook
 
-1. **Volume Encryption Inspection**:
-   Execute `npm run ops:volume-drill` (or `node scripts/ops/verify-volume-encryption.js`). Validates:
-   - Evaluates all 9 stateful container mounts across `infra/compose/docker-compose.production.example.yml` and `infra/env/production.env.example`:
-     - `postgres`: `/var/lib/postgresql` -> `${ACRES_POSTGRES_ENCRYPTED_MOUNT}`
-     - `valkey`: `/data` -> `${ACRES_VALKEY_ENCRYPTED_MOUNT}`
-     - `garage`: `/var/lib/garage/meta` -> `${ACRES_GARAGE_META_ENCRYPTED_MOUNT}`
-     - `garage`: `/var/lib/garage/data` -> `${ACRES_GARAGE_DATA_ENCRYPTED_MOUNT}`
-     - `clamav`: `/var/lib/clamav` -> `${ACRES_CLAMAV_ENCRYPTED_MOUNT}`
-     - `caddy`: `/data` -> `${ACRES_CADDY_DATA_MOUNT}`
-     - `caddy`: `/config` -> `${ACRES_CADDY_CONFIG_MOUNT}`
-     - `prometheus`: `/prometheus` -> `${ACRES_PROMETHEUS_ENCRYPTED_MOUNT}`
-     - `grafana`: `/var/lib/grafana` -> `${ACRES_GRAFANA_ENCRYPTED_MOUNT}`
-   - Asserts approved host volume encryption mechanisms: `LUKS2/dm-crypt`, `aws:kms`, `gcp:cmek`, `azure:keyvault`.
-   - Fails closed on any direct unencrypted host binds for stateful services or missing mount variables.
+1. **Configuration preflight**: `npm run ops:volume-drill` validates Compose/env
+   declarations for exactly nine required service/container mounts: PostgreSQL
+   `/var/lib/postgresql`, Valkey `/data`, Garage `/var/lib/garage/meta` and
+   `/var/lib/garage/data`, ClamAV `/var/lib/clamav`, Caddy `/data` and `/config`,
+   Prometheus `/prometheus`, Grafana `/var/lib/grafana`. Concrete declared
+   mechanisms are checked against the installed LUKS/dm-crypt, AWS KMS, GCP CMEK
+   and Azure Key Vault patterns. Every emitted receipt, successful or failed,
+   declares `execution_mode: "simulation"`. Sentinel templates may pass.
+2. **Limited local filename scans**: selected existing mount/backup paths and
+   Git filenames are checked for key-like names. Missing directories, depth
+   limits, filesystem errors and Git failures can leave material unexamined;
+   symlinks are followed with cycle limits. Patterns also match TLS private
+   keys/certificates, which are not necessarily volume-unlock material. The
+   compatibility `keySeparation.verified` flag means preflight passed. It proves
+   neither absence of all unlock material nor external custody, dual control,
+   actual mounted-device encryption, or recovery. Scanner behavior is unchanged.
+3. **Independent live inspection**: the security/infrastructure leads inspect
+   every deployed service mount, underlying encrypted device/cloud policy and
+   actual physical/symlink mapping. Independently inspect unlock-material custody
+   outside data, backups and Git; dual-custody governance; the designated owner;
+   and the documented, tested recovery procedure. Store raw evidence in the
+   restricted operator store. Never place key bytes, passphrases or plaintext
+   credentials in receipts, chat or Git.
+4. **Operator-supplied live receipt**: retain the producer structural fields
+   (`drill_type: "production_volume_encryption_and_key_separation"`, real
+   nonfuture canonical ISO UTC timestamp with/without milliseconds, success,
+   valid, empty errors/violations, verified preflight flag). Require exactly the
+   nine distinct service/container identities, each `passed: true`, and safe
+   integer total/valid counts equal to nine. Add `execution_mode: "live"`,
+   `environment: "production"`, opaque `environment_reference`,
+   `authorization_reference`, `operator_reference`, `encryption_mechanism`,
+   `key_recovery_owner`, and `encrypted_mount_paths`. Each mount adds `host_path`
+   and `evidence_reference`. `live_verification` has exactly `host_encryption`,
+   `key_separation`, `dual_custody`, `recovery_procedure`; each has exactly
+   `status: "passed"`, `verified: true`, `evidence_reference`.
+5. **Binding and launch acceptance**: mechanism and owner must match the approved
+   Category 8 exactly (including mechanism alias spelling); root path sets must
+   match irrespective of order. Roots are at least three unique concrete absolute
+   POSIX directory paths. Reject `/`, trailing slashes, empty/dot/dot-dot
+   segments, backslashes and controls. Each mount is equal to or a directory
+   descendant of an approved root, and every root covers a mount. Shared roots
+   may cover Garage metadata/data or other service storage; nine disks or nine
+   roots are not required. Strings are trimmed, nonempty, control-free and pass
+   placeholder/dev/literal-secret rejection. The validator does not stat paths,
+   resolve symlinks, dereference opaque pointers, or authenticate provenance.
+   References and paths are sensitive metadata requiring restricted custody.
+6. **Evidence files**: every volume child must structurally pass; at least one
+   complete live child must bind to the approved parent. A valid simulation may
+   accompany it. Legacy/unknown modes require regeneration or independent live
+   inspection, never relabeling. Simulation-only, dossier-only, prose-only and
+   external-pointer-only records cannot approve. Failed, malformed or unrelated
+   live children and failed dossiers block even beside a matching child, including
+   wildcard matches. Category 8 file failures use only
+   `A referenced volume encryption report is invalid or failed`, suppressing
+   paths, child errors, scan diagnostics and nested formatting exceptions.
 
-2. **Key Separation Invariant Verification**:
-   - Strictly enforces that volume unlock keys, passphrases, or cloud KMS credentials are never stored within stateful volume mounts, backup archives (`backups/`), or tracked in Git.
-   - Automatically scans mount paths and backup directories against forbidden key patterns (`*.key`, `*.keyfile`, `*.passphrase`, `id_rsa`, `*luks*key*`, `*kms*creds*`).
-   - Asserts volume unlock material is managed strictly out-of-band by host init or approved secret store.
-
-3. **Key Recovery Governance**:
-   - Requires designated key recovery owner (`PRODUCTION_KEY_RECOVERY_OWNER`).
-   - Enforces split-key / dual-custody parameters and documented recovery runbook references for disaster recovery without CI credential exposure.
-
-4. **Launch Approval Child Evidence Requirement**:
-   Approved Category 8 (`volume_encryption`) records must reference a concrete volume encryption child JSON report in `evidence`. A custom path qualifies by report content; declaration, prose, filename alone, or unified dossier does not. The validator requires a valid, nonfuture ISO UTC `timestamp`, `status: "success"`, `valid: true`, empty `errors` array, `keySeparation.verified: true`, empty `keySeparation.detectedViolations` array, and `evaluatedMounts` array containing all items with `passed: true` covering at least the 3 required stateful mounts (PostgreSQL, Valkey, Garage). If total/valid mount counts are present, they must be equal positive integers. Every referenced child report, including wildcard matches, must pass. This verifies report consistency with the launch record; the operator remains obligated to inspect physical host encryption, confirm detached key separation, and audit volume mounts.
+Stage 4 and the existing `volumeEncryptionBaseline` / compliance fields summarize
+configuration/local-scan preflight only. A 7/7 dossier cannot replace the live
+child and independent human sign-off. Mode flags, confirmations and source
+pointers are unauthenticated assertions: consistent JSON cannot prove production
+scope. Prompt 201 and Phase 12 remain open; this runbook authorizes no live action.
 
 ### Secret Rotation & Emergency Compromise Response Runbook
 
@@ -652,6 +687,10 @@ Implemented in Prompt 63:
 
 ## Phase 12H Production Volume Encryption Key Separation & Secret Rotation Drill
 
+**Current volume qualification (prompt 237, 2026-09-30):** The historical
+volume results below establish declaration/local-scan preflight only. They do
+not close TM-21 live host/custody/recovery inspection or Category 8 sign-off.
+
 **Current rotation qualification (prompt 235, 2026-09-30):** The dated rotation
 results below describe local algorithms and mock services. No live service
 rotation, SMTP/Grafana verification or zero-downtime guarantee is established.
@@ -686,7 +725,7 @@ Implemented in Prompt 64:
 3. **Operations & CI Integration**:
    - Added root package scripts: `npm run ops:volume-test`, `npm run ops:volume-drill`, and `npm run ops:rotation-drill`.
    - Integrated `npm run ops:volume-test` and template verification into `npm run ops:check` and `scripts/ops/check-production-templates.sh`.
-   - Closes TM-15 and TM-21 operational verification gates.
+   - Supplies rehearsal/preflight checks; TM-15/TM-21 production acceptance remains operator-owned.
 
 ## Phase 12I Supply-Chain Security, Deterministic SAST & Container Build Hardening
 
@@ -2168,3 +2207,14 @@ reported `Ready to commit: Yes`, with focused regression `tests 1`, `pass 1`,
 `fail 0` and no remaining findings. Other required gates passed before this
 focused classifier fix; affected readiness, syntax, format and diff checks were
 rerun afterward. Source records and production sign-off remain operator-owned.
+
+**Prompt 237 verification (2026-09-30):** Volume tests reported `pass 18`,
+`fail 0`; readiness tests `pass 593`, `fail 0`; launch/dossier tests `pass 59`,
+`fail 0`. Templates printed `ops template check passed`; the full operations
+suite, lint, typecheck, build, scoped formatting and diff checks passed. The
+unresolved example remained `0` approved, `11` blocked, `70` blockers.
+Initial sandbox child-process failures required permitted normal-execution
+reruns. The full verification and audit output is recorded in the Phase 12K
+prompt-237 entry in `docs/build-plan.md`. Inspect safely with
+`npm run ops:volume-test` and `npm run ops:readiness-test` from the repository
+root; these use test-owned fixtures and do not approve launch.

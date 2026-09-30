@@ -21,7 +21,7 @@ set -m
 #   1. static_templates        — production templates, docker runtime, secret scan
 #   2. supply_chain_sast       — SBOM + licenses, SAST scan, container security
 #   3. ingress_deployment      — Caddy routing verify + deployment drill
-#   4. volume_encryption       — volume encryption + key separation verify
+#   4. volume_encryption       — volume declarations + local filename scan preflight
 #   5. secret_rotation         — secret rotation drill (always --dry-run)
 #   6. capacity_alerting       — capacity benchmark, DoS resilience, alert simulation
 #   7. disaster_recovery       — restore drill + storage reconciliation
@@ -238,8 +238,8 @@ run_stage "supply_chain_sast" "SBOM, SAST, container security" \
 run_stage "ingress_deployment" "Caddy routing + deployment drill" \
   stage_ingress
 
-# Stage 4: production volume encryption key separation
-run_stage "volume_encryption" "Volume encryption + key separation" \
+# Stage 4: volume configuration/local-scan preflight (always simulation)
+run_stage "volume_encryption" "Volume configuration preflight + local filename scan" \
   stage_volume
 
 # Stage 5: zero-downtime secret rotation & compromise drill.
