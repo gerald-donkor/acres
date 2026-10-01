@@ -905,3 +905,26 @@ and production ingress security remain subject to independent operator inspectio
 threat model mitigations TM-01 (tamper resistance / fail closed), TM-04 (information disclosure suppression),
 TM-05 (evidence boundary enforcement), and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off
 remain open.
+
+**Prompt 244 optional AI posture evidence integrity (2026-10-01):** Optional
+AI posture verification separates simulation preflights from live operator receipts.
+Local configuration checks and mock preview artifacts are classified as `execution_mode: "simulation"`;
+they validate structural runtime inventory schema and deterministic journey definitions but do not prove
+active runtime exclusion of Gemini credentials.
+
+Category 11 (`optional_ai_posture`) requires separately inspected live operator child receipts
+(`execution_mode: "live"`) bound to the production environment, operator reference,
+authorization reference, and provider policy reference when approved. Live receipts must confirm
+`unpaid_provider_excluded: true`, runtime inventory with `ai_draft_enabled: false` and `gemini_api_key_present: false`
+for both API and worker services, and verified deterministic journeys (`analytics_dashboard`, `governed_report`,
+`export_download`) with zero placeholders or exposed secrets. Unified evidence dossiers (`stages`,
+`dossier_version`) are rejected as candidate child reports.
+
+Category 11 enforces a safe diagnostic boundary in `checkEvidenceFile`: missing child files, parse errors,
+child validation failures, non-candidate files, and nested formatting exceptions are mapped to the fixed blocker message
+`'A referenced no-AI production posture report is invalid or failed'`, suppressing private filesystem
+paths, internal stack traces, and child diagnostics. Mode flags, booleans, and opaque references are
+unauthenticated assertions; actual runtime environment variables, container image digests, and secret store
+contents remain subject to independent operator inspection. Aligns with threat model mitigations TM-01
+(tamper resistance / fail closed), TM-04 (information disclosure suppression), TM-05 (evidence boundary enforcement),
+and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.

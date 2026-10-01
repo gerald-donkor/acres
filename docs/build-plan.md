@@ -1414,3 +1414,27 @@ reported no findings and confirmed readiness to commit. Verification output:
 (57/57), all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit
 reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No live network probe was executed
 or endpoint configuration modified; operator sign-off remains open.
+
+**Prompt 244 Phase 12K optional AI posture evidence separation (2026-10-01):** Category 11
+(`optional_ai_posture`) in `scripts/ops/check-launch-readiness.js` now classifies no-AI
+posture verifications as simulation preflight (`execution_mode: "simulation"`) and
+requires a separately inspected live operator child receipt (`execution_mode: "live"`)
+when approved. Live receipts require `environment: "production"`, trimmed non-empty opaque
+references (`operator_reference`, `authorization_reference`, `provider_policy_reference`),
+and confirmed runtime inventory (`api` and `worker` with `ai_draft_enabled: false`,
+`gemini_api_key_present: false`, non-empty trimmed `inventory_reference`) and deterministic
+journey passes (`analytics_dashboard`, `governed_report`, `export_download` with `passed: true`,
+non-empty trimmed `test_reference`).
+
+Unified dossiers are excluded from candidate evaluation (`isNoAiPostureCandidate`), and disguised
+dossiers fail validation. Every referenced child report must pass strict structural validation;
+valid simulations may accompany live evidence, but any invalid or malformed child blocks approval
+even beside a valid one. Category 11 enforces a safe diagnostic boundary in `checkEvidenceFile`
+suppressing private filesystem paths, stack traces, and child error diagnostics, mapping failures to
+`'A referenced no-AI production posture report is invalid or failed'`. Unresolved example readiness template
+failed closed with 0 approved categories, 11 blocked, and 70 blockers. Independent code review
+reported no findings and confirmed readiness to commit. Verification output:
+`ops:readiness-test` (599/599), `ops:readiness-schema-test` (8/8), `ops:templates`, `ops:templates-test`
+(57/57), all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit
+reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No production inventory or
+keys were inspected live; operator sign-off remains open.

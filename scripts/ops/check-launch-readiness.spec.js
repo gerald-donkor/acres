@@ -631,10 +631,31 @@ fs.writeFileSync(graphqlIntrospectionFixturePath, JSON.stringify(validGraphqlInt
 const noAiFixturePath = path.join(restoreFixtureDir, 'no-ai-posture-valid.json');
 const validNoAiReport = {
   drill_type: 'no_ai_production_posture_verification',
+  execution_mode: 'live',
+  environment: 'production',
+  operator_reference: 'op-ai-review-2026-08-28',
+  authorization_reference: 'auth-ai-review-2026-08-28',
   timestamp: '2026-08-28T12:00:00.000Z',
   status: 'success',
   errors: [],
-  environment: 'production',
+  runtime: {
+    api: { ai_draft_enabled: false, gemini_api_key_present: false, inventory_reference: 'inventory:api-prod-2026-08-28' },
+    worker: { ai_draft_enabled: false, gemini_api_key_present: false, inventory_reference: 'inventory:worker-prod-2026-08-28' },
+  },
+  journeys: {
+    analytics_dashboard: { passed: true, test_reference: 'run:analytics-dashboard-2026-08-28' },
+    governed_report: { passed: true, test_reference: 'run:governed-report-2026-08-28' },
+    export_download: { passed: true, test_reference: 'run:export-download-2026-08-28' },
+  },
+  unpaid_provider_excluded: true,
+  provider_policy_reference: 'policy:production-no-ai-v1',
+};
+const validSimulationNoAiReport = {
+  drill_type: 'no_ai_production_posture_verification',
+  execution_mode: 'simulation',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  errors: [],
   runtime: {
     api: { ai_draft_enabled: false, gemini_api_key_present: false, inventory_reference: 'inventory:api-prod-2026-08-28' },
     worker: { ai_draft_enabled: false, gemini_api_key_present: false, inventory_reference: 'inventory:worker-prod-2026-08-28' },
@@ -1032,7 +1053,7 @@ test('non-object evidence blocker does not echo its path', () => {
     const record = buildValidApprovedRecord();
     record.sections.optional_ai_posture.evidence = [noAiFixturePath, file];
     const blockers = validateApprovedRecord(record).categoryBlockers.optional_ai_posture || [];
-    assert.ok(blockers.some((blocker) => blocker.includes('must contain a JSON object')));
+    assert.ok(blockers.some((blocker) => blocker.includes('A referenced no-AI production posture report is invalid or failed')));
     assert.ok(!JSON.stringify(blockers).includes('credential-bearing-reference'));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -1177,25 +1198,53 @@ test('validateReadiness rejects ai_enabled: true with the launch-exclusion fatal
 });
 
 test('approved no-AI posture requires a production child, not prose or a dossier', () => {
-  const record = buildValidApprovedRecord();
-  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.optional_ai_posture, undefined);
-  assert.equal(isNoAiPostureCandidate({ parsed: {} }), true);
-  assert.equal(isNoAiPostureCandidate({ parsed: [] }), false);
-  record.sections.optional_ai_posture.evidence = ['No-AI journeys and runtime inventory checked'];
-  assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /child JSON report is required/);
-  record.sections.optional_ai_posture.evidence = [deploymentDrillFixturePath];
-  assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-no-ai-test-'));
+  try {
+    const simPath = path.join(dir, 'no-ai-sim.json');
+    fs.writeFileSync(simPath, JSON.stringify(validSimulationNoAiReport));
+    const record = buildValidApprovedRecord();
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.optional_ai_posture, undefined);
+    record.sections.optional_ai_posture.evidence = ['No-AI journeys and runtime inventory checked'];
+    assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /child JSON report is required/);
+    record.sections.optional_ai_posture.evidence = [simPath];
+    assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /A live no-AI production posture operator receipt is required/);
+    record.sections.optional_ai_posture.evidence = [simPath, noAiFixturePath];
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.optional_ai_posture, undefined);
+
+    assert.equal(isNoAiPostureCandidate({ parsed: {} }), true);
+    assert.equal(isNoAiPostureCandidate({ parsed: [] }), false);
+    assert.equal(isNoAiPostureCandidate({ parsed: { stages: [] } }), false);
+    assert.equal(isNoAiPostureCandidate({ parsed: { dossier_version: '1.0.0' } }), false);
+    record.sections.optional_ai_posture.evidence = [deploymentDrillFixturePath];
+    assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('no-AI posture report rejects failed, incomplete, nonproduction and secret-bearing claims', () => {
   const approved = buildValidApprovedRecord().sections.optional_ai_posture;
   assert.equal(validateNoAiPostureReport(validNoAiReport, fixedNow, approved), true);
+  assert.equal(validateNoAiPostureReport(validSimulationNoAiReport, fixedNow, approved), true);
+  assert.equal(validateNoAiPostureReport(validSimulationNoAiReport, fixedNow, approved, { requireLive: true }), false);
+  assert.equal(validateNoAiPostureReport(validNoAiReport, new Date('invalid'), approved), false);
   const mutations = [
     (r) => { r.timestamp = '2026-02-30T12:00:00.000Z'; },
     (r) => { r.timestamp = '2027-01-01T00:00:00.000Z'; },
     (r) => { r.status = 'failed'; },
     (r) => { r.errors = ['runtime inspection failed']; },
     (r) => { r.environment = 'staging'; },
+    (r) => { delete r.environment; },
+    (r) => { r.execution_mode = 'dry-run'; },
+    (r) => { delete r.execution_mode; },
+    (r) => { delete r.operator_reference; },
+    (r) => { r.operator_reference = ''; },
+    (r) => { r.operator_reference = ' op '; },
+    (r) => { r.operator_reference = '__REQUIRED_OPERATOR__'; },
+    (r) => { delete r.authorization_reference; },
+    (r) => { r.authorization_reference = ''; },
+    (r) => { r.authorization_reference = ' auth '; },
+    (r) => { r.authorization_reference = '__REQUIRED_AUTH__'; },
     (r) => { r.runtime.api.ai_draft_enabled = true; },
     (r) => { r.runtime.worker.gemini_api_key_present = true; },
     (r) => { r.runtime.api.inventory_reference = ''; },
@@ -1228,14 +1277,36 @@ test('no-AI approval accepts a custom child path and rejects mixed wildcard chil
   try {
     const good = path.join(dir, 'custom.json');
     const bad = path.join(dir, 'other.json');
+    const malformed = path.join(dir, 'malformed.json');
     fs.writeFileSync(good, JSON.stringify(validNoAiReport));
     const record = buildValidApprovedRecord();
     record.sections.optional_ai_posture.evidence = [good];
     assert.strictEqual(validateApprovedRecord(record).categoryBlockers.optional_ai_posture, undefined);
+
+    // Malformed JSON suppresses file path diagnostics
+    fs.writeFileSync(malformed, '{ invalid json');
+    record.sections.optional_ai_posture.evidence = [malformed];
+    const malformedBlockers = validateApprovedRecord(record).categoryBlockers.optional_ai_posture || [];
+    assert.ok(malformedBlockers.includes('A referenced no-AI production posture report is invalid or failed'));
+    assert.ok(!malformedBlockers.some((b) => b.includes(dir) || b.includes('malformed.json')));
+
+    // Disguised dossier rejected
+    const disguisedDossier = path.join(dir, 'disguised-dossier.json');
+    fs.writeFileSync(disguisedDossier, JSON.stringify({ ...validNoAiReport, dossier_version: '1.0.0', stages: [] }));
+    record.sections.optional_ai_posture.evidence = [disguisedDossier];
+    assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /child JSON report is required/);
+
     fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
     record.sections.optional_ai_posture.evidence = [path.join(dir, '*.json')];
     assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
+
     fs.writeFileSync(bad, JSON.stringify({ ...validNoAiReport, status: 'failed' }));
+    record.sections.optional_ai_posture.evidence = [bad];
+    assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
+
+    const uppercase = path.join(dir, 'failed.JSON');
+    fs.writeFileSync(uppercase, JSON.stringify({ ...validNoAiReport, status: 'failed' }));
+    record.sections.optional_ai_posture.evidence = [good, uppercase];
     assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -1401,9 +1472,10 @@ test('validateReadiness blocks approval when referenced evidence file is missing
   const result = validateApprovedRecord(record);
   const blockers = result.categoryBlockers.optional_ai_posture || [];
   assert.ok(
-    blockers.some((b) => b.includes('no matching file exists on disk')),
+    blockers.some((b) => b.includes('A referenced no-AI production posture report is invalid or failed')),
     `Expected missing-file blocker, got: ${JSON.stringify(blockers)}`
   );
+  assert.ok(!JSON.stringify(blockers).includes('missing-posture-file.json'));
 });
 
 test('validateReadiness blocks approval when referenced evidence reports failure', () => {
@@ -1422,7 +1494,7 @@ test('validateReadiness blocks approval when referenced evidence reports failure
     const result = validateApprovedRecord(record);
     const blockers = result.categoryBlockers.optional_ai_posture || [];
     assert.ok(
-      blockers.some((b) => b.includes('reports drill failure')),
+      blockers.some((b) => b.includes('A referenced no-AI production posture report is invalid or failed')),
       `Expected failure-report blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {
@@ -1497,7 +1569,7 @@ test('validateReadiness blocks approval when evidence reports a non-zero exitCod
     const result = validateApprovedRecord(record);
     const blockers = result.categoryBlockers.optional_ai_posture || [];
     assert.ok(
-      blockers.some((b) => b.includes('summary.exitCode: 1')),
+      blockers.some((b) => b.includes('A referenced no-AI production posture report is invalid or failed')),
       `Expected exitCode blocker, got: ${JSON.stringify(blockers)}`
     );
   } finally {

@@ -2494,3 +2494,47 @@ Verification and review (2026-10-01):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open; no production network probes were issued against production `/graphql` ingress.
+
+## Prompt 244 — separate optional AI posture preflight from live evidence (2026-10-01)
+
+`scripts/ops/check-launch-readiness.js`:
+- `validateNoAiPostureReport(report, now, approved, context)` supports both simulation and live modes:
+  - Requires `drill_type === "no_ai_production_posture_verification"`, `status === "success"`, empty `errors` array,
+    `unpaid_provider_excluded === true`, valid nonfuture ISO UTC timestamp, and zero placeholder or secret markers.
+  - Requires explicit `execution_mode: "simulation" | "live"`. Missing or unrecognized modes fail closed.
+  - Validates `runtime` object containing exactly `api` and `worker` services, each with `ai_draft_enabled: false`,
+    `gemini_api_key_present: false`, and trimmed non-empty `inventory_reference`.
+  - Validates `journeys` object containing exactly `analytics_dashboard`, `governed_report`, and `export_download`,
+    each with `passed: true` and trimmed non-empty `test_reference`.
+  - When approved section is passed, requires `approved.ai_enabled === false`, `approved.no_ai_path_verified === true`,
+    `approved.server_ai_draft_enabled_false === true`, `approved.no_gemini_api_key_provisioned === true`, and
+    `approved.unpaid_provider_excluded === true`.
+  - In simulation mode (`execution_mode: "simulation"`):
+    - Validates structural completeness and exact top-level keys (`drill_type`, `errors`, `execution_mode`,
+      `journeys`, `provider_policy_reference`, `runtime`, `status`, `timestamp`, `unpaid_provider_excluded`).
+    - If live mode is requested (`context.requireLive: true`), immediately returns `false`.
+  - In live mode (`execution_mode: "live"` or `context.requireLive: true`):
+    - Requires `environment === "production"`.
+    - Requires trimmed, nonempty, control-free, secret-free references: `operator_reference`,
+      `authorization_reference`, and `provider_policy_reference`.
+    - Requires exact top-level keys matching the live specification.
+- Category 11 (`optional_ai_posture`) evaluation:
+  - Excludes unified launch dossiers from candidate evaluation (`isNoAiPostureCandidate`).
+  - When approved (`aiSec.status === 'approved'`), requires a valid live no-AI production posture operator receipt (`execution_mode: "live"`).
+  - Valid classified simulation may accompany live evidence; simulation-only, dossier-only, prose-only, or external-pointer-only evidence cannot approve Category 11.
+  - Every child must match: an invalid or malformed child blocks beside a valid one.
+- Safe diagnostic boundary:
+  - Added `optional_ai_posture` to `checkEvidenceFile`'s safe fail-closed wrapper.
+  - Missing files, parse errors, child/dossier failures, and malformed nested-value exceptions are masked to fixed message `'A referenced no-AI production posture report is invalid or failed'`.
+  - Suppresses private filesystem paths, child error diagnostics, and exception stack traces.
+  - Retains useful Category 11 boolean, inventory, journey, and phase11 status blockers.
+
+Verification and review (2026-10-01):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
+- `npm run ops:readiness-test`: 599 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open; no production secret store or runtime inventory was inspected live.

@@ -1907,47 +1907,131 @@ function hasExactKeys(value, keys) {
 }
 
 function isNoAiPostureCandidate({ parsed } = {}) {
-  // A custom-named child qualifies by content; a dossier remains invalid evidence.
-  return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+  // A custom-named JSON file must be checked too; a dossier cannot qualify.
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  if (Array.isArray(parsed.stages) || parsed.dossier_version !== undefined) return false;
+  return true;
 }
 
-function validateNoAiPostureReport(report, now, approved) {
-  if (!isNoAiPostureCandidate({ parsed: report }) ||
-      !hasExactKeys(report, ['drill_type', 'timestamp', 'status', 'errors', 'environment',
-        'runtime', 'journeys', 'unpaid_provider_excluded', 'provider_policy_reference']) ||
-      report.drill_type !== 'no_ai_production_posture_verification' ||
-      report.status !== 'success' || report.environment !== 'production' ||
-      !Array.isArray(report.errors) || report.errors.length !== 0 ||
-      report.unpaid_provider_excluded !== true ||
-      typeof report.provider_policy_reference !== 'string' || !report.provider_policy_reference.trim()) return false;
+function validateNoAiPostureReport(report, now, approvedOrContext, maybeContext) {
+  try {
+    if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+    if (report.drill_type !== 'no_ai_production_posture_verification' || report.status !== 'success') return false;
+    const mode = report.execution_mode;
+    if (mode !== 'simulation' && mode !== 'live') return false;
 
-  const timestamp = parseSmtpTimestamp(report.timestamp);
-  const evalNow = now instanceof Date ? now : new Date();
-  if (!timestamp || timestamp > evalNow ||
-      !approved || approved.status !== 'approved' || approved.ai_enabled !== false ||
-      approved.no_ai_path_verified !== true || approved.server_ai_draft_enabled_false !== true ||
-      approved.no_gemini_api_key_provisioned !== true || approved.unpaid_provider_excluded !== true ||
-      !hasExactKeys(report.runtime, ['api', 'worker']) ||
-      !hasExactKeys(report.journeys, NO_AI_JOURNEYS)) return false;
+    let approved = null;
+    let context = {};
+    if (approvedOrContext && typeof approvedOrContext === 'object') {
+      if (approvedOrContext.requireLive !== undefined || approvedOrContext.expectedSection !== undefined) {
+        context = approvedOrContext;
+      } else {
+        approved = approvedOrContext;
+        if (maybeContext && typeof maybeContext === 'object') {
+          context = maybeContext;
+        }
+      }
+    }
 
-  for (const service of ['api', 'worker']) {
-    const runtime = report.runtime[service];
-    if (!hasExactKeys(runtime, ['ai_draft_enabled', 'gemini_api_key_present', 'inventory_reference']) ||
-        runtime.ai_draft_enabled !== false || runtime.gemini_api_key_present !== false ||
-        typeof runtime.inventory_reference !== 'string' || !runtime.inventory_reference.trim()) return false;
+    const evalNow = now instanceof Date ? now : new Date();
+    if (!Number.isFinite(evalNow.getTime())) return false;
+    const timestamp = parseSmtpTimestamp(report.timestamp);
+    if (!timestamp || timestamp > evalNow) return false;
+
+    if (!Array.isArray(report.errors) || report.errors.length !== 0) return false;
+    if (report.unpaid_provider_excluded !== true) return false;
+    if (!validSmtpReference(report.provider_policy_reference)) return false;
+
+    if (!report.runtime || typeof report.runtime !== 'object' || Array.isArray(report.runtime)) return false;
+    if (!report.journeys || typeof report.journeys !== 'object' || Array.isArray(report.journeys)) return false;
+    if (!hasExactKeys(report.runtime, ['api', 'worker'])) return false;
+    if (!hasExactKeys(report.journeys, NO_AI_JOURNEYS)) return false;
+
+    for (const service of ['api', 'worker']) {
+      const runtime = report.runtime[service];
+      if (!runtime || typeof runtime !== 'object' || Array.isArray(runtime)) return false;
+      if (!hasExactKeys(runtime, ['ai_draft_enabled', 'gemini_api_key_present', 'inventory_reference']) ||
+          runtime.ai_draft_enabled !== false || runtime.gemini_api_key_present !== false ||
+          !validSmtpReference(runtime.inventory_reference)) return false;
+    }
+    for (const journey of NO_AI_JOURNEYS) {
+      const result = report.journeys[journey];
+      if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
+      if (!hasExactKeys(result, ['passed', 'test_reference']) || result.passed !== true ||
+          !validSmtpReference(result.test_reference)) return false;
+    }
+
+    const secretMarkers = [];
+    checkPlaceholdersAndSecrets(report, 'no_ai_posture_report', secretMarkers);
+    if (secretMarkers.length > 0) return false;
+
+    if (approved && typeof approved === 'object') {
+      if (
+        approved.status !== 'approved' ||
+        approved.ai_enabled !== false ||
+        approved.no_ai_path_verified !== true ||
+        approved.server_ai_draft_enabled_false !== true ||
+        approved.no_gemini_api_key_provisioned !== true ||
+        approved.unpaid_provider_excluded !== true
+      ) {
+        return false;
+      }
+    }
+
+    const requireLive = Boolean(context?.requireLive);
+
+    if (mode === 'simulation') {
+      if (requireLive) return false;
+      if (!hasExactKeys(report, [
+        'drill_type',
+        'errors',
+        'execution_mode',
+        'journeys',
+        'provider_policy_reference',
+        'runtime',
+        'status',
+        'timestamp',
+        'unpaid_provider_excluded',
+      ])) {
+        return false;
+      }
+      return true;
+    }
+
+    // Live mode
+    if (report.environment !== 'production') return false;
+    if (
+      !validSmtpReference(report.operator_reference) ||
+      !validSmtpReference(report.authorization_reference)
+    ) {
+      return false;
+    }
+
+    if (!hasExactKeys(report, [
+      'authorization_reference',
+      'drill_type',
+      'environment',
+      'errors',
+      'execution_mode',
+      'journeys',
+      'operator_reference',
+      'provider_policy_reference',
+      'runtime',
+      'status',
+      'timestamp',
+      'unpaid_provider_excluded',
+    ])) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
   }
-  for (const journey of NO_AI_JOURNEYS) {
-    const result = report.journeys[journey];
-    if (!hasExactKeys(result, ['passed', 'test_reference']) || result.passed !== true ||
-        typeof result.test_reference !== 'string' || !result.test_reference.trim()) return false;
-  }
-  const blockers = [];
-  checkPlaceholdersAndSecrets(report, 'no_ai_posture_report', blockers);
-  return blockers.length === 0;
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
-  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'secret_references', 'data_retention_policy', 'graphql_introspection', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery'].includes(category)) {
+  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'secret_references', 'data_retention_policy', 'graphql_introspection', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery', 'optional_ai_posture'].includes(category)) {
     return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
   }
   const fail = () =>
@@ -1969,6 +2053,8 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
         ? 'A referenced GraphQL introspection report is invalid or failed'
         : category === 'deployment_and_rollback'
         ? 'A referenced deployment drill report is invalid or failed'
+        : category === 'optional_ai_posture'
+        ? 'A referenced no-AI production posture report is invalid or failed'
         : typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
         ? 'A referenced storage reconciliation report is invalid or failed'
         : 'A referenced restore drill report is invalid or failed'
@@ -3337,8 +3423,13 @@ function validateReadiness(record, _filePath, options = {}) {
       const noAiCandidates = noAiEvidence.filter(isNoAiPostureCandidate);
       if (noAiCandidates.length === 0) {
         addBlocker('optional_ai_posture', 'A successful no-AI production posture child JSON report is required');
-      } else if (noAiCandidates.some(({ parsed }) => !validateNoAiPostureReport(parsed, now, aiSec))) {
-        addBlocker('optional_ai_posture', 'A referenced no-AI production posture report is invalid or failed');
+      } else {
+        if (noAiCandidates.some(({ parsed }) => !validateNoAiPostureReport(parsed, now, aiSec))) {
+          addBlocker('optional_ai_posture', 'A referenced no-AI production posture report is invalid or failed');
+        }
+        if (!noAiCandidates.some(({ parsed }) => validateNoAiPostureReport(parsed, now, aiSec, { requireLive: true }))) {
+          addBlocker('optional_ai_posture', 'A live no-AI production posture operator receipt is required');
+        }
       }
     }
   }
