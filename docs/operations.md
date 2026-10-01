@@ -666,6 +666,14 @@ Implemented in Prompt 62:
 
 ## Phase 12G Caddy Same-Origin Ingress & Deployment Promotion/Rollback Drill
 
+**Current Caddy routing and domain TLS qualification (prompt 239, 2026-10-01):** The Caddy verifier
+(`scripts/ops/verify-caddy-routing.js`) evaluates static configuration simulation and route dispatching
+preflights (`execution_mode: "simulation"`). It inspects local Caddyfile directives, reverse proxy matchers,
+SigV4 Host header preservation, and security headers; it does not perform live public DNS lookups, live TLS
+handshake/cipher negotiation, certificate issuance/validity checks, or live HTTPS response header measurement.
+When Category 1 (`production_domain_tls`) is approved, separately inspected live operator child receipts
+(`execution_mode: "live"`) are required.
+
 **Current deployment qualification (prompt 236, 2026-09-30):** The dated
 results below are configuration preflight/rehearsal, not exercised promotion,
 rollback or service draining. The DDL search is a heuristic: absence of its
@@ -2278,3 +2286,57 @@ Verification and review (2026-10-01):
   enforced strict ISO UTC timestamps in `validateReconciliationReport`, aligned reference fields between code and
   documentation (`maintenance_window_reference` for restore, `storage_target_reference` for reconciliation), and
   ensured restore drill date validation accurately tracks live receipts without rejecting historical evidence.
+
+## Prompt 239 — separate domain TLS preflight from live evidence (2026-10-01)
+
+`scripts/ops/verify-caddy-routing.js` now classifies every emitted receipt as configuration simulation
+(`execution_mode: "simulation"`). Its CLI introduction, help text, and exit banners explicitly document
+that the tool verifies static Caddyfile syntax, reverse proxy matchers, transport timeouts, security headers,
+and S3 SigV4 Host header preservation; it disclaims live public DNS resolution, live TLS handshakes,
+certificate chain validation, and live HTTPS response header measurements.
+
+`scripts/ops/check-launch-readiness.js`:
+- `validateCaddyRoutingReport(report, now, approvedDomain, context)` supports both simulation and live modes:
+  - Simulation mode (`execution_mode: "simulation"`) requires `drill_type: "caddy_routing_and_tls_verification"`,
+    `status: "success"`, `valid: true`, empty `errors` array, `securityHeadersVerified: true`,
+    `s3SigV4HostPreserved: true`, `proxyHeadersVerified: true`, at least 12 evaluated routes,
+    `routesPassed === routesEvaluated`, all evaluated routes passing, real nonfuture ISO UTC timestamp, and
+    `hstsApproved: true` when validating against an approved production domain.
+  - When live mode is requested (`context.requireLive: true` or `report.execution_mode === "live"`):
+    - Rejects simulation mode.
+    - Requires `execution_mode: "live"`, `environment: "production"`.
+    - Requires trimmed, non-empty, control-free, secret-free references: `operator_reference`,
+      `authorization_reference`, and `domain_reference`.
+    - Requires structured live verification objects:
+      - `dns_verification`: `{ status: "passed", verified: true, record_type: string, evidence_reference: string }`.
+      - `tls_handshake_verification`: `{ status: "passed", verified: true, certificate_valid: true, protocol: string, evidence_reference: string }`.
+      - `https_headers_verification`: `{ status: "passed", verified: true, security_headers_verified: true, evidence_reference: string }`.
+    - When `context.expectedSection` is supplied:
+      - Verifies `report.domain.toLowerCase() === expectedSection.domain.toLowerCase()`.
+      - If `expectedSection.hsts_approved === true`, requires `report.https_headers_verification.hsts_verified === true`.
+- Category 1 (`production_domain_tls`) evaluation:
+  - Excludes unified launch dossiers from Caddy routing candidates (`isCaddyRoutingCandidate`).
+  - When approved (`domainSec.status === 'approved'`), requires a valid live Caddy routing operator receipt (`execution_mode: "live"`).
+  - Valid classified simulation may accompany live evidence; simulation-only, dossier-only, prose-only, or external-pointer-only evidence cannot approve Category 1.
+  - Every live child must match: an invalid or malformed child blocks beside a valid one.
+- Safe diagnostic boundary:
+  - Added `production_domain_tls` to `checkEvidenceFile`'s safe fail-closed wrapper.
+  - Missing files, parse errors, child/dossier failures, and malformed nested-value exceptions are masked to fixed message `'A referenced Caddy routing report is invalid or failed'`.
+  - Suppresses private filesystem paths, child error diagnostics, and exception stack traces.
+  - Retains useful Category 1 domain syntax, email validation, and boolean field blockers.
+
+`scripts/ops/assemble-launch-dossier.js`:
+- In `caddyPassed`, enforces `caddyEvidence.execution_mode === "simulation"`.
+- Summarizes Stage 3 in the launch evidence dossier as routing preflight verification rather than live domain/TLS sign-off.
+
+Verification and review (2026-10-01):
+- `node --test scripts/ops/verify-caddy-routing.spec.js`: 18 passed, 0 failed.
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 598 passed, 0 failed.
+- `npm run ops:launch-drill-test`: 59 passed, 0 failed.
+- `npm run ops:readiness-test`: 598 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates`: `ops template check passed`.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open; no production DNS or TLS modification was performed.

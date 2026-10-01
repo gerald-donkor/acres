@@ -7,6 +7,12 @@
  * Validates Caddyfile structure, security headers, request body limits,
  * transport timeouts, and upstream route dispatching (@api, @objects, and fallback)
  * ensuring S3 SigV4 Host header preservation for Garage and proxy headers for API.
+ *
+ * Classification: Static configuration simulation and route dispatching preflight
+ * (execution_mode: "simulation"). Validates local Caddyfile syntax, directives,
+ * security headers, reverse proxy matchers, and transport timeouts; does not perform
+ * live public DNS lookups, live TLS handshake/cipher negotiation, certificate chain
+ * validation, or live HTTPS header measurement.
  */
 
 const fs = require('fs');
@@ -577,7 +583,8 @@ if (require.main === module) {
       console.log(`Usage: node scripts/ops/verify-caddy-routing.js [target-caddyfile] [options]
 
 Validates Caddyfile structure, security headers, request body limits,
-transport timeouts, and upstream route dispatching.
+transport timeouts, and upstream route dispatching as a static configuration simulation preflight.
+Does not perform live DNS lookups, live TLS handshake testing, certificate chain validation, or live HTTPS header measurement.
 
 Options:
   --output, -o <file>   Write structured JSON drill evidence to target file path
@@ -610,6 +617,7 @@ Options:
       timestamp: new Date().toISOString(),
       status: 'failed',
       valid: false,
+      execution_mode: 'simulation',
       targetPath,
       errors: [`Error: target Caddyfile does not exist at "${targetPath}"`],
     };
@@ -644,6 +652,7 @@ Options:
     timestamp: new Date().toISOString(),
     status: result.valid ? 'success' : 'failed',
     valid: result.valid,
+    execution_mode: 'simulation',
     targetPath,
     domain,
     hstsApproved,
@@ -668,7 +677,7 @@ Options:
   }
 
   console.log('=================================================================');
-  console.log('         Acres Caddy Ingress & Same-Origin Route Verifier        ');
+  console.log('    Acres Caddy Ingress & Route Verifier (Simulation Preflight)  ');
   console.log('=================================================================');
   console.log(`Target Caddyfile: ${targetPath}`);
 
@@ -721,7 +730,7 @@ Options:
   console.log(' ✓ Proxy headers (X-Forwarded-Host, X-Forwarded-Proto) verified for API');
   console.log(' ✓ HSTS gate invariant verified (commented out pending approved domain)');
   console.log('=================================================================');
-  console.log('Status: PASSED (Caddy routing and security posture clean)');
+  console.log('Status: PASSED (Caddy routing and security posture simulation preflight clean; does not attest live DNS, TLS handshake, or live HTTPS headers)');
   process.exit(0);
 }
 

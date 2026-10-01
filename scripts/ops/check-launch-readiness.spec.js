@@ -422,11 +422,12 @@ const validCapacityAlertingReport = {
 
 fs.writeFileSync(capacityAlertingFixturePath, JSON.stringify(validCapacityAlertingReport));
 const caddyRoutingFixturePath = path.join(restoreFixtureDir, 'caddy-routing-evidence-valid.json');
-const validCaddyRoutingReport = {
+const simulationCaddyRoutingReport = {
   drill_type: 'caddy_routing_and_tls_verification',
   timestamp: '2026-08-28T12:00:00.000Z',
   status: 'success',
   valid: true,
+  execution_mode: 'simulation',
   targetPath: 'infra/caddy/Caddyfile.production',
   domain: 'acres.example.com',
   hstsApproved: true,
@@ -442,6 +443,34 @@ const validCaddyRoutingReport = {
   })),
   errors: [],
   warnings: [],
+};
+const validCaddyRoutingReport = {
+  ...structuredClone(simulationCaddyRoutingReport),
+  execution_mode: 'live',
+  environment: 'production',
+  operator_reference: 'ops-lead',
+  authorization_reference: 'CHG-TLS-2026-08-28',
+  domain_reference: 'domain-reg-acres-2026',
+  dns_verification: {
+    status: 'passed',
+    verified: true,
+    record_type: 'A',
+    evidence_reference: 'dns-query-a-acres-example-com',
+  },
+  tls_handshake_verification: {
+    status: 'passed',
+    verified: true,
+    certificate_valid: true,
+    protocol: 'TLSv1.3',
+    evidence_reference: 'tls-handshake-acres-example-com',
+  },
+  https_headers_verification: {
+    status: 'passed',
+    verified: true,
+    security_headers_verified: true,
+    hsts_verified: true,
+    evidence_reference: 'https-headers-acres-example-com',
+  },
 };
 fs.writeFileSync(caddyRoutingFixturePath, JSON.stringify(validCaddyRoutingReport));
 const smtpFixturePath = path.join(restoreFixtureDir, 'smtp-delivery-evidence-valid.json');
@@ -933,8 +962,8 @@ test('non-object evidence blocker does not echo its path', () => {
     const file = path.join(dir, 'credential-bearing-reference.json');
     fs.writeFileSync(file, 'null');
     const record = buildValidApprovedRecord();
-    record.sections.production_domain_tls.evidence = [caddyRoutingFixturePath, file];
-    const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+    record.sections.smtp_delivery.evidence = [smtpFixturePath, file];
+    const blockers = validateApprovedRecord(record).categoryBlockers.smtp_delivery || [];
     assert.ok(blockers.some((blocker) => blocker.includes('must contain a JSON object')));
     assert.ok(!JSON.stringify(blockers).includes('credential-bearing-reference'));
   } finally {
@@ -1299,10 +1328,10 @@ test('validateReadiness passes evidence cross-validation when a referenced dossi
 
 test('validateReadiness blocks approval when referenced evidence file is missing', () => {
   const record = buildValidApprovedRecord();
-  record.sections.production_domain_tls.evidence = ['infra/caddy/missing-routing-file.json'];
+  record.sections.smtp_delivery.evidence = ['infra/smtp/missing-delivery-file.json'];
 
   const result = validateApprovedRecord(record);
-  const blockers = result.categoryBlockers.production_domain_tls || [];
+  const blockers = result.categoryBlockers.smtp_delivery || [];
   assert.ok(
     blockers.some((b) => b.includes('no matching file exists on disk')),
     `Expected missing-file blocker, got: ${JSON.stringify(blockers)}`
@@ -1313,17 +1342,17 @@ test('validateReadiness blocks approval when referenced evidence reports failure
   const os = require('node:os');
   const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
   try {
-    const failedPath = path.join(tmpDir, 'caddy-routing-failed.json');
+    const failedPath = path.join(tmpDir, 'smtp-delivery-failed.json');
     fs.writeFileSync(
       failedPath,
       JSON.stringify({ status: 'FAILED' }),
       'utf8'
     );
     const record = buildValidApprovedRecord();
-    record.sections.production_domain_tls.evidence = [failedPath];
+    record.sections.smtp_delivery.evidence = [failedPath];
 
     const result = validateApprovedRecord(record);
-    const blockers = result.categoryBlockers.production_domain_tls || [];
+    const blockers = result.categoryBlockers.smtp_delivery || [];
     assert.ok(
       blockers.some((b) => b.includes('reports drill failure')),
       `Expected failure-report blocker, got: ${JSON.stringify(blockers)}`
@@ -1395,10 +1424,10 @@ test('validateReadiness blocks approval when evidence reports a non-zero exitCod
     const reportPath = path.join(tmpDir, 'generic-report.json');
     fs.writeFileSync(reportPath, JSON.stringify({ summary: { exitCode: 1 } }), 'utf8');
     const record = buildValidApprovedRecord();
-    record.sections.production_domain_tls.evidence = [reportPath];
+    record.sections.smtp_delivery.evidence = [reportPath];
 
     const result = validateApprovedRecord(record);
-    const blockers = result.categoryBlockers.production_domain_tls || [];
+    const blockers = result.categoryBlockers.smtp_delivery || [];
     assert.ok(
       blockers.some((b) => b.includes('summary.exitCode: 1')),
       `Expected exitCode blocker, got: ${JSON.stringify(blockers)}`
@@ -2591,7 +2620,8 @@ test('static integrity child evidence accepts exact success and rejects contradi
       mutate(changed);
       fs.writeFileSync(file, JSON.stringify(changed));
       const blockers = readBlockers();
-      assert.ok(blockers.some((blocker) => blocker.includes('invalid static integrity evidence')), JSON.stringify(blockers));
+      assert.ok(blockers.includes('A referenced Caddy routing report is invalid or failed'), JSON.stringify(blockers));
+      assert.ok(!JSON.stringify(blockers).includes('invalid static integrity evidence'));
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -3402,6 +3432,138 @@ test('caddy routing helper functions handle edge cases and missing parameters sa
   assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, evaluatedRoutes: [{ passed: false }] }), false);
   assert.strictEqual(parseCaddyRoutingTimestamp('invalid-date'), null);
   assert.ok(parseCaddyRoutingTimestamp('20260828T120000Z') instanceof Date);
+});
+
+test('validateCaddyRoutingReport distinguishes simulation from live and rejects invalid modes or observations', () => {
+  assert.strictEqual(validateCaddyRoutingReport(simulationCaddyRoutingReport, fixedNow), true);
+  assert.strictEqual(validateCaddyRoutingReport(simulationCaddyRoutingReport, fixedNow, { requireLive: true }), false);
+  assert.strictEqual(validateCaddyRoutingReport(simulationCaddyRoutingReport, fixedNow, 'acres.example.com'), true);
+  assert.strictEqual(validateCaddyRoutingReport(simulationCaddyRoutingReport, fixedNow, 'other.example.com'), false);
+  assert.strictEqual(validateCaddyRoutingReport(validCaddyRoutingReport, fixedNow, { requireLive: true }), true);
+
+  // Missing, legacy, or unknown execution_mode
+  assert.strictEqual(validateCaddyRoutingReport({ ...simulationCaddyRoutingReport, execution_mode: undefined }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...simulationCaddyRoutingReport, execution_mode: 'manual' }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...simulationCaddyRoutingReport, execution_mode: 'live' }, fixedNow), false);
+
+  // Live mode environment
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, environment: 'staging' }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, environment: undefined }, fixedNow), false);
+
+  // Live mode references
+  for (const refKey of ['operator_reference', 'authorization_reference', 'domain_reference']) {
+    for (const badRef of [undefined, '', '   ', 'lead\x00user', '__REQUIRED_REF__', 'sk-abcdef12345678901234567890', 'acres_app_dev_password']) {
+      const copy = structuredClone(validCaddyRoutingReport);
+      copy[refKey] = badRef;
+      assert.strictEqual(validateCaddyRoutingReport(copy, fixedNow, { requireLive: true }), false);
+    }
+  }
+
+  // dns_verification
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, dns_verification: null }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, dns_verification: { ...validCaddyRoutingReport.dns_verification, status: 'failed' } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, dns_verification: { ...validCaddyRoutingReport.dns_verification, verified: false } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, dns_verification: { ...validCaddyRoutingReport.dns_verification, record_type: '' } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, dns_verification: { ...validCaddyRoutingReport.dns_verification, evidence_reference: '__REQUIRED_REF__' } }, fixedNow), false);
+
+  // tls_handshake_verification
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, tls_handshake_verification: null }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, tls_handshake_verification: { ...validCaddyRoutingReport.tls_handshake_verification, status: 'failed' } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, tls_handshake_verification: { ...validCaddyRoutingReport.tls_handshake_verification, verified: false } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, tls_handshake_verification: { ...validCaddyRoutingReport.tls_handshake_verification, certificate_valid: false } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, tls_handshake_verification: { ...validCaddyRoutingReport.tls_handshake_verification, protocol: '' } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, tls_handshake_verification: { ...validCaddyRoutingReport.tls_handshake_verification, evidence_reference: 'sk-123456789012345678901234' } }, fixedNow), false);
+
+  // https_headers_verification
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, https_headers_verification: null }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, https_headers_verification: { ...validCaddyRoutingReport.https_headers_verification, status: 'failed' } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, https_headers_verification: { ...validCaddyRoutingReport.https_headers_verification, verified: false } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, https_headers_verification: { ...validCaddyRoutingReport.https_headers_verification, security_headers_verified: false } }, fixedNow), false);
+  assert.strictEqual(validateCaddyRoutingReport({ ...validCaddyRoutingReport, https_headers_verification: { ...validCaddyRoutingReport.https_headers_verification, evidence_reference: 'acres_superuser_dev_password' } }, fixedNow), false);
+
+  // expectedSection checks
+  assert.strictEqual(validateCaddyRoutingReport(validCaddyRoutingReport, fixedNow, { expectedSection: { domain: 'acres.example.com', hsts_approved: true } }), true);
+  assert.strictEqual(validateCaddyRoutingReport(validCaddyRoutingReport, fixedNow, { expectedSection: { domain: 'different.example.com', hsts_approved: true } }), false);
+  assert.strictEqual(validateCaddyRoutingReport({
+    ...validCaddyRoutingReport,
+    https_headers_verification: { ...validCaddyRoutingReport.https_headers_verification, hsts_verified: false },
+  }, fixedNow, { expectedSection: { domain: 'acres.example.com', hsts_approved: true } }), false);
+});
+
+test('Category 1 requires bound live child and suppresses private evidence failures including globs', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'caddy-private-canary-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const good = path.join(dir, 'caddy-routing-live.json');
+  const sim = path.join(dir, 'caddy-routing-sim.json');
+  const other = path.join(dir, 'caddy-routing-private-canary.json');
+  fs.writeFileSync(good, JSON.stringify(validCaddyRoutingReport));
+  fs.writeFileSync(sim, JSON.stringify(simulationCaddyRoutingReport));
+
+  const record = buildValidApprovedRecord();
+  const blockers = (evidence) => {
+    record.sections.production_domain_tls.evidence = evidence;
+    return validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
+  };
+
+  const caddyFailure = 'A referenced Caddy routing report is invalid or failed';
+  const caddyLiveRequired = 'A live Caddy routing and TLS verification operator receipt is required';
+
+  // Simulation alone cannot approve Category 1
+  assert.ok(blockers([sim]).includes(caddyLiveRequired));
+  // Live report alone passes
+  assert.deepStrictEqual(blockers([good]), []);
+  // Simulation accompanying live child passes
+  assert.deepStrictEqual(blockers([good, sim]), []);
+  // Glob matching both passes
+  assert.deepStrictEqual(blockers([path.join(dir, 'caddy-routing-*.json')]), []);
+
+  // Private canary mutations
+  for (const bad of [
+    { ...validCaddyRoutingReport, domain: 'different.example.com' },
+    { ...validCaddyRoutingReport, status: 'private-canary', errors: ['private-canary'] },
+    { ...validCaddyRoutingReport, operator_reference: 'bad\x00private-canary' },
+    { ...validCaddyRoutingReport, dns_verification: { status: 'failed', verified: false, record_type: 'A', evidence_reference: 'private-canary' } },
+    { ...validCaddyRoutingReport, tls_handshake_verification: { status: 'passed', verified: true, certificate_valid: false, protocol: 'TLSv1.3', evidence_reference: 'private-canary' } },
+    { ...validCaddyRoutingReport, https_headers_verification: { ...validCaddyRoutingReport.https_headers_verification, hsts_verified: false } },
+    { ...validCaddyRoutingReport, routesPassed: 10 },
+    { ...validCaddyRoutingReport, execution_mode: 'unrecognized-private-canary' },
+    { dossier_version: '1.0.0', overall_status: 'FAILED', stages: [], error_message: 'private-canary' },
+    { arbitrary: 'private-canary' },
+    { stages: [], overall_status: 'PASSED' },
+  ]) {
+    fs.writeFileSync(other, JSON.stringify(bad));
+    for (const evidence of [[good, other], [path.join(dir, 'caddy-routing-*.json')]]) {
+      const result = blockers(evidence);
+      assert.ok(result.includes(caddyFailure), JSON.stringify(result));
+      assert.ok(!JSON.stringify(result).includes('private-canary'));
+      assert.ok(!JSON.stringify(result).includes(dir));
+    }
+  }
+
+  // Malformed JSON suppresses diagnostics
+  fs.writeFileSync(other, '{private-canary');
+  assert.ok(blockers([good, other]).includes(caddyFailure));
+  assert.ok(!JSON.stringify(blockers([good, other])).includes('private-canary'));
+
+  // Missing file suppresses diagnostics
+  fs.unlinkSync(other);
+  assert.ok(blockers([good, other]).includes(caddyFailure));
+  assert.ok(!JSON.stringify(blockers([good, other])).includes(dir));
+
+  // External pointers or prose cannot satisfy live child report
+  for (const evidence of [['DNS A record points to host'], ['https://status.example.com']]) {
+    assert.ok(blockers(evidence).includes('A successful Caddy routing and TLS verification child JSON report is required'));
+  }
+
+  // Disguised dossier cannot impersonate candidate
+  const dossier = {
+    ...validCaddyRoutingReport,
+    dossier_version: '1.0.0',
+    stages: [],
+  };
+  fs.writeFileSync(other, JSON.stringify(dossier));
+  assert.strictEqual(isCaddyRoutingCandidate({ file: other, parsed: dossier }), false);
+  assert.ok(blockers([other]).includes('A successful Caddy routing and TLS verification child JSON report is required'));
 });
 
 test('approved SMTP delivery requires matching delivered receipt and DNS child evidence', () => {

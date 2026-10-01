@@ -145,6 +145,7 @@ function stub(key, args) {
     },
     caddy: {
       ...success,
+      execution_mode: "simulation",
       drill_type: "caddy_routing_and_tls_verification",
       targetPath: args[0],
       securityHeadersVerified: true,
@@ -595,6 +596,22 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
   assert.equal(r.dossier.targets.mode, "offline");
   assert.equal(r.dossier.volumeEncryptionBaseline.status, "verified");
   assert.equal(r.dossier.summary.volumeEncryptionCompliance, "passed");
+  assert.equal(
+    r.dossier.deploymentBaseline.caddyRoutingPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.summary.caddyRoutingPreflight,
+    "simulation",
+  );
+  const caddyChild = JSON.parse(
+    fs.readFileSync(
+      r.dossier.stages[2].artifacts.find((file) =>
+        file.endsWith("caddy-routing-evidence-receipt.json"),
+      ),
+    ),
+  );
+  assert.equal(caddyChild.execution_mode, "simulation");
   const volumeChild = JSON.parse(
     fs.readFileSync(
       r.dossier.stages[3].artifacts.find((file) =>
@@ -688,6 +705,8 @@ for (const scenario of [
   "sast:contradictory",
   "sast:summary-private",
   "container:null-check",
+  "caddy:legacy-mode",
+  "caddy:live-mode",
   "volume:null-check",
   "volume:legacy-mode",
   "volume:live-mode",

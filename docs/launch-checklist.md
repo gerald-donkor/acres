@@ -106,6 +106,42 @@ passed. `ops:check` stopped at `ops:audit` because DNS resolution of
 direct `tsc --showConfig` output parsed as JSON. Neither failure supplies
 production evidence or changes the unresolved Category 1 decision.
 
+**Prompt 239 Category 1 evidence separation (2026-10-01).** Category 1
+(`production_domain_tls`) now classifies static Caddy routing verifier output as
+simulation preflight (`execution_mode: "simulation"`) and requires a separately
+inspected live operator child receipt (`execution_mode: "live"`) when approved:
+- `scripts/ops/verify-caddy-routing.js` emits `execution_mode: "simulation"` on both
+  success and error payloads. It validates static Caddyfile syntax, reverse proxy
+  matchers, transport timeouts, security headers, and S3 SigV4 Host preservation;
+  it explicitly disclaims live public DNS resolution, live TLS handshakes, certificate
+  chain verification, and live HTTPS response header measurement.
+- Stage 3 in `scripts/ops/run-launch-drills.sh` and `scripts/ops/assemble-launch-dossier.js`
+  is designated as configuration and routing preflight, validating
+  `caddyEvidence.execution_mode === "simulation"`.
+- When `status: "approved"`, Category 1 requires:
+  1. A live Caddy routing and TLS verification operator receipt (`execution_mode: "live"`)
+     with `environment: "production"`.
+  2. Trimmed, non-empty, control-free, secret-free references: `operator_reference`,
+     `authorization_reference`, and `domain_reference`.
+  3. Structured live verification objects:
+     - `dns_verification`: `{ status: "passed", verified: true, record_type: string, evidence_reference: string }`.
+     - `tls_handshake_verification`: `{ status: "passed", verified: true, certificate_valid: true, protocol: string, evidence_reference: string }`.
+     - `https_headers_verification`: `{ status: "passed", verified: true, security_headers_verified: true, evidence_reference: string }`.
+  4. Exact domain matching (`report.domain.toLowerCase() === expectedSection.domain.toLowerCase()`).
+  5. If `expectedSection.hsts_approved === true`, requires `report.https_headers_verification.hsts_verified === true`.
+- Unified launch dossiers are excluded from candidate evaluation (`isCaddyRoutingCandidate`);
+  a disguised dossier named as a Caddy child fails validation.
+- All referenced Category 1 children must pass structural validation; valid simulations
+  may accompany live receipts, but an invalid or malformed child blocks approval even
+  beside a valid one.
+- Safe diagnostic boundary: Category 1 child file operations suppress private filesystem
+  paths, stack traces, and internal child diagnostics, mapping failures to fixed safe
+  blocker message `'A referenced Caddy routing report is invalid or failed'`.
+- Repository checks for Prompt 239: `ops:caddy-test` (18/18), `ops:launch-drill-test`
+  (59/59), `ops:readiness-test` (598/598), `ops:readiness-schema-test` (8/8),
+  `ops:templates`, all ops suites, lint, typecheck, build, and `git diff --check`
+  passed cleanly. Unresolved example failed closed with 0 approved, 11 blocked, 70 blockers.
+
 ### 2. SMTP Delivery (`smtp_delivery`)
 
 - Drill/verify: test delivery via the configured provider, DKIM/SPF/DMARC DNS checks

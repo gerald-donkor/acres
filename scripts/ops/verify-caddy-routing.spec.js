@@ -492,6 +492,7 @@ test('verify-caddy-routing CLI: --json outputs valid JSON to stdout', () => {
 
   const parsed = JSON.parse(stdout);
   assert.strictEqual(parsed.drill_type, 'caddy_routing_and_tls_verification');
+  assert.strictEqual(parsed.execution_mode, 'simulation');
   assert.strictEqual(parsed.status, 'success');
   assert.strictEqual(parsed.valid, true);
   assert.strictEqual(parsed.securityHeadersVerified, true);
@@ -586,6 +587,7 @@ test('verify-caddy-routing CLI: nonexistent Caddyfile exits with 1 and writes fa
     const content = JSON.parse(fs.readFileSync(outPath, 'utf8'));
     assert.strictEqual(content.status, 'failed');
     assert.strictEqual(content.valid, false);
+    assert.strictEqual(content.execution_mode, 'simulation');
     assert.ok(content.errors.length > 0);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

@@ -773,6 +773,7 @@ function assemble(config) {
 
   const caddyPassed = Boolean(
     caddyEvidence &&
+    caddyEvidence.execution_mode === "simulation" &&
     caddyEvidence.status === "success" &&
     caddyEvidence.valid === true &&
     caddyEvidence.securityHeadersVerified === true &&
@@ -794,12 +795,14 @@ function assemble(config) {
     liveIngressValid,
   );
 
+  // Stage 3 baseline fields summarize configuration/routing preflight, not live domain/TLS sign-off.
   let deploymentBaseline;
   if (depPassed) {
     deploymentBaseline = {
       status: "verified",
       schemaBackwardCompatible: depEvidence.schema_backward_compatible,
       caddyRoutingVerified: depEvidence.caddy_routing_verified,
+      caddyRoutingPreflight: "simulation",
       rollbackProcedureVerified: depEvidence.rollback_procedure_verified,
       networkIsolationVerified: depEvidence.network_isolation_verified,
       migrationCount: depEvidence.migration_count,
@@ -1045,6 +1048,7 @@ function assemble(config) {
       sastCompliance,
       containerSecurityCompliance,
       ingressDeployment: depStage.status === "PASSED" ? "passed" : "failed",
+      caddyRoutingPreflight: depStage.status === "PASSED" ? "simulation" : "failed",
       volumeEncryption: stages[3].status === "PASSED" ? "passed" : "failed",
       secretRotation: stages[4].status === "PASSED" ? "passed" : "failed",
       capacityAlerting: capStage.status === "PASSED" ? "passed" : "failed",

@@ -506,8 +506,11 @@ validator (`scripts/ops/check-launch-readiness.js`) are implemented:
 ## 18. Phase 12G Caddy same-origin ingress and deployment drill update
 
 As of 2026-09-09, Caddy routing verification and deployment configuration preflight
-were implemented and verified. Prompt 236 qualifies the dated claims below:
-no live promotion, rollback or service draining was exercised; the DDL search is
+were implemented and verified. Prompts 236 and 239 qualify the dated claims below:
+`verify-caddy-routing.js` is classified as simulation preflight (`execution_mode: "simulation"`),
+verifying static Caddyfile syntax, reverse proxy matchers, and header rules; it does not
+perform live public DNS lookups, TLS handshake negotiation, or live HTTPS header measurement.
+No live promotion, rollback or service draining was exercised; the DDL search is
 a heuristic and configured drain strings do not prove actual bounded shutdown.
 
 - **Edge Ingress and S3 SigV4 Integrity (TM-08, TM-20)**:
@@ -797,3 +800,24 @@ filesystem paths, internal stack traces, and child diagnostics. Mode flags, conf
 and opaque references are unauthenticated assertions; actual disaster recovery readiness
 and off-host backup integrity remain subject to independent operator inspection. Prompt 201
 and Phase 12 live sign-off remain open.
+
+**Prompt 239 domain TLS evidence integrity (2026-10-01):** The Caddy verifier
+(`verify-caddy-routing.js`) is classified as configuration simulation preflight and
+always emits `execution_mode: "simulation"`. Static Caddyfile parsing and route
+evaluations do not prove live public DNS resolution, live TLS handshakes, certificate
+validity, or live HTTPS response headers.
+
+Category 1 (`production_domain_tls`) requires separately inspected live operator child
+receipts (`execution_mode: "live"`) bound to the production environment, operator reference,
+authorization reference, and domain reference when approved. Live receipts must contain
+structured verification objects (`dns_verification`, `tls_handshake_verification`,
+`https_headers_verification`) with matching domain and verified HSTS header state when
+HSTS approval is declared.
+
+Category 1 enforces a safe diagnostic boundary: missing child files, parse errors, child
+validation failures, and nested formatting exceptions are mapped to the fixed blocker message
+`'A referenced Caddy routing report is invalid or failed'`, suppressing private filesystem
+paths, internal stack traces, and child diagnostics. Mode flags, confirmations, and opaque
+references are unauthenticated assertions; actual production domain resolution and TLS
+security posture remain subject to independent operator inspection. Prompt 201 and Phase 12
+live sign-off remain open.

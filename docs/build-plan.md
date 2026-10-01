@@ -1302,3 +1302,24 @@ Independent read-only review feedback was addressed: restored ISO UTC timestamp 
 `validateRestoreReport`, enforced strict ISO UTC timestamps in `validateReconciliationReport`, aligned
 required reference fields with the documentation, and verified date tracking across historical evidence.
 No production restore or bucket modification was performed; operator sign-off remains open.
+
+**Prompt 239 Phase 12K domain TLS evidence separation (2026-10-01):** The Caddy routing verifier
+(`scripts/ops/verify-caddy-routing.js`) now classifies all emitted receipts as configuration simulation
+preflight (`execution_mode: "simulation"`). Category 1 (`production_domain_tls`) in
+`scripts/ops/check-launch-readiness.js` requires a separately inspected live operator child receipt
+(`execution_mode: "live"`) when approved. Live receipts require `environment: "production"`, trimmed
+non-empty opaque references (`operator_reference`, `authorization_reference`, `domain_reference`), structured
+live observation objects (`dns_verification`, `tls_handshake_verification`, `https_headers_verification`),
+matching domain, and verified HSTS state when HSTS approval is declared.
+
+Unified dossiers are excluded from candidate evaluation (`isCaddyRoutingCandidate`), and disguised dossiers
+fail validation. Every referenced child report must pass strict structural validation; valid simulations may
+accompany live evidence, but any invalid or malformed child blocks approval even beside a valid one. Category 1
+enforces a safe diagnostic boundary suppressing private filesystem paths, stack traces, and child error diagnostics,
+mapping failures to `'A referenced Caddy routing report is invalid or failed'`. Stage 3 in dossier assembly
+enforces `execution_mode === "simulation"`. Unresolved example readiness template failed closed with 0 approved
+categories, 11 blocked, and 70 blockers. Verification output: `ops:caddy-test` (18/18), `ops:launch-drill-test`
+(59/59), `ops:readiness-test` (598/598), `ops:readiness-schema-test` (8/8), `ops:templates`, all 21 ops test
+suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit reports the existing
+upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No production DNS or TLS modifications were performed;
+operator sign-off remains open.

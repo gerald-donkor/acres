@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const {
+  RECEIPTS,
   freshTimestamp,
   readReceipt,
   publish,
@@ -138,4 +139,10 @@ test("prepare leaves existing parent permissions and unrelated lock contents unc
   assert.equal(fs.readFileSync(output + ".lock", "utf8"), "one");
   releaseOutput(output, "one");
   assert.deepEqual(fs.readdirSync(root), []);
+});
+test("RECEIPTS includes ingress_deployment caddy-routing-evidence-receipt.json", () => {
+  assert.equal(
+    RECEIPTS.ingress_deployment.caddy,
+    "caddy-routing-evidence-receipt.json",
+  );
 });
