@@ -533,6 +533,20 @@ const secretReferences = {
 const secretPolicyFixturePath = path.join(restoreFixtureDir, 'secret-reference-policy-valid.json');
 const validSecretPolicyReport = {
   drill_type: 'secret_reference_policy_verification',
+  execution_mode: 'live',
+  environment: 'production',
+  operator_reference: 'sec-lead-op-456',
+  authorization_reference: 'sec-auth-ref-789',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  errors: [],
+  policy_reference: 'vault-policy-printout-123',
+  references: Object.fromEntries(Object.entries(secretReferences).map(([key, source]) =>
+    [key, { source, access_verified: true, plaintext_exposed: false }])),
+};
+const validSimulationSecretPolicyReport = {
+  drill_type: 'secret_reference_policy_verification',
+  execution_mode: 'simulation',
   timestamp: '2026-08-28T12:00:00.000Z',
   status: 'success',
   errors: [],
@@ -2648,25 +2662,48 @@ test('static integrity child evidence accepts exact success and rejects contradi
 });
 
 test('approved secret references require a matching policy child, not prose or a dossier', () => {
-  const record = buildValidApprovedRecord();
-  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
-  record.sections.secret_references.evidence = ['All secret references verified against Vault policy'];
-  assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /policy child JSON report is required/);
-  record.sections.secret_references.evidence = [secretPolicyFixturePath];
-  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
-  assert.equal(isSecretReferencePolicyCandidate({ parsed: {} }), true);
-  assert.equal(isSecretReferencePolicyCandidate({ parsed: [] }), false);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-policy-test-'));
+  try {
+    const simPath = path.join(dir, 'secret-reference-policy-sim.json');
+    fs.writeFileSync(simPath, JSON.stringify(validSimulationSecretPolicyReport));
+    const record = buildValidApprovedRecord();
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+    record.sections.secret_references.evidence = ['All secret references verified against Vault policy'];
+    assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /policy child JSON report is required/);
+    record.sections.secret_references.evidence = [simPath];
+    assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /A live secret-reference policy operator receipt is required/);
+    record.sections.secret_references.evidence = [simPath, secretPolicyFixturePath];
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+    assert.equal(isSecretReferencePolicyCandidate({ parsed: {} }), true);
+    assert.equal(isSecretReferencePolicyCandidate({ parsed: [] }), false);
+    assert.equal(isSecretReferencePolicyCandidate({ parsed: { stages: [] } }), false);
+    assert.equal(isSecretReferencePolicyCandidate({ parsed: { dossier_version: '1.0.0' } }), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('secret-reference policy validation rejects malformed and contradictory reports', () => {
   const approved = buildValidApprovedRecord().sections.secret_references;
   assert.equal(validateSecretReferencePolicyReport(validSecretPolicyReport, fixedNow, approved), true);
+  assert.equal(validateSecretReferencePolicyReport(validSimulationSecretPolicyReport, fixedNow, approved), true);
+  assert.equal(validateSecretReferencePolicyReport(validSimulationSecretPolicyReport, fixedNow, approved, { requireLive: true }), false);
+  assert.equal(validateSecretReferencePolicyReport(validSecretPolicyReport, new Date('invalid'), approved), false);
   const mutations = [
     (r) => { r.timestamp = '2026-02-30T12:00:00.000Z'; },
     (r) => { r.timestamp = '2027-01-01T00:00:00.000Z'; },
     (r) => { r.status = 'failed'; },
     (r) => { r.errors = ['policy denied']; },
     (r) => { r.policy_reference = ''; },
+    (r) => { r.policy_reference = 'bad\x00char'; },
+    (r) => { delete r.execution_mode; },
+    (r) => { r.execution_mode = 'unrecognized'; },
+    (r) => { r.environment = 'staging'; },
+    (r) => { r.operator_reference = ''; },
+    (r) => { r.operator_reference = 'bad\x00char'; },
+    (r) => { r.authorization_reference = ''; },
+    (r) => { r.authorization_reference = 'bad\x00char'; },
+    (r) => { r.extra_field = true; },
     (r) => { delete r.references.session_secret_source; },
     (r) => { r.references.gemini_api_key_source = { source: 'env:GEMINI_API_KEY', access_verified: true, plaintext_exposed: false }; },
     (r) => { r.references.session_secret_source.source = 'vault:other/session#secret'; },
@@ -2692,10 +2729,25 @@ test('secret-reference approval rejects custom-path failures and mixed wildcard 
   try {
     const good = path.join(dir, 'custom.json');
     const bad = path.join(dir, 'other.json');
+    const malformed = path.join(dir, 'malformed.json');
     fs.writeFileSync(good, JSON.stringify(validSecretPolicyReport));
     const record = buildValidApprovedRecord();
     record.sections.secret_references.evidence = [good];
     assert.strictEqual(validateApprovedRecord(record).categoryBlockers.secret_references, undefined);
+
+    // Malformed JSON suppresses file path diagnostics
+    fs.writeFileSync(malformed, '{ invalid json');
+    record.sections.secret_references.evidence = [malformed];
+    const malformedBlockers = validateApprovedRecord(record).categoryBlockers.secret_references || [];
+    assert.ok(malformedBlockers.includes('A referenced secret-reference policy report is invalid or failed'));
+    assert.ok(!malformedBlockers.some((b) => b.includes(dir) || b.includes('malformed.json')));
+
+    // Disguised dossier rejected
+    const disguisedDossier = path.join(dir, 'disguised-dossier.json');
+    fs.writeFileSync(disguisedDossier, JSON.stringify({ ...validSecretPolicyReport, dossier_version: '1.0.0', stages: [] }));
+    record.sections.secret_references.evidence = [disguisedDossier];
+    assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /policy child JSON report is required/);
+
     fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
     record.sections.secret_references.evidence = [path.join(dir, '*.json')];
     assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /invalid or failed/);

@@ -528,6 +528,32 @@ and `git diff --check` exited 0. No operator production source, secret store,
 granted access, or approval was inspected, and none of these repository results
 supplies Category 4 evidence.
 
+**Prompt 241 Category 4 evidence separation (2026-10-01).** Category 4
+(`secret_references`) now classifies local/configuration verification as simulation
+preflight (`execution_mode: "simulation"`) and requires a separately inspected live
+operator child receipt (`execution_mode: "live"`) when approved:
+- Structural secret-reference policy child reports require `execution_mode: "simulation" | "live"`.
+  Unrecognized, legacy, or missing execution modes fail closed.
+- Simulation reports validate structural completeness (drill_type, status, errors,
+  policy_reference, and matching 12 distinct indirect secret references), but cannot approve
+  Category 4 on their own (`requireLive: true` fails closed on simulation).
+- Live reports require `execution_mode: "live"`, `environment: "production"`, and
+  trimmed nonempty opaque audit references (`operator_reference`,
+  `authorization_reference`, `policy_reference`).
+- The references object must contain exactly the twelve approved indirect secret keys with
+  `access_verified: true`, `plaintext_exposed: false`, and `source` matching the approved section.
+- All referenced child reports must pass strict validation; a malformed, failed,
+  or unclassified child blocks approval even beside a valid live receipt. Valid
+  simulation reports may accompany a live receipt.
+- Unified dossiers (`stages`, `dossier_version`) are explicitly rejected as candidates
+  in `isSecretReferencePolicyCandidate`.
+- Category 4 is enclosed in the narrow safe evidence boundary (`checkEvidenceFile`),
+  mapping any missing, malformed, non-object, non-candidate, or throwing file to the
+  fixed blocker `'A referenced secret-reference policy report is invalid or failed'` and suppressing
+  private file paths, canary tokens, stack traces, and internal errors.
+- Unresolved example readiness record failed closed with 0 approved categories,
+  11 blocked, and 70 blockers.
+
 ### 5. SLOs, Alerting & Capacity (`slo_and_alerting`)
 
 - Drill/verify: `bash scripts/ops/run-capacity-alerting-drill.sh`,

@@ -2378,3 +2378,40 @@ Verification and review (2026-10-01):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open; no live emails were transmitted or external DNS records modified.
+
+## Prompt 241 — separate secret-reference preflight from live evidence (2026-10-01)
+
+`scripts/ops/check-launch-readiness.js`:
+- `validateSecretReferencePolicyReport(report, now, approved, context)` supports both simulation and live modes:
+  - Requires `drill_type === "secret_reference_policy_verification"`, `status === "success"`, empty `errors` array,
+    matching 12 distinct indirect secret sources against the approved readiness record, valid nonfuture ISO UTC timestamp,
+    and zero placeholder or secret markers.
+  - Requires explicit `execution_mode: "simulation" | "live"`. Missing or unrecognized modes fail closed.
+  - In simulation mode (`execution_mode: "simulation"`):
+    - Validates structural completeness.
+    - If live mode is requested (`context.requireLive: true`), immediately returns `false`.
+  - In live mode (`execution_mode: "live"` or `context.requireLive: true`):
+    - Requires `environment === "production"`.
+    - Requires trimmed, nonempty, control-free, secret-free references: `operator_reference`,
+      `authorization_reference`, and `policy_reference`.
+    - Requires exact top-level keys matching the live specification.
+- Category 4 (`secret_references`) evaluation:
+  - Excludes unified launch dossiers from secret-reference policy candidates (`isSecretReferencePolicyCandidate`).
+  - When approved (`secRefs.status === 'approved'`), requires a valid live secret-reference policy operator receipt (`execution_mode: "live"`).
+  - Valid classified simulation may accompany live evidence; simulation-only, dossier-only, prose-only, or external-pointer-only evidence cannot approve Category 4.
+  - Every child must match: an invalid or malformed child blocks beside a valid one.
+- Safe diagnostic boundary:
+  - Added `secret_references` to `checkEvidenceFile`'s safe fail-closed wrapper.
+  - Missing files, parse errors, child/dossier failures, and malformed nested-value exceptions are masked to fixed message `'A referenced secret-reference policy report is invalid or failed'`.
+  - Suppresses private filesystem paths, child error diagnostics, and exception stack traces.
+  - Retains useful Category 4 field syntax and placeholder blockers.
+
+Verification and review (2026-10-01):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
+- `npm run ops:readiness-test`: 599 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open; no production secret store access was performed or credentials modified.

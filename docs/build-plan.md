@@ -1348,3 +1348,24 @@ added explicit test coverage. Verification output: `ops:readiness-test` (599/599
 suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit reports
 the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No live emails were transmitted
 or DNS records modified; operator sign-off remains open.
+
+**Prompt 241 Phase 12K secret-reference evidence separation (2026-10-01):** Category 4
+(`secret_references`) in `scripts/ops/check-launch-readiness.js` now classifies configuration
+and policy verifications as simulation preflight (`execution_mode: "simulation"`) and
+requires a separately inspected live operator child receipt (`execution_mode: "live"`)
+when approved. Live receipts require `environment: "production"`, trimmed non-empty opaque
+references (`operator_reference`, `authorization_reference`, `policy_reference`), and
+all twelve verified indirect secret references matching approved sources (`access_verified: true`,
+`plaintext_exposed: false`).
+
+Unified dossiers are excluded from candidate evaluation (`isSecretReferencePolicyCandidate`), and disguised
+dossiers fail validation. Every referenced child report must pass strict structural validation;
+valid simulations may accompany live evidence, but any invalid or malformed child blocks approval
+even beside a valid one. Category 4 enforces a safe diagnostic boundary suppressing private
+filesystem paths, stack traces, and child error diagnostics, mapping failures to
+`'A referenced secret-reference policy report is invalid or failed'`. Unresolved example readiness template
+failed closed with 0 approved categories, 11 blocked, and 70 blockers. Verification output:
+`ops:readiness-test` (599/599), `ops:readiness-schema-test` (8/8), `ops:templates`, `ops:templates-test`
+(57/57), all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit
+reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No secret store access was performed
+or credentials modified; operator sign-off remains open.
