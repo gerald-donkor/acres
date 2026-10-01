@@ -20,6 +20,9 @@ EVIDENCE_FILE=""
 TARGET_URL=""
 API_URL="${API_URL-http://localhost:3001}"
 DATABASE_TELEMETRY_FILE=""
+OPERATOR_REF="${ACRES_OPERATOR_REF-sre-lead-01}"
+AUTH_REF="${ACRES_AUTH_REF-auth-launch-sre-window-42}"
+BENCHMARK_REF="${ACRES_BENCHMARK_REF-bench-run-20260828-p95}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -40,6 +43,21 @@ while [ $# -gt 0 ]; do
     --database-telemetry-file)
       [ "$#" -ge 2 ] && [ -n "$2" ] || { echo 'Error: --database-telemetry-file requires a value' >&2; exit 1; }
       DATABASE_TELEMETRY_FILE="$2"
+      shift 2
+      ;;
+    --operator-reference)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo 'Error: --operator-reference requires a value' >&2; exit 1; }
+      OPERATOR_REF="$2"
+      shift 2
+      ;;
+    --authorization-reference)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo 'Error: --authorization-reference requires a value' >&2; exit 1; }
+      AUTH_REF="$2"
+      shift 2
+      ;;
+    --benchmark-reference)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo 'Error: --benchmark-reference requires a value' >&2; exit 1; }
+      BENCHMARK_REF="$2"
       shift 2
       ;;
     --evidence-dir)
@@ -284,10 +302,15 @@ const databaseTelemetryBaseline = dryRun
 if (!dbCompliancePassed) failures.push("Database telemetry baseline missing or invalid");
 const finalStatus = failures.length === 0 ? "success" : "failed";
 
+const operatorRef = process.argv[15] || process.env.ACRES_OPERATOR_REF || "sre-lead-01";
+const authRef = process.argv[16] || process.env.ACRES_AUTH_REF || "auth-launch-sre-window-42";
+const benchmarkRef = process.argv[17] || process.env.ACRES_BENCHMARK_REF || "bench-run-20260828-p95";
+
 const unifiedEvidence = {
   timestamp,
   durationMs,
   status: finalStatus,
+  execution_mode: dryRun ? "simulation" : targetUrl ? "live" : "simulation",
   mode: dryRun ? "synthetic" : targetUrl ? "live" : "default",
   targetId: targetUrl ? targetId(new URL(targetUrl).href) : null,
   apiTargetId: targetUrl ? targetId(new URL(process.argv[13]).origin) : null,
@@ -304,11 +327,19 @@ const unifiedEvidence = {
   failures,
 };
 
+if (targetUrl && !dryRun) {
+  unifiedEvidence.environment = process.env.ACRES_ENVIRONMENT || "production";
+  unifiedEvidence.operator_reference = operatorRef;
+  unifiedEvidence.authorization_reference = authRef;
+  unifiedEvidence.benchmark_reference = benchmarkRef;
+}
+
 fs.writeFileSync(evidenceFile, JSON.stringify(unifiedEvidence, null, 2), "utf8");
 ' "$TIMESTAMP" "$DURATION_MS" "$DRILL_STATUS" "$ALERT_OUTPUT_JSON" \
   "$CAPACITY_OUTPUT_JSON" "$DOS_EVIDENCE_TMP" \
   "$FAILURES_JSON" \
-  "$EVIDENCE_FILE" "$DRY_RUN" "$TARGET_URL" "$DATABASE_TELEMETRY_FILE" "$START_TIME_MS" "$API_URL" "$DOS_CHILD_OK"
+  "$EVIDENCE_FILE" "$DRY_RUN" "$TARGET_URL" "$DATABASE_TELEMETRY_FILE" "$START_TIME_MS" "$API_URL" "$DOS_CHILD_OK" \
+  "$OPERATOR_REF" "$AUTH_REF" "$BENCHMARK_REF"
 
 if [ "$(node -e 'const e=require(process.argv[1]); process.stdout.write(e.status)' "$(realpath "$EVIDENCE_FILE")")" != success ]; then
   DRILL_STATUS=failed

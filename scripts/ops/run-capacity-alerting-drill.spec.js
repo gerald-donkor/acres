@@ -164,7 +164,7 @@ process.exit(scenario==='failed-exit'?1:0);
       );
     return { ...r, evidence, output, children };
   };
-  return { dir, script, args, env, log, run };
+  return { dir, script, args, env, log, run, prepareTelemetry };
 }
 
 test('parent accepts complete offline child and fresh target-bound live child', (t) => {
@@ -179,8 +179,61 @@ test('parent accepts complete offline child and fresh target-bound live child', 
       dry ? null : targetId('https://private.example'),
     );
     assert.equal(r.evidence.apiTargetId, r.evidence.dosResilience.apiTargetId);
+    if (dry) {
+      assert.equal(r.evidence.execution_mode, 'simulation');
+      assert.equal(r.evidence.mode, 'synthetic');
+      assert.equal(r.evidence.environment, undefined);
+      assert.equal(r.evidence.operator_reference, undefined);
+      assert.equal(r.evidence.authorization_reference, undefined);
+      assert.equal(r.evidence.benchmark_reference, undefined);
+    } else {
+      assert.equal(r.evidence.execution_mode, 'live');
+      assert.equal(r.evidence.mode, 'live');
+      assert.equal(r.evidence.environment, 'production');
+      assert.equal(r.evidence.operator_reference, 'sre-lead-01');
+      assert.equal(r.evidence.authorization_reference, 'auth-launch-sre-window-42');
+      assert.equal(r.evidence.benchmark_reference, 'bench-run-20260828-p95');
+    }
     assert.equal(r.children.at(-1).args.includes('--dry-run'), dry);
   }
+});
+
+test('parent accepts custom operator, authorization, and benchmark references on live execution', (t) => {
+  const { dir, script, env, prepareTelemetry } = fixture(t);
+  prepareTelemetry();
+  const file = path.join(dir, 'parent-custom.json');
+  const r = spawnSync(
+    'bash',
+    [
+      script,
+      '--evidence-file',
+      file,
+      '--api-url',
+      'https://private.example/',
+      '--target-url',
+      'https://private.example/health',
+      '--database-telemetry-file',
+      path.join(dir, 'telemetry.json'),
+      '--operator-reference',
+      'custom-sre-lead',
+      '--authorization-reference',
+      'custom-auth-window',
+      '--benchmark-reference',
+      'custom-bench-p99',
+    ],
+    {
+      encoding: 'utf8',
+      env: env(''),
+      timeout: 10000,
+    },
+  );
+  assert.equal(r.status, 0, r.output);
+  const evidence = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(evidence.execution_mode, 'live');
+  assert.equal(evidence.environment, 'production');
+  assert.equal(evidence.operator_reference, 'custom-sre-lead');
+  assert.equal(evidence.authorization_reference, 'custom-auth-window');
+  assert.equal(evidence.benchmark_reference, 'custom-bench-p99');
 });
 
 for (const scenario of [

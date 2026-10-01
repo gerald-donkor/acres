@@ -754,6 +754,32 @@ across all workspaces, and `git diff --check` exited 0. No operator production
 source, live scrape, benchmark, alert delivery, or approval was inspected, and
 none of these repository results supplies Category 5 evidence.
 
+**Prompt 245 Category 5 evidence separation (2026-10-01).** Category 5
+(`slo_and_alerting`) now classifies synthetic drills and simulated runs as simulation
+preflight (`execution_mode: "simulation"`, `mode: "synthetic"`) and requires a separately
+inspected live operator child receipt (`execution_mode: "live"`) when approved:
+- Structural capacity and alerting child reports support explicit `execution_mode: "simulation" | "live"`.
+  Synthetic mode (`mode: "synthetic"`) maps to simulation preflight.
+- Simulation reports validate structural completeness (drill_type, duration, timestamps,
+  alert evaluations, synthetic distributions, simulated DoS layer, and database baseline), but
+  cannot approve Category 5 on their own (`requireLive: true` fails closed on simulation).
+- Live receipts require `execution_mode: "live"`, `environment: "production"`, and trimmed
+  nonempty control-free references (`operator_reference`, `authorization_reference`, and
+  `benchmark_reference` or `monitoring_reference` / `telemetry_reference`).
+- All referenced child reports must pass strict validation; a malformed, failed,
+  or unclassified child blocks approval even beside a valid live receipt. Valid
+  simulation reports may accompany a live receipt.
+- Unified launch dossiers (`stages`, `dossier_version`, `capacityAlertingBaseline`) are
+  explicitly rejected as candidates in `isCapacityAlertingCandidate`, while legitimate
+  dossiers accompanying child evidence in Category 5 evidence arrays are safely recognized
+  without causing false-positive child blockers.
+- Category 5 is enclosed in the narrow safe evidence boundary (`checkEvidenceFile`),
+  mapping any missing, malformed, non-candidate, or throwing file to the fixed blocker
+  `'A referenced capacity and alerting report is invalid or failed'` and suppressing
+  private file paths, canary tokens, stack traces, and internal errors.
+- Unresolved example readiness record failed closed with 0 approved categories,
+  11 blocked, and 70 blockers.
+
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
 - Drill/verify: `bash scripts/ops/run-restore-drill.sh --dry-run`,
@@ -2119,7 +2145,7 @@ operators own authentic live evidence and human sign-off.
 | 2 | smtp_delivery | provider delivery receipt + DNS check | ops-lead | |
 | 3 | secrets_management | Rehearsal: `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`; separately supplied live operator receipt required | security-lead | |
 | 4 | secret_references | `scripts/ops/scan-secrets.sh` | security-lead | |
-| 5 | slo_and_alerting | `bash scripts/ops/run-capacity-alerting-drill.sh` | sre-lead | |
+| 5 | slo_and_alerting | Preflight: `bash scripts/ops/run-capacity-alerting-drill.sh --dry-run`; separately inspected live operator receipt required | sre-lead | |
 | 6 | backup_and_disaster_recovery | `bash scripts/ops/run-restore-drill.sh` | sre-lead | |
 | 7 | data_retention_policy | Policy review sign-off; separately inspected live operator receipt required on approval | legal-lead | |
 | 8 | volume_encryption | Bound live operator receipt + independent nine-mount/custody/dual-control/recovery inspection; CLI is preflight only | security-lead + key-recovery owner | |

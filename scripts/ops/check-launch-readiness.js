@@ -1033,9 +1033,47 @@ function validateDeploymentDrillReport(
   return blockers.length === 0;
 }
 
+function validCapacityDossier(report) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  if (report.overall_status !== 'PASSED') return false;
+  if (
+    !Array.isArray(report.stages) &&
+    report.dossier_version === undefined &&
+    report.capacityAlertingBaseline === undefined
+  ) {
+    return false;
+  }
+  if (Array.isArray(report.stages)) {
+    if (report.stages.some((s) => s && s.status === 'FAILED')) return false;
+  }
+  const summary = report.summary;
+  if (summary && typeof summary === 'object') {
+    if (
+      summary.capacityAlerting === 'failed' ||
+      summary.sloCompliance === 'failed' ||
+      summary.capacitySloCompliance === 'failed' ||
+      summary.databaseBaselineCompliance === 'failed'
+    ) {
+      return false;
+    }
+  }
+  const db = report.databaseTelemetryBaseline;
+  if (db && typeof db === 'object' && db.status === 'breached') {
+    return false;
+  }
+  return true;
+}
+
 function isCapacityAlertingCandidate({ file, parsed } = {}) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-  if (Array.isArray(parsed.stages) || parsed.dossier_version !== undefined) return false;
+  if (
+    Object.hasOwn(parsed, 'stages') ||
+    Array.isArray(parsed.stages) ||
+    parsed.dossier_version !== undefined ||
+    parsed.capacityAlertingBaseline !== undefined
+  ) {
+    return false;
+  }
   const name = typeof file === 'string' ? path.basename(file) : '';
   if (name.includes('capacity-alerting-drill-evidence-') || name.includes('capacity-alerting')) return true;
   return (
@@ -1101,12 +1139,35 @@ function validateCapacityAlertingReport(report, now, context = {}) {
     start + report.durationMs > evaluation
   )
     return false;
-  if (
-    !['synthetic', 'live'].includes(report.mode) ||
-    (context.requireLive === true && report.mode !== 'live')
-  )
+
+  const mode = report.mode;
+  const execMode = report.execution_mode;
+  if (execMode !== undefined && !['simulation', 'live'].includes(execMode)) return false;
+  if (mode !== undefined && !['synthetic', 'live'].includes(mode)) return false;
+  if (execMode === undefined && mode === undefined) return false;
+  if (execMode === 'simulation' && mode === 'live') return false;
+  if (execMode === 'live' && mode === 'synthetic') return false;
+
+  const isLive = execMode === 'live' || mode === 'live';
+  if (context.requireLive === true && (!isLive || execMode === 'simulation' || mode === 'synthetic')) {
     return false;
-  const synthetic = report.mode === 'synthetic';
+  }
+  const synthetic = !isLive;
+
+  if (isLive) {
+    if (report.environment !== 'production') return false;
+    if (
+      !validSmtpReference(report.operator_reference) ||
+      !validSmtpReference(report.authorization_reference) ||
+      !validSmtpReference(report.benchmark_reference || report.monitoring_reference || report.telemetry_reference)
+    ) {
+      return false;
+    }
+  }
+
+  const blockers = [];
+  checkPlaceholdersAndSecrets(report, 'capacity_alerting_report', blockers);
+  if (blockers.length > 0) return false;
   if (
     !object(report.summary) ||
     ![
@@ -1178,10 +1239,12 @@ function validateCapacityAlertingReport(report, now, context = {}) {
     ) &&
     v.mean >= v.min &&
     v.mean <= v.max;
+  const expectedCapacityMode = synthetic ? 'synthetic' : 'live';
   const capacity = report.capacity;
   if (
     !object(capacity) ||
-    capacity.mode !== report.mode ||
+    capacity.mode !== expectedCapacityMode ||
+    (report.mode !== undefined && capacity.mode !== report.mode) ||
     !validTargets(capacity.targets)
   )
     return false;
@@ -2031,7 +2094,7 @@ function validateNoAiPostureReport(report, now, approvedOrContext, maybeContext)
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
-  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'secret_references', 'data_retention_policy', 'graphql_introspection', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery', 'optional_ai_posture'].includes(category)) {
+  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'secret_references', 'slo_and_alerting', 'data_retention_policy', 'graphql_introspection', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery', 'optional_ai_posture'].includes(category)) {
     return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
   }
   const fail = () =>
@@ -2047,6 +2110,8 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
         ? 'A referenced secret rotation report is invalid or failed'
         : category === 'secret_references'
         ? 'A referenced secret-reference policy report is invalid or failed'
+        : category === 'slo_and_alerting'
+        ? 'A referenced capacity and alerting report is invalid or failed'
         : category === 'data_retention_policy'
         ? 'A referenced data retention policy report is invalid or failed'
         : category === 'graphql_introspection'
@@ -2070,11 +2135,6 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
 }
 
 function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
-  if (category === 'slo_and_alerting') {
-    const emit = addBlocker;
-    // Even non-child dossiers and malformed custom files can contain private diagnostics.
-    addBlocker = (key) => emit(key, 'A referenced capacity and alerting report is invalid or failed');
-  }
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
   if (matches.length === 0) {
@@ -2127,9 +2187,12 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
       addBlocker(category, 'A referenced SMTP delivery report is invalid or failed');
       continue;
     }
-    // Category 5 child failures use fixed reasons, never untrusted child diagnostics.
-    if (category === 'slo_and_alerting' && isCapacityAlertingCandidate({ file, parsed })) {
-      if (!validateCapacityAlertingReport(parsed)) {
+    if (category === 'slo_and_alerting') {
+      if (isCapacityAlertingCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock and live requirement.
+        continue;
+      }
+      if (!validCapacityDossier(parsed)) {
         addBlocker(category, 'A referenced capacity and alerting report is invalid or failed');
       }
       continue;
@@ -3008,8 +3071,10 @@ function validateReadiness(record, _filePath, options = {}) {
     const capacityCandidates = capacityEvidence.filter(isCapacityAlertingCandidate);
     if (capacityCandidates.length === 0) {
       addBlocker('slo_and_alerting', 'A successful capacity and alerting drill child JSON report is required');
-    } else if (capacityCandidates.some(({ parsed }) => !validateCapacityAlertingReport(parsed, now, { section: sloSec, requireLive: true }))) {
+    } else if (capacityCandidates.some(({ parsed }) => !validateCapacityAlertingReport(parsed, now, { section: sloSec }))) {
       addBlocker('slo_and_alerting', 'A referenced capacity and alerting report is invalid or failed');
+    } else if (!capacityCandidates.some(({ parsed }) => validateCapacityAlertingReport(parsed, now, { section: sloSec, requireLive: true }))) {
+      addBlocker('slo_and_alerting', 'A live capacity and alerting operator receipt is required');
     }
   }
 
@@ -3531,6 +3596,7 @@ module.exports = {
   validateDeploymentDrillReport,
   DEPLOYMENT_DRAIN_PERIODS,
   isCapacityAlertingCandidate,
+  validCapacityDossier,
   parseCapacityAlertingTimestamp,
   validateCapacityAlertingReport,
   isCaddyRoutingCandidate,

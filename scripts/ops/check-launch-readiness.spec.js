@@ -340,7 +340,12 @@ const validCapacityAlertingReport = {
   timestamp: '20260828T120000Z',
   durationMs: 4500,
   status: 'success',
+  execution_mode: 'live',
   mode: 'live',
+  environment: 'production',
+  operator_reference: 'sre-lead-01',
+  authorization_reference: 'auth-launch-sre-window-42',
+  benchmark_reference: 'bench-run-20260828-p95',
   targetId: targetId('https://fixture.example/health'),
   apiTargetId: targetId('https://fixture.example'),
   summary: {
@@ -421,6 +426,54 @@ const validCapacityAlertingReport = {
 };
 
 fs.writeFileSync(capacityAlertingFixturePath, JSON.stringify(validCapacityAlertingReport));
+const simulationCapacityAlertingFixturePath = path.join(restoreFixtureDir, 'capacity-alerting-drill-evidence-simulation.json');
+const simulationDistribution = generateSyntheticWorkload();
+const validSimulationCapacityAlertingReport = {
+  ...validCapacityAlertingReport,
+  execution_mode: 'simulation',
+  mode: 'synthetic',
+  targetId: null,
+  apiTargetId: null,
+  capacity: {
+    ...validCapacityAlertingReport.capacity,
+    mode: 'synthetic',
+    targetUrl: 'synthetic://in-process-evaluation',
+    distribution: simulationDistribution,
+    compliance: evaluateSloCompliance(simulationDistribution),
+  },
+  databaseTelemetryBaseline: {
+    ...validCapacityAlertingReport.databaseTelemetryBaseline,
+    source: 'synthetic',
+    targetId: null,
+    probeHealthy: true,
+  },
+  dosResilience: {
+    ...validCapacityAlertingReport.dosResilience,
+    mode: 'simulated',
+    apiTargetId: null,
+    layers: {
+      ...validCapacityAlertingReport.dosResilience.layers,
+      layer6_rate_limiter_burst: {
+        passed: null,
+        burstTestMode: 'skipped',
+        attemptedRequests: 0,
+        throttledRequests: 0,
+        authRejectedRequests: 0,
+        unexpectedResponses: 0,
+        transportFailures: 0,
+        preHealthPassed: false,
+        csrfHandshakePassed: false,
+        postHealthPassed: false,
+      },
+    },
+  },
+};
+delete validSimulationCapacityAlertingReport.environment;
+delete validSimulationCapacityAlertingReport.operator_reference;
+delete validSimulationCapacityAlertingReport.authorization_reference;
+delete validSimulationCapacityAlertingReport.benchmark_reference;
+fs.writeFileSync(simulationCapacityAlertingFixturePath, JSON.stringify(validSimulationCapacityAlertingReport));
+
 const caddyRoutingFixturePath = path.join(restoreFixtureDir, 'caddy-routing-evidence-valid.json');
 const simulationCaddyRoutingReport = {
   drill_type: 'caddy_routing_and_tls_verification',
@@ -4336,6 +4389,7 @@ const capacityMutations = {
   },
   'missing mode': (r) => {
     delete r.mode;
+    delete r.execution_mode;
   },
   'benchmark hash mismatch': (r) => {
     r.capacity.targetUrl = targetId('other');
@@ -4671,6 +4725,151 @@ test('capacity report rejects malformed nested objects and stricter child DB cei
     );
     assert.strictEqual(validateCapacityAlertingReport(report), false);
   }
+});
+
+test('approved slo_and_alerting requires live receipt beyond simulation preflight', (t) => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'acres-capacity-separation-'),
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const simPath = path.join(dir, 'capacity-alerting-drill-evidence-sim.json');
+  fs.writeFileSync(simPath, JSON.stringify(validSimulationCapacityAlertingReport));
+
+  const record = buildValidApprovedRecord();
+  record.sections.slo_and_alerting.evidence = [simPath];
+  const res = validateApprovedRecord(record);
+  const blockers = res.categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    blockers.some((b) => b.includes('A live capacity and alerting operator receipt is required')),
+    `Expected live operator receipt blocker for simulation-only evidence, got: ${JSON.stringify(blockers)}`,
+  );
+
+  const livePath = path.join(dir, 'capacity-alerting-drill-evidence-live.json');
+  fs.writeFileSync(livePath, JSON.stringify(validCapacityAlertingReport));
+  record.sections.slo_and_alerting.evidence = [simPath, livePath];
+  const passedRes = validateApprovedRecord(record);
+  assert.strictEqual(
+    passedRes.categoryBlockers.slo_and_alerting,
+    undefined,
+    `Expected simulation + live evidence to pass cleanly, got: ${JSON.stringify(passedRes.categoryBlockers.slo_and_alerting)}`,
+  );
+});
+
+test('capacity alerting live report rejects non-production environment and missing/invalid references', () => {
+  const base = structuredClone(validCapacityAlertingReport);
+
+  const nonProd = structuredClone(base);
+  nonProd.environment = 'staging';
+  assert.strictEqual(validateCapacityAlertingReport(nonProd), false);
+
+  for (const field of ['operator_reference', 'authorization_reference', 'benchmark_reference']) {
+    for (const badVal of [undefined, null, '', '   ', 'lead\x00ref', 'change-me', '__REQUIRED_OPERATOR__', 'sk-123456789012345678901']) {
+      const copy = structuredClone(base);
+      copy[field] = badVal;
+      assert.strictEqual(
+        validateCapacityAlertingReport(copy),
+        false,
+        `Expected ${field}=${JSON.stringify(badVal)} to fail validation`,
+      );
+    }
+  }
+
+  const badExecMode = structuredClone(base);
+  badExecMode.execution_mode = 'invalid_mode';
+  assert.strictEqual(validateCapacityAlertingReport(badExecMode), false);
+
+  const mismatchedMode1 = structuredClone(base);
+  mismatchedMode1.execution_mode = 'simulation';
+  mismatchedMode1.mode = 'live';
+  assert.strictEqual(validateCapacityAlertingReport(mismatchedMode1), false);
+
+  const mismatchedMode2 = structuredClone(base);
+  mismatchedMode2.execution_mode = 'live';
+  mismatchedMode2.mode = 'synthetic';
+  assert.strictEqual(validateCapacityAlertingReport(mismatchedMode2), false);
+
+  const simWithRequireLive = structuredClone(validSimulationCapacityAlertingReport);
+  assert.strictEqual(
+    validateCapacityAlertingReport(simWithRequireLive, undefined, { requireLive: true }),
+    false,
+  );
+
+  const liveNoLegacyMode = structuredClone(base);
+  delete liveNoLegacyMode.mode;
+  assert.strictEqual(
+    validateCapacityAlertingReport(liveNoLegacyMode, undefined, { requireLive: true }),
+    true,
+  );
+
+  const simNoLegacyMode = structuredClone(validSimulationCapacityAlertingReport);
+  delete simNoLegacyMode.mode;
+  assert.strictEqual(
+    validateCapacityAlertingReport(simNoLegacyMode),
+    true,
+  );
+});
+
+test('isCapacityAlertingCandidate rejects disguised dossiers', () => {
+  assert.strictEqual(
+    isCapacityAlertingCandidate({ parsed: { stages: [] } }),
+    false,
+  );
+  assert.strictEqual(
+    isCapacityAlertingCandidate({ parsed: { dossier_version: '1.0.0' } }),
+    false,
+  );
+  assert.strictEqual(
+    isCapacityAlertingCandidate({ parsed: { capacityAlertingBaseline: {} } }),
+    false,
+  );
+  assert.strictEqual(
+    isCapacityAlertingCandidate({ parsed: validCapacityAlertingReport }),
+    true,
+  );
+  assert.strictEqual(
+    isCapacityAlertingCandidate({ parsed: validSimulationCapacityAlertingReport }),
+    true,
+  );
+});
+
+test('checkEvidenceFile safe fail-closed boundary for slo_and_alerting', (t) => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'acres-capacity-safe-boundary-'),
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const missingFile = path.join(dir, 'non-existent-report.json');
+  const record1 = buildValidApprovedRecord();
+  record1.sections.slo_and_alerting.evidence = [missingFile];
+  const b1 = validateApprovedRecord(record1).categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    b1.includes('A referenced capacity and alerting report is invalid or failed'),
+    `Expected safe blocker for missing file, got: ${JSON.stringify(b1)}`,
+  );
+  assert.doesNotMatch(JSON.stringify(b1), new RegExp(dir));
+
+  const malformedFile = path.join(dir, 'malformed.json');
+  fs.writeFileSync(malformedFile, '{"private_stack_trace": unexpected_token');
+  const record2 = buildValidApprovedRecord();
+  record2.sections.slo_and_alerting.evidence = [malformedFile];
+  const b2 = validateApprovedRecord(record2).categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    b2.includes('A referenced capacity and alerting report is invalid or failed'),
+    `Expected safe blocker for malformed file, got: ${JSON.stringify(b2)}`,
+  );
+  assert.doesNotMatch(JSON.stringify(b2), /private_stack_trace/);
+
+  const notAnObjectFile = path.join(dir, 'array.json');
+  fs.writeFileSync(notAnObjectFile, '["sensitive-item"]');
+  const record3 = buildValidApprovedRecord();
+  record3.sections.slo_and_alerting.evidence = [notAnObjectFile];
+  const b3 = validateApprovedRecord(record3).categoryBlockers.slo_and_alerting || [];
+  assert.ok(
+    b3.includes('A referenced capacity and alerting report is invalid or failed'),
+    `Expected safe blocker for array file, got: ${JSON.stringify(b3)}`,
+  );
+  assert.doesNotMatch(JSON.stringify(b3), /sensitive-item/);
 });
 
 const rotationMutations = [

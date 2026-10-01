@@ -2538,3 +2538,41 @@ Verification and review (2026-10-01):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open; no production secret store or runtime inventory was inspected live.
+
+## Prompt 245 — separate capacity alerting preflight from live evidence (2026-10-01)
+
+`scripts/ops/check-launch-readiness.js`:
+- `validateCapacityAlertingReport(report, now, context)` supports both simulation and live modes:
+  - Supports explicit `execution_mode: "simulation" | "live"` alongside backward-compatible `mode: "synthetic" | "live"`.
+  - Classifies synthetic distributions and simulated DoS layers as simulation preflight (`execution_mode: "simulation"` or `mode: "synthetic"`).
+  - If live mode is requested (`context.requireLive: true`), immediately returns `false` on simulation reports.
+  - In live mode (`execution_mode: "live"`, `mode: "live"`, or `context.requireLive: true`):
+    - Requires `environment === "production"`.
+    - Requires trimmed, nonempty, control-free, placeholder-free, and secret-free references: `operator_reference`,
+      `authorization_reference`, and `benchmark_reference` (or `monitoring_reference` / `telemetry_reference`).
+    - Validates live capacity distributions, alert rule simulations, DoS resilience, and target-bound database telemetry baseline.
+    - Evaluates nested `capacity.mode` against resolved mode (`synthetic ? 'synthetic' : 'live'`) to permit modern receipts without legacy top-level `mode`.
+- Category 5 (`slo_and_alerting`) evaluation:
+  - Excludes unified launch dossiers from candidate evaluation (`isCapacityAlertingCandidate`), rejecting disguised dossiers with `stages`, `dossier_version`, or `capacityAlertingBaseline`.
+  - Added `validCapacityDossier(report)` helper to `checkEvidenceFileContents` to safely recognize valid launch dossiers accompanying child evidence in Category 5 evidence arrays without raising false-positive child blockers.
+  - When approved (`slo.status === 'approved'`), requires a valid live capacity and alerting operator receipt (`execution_mode: "live"`).
+  - Valid classified simulation may accompany live evidence; simulation-only, dossier-only, prose-only, or external-pointer-only evidence cannot approve Category 5.
+  - Every child must match: an invalid or malformed child blocks beside a valid one.
+- Safe diagnostic boundary:
+  - Added `slo_and_alerting` to `checkEvidenceFile`'s safe fail-closed wrapper.
+  - Missing files, parse errors, child/dossier failures, and malformed nested-value exceptions are masked to fixed message `'A referenced capacity and alerting report is invalid or failed'`.
+  - Suppresses private filesystem paths, child error diagnostics, and exception stack traces.
+- `scripts/ops/run-capacity-alerting-drill.sh`:
+  - Added CLI flags `--operator-reference`, `--authorization-reference`, and `--benchmark-reference` with env var fallbacks.
+  - Guards live field emission (`environment: "production"` and operator references) with `if (targetUrl && !dryRun)`.
+
+Verification and review (2026-10-01):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 603 passed, 0 failed.
+- `node --test scripts/ops/run-capacity-alerting-drill.spec.js`: 17 passed, 0 failed.
+- `npm run ops:readiness-test`: 603 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open; no production traffic was generated or telemetry scraped.

@@ -1438,3 +1438,27 @@ reported no findings and confirmed readiness to commit. Verification output:
 (57/57), all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit
 reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No production inventory or
 keys were inspected live; operator sign-off remains open.
+
+**Prompt 245 Phase 12K capacity and alerting evidence separation (2026-10-01):** Category 5
+(`slo_and_alerting`) in `scripts/ops/check-launch-readiness.js` now classifies synthetic
+and simulated capacity drill runs as simulation preflight (`execution_mode: "simulation"`,
+`mode: "synthetic"`) and requires a separately inspected live operator child receipt
+(`execution_mode: "live"`) when approved. Live receipts require `environment: "production"`,
+trimmed non-empty opaque references (`operator_reference`, `authorization_reference`, and
+`benchmark_reference` or `monitoring_reference` / `telemetry_reference`), and valid live
+capacity distribution, alert rule evaluation, DoS resilience, and database telemetry baselines.
+
+Unified dossiers are excluded from candidate evaluation (`isCapacityAlertingCandidate`), disguised
+dossiers fail validation, and valid dossiers (`validCapacityDossier`) are safely recognized beside
+child reports. Every referenced child report must pass strict structural validation; valid
+simulations may accompany live evidence, but any invalid or malformed child blocks approval even
+beside a valid one. Category 5 enforces a safe diagnostic boundary in `checkEvidenceFile`
+suppressing private filesystem paths, stack traces, and child error diagnostics, mapping failures to
+`'A referenced capacity and alerting report is invalid or failed'`. `scripts/ops/run-capacity-alerting-drill.sh`
+now supports `--operator-reference`, `--authorization-reference`, and `--benchmark-reference` CLI
+flags and env vars, emitting live receipts when bound to target URLs. Unresolved example readiness
+template failed closed with 0 approved categories, 11 blocked, and 70 blockers. Verification output:
+`ops:readiness-test` (603/603), `ops:capacity-alerting-test` (17/17), `ops:readiness-schema-test` (8/8),
+`ops:templates`, `ops:templates-test` (57/57), all 21 ops test suites, lint, typecheck, build, and
+`git diff --check` passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4
+(GHSA-vcvr-r3jv-pc5j). No production traffic was generated or telemetry scraped; operator sign-off remains open.

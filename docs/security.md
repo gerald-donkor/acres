@@ -928,3 +928,28 @@ unauthenticated assertions; actual runtime environment variables, container imag
 contents remain subject to independent operator inspection. Aligns with threat model mitigations TM-01
 (tamper resistance / fail closed), TM-04 (information disclosure suppression), TM-05 (evidence boundary enforcement),
 and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.
+
+**Prompt 245 capacity and alerting evidence integrity (2026-10-01):** Capacity and alerting
+verification separates simulation preflights from live operator receipts.
+Synthetic load generations, alert rule breach/clear simulations, and simulated DoS exercises are classified
+as simulation preflights (`execution_mode: "simulation"`, `mode: "synthetic"`); they validate metrics
+definitions, PromQL expressions, and client throttling logic in-process, but do not prove live cluster
+capacity, Alertmanager notification delivery, or database connection pool resilience under live load.
+
+Category 5 (`slo_and_alerting`) requires separately inspected live operator child receipts
+(`execution_mode: "live"`) bound to the production environment, operator reference,
+authorization reference, and benchmark reference (or monitoring/telemetry reference) when approved.
+Live receipts must confirm real capacity distributions meeting availability and latency ceilings,
+all 11 alert rules verified, passing DoS resilience, and healthy target-bound database telemetry baseline
+(`source: "prometheus-live-scrape"`). Unified evidence dossiers (`stages`, `dossier_version`,
+`capacityAlertingBaseline`) are rejected as candidate child reports in `isCapacityAlertingCandidate`,
+while valid dossiers (`validCapacityDossier`) are safely permitted in Category 5 evidence arrays.
+
+Category 5 enforces a safe diagnostic boundary in `checkEvidenceFile`: missing child files, parse errors,
+child validation failures, non-candidate files, and nested formatting exceptions are mapped to the fixed blocker message
+`'A referenced capacity and alerting report is invalid or failed'`, suppressing private filesystem
+paths, internal stack traces, and child diagnostics. Mode flags, booleans, and opaque references are
+unauthenticated assertions; actual cluster capacity, database saturation, and paging channels remain
+subject to independent operator inspection. Aligns with threat model mitigations TM-01
+(tamper resistance / fail closed), TM-04 (information disclosure suppression), TM-05 (evidence boundary enforcement),
+and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.
