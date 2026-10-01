@@ -2340,3 +2340,41 @@ Verification and review (2026-10-01):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open; no production DNS or TLS modification was performed.
+
+## Prompt 240 — separate SMTP delivery preflight from live evidence (2026-10-01)
+
+`scripts/ops/check-launch-readiness.js`:
+- `validateSmtpDeliveryReport(report, now, approved, context)` supports both simulation and live modes:
+  - Requires `drill_type === "smtp_delivery_verification"`, `status === "success"`, empty `errors` array,
+    matching provider, host, port, tls_mode, and from_address against the approved readiness record, valid
+    nonfuture ISO UTC timestamp, and zero placeholder or secret markers.
+  - Requires explicit `execution_mode: "simulation" | "live"`. Missing or unrecognized modes fail closed.
+  - In simulation mode (`execution_mode: "simulation"`):
+    - Validates structural completeness.
+    - If live mode is requested (`context.requireLive: true`), immediately returns `false`.
+  - In live mode (`execution_mode: "live"` or `context.requireLive: true`):
+    - Requires `environment === "production"`.
+    - Requires trimmed, nonempty, control-free, secret-free references: `operator_reference`,
+      `authorization_reference`, and `provider_reference`.
+    - Requires structured `delivery` verification object: `{ status: "delivered", receipt_id: string, timestamp: ISO_UTC }`.
+    - Requires structured `dns` authentication verification object: `{ checked_at: ISO_UTC, spf: { passed: true, record: string }, dkim: { passed: true, record: string }, dmarc: { passed: true, record: string } }`.
+- Category 2 (`smtp_delivery`) evaluation:
+  - Excludes unified launch dossiers from SMTP delivery candidates (`isSmtpDeliveryCandidate`).
+  - When approved (`smtpSec.status === 'approved'`), requires a valid live SMTP delivery operator receipt (`execution_mode: "live"`).
+  - Valid classified simulation may accompany live evidence; simulation-only, dossier-only, prose-only, or external-pointer-only evidence cannot approve Category 2.
+  - Every child must match: an invalid or malformed child blocks beside a valid one.
+- Safe diagnostic boundary:
+  - Added `smtp_delivery` to `checkEvidenceFile`'s safe fail-closed wrapper.
+  - Missing files, parse errors, child/dossier failures, and malformed nested-value exceptions are masked to fixed message `'A referenced SMTP delivery report is invalid or failed'`.
+  - Suppresses private filesystem paths, child error diagnostics, and exception stack traces.
+  - Retains useful Category 2 field, port, email, and TLS mode syntax blockers.
+
+Verification and review (2026-10-01):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
+- `npm run ops:readiness-test`: 599 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open; no live emails were transmitted or external DNS records modified.

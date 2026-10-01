@@ -1494,11 +1494,24 @@ function validateCaddyRoutingReport(report, now, approvedDomain, context = {}) {
   }
 }
 
-function isSmtpDeliveryCandidate({ parsed } = {}) {
+function isSmtpDeliveryCandidate({ file, parsed } = {}) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-  // Every JSON file in SMTP evidence must be a valid child report. A dossier
-  // or a partial custom-named report cannot hide beside a valid sibling.
-  return true;
+  if (
+    Object.hasOwn(parsed, 'stages') ||
+    Array.isArray(parsed.stages) ||
+    parsed.dossier_version !== undefined ||
+    parsed.deploymentBaseline !== undefined
+  ) {
+    return false;
+  }
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  if (fileName.startsWith('smtp-delivery-evidence-') || fileName.startsWith('smtp-delivery')) return true;
+  if (parsed.drill_type === 'smtp_delivery_verification') return true;
+  return (
+    typeof parsed.provider === 'string' &&
+    typeof parsed.host === 'string' &&
+    typeof parsed.from_address === 'string'
+  );
 }
 
 function validSmtpText(value) {
@@ -1519,41 +1532,104 @@ function validSmtpSecretReference(value) {
   return /^(?:vault:[A-Za-z0-9_./-]+#[A-Za-z0-9_.-]+|aws-sm:[A-Za-z0-9_./-]+|env:[A-Z][A-Z0-9_]*|file:\/[A-Za-z0-9_./-]+)$/.test(value);
 }
 
+function validSmtpReference(value) {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value !== value.trim() ||
+    /[\x00-\x1f\x7f-\x9f]/.test(value)
+  ) {
+    return false;
+  }
+  const blockers = [];
+  checkPlaceholdersAndSecrets(value, 'smtp_reference', blockers);
+  return blockers.length === 0;
+}
+
 function parseSmtpTimestamp(value) {
   if (typeof value !== 'string' ||
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value)) return null;
   return parseCaddyRoutingTimestamp(value);
 }
 
-function validateSmtpDeliveryReport(report, now, approved) {
-  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
-  if (report.drill_type !== 'smtp_delivery_verification' || report.status !== 'success') return false;
-  const evalNow = now instanceof Date ? now : new Date();
-  const timestamp = parseSmtpTimestamp(report.timestamp);
-  if (!timestamp || timestamp > evalNow) return false;
-  if (!Array.isArray(report.errors) || report.errors.length !== 0) return false;
-  if (!validSmtpText(report.provider) || !validSmtpText(report.host) || !validSmtpEmail(report.from_address)) return false;
-  if (!Number.isInteger(report.port) || report.port < 1 || report.port > 65535) return false;
-  if (!['STARTTLS', 'TLS'].includes(report.tls_mode)) return false;
-  if (approved) {
-    if (!validSmtpText(approved.provider) || !validSmtpText(approved.host) ||
-        !validSmtpEmail(approved.from_address)) return false;
-    if (report.provider !== approved.provider || report.host.toLowerCase() !== approved.host.toLowerCase() ||
-        report.port !== approved.port || report.tls_mode !== approved.tls_mode ||
-        report.from_address.toLowerCase() !== approved.from_address.toLowerCase()) return false;
+function validateSmtpDeliveryReport(report, now, approvedOrContext, maybeContext) {
+  try {
+    if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+    if (report.drill_type !== 'smtp_delivery_verification' || report.status !== 'success') return false;
+    const mode = report.execution_mode;
+    if (mode !== 'simulation' && mode !== 'live') return false;
+
+    let approved = null;
+    let context = {};
+    if (approvedOrContext && typeof approvedOrContext === 'object') {
+      if (approvedOrContext.requireLive !== undefined || approvedOrContext.expectedSection !== undefined) {
+        context = approvedOrContext;
+      } else {
+        approved = approvedOrContext;
+        if (maybeContext && typeof maybeContext === 'object') {
+          context = maybeContext;
+        }
+      }
+    }
+
+    const evalNow = now instanceof Date ? now : new Date();
+    if (!Number.isFinite(evalNow.getTime())) return false;
+    const timestamp = parseSmtpTimestamp(report.timestamp);
+    if (!timestamp || timestamp > evalNow) return false;
+    if (!Array.isArray(report.errors) || report.errors.length !== 0) return false;
+    if (!validSmtpText(report.provider) || !validSmtpText(report.host) || !validSmtpEmail(report.from_address)) return false;
+    if (!Number.isInteger(report.port) || report.port < 1 || report.port > 65535) return false;
+    if (!['STARTTLS', 'TLS'].includes(report.tls_mode)) return false;
+
+    if (approved) {
+      if (!validSmtpText(approved.provider) || !validSmtpText(approved.host) ||
+          !validSmtpEmail(approved.from_address)) return false;
+      if (report.provider !== approved.provider || report.host.toLowerCase() !== approved.host.toLowerCase() ||
+          report.port !== approved.port || report.tls_mode !== approved.tls_mode ||
+          report.from_address.toLowerCase() !== approved.from_address.toLowerCase()) return false;
+    }
+
+    const secretMarkers = [];
+    checkPlaceholdersAndSecrets(report, 'smtp_report', secretMarkers);
+    if (secretMarkers.length > 0) return false;
+
+    const requireLive = Boolean(context?.requireLive);
+
+    if (mode === 'simulation') {
+      if (requireLive) return false;
+      return true;
+    }
+
+    // Live mode
+    if (report.environment !== 'production') return false;
+    if (
+      !validSmtpReference(report.operator_reference) ||
+      !validSmtpReference(report.authorization_reference) ||
+      !validSmtpReference(report.provider_reference)
+    ) {
+      return false;
+    }
+
+    const delivery = report.delivery;
+    if (!delivery || typeof delivery !== 'object' || Array.isArray(delivery) ||
+        delivery.status !== 'delivered' || !validSmtpReference(delivery.receipt_id)) return false;
+    const deliveredAt = parseSmtpTimestamp(delivery.timestamp);
+    if (!deliveredAt || deliveredAt > evalNow) return false;
+
+    const dns = report.dns;
+    if (!dns || typeof dns !== 'object' || Array.isArray(dns)) return false;
+    const checkedAt = parseSmtpTimestamp(dns.checked_at);
+    if (!checkedAt || checkedAt > evalNow) return false;
+
+    const dnsPassed = ['spf', 'dkim', 'dmarc'].every((key) =>
+      dns[key] && typeof dns[key] === 'object' && !Array.isArray(dns[key]) &&
+      dns[key].passed === true && validSmtpReference(dns[key].record));
+    if (!dnsPassed) return false;
+
+    return true;
+  } catch {
+    return false;
   }
-  const delivery = report.delivery;
-  if (!delivery || typeof delivery !== 'object' || Array.isArray(delivery) ||
-      delivery.status !== 'delivered' || !validSmtpText(delivery.receipt_id)) return false;
-  const deliveredAt = parseSmtpTimestamp(delivery.timestamp);
-  if (!deliveredAt || deliveredAt > evalNow) return false;
-  const dns = report.dns;
-  if (!dns || typeof dns !== 'object' || Array.isArray(dns)) return false;
-  const checkedAt = parseSmtpTimestamp(dns.checked_at);
-  if (!checkedAt || checkedAt > evalNow) return false;
-  return ['spf', 'dkim', 'dmarc'].every((key) =>
-    dns[key] && typeof dns[key] === 'object' && !Array.isArray(dns[key]) &&
-    dns[key].passed === true && validSmtpText(dns[key].record));
 }
 
 function isSecretReferencePolicyCandidate({ parsed } = {}) {
@@ -1729,7 +1805,7 @@ function validateNoAiPostureReport(report, now, approved) {
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
-  if (!['production_domain_tls', 'secrets_management', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery'].includes(category)) {
+  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery'].includes(category)) {
     return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
   }
   const fail = () =>
@@ -1737,6 +1813,8 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
       category,
       category === 'production_domain_tls'
         ? 'A referenced Caddy routing report is invalid or failed'
+        : category === 'smtp_delivery'
+        ? 'A referenced SMTP delivery report is invalid or failed'
         : category === 'volume_encryption'
         ? 'A referenced volume encryption report is invalid or failed'
         : category === 'secrets_management'
@@ -1806,6 +1884,14 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
         addBlocker(category, 'A referenced Caddy routing report is invalid or failed');
         continue;
       }
+    }
+    if (category === 'smtp_delivery') {
+      if (isSmtpDeliveryCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock and live requirement.
+        continue;
+      }
+      addBlocker(category, 'A referenced SMTP delivery report is invalid or failed');
+      continue;
     }
     // Category 5 child failures use fixed reasons, never untrusted child diagnostics.
     if (category === 'slo_and_alerting' && isCapacityAlertingCandidate({ file, parsed })) {
@@ -2544,8 +2630,13 @@ function validateReadiness(record, _filePath, options = {}) {
     const smtpCandidates = smtpEvidence.filter(isSmtpDeliveryCandidate);
     if (smtpCandidates.length === 0) {
       addBlocker('smtp_delivery', 'A successful SMTP delivery and DNS verification child JSON report is required');
-    } else if (smtpCandidates.some(({ parsed }) => !validateSmtpDeliveryReport(parsed, now, smtpSec))) {
-      addBlocker('smtp_delivery', 'A referenced SMTP delivery report is invalid or failed');
+    } else {
+      if (smtpCandidates.some(({ parsed }) => !validateSmtpDeliveryReport(parsed, now, smtpSec))) {
+        addBlocker('smtp_delivery', 'A referenced SMTP delivery report is invalid or failed');
+      }
+      if (!smtpCandidates.some(({ parsed }) => validateSmtpDeliveryReport(parsed, now, smtpSec, { requireLive: true }))) {
+        addBlocker('smtp_delivery', 'A live SMTP delivery verification operator receipt is required');
+      }
     }
   }
 
@@ -3192,6 +3283,7 @@ module.exports = {
   parseCaddyRoutingTimestamp,
   validateCaddyRoutingReport,
   isSmtpDeliveryCandidate,
+  validSmtpReference,
   validateSmtpDeliveryReport,
   isSecretReferencePolicyCandidate,
   validateSecretReferencePolicyReport,

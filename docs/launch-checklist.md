@@ -198,6 +198,35 @@ secret/default and Docker checks passed. `npm run build` failed during the
 client Next 16.3.4 build with `Could not parse output from TypeScript's
 --showConfig`. Neither failed check supplies or invalidates live SMTP proof.
 
+**Prompt 240 Category 2 evidence separation (2026-10-01).** Category 2
+(`smtp_delivery`) now classifies local/configuration verification as simulation
+preflight (`execution_mode: "simulation"`) and requires a separately inspected live
+operator child receipt (`execution_mode: "live"`) when approved:
+- Structural SMTP delivery child reports require `execution_mode: "simulation" | "live"`.
+  Unrecognized, legacy, or missing execution modes fail closed.
+- Simulation reports validate structural completeness (drill_type, status, errors,
+  matching provider, host, port, tls_mode, and from_address), but cannot approve
+  Category 2 on their own (`requireLive: true` fails closed on simulation).
+- Live reports require `execution_mode: "live"`, `environment: "production"`, and
+  trimmed nonempty opaque audit references (`operator_reference`,
+  `authorization_reference`, `provider_reference`).
+- The `delivery` verification requires `status: "delivered"`, an opaque nonempty
+  `receipt_id`, and a real nonfuture ISO UTC `timestamp`.
+- The `dns` authentication verification requires a real nonfuture ISO UTC `checked_at`,
+  and `passed: true` with a nonempty `record` evidence reference for all three of
+  `spf`, `dkim`, and `dmarc`.
+- All referenced child reports must pass strict validation; a malformed, failed,
+  or unclassified child blocks approval even beside a valid live receipt. Valid
+  simulation reports may accompany a live receipt.
+- Unified dossiers (`stages`, `dossier_version`) are explicitly rejected as candidates
+  in `isSmtpDeliveryCandidate`.
+- Category 2 is enclosed in the narrow safe evidence boundary (`checkEvidenceFile`),
+  mapping any missing, malformed, non-object, non-candidate, or throwing file to the
+  fixed blocker `'A referenced SMTP delivery report is invalid or failed'` and suppressing
+  private file paths, canary tokens, stack traces, and internal errors.
+- Unresolved example readiness record failed closed with 0 approved categories,
+  11 blocked, and 70 blockers.
+
 ### 3. Secrets Management (`secrets_management`)
 
 - Rehearsal only: `scripts/ops/scan-secrets.sh` and

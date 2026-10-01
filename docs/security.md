@@ -821,3 +821,24 @@ paths, internal stack traces, and child diagnostics. Mode flags, confirmations, 
 references are unauthenticated assertions; actual production domain resolution and TLS
 security posture remain subject to independent operator inspection. Prompt 201 and Phase 12
 live sign-off remain open.
+
+**Prompt 240 SMTP delivery evidence integrity (2026-10-01):** SMTP delivery
+verification separates simulation preflight from live operator receipts. Local template
+checks and configuration probes are classified as `execution_mode: "simulation"`; they
+validate structural completeness but do not prove live email transmission or DNS deliverability.
+
+Category 2 (`smtp_delivery`) requires separately inspected live operator child receipts
+(`execution_mode: "live"`) bound to the production environment, operator reference,
+authorization reference, and provider reference when approved. Live receipts must contain
+structured delivery verification (`status: "delivered"`, opaque `receipt_id`, ISO UTC timestamp)
+and DNS authentication verification (`checked_at`, `spf.passed: true`, `dkim.passed: true`,
+`dmarc.passed: true` with evidence references) matching the approved provider, host, port,
+TLS mode, and from_address.
+
+Category 2 enforces a safe diagnostic boundary: missing child files, parse errors, child
+validation failures, and nested formatting exceptions are mapped to the fixed blocker message
+`'A referenced SMTP delivery report is invalid or failed'`, suppressing private filesystem
+paths, internal stack traces, and child diagnostics. Mode flags, confirmations, and opaque
+references are unauthenticated assertions; actual mail relay connectivity and DNS authentication
+records remain subject to independent operator inspection. Prompt 201 and Phase 12 live sign-off
+remain open.

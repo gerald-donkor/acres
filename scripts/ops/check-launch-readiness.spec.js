@@ -476,6 +476,11 @@ fs.writeFileSync(caddyRoutingFixturePath, JSON.stringify(validCaddyRoutingReport
 const smtpFixturePath = path.join(restoreFixtureDir, 'smtp-delivery-evidence-valid.json');
 const validSmtpReport = {
   drill_type: 'smtp_delivery_verification',
+  execution_mode: 'live',
+  environment: 'production',
+  operator_reference: 'op:gerald-donkor',
+  authorization_reference: 'auth:launch-2026-10-01',
+  provider_reference: 'resend:msg_live_123',
   timestamp: '2026-08-28T12:00:00.000Z',
   status: 'success',
   provider: 'resend',
@@ -497,6 +502,20 @@ const validSmtpReport = {
   errors: [],
 };
 fs.writeFileSync(smtpFixturePath, JSON.stringify(validSmtpReport));
+const simulationSmtpFixturePath = path.join(restoreFixtureDir, 'smtp-delivery-evidence-simulation.json');
+const simulationSmtpReport = {
+  drill_type: 'smtp_delivery_verification',
+  execution_mode: 'simulation',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  provider: 'resend',
+  host: 'smtp.resend.com',
+  port: 587,
+  tls_mode: 'STARTTLS',
+  from_address: 'notifications@acres.example.com',
+  errors: [],
+};
+fs.writeFileSync(simulationSmtpFixturePath, JSON.stringify(simulationSmtpReport));
 const secretReferences = {
   session_secret_source: 'vault:acres/production/session#secret',
   csrf_secret_source: 'vault:acres/production/csrf#secret',
@@ -962,8 +981,8 @@ test('non-object evidence blocker does not echo its path', () => {
     const file = path.join(dir, 'credential-bearing-reference.json');
     fs.writeFileSync(file, 'null');
     const record = buildValidApprovedRecord();
-    record.sections.smtp_delivery.evidence = [smtpFixturePath, file];
-    const blockers = validateApprovedRecord(record).categoryBlockers.smtp_delivery || [];
+    record.sections.graphql_introspection.evidence = [graphqlIntrospectionFixturePath, file];
+    const blockers = validateApprovedRecord(record).categoryBlockers.graphql_introspection || [];
     assert.ok(blockers.some((blocker) => blocker.includes('must contain a JSON object')));
     assert.ok(!JSON.stringify(blockers).includes('credential-bearing-reference'));
   } finally {
@@ -1328,10 +1347,10 @@ test('validateReadiness passes evidence cross-validation when a referenced dossi
 
 test('validateReadiness blocks approval when referenced evidence file is missing', () => {
   const record = buildValidApprovedRecord();
-  record.sections.smtp_delivery.evidence = ['infra/smtp/missing-delivery-file.json'];
+  record.sections.graphql_introspection.evidence = ['infra/graphql/missing-introspection-file.json'];
 
   const result = validateApprovedRecord(record);
-  const blockers = result.categoryBlockers.smtp_delivery || [];
+  const blockers = result.categoryBlockers.graphql_introspection || [];
   assert.ok(
     blockers.some((b) => b.includes('no matching file exists on disk')),
     `Expected missing-file blocker, got: ${JSON.stringify(blockers)}`
@@ -1342,17 +1361,17 @@ test('validateReadiness blocks approval when referenced evidence reports failure
   const os = require('node:os');
   const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
   try {
-    const failedPath = path.join(tmpDir, 'smtp-delivery-failed.json');
+    const failedPath = path.join(tmpDir, 'graphql-probe-failed.json');
     fs.writeFileSync(
       failedPath,
       JSON.stringify({ status: 'FAILED' }),
       'utf8'
     );
     const record = buildValidApprovedRecord();
-    record.sections.smtp_delivery.evidence = [failedPath];
+    record.sections.graphql_introspection.evidence = [failedPath];
 
     const result = validateApprovedRecord(record);
-    const blockers = result.categoryBlockers.smtp_delivery || [];
+    const blockers = result.categoryBlockers.graphql_introspection || [];
     assert.ok(
       blockers.some((b) => b.includes('reports drill failure')),
       `Expected failure-report blocker, got: ${JSON.stringify(blockers)}`
@@ -1424,10 +1443,10 @@ test('validateReadiness blocks approval when evidence reports a non-zero exitCod
     const reportPath = path.join(tmpDir, 'generic-report.json');
     fs.writeFileSync(reportPath, JSON.stringify({ summary: { exitCode: 1 } }), 'utf8');
     const record = buildValidApprovedRecord();
-    record.sections.smtp_delivery.evidence = [reportPath];
+    record.sections.graphql_introspection.evidence = [reportPath];
 
     const result = validateApprovedRecord(record);
-    const blockers = result.categoryBlockers.smtp_delivery || [];
+    const blockers = result.categoryBlockers.graphql_introspection || [];
     assert.ok(
       blockers.some((b) => b.includes('summary.exitCode: 1')),
       `Expected exitCode blocker, got: ${JSON.stringify(blockers)}`
@@ -3591,20 +3610,37 @@ test('SMTP delivery report validation fails closed on invalid status, identity, 
     { port: 587.5 }, { tls_mode: 'NONE' }, { from_address: 'invalid' },
     { timestamp: '2026-09-26T12:00:00.000Z' }, { timestamp: '2026-02-30T12:00:00.000Z' },
     { timestamp: '20260828T120000Z' },
+    { execution_mode: 'unrecognized' },
+    { execution_mode: 'simulation' }, // in live mode without override
+    { environment: 'staging' },
+    { operator_reference: '' },
+    { operator_reference: 'bad\x00char' },
+    { authorization_reference: '' },
+    { provider_reference: '' },
+    { delivery: null },
     { delivery: { ...validSmtpReport.delivery, status: 'accepted' } },
     { delivery: { ...validSmtpReport.delivery, receipt_id: '' } },
+    { delivery: { ...validSmtpReport.delivery, receipt_id: 'bad\x00id' } },
     { delivery: { ...validSmtpReport.delivery, timestamp: '2026-09-26T12:00:00.000Z' } },
+    { dns: null },
     { dns: { ...validSmtpReport.dns, dkim: { passed: false, record: 'dns-printout-dkim' } } },
     { dns: { ...validSmtpReport.dns, spf: { passed: true, record: '' } } },
     { dns: { ...validSmtpReport.dns, checked_at: 'not-a-date' } },
     { errors: ['delivery rejected'] },
+    { secret_note: '__REQUIRED_SECRET__' },
   ];
   for (const mutation of mutations) {
-    assert.strictEqual(validateSmtpDeliveryReport({ ...validSmtpReport, ...mutation }, fixedNow, approved), false,
+    assert.strictEqual(validateSmtpDeliveryReport({ ...validSmtpReport, ...mutation }, fixedNow, approved, { requireLive: true }), false,
       `Expected rejection for ${JSON.stringify(mutation)}`);
   }
   assert.strictEqual(validateSmtpDeliveryReport(validSmtpReport, fixedNow, { ...approved, host: null }), false);
   assert.strictEqual(validateSmtpDeliveryReport(validSmtpReport, fixedNow, { ...approved, from_address: null }), false);
+  // Simulation report passes structural validation in simulation mode
+  assert.strictEqual(validateSmtpDeliveryReport(simulationSmtpReport, fixedNow, approved), true);
+  // Simulation report fails when live report is required
+  assert.strictEqual(validateSmtpDeliveryReport(simulationSmtpReport, fixedNow, approved, { requireLive: true }), false);
+  // Invalid clock fails closed
+  assert.strictEqual(validateSmtpDeliveryReport(validSmtpReport, new Date(NaN), approved), false);
 });
 
 test('SMTP evidence accepts custom path and rejects failed child in wildcard', () => {
@@ -3628,12 +3664,94 @@ test('SMTP evidence accepts custom path and rejects failed child in wildcard', (
   }
 });
 
-test('SMTP evidence candidate includes dossiers and handles missing input', () => {
+test('Category 2 separates simulation from live receipts and enforces safe evidence boundary', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-smtp-boundary-'));
+  try {
+    const good = path.join(dir, 'smtp-delivery-evidence-live.json');
+    const sim = path.join(dir, 'smtp-delivery-evidence-simulation.json');
+    const other = path.join(dir, 'smtp-delivery-evidence-other.json');
+
+    fs.writeFileSync(good, JSON.stringify(validSmtpReport));
+    fs.writeFileSync(sim, JSON.stringify(simulationSmtpReport));
+
+    const record = buildValidApprovedRecord();
+    const blockers = (evidence) => {
+      record.sections.smtp_delivery.evidence = evidence;
+      return validateApprovedRecord(record).categoryBlockers.smtp_delivery || [];
+    };
+
+    const smtpFailure = 'A referenced SMTP delivery report is invalid or failed';
+    const smtpLiveRequired = 'A live SMTP delivery verification operator receipt is required';
+
+    // Simulation alone cannot approve Category 2
+    assert.ok(blockers([sim]).includes(smtpLiveRequired));
+    // Live report alone passes
+    assert.deepStrictEqual(blockers([good]), []);
+    // Simulation accompanying live child passes
+    assert.deepStrictEqual(blockers([good, sim]), []);
+    // Glob matching both passes
+    assert.deepStrictEqual(blockers([path.join(dir, 'smtp-delivery-evidence-*.json')]), []);
+
+    // Private canary mutations
+    for (const bad of [
+      { ...validSmtpReport, host: 'different.example.com' },
+      { ...validSmtpReport, status: 'private-canary', errors: ['private-canary'] },
+      { ...validSmtpReport, operator_reference: 'bad\x00private-canary' },
+      { ...validSmtpReport, provider_reference: '' },
+      { ...validSmtpReport, environment: 'staging' },
+      { ...validSmtpReport, delivery: { ...validSmtpReport.delivery, status: 'bounced', receipt_id: 'private-canary' } },
+      { ...validSmtpReport, dns: { ...validSmtpReport.dns, spf: { passed: false, record: 'private-canary' } } },
+      { ...validSmtpReport, execution_mode: 'unrecognized-private-canary' },
+      { dossier_version: '1.0.0', overall_status: 'FAILED', stages: [], error_message: 'private-canary' },
+      { arbitrary: 'private-canary' },
+      { stages: [], overall_status: 'PASSED' },
+    ]) {
+      fs.writeFileSync(other, JSON.stringify(bad));
+      for (const evidence of [[good, other], [path.join(dir, 'smtp-delivery-evidence-*.json')]]) {
+        const result = blockers(evidence);
+        assert.ok(result.includes(smtpFailure), JSON.stringify(result));
+        assert.ok(!JSON.stringify(result).includes('private-canary'));
+        assert.ok(!JSON.stringify(result).includes(dir));
+      }
+    }
+
+    // Malformed JSON suppresses diagnostics
+    fs.writeFileSync(other, '{private-canary');
+    assert.ok(blockers([good, other]).includes(smtpFailure));
+    assert.ok(!JSON.stringify(blockers([good, other])).includes('private-canary'));
+
+    // Missing file suppresses diagnostics
+    fs.unlinkSync(other);
+    assert.ok(blockers([good, other]).includes(smtpFailure));
+    assert.ok(!JSON.stringify(blockers([good, other])).includes(dir));
+
+    // External pointers or prose cannot satisfy live child report
+    for (const evidence of [['SMTP test delivery sent to operator'], ['https://smtp-provider.example.com']]) {
+      assert.ok(blockers(evidence).includes('A successful SMTP delivery and DNS verification child JSON report is required'));
+    }
+
+    // Disguised dossier cannot impersonate candidate
+    const dossier = {
+      ...validSmtpReport,
+      dossier_version: '1.0.0',
+      stages: [],
+    };
+    fs.writeFileSync(other, JSON.stringify(dossier));
+    assert.strictEqual(isSmtpDeliveryCandidate({ file: other, parsed: dossier }), false);
+    assert.ok(blockers([other]).includes('A successful SMTP delivery and DNS verification child JSON report is required'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SMTP evidence candidate excludes dossiers and handles missing input', () => {
   assert.strictEqual(isSmtpDeliveryCandidate(), false);
   assert.strictEqual(isSmtpDeliveryCandidate({ parsed: [] }), false);
-  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'smtp-delivery-evidence-a.json', parsed: { stages: [] } }), true);
+  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'smtp-delivery-evidence-a.json', parsed: { stages: [] } }), false);
+  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'smtp-delivery-evidence-a.json', parsed: { dossier_version: '1.0.0' } }), false);
   assert.strictEqual(isSmtpDeliveryCandidate({ file: 'custom.json', parsed: validSmtpReport }), true);
-  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'custom.json', parsed: { delivery: {} } }), true);
+  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'custom.json', parsed: { provider: 'resend', host: 'smtp.resend.com', from_address: 'test@acres.example.com' } }), true);
+  assert.strictEqual(isSmtpDeliveryCandidate({ file: 'custom.json', parsed: { delivery: {} } }), false);
   assert.strictEqual(validateSmtpDeliveryReport(null), false);
 });
 
