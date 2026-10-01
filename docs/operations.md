@@ -2452,3 +2452,45 @@ Verification and review (2026-10-01):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open; no production retention purge routines were executed or database tables modified.
+
+## Prompt 243 — separate GraphQL introspection preflight from live evidence (2026-10-01)
+
+`scripts/ops/check-launch-readiness.js`:
+- `validateGraphqlIntrospectionReport(report, now, approved, context)` supports both simulation and live modes:
+  - Requires `drill_type === "graphql_introspection_probe"`, `status === "success"`, empty `errors` array,
+    valid endpoint (`/graphql` or absolute HTTP/HTTPS URL ending in `/graphql`), boolean `production_introspection_enabled`,
+    valid nonfuture ISO UTC timestamp, and zero placeholder or secret markers.
+  - Requires explicit `execution_mode: "simulation" | "live"`. Missing or unrecognized modes fail closed.
+  - Validates `probe_result` object containing exactly `status_code` (positive integer), `introspection_permitted`
+    (matching `production_introspection_enabled`), `schema_exposed` (`false` when disabled, `true` when enabled),
+    and non-empty trimmed `response_summary`.
+  - When approved section is passed, requires `report.production_introspection_enabled === approved.production_introspection_enabled`.
+  - In simulation mode (`execution_mode: "simulation"`):
+    - Validates structural completeness and exact top-level keys (`drill_type`, `endpoint`, `errors`, `execution_mode`,
+      `probe_result`, `production_introspection_enabled`, `status`, `timestamp`).
+    - If live mode is requested (`context.requireLive: true`), immediately returns `false`.
+  - In live mode (`execution_mode: "live"` or `context.requireLive: true`):
+    - Requires `environment === "production"`.
+    - Requires trimmed, nonempty, control-free, secret-free references: `operator_reference`,
+      `authorization_reference`, and `probe_reference`.
+    - Requires exact top-level keys matching the live specification.
+- Category 9 (`graphql_introspection`) evaluation:
+  - Excludes unified launch dossiers from candidate evaluation (`isGraphqlIntrospectionCandidate`).
+  - When approved (`gqlSec.status === 'approved'`), requires a valid live GraphQL introspection probe operator receipt (`execution_mode: "live"`).
+  - Valid classified simulation may accompany live evidence; simulation-only, dossier-only, prose-only, or external-pointer-only evidence cannot approve Category 9.
+  - Every child must match: an invalid or malformed child blocks beside a valid one.
+- Safe diagnostic boundary:
+  - Added `graphql_introspection` to `checkEvidenceFile`'s safe fail-closed wrapper.
+  - Missing files, parse errors, child/dossier failures, and malformed nested-value exceptions are masked to fixed message `'A referenced GraphQL introspection report is invalid or failed'`.
+  - Suppresses private filesystem paths, child error diagnostics, and exception stack traces.
+  - Retains useful Category 9 boolean and justification blockers.
+
+Verification and review (2026-10-01):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
+- `npm run ops:readiness-test`: 599 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open; no production network probes were issued against production `/graphql` ingress.

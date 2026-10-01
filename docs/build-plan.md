@@ -1391,3 +1391,26 @@ reported no findings and confirmed readiness to commit. Verification output:
 (57/57), all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit
 reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No production purge routines
 were executed or database tables modified; operator sign-off remains open.
+
+**Prompt 243 Phase 12K GraphQL introspection evidence separation (2026-10-01):** Category 9
+(`graphql_introspection`) in `scripts/ops/check-launch-readiness.js` now classifies probe
+and schema inspection verifications as simulation preflight (`execution_mode: "simulation"`) and
+requires a separately inspected live operator child receipt (`execution_mode: "live"`)
+when approved. Live receipts require `environment: "production"`, trimmed non-empty opaque
+references (`operator_reference`, `authorization_reference`, `probe_reference`), and
+confirmed probe results matching `production_introspection_enabled: false` (or explicitly approved posture),
+`introspection_permitted: false`, `schema_exposed: false`, positive integer HTTP `status_code`,
+and non-empty trimmed `response_summary` with zero placeholders or exposed secrets.
+
+Unified dossiers are excluded from candidate evaluation (`isGraphqlIntrospectionCandidate`), and disguised
+dossiers fail validation. Every referenced child report must pass strict structural validation;
+valid simulations may accompany live evidence, but any invalid or malformed child blocks approval
+even beside a valid one. Category 9 enforces a safe diagnostic boundary suppressing private
+filesystem paths, stack traces, canary tokens, and child error diagnostics, mapping failures to
+`'A referenced GraphQL introspection report is invalid or failed'`. Unresolved example readiness template
+failed closed with 0 approved categories, 11 blocked, and 70 blockers. Independent code review
+reported no findings and confirmed readiness to commit. Verification output:
+`ops:readiness-test` (599/599), `ops:readiness-schema-test` (8/8), `ops:templates`, `ops:templates-test`
+(57/57), all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit
+reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No live network probe was executed
+or endpoint configuration modified; operator sign-off remains open.

@@ -1816,45 +1816,87 @@ function isValidGraphqlEndpoint(endpoint) {
 
 function isGraphqlIntrospectionCandidate({ parsed } = {}) {
   // A custom-named JSON file must be checked too; a dossier cannot qualify.
-  return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  if (Array.isArray(parsed.stages) || parsed.dossier_version !== undefined) return false;
+  return true;
 }
 
-function validateGraphqlIntrospectionReport(report, now, approved) {
-  if (!isGraphqlIntrospectionCandidate({ parsed: report }) ||
-      report.drill_type !== 'graphql_introspection_probe' ||
-      report.status !== 'success' ||
-      !isValidGraphqlEndpoint(report.endpoint) ||
-      typeof report.production_introspection_enabled !== 'boolean' ||
-      !Array.isArray(report.errors) || report.errors.length !== 0) return false;
-  const timestamp = parseSmtpTimestamp(report.timestamp);
-  const evalNow = now instanceof Date ? now : new Date();
-  if (!timestamp || timestamp > evalNow ||
-      !report.probe_result || typeof report.probe_result !== 'object' || Array.isArray(report.probe_result) ||
-      !approved || typeof approved !== 'object') return false;
-  const secretMarkers = [];
-  checkPlaceholdersAndSecrets(report, 'graphql_probe_report', secretMarkers);
-  if (secretMarkers.length > 0) return false;
-  if (Object.keys(report).sort().join(',') !==
-      ['drill_type', 'endpoint', 'errors', 'probe_result', 'production_introspection_enabled', 'status', 'timestamp'].sort().join(',')) return false;
-  if (Object.keys(report.probe_result).sort().join(',') !==
-      ['introspection_permitted', 'response_summary', 'schema_exposed', 'status_code'].sort().join(',')) return false;
+function validateGraphqlIntrospectionReport(report, now, approvedOrContext, maybeContext) {
+  try {
+    if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+    if (report.drill_type !== 'graphql_introspection_probe' || report.status !== 'success') return false;
+    const mode = report.execution_mode;
+    if (mode !== 'simulation' && mode !== 'live') return false;
 
-  const probe = report.probe_result;
-  if (typeof probe.status_code !== 'number' || !Number.isInteger(probe.status_code) || probe.status_code <= 0 ||
-      typeof probe.introspection_permitted !== 'boolean' ||
-      typeof probe.schema_exposed !== 'boolean' ||
-      typeof probe.response_summary !== 'string' || !probe.response_summary.trim()) return false;
+    let approved = null;
+    let context = {};
+    if (approvedOrContext && typeof approvedOrContext === 'object') {
+      if (approvedOrContext.requireLive !== undefined || approvedOrContext.expectedSection !== undefined) {
+        context = approvedOrContext;
+      } else {
+        approved = approvedOrContext;
+        if (maybeContext && typeof maybeContext === 'object') {
+          context = maybeContext;
+        }
+      }
+    }
 
-  if (report.production_introspection_enabled !== approved.production_introspection_enabled) return false;
-  if (probe.introspection_permitted !== approved.production_introspection_enabled) return false;
+    const evalNow = now instanceof Date ? now : new Date();
+    if (!Number.isFinite(evalNow.getTime())) return false;
+    const timestamp = parseSmtpTimestamp(report.timestamp);
+    if (!timestamp || timestamp > evalNow) return false;
+    if (!isValidGraphqlEndpoint(report.endpoint)) return false;
+    if (typeof report.production_introspection_enabled !== 'boolean') return false;
+    if (!Array.isArray(report.errors) || report.errors.length !== 0) return false;
 
-  if (approved.production_introspection_enabled === false) {
-    if (probe.schema_exposed !== false) return false;
-  } else if (approved.production_introspection_enabled === true) {
-    if (probe.schema_exposed !== true) return false;
+    if (!report.probe_result || typeof report.probe_result !== 'object' || Array.isArray(report.probe_result)) return false;
+
+    const secretMarkers = [];
+    checkPlaceholdersAndSecrets(report, 'graphql_probe_report', secretMarkers);
+    if (secretMarkers.length > 0) return false;
+
+    if (Object.keys(report.probe_result).sort().join(',') !==
+        ['introspection_permitted', 'response_summary', 'schema_exposed', 'status_code'].sort().join(',')) return false;
+
+    const probe = report.probe_result;
+    if (typeof probe.status_code !== 'number' || !Number.isInteger(probe.status_code) || probe.status_code <= 0) return false;
+    if (typeof probe.introspection_permitted !== 'boolean') return false;
+    if (probe.introspection_permitted !== report.production_introspection_enabled) return false;
+    if (typeof probe.schema_exposed !== 'boolean') return false;
+    if (report.production_introspection_enabled === false && probe.schema_exposed !== false) return false;
+    if (report.production_introspection_enabled === true && probe.schema_exposed !== true) return false;
+    if (typeof probe.response_summary !== 'string' || !probe.response_summary.trim() || probe.response_summary !== probe.response_summary.trim()) return false;
+
+    if (approved && typeof approved === 'object' && typeof approved.production_introspection_enabled === 'boolean') {
+      if (report.production_introspection_enabled !== approved.production_introspection_enabled) return false;
+    }
+
+    const requireLive = Boolean(context?.requireLive);
+
+    if (mode === 'simulation') {
+      if (requireLive) return false;
+      if (Object.keys(report).sort().join(',') !==
+          ['drill_type', 'endpoint', 'errors', 'execution_mode', 'probe_result', 'production_introspection_enabled', 'status', 'timestamp'].sort().join(',')) return false;
+      return true;
+    }
+
+    // Live mode
+    if (report.environment !== 'production') return false;
+    if (
+      !validSmtpReference(report.operator_reference) ||
+      !validSmtpReference(report.authorization_reference) ||
+      !validSmtpReference(report.probe_reference)
+    ) {
+      return false;
+    }
+
+    if (Object.keys(report).sort().join(',') !==
+        ['authorization_reference', 'drill_type', 'endpoint', 'environment', 'errors', 'execution_mode', 'operator_reference', 'probe_reference', 'probe_result', 'production_introspection_enabled', 'status', 'timestamp'].sort().join(',')) return false;
+
+    return true;
+  } catch {
+    return false;
   }
-
-  return true;
 }
 
 const NO_AI_JOURNEYS = ['analytics_dashboard', 'governed_report', 'export_download'];
@@ -1905,7 +1947,7 @@ function validateNoAiPostureReport(report, now, approved) {
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
-  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'secret_references', 'data_retention_policy', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery'].includes(category)) {
+  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'secret_references', 'data_retention_policy', 'graphql_introspection', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery'].includes(category)) {
     return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
   }
   const fail = () =>
@@ -1923,6 +1965,8 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
         ? 'A referenced secret-reference policy report is invalid or failed'
         : category === 'data_retention_policy'
         ? 'A referenced data retention policy report is invalid or failed'
+        : category === 'graphql_introspection'
+        ? 'A referenced GraphQL introspection report is invalid or failed'
         : category === 'deployment_and_rollback'
         ? 'A referenced deployment drill report is invalid or failed'
         : typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
@@ -3111,8 +3155,13 @@ function validateReadiness(record, _filePath, options = {}) {
     const graphqlCandidates = graphqlEvidence.filter(isGraphqlIntrospectionCandidate);
     if (graphqlCandidates.length === 0) {
       addBlocker('graphql_introspection', 'A successful GraphQL introspection probe child JSON report is required');
-    } else if (graphqlCandidates.some(({ parsed }) => !validateGraphqlIntrospectionReport(parsed, now, gqlSec))) {
-      addBlocker('graphql_introspection', 'A referenced GraphQL introspection report is invalid or failed');
+    } else {
+      if (graphqlCandidates.some(({ parsed }) => !validateGraphqlIntrospectionReport(parsed, now, gqlSec))) {
+        addBlocker('graphql_introspection', 'A referenced GraphQL introspection report is invalid or failed');
+      }
+      if (!graphqlCandidates.some(({ parsed }) => validateGraphqlIntrospectionReport(parsed, now, gqlSec, { requireLive: true }))) {
+        addBlocker('graphql_introspection', 'A live GraphQL introspection probe operator receipt is required');
+      }
     }
   }
 

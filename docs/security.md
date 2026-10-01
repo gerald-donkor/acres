@@ -881,3 +881,27 @@ paths, internal stack traces, and child diagnostics. Mode flags, confirmations, 
 references are unauthenticated assertions; actual legal retention schedules and active purge
 jobs remain subject to independent operator inspection. Prompt 201 and Phase 12 live sign-off
 remain open.
+
+**Prompt 243 GraphQL introspection evidence integrity (2026-10-01):** GraphQL
+introspection verification separates simulation preflights from live operator receipts.
+Local probe checks and schema inspection artifacts are classified as `execution_mode: "simulation"`;
+they validate structural schema query handling and preflight responses but do not prove active production
+ingress disablement.
+
+Category 9 (`graphql_introspection`) requires separately inspected live operator child receipts
+(`execution_mode: "live"`) bound to the production environment, operator reference,
+authorization reference, and probe reference when approved. Live receipts must confirm
+`production_introspection_enabled: false` (or explicitly approved posture), matching
+`introspection_permitted: false`, `schema_exposed: false`, positive integer HTTP `status_code`,
+and trimmed non-empty `response_summary` with zero placeholders or exposed secrets. Unified
+evidence dossiers (`stages`, `dossier_version`) are rejected as candidate child reports.
+
+Category 9 enforces a safe diagnostic boundary: missing child files, parse errors, child
+validation failures, non-candidate files, and nested formatting exceptions are mapped to the fixed blocker message
+`'A referenced GraphQL introspection report is invalid or failed'`, suppressing private filesystem
+paths, internal stack traces, canary tokens, and child diagnostics. Mode flags, booleans, and opaque
+references are unauthenticated assertions; actual introspection route configuration, network exposure,
+and production ingress security remain subject to independent operator inspection. Aligns with
+threat model mitigations TM-01 (tamper resistance / fail closed), TM-04 (information disclosure suppression),
+TM-05 (evidence boundary enforcement), and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off
+remain open.

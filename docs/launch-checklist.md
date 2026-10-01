@@ -1355,6 +1355,34 @@ inside the sandbox with Next's `Could not parse output from TypeScript's
 16.3.4 and server Nest builds. None of these repository checks supplies a live
 production GraphQL response or security approval.
 
+**Prompt 243 Category 9 evidence separation (2026-10-01).** Category 9
+(`graphql_introspection`) now classifies probe verification reports as simulation
+preflight (`execution_mode: "simulation"`) and requires a separately inspected live
+operator child receipt (`execution_mode: "live"`) when approved:
+- Structural GraphQL probe child reports require `execution_mode: "simulation" | "live"`.
+  Unrecognized, legacy, or missing execution modes fail closed.
+- Simulation reports validate structural completeness (drill_type, endpoint, errors,
+  matching production_introspection_enabled, and probe_result), but cannot approve
+  Category 9 on their own (`requireLive: true` fails closed on simulation).
+- Live reports require `execution_mode: "live"`, `environment: "production"`, and
+  trimmed nonempty opaque references (`operator_reference`, `authorization_reference`,
+  `probe_reference`).
+- All probe reports require `probe_result` matching `status_code` (positive integer),
+  `introspection_permitted` (matching `production_introspection_enabled`),
+  `schema_exposed` (`false` when disabled, `true` when enabled), and non-empty
+  trimmed `response_summary` with zero placeholders or secrets.
+- All referenced child reports must pass strict validation; a malformed, failed,
+  or unclassified child blocks approval even beside a valid live receipt. Valid
+  simulation reports may accompany a live receipt.
+- Unified dossiers (`stages`, `dossier_version`) are explicitly rejected as candidates
+  in `isGraphqlIntrospectionCandidate`.
+- Category 9 is enclosed in the narrow safe evidence boundary (`checkEvidenceFile`),
+  mapping any missing, malformed, non-object, non-candidate, or throwing file to the
+  fixed blocker `'A referenced GraphQL introspection report is invalid or failed'` and suppressing
+  private file paths, canary tokens, stack traces, and internal errors.
+- Unresolved example readiness record failed closed with 0 approved categories,
+  11 blocked, and 70 blockers.
+
 ### 10. Deployment & Rollback (`deployment_and_rollback`)
 
 - Preflight/rehearsal: `bash scripts/ops/run-deployment-drill.sh --dry-run`;
@@ -1968,7 +1996,7 @@ from an operator's private store.
 | `backup_and_disaster_recovery` | Available but unverified: restore/reconciliation scripts and example one-hour/four-hour objectives. Missing: approved RPO ≤1h, RTO ≤4h, UTC schedule, encrypted off-host destination, isolated target, completed restore/reconciliation and approval. Unresolved. | Successful restore and object-reconciliation child JSON reports; independently inspect actual backup completion/freshness, encrypted transfer, PostgreSQL/Garage coverage, isolated restore parity and object inventory. | SRE lead; provide redacted backup and isolated-target references; authorize restore operation separately. |
 | `data_retention_policy` | Available but unverified: fixed example windows (7d quarantine, 1d rejected objects, 30d exports/backups, 15d telemetry). Missing: approved account, audit and report windows, scheduled cleanup verification, legal approval. Unresolved. | Retention-policy-review child JSON; inspect signed policy and live cleanup schedule/results for all eight fields. Separate live operator receipt required on approval. | Legal lead with operations; provide opaque policy and cleanup evidence references. |
 | `volume_encryption` | Available: simulation declaration/local-scan preflight. Missing: independently inspected live child, approved mechanism/root inventory/owner and sign-off. Unresolved. | Bound live production child covering all nine required service mounts; inspect encryption, separated custody, dual control and tested recovery. | Security/infrastructure leads and key-recovery owner; restricted mount/custody source pointers and dated approval. |
-| `graphql_introspection` | Available but unverified: example says disabled. Missing: operator production policy decision, live route result and approval. Unresolved. | GraphQL-introspection-probe child JSON; independently probe the designated production `/graphql` ingress and inspect response without exposing schema data. | Security lead; provide policy reference and authorize a read-only route probe. |
+| `graphql_introspection` | Available: simulation preflight. Missing: operator production policy decision, live route result, bound operator receipt and approval. Unresolved. | GraphQL-introspection-probe child JSON; independently probe the designated production `/graphql` ingress and inspect response without exposing schema data. Separate live operator receipt required on approval. | Security lead; provide policy reference and authorize a read-only route probe. |
 | `deployment_and_rollback` | Available but unverified: deployment drill and image checks. Missing: host profile, registry, deployment approver, rollback authority, provenance policy, reviewed 40-hex source commit, immutable current/previous client/server image pairs, provenance artifacts, live drill and approval. Unresolved. | Successful deployment child JSON and distinct client/server provenance evidence; inspect registry manifests, signatures, materialized Compose, release preflight, live promotion and rollback observations. | Release manager, deployment approver and rollback authority; provide opaque release/provenance references and approve any live change in a later window. |
 | `optional_ai_posture` | Available but unverified: example declares AI disabled and Phase 11A excluded. Missing: verified API/worker `AI_DRAFT_ENABLED=false`, absent `GEMINI_API_KEY`, unpaid-provider exclusion, three deterministic journeys and product/security approval. Unresolved. | No-AI production posture child JSON; inspect redacted live API/worker inventories, provider policy and analytics dashboard, governed report and export download run results. | Product and security leads; provide opaque inventory, policy and journey-run references. |
 
@@ -2095,7 +2123,7 @@ operators own authentic live evidence and human sign-off.
 | 6 | backup_and_disaster_recovery | `bash scripts/ops/run-restore-drill.sh` | sre-lead | |
 | 7 | data_retention_policy | Policy review sign-off; separately inspected live operator receipt required on approval | legal-lead | |
 | 8 | volume_encryption | Bound live operator receipt + independent nine-mount/custody/dual-control/recovery inspection; CLI is preflight only | security-lead + key-recovery owner | |
-| 9 | graphql_introspection | production probe transcript | security-lead | |
+| 9 | graphql_introspection | Preflight probe check; separately inspected live operator receipt required on approval | security-lead | |
 | 10 | deployment_and_rollback | Preflight: `bash scripts/ops/run-deployment-drill.sh --dry-run`; separately inspected live release-bound operator receipt | release-manager | |
 | 11 | optional_ai_posture | `node scripts/ops/check-launch-readiness.js <record>` | product-and-security-lead | |
 

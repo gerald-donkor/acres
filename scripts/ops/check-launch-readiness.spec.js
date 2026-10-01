@@ -595,6 +595,26 @@ fs.writeFileSync(retentionPolicyFixturePath, JSON.stringify(validRetentionPolicy
 const graphqlIntrospectionFixturePath = path.join(restoreFixtureDir, 'graphql-introspection-probe-valid.json');
 const validGraphqlIntrospectionReport = {
   drill_type: 'graphql_introspection_probe',
+  execution_mode: 'live',
+  environment: 'production',
+  operator_reference: 'api-sec-op-123',
+  authorization_reference: 'auth-sec-review-456',
+  probe_reference: 'probe-run-prod-789',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  errors: [],
+  endpoint: '/graphql',
+  production_introspection_enabled: false,
+  probe_result: {
+    status_code: 400,
+    introspection_permitted: false,
+    schema_exposed: false,
+    response_summary: 'GraphQL introspection is not allowed by Apollo Server',
+  },
+};
+const validSimulationGraphqlIntrospectionReport = {
+  drill_type: 'graphql_introspection_probe',
+  execution_mode: 'simulation',
   timestamp: '2026-08-28T12:00:00.000Z',
   status: 'success',
   errors: [],
@@ -1010,8 +1030,8 @@ test('non-object evidence blocker does not echo its path', () => {
     const file = path.join(dir, 'credential-bearing-reference.json');
     fs.writeFileSync(file, 'null');
     const record = buildValidApprovedRecord();
-    record.sections.graphql_introspection.evidence = [graphqlIntrospectionFixturePath, file];
-    const blockers = validateApprovedRecord(record).categoryBlockers.graphql_introspection || [];
+    record.sections.optional_ai_posture.evidence = [noAiFixturePath, file];
+    const blockers = validateApprovedRecord(record).categoryBlockers.optional_ai_posture || [];
     assert.ok(blockers.some((blocker) => blocker.includes('must contain a JSON object')));
     assert.ok(!JSON.stringify(blockers).includes('credential-bearing-reference'));
   } finally {
@@ -1376,10 +1396,10 @@ test('validateReadiness passes evidence cross-validation when a referenced dossi
 
 test('validateReadiness blocks approval when referenced evidence file is missing', () => {
   const record = buildValidApprovedRecord();
-  record.sections.graphql_introspection.evidence = ['infra/graphql/missing-introspection-file.json'];
+  record.sections.optional_ai_posture.evidence = ['infra/ai/missing-posture-file.json'];
 
   const result = validateApprovedRecord(record);
-  const blockers = result.categoryBlockers.graphql_introspection || [];
+  const blockers = result.categoryBlockers.optional_ai_posture || [];
   assert.ok(
     blockers.some((b) => b.includes('no matching file exists on disk')),
     `Expected missing-file blocker, got: ${JSON.stringify(blockers)}`
@@ -1390,17 +1410,17 @@ test('validateReadiness blocks approval when referenced evidence reports failure
   const os = require('node:os');
   const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
   try {
-    const failedPath = path.join(tmpDir, 'graphql-probe-failed.json');
+    const failedPath = path.join(tmpDir, 'ai-posture-failed.json');
     fs.writeFileSync(
       failedPath,
       JSON.stringify({ status: 'FAILED' }),
       'utf8'
     );
     const record = buildValidApprovedRecord();
-    record.sections.graphql_introspection.evidence = [failedPath];
+    record.sections.optional_ai_posture.evidence = [failedPath];
 
     const result = validateApprovedRecord(record);
-    const blockers = result.categoryBlockers.graphql_introspection || [];
+    const blockers = result.categoryBlockers.optional_ai_posture || [];
     assert.ok(
       blockers.some((b) => b.includes('reports drill failure')),
       `Expected failure-report blocker, got: ${JSON.stringify(blockers)}`
@@ -1472,10 +1492,10 @@ test('validateReadiness blocks approval when evidence reports a non-zero exitCod
     const reportPath = path.join(tmpDir, 'generic-report.json');
     fs.writeFileSync(reportPath, JSON.stringify({ summary: { exitCode: 1 } }), 'utf8');
     const record = buildValidApprovedRecord();
-    record.sections.graphql_introspection.evidence = [reportPath];
+    record.sections.optional_ai_posture.evidence = [reportPath];
 
     const result = validateApprovedRecord(record);
-    const blockers = result.categoryBlockers.graphql_introspection || [];
+    const blockers = result.categoryBlockers.optional_ai_posture || [];
     assert.ok(
       blockers.some((b) => b.includes('summary.exitCode: 1')),
       `Expected exitCode blocker, got: ${JSON.stringify(blockers)}`
@@ -3959,32 +3979,36 @@ test('data retention approval rejects custom-path failures and mixed wildcard ev
 });
 
 test('approved GraphQL introspection requires a matching probe child, not prose or a dossier', () => {
-  const record = buildValidApprovedRecord();
-  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.graphql_introspection, undefined);
-  record.sections.graphql_introspection.evidence = ['GraphQL schema introspection verified disabled on production route'];
-  assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /probe child JSON report is required/);
-  record.sections.graphql_introspection.evidence = [graphqlIntrospectionFixturePath];
-  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.graphql_introspection, undefined);
-
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-graphql-dossier-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-graphql-test-'));
   try {
-    const dossierFile = path.join(dir, 'dossier.json');
-    fs.writeFileSync(dossierFile, JSON.stringify({ overall_status: 'PASSED' }));
-    record.sections.graphql_introspection.evidence = [dossierFile];
-    assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /invalid or failed/);
+    const simPath = path.join(dir, 'graphql-introspection-sim.json');
+    fs.writeFileSync(simPath, JSON.stringify(validSimulationGraphqlIntrospectionReport));
+    const record = buildValidApprovedRecord();
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.graphql_introspection, undefined);
+    record.sections.graphql_introspection.evidence = ['GraphQL schema introspection verified disabled on production route'];
+    assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /probe child JSON report is required/);
+    record.sections.graphql_introspection.evidence = [simPath];
+    assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /A live GraphQL introspection probe operator receipt is required/);
+    record.sections.graphql_introspection.evidence = [simPath, graphqlIntrospectionFixturePath];
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.graphql_introspection, undefined);
+
+    assert.equal(isGraphqlIntrospectionCandidate({ parsed: {} }), true);
+    assert.equal(isGraphqlIntrospectionCandidate({ parsed: [] }), false);
+    assert.equal(isGraphqlIntrospectionCandidate({ parsed: { stages: [] } }), false);
+    assert.equal(isGraphqlIntrospectionCandidate({ parsed: { dossier_version: '1.0.0' } }), false);
+    assert.equal(isGraphqlIntrospectionCandidate(), false);
+    assert.equal(validateGraphqlIntrospectionReport(null), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-
-  assert.equal(isGraphqlIntrospectionCandidate({ parsed: {} }), true);
-  assert.equal(isGraphqlIntrospectionCandidate({ parsed: [] }), false);
-  assert.equal(isGraphqlIntrospectionCandidate(), false);
-  assert.equal(validateGraphqlIntrospectionReport(null), false);
 });
 
 test('GraphQL introspection probe validation rejects malformed and contradictory reports', () => {
   const approved = buildValidApprovedRecord().sections.graphql_introspection;
   assert.equal(validateGraphqlIntrospectionReport(validGraphqlIntrospectionReport, fixedNow, approved), true);
+  assert.equal(validateGraphqlIntrospectionReport(validSimulationGraphqlIntrospectionReport, fixedNow, approved), true);
+  assert.equal(validateGraphqlIntrospectionReport(validSimulationGraphqlIntrospectionReport, fixedNow, approved, { requireLive: true }), false);
+  assert.equal(validateGraphqlIntrospectionReport(validGraphqlIntrospectionReport, new Date('invalid'), approved), false);
   const mutations = [
     (r) => { r.timestamp = '2026-02-30T12:00:00.000Z'; },
     (r) => { r.timestamp = '2027-01-01T00:00:00.000Z'; },
@@ -4003,6 +4027,17 @@ test('GraphQL introspection probe validation rejects malformed and contradictory
     (r) => { r.probe_result.extra = 'unexpected'; },
     (r) => { r.extra_field = 'unexpected'; },
     (r) => { r.probe_result.response_summary = '__REQUIRED_SUMMARY__'; },
+    (r) => { delete r.execution_mode; },
+    (r) => { r.execution_mode = 'unknown'; },
+    (r) => { r.environment = 'staging'; },
+    (r) => { delete r.operator_reference; },
+    (r) => { r.operator_reference = ''; },
+    (r) => { r.operator_reference = 'bad\x00char'; },
+    (r) => { r.operator_reference = '__REQUIRED_OPERATOR_REF__'; },
+    (r) => { delete r.authorization_reference; },
+    (r) => { r.authorization_reference = ''; },
+    (r) => { delete r.probe_reference; },
+    (r) => { r.probe_reference = ''; },
   ];
   for (const mutate of mutations) {
     const report = structuredClone(validGraphqlIntrospectionReport);
@@ -4018,6 +4053,11 @@ test('GraphQL introspection approval with introspection enabled requires justifi
 
   const enabledReport = {
     drill_type: 'graphql_introspection_probe',
+    execution_mode: 'live',
+    environment: 'production',
+    operator_reference: 'api-sec-op-123',
+    authorization_reference: 'auth-sec-review-456',
+    probe_reference: 'probe-run-prod-789',
     timestamp: '2026-08-28T12:00:00.000Z',
     status: 'success',
     errors: [],
@@ -4059,20 +4099,35 @@ test('GraphQL introspection approval with introspection enabled requires justifi
 });
 
 test('GraphQL introspection approval rejects custom-path failures and mixed wildcard evidence', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-graphql-wildcard-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-graphql-'));
   try {
-    const good = path.join(dir, 'custom-probe.json');
-    const bad = path.join(dir, 'other-file.json');
+    const good = path.join(dir, 'custom.json');
+    const bad = path.join(dir, 'other.json');
+    const malformed = path.join(dir, 'malformed.json');
     fs.writeFileSync(good, JSON.stringify(validGraphqlIntrospectionReport));
     const record = buildValidApprovedRecord();
     record.sections.graphql_introspection.evidence = [good];
     assert.strictEqual(validateApprovedRecord(record).categoryBlockers.graphql_introspection, undefined);
+
+    // Malformed JSON suppresses file path diagnostics
+    fs.writeFileSync(malformed, '{ invalid json');
+    record.sections.graphql_introspection.evidence = [malformed];
+    const malformedBlockers = validateApprovedRecord(record).categoryBlockers.graphql_introspection || [];
+    assert.ok(malformedBlockers.includes('A referenced GraphQL introspection report is invalid or failed'));
+    assert.ok(!malformedBlockers.some((b) => b.includes(dir) || b.includes('malformed.json')));
+
+    // Disguised dossier rejected
+    const disguisedDossier = path.join(dir, 'disguised-dossier.json');
+    fs.writeFileSync(disguisedDossier, JSON.stringify({ ...validGraphqlIntrospectionReport, dossier_version: '1.0.0', stages: [] }));
+    record.sections.graphql_introspection.evidence = [disguisedDossier];
+    assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /probe child JSON report is required/);
 
     fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
     record.sections.graphql_introspection.evidence = [path.join(dir, '*.json')];
     assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /invalid or failed/);
 
     fs.writeFileSync(bad, JSON.stringify({ ...validGraphqlIntrospectionReport, status: 'failed' }));
+    record.sections.graphql_introspection.evidence = [bad];
     assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /invalid or failed/);
 
     const uppercase = path.join(dir, 'failed.JSON');
