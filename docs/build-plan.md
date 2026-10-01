@@ -1277,3 +1277,28 @@ Independent read-only review of the working-tree implementation and final
 records against the approved prompt returned `No critical, important or minor
 findings` and `Ready to commit: Yes`. Feedback was evaluated against the code,
 contract and recorded checks; no fixes or follow-up review were required.
+
+**Prompt 238 Phase 12K disaster recovery evidence separation (2026-10-01):** The existing
+PostgreSQL restore drill runner (`run-restore-drill.sh`) and storage reconciliation utility
+(`reconcile-storage-objects.js`) now classify every emitted receipt as rehearsal simulation
+(`execution_mode: "simulation"`). Category 6 (`backup_and_disaster_recovery`) requires separately
+inspected live operator child receipts (`execution_mode: "live"`) for both PostgreSQL restore
+and storage reconciliation when approved. Live restore receipts must be bound to production
+environment, operator reference, authorization reference, maintenance window reference, matching
+drill date, and measured duration within declared RTO bounds. Live reconciliation receipts must
+be bound to production environment, operator reference, authorization reference, and storage target
+reference matching `expectedSection.backup_destination`.
+
+Every referenced child report must pass strict structural validation; legacy unclassified receipts
+fail closed. Category 6 enforces a safe diagnostic boundary suppressing private filesystem paths,
+stack traces, and child error diagnostics, mapping failures to fixed blocker messages. Stage 7
+in launch drills and dossier assembly summarizes drill rehearsal, not production sign-off.
+Unresolved example readiness template failed closed with 0 approved categories, 11 blocked,
+and 70 blockers. Verification output: `ops:restore-drill-test` (28/28), `ops:reconcile-test` (10/10),
+`ops:launch-drill-test` (59/59), `ops:readiness-test` (596/596), `ops:readiness-schema-test` (8/8),
+`ops:templates`, all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly;
+dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+Independent read-only review feedback was addressed: restored ISO UTC timestamp support in
+`validateRestoreReport`, enforced strict ISO UTC timestamps in `validateReconciliationReport`, aligned
+required reference fields with the documentation, and verified date tracking across historical evidence.
+No production restore or bucket modification was performed; operator sign-off remains open.

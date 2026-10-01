@@ -840,6 +840,41 @@ shared) exited 0 across all workspaces, and `git diff --check` exited 0. No
 operator production source, backup archive, restore drill, or approval was
 inspected, and none of these repository results supplies Category 6 evidence.
 
+**Prompt 238 Category 6 evidence separation (2026-10-01).** Category 6
+(`backup_and_disaster_recovery`) now requires separately inspected live operator
+child receipts (`execution_mode: "live"`) for both PostgreSQL restore and storage
+reconciliation when the category is approved:
+- The local runner `scripts/ops/run-restore-drill.sh` and storage reconciliation
+  utility `scripts/ops/reconcile-storage-objects.js` now classify all emitted
+  receipts as `execution_mode: "simulation"` and record their respective drill types.
+  They execute against local drill databases (`acres_restore_drill`) and local
+  storage instances; they do not attest production recovery or multi-region bucket
+  integrity.
+- Stage 7 in `scripts/ops/run-launch-drills.sh` and `scripts/ops/assemble-launch-dossier.js`
+  is explicitly designated as drill rehearsal, validating `execution_mode === "simulation"`
+  on child evidence.
+- When `status: "approved"`, Category 6 requires:
+  1. A live restore report (`execution_mode: "live"`) with `environment: "production"`,
+     trimmed non-empty, control-free `operator_reference`, `authorization_reference`,
+     `maintenance_window_reference`, matching `restore_drill_date`, and measured
+     `duration_seconds <= expectedSection.rto_hours * 3600`.
+  2. A live storage reconciliation report (`execution_mode: "live"`) with
+     `environment: "production"`, trimmed non-empty, control-free `operator_reference`,
+     `authorization_reference`, and `storage_target_reference` matching
+     `expectedSection.backup_destination`.
+- All referenced children must pass structural validation; valid simulations may
+  accompany live receipts, but any failed child blocks approval even beside valid
+  evidence.
+- Safe diagnostic boundary: all Category 6 child file operations suppress private
+  filesystem paths, stack traces, and internal child diagnostics, mapping failures
+  to fixed safe blocker messages (`A referenced restore drill report is invalid or failed`
+  and `A referenced storage reconciliation report is invalid or failed`).
+- Repository checks for Prompt 238: `ops:restore-drill-test` (28/28), `ops:reconcile-test`
+  (10/10), `ops:launch-drill-test` (59/59), `ops:readiness-test` (596/596),
+  `ops:readiness-schema-test` (8/8), `ops:templates`, all ops suites, lint,
+  typecheck, build, and `git diff --check` passed cleanly. Unresolved example
+  failed closed with 0 approved, 11 blocked, 70 blockers.
+
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table

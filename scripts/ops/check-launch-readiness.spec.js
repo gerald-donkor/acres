@@ -32,6 +32,11 @@ const {
   validateGraphqlIntrospectionReport,
   isNoAiPostureCandidate,
   validateNoAiPostureReport,
+  isRestoreCandidate,
+  validateRestoreReport,
+  isReconciliationCandidate,
+  validateReconciliationReport,
+  RECONCILIATION_COUNTS,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -39,7 +44,12 @@ const fixedNow = new Date('2026-09-25T12:00:00Z');
 const restoreFixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-restore-fixture-'));
 const restoreFixturePath = path.join(restoreFixtureDir, 'restore-drill-evidence-valid.json');
 const reconciliationFixturePath = path.join(restoreFixtureDir, 'reconcile-report-valid.json');
-const validRestoreReport = {
+const simulationRestoreFixturePath = path.join(restoreFixtureDir, 'restore-drill-evidence-simulation.json');
+const simulationReconciliationFixturePath = path.join(restoreFixtureDir, 'reconcile-report-simulation.json');
+
+const simulationRestoreReport = {
+  execution_mode: 'simulation',
+  drill_type: 'disaster_recovery_restore',
   drill_timestamp: '20260828T120000Z',
   status: 'success',
   rto_compliant: true,
@@ -52,9 +62,27 @@ const validRestoreReport = {
   migrations_restored: 17,
   backup_bytes: 1024,
   duration_ms: 2500,
+  duration_seconds: 2,
+  rto_target_seconds: 14400,
+  source_db: 'acres',
+  drill_db: 'acres_restore_drill',
+};
+fs.writeFileSync(simulationRestoreFixturePath, JSON.stringify(simulationRestoreReport));
+
+const validRestoreReport = {
+  ...simulationRestoreReport,
+  execution_mode: 'live',
+  environment: 'production',
+  operator_reference: 'ops-lead',
+  authorization_reference: 'CHG-DR-2026-08-28',
+  maintenance_window_reference: 'MW-2026-08-28-01',
+  storage_target_reference: 's3://acres-dr-backups-us-west-2/backups',
 };
 fs.writeFileSync(restoreFixturePath, JSON.stringify(validRestoreReport));
-const validReconciliationReport = {
+
+const simulationReconciliationReport = {
+  execution_mode: 'simulation',
+  drill_type: 'storage_reconciliation',
   timestamp: '2026-08-28T12:00:00.000Z',
   summary: {
     totalDatabaseObjects: 1,
@@ -69,6 +97,17 @@ const validReconciliationReport = {
     exitCode: 0,
   },
   matched: [{}], missing: [], orphans: [], mismatches: [],
+};
+fs.writeFileSync(simulationReconciliationFixturePath, JSON.stringify(simulationReconciliationReport));
+
+const validReconciliationReport = {
+  ...simulationReconciliationReport,
+  execution_mode: 'live',
+  environment: 'production',
+  operator_reference: 'ops-lead',
+  authorization_reference: 'CHG-DR-2026-08-28',
+  maintenance_window_reference: 'MW-2026-08-28-01',
+  storage_target_reference: 's3://acres-dr-backups-us-west-2/backups',
 };
 fs.writeFileSync(reconciliationFixturePath, JSON.stringify(validReconciliationReport));
 const volumeEncryptionFixturePath = path.join(restoreFixtureDir, 'volume-encryption-evidence-valid.json');
@@ -716,7 +755,7 @@ test('restore child report validates every required success field and numerical 
       ['migrations_restored', '17'], ['backup_bytes', 0], ['backup_bytes', Infinity],
       ['duration_ms', -1], ['duration_ms', '2500'],
       ['drill_timestamp', '20260230T120000Z'], ['drill_timestamp', '20260926T120000Z'],
-      ['drill_timestamp', '20260828T250000Z'], ['drill_timestamp', '2026-08-28T12:00:00Z'],
+      ['drill_timestamp', '20260828T250000Z'], ['drill_timestamp', 'invalid-timestamp-value'],
     ];
     for (const [field, value] of mutations) {
       const report = { ...validRestoreReport, [field]: value };
@@ -725,6 +764,13 @@ test('restore child report validates every required success field and numerical 
       record.sections.backup_and_disaster_recovery.evidence = [file];
       const blockers = validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
       assert.ok(blockers.some((blocker) => blocker.includes('report is invalid or failed')), `${field}: ${JSON.stringify(blockers)}`);
+    }
+    for (const validTs of ['20260828T120000Z', '2026-08-28T12:00:00Z', '2026-08-28T12:00:00.000Z']) {
+      const rep = { ...validRestoreReport, drill_timestamp: validTs };
+      fs.writeFileSync(file, JSON.stringify(rep));
+      const record = buildValidApprovedRecord();
+      record.sections.backup_and_disaster_recovery.evidence = [file, reconciliationFixturePath];
+      assert.strictEqual(validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery, undefined, `Expected ${validTs} to pass`);
     }
     fs.writeFileSync(file, JSON.stringify(validRestoreReport));
     const record = buildValidApprovedRecord();
@@ -887,8 +933,8 @@ test('non-object evidence blocker does not echo its path', () => {
     const file = path.join(dir, 'credential-bearing-reference.json');
     fs.writeFileSync(file, 'null');
     const record = buildValidApprovedRecord();
-    record.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, file];
-    const blockers = validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
+    record.sections.production_domain_tls.evidence = [caddyRoutingFixturePath, file];
+    const blockers = validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
     assert.ok(blockers.some((blocker) => blocker.includes('must contain a JSON object')));
     assert.ok(!JSON.stringify(blockers).includes('credential-bearing-reference'));
   } finally {
@@ -1242,7 +1288,7 @@ test('validateReadiness passes evidence cross-validation when a referenced dossi
       'utf8'
     );
     const record = buildValidApprovedRecord();
-    record.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, reconciliationFixturePath, dossierPath];
+    record.sections.production_domain_tls.evidence = [caddyRoutingFixturePath, dossierPath];
 
     const result = validateApprovedRecord(record);
     assert.strictEqual(Object.keys(result.categoryBlockers).length, 0);
@@ -1253,10 +1299,10 @@ test('validateReadiness passes evidence cross-validation when a referenced dossi
 
 test('validateReadiness blocks approval when referenced evidence file is missing', () => {
   const record = buildValidApprovedRecord();
-  record.sections.backup_and_disaster_recovery.evidence = ['backups/restore-drill-evidence-does-not-exist.json'];
+  record.sections.production_domain_tls.evidence = ['infra/caddy/missing-routing-file.json'];
 
   const result = validateApprovedRecord(record);
-  const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+  const blockers = result.categoryBlockers.production_domain_tls || [];
   assert.ok(
     blockers.some((b) => b.includes('no matching file exists on disk')),
     `Expected missing-file blocker, got: ${JSON.stringify(blockers)}`
@@ -1267,17 +1313,17 @@ test('validateReadiness blocks approval when referenced evidence reports failure
   const os = require('node:os');
   const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
   try {
-    const dossierPath = path.join(tmpDir, 'launch-evidence-dossier-failed.json');
+    const failedPath = path.join(tmpDir, 'caddy-routing-failed.json');
     fs.writeFileSync(
-      dossierPath,
-      JSON.stringify({ version: '1.0.0', overall_status: 'FAILED', total_stages: 7 }),
+      failedPath,
+      JSON.stringify({ status: 'FAILED' }),
       'utf8'
     );
     const record = buildValidApprovedRecord();
-    record.sections.backup_and_disaster_recovery.evidence = [dossierPath];
+    record.sections.production_domain_tls.evidence = [failedPath];
 
     const result = validateApprovedRecord(record);
-    const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+    const blockers = result.categoryBlockers.production_domain_tls || [];
     assert.ok(
       blockers.some((b) => b.includes('reports drill failure')),
       `Expected failure-report blocker, got: ${JSON.stringify(blockers)}`
@@ -1309,11 +1355,11 @@ test('validateReadiness blocks approval when referenced evidence is not valid JS
 
 test('validateReadiness skips cross-validation for non-approved sections', () => {
   const record = buildValidApprovedRecord();
-  record.sections.backup_and_disaster_recovery.status = 'unresolved';
-  record.sections.backup_and_disaster_recovery.evidence = ['backups/restore-drill-evidence-does-not-exist.json'];
+  record.sections.production_domain_tls.status = 'unresolved';
+  record.sections.production_domain_tls.evidence = ['infra/caddy/missing-routing-file.json'];
 
   const result = validateApprovedRecord(record);
-  const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+  const blockers = result.categoryBlockers.production_domain_tls || [];
   assert.ok(
     blockers.every((b) => !b.includes('no matching file exists on disk')),
     `Non-approved sections must not get evidence-file blockers, got: ${JSON.stringify(blockers)}`
@@ -1329,10 +1375,10 @@ test('validateReadiness resolves repo-relative evidence from a record kept in a 
     const evidencePath = path.join(subDir, 'my-evidence.json');
     fs.writeFileSync(evidencePath, JSON.stringify({ status: 'success' }), 'utf8');
     const record = buildValidApprovedRecord();
-    record.sections.backup_and_disaster_recovery.evidence = ['my-evidence.json'];
+    record.sections.production_domain_tls.evidence = ['my-evidence.json'];
 
     const result = validateApprovedRecord(record, path.join(subDir, 'operator.json'));
-    const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+    const blockers = result.categoryBlockers.production_domain_tls || [];
     assert.ok(
       blockers.every((b) => !b.includes('no matching file exists on disk')),
       `Subdir-relative evidence must resolve, got: ${JSON.stringify(blockers)}`
@@ -1346,13 +1392,13 @@ test('validateReadiness blocks approval when evidence reports a non-zero exitCod
   const os = require('node:os');
   const tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'readiness-evidence-'));
   try {
-    const reportPath = path.join(tmpDir, 'reconciliation-report.json');
+    const reportPath = path.join(tmpDir, 'generic-report.json');
     fs.writeFileSync(reportPath, JSON.stringify({ summary: { exitCode: 1 } }), 'utf8');
     const record = buildValidApprovedRecord();
-    record.sections.backup_and_disaster_recovery.evidence = [reportPath];
+    record.sections.production_domain_tls.evidence = [reportPath];
 
     const result = validateApprovedRecord(record);
-    const blockers = result.categoryBlockers.backup_and_disaster_recovery || [];
+    const blockers = result.categoryBlockers.production_domain_tls || [];
     assert.ok(
       blockers.some((b) => b.includes('summary.exitCode: 1')),
       `Expected exitCode blocker, got: ${JSON.stringify(blockers)}`
@@ -1698,7 +1744,7 @@ test('validateReadiness blocks approval when restore drill evidence reports RTO 
     rec1.sections.backup_and_disaster_recovery.evidence = [rtoBreachPath];
     const res1 = validateApprovedRecord(rec1);
     const b1 = res1.categoryBlockers.backup_and_disaster_recovery || [];
-    assert.ok(b1.some((msg) => msg.includes('reports RTO breach (rto_compliant: false)')));
+    assert.ok(b1.some((msg) => msg === 'A referenced restore drill report is invalid or failed'));
 
     const parityFailPath = path.join(tmpDir, 'restore-drill-evidence-parity-fail.json');
     fs.writeFileSync(
@@ -1721,7 +1767,7 @@ test('validateReadiness blocks approval when restore drill evidence reports RTO 
     rec2.sections.backup_and_disaster_recovery.evidence = [parityFailPath];
     const res2 = validateApprovedRecord(rec2);
     const b2 = res2.categoryBlockers.backup_and_disaster_recovery || [];
-    assert.ok(b2.some((msg) => msg.includes('reports record parity verification failure')));
+    assert.ok(b2.some((msg) => msg === 'A referenced restore drill report is invalid or failed'));
 
     const tableMismatchPath = path.join(tmpDir, 'restore-drill-evidence-table-mismatch.json');
     fs.writeFileSync(
@@ -1744,7 +1790,7 @@ test('validateReadiness blocks approval when restore drill evidence reports RTO 
     rec3.sections.backup_and_disaster_recovery.evidence = [tableMismatchPath];
     const res3 = validateApprovedRecord(rec3);
     const b3 = res3.categoryBlockers.backup_and_disaster_recovery || [];
-    assert.ok(b3.some((msg) => msg.includes('reports table count discrepancy (source: 46, restored: 45)')));
+    assert.ok(b3.some((msg) => msg === 'A referenced restore drill report is invalid or failed'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -1774,8 +1820,7 @@ test('validateReadiness blocks approval when storage reconciliation evidence rep
     rec1.sections.backup_and_disaster_recovery.evidence = [errorStatusPath];
     const res1 = validateApprovedRecord(rec1);
     const b1 = res1.categoryBlockers.backup_and_disaster_recovery || [];
-    assert.ok(b1.some((msg) => msg.includes('reports storage reconciliation failure (summary.status: "error")')));
-    assert.ok(b1.some((msg) => msg.includes('reports missing storage object(s) (2 missing)')));
+    assert.ok(b1.some((msg) => msg === 'A referenced storage reconciliation report is invalid or failed'));
 
     const mismatchPath = path.join(tmpDir, 'reconcile-report-mismatch.json');
     fs.writeFileSync(
@@ -1797,7 +1842,7 @@ test('validateReadiness blocks approval when storage reconciliation evidence rep
     rec2.sections.backup_and_disaster_recovery.evidence = [mismatchPath];
     const res2 = validateApprovedRecord(rec2);
     const b2 = res2.categoryBlockers.backup_and_disaster_recovery || [];
-    assert.ok(b2.some((msg) => msg.includes('reports storage object checksum or size mismatch(es) (1 mismatched)')));
+    assert.ok(b2.some((msg) => msg === 'A referenced storage reconciliation report is invalid or failed'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -1832,9 +1877,7 @@ test('validateReadiness blocks approval when evidence dossier reports disasterRe
     rec.sections.backup_and_disaster_recovery.evidence = [drBreachPath];
     const res = validateApprovedRecord(rec);
     const b = res.categoryBlockers.backup_and_disaster_recovery || [];
-    assert.ok(b.some((msg) => msg.includes('reports disaster recovery baseline breach (disasterRecoveryBaseline.status: "breached")')));
-    assert.ok(b.some((msg) => msg.includes('reports restore drill compliance failure (summary.restoreCompliance: "failed")')));
-    assert.ok(b.some((msg) => msg.includes('reports storage reconciliation compliance failure (summary.reconcileCompliance: "failed")')));
+    assert.ok(b.includes('A referenced restore drill report is invalid or failed'));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -2528,8 +2571,8 @@ test('static integrity child evidence accepts exact success and rejects contradi
     const file = path.join(dir, 'static-integrity-evidence-test.json');
     const good = runChecks(() => ({ status: 0 }));
     const record = buildValidApprovedRecord();
-    record.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, reconciliationFixturePath, file];
-    const readBlockers = () => validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
+    record.sections.production_domain_tls.evidence = [caddyRoutingFixturePath, file];
+    const readBlockers = () => validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
     fs.writeFileSync(file, JSON.stringify(good));
     assert.deepEqual(readBlockers(), []);
 
@@ -2624,8 +2667,8 @@ test('static integrity dossier baseline and compliance must agree with approval'
   try {
     const file = path.join(dir, 'launch-evidence-dossier-static.json');
     const record = buildValidApprovedRecord();
-    record.sections.backup_and_disaster_recovery.evidence = [restoreFixturePath, reconciliationFixturePath, file];
-    const readBlockers = () => validateApprovedRecord(record).categoryBlockers.backup_and_disaster_recovery || [];
+    record.sections.production_domain_tls.evidence = [caddyRoutingFixturePath, file];
+    const readBlockers = () => validateApprovedRecord(record).categoryBlockers.production_domain_tls || [];
     const good = { overall_status: 'PASSED', staticIntegrityBaseline: { status: 'verified' },
       summary: { staticIntegrity: 'passed', staticIntegrityCompliance: 'passed' } };
     fs.writeFileSync(file, JSON.stringify(good));
@@ -5467,4 +5510,220 @@ test('Category 8 requires bound live child and suppresses private evidence failu
   fs.writeFileSync(other, JSON.stringify(dossier));
   assert.equal(volumeCandidate({ file: other, parsed: dossier }), false);
   assert.ok(blockers([other]).includes(volumeLiveRequired));
+});
+
+test('validateRestoreReport: mode, references, RTO bounds and target verification', () => {
+  const now = fixedNow;
+  const expectedSection = {
+    status: 'approved',
+    rpo_hours: 1,
+    rto_hours: 4,
+    backup_destination: 's3://acres-dr-backups-us-west-2/backups',
+    restore_drill_date: '2026-08-28',
+  };
+
+  // Valid simulation passes when requireLive is false, rejected when requireLive is true
+  assert.ok(validateRestoreReport(simulationRestoreReport, now) instanceof Date);
+  assert.strictEqual(validateRestoreReport(simulationRestoreReport, now, { requireLive: true }), null);
+
+  // Valid live passes when requireLive is true and matches expectedSection
+  assert.ok(validateRestoreReport(validRestoreReport, now, { requireLive: true, expectedSection }) instanceof Date);
+
+  // Invalid mode
+  assert.strictEqual(validateRestoreReport({ ...validRestoreReport, execution_mode: 'manual' }, now), null);
+  assert.strictEqual(validateRestoreReport({ ...validRestoreReport, execution_mode: undefined }, now), null);
+
+  // Live missing references
+  for (const refKey of ['operator_reference', 'authorization_reference', 'maintenance_window_reference']) {
+    assert.strictEqual(validateRestoreReport({ ...validRestoreReport, [refKey]: '' }, now, { requireLive: true }), null);
+    assert.strictEqual(validateRestoreReport({ ...validRestoreReport, [refKey]: undefined }, now, { requireLive: true }), null);
+    assert.strictEqual(validateRestoreReport({ ...validRestoreReport, [refKey]: ' change-me ' }, now, { requireLive: true }), null);
+  }
+
+  // Restore drill date mismatch against expectedSection.restore_drill_date
+  assert.strictEqual(
+    validateRestoreReport(
+      validRestoreReport,
+      now,
+      { requireLive: true, expectedSection: { ...expectedSection, restore_drill_date: '2026-08-29' } }
+    ),
+    null
+  );
+
+  // Both basic UTC and ISO UTC drill timestamps succeed
+  assert.ok(validateRestoreReport({ ...validRestoreReport, drill_timestamp: '20260828T120000Z' }, now, { requireLive: true, expectedSection }) instanceof Date);
+  assert.ok(validateRestoreReport({ ...validRestoreReport, drill_timestamp: '2026-08-28T12:00:00Z' }, now, { requireLive: true, expectedSection }) instanceof Date);
+  assert.ok(validateRestoreReport({ ...validRestoreReport, drill_timestamp: '2026-08-28T12:00:00.000Z' }, now, { requireLive: true, expectedSection }) instanceof Date);
+
+  // Exceeding section RTO hours (rto_hours: 4 -> 14400s)
+  assert.strictEqual(
+    validateRestoreReport(
+      { ...validRestoreReport, duration_seconds: 14401 },
+      now,
+      { requireLive: true, expectedSection }
+    ),
+    null
+  );
+
+  // Exceeding report rto_target_seconds
+  assert.strictEqual(
+    validateRestoreReport(
+      { ...simulationRestoreReport, rto_target_seconds: 10, duration_seconds: 11 },
+      now
+    ),
+    null
+  );
+
+  // Integrity flags false
+  for (const flag of ['rto_compliant', 'record_parity_verified', 'postgis_verified', 'foreign_keys_verified']) {
+    assert.strictEqual(validateRestoreReport({ ...simulationRestoreReport, [flag]: false }, now), null);
+  }
+
+  // Mismatch in tables or migrations
+  assert.strictEqual(validateRestoreReport({ ...simulationRestoreReport, tables_restored: 45 }, now), null);
+  assert.strictEqual(validateRestoreReport({ ...simulationRestoreReport, migrations_restored: 16 }, now), null);
+
+  // Future timestamp
+  assert.strictEqual(validateRestoreReport({ ...simulationRestoreReport, drill_timestamp: '20261231T120000Z' }, now), null);
+});
+
+test('validateReconciliationReport: mode, references, object counts, status and target verification', () => {
+  const now = fixedNow;
+  const expectedSection = {
+    status: 'approved',
+    backup_destination: 's3://acres-dr-backups-us-west-2/backups',
+  };
+
+  // Valid simulation passes when requireLive is false, rejected when requireLive is true
+  assert.strictEqual(validateReconciliationReport(simulationReconciliationReport, now), true);
+  assert.strictEqual(validateReconciliationReport(simulationReconciliationReport, now, { requireLive: true }), false);
+
+  // Valid live passes when requireLive is true and matches expectedSection
+  assert.strictEqual(validateReconciliationReport(validReconciliationReport, now, { requireLive: true, expectedSection }), true);
+
+  // Invalid mode
+  assert.strictEqual(validateReconciliationReport({ ...validReconciliationReport, execution_mode: 'manual' }, now), false);
+  assert.strictEqual(validateReconciliationReport({ ...validReconciliationReport, execution_mode: null }, now), false);
+
+  // Live missing references
+  for (const refKey of ['operator_reference', 'authorization_reference', 'storage_target_reference']) {
+    assert.strictEqual(validateReconciliationReport({ ...validReconciliationReport, [refKey]: '' }, now, { requireLive: true }), false);
+    assert.strictEqual(validateReconciliationReport({ ...validReconciliationReport, [refKey]: undefined }, now, { requireLive: true }), false);
+  }
+
+  // Non-ISO timestamp rejected
+  assert.strictEqual(validateReconciliationReport({ ...validReconciliationReport, timestamp: '20260828T120000Z' }, now), false);
+
+  // Storage target mismatch
+  assert.strictEqual(
+    validateReconciliationReport(
+      { ...validReconciliationReport, storage_target_reference: 's3://other-bucket/backups' },
+      now,
+      { requireLive: true, expectedSection }
+    ),
+    false
+  );
+
+  // Mismatched objects / missing objects
+  const badMissing = structuredClone(simulationReconciliationReport);
+  badMissing.summary.missingObjects = 1;
+  badMissing.missing = [{ id: 'miss' }];
+  assert.strictEqual(validateReconciliationReport(badMissing, now), false);
+
+  const badMismatch = structuredClone(simulationReconciliationReport);
+  badMismatch.summary.mismatchedObjects = 1;
+  badMismatch.mismatches = [{ id: 'mism' }];
+  assert.strictEqual(validateReconciliationReport(badMismatch, now), false);
+
+  // Exit code nonzero
+  const badExit = structuredClone(simulationReconciliationReport);
+  badExit.summary.exitCode = 1;
+  assert.strictEqual(validateReconciliationReport(badExit, now), false);
+
+  // Benign orphans with status warning passes; benign orphans with status clean fails
+  const orphanWarning = structuredClone(simulationReconciliationReport);
+  orphanWarning.summary.orphanObjects = 1;
+  orphanWarning.orphans = [{ key: 'benign' }];
+  orphanWarning.summary.status = 'warning';
+  assert.strictEqual(validateReconciliationReport(orphanWarning, now), true);
+
+  orphanWarning.summary.status = 'clean';
+  assert.strictEqual(validateReconciliationReport(orphanWarning, now), false);
+
+  // Collection length mismatch
+  const countMismatch = structuredClone(simulationReconciliationReport);
+  countMismatch.summary.matchedObjects = 2;
+  assert.strictEqual(validateReconciliationReport(countMismatch, now), false);
+});
+
+test('Category 6 requires live receipts on approval and enforces safe diagnostic boundaries', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-category6-safe-'));
+  try {
+    const restoreFailMsg = 'A referenced restore drill report is invalid or failed';
+    const reconcileFailMsg = 'A referenced storage reconciliation report is invalid or failed';
+    const restoreLiveReqMsg = 'A live disaster recovery restore operator receipt is required';
+    const reconcileLiveReqMsg = 'A live storage reconciliation operator receipt is required';
+
+    // 1. Simulation reports rejected on approved section
+    const record = buildValidApprovedRecord();
+    record.sections.backup_and_disaster_recovery.evidence = [
+      simulationRestoreFixturePath,
+      simulationReconciliationFixturePath,
+    ];
+    let res = validateApprovedRecord(record);
+    let blockers = res.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(blockers.includes(restoreLiveReqMsg), JSON.stringify(blockers));
+    assert.ok(blockers.includes(reconcileLiveReqMsg), JSON.stringify(blockers));
+
+    // 2. Both live reports present and valid: passes completely
+    record.sections.backup_and_disaster_recovery.evidence = [
+      restoreFixturePath,
+      reconciliationFixturePath,
+    ];
+    res = validateApprovedRecord(record);
+    assert.strictEqual(res.categoryBlockers.backup_and_disaster_recovery, undefined);
+
+    // 3. Storage target reference mismatch rejected on reconciliation report
+    const mismatchedReconcile = path.join(dir, 'reconcile-mismatch.json');
+    fs.writeFileSync(mismatchedReconcile, JSON.stringify({
+      ...validReconciliationReport,
+      storage_target_reference: 's3://wrong-bucket/backups',
+    }));
+    record.sections.backup_and_disaster_recovery.evidence = [
+      restoreFixturePath,
+      mismatchedReconcile,
+    ];
+    res = validateApprovedRecord(record);
+    blockers = res.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(blockers.includes(reconcileLiveReqMsg), JSON.stringify(blockers));
+
+    // 3b. Date mismatch on live restore report rejected
+    const mismatchedRestore = path.join(dir, 'restore-mismatch.json');
+    fs.writeFileSync(mismatchedRestore, JSON.stringify({
+      ...validRestoreReport,
+      drill_timestamp: '2026-08-27T12:00:00Z',
+    }));
+    record.sections.backup_and_disaster_recovery.evidence = [
+      mismatchedRestore,
+      reconciliationFixturePath,
+    ];
+    res = validateApprovedRecord(record);
+    blockers = res.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(blockers.includes(restoreLiveReqMsg), JSON.stringify(blockers));
+
+    // 4. Safe diagnostic boundary: corrupt JSON, syntax error, malformed structure
+    const corruptFile = path.join(dir, 'restore-corrupt.json');
+    fs.writeFileSync(corruptFile, '{ not valid json / private /etc/passwd canary');
+    record.sections.backup_and_disaster_recovery.evidence = [
+      corruptFile,
+      reconciliationFixturePath,
+    ];
+    res = validateApprovedRecord(record);
+    blockers = res.categoryBlockers.backup_and_disaster_recovery || [];
+    assert.ok(blockers.includes(restoreFailMsg), JSON.stringify(blockers));
+    assert.ok(!JSON.stringify(blockers).includes('canary'));
+    assert.ok(!JSON.stringify(blockers).includes(dir));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

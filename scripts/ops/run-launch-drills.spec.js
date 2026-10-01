@@ -251,6 +251,8 @@ function stub(key, args) {
     },
     restore: {
       ...success,
+      execution_mode: "simulation",
+      drill_type: "disaster_recovery_restore",
       drill_timestamp: now,
       duration_seconds: 1,
       rto_target_seconds: 900,
@@ -264,6 +266,8 @@ function stub(key, args) {
       migrations_restored: 1,
     },
     reconcile: {
+      execution_mode: "simulation",
+      drill_type: "storage_reconciliation",
       timestamp: now,
       summary: {
         status: "clean",

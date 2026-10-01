@@ -496,7 +496,7 @@ validator (`scripts/ops/check-launch-readiness.js`) are implemented:
   - **TM-14**: Optional AI enablement is strictly rejected (`ai_enabled: true` triggers a fatal blocker stating that the unpaid Gemini preview is excluded from production launch); enforces `AI_DRAFT_ENABLED=false`, absence of `GEMINI_API_KEY`, unpaid provider exclusion, and deterministic no-AI verification.
   - **TM-15**: Requires explicit secret injection mechanism, log masking policy, rotation cadence (days), and compromise response runbook reference. Validates that no raw passwords or client-exposed `NEXT_PUBLIC_*` secrets are used.
   - **TM-18**: Enforces image provenance policy, designated deployment approver, and rollback authority.
-  - **TM-19**: Enforces RPO/RTO targets, off-host backup destination, completed restore drill date, and PostgreSQL/Garage DB-object reconciliation verification. Implemented in Phase 12F via:
+  - **TM-19**: Enforces RPO/RTO targets, off-host backup destination, completed restore drill date, and PostgreSQL/Garage DB-object reconciliation verification. Implemented in Phase 12F and qualified by Prompt 238 as simulation rehearsal preflights (`execution_mode: "simulation"`), requiring separately inspected live operator child receipts (`execution_mode: "live"`) when Category 6 is approved:
     - `scripts/ops/run-restore-drill.sh`: automated drill runner executing fresh backup, integrity validation (`pg_restore --list`), isolated database restore (`acres_restore_drill`), schema/table count parity, migration parity, PostGIS extension verification, foreign key constraint validation (`pg_constraint`), and RTO measurement (< 300s).
     - `scripts/ops/reconcile-storage-objects.js`: deterministic reconciliation engine validating `StoredObject`, `Upload`, and `ExportArtifact` rows against object storage keys, failing closed with non-zero exit code if missing objects or checksum/size corruption is detected.
   - **TM-20**: Enforces defined SLO targets, capacity targets, and confirmed alert thresholds with designated on-call routes.
@@ -774,3 +774,26 @@ tested recovery require independent operator inspection. Content consistency,
 mode flags and confirmations are unauthenticated assertions. Stage 4/dossier
 baselines remain preflight, and TM-21, prompt 201 and Phase 12 live sign-off
 remain open. No production action or new runtime trust boundary was introduced.
+
+**Prompt 238 disaster recovery evidence integrity (2026-10-01):** TM-19's local runners
+(`run-restore-drill.sh` and `reconcile-storage-objects.js`) are classified as simulation
+rehearsals and always emit `execution_mode: "simulation"`. Local execution against an isolated
+ephemeral drill database (`acres_restore_drill`) or local Garage/S3 storage does not prove
+live production disaster recovery, off-host backup encryption, live off-host restore, or
+live multi-region bucket integrity.
+
+Category 6 (`backup_and_disaster_recovery`) requires separately inspected live operator
+child receipts (`execution_mode: "live"`) for both PostgreSQL restore and storage
+reconciliation when approved. Live receipts must be bound to production environment,
+authorized operator references, authorized maintenance window references, and matching
+storage target references (`expectedSection.backup_destination`), with matching drill date
+and measured duration within RTO bounds.
+
+Category 6 enforces a safe diagnostic boundary: missing child files, parse errors, child
+validation failures, and nested formatting exceptions are mapped to fixed blocker messages
+(`A referenced restore drill report is invalid or failed` and
+`A referenced storage reconciliation report is invalid or failed`), suppressing private
+filesystem paths, internal stack traces, and child diagnostics. Mode flags, confirmations,
+and opaque references are unauthenticated assertions; actual disaster recovery readiness
+and off-host backup integrity remain subject to independent operator inspection. Prompt 201
+and Phase 12 live sign-off remain open.

@@ -661,6 +661,7 @@ function assemble(config) {
   const restorePassed = Boolean(
     drStage?.status === "PASSED" &&
     restoreEvidence &&
+    restoreEvidence.execution_mode === "simulation" &&
     restoreEvidence.rto_compliant === true &&
     restoreEvidence.record_parity_verified === true &&
     restoreEvidence.postgis_verified === true &&
@@ -675,6 +676,7 @@ function assemble(config) {
   const reconcilePassed = Boolean(
     drStage?.status === "PASSED" &&
     reconcileEvidence &&
+    reconcileEvidence.execution_mode === "simulation" &&
     reconcileEvidence.summary &&
     reconcileEvidence.summary.status !== "error" &&
     reconcileEvidence.summary.missingObjects === 0 &&
@@ -682,6 +684,7 @@ function assemble(config) {
     reconcileEvidence.summary.exitCode === 0,
   );
 
+  // Compatibility fields summarize disaster recovery drill rehearsal, not live operator restore sign-off.
   let disasterRecoveryBaseline;
   if (restorePassed && reconcilePassed) {
     disasterRecoveryBaseline = {

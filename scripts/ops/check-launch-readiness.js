@@ -196,13 +196,71 @@ function parseUtcDate(value, basicTimestamp = false) {
   return date;
 }
 
-function validateRestoreReport(report, now) {
+function parseRestoreTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const basic = parseUtcDate(value, true);
+  if (basic) return basic;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value)) {
+    const d = new Date(value);
+    if (Number.isFinite(d.getTime())) {
+      const iso = d.toISOString();
+      if (iso === value || iso.replace(/\.000Z$/, 'Z') === value) return d;
+    }
+  }
+  return null;
+}
+
+function validRecoveryReference(value) {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value !== value.trim() ||
+    /[\x00-\x1f\x7f-\x9f]/.test(value)
+  )
+    return false;
+  const blockers = [];
+  checkPlaceholdersAndSecrets(value, 'recovery_reference', blockers);
+  return blockers.length === 0;
+}
+
+function isRestoreCandidate({ file, parsed } = {}) {
+  if (
+    parsed &&
+    (Object.hasOwn(parsed, 'stages') ||
+      parsed.dossier_version !== undefined ||
+      parsed.disasterRecoveryBaseline !== undefined)
+  )
+    return false;
+  const name = typeof file === 'string' ? path.basename(file) : '';
+  if (name.includes('restore-drill-evidence') || name.startsWith('restore-drill-evidence-')) return true;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  return (
+    parsed.drill_type === 'disaster_recovery_restore' ||
+    ['drill_timestamp', 'source_db', 'drill_db', 'backup_file', 'backup_bytes',
+      'duration_ms', 'duration_seconds', 'rto_target_seconds', 'rto_compliant',
+      'tables_source', 'tables_restored', 'migrations_source', 'migrations_restored',
+      'record_parity_verified', 'postgis_verified', 'foreign_keys_verified'].some((key) => key in parsed)
+  );
+}
+
+function validateRestoreReport(report, now, context = {}) {
   if (!report || typeof report !== 'object' || Array.isArray(report)) return null;
+  const mode = report.execution_mode;
+  if (mode !== 'simulation' && mode !== 'live') return null;
+  const requireLive = Boolean(context.requireLive);
+  if (requireLive && mode !== 'live') return null;
+
   if (typeof report.drill_timestamp !== 'string') return null;
-  const timestamp = parseUtcDate(report.drill_timestamp, true);
-  if (!timestamp || timestamp.getTime() > now.getTime() || report.status !== 'success' ||
-      report.rto_compliant !== true || report.record_parity_verified !== true ||
-      report.postgis_verified !== true || report.foreign_keys_verified !== true) return null;
+  const timestamp = parseRestoreTimestamp(report.drill_timestamp);
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!timestamp || timestamp.getTime() > evalNow.getTime()) return null;
+
+  if (report.status !== 'success' ||
+      report.rto_compliant !== true ||
+      report.record_parity_verified !== true ||
+      report.postgis_verified !== true ||
+      report.foreign_keys_verified !== true) return null;
+
   for (const key of ['tables_source', 'tables_restored', 'migrations_source', 'migrations_restored']) {
     if (!Number.isSafeInteger(report[key]) || report[key] < 0) return null;
   }
@@ -211,6 +269,43 @@ function validateRestoreReport(report, now) {
       !Number.isSafeInteger(report.backup_bytes) || report.backup_bytes <= 0 ||
       typeof report.duration_ms !== 'number' || !Number.isFinite(report.duration_ms) ||
       report.duration_ms < 0) return null;
+
+  if (report.duration_seconds !== undefined) {
+    if (typeof report.duration_seconds !== 'number' || !Number.isFinite(report.duration_seconds) || report.duration_seconds < 0) {
+      return null;
+    }
+  }
+
+  if (report.rto_target_seconds !== undefined) {
+    if (!Number.isSafeInteger(report.rto_target_seconds) || report.rto_target_seconds <= 0) {
+      return null;
+    }
+    const durSec = report.duration_seconds !== undefined ? report.duration_seconds : Math.floor(report.duration_ms / 1000);
+    if (durSec > report.rto_target_seconds) return null;
+  }
+
+  if (mode === 'live') {
+    if (report.environment !== 'production' ||
+        !validRecoveryReference(report.operator_reference) ||
+        !validRecoveryReference(report.authorization_reference) ||
+        !validRecoveryReference(report.maintenance_window_reference)) {
+      return null;
+    }
+    const expected = context.expectedSection;
+    if (expected && typeof expected === 'object') {
+      if (requireLive && typeof expected.restore_drill_date === 'string') {
+        const expDate = parseUtcDate(expected.restore_drill_date);
+        if (!expDate || expDate.toISOString().slice(0, 10) !== timestamp.toISOString().slice(0, 10)) {
+          return null;
+        }
+      }
+      if (typeof expected.rto_hours === 'number' && Number.isFinite(expected.rto_hours) && expected.rto_hours > 0) {
+        const durSec = report.duration_seconds !== undefined ? report.duration_seconds : Math.floor(report.duration_ms / 1000);
+        if (durSec > expected.rto_hours * 3600) return null;
+      }
+    }
+  }
+
   return timestamp;
 }
 
@@ -220,22 +315,62 @@ const RECONCILIATION_COUNTS = [
   'mismatchedObjects',
 ];
 
-function isReconciliationCandidate({ file, parsed }) {
-  const name = path.basename(file);
+function isReconciliationCandidate({ file, parsed } = {}) {
+  if (
+    parsed &&
+    (Object.hasOwn(parsed, 'stages') ||
+      parsed.dossier_version !== undefined ||
+      parsed.disasterRecoveryBaseline !== undefined)
+  )
+    return false;
+  const name = typeof file === 'string' ? path.basename(file) : '';
   if (name.includes('reconcile-report-') || name.includes('reconciliation-report')) return true;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-  return RECONCILIATION_COUNTS.some((key) =>
-    parsed.summary && typeof parsed.summary === 'object' && key in parsed.summary) ||
-    ['matched', 'missing', 'orphans', 'mismatches'].some((key) => key in parsed);
+  return (
+    parsed.drill_type === 'storage_reconciliation' ||
+    RECONCILIATION_COUNTS.some((key) =>
+      parsed.summary && typeof parsed.summary === 'object' && key in parsed.summary) ||
+    ['matched', 'missing', 'orphans', 'mismatches'].some((key) => key in parsed)
+  );
 }
 
-function validateReconciliationReport(report, now) {
-  if (!report || typeof report !== 'object' || Array.isArray(report) ||
-      typeof report.timestamp !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(report.timestamp)) return false;
+function validRecoveryDossier(report) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  if (report.overall_status !== 'PASSED') return false;
+  if (!Array.isArray(report.stages) && report.dossier_version === undefined && report.disasterRecoveryBaseline === undefined) {
+    return false;
+  }
+  const baseline = report.disasterRecoveryBaseline;
+  if (baseline !== undefined) {
+    if (!baseline || typeof baseline !== 'object' || baseline.status !== 'verified') return false;
+    if (baseline.restoreDrill?.rtoCompliant === false || baseline.storageReconciliation?.status === 'error') return false;
+  }
+  const summary = report.summary;
+  if (summary && typeof summary === 'object') {
+    if (summary.restoreCompliance === 'failed' || summary.reconcileCompliance === 'failed' || summary.recoveryCompliance === 'restore_reconcile_failed') {
+      return false;
+    }
+  }
+  return true;
+}
+
+function validateReconciliationReport(report, now, context = {}) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const mode = report.execution_mode;
+  if (mode !== 'simulation' && mode !== 'live') return false;
+  const requireLive = Boolean(context.requireLive);
+  if (requireLive && mode !== 'live') return false;
+
+  if (typeof report.timestamp !== 'string') return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(report.timestamp)) return false;
   const timestamp = new Date(report.timestamp);
-  if (!Number.isFinite(timestamp.getTime()) || timestamp.toISOString() !== report.timestamp ||
-      timestamp.getTime() > now.getTime()) return false;
+  const evalNow = now instanceof Date ? now : new Date();
+  if (!Number.isFinite(timestamp.getTime()) ||
+      (timestamp.toISOString() !== report.timestamp && timestamp.toISOString().replace(/\.000Z$/, 'Z') !== report.timestamp) ||
+      timestamp.getTime() > evalNow.getTime()) {
+    return false;
+  }
+
   const summary = report.summary;
   if (!summary || typeof summary !== 'object' || Array.isArray(summary) ||
       RECONCILIATION_COUNTS.some((key) => !Number.isSafeInteger(summary[key]) || summary[key] < 0)) return false;
@@ -245,9 +380,30 @@ function validateReconciliationReport(report, now) {
   ]) {
     if (!Array.isArray(report[collection]) || summary[count] !== report[collection].length) return false;
   }
-  return summary.missingObjects === 0 && summary.mismatchedObjects === 0 &&
-    summary.exitCode === 0 &&
-    (summary.orphanObjects === 0 ? summary.status === 'clean' : summary.status === 'warning');
+  if (summary.missingObjects !== 0 || summary.mismatchedObjects !== 0 ||
+      summary.exitCode !== 0 ||
+      (summary.orphanObjects === 0 ? summary.status !== 'clean' : summary.status !== 'warning')) {
+    return false;
+  }
+
+  if (mode === 'live') {
+    if (report.environment !== 'production' ||
+        !validRecoveryReference(report.operator_reference) ||
+        !validRecoveryReference(report.authorization_reference) ||
+        !validRecoveryReference(report.storage_target_reference)) {
+      return false;
+    }
+    const expected = context.expectedSection;
+    if (expected && typeof expected === 'object') {
+      if (typeof expected.backup_destination === 'string' &&
+          validRecoveryReference(expected.backup_destination) &&
+          report.storage_target_reference !== expected.backup_destination) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 function isVolumeEncryptionCandidate({ file, parsed } = {}) {
@@ -1401,7 +1557,7 @@ function validateNoAiPostureReport(report, now, approved) {
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
-  if (!['secrets_management', 'deployment_and_rollback', 'volume_encryption'].includes(category)) {
+  if (!['secrets_management', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery'].includes(category)) {
     return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
   }
   const fail = () =>
@@ -1411,7 +1567,11 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
         ? 'A referenced volume encryption report is invalid or failed'
         : category === 'secrets_management'
         ? 'A referenced secret rotation report is invalid or failed'
-        : 'A referenced deployment drill report is invalid or failed'
+        : category === 'deployment_and_rollback'
+        ? 'A referenced deployment drill report is invalid or failed'
+        : typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
+        ? 'A referenced storage reconciliation report is invalid or failed'
+        : 'A referenced restore drill report is invalid or failed'
     );
   try {
     // Formatting unexpected nested JSON values can itself throw. Neither the
@@ -1451,6 +1611,17 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
     if (category === 'volume_encryption' && !isVolumeEncryptionCandidate({ file, parsed }) &&
         !validVolumeDossier(parsed)) {
       addBlocker(category, 'A referenced volume encryption report is invalid or failed');
+    }
+    if (category === 'backup_and_disaster_recovery' &&
+        !isRestoreCandidate({ file, parsed }) &&
+        !isReconciliationCandidate({ file, parsed }) &&
+        !validRecoveryDossier(parsed)) {
+      addBlocker(
+        category,
+        typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
+          ? 'A referenced storage reconciliation report is invalid or failed'
+          : 'A referenced restore drill report is invalid or failed'
+      );
     }
     // Category 5 child failures use fixed reasons, never untrusted child diagnostics.
     if (category === 'slo_and_alerting' && isCapacityAlertingCandidate({ file, parsed })) {
@@ -2342,7 +2513,11 @@ function validateReadiness(record, _filePath, options = {}) {
     ) {
       addBlocker('backup_and_disaster_recovery', `RTO hours must be a positive number <= 4 hours (received: ${bdrSec.rto_hours})`);
     }
-    if (!bdrSec.backup_destination || typeof bdrSec.backup_destination !== 'string') {
+    if (
+      !bdrSec.backup_destination ||
+      typeof bdrSec.backup_destination !== 'string' ||
+      !validRecoveryReference(bdrSec.backup_destination)
+    ) {
       addBlocker('backup_and_disaster_recovery', 'Off-host backup destination is required');
     }
     const schedule = parseBackupScheduleCron(bdrSec.backup_schedule_cron);
@@ -2359,23 +2534,33 @@ function validateReadiness(record, _filePath, options = {}) {
     if (!declaredDate || declaredDate.getTime() > now.getTime()) {
       addBlocker('backup_and_disaster_recovery', 'Restore drill date must be a valid, nonfuture UTC date');
     }
-    const candidates = recoveryEvidence.filter(({ file, parsed }) =>
-      path.basename(file).startsWith('restore-drill-evidence-') ||
-      (parsed && typeof parsed === 'object' && !Array.isArray(parsed) &&
-        ['drill_timestamp', 'source_db', 'drill_db', 'backup_file', 'backup_bytes',
-          'duration_ms', 'duration_seconds', 'rto_target_seconds', 'rto_compliant',
-          'tables_source', 'tables_restored', 'migrations_source', 'migrations_restored',
-          'record_parity_verified', 'postgis_verified', 'foreign_keys_verified'].some((key) => key in parsed)));
-    if (candidates.length === 0) {
+    const restoreCandidates = recoveryEvidence.filter(isRestoreCandidate);
+    if (restoreCandidates.length === 0) {
       addBlocker('backup_and_disaster_recovery', 'A successful restore drill child JSON report is required');
     } else {
-      const timestamps = candidates.map(({ parsed }) => validateRestoreReport(parsed, now));
-      if (timestamps.some((timestamp) => timestamp === null)) {
+      if (
+        restoreCandidates.some(
+          ({ parsed }) =>
+            !validateRestoreReport(parsed, now),
+        )
+      ) {
         addBlocker('backup_and_disaster_recovery', 'A referenced restore drill report is invalid or failed');
       }
-      const valid = timestamps.filter(Boolean);
+      if (
+        !restoreCandidates.some(({ parsed }) =>
+          validateRestoreReport(parsed, now, {
+            requireLive: true,
+            expectedSection: bdrSec,
+          }),
+        )
+      ) {
+        addBlocker('backup_and_disaster_recovery', 'A live disaster recovery restore operator receipt is required');
+      }
+      const valid = restoreCandidates
+        .map(({ parsed }) => validateRestoreReport(parsed, now))
+        .filter(Boolean);
       if (valid.length > 0 && declaredDate) {
-        const latest = valid.reduce((max, date) => date > max ? date : max);
+        const latest = valid.reduce((max, date) => (date > max ? date : max));
         if (declaredDate.toISOString().slice(0, 10) !== latest.toISOString().slice(0, 10)) {
           addBlocker('backup_and_disaster_recovery', 'Restore drill date does not match the latest successful report UTC date');
         }
@@ -2387,8 +2572,25 @@ function validateReadiness(record, _filePath, options = {}) {
     const reconciliationCandidates = recoveryEvidence.filter(isReconciliationCandidate);
     if (reconciliationCandidates.length === 0) {
       addBlocker('backup_and_disaster_recovery', 'A successful storage reconciliation child JSON report is required');
-    } else if (reconciliationCandidates.some(({ parsed }) => !validateReconciliationReport(parsed, now))) {
-      addBlocker('backup_and_disaster_recovery', 'A referenced storage reconciliation report is invalid or failed');
+    } else {
+      if (
+        reconciliationCandidates.some(
+          ({ parsed }) =>
+            !validateReconciliationReport(parsed, now, { expectedSection: bdrSec }),
+        )
+      ) {
+        addBlocker('backup_and_disaster_recovery', 'A referenced storage reconciliation report is invalid or failed');
+      }
+      if (
+        !reconciliationCandidates.some(({ parsed }) =>
+          validateReconciliationReport(parsed, now, {
+            requireLive: true,
+            expectedSection: bdrSec,
+          }),
+        )
+      ) {
+        addBlocker('backup_and_disaster_recovery', 'A live storage reconciliation operator receipt is required');
+      }
     }
   }
 
@@ -2811,4 +3013,9 @@ module.exports = {
   validateGraphqlIntrospectionReport,
   isNoAiPostureCandidate,
   validateNoAiPostureReport,
+  isRestoreCandidate,
+  validateRestoreReport,
+  isReconciliationCandidate,
+  validateReconciliationReport,
+  RECONCILIATION_COUNTS,
 };

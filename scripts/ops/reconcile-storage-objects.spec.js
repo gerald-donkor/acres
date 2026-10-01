@@ -45,6 +45,8 @@ test('reconcileObjects: clean match with exact sizes and checksums', () => {
 
   const result = reconcileObjects({ dbObjects, storageObjects });
 
+  assert.strictEqual(result.execution_mode, 'simulation');
+  assert.strictEqual(result.drill_type, 'storage_reconciliation');
   assert.strictEqual(result.summary.status, 'clean');
   assert.strictEqual(result.summary.exitCode, 0);
   assert.strictEqual(result.summary.matchedObjects, 2);

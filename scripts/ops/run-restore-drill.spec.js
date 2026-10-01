@@ -142,6 +142,8 @@ test('success verifies parity, cleans owned resources, and publishes Category 6 
   assert.equal(result.status, 0, result.stderr + result.stdout);
   const report = JSON.parse(fs.readFileSync(f.evidence, 'utf8'));
   assert.equal(report.status, 'success');
+  assert.equal(report.execution_mode, 'simulation');
+  assert.equal(report.drill_type, 'disaster_recovery_restore');
   assert.equal(report.rto_compliant, true);
   assert.equal(report.postgis_verified, true);
   assert.equal(report.foreign_keys_verified, true);

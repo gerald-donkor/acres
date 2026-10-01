@@ -257,11 +257,10 @@ if [ -n "$DATABASE_TELEMETRY_FILE" ]; then capacity_args+=(--database-telemetry-
 run_stage "capacity_alerting" "Capacity, DoS, alert simulation" \
   stage_capacity
 
-# Stage 7: disaster recovery restore drill & reconciliation.
-# Restore dry-run preflight and read-only reconciliation still require live drill
-# infrastructure. Static integrity can also contact the dependency registry.
-# The hermetic process tests stub these children; this runner does not.
-run_stage "disaster_recovery" "Restore drill + reconciliation" \
+# Stage 7: disaster recovery restore drill & reconciliation (simulation rehearsal).
+# Runs an isolated local restore into acres_restore_drill and read-only reconciliation.
+# Does not perform live production disaster recovery or verify off-host encryption.
+run_stage "disaster_recovery" "Restore drill + reconciliation (simulation rehearsal)" \
   stage_disaster_recovery
 END_MS="$(get_time_ms)"
 DURATION_MS=$((END_MS - START_MS))

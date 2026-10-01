@@ -36,6 +36,12 @@ while (($#)); do
     --help|-h)
       cat <<'HELP'
 Usage: scripts/ops/run-restore-drill.sh [options]
+
+Rehearsal drill: creates an isolated drill database, restores a fresh source dump,
+and measures local RTO. Does not perform live production restore or off-host recovery;
+receipts are simulation.
+
+Options:
   --source-db <name>           Source database (default: acres)
   --drill-db <name>            New, absent target database (default: acres_restore_drill)
   --backup-dir <dir>           Private archive directory (default: backups)
@@ -155,7 +161,7 @@ write_evidence() {
   if ! TIMESTAMP="$TIMESTAMP" SOURCE_DB="$SOURCE_DB" DRILL_DB="$DRILL_DB" BACKUP_FILE="$CREATED_BACKUP" BACKUP_BYTES="$BACKUP_BYTES" DURATION_MS="$DURATION_MS" RTO_TARGET_SECONDS="$RTO_TARGET_SECONDS" TABLES_SOURCE="$TABLES_SOURCE" TABLES_RESTORED="$TABLES_RESTORED" MIGRATIONS_SOURCE="$MIGRATIONS_SOURCE" MIGRATIONS_RESTORED="$MIGRATIONS_RESTORED" node -e '
 const e=process.env;
 const n=k=>Number(e[k]);
-const report={drill_timestamp:e.TIMESTAMP,source_db:e.SOURCE_DB,drill_db:e.DRILL_DB,backup_file:e.BACKUP_FILE,backup_bytes:n("BACKUP_BYTES"),duration_ms:n("DURATION_MS"),duration_seconds:Math.floor(n("DURATION_MS")/1000),rto_target_seconds:n("RTO_TARGET_SECONDS"),rto_compliant:true,tables_source:n("TABLES_SOURCE"),tables_restored:n("TABLES_RESTORED"),migrations_source:n("MIGRATIONS_SOURCE"),migrations_restored:n("MIGRATIONS_RESTORED"),postgis_verified:true,foreign_keys_verified:true,record_parity_verified:true,status:"success"};
+const report={execution_mode:"simulation",drill_type:"disaster_recovery_restore",drill_timestamp:e.TIMESTAMP,source_db:e.SOURCE_DB,drill_db:e.DRILL_DB,backup_file:e.BACKUP_FILE,backup_bytes:n("BACKUP_BYTES"),duration_ms:n("DURATION_MS"),duration_seconds:Math.floor(n("DURATION_MS")/1000),rto_target_seconds:n("RTO_TARGET_SECONDS"),rto_compliant:true,tables_source:n("TABLES_SOURCE"),tables_restored:n("TABLES_RESTORED"),migrations_source:n("MIGRATIONS_SOURCE"),migrations_restored:n("MIGRATIONS_RESTORED"),postgis_verified:true,foreign_keys_verified:true,record_parity_verified:true,status:"success"};
 process.stdout.write(JSON.stringify(report,null,2)+"\n");' > "$temp"; then
     rm -f -- "$temp"; return 1
   fi
@@ -163,7 +169,7 @@ process.stdout.write(JSON.stringify(report,null,2)+"\n");' > "$temp"; then
   if ! ln -- "$temp" "$EVIDENCE_FILE"; then rm -f -- "$temp"; return 1; fi
   rm -f -- "$temp"
   printf 'Drill evidence saved to: %s\n' "$EVIDENCE_FILE"
-  printf 'DISASTER RECOVERY RESTORE DRILL PASSED\n'
+  printf 'DISASTER RECOVERY RESTORE DRILL PASSED (simulation rehearsal)\n'
 }
 trap cleanup EXIT
 trap 'exit 130' INT

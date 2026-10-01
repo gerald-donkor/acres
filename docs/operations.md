@@ -638,6 +638,14 @@ Implemented in Prompt 61:
 
 ## Phase 12F Disaster Recovery Restore Drill & Storage Object Reconciliation
 
+**Current disaster recovery and reconciliation qualification (prompt 238, 2026-10-01):** The historical
+runner receipts below establish rehearsal simulation preflights only (`execution_mode: "simulation"`).
+They execute against an isolated local drill database (`acres_restore_drill`) and local Garage/S3 storage
+or under `--dry-run`. They do not attest live production disaster recovery, off-host backup encryption,
+live off-host restore, live multi-region bucket integrity, or live RPO/RTO. Separately inspected live
+operator child receipts (`execution_mode: "live"`) are required when Category 6 (`backup_and_disaster_recovery`)
+is approved.
+
 Implemented in Prompt 62:
 1. **Automated Disaster Recovery Restore Drill Runner (`scripts/ops/run-restore-drill.sh`)**:
    - Executes automated end-to-end backup, archive validation, target database recreation, restore, and parity verification against an isolated target database (`acres_restore_drill`).
@@ -2218,3 +2226,55 @@ reruns. The full verification and audit output is recorded in the Phase 12K
 prompt-237 entry in `docs/build-plan.md`. Inspect safely with
 `npm run ops:volume-test` and `npm run ops:readiness-test` from the repository
 root; these use test-owned fixtures and do not approve launch.
+
+## Prompt 238 — disaster recovery drill and live evidence separation (2026-10-01)
+
+`run-restore-drill.sh` always emits `execution_mode: "simulation"` and `drill_type: "disaster_recovery_restore"`.
+The CLI introduction, help text, and success banner make explicit that the tool executes an isolated local
+rehearsal restore into `acres_restore_drill`, measuring local RTO; it does not perform an actual off-host
+production restore, attest production disaster recovery, or validate off-host backup encryption.
+
+`reconcile-storage-objects.js` emits `execution_mode: "simulation"` (or explicit options) and
+`drill_type: "storage_reconciliation"`. Its CLI help documents that it reconciles reachable database
+records against object storage keys and does not attest live production multi-region bucket integrity.
+
+`assemble-launch-dossier.js` validates `execution_mode === "simulation"` for Stage 7 `restoreEvidence` and
+`reconcileEvidence` child reports and qualifies Stage 7 in the dossier as rehearsal preflight rather than
+production recovery sign-off. `run-launch-drills.sh` documents Stage 7 explicitly as restore drill and storage
+reconciliation rehearsal.
+
+Category 6 (`backup_and_disaster_recovery`) in `scripts/ops/check-launch-readiness.js`:
+- Unified launch evidence dossiers are excluded from candidate evaluation.
+- Every referenced child report must pass strict structural validation. Legacy unclassified receipts without
+  `execution_mode` fail closed; valid simulation may accompany live evidence, but failed simulations or live
+  children block approval even beside a valid receipt.
+- When Category 6 is approved (`status: "approved"`), separately inspected live operator child receipts
+  (`execution_mode: "live"`) are required for both PostgreSQL restore and storage reconciliation:
+  - Live restore child requires `execution_mode: "live"`, `environment: "production"`, trimmed non-empty,
+    control-free `operator_reference`, `authorization_reference`, `maintenance_window_reference`, matching
+    drill date (`declaredDate === reportDate`), and measured duration within declared RTO bounds
+    (`duration_seconds <= expectedSection.rto_hours * 3600`).
+  - Live reconciliation child requires `execution_mode: "live"`, `environment: "production"`, trimmed non-empty,
+    control-free `operator_reference`, `authorization_reference`, and `storage_target_reference` matching
+    `expectedSection.backup_destination`.
+- Safe diagnostic boundary: all Category 6 child file reads and parse/validation operations are guarded.
+  Missing files, parse errors, child structural failures, and formatting exceptions are mapped to fixed safe
+  blocker messages (`A referenced restore drill report is invalid or failed` and `A referenced storage reconciliation report is invalid or failed`),
+  suppressing private filesystem paths, stack traces, and internal child diagnostics.
+- Timestamp format rules: Restore drill reports accept real nonfuture basic UTC (`YYYYMMDDTHHMMSSZ`) and
+  standard ISO 8601 UTC timestamps; storage reconciliation reports strictly enforce ISO 8601 UTC format.
+
+Verification and review (2026-10-01):
+- `npm run ops:restore-drill-test`: 28 passed, 0 failed.
+- `npm run ops:reconcile-test`: 10 passed, 0 failed.
+- `npm run ops:launch-drill-test`: 59 passed, 0 failed.
+- `npm run ops:readiness-test`: 596 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates`: `ops template check passed`.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Independent code review completed and addressed: restored ISO UTC timestamp support in `validateRestoreReport`,
+  enforced strict ISO UTC timestamps in `validateReconciliationReport`, aligned reference fields between code and
+  documentation (`maintenance_window_reference` for restore, `storage_target_reference` for reconciliation), and
+  ensured restore drill date validation accurately tracks live receipts without rejecting historical evidence.

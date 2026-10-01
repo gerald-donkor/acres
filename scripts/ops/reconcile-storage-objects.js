@@ -183,6 +183,8 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
   }
 
   return {
+    execution_mode: options.execution_mode || 'simulation',
+    drill_type: 'storage_reconciliation',
     timestamp: new Date().toISOString(),
     summary: {
       totalDatabaseObjects: dbObjects.length,
@@ -322,6 +324,9 @@ async function main() {
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
 Usage: node scripts/ops/reconcile-storage-objects.js [options]
+
+Reconciliation drill: compares database metadata records against object storage keys.
+Local/dry-run receipts are simulation; does not attest live production storage integrity.
 
 Options:
   --bucket <bucket>           S3 / Garage bucket name (default: STORAGE_BUCKET or acres-quarantine)
