@@ -1722,37 +1722,85 @@ function validateSecretReferencePolicyReport(report, now, approvedOrContext, may
 
 function isDataRetentionPolicyCandidate({ parsed } = {}) {
   // A custom-named JSON file must be checked too; a dossier cannot qualify.
-  return !!parsed && typeof parsed === 'object' && !Array.isArray(parsed);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  if (Array.isArray(parsed.stages) || parsed.dossier_version !== undefined) return false;
+  return true;
 }
 
-function validateDataRetentionPolicyReport(report, now, approved) {
-  if (!isDataRetentionPolicyCandidate({ parsed: report }) ||
-      report.drill_type !== 'data_retention_policy_verification' ||
-      report.status !== 'success' ||
-      !validSmtpText(report.policy_reference) ||
-      report.scheduled_cleanup_verified !== true ||
-      !Array.isArray(report.errors) || report.errors.length !== 0) return false;
-  const timestamp = parseSmtpTimestamp(report.timestamp);
-  const evalNow = now instanceof Date ? now : new Date();
-  if (!timestamp || timestamp > evalNow ||
-      !report.retention_windows || typeof report.retention_windows !== 'object' || Array.isArray(report.retention_windows) ||
-      !approved || typeof approved !== 'object') return false;
-  const secretMarkers = [];
-  checkPlaceholdersAndSecrets(report, 'retention_report', secretMarkers);
-  if (secretMarkers.length > 0) return false;
-  if (Object.keys(report).sort().join(',') !==
-      ['drill_type', 'errors', 'policy_reference', 'retention_windows', 'scheduled_cleanup_verified', 'status', 'timestamp'].sort().join(',')) return false;
-  const keys = Object.keys(report.retention_windows);
-  if (keys.length !== REQUIRED_RETENTION_KEYS.length ||
-      keys.some((key) => !REQUIRED_RETENTION_KEYS.includes(key))) return false;
-  return REQUIRED_RETENTION_KEYS.every((key) => {
-    const entry = report.retention_windows[key];
-    return entry && typeof entry === 'object' && !Array.isArray(entry) &&
-      typeof approved[key] === 'string' &&
-      entry.window === approved[key] &&
-      entry.policy_verified === true &&
-      Object.keys(entry).length === 2;
-  });
+function validateDataRetentionPolicyReport(report, now, approvedOrContext, maybeContext) {
+  try {
+    if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+    if (report.drill_type !== 'data_retention_policy_verification' || report.status !== 'success') return false;
+    const mode = report.execution_mode;
+    if (mode !== 'simulation' && mode !== 'live') return false;
+
+    let approved = null;
+    let context = {};
+    if (approvedOrContext && typeof approvedOrContext === 'object') {
+      if (approvedOrContext.requireLive !== undefined || approvedOrContext.expectedSection !== undefined) {
+        context = approvedOrContext;
+      } else {
+        approved = approvedOrContext;
+        if (maybeContext && typeof maybeContext === 'object') {
+          context = maybeContext;
+        }
+      }
+    }
+
+    const evalNow = now instanceof Date ? now : new Date();
+    if (!Number.isFinite(evalNow.getTime())) return false;
+    const timestamp = parseSmtpTimestamp(report.timestamp);
+    if (!timestamp || timestamp > evalNow) return false;
+    if (!Array.isArray(report.errors) || report.errors.length !== 0) return false;
+    if (!validSmtpReference(report.policy_reference)) return false;
+    if (report.scheduled_cleanup_verified !== true) return false;
+
+    if (!report.retention_windows || typeof report.retention_windows !== 'object' || Array.isArray(report.retention_windows)) return false;
+
+    const secretMarkers = [];
+    checkPlaceholdersAndSecrets(report, 'retention_report', secretMarkers);
+    if (secretMarkers.length > 0) return false;
+
+    const keys = Object.keys(report.retention_windows);
+    if (keys.length !== REQUIRED_RETENTION_KEYS.length ||
+        keys.some((key) => !REQUIRED_RETENTION_KEYS.includes(key))) return false;
+
+    const windowsValid = REQUIRED_RETENTION_KEYS.every((key) => {
+      const entry = report.retention_windows[key];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+      const expectedWindow = approved ? approved[key] : entry.window;
+      if (typeof expectedWindow !== 'string' || entry.window !== expectedWindow) return false;
+      if (entry.policy_verified !== true) return false;
+      return Object.keys(entry).length === 2;
+    });
+    if (!windowsValid) return false;
+
+    const requireLive = Boolean(context?.requireLive);
+
+    if (mode === 'simulation') {
+      if (requireLive) return false;
+      if (Object.keys(report).sort().join(',') !==
+          ['drill_type', 'errors', 'execution_mode', 'policy_reference', 'retention_windows', 'scheduled_cleanup_verified', 'status', 'timestamp'].sort().join(',')) return false;
+      return true;
+    }
+
+    // Live mode
+    if (report.environment !== 'production') return false;
+    if (
+      !validSmtpReference(report.operator_reference) ||
+      !validSmtpReference(report.authorization_reference) ||
+      !validSmtpReference(report.policy_reference)
+    ) {
+      return false;
+    }
+
+    if (Object.keys(report).sort().join(',') !==
+        ['authorization_reference', 'drill_type', 'environment', 'errors', 'execution_mode', 'operator_reference', 'policy_reference', 'retention_windows', 'scheduled_cleanup_verified', 'status', 'timestamp'].sort().join(',')) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isValidGraphqlEndpoint(endpoint) {
@@ -1857,7 +1905,7 @@ function validateNoAiPostureReport(report, now, approved) {
 }
 
 function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
-  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'secret_references', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery'].includes(category)) {
+  if (!['production_domain_tls', 'smtp_delivery', 'secrets_management', 'secret_references', 'data_retention_policy', 'deployment_and_rollback', 'volume_encryption', 'backup_and_disaster_recovery'].includes(category)) {
     return checkEvidenceFileContents(ref, category, addBlocker, baseDirs);
   }
   const fail = () =>
@@ -1873,6 +1921,8 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
         ? 'A referenced secret rotation report is invalid or failed'
         : category === 'secret_references'
         ? 'A referenced secret-reference policy report is invalid or failed'
+        : category === 'data_retention_policy'
+        ? 'A referenced data retention policy report is invalid or failed'
         : category === 'deployment_and_rollback'
         ? 'A referenced deployment drill report is invalid or failed'
         : typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
@@ -2980,8 +3030,13 @@ function validateReadiness(record, _filePath, options = {}) {
     const retentionCandidates = retentionEvidence.filter(isDataRetentionPolicyCandidate);
     if (retentionCandidates.length === 0) {
       addBlocker('data_retention_policy', 'A successful data retention policy child JSON report is required');
-    } else if (retentionCandidates.some(({ parsed }) => !validateDataRetentionPolicyReport(parsed, now, retSec))) {
-      addBlocker('data_retention_policy', 'A referenced data retention policy report is invalid or failed');
+    } else {
+      if (retentionCandidates.some(({ parsed }) => !validateDataRetentionPolicyReport(parsed, now, retSec))) {
+        addBlocker('data_retention_policy', 'A referenced data retention policy report is invalid or failed');
+      }
+      if (!retentionCandidates.some(({ parsed }) => validateDataRetentionPolicyReport(parsed, now, retSec, { requireLive: true }))) {
+        addBlocker('data_retention_policy', 'A live data retention policy operator receipt is required');
+      }
     }
   }
 

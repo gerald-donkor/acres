@@ -568,6 +568,21 @@ const retentionPolicyWindows = {
 const retentionPolicyFixturePath = path.join(restoreFixtureDir, 'retention-policy-review-valid.json');
 const validRetentionPolicyReport = {
   drill_type: 'data_retention_policy_verification',
+  execution_mode: 'live',
+  environment: 'production',
+  operator_reference: 'legal-lead-op-456',
+  authorization_reference: 'legal-auth-ref-789',
+  timestamp: '2026-08-28T12:00:00.000Z',
+  status: 'success',
+  errors: [],
+  policy_reference: 'policy-retention-review-2026-v1',
+  scheduled_cleanup_verified: true,
+  retention_windows: Object.fromEntries(Object.entries(retentionPolicyWindows).map(([key, window]) =>
+    [key, { window, policy_verified: true }])),
+};
+const validSimulationRetentionPolicyReport = {
+  drill_type: 'data_retention_policy_verification',
+  execution_mode: 'simulation',
   timestamp: '2026-08-28T12:00:00.000Z',
   status: 'success',
   errors: [],
@@ -3808,38 +3823,49 @@ test('SMTP evidence candidate excludes dossiers and handles missing input', () =
 });
 
 test('approved data retention policy requires a matching policy child, not prose or a dossier', () => {
-  const record = buildValidApprovedRecord();
-  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
-  record.sections.data_retention_policy.evidence = ['Retention policy review approved'];
-  assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /policy child JSON report is required/);
-  record.sections.data_retention_policy.evidence = [retentionPolicyFixturePath];
-  assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
-
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-retention-dossier-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-retention-test-'));
   try {
-    const dossierFile = path.join(dir, 'dossier.json');
-    fs.writeFileSync(dossierFile, JSON.stringify({ overall_status: 'PASSED' }));
-    record.sections.data_retention_policy.evidence = [dossierFile];
-    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /invalid or failed/);
+    const simPath = path.join(dir, 'retention-policy-sim.json');
+    fs.writeFileSync(simPath, JSON.stringify(validSimulationRetentionPolicyReport));
+    const record = buildValidApprovedRecord();
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
+    record.sections.data_retention_policy.evidence = ['Retention policy review approved'];
+    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /policy child JSON report is required/);
+    record.sections.data_retention_policy.evidence = [simPath];
+    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /A live data retention policy operator receipt is required/);
+    record.sections.data_retention_policy.evidence = [simPath, retentionPolicyFixturePath];
+    assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
+    assert.equal(isDataRetentionPolicyCandidate({ parsed: {} }), true);
+    assert.equal(isDataRetentionPolicyCandidate({ parsed: [] }), false);
+    assert.equal(isDataRetentionPolicyCandidate({ parsed: { stages: [] } }), false);
+    assert.equal(isDataRetentionPolicyCandidate({ parsed: { dossier_version: '1.0.0' } }), false);
+    assert.equal(isDataRetentionPolicyCandidate(), false);
+    assert.equal(validateDataRetentionPolicyReport(null), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-
-  assert.equal(isDataRetentionPolicyCandidate({ parsed: {} }), true);
-  assert.equal(isDataRetentionPolicyCandidate({ parsed: [] }), false);
-  assert.equal(isDataRetentionPolicyCandidate(), false);
-  assert.equal(validateDataRetentionPolicyReport(null), false);
 });
 
 test('data retention policy validation rejects malformed and contradictory reports', () => {
   const approved = buildValidApprovedRecord().sections.data_retention_policy;
   assert.equal(validateDataRetentionPolicyReport(validRetentionPolicyReport, fixedNow, approved), true);
+  assert.equal(validateDataRetentionPolicyReport(validSimulationRetentionPolicyReport, fixedNow, approved), true);
+  assert.equal(validateDataRetentionPolicyReport(validSimulationRetentionPolicyReport, fixedNow, approved, { requireLive: true }), false);
+  assert.equal(validateDataRetentionPolicyReport(validRetentionPolicyReport, new Date('invalid'), approved), false);
   const mutations = [
     (r) => { r.timestamp = '2026-02-30T12:00:00.000Z'; },
     (r) => { r.timestamp = '2027-01-01T00:00:00.000Z'; },
     (r) => { r.status = 'failed'; },
     (r) => { r.errors = ['purge failed']; },
     (r) => { r.policy_reference = ''; },
+    (r) => { r.policy_reference = 'bad\x00char'; },
+    (r) => { delete r.execution_mode; },
+    (r) => { r.execution_mode = 'unrecognized'; },
+    (r) => { r.environment = 'staging'; },
+    (r) => { r.operator_reference = ''; },
+    (r) => { r.operator_reference = 'bad\x00char'; },
+    (r) => { r.authorization_reference = ''; },
+    (r) => { r.authorization_reference = 'bad\x00char'; },
     (r) => { r.scheduled_cleanup_verified = false; },
     (r) => { delete r.retention_windows.account_retention_policy; },
     (r) => { r.retention_windows.extra_policy = { window: '10d', policy_verified: true }; },
@@ -3897,10 +3923,24 @@ test('data retention approval rejects custom-path failures and mixed wildcard ev
   try {
     const good = path.join(dir, 'custom.json');
     const bad = path.join(dir, 'other.json');
+    const malformed = path.join(dir, 'malformed.json');
     fs.writeFileSync(good, JSON.stringify(validRetentionPolicyReport));
     const record = buildValidApprovedRecord();
     record.sections.data_retention_policy.evidence = [good];
     assert.strictEqual(validateApprovedRecord(record).categoryBlockers.data_retention_policy, undefined);
+
+    // Malformed JSON suppresses file path diagnostics
+    fs.writeFileSync(malformed, '{ invalid json');
+    record.sections.data_retention_policy.evidence = [malformed];
+    const malformedBlockers = validateApprovedRecord(record).categoryBlockers.data_retention_policy || [];
+    assert.ok(malformedBlockers.includes('A referenced data retention policy report is invalid or failed'));
+    assert.ok(!malformedBlockers.some((b) => b.includes(dir) || b.includes('malformed.json')));
+
+    // Disguised dossier rejected
+    const disguisedDossier = path.join(dir, 'disguised-dossier.json');
+    fs.writeFileSync(disguisedDossier, JSON.stringify({ ...validRetentionPolicyReport, dossier_version: '1.0.0', stages: [] }));
+    record.sections.data_retention_policy.evidence = [disguisedDossier];
+    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /policy child JSON report is required/);
 
     fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
     record.sections.data_retention_policy.evidence = [path.join(dir, '*.json')];

@@ -861,3 +861,23 @@ paths, internal stack traces, and child diagnostics. Mode flags, confirmations, 
 references are unauthenticated assertions; actual secret-store RBAC and runtime injection
 remain subject to independent operator inspection. Prompt 201 and Phase 12 live sign-off
 remain open.
+
+**Prompt 242 data-retention evidence integrity (2026-10-01):** Data-retention
+policy verification separates simulation preflight from live operator receipts. Local policy
+checks and configuration probes are classified as `execution_mode: "simulation"`; they
+validate structural completeness and retention windows but do not prove active production
+purge enforcement.
+
+Category 7 (`data_retention_policy`) requires separately inspected live operator child receipts
+(`execution_mode: "live"`) bound to the production environment, operator reference,
+authorization reference, and policy reference when approved. Live receipts must contain
+all eight required retention windows matching approved values with `policy_verified: true`
+and `scheduled_cleanup_verified: true`.
+
+Category 7 enforces a safe diagnostic boundary: missing child files, parse errors, child
+validation failures, and nested formatting exceptions are mapped to the fixed blocker message
+`'A referenced data retention policy report is invalid or failed'`, suppressing private filesystem
+paths, internal stack traces, and child diagnostics. Mode flags, confirmations, and opaque
+references are unauthenticated assertions; actual legal retention schedules and active purge
+jobs remain subject to independent operator inspection. Prompt 201 and Phase 12 live sign-off
+remain open.

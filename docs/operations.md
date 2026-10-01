@@ -2415,3 +2415,40 @@ Verification and review (2026-10-01):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open; no production secret store access was performed or credentials modified.
+
+## Prompt 242 — separate data-retention preflight from live evidence (2026-10-01)
+
+`scripts/ops/check-launch-readiness.js`:
+- `validateDataRetentionPolicyReport(report, now, approved, context)` supports both simulation and live modes:
+  - Requires `drill_type === "data_retention_policy_verification"`, `status === "success"`, empty `errors` array,
+    `scheduled_cleanup_verified === true`, valid nonfuture ISO UTC timestamp, and zero placeholder or secret markers.
+  - Requires explicit `execution_mode: "simulation" | "live"`. Missing or unrecognized modes fail closed.
+  - Validates all 8 retention windows (`REQUIRED_RETENTION_KEYS`) against approved values (with `policy_verified === true` and exactly two keys per window).
+  - In simulation mode (`execution_mode: "simulation"`):
+    - Validates structural completeness and exact top-level keys.
+    - If live mode is requested (`context.requireLive: true`), immediately returns `false`.
+  - In live mode (`execution_mode: "live"` or `context.requireLive: true`):
+    - Requires `environment === "production"`.
+    - Requires trimmed, nonempty, control-free, secret-free references: `operator_reference`,
+      `authorization_reference`, and `policy_reference`.
+    - Requires exact top-level keys matching the live specification.
+- Category 7 (`data_retention_policy`) evaluation:
+  - Excludes unified launch dossiers from data-retention policy candidates (`isDataRetentionPolicyCandidate`).
+  - When approved (`retSec.status === 'approved'`), requires a valid live data-retention policy operator receipt (`execution_mode: "live"`).
+  - Valid classified simulation may accompany live evidence; simulation-only, dossier-only, prose-only, or external-pointer-only evidence cannot approve Category 7.
+  - Every child must match: an invalid or malformed child blocks beside a valid one.
+- Safe diagnostic boundary:
+  - Added `data_retention_policy` to `checkEvidenceFile`'s safe fail-closed wrapper.
+  - Missing files, parse errors, child/dossier failures, and malformed nested-value exceptions are masked to fixed message `'A referenced data retention policy report is invalid or failed'`.
+  - Suppresses private filesystem paths, child error diagnostics, and exception stack traces.
+  - Retains useful Category 7 field, format, and window syntax blockers.
+
+Verification and review (2026-10-01):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
+- `npm run ops:readiness-test`: 599 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open; no production retention purge routines were executed or database tables modified.

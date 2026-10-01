@@ -1369,3 +1369,25 @@ failed closed with 0 approved categories, 11 blocked, and 70 blockers. Verificat
 (57/57), all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit
 reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No secret store access was performed
 or credentials modified; operator sign-off remains open.
+
+**Prompt 242 Phase 12K data-retention evidence separation (2026-10-01):** Category 7
+(`data_retention_policy`) in `scripts/ops/check-launch-readiness.js` now classifies configuration
+and policy verifications as simulation preflight (`execution_mode: "simulation"`) and
+requires a separately inspected live operator child receipt (`execution_mode: "live"`)
+when approved. Live receipts require `environment: "production"`, trimmed non-empty opaque
+references (`operator_reference`, `authorization_reference`, `policy_reference`), and
+all eight verified retention windows matching approved values (`policy_verified: true`,
+`scheduled_cleanup_verified: true`).
+
+Unified dossiers are excluded from candidate evaluation (`isDataRetentionPolicyCandidate`), and disguised
+dossiers fail validation. Every referenced child report must pass strict structural validation;
+valid simulations may accompany live evidence, but any invalid or malformed child blocks approval
+even beside a valid one. Category 7 enforces a safe diagnostic boundary suppressing private
+filesystem paths, stack traces, and child error diagnostics, mapping failures to
+`'A referenced data retention policy report is invalid or failed'`. Unresolved example readiness template
+failed closed with 0 approved categories, 11 blocked, and 70 blockers. Independent code review
+reported no findings and confirmed readiness to commit. Verification output:
+`ops:readiness-test` (599/599), `ops:readiness-schema-test` (8/8), `ops:templates`, `ops:templates-test`
+(57/57), all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit
+reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). No production purge routines
+were executed or database tables modified; operator sign-off remains open.
