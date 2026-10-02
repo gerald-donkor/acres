@@ -993,3 +993,19 @@ Evidence candidate evaluation is now fail-closed across all non-drill policy and
   TM-04 (information disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary
   enforcement across all categories), and TM-15 (preflight / live separation). Prompt 201 and Phase 12
   live sign-off remain open.
+
+**Prompt 248 unified drill dossier and candidate contract verification (2026-10-02):**
+Unified drill dossier evaluation, candidate filtering, and safe fall-through semantics across Category 8
+(`volume_encryption`), Category 6 (`backup_and_disaster_recovery`), and Category 1 (`production_domain_tls`):
+- Hardened `validVolumeDossier(report, file)` and `validRecoveryDossier(report, file)` to reject child report
+  filenames (`volume-encryption*`, `restore-drill*`, `reconcil*`), non-object/array payloads, and unverified
+  baselines, preventing child reports from masquerading as dossiers.
+- Hardened `validCaddyDossier(report, file)` to reject dossiers reporting `staticIntegrity: 'failed'` or
+  `staticIntegrityCompliance: 'failed'`.
+- In `checkEvidenceFileContents`, Categories 1, 6, and 8 now evaluate candidate child contracts first
+  (`isCaddyRoutingCandidate`, `isRestoreCandidate` / `isReconciliationCandidate`, `isVolumeEncryptionCandidate`),
+  followed by hardened dossier verification, immediately emitting fixed category-specific invalid/failed blockers
+  upon failure and executing explicit `continue;` statements to eliminate parser fall-through.
+- Directly reinforces threat model mitigations TM-01 (tamper resistance / fail-closed parsing), TM-04 (information
+  disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary enforcement across all categories),
+  and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.

@@ -23,6 +23,7 @@ const {
   isCaddyRoutingCandidate,
   parseCaddyRoutingTimestamp,
   validateCaddyRoutingReport,
+  validCaddyDossier,
   isSmtpDeliveryCandidate,
   validateSmtpDeliveryReport,
   isSecretReferencePolicyCandidate,
@@ -36,9 +37,11 @@ const {
   validateNoAiPostureReport,
   isRestoreCandidate,
   validateRestoreReport,
+  validRecoveryDossier,
   isReconciliationCandidate,
   validateReconciliationReport,
   RECONCILIATION_COUNTS,
+  validVolumeDossier,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -6788,4 +6791,362 @@ test('Category 6 requires live receipts on approval and enforces safe diagnostic
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('validVolumeDossier contract and rejection scenarios', () => {
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'static_integrity', status: 'PASSED' },
+      { stage_id: 'supply_chain_security', status: 'PASSED' },
+      { stage_id: 'ingress_deployment', status: 'PASSED' },
+      { stage_id: 'volume_encryption', status: 'PASSED' },
+      { stage_id: 'secret_rotation', status: 'PASSED' },
+      { stage_id: 'capacity_alerting', status: 'PASSED' },
+      { stage_id: 'disaster_recovery', status: 'PASSED' },
+    ],
+    volumeEncryptionBaseline: {
+      status: 'verified',
+      totalRequiredMounts: 9,
+      validMountsCount: 9,
+      keySeparationVerified: true,
+      violationsDetected: 0,
+    },
+    summary: {
+      volumeEncryptionCompliance: 'passed',
+      volumePreflight: 'simulation',
+    },
+  };
+
+  assert.strictEqual(validVolumeDossier(validDossier, 'launch-evidence-dossier.json'), true);
+  assert.strictEqual(validVolumeDossier(null), false);
+  assert.strictEqual(validVolumeDossier([]), false);
+  assert.strictEqual(validVolumeDossier('dossier'), false);
+  assert.strictEqual(validVolumeDossier(validDossier, 'volume-encryption-evidence.json'), false);
+
+  assert.strictEqual(validVolumeDossier({ ...validDossier, overall_status: 'FAILED' }), false);
+  assert.strictEqual(validVolumeDossier({ ...validDossier, total_stages: 6 }), false);
+  assert.strictEqual(validVolumeDossier({ ...validDossier, failed_stages: 1 }), false);
+  assert.strictEqual(
+    validVolumeDossier({
+      ...validDossier,
+      stages: validDossier.stages.map((s) => (s.stage_id === 'volume_encryption' ? { ...s, status: 'FAILED' } : s)),
+    }),
+    false
+  );
+  assert.strictEqual(
+    validVolumeDossier({
+      ...validDossier,
+      volumeEncryptionBaseline: { ...validDossier.volumeEncryptionBaseline, status: 'breached' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validVolumeDossier({
+      ...validDossier,
+      volumeEncryptionBaseline: { ...validDossier.volumeEncryptionBaseline, validMountsCount: 2 },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validVolumeDossier({
+      ...validDossier,
+      volumeEncryptionBaseline: { ...validDossier.volumeEncryptionBaseline, keySeparationVerified: false },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validVolumeDossier({
+      ...validDossier,
+      volumeEncryptionBaseline: { ...validDossier.volumeEncryptionBaseline, violationsDetected: 1 },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validVolumeDossier({
+      ...validDossier,
+      summary: { volumeEncryptionCompliance: 'failed' },
+    }),
+    false
+  );
+});
+
+test('validRecoveryDossier contract and rejection scenarios', () => {
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'static_integrity', status: 'PASSED' },
+      { stage_id: 'supply_chain_security', status: 'PASSED' },
+      { stage_id: 'ingress_deployment', status: 'PASSED' },
+      { stage_id: 'volume_encryption', status: 'PASSED' },
+      { stage_id: 'secret_rotation', status: 'PASSED' },
+      { stage_id: 'capacity_alerting', status: 'PASSED' },
+      { stage_id: 'disaster_recovery', status: 'PASSED' },
+    ],
+    disasterRecoveryBaseline: {
+      status: 'verified',
+      restoreDrill: { rtoCompliant: true },
+      storageReconciliation: { status: 'clean' },
+    },
+    summary: {
+      restoreCompliance: 'passed',
+      reconcileCompliance: 'passed',
+      recoveryCompliance: 'passed',
+    },
+  };
+
+  assert.strictEqual(validRecoveryDossier(validDossier, 'launch-evidence-dossier.json'), true);
+  assert.strictEqual(validRecoveryDossier(null), false);
+  assert.strictEqual(validRecoveryDossier([]), false);
+  assert.strictEqual(validRecoveryDossier('dossier'), false);
+  assert.strictEqual(validRecoveryDossier(validDossier, 'restore-drill-evidence.json'), false);
+  assert.strictEqual(validRecoveryDossier(validDossier, 'reconcile-report.json'), false);
+
+  assert.strictEqual(validRecoveryDossier({ ...validDossier, overall_status: 'FAILED' }), false);
+  assert.strictEqual(
+    validRecoveryDossier({
+      ...validDossier,
+      stages: [{ stage_id: 'disaster_recovery', status: 'FAILED' }],
+    }),
+    false
+  );
+  assert.strictEqual(
+    validRecoveryDossier({
+      ...validDossier,
+      disasterRecoveryBaseline: { status: 'breached' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validRecoveryDossier({
+      ...validDossier,
+      disasterRecoveryBaseline: { status: 'verified', restoreDrill: { rtoCompliant: false } },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validRecoveryDossier({
+      ...validDossier,
+      disasterRecoveryBaseline: { status: 'verified', storageReconciliation: { status: 'error' } },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validRecoveryDossier({
+      ...validDossier,
+      summary: { restoreCompliance: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validRecoveryDossier({
+      ...validDossier,
+      summary: { reconcileCompliance: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validRecoveryDossier({
+      ...validDossier,
+      summary: { recoveryCompliance: 'restore_reconcile_failed' },
+    }),
+    false
+  );
+});
+
+test('validCaddyDossier contract and rejection scenarios', () => {
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'ingress_deployment', status: 'PASSED' },
+    ],
+    deploymentBaseline: {
+      status: 'verified',
+      caddyRoutingVerified: true,
+      caddyRoutingPreflight: 'simulation',
+    },
+    staticIntegrityBaseline: {
+      status: 'verified',
+    },
+    summary: {
+      ingressDeployment: 'passed',
+      caddyRoutingPreflight: 'simulation',
+      staticIntegrity: 'passed',
+      staticIntegrityCompliance: 'passed',
+    },
+  };
+
+  assert.strictEqual(validCaddyDossier(validDossier, 'launch-evidence-dossier.json'), true);
+  assert.strictEqual(validCaddyDossier(null), false);
+  assert.strictEqual(validCaddyDossier([]), false);
+  assert.strictEqual(validCaddyDossier('dossier'), false);
+  assert.strictEqual(validCaddyDossier(validDossier, 'caddy-routing-evidence.json'), false);
+
+  assert.strictEqual(validCaddyDossier({ ...validDossier, overall_status: 'FAILED' }), false);
+  assert.strictEqual(
+    validCaddyDossier({
+      ...validDossier,
+      stages: [{ stage_id: 'ingress_deployment', status: 'FAILED' }],
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCaddyDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, ingressDeployment: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCaddyDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, caddyRoutingPreflight: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCaddyDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, staticIntegrityCompliance: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCaddyDossier({
+      ...validDossier,
+      deploymentBaseline: { status: 'verified', caddyRoutingPreflight: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCaddyDossier({
+      ...validDossier,
+      staticIntegrityBaseline: { status: 'breached' },
+    }),
+    false
+  );
+});
+
+test('Categories 1, 6, and 8 accept valid drill dossiers alongside live operator receipts and reject failing/disguised dossiers', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dossier-unify-test-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const validDossierFile = path.join(dir, 'launch-evidence-dossier.json');
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'static_integrity', status: 'PASSED' },
+      { stage_id: 'supply_chain_security', status: 'PASSED' },
+      { stage_id: 'ingress_deployment', status: 'PASSED' },
+      { stage_id: 'volume_encryption', status: 'PASSED' },
+      { stage_id: 'secret_rotation', status: 'PASSED' },
+      { stage_id: 'capacity_alerting', status: 'PASSED' },
+      { stage_id: 'disaster_recovery', status: 'PASSED' },
+    ],
+    deploymentBaseline: {
+      status: 'verified',
+      caddyRoutingVerified: true,
+      caddyRoutingPreflight: 'simulation',
+    },
+    staticIntegrityBaseline: {
+      status: 'verified',
+    },
+    volumeEncryptionBaseline: {
+      status: 'verified',
+      totalRequiredMounts: 9,
+      validMountsCount: 9,
+      keySeparationVerified: true,
+      violationsDetected: 0,
+    },
+    disasterRecoveryBaseline: {
+      status: 'verified',
+      restoreDrill: { rtoCompliant: true },
+      storageReconciliation: { status: 'clean' },
+    },
+    summary: {
+      ingressDeployment: 'passed',
+      caddyRoutingPreflight: 'simulation',
+      staticIntegrity: 'passed',
+      staticIntegrityCompliance: 'passed',
+      volumeEncryptionCompliance: 'passed',
+      volumePreflight: 'simulation',
+      restoreCompliance: 'passed',
+      reconcileCompliance: 'passed',
+      recoveryCompliance: 'passed',
+    },
+  };
+  fs.writeFileSync(validDossierFile, JSON.stringify(validDossier));
+
+  const failingDossierFile = path.join(dir, 'launch-evidence-dossier-failing.json');
+  fs.writeFileSync(failingDossierFile, JSON.stringify({
+    ...validDossier,
+    overall_status: 'FAILED',
+  }));
+
+  // Category 1: production_domain_tls
+  const rec1 = buildValidApprovedRecord();
+  rec1.sections.production_domain_tls.evidence = [caddyRoutingFixturePath, validDossierFile];
+  assert.strictEqual(validateApprovedRecord(rec1).categoryBlockers.production_domain_tls, undefined);
+
+  const rec1Fail = buildValidApprovedRecord();
+  rec1Fail.sections.production_domain_tls.evidence = [caddyRoutingFixturePath, failingDossierFile];
+  assert.ok(
+    (validateApprovedRecord(rec1Fail).categoryBlockers.production_domain_tls || []).includes(
+      'A referenced Caddy routing report is invalid or failed'
+    )
+  );
+
+  // Category 6: backup_and_disaster_recovery
+  const rec6 = buildValidApprovedRecord();
+  rec6.sections.backup_and_disaster_recovery.evidence = [
+    restoreFixturePath,
+    reconciliationFixturePath,
+    validDossierFile,
+  ];
+  assert.strictEqual(validateApprovedRecord(rec6).categoryBlockers.backup_and_disaster_recovery, undefined);
+
+  const rec6Fail = buildValidApprovedRecord();
+  rec6Fail.sections.backup_and_disaster_recovery.evidence = [
+    restoreFixturePath,
+    reconciliationFixturePath,
+    failingDossierFile,
+  ];
+  assert.ok(
+    (validateApprovedRecord(rec6Fail).categoryBlockers.backup_and_disaster_recovery || []).some((b) =>
+      b.includes('invalid or failed')
+    )
+  );
+
+  // Category 8: volume_encryption
+  const rec8 = buildValidApprovedRecord();
+  rec8.sections.volume_encryption.evidence = [volumeEncryptionFixturePath, validDossierFile];
+  assert.strictEqual(validateApprovedRecord(rec8).categoryBlockers.volume_encryption, undefined);
+
+  const rec8Fail = buildValidApprovedRecord();
+  rec8Fail.sections.volume_encryption.evidence = [volumeEncryptionFixturePath, failingDossierFile];
+  assert.ok(
+    (validateApprovedRecord(rec8Fail).categoryBlockers.volume_encryption || []).includes(
+      'A referenced volume encryption report is invalid or failed'
+    )
+  );
 });

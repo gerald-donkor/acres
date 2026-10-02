@@ -334,11 +334,16 @@ function isReconciliationCandidate({ file, parsed } = {}) {
   );
 }
 
-function validRecoveryDossier(report) {
+function validRecoveryDossier(report, file) {
   if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  if (fileName.startsWith('restore-drill') || fileName.startsWith('reconcil')) return false;
   if (report.overall_status !== 'PASSED') return false;
   if (!Array.isArray(report.stages) && report.dossier_version === undefined && report.disasterRecoveryBaseline === undefined) {
     return false;
+  }
+  if (Array.isArray(report.stages)) {
+    if (report.stages.some((s) => s && s.status === 'FAILED')) return false;
   }
   const baseline = report.disasterRecoveryBaseline;
   if (baseline !== undefined) {
@@ -374,7 +379,9 @@ function validCaddyDossier(report, file) {
   if (report.summary && typeof report.summary === 'object') {
     if (
       report.summary.ingressDeployment === 'failed' ||
-      report.summary.caddyRoutingPreflight === 'failed'
+      report.summary.caddyRoutingPreflight === 'failed' ||
+      report.summary.staticIntegrity === 'failed' ||
+      report.summary.staticIntegrityCompliance === 'failed'
     ) {
       return false;
     }
@@ -480,7 +487,10 @@ function isVolumeEncryptionCandidate({ file, parsed } = {}) {
 }
 
 // Only Category 8 uses this narrow dossier check; a dossier never supplies live acceptance.
-function validVolumeDossier(report) {
+function validVolumeDossier(report, file) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  if (fileName.startsWith('volume-encryption')) return false;
   const baseline = report.volumeEncryptionBaseline;
   return (
     report.overall_status === 'PASSED' &&
@@ -2281,20 +2291,30 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
       continue;
     }
     parsedFiles.push({ file, parsed });
-    if (category === 'volume_encryption' && !isVolumeEncryptionCandidate({ file, parsed }) &&
-        !validVolumeDossier(parsed)) {
-      addBlocker(category, 'A referenced volume encryption report is invalid or failed');
+    if (category === 'volume_encryption') {
+      if (isVolumeEncryptionCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock and live requirement.
+        continue;
+      }
+      if (!validVolumeDossier(parsed, file)) {
+        addBlocker(category, 'A referenced volume encryption report is invalid or failed');
+      }
+      continue;
     }
-    if (category === 'backup_and_disaster_recovery' &&
-        !isRestoreCandidate({ file, parsed }) &&
-        !isReconciliationCandidate({ file, parsed }) &&
-        !validRecoveryDossier(parsed)) {
-      addBlocker(
-        category,
-        typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
-          ? 'A referenced storage reconciliation report is invalid or failed'
-          : 'A referenced restore drill report is invalid or failed'
-      );
+    if (category === 'backup_and_disaster_recovery') {
+      if (isRestoreCandidate({ file, parsed }) || isReconciliationCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock and live requirement.
+        continue;
+      }
+      if (!validRecoveryDossier(parsed, file)) {
+        addBlocker(
+          category,
+          typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
+            ? 'A referenced storage reconciliation report is invalid or failed'
+            : 'A referenced restore drill report is invalid or failed'
+        );
+      }
+      continue;
     }
     if (category === 'production_domain_tls') {
       if (isCaddyRoutingCandidate({ file, parsed })) {
@@ -2303,8 +2323,8 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
       }
       if (!validCaddyDossier(parsed, file) && !validCaddyStaticEvidence(parsed, file)) {
         addBlocker(category, 'A referenced Caddy routing report is invalid or failed');
-        continue;
       }
+      continue;
     }
     if (category === 'smtp_delivery') {
       if (isSmtpDeliveryCandidate({ file, parsed })) {
@@ -3785,6 +3805,7 @@ module.exports = {
   DEV_PASSWORDS,
   isVolumeEncryptionCandidate,
   validateVolumeEncryptionReport,
+  validVolumeDossier,
   isSecretRotationCandidate,
   validateSecretRotationReport,
   validSecretDossier,
@@ -3801,6 +3822,7 @@ module.exports = {
   isCaddyRoutingCandidate,
   parseCaddyRoutingTimestamp,
   validateCaddyRoutingReport,
+  validCaddyDossier,
   isSmtpDeliveryCandidate,
   validSmtpReference,
   validateSmtpDeliveryReport,
@@ -3815,6 +3837,7 @@ module.exports = {
   validateNoAiPostureReport,
   isRestoreCandidate,
   validateRestoreReport,
+  validRecoveryDossier,
   isReconciliationCandidate,
   validateReconciliationReport,
   RECONCILIATION_COUNTS,

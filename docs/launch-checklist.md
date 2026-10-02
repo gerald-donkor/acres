@@ -141,6 +141,11 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   (59/59), `ops:readiness-test` (598/598), `ops:readiness-schema-test` (8/8),
   `ops:templates`, all ops suites, lint, typecheck, build, and `git diff --check`
   passed cleanly. Unresolved example failed closed with 0 approved, 11 blocked, 70 blockers.
+- Prompt 248: In `checkEvidenceFileContents`, `validCaddyDossier` now strictly verifies that
+  neither `summary.staticIntegrity` nor `summary.staticIntegrityCompliance` is `'failed'`.
+  Candidate evaluation (`isCaddyRoutingCandidate`) is evaluated first, followed by dossier and
+  static evidence checks, emitting `'A referenced Caddy routing report is invalid or failed'`
+  and explicitly terminating inspection with `continue;` to prevent fall-through.
 
 ### 2. SMTP Delivery (`smtp_delivery`)
 
@@ -1003,6 +1008,11 @@ reconciliation when the category is approved:
   `ops:readiness-schema-test` (8/8), `ops:templates`, all ops suites, lint,
   typecheck, build, and `git diff --check` passed cleanly. Unresolved example
   failed closed with 0 approved, 11 blocked, 70 blockers.
+- Prompt 248: In `checkEvidenceFileContents`, `validRecoveryDossier` rejects child report files
+  (`restore-drill*`, `reconcil*`), non-object/array payloads, and unverified baseline contracts.
+  Category 6 evaluates candidate child contracts (`isRestoreCandidate`, `isReconciliationCandidate`)
+  first, followed by `validRecoveryDossier`, emitting category-specific invalid/failed blockers and
+  explicitly terminating inspection with `continue;` to prevent fall-through.
 
 ### 7. Data Retention (`data_retention_policy`)
 
@@ -1325,6 +1335,12 @@ typecheck`, and `npm run build` (client Next 16.3.4 webpack, NestJS, and
 shared) exited 0 across all workspaces, and `git diff --check` exited 0. No
 operator production source, disk encryption inspect, or approval was
 inspected, and none of these repository results supplies Category 8 evidence.
+
+- Prompt 248: In `checkEvidenceFileContents`, `validVolumeDossier` rejects child report files
+  (`volume-encryption*`), non-object/array payloads, and unverified baseline contracts.
+  Category 8 evaluates `isVolumeEncryptionCandidate` first, followed by `validVolumeDossier`,
+  emitting `'A referenced volume encryption report is invalid or failed'` and explicitly terminating
+  inspection with `continue;` to prevent fall-through.
 
 ### 9. GraphQL Introspection (`graphql_introspection`)
 

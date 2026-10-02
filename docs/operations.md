@@ -2642,3 +2642,31 @@ Verification and review (2026-10-02):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open.
+
+## Prompt 248 — unify drill dossier and candidate contracts for volume, recovery, and TLS (2026-10-02)
+
+`scripts/ops/check-launch-readiness.js`:
+- Unifies dossier recognition, candidate filtering, and safe fall-through semantics across Category 8 (`volume_encryption`), Category 6 (`backup_and_disaster_recovery`), and Category 1 (`production_domain_tls`):
+  - Hardened `validVolumeDossier(report, file)` to reject child report files (`volume-encryption*`), non-object/array reports, and unverified baseline contracts.
+  - Hardened `validRecoveryDossier(report, file)` to reject child report files (`restore-drill*`, `reconcil*`), non-object/array reports, and unverified baseline contracts.
+  - Hardened `validCaddyDossier(report, file)` to reject dossiers reporting `staticIntegrity: 'failed'` or `staticIntegrityCompliance: 'failed'`.
+  - In `checkEvidenceFileContents`:
+    - Evaluates candidate child contracts first across Categories 1, 6, and 8, deferring full structural evaluation to approval-time checks with explicit clocks and live requirements.
+    - Evaluates non-candidates against hardened dossier contracts (`validVolumeDossier`, `validRecoveryDossier`, `validCaddyDossier`), admitting valid dossiers alongside live operator receipts.
+    - If non-candidate evaluation fails, category-specific invalid/failed blockers are immediately emitted:
+      - `'A referenced volume encryption report is invalid or failed'`
+      - `'A referenced restore drill report is invalid or failed'` / `'A referenced storage reconciliation report is invalid or failed'`
+      - `'A referenced Caddy routing report is invalid or failed'`
+    - Adds explicit `continue;` statements preventing unintended fall-through to generic parser logic across all three categories.
+- Exports `validVolumeDossier`, `validRecoveryDossier`, and `validCaddyDossier` in `module.exports`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive contract tests validating dossier acceptance alongside live operator receipts, rejection of failing/disguised dossiers, and child filename rejection.
+
+Verification and review (2026-10-02):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 611 passed, 0 failed.
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open.

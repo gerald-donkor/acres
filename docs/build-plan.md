@@ -1520,3 +1520,26 @@ all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cl
 dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
 Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
 Operator sign-off remains open.
+
+**Prompt 248 Phase 12K unify drill dossier and candidate contracts for volume, recovery, and TLS (2026-10-02):**
+Unified dossier recognition, candidate filtering, and safe fall-through semantics in `scripts/ops/check-launch-readiness.js`
+across Category 8 (`volume_encryption`), Category 6 (`backup_and_disaster_recovery`), and Category 1 (`production_domain_tls`):
+- Hardened `validVolumeDossier(report, file)` to reject child report files (`volume-encryption*`), non-object/array reports,
+  and unverified baseline contracts.
+- Hardened `validRecoveryDossier(report, file)` to reject child report files (`restore-drill*`, `reconcil*`), non-object/array
+  reports, and unverified baseline contracts.
+- Hardened `validCaddyDossier(report, file)` to reject dossiers reporting `staticIntegrity: 'failed'` or
+  `staticIntegrityCompliance: 'failed'`.
+- In `checkEvidenceFileContents`:
+  - Categories 1, 6, and 8 now evaluate candidate child contracts first; candidates defer full evaluation to approval time.
+  - Non-candidates are evaluated against hardened dossier contracts (`validVolumeDossier`, `validRecoveryDossier`, `validCaddyDossier`).
+  - When non-candidate evaluation fails, category-specific invalid/failed blockers are immediately emitted.
+  - Explicit `continue;` statements prevent unintended fall-through to generic parser logic across all three categories.
+- Exported `validVolumeDossier`, `validRecoveryDossier`, and `validCaddyDossier` in `module.exports`.
+- Added contract tests in `scripts/ops/check-launch-readiness.spec.js` covering valid dossier acceptance beside live receipts,
+  rejection of failing/disguised dossiers, and child filename rejection.
+
+Verification output: `ops:readiness-test` (611/611), `ops:launch-drill-test` (68/68), `ops:readiness-schema-test` (8/8),
+`ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
+audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
+closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
