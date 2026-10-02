@@ -1610,3 +1610,21 @@ Verification output: `ops:readiness-test` (621/621), `ops:launch-drill-test` (68
 `ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
 audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
 closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
+
+**Prompt 253 Phase 12K export and test evidence glob, timestamp, and reference validation helpers (2026-10-02):**
+Exported all remaining internal evidence helpers and constants, added defensive parameter guards, and established comprehensive unit and contract test coverage in `scripts/ops/check-launch-readiness.js`:
+- In `expandEvidenceGlob`, added defensive check `if (typeof ref !== 'string' || ref.length === 0) return [];` preventing `TypeError` on non-string inputs.
+- In `parseUtcDate`, added defensive check `if (typeof value !== 'string') return null;` ensuring type safety for non-string values.
+- Exported all internal helper functions and constants in `module.exports`: `isEvidenceFileReference`, `expandEvidenceGlob`, `parseUtcDate`, `parseRestoreTimestamp`, `parseSecretRotationTimestamp`, `parseSmtpTimestamp`, `validVolumePath`, `validVolumePaths`, `validVolumeSection`, `isRotationReference`, `validSmtpText`, `validSmtpEmail`, `validSmtpSecretReference`, `isValidGraphqlEndpoint`, `hasExactKeys`, `DEPLOYMENT_OBSERVATIONS`, and `NO_AI_JOURNEYS`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive unit test suites:
+  - `isEvidenceFileReference`: tests acceptance of `.json` and wildcard `*...json` references, and rejection of non-strings, whitespace, and non-JSON extensions.
+  - `expandEvidenceGlob`: tests exact matches, single-`*` expansions, non-existent directories, non-string/empty inputs, and rejection of multiple-`*` wildcards.
+  - Timestamp parsers (`parseUtcDate`, `parseRestoreTimestamp`, `parseSecretRotationTimestamp`, `parseSmtpTimestamp`): tests compact basic UTC and ISO 8601 UTC (with and without millis), invalid dates, non-UTC offsets, and strict ISO requirement on SMTP timestamps.
+  - Volume validation helpers (`validVolumePath`, `validVolumePaths`, `validVolumeSection`): tests path format, path traversal/relative segments, whitespace padding, duplicate paths, minimum 3 paths requirement, approved encryption mechanisms, and recovery owner validation.
+  - Reference and transport helpers (`isRotationReference`, `validSmtpText`, `validSmtpEmail`, `validSmtpSecretReference`): tests trimmed string formatting, control character rejection, email syntax and domain dots, and indirect secret reference formats (`env:`, `vault:`, `aws-sm:`, `file:`).
+  - Endpoint, schema shape, and constants: tests `/graphql` path and URL validation, exact key checking, and canonical contents of `DEPLOYMENT_OBSERVATIONS` and `NO_AI_JOURNEYS`.
+
+Verification output: `ops:readiness-test` (627/627), `ops:launch-drill-test` (68/68), `ops:readiness-schema-test` (8/8),
+`ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
+audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
+closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.

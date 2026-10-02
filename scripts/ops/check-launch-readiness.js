@@ -145,6 +145,7 @@ function isEvidenceFileReference(ev) {
 }
 
 function expandEvidenceGlob(ref, baseDirs) {
+  if (typeof ref !== 'string' || ref.length === 0) return [];
   const matches = [];
   const dirs = Array.isArray(baseDirs) && baseDirs.length > 0 ? baseDirs : [process.cwd()];
   for (const baseDir of dirs) {
@@ -183,6 +184,7 @@ function expandEvidenceGlob(ref, baseDirs) {
 }
 
 function parseUtcDate(value, basicTimestamp = false) {
+  if (typeof value !== 'string') return null;
   const match = basicTimestamp
     ? /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(value)
     : /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})Z)?$/.exec(value);
@@ -3467,4 +3469,21 @@ module.exports = {
   validateSupplyChainEvidence,
   checkEvidenceFile,
   checkEvidenceFileContents,
+  isEvidenceFileReference,
+  expandEvidenceGlob,
+  parseUtcDate,
+  parseRestoreTimestamp,
+  parseSecretRotationTimestamp,
+  parseSmtpTimestamp,
+  validVolumePath,
+  validVolumePaths,
+  validVolumeSection,
+  isRotationReference,
+  validSmtpText,
+  validSmtpEmail,
+  validSmtpSecretReference,
+  isValidGraphqlEndpoint,
+  hasExactKeys,
+  DEPLOYMENT_OBSERVATIONS,
+  NO_AI_JOURNEYS,
 };

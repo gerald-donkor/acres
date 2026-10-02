@@ -55,6 +55,23 @@ const {
   validateSupplyChainEvidence,
   checkEvidenceFile,
   checkEvidenceFileContents,
+  isEvidenceFileReference,
+  expandEvidenceGlob,
+  parseUtcDate,
+  parseRestoreTimestamp,
+  parseSecretRotationTimestamp,
+  parseSmtpTimestamp,
+  validVolumePath,
+  validVolumePaths,
+  validVolumeSection,
+  isRotationReference,
+  validSmtpText,
+  validSmtpEmail,
+  validSmtpSecretReference,
+  isValidGraphqlEndpoint,
+  hasExactKeys,
+  DEPLOYMENT_OBSERVATIONS,
+  NO_AI_JOURNEYS,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -7823,4 +7840,299 @@ test('Category 10 candidate and non-candidate discrimination in checkEvidenceFil
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('isEvidenceFileReference validation scenarios', () => {
+  assert.strictEqual(isEvidenceFileReference('backups/audit.json'), true);
+  assert.strictEqual(isEvidenceFileReference('backups/audit.JSON'), true);
+  assert.strictEqual(isEvidenceFileReference('./rel/path/evidence.json'), true);
+  assert.strictEqual(isEvidenceFileReference('*.json'), true);
+  assert.strictEqual(isEvidenceFileReference('prefix-*-suffix.json'), true);
+  assert.strictEqual(isEvidenceFileReference('  path/to/file.json  '), true);
+  assert.strictEqual(isEvidenceFileReference('backups/*-evidence.json'), true);
+
+  assert.strictEqual(isEvidenceFileReference(null), false);
+  assert.strictEqual(isEvidenceFileReference(undefined), false);
+  assert.strictEqual(isEvidenceFileReference(12345), false);
+  assert.strictEqual(isEvidenceFileReference({}), false);
+  assert.strictEqual(isEvidenceFileReference([]), false);
+  assert.strictEqual(isEvidenceFileReference(''), false);
+  assert.strictEqual(isEvidenceFileReference('   '), false);
+  assert.strictEqual(isEvidenceFileReference('file.txt'), false);
+  assert.strictEqual(isEvidenceFileReference('file.yaml'), false);
+  assert.strictEqual(isEvidenceFileReference('json'), false);
+  assert.strictEqual(isEvidenceFileReference('file.json.bak'), false);
+});
+
+test('expandEvidenceGlob resolution and error handling scenarios', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'glob-test-'));
+  try {
+    const f1 = path.join(dir, 'evidence-alpha.json');
+    const f2 = path.join(dir, 'evidence-beta.json');
+    const f3 = path.join(dir, 'other-file.txt');
+    fs.writeFileSync(f1, '{}', 'utf8');
+    fs.writeFileSync(f2, '{}', 'utf8');
+    fs.writeFileSync(f3, 'text', 'utf8');
+
+    // Safe handling of non-string / empty ref
+    assert.deepStrictEqual(expandEvidenceGlob(null, [dir]), []);
+    assert.deepStrictEqual(expandEvidenceGlob(undefined, [dir]), []);
+    assert.deepStrictEqual(expandEvidenceGlob('', [dir]), []);
+    assert.deepStrictEqual(expandEvidenceGlob(123, [dir]), []);
+
+    // Exact file match
+    const exactMatches = expandEvidenceGlob('evidence-alpha.json', [dir]);
+    assert.strictEqual(exactMatches.length, 1);
+    assert.strictEqual(exactMatches[0], f1);
+
+    // Exact file non-existent
+    assert.deepStrictEqual(expandEvidenceGlob('non-existent.json', [dir]), []);
+
+    // Wildcard match
+    const wildcardMatches = expandEvidenceGlob('evidence-*.json', [dir]);
+    assert.strictEqual(wildcardMatches.length, 2);
+    assert.ok(wildcardMatches.includes(f1));
+    assert.ok(wildcardMatches.includes(f2));
+    assert.ok(!wildcardMatches.includes(f3));
+
+    // Multiple wildcards not supported (returns empty)
+    assert.deepStrictEqual(expandEvidenceGlob('evi*-*-*.json', [dir]), []);
+
+    // Non-existent directory handling
+    const nonExistentDir = path.join(dir, 'does-not-exist');
+    assert.deepStrictEqual(expandEvidenceGlob('evidence-*.json', [nonExistentDir]), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('timestamp parsers: parseUtcDate, parseRestoreTimestamp, parseSecretRotationTimestamp, parseSmtpTimestamp', () => {
+  const dualParsers = [
+    { name: 'parseRestoreTimestamp', fn: parseRestoreTimestamp },
+    { name: 'parseSecretRotationTimestamp', fn: parseSecretRotationTimestamp },
+  ];
+
+  // parseUtcDate unit tests
+  assert.strictEqual(parseUtcDate(null), null);
+  assert.strictEqual(parseUtcDate(undefined), null);
+  assert.strictEqual(parseUtcDate(123), null);
+  assert.strictEqual(parseUtcDate(''), null);
+  assert.strictEqual(parseUtcDate('not-a-date'), null);
+  assert.strictEqual(parseUtcDate('2026-13-01T12:00:00Z'), null); // invalid month
+  assert.strictEqual(parseUtcDate('2026-02-30T12:00:00Z'), null); // invalid day
+
+  const parsedIso = parseUtcDate('2026-09-25T12:30:45Z');
+  assert.ok(parsedIso instanceof Date);
+  assert.strictEqual(parsedIso.toISOString(), '2026-09-25T12:30:45.000Z');
+
+  const parsedDateOnly = parseUtcDate('2026-09-25');
+  assert.ok(parsedDateOnly instanceof Date);
+  assert.strictEqual(parsedDateOnly.toISOString(), '2026-09-25T00:00:00.000Z');
+
+  // basicTimestamp mode in parseUtcDate
+  assert.strictEqual(parseUtcDate('2026-09-25T12:30:45Z', true), null);
+  const parsedBasic = parseUtcDate('20260925T123045Z', true);
+  assert.ok(parsedBasic instanceof Date);
+  assert.strictEqual(parsedBasic.toISOString(), '2026-09-25T12:30:45.000Z');
+  assert.strictEqual(parseUtcDate('20260230T120000Z', true), null); // invalid Feb 30
+
+  for (const { name, fn } of dualParsers) {
+    // Basic compact UTC
+    const d1 = fn('20260925T123045Z');
+    assert.ok(d1 instanceof Date, `${name} parses compact UTC`);
+    assert.strictEqual(d1.toISOString(), '2026-09-25T12:30:45.000Z');
+
+    // ISO 8601 UTC
+    const d2 = fn('2026-09-25T12:30:45Z');
+    assert.ok(d2 instanceof Date, `${name} parses ISO 8601 UTC`);
+    assert.strictEqual(d2.toISOString(), '2026-09-25T12:30:45.000Z');
+
+    // ISO 8601 UTC with millis
+    const d3 = fn('2026-09-25T12:30:45.500Z');
+    assert.ok(d3 instanceof Date, `${name} parses ISO 8601 UTC with millis`);
+    assert.strictEqual(d3.toISOString(), '2026-09-25T12:30:45.500Z');
+
+    // Rejections
+    assert.strictEqual(fn(null), null, `${name} rejects null`);
+    assert.strictEqual(fn(undefined), null, `${name} rejects undefined`);
+    assert.strictEqual(fn(''), null, `${name} rejects empty string`);
+    assert.strictEqual(fn('not-a-date'), null, `${name} rejects invalid string`);
+    assert.strictEqual(fn('2026-09-25T12:30:45+02:00'), null, `${name} rejects non-UTC offset`);
+    assert.strictEqual(fn('2026-09-25T12:30:45'), null, `${name} rejects missing timezone`);
+  }
+
+  // parseSmtpTimestamp strictly requires ISO 8601 UTC and rejects compact format
+  assert.strictEqual(parseSmtpTimestamp('20260925T123045Z'), null, 'parseSmtpTimestamp rejects compact format');
+  const smtpIso = parseSmtpTimestamp('2026-09-25T12:30:45Z');
+  assert.ok(smtpIso instanceof Date, 'parseSmtpTimestamp parses ISO UTC');
+  assert.strictEqual(smtpIso.toISOString(), '2026-09-25T12:30:45.000Z');
+  const smtpMillis = parseSmtpTimestamp('2026-09-25T12:30:45.250Z');
+  assert.ok(smtpMillis instanceof Date, 'parseSmtpTimestamp parses ISO UTC with millis');
+  assert.strictEqual(smtpMillis.toISOString(), '2026-09-25T12:30:45.250Z');
+});
+
+test('volume validation helpers: validVolumePath, validVolumePaths, validVolumeSection', () => {
+  // validVolumePath
+  assert.strictEqual(validVolumePath('/var/lib/postgresql'), true);
+  assert.strictEqual(validVolumePath('/etc/caddy/Caddyfile'), true);
+  assert.strictEqual(validVolumePath('/mnt/storage/garage'), true);
+
+  assert.strictEqual(validVolumePath(''), false);
+  assert.strictEqual(validVolumePath('/'), false);
+  assert.strictEqual(validVolumePath(' /var/lib/postgresql '), false); // padding
+  assert.strictEqual(validVolumePath('/var/lib/postgresql\n'), false); // control character
+  assert.strictEqual(validVolumePath('/var/../lib'), false); // traversal
+  assert.strictEqual(validVolumePath('/var/./lib'), false); // relative segment
+  assert.strictEqual(validVolumePath('/var//lib'), false); // double slash
+  assert.strictEqual(validVolumePath('C:\\var\\lib'), false); // backslash
+  assert.strictEqual(validVolumePath(null), false);
+  assert.strictEqual(validVolumePath(undefined), false);
+  assert.strictEqual(validVolumePath(12345), false);
+  assert.strictEqual(validVolumePath('__REQUIRED_PATH__'), false);
+  assert.strictEqual(validVolumePath('change-me'), false);
+  assert.strictEqual(validVolumePath('<REQUIRED_PATH>'), false);
+
+  // validVolumePaths requires >= 3 unique valid paths
+  assert.strictEqual(
+    validVolumePaths(['/var/lib/postgresql', '/etc/caddy', '/mnt/storage/garage']),
+    true
+  );
+  assert.strictEqual(validVolumePaths(['/var/lib/postgresql', '/etc/caddy']), false); // < 3
+  assert.strictEqual(validVolumePaths([]), false);
+  assert.strictEqual(validVolumePaths(null), false);
+  assert.strictEqual(
+    validVolumePaths(['/var/lib/postgresql', '/var/lib/postgresql', '/etc/caddy']),
+    false // duplicate
+  );
+  assert.strictEqual(
+    validVolumePaths(['/var/lib/postgresql', '/etc/caddy', 'change-me']),
+    false
+  );
+
+  // validVolumeSection requires approved mechanism, recovery owner, and >= 3 paths
+  assert.strictEqual(
+    validVolumeSection({
+      encryption_mechanism: 'luks2',
+      key_recovery_owner: 'ops-lead',
+      encrypted_mount_paths: ['/var/lib/postgresql', '/etc/caddy', '/mnt/storage/garage'],
+    }),
+    true
+  );
+  assert.strictEqual(
+    validVolumeSection({
+      encryption_mechanism: 'aws:kms',
+      key_recovery_owner: 'sec-lead',
+      encrypted_mount_paths: ['/var/lib/postgresql', '/etc/caddy', '/mnt/storage/garage'],
+    }),
+    true
+  );
+  assert.strictEqual(
+    validVolumeSection({
+      encryption_mechanism: 'unapproved-mechanism',
+      key_recovery_owner: 'ops-lead',
+      encrypted_mount_paths: ['/var/lib/postgresql', '/etc/caddy', '/mnt/storage/garage'],
+    }),
+    false
+  );
+  assert.strictEqual(
+    validVolumeSection({
+      encryption_mechanism: 'luks2',
+      key_recovery_owner: 'change-me',
+      encrypted_mount_paths: ['/var/lib/postgresql', '/etc/caddy', '/mnt/storage/garage'],
+    }),
+    false
+  );
+  assert.strictEqual(
+    validVolumeSection({
+      encryption_mechanism: 'luks2',
+      key_recovery_owner: 'ops-lead',
+      encrypted_mount_paths: ['/var/lib/postgresql', '/etc/caddy'], // < 3 paths
+    }),
+    false
+  );
+  assert.strictEqual(validVolumeSection(null), false);
+  assert.strictEqual(validVolumeSection([]), false);
+});
+
+test('reference and transport helpers: isRotationReference, validSmtpText, validSmtpEmail, validSmtpSecretReference', () => {
+  // isRotationReference verifies string, non-empty, trimmed, and no control characters
+  assert.strictEqual(isRotationReference('rot-ref-12345'), true);
+  assert.strictEqual(isRotationReference('rotation.key.2026'), true);
+  assert.strictEqual(isRotationReference(''), false);
+  assert.strictEqual(isRotationReference(' rot-ref '), false);
+  assert.strictEqual(isRotationReference('rot-ref\n'), false);
+  assert.strictEqual(isRotationReference('rot\x00ref'), false);
+  assert.strictEqual(isRotationReference(null), false);
+  assert.strictEqual(isRotationReference(12345), false);
+
+  // validSmtpText & validSmtpSecretReference
+  assert.strictEqual(validSmtpText('smtp.sendgrid.net'), true);
+  assert.strictEqual(validSmtpText('587'), true);
+  assert.strictEqual(validSmtpText(' text '), true);
+  assert.strictEqual(validSmtpText(''), false);
+  assert.strictEqual(validSmtpText('   '), false);
+  assert.strictEqual(validSmtpText('__REQUIRED_TEXT__'), false);
+  assert.strictEqual(validSmtpText('<REQUIRED_TEXT>'), false);
+  assert.strictEqual(validSmtpText('change-me'), false);
+  assert.strictEqual(validSmtpSecretReference('env:SMTP_PASSWORD'), true);
+  assert.strictEqual(validSmtpSecretReference('vault:secret/smtp#token'), true);
+  assert.strictEqual(validSmtpSecretReference('aws-sm:acres/smtp'), true);
+  assert.strictEqual(validSmtpSecretReference('file:/run/secrets/smtp'), true);
+  assert.strictEqual(validSmtpSecretReference('raw-password-123'), false);
+  assert.strictEqual(validSmtpSecretReference(''), false);
+  assert.strictEqual(validSmtpSecretReference('__REQUIRED_SECRET__'), false);
+
+  // validSmtpEmail
+  assert.strictEqual(validSmtpEmail('ops@example.com'), true);
+  assert.strictEqual(validSmtpEmail('alert.delivery+prod@sub.domain.co.uk'), true);
+  assert.strictEqual(validSmtpEmail(' ops@example.com '), false);
+  assert.strictEqual(validSmtpEmail('not-an-email'), false);
+  assert.strictEqual(validSmtpEmail('@example.com'), false);
+  assert.strictEqual(validSmtpEmail('ops@'), false);
+  assert.strictEqual(validSmtpEmail('ops@@example.com'), false);
+  assert.strictEqual(validSmtpEmail('ops@example'), false);
+  assert.strictEqual(validSmtpEmail('ops@.com'), false);
+  assert.strictEqual(validSmtpEmail('ops@example.'), false);
+  assert.strictEqual(validSmtpEmail('__REQUIRED_EMAIL__@example.com'), false);
+  assert.strictEqual(validSmtpEmail('change-me'), false);
+  assert.strictEqual(validSmtpEmail(null), false);
+});
+
+test('endpoint, schema shape, and constants: isValidGraphqlEndpoint, hasExactKeys, DEPLOYMENT_OBSERVATIONS, NO_AI_JOURNEYS', () => {
+  // isValidGraphqlEndpoint accepts /graphql or full URL with /graphql path
+  assert.strictEqual(isValidGraphqlEndpoint('/graphql'), true);
+  assert.strictEqual(isValidGraphqlEndpoint('https://api.example.com/graphql'), true);
+  assert.strictEqual(isValidGraphqlEndpoint('http://localhost:3000/graphql'), true);
+  assert.strictEqual(isValidGraphqlEndpoint('/api/v1/graphql'), false);
+  assert.strictEqual(isValidGraphqlEndpoint('/query'), false);
+  assert.strictEqual(isValidGraphqlEndpoint('graphql'), false);
+  assert.strictEqual(isValidGraphqlEndpoint('/graph ql'), false);
+  assert.strictEqual(isValidGraphqlEndpoint(''), false);
+  assert.strictEqual(isValidGraphqlEndpoint(' /graphql '), false);
+  assert.strictEqual(isValidGraphqlEndpoint(null), false);
+  assert.strictEqual(isValidGraphqlEndpoint(12345), false);
+
+  // hasExactKeys
+  assert.strictEqual(hasExactKeys({ a: 1, b: 2 }, ['a', 'b']), true);
+  assert.strictEqual(hasExactKeys({ b: 2, a: 1 }, ['a', 'b']), true);
+  assert.strictEqual(hasExactKeys({ a: 1 }, ['a', 'b']), false);
+  assert.strictEqual(hasExactKeys({ a: 1, b: 2, c: 3 }, ['a', 'b']), false);
+  assert.strictEqual(hasExactKeys(null, ['a']), false);
+  assert.strictEqual(hasExactKeys([], ['a']), false);
+  assert.strictEqual(hasExactKeys('string', ['a']), false);
+
+  // DEPLOYMENT_OBSERVATIONS
+  assert.ok(Array.isArray(DEPLOYMENT_OBSERVATIONS));
+  assert.strictEqual(DEPLOYMENT_OBSERVATIONS.length, 8);
+  assert.ok(DEPLOYMENT_OBSERVATIONS.includes('promotion'));
+  assert.ok(DEPLOYMENT_OBSERVATIONS.includes('rollback'));
+  assert.ok(DEPLOYMENT_OBSERVATIONS.includes('image_provenance'));
+
+  // NO_AI_JOURNEYS
+  assert.ok(Array.isArray(NO_AI_JOURNEYS));
+  assert.deepStrictEqual(NO_AI_JOURNEYS, [
+    'analytics_dashboard',
+    'governed_report',
+    'export_download',
+  ]);
 });

@@ -1521,6 +1521,14 @@ operator child receipt (`execution_mode: "live"`) when approved:
   `'A referenced deployment drill report is invalid or failed'` if any failure condition is present.
   Exported validation helpers `validDeploymentRelease`, `parseDeploymentDrillTimestamp`,
   `validRecoveryReference`, `validVolumeReference`, and `validDomainTlsReference` in `module.exports`.
+- **Prompt 253 update (2026-10-02):** Exported all remaining readiness validation helpers
+  and constants (`isEvidenceFileReference`, `expandEvidenceGlob`, `parseUtcDate`,
+  `parseRestoreTimestamp`, `parseSecretRotationTimestamp`, `parseSmtpTimestamp`,
+  `validVolumePath`, `validVolumePaths`, `validVolumeSection`, `isRotationReference`,
+  `validSmtpText`, `validSmtpEmail`, `validSmtpSecretReference`, `isValidGraphqlEndpoint`,
+  `hasExactKeys`, `DEPLOYMENT_OBSERVATIONS`, `NO_AI_JOURNEYS`) in `scripts/ops/check-launch-readiness.js`.
+  Added defensive type guards in `expandEvidenceGlob` and `parseUtcDate`, and comprehensive
+  unit and contract test coverage across all helpers in `scripts/ops/check-launch-readiness.spec.js`.
 - **Container health & edge ingress gating (Prompt 226, 2026-09-28):**
   The production Compose template defines an explicit bounded healthcheck for
   `next` (`wget -qO- http://127.0.0.1:3000/ || exit 1`, interval: 30s, timeout: 5s,
