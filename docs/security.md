@@ -974,3 +974,22 @@ stages and the Unified Launch Evidence Dossier published by `scripts/ops/assembl
   (tamper resistance / fail closed), TM-04 (information disclosure suppression), TM-05 (evidence
   boundary enforcement), and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live
   sign-off remain open.
+
+**Prompt 247 policy and posture evidence candidate contract enforcement (2026-10-02):**
+Evidence candidate evaluation is now fail-closed across all non-drill policy and posture categories:
+- In `scripts/ops/check-launch-readiness.js`, `checkEvidenceFileContents` now strictly evaluates candidate
+  eligibility for `secret_references` (`isSecretReferencePolicyCandidate`), `data_retention_policy`
+  (`isDataRetentionPolicyCandidate`), `graphql_introspection` (`isGraphqlIntrospectionCandidate`), and
+  `optional_ai_posture` (`isNoAiPostureCandidate`).
+- Any referenced JSON file that does not meet candidate criteria (including disguised dossiers with `stages`
+  or `dossier_version`, or non-candidate JSON structures lacking explicit error flags) immediately triggers
+  the category-specific blocker (`'A referenced secret-reference policy report is invalid or failed'`,
+  `'A referenced data retention policy report is invalid or failed'`,
+  `'A referenced GraphQL introspection report is invalid or failed'`, or
+  `'A referenced no-AI production posture report is invalid or failed'`).
+- Prevents an attacker or misconfigured runner from slipping a non-candidate or disguised dossier past
+  validation alongside a valid live child report (`[good, disguisedDossier]`).
+- Directly satisfies threat model mitigations TM-01 (tamper resistance / fail-closed parsing),
+  TM-04 (information disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary
+  enforcement across all categories), and TM-15 (preflight / live separation). Prompt 201 and Phase 12
+  live sign-off remain open.

@@ -1345,13 +1345,23 @@ test('no-AI approval accepts a custom child path and rejects mixed wildcard chil
     assert.ok(malformedBlockers.includes('A referenced no-AI production posture report is invalid or failed'));
     assert.ok(!malformedBlockers.some((b) => b.includes(dir) || b.includes('malformed.json')));
 
-    // Disguised dossier rejected
+    // Disguised dossier or non-candidate rejected beside valid live report and when standalone
     const disguisedDossier = path.join(dir, 'disguised-dossier.json');
     fs.writeFileSync(disguisedDossier, JSON.stringify({ ...validNoAiReport, dossier_version: '1.0.0', stages: [] }));
-    record.sections.optional_ai_posture.evidence = [disguisedDossier];
-    assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /child JSON report is required/);
+    record.sections.optional_ai_posture.evidence = [good, disguisedDossier];
+    const disguisedBesideGood = validateApprovedRecord(record).categoryBlockers.optional_ai_posture || [];
+    assert.ok(disguisedBesideGood.includes('A referenced no-AI production posture report is invalid or failed'));
 
+    record.sections.optional_ai_posture.evidence = [disguisedDossier];
+    const disguisedOnly = validateApprovedRecord(record).categoryBlockers.optional_ai_posture || [];
+    assert.ok(disguisedOnly.includes('A successful no-AI production posture child JSON report is required'));
+    assert.ok(disguisedOnly.includes('A referenced no-AI production posture report is invalid or failed'));
+
+    // Non-candidate JSON report beside valid report
     fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
+    record.sections.optional_ai_posture.evidence = [good, bad];
+    const nonCandidateBesideGood = validateApprovedRecord(record).categoryBlockers.optional_ai_posture || [];
+    assert.ok(nonCandidateBesideGood.includes('A referenced no-AI production posture report is invalid or failed'));
     record.sections.optional_ai_posture.evidence = [path.join(dir, '*.json')];
     assert.match((validateApprovedRecord(record).categoryBlockers.optional_ai_posture || []).join(' '), /invalid or failed/);
 
@@ -2904,13 +2914,23 @@ test('secret-reference approval rejects custom-path failures and mixed wildcard 
     assert.ok(malformedBlockers.includes('A referenced secret-reference policy report is invalid or failed'));
     assert.ok(!malformedBlockers.some((b) => b.includes(dir) || b.includes('malformed.json')));
 
-    // Disguised dossier rejected
+    // Disguised dossier or non-candidate rejected beside valid live report and when standalone
     const disguisedDossier = path.join(dir, 'disguised-dossier.json');
     fs.writeFileSync(disguisedDossier, JSON.stringify({ ...validSecretPolicyReport, dossier_version: '1.0.0', stages: [] }));
-    record.sections.secret_references.evidence = [disguisedDossier];
-    assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /policy child JSON report is required/);
+    record.sections.secret_references.evidence = [good, disguisedDossier];
+    const disguisedBesideGood = validateApprovedRecord(record).categoryBlockers.secret_references || [];
+    assert.ok(disguisedBesideGood.includes('A referenced secret-reference policy report is invalid or failed'));
 
+    record.sections.secret_references.evidence = [disguisedDossier];
+    const disguisedOnly = validateApprovedRecord(record).categoryBlockers.secret_references || [];
+    assert.ok(disguisedOnly.includes('A successful secret-reference policy child JSON report is required'));
+    assert.ok(disguisedOnly.includes('A referenced secret-reference policy report is invalid or failed'));
+
+    // Non-candidate JSON report beside valid report
     fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
+    record.sections.secret_references.evidence = [good, bad];
+    const nonCandidateBesideGood = validateApprovedRecord(record).categoryBlockers.secret_references || [];
+    assert.ok(nonCandidateBesideGood.includes('A referenced secret-reference policy report is invalid or failed'));
     record.sections.secret_references.evidence = [path.join(dir, '*.json')];
     assert.match((validateApprovedRecord(record).categoryBlockers.secret_references || []).join(' '), /invalid or failed/);
     fs.writeFileSync(bad, JSON.stringify({ ...validSecretPolicyReport, status: 'failed' }));
@@ -4083,13 +4103,23 @@ test('data retention approval rejects custom-path failures and mixed wildcard ev
     assert.ok(malformedBlockers.includes('A referenced data retention policy report is invalid or failed'));
     assert.ok(!malformedBlockers.some((b) => b.includes(dir) || b.includes('malformed.json')));
 
-    // Disguised dossier rejected
+    // Disguised dossier or non-candidate rejected beside valid live report and when standalone
     const disguisedDossier = path.join(dir, 'disguised-dossier.json');
     fs.writeFileSync(disguisedDossier, JSON.stringify({ ...validRetentionPolicyReport, dossier_version: '1.0.0', stages: [] }));
-    record.sections.data_retention_policy.evidence = [disguisedDossier];
-    assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /policy child JSON report is required/);
+    record.sections.data_retention_policy.evidence = [good, disguisedDossier];
+    const disguisedBesideGood = validateApprovedRecord(record).categoryBlockers.data_retention_policy || [];
+    assert.ok(disguisedBesideGood.includes('A referenced data retention policy report is invalid or failed'));
 
+    record.sections.data_retention_policy.evidence = [disguisedDossier];
+    const disguisedOnly = validateApprovedRecord(record).categoryBlockers.data_retention_policy || [];
+    assert.ok(disguisedOnly.includes('A successful data retention policy child JSON report is required'));
+    assert.ok(disguisedOnly.includes('A referenced data retention policy report is invalid or failed'));
+
+    // Non-candidate JSON report beside valid report
     fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
+    record.sections.data_retention_policy.evidence = [good, bad];
+    const nonCandidateBesideGood = validateApprovedRecord(record).categoryBlockers.data_retention_policy || [];
+    assert.ok(nonCandidateBesideGood.includes('A referenced data retention policy report is invalid or failed'));
     record.sections.data_retention_policy.evidence = [path.join(dir, '*.json')];
     assert.match((validateApprovedRecord(record).categoryBlockers.data_retention_policy || []).join(' '), /invalid or failed/);
 
@@ -4243,13 +4273,23 @@ test('GraphQL introspection approval rejects custom-path failures and mixed wild
     assert.ok(malformedBlockers.includes('A referenced GraphQL introspection report is invalid or failed'));
     assert.ok(!malformedBlockers.some((b) => b.includes(dir) || b.includes('malformed.json')));
 
-    // Disguised dossier rejected
+    // Disguised dossier or non-candidate rejected beside valid live report and when standalone
     const disguisedDossier = path.join(dir, 'disguised-dossier.json');
     fs.writeFileSync(disguisedDossier, JSON.stringify({ ...validGraphqlIntrospectionReport, dossier_version: '1.0.0', stages: [] }));
-    record.sections.graphql_introspection.evidence = [disguisedDossier];
-    assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /probe child JSON report is required/);
+    record.sections.graphql_introspection.evidence = [good, disguisedDossier];
+    const disguisedBesideGood = validateApprovedRecord(record).categoryBlockers.graphql_introspection || [];
+    assert.ok(disguisedBesideGood.includes('A referenced GraphQL introspection report is invalid or failed'));
 
+    record.sections.graphql_introspection.evidence = [disguisedDossier];
+    const disguisedOnly = validateApprovedRecord(record).categoryBlockers.graphql_introspection || [];
+    assert.ok(disguisedOnly.includes('A successful GraphQL introspection probe child JSON report is required'));
+    assert.ok(disguisedOnly.includes('A referenced GraphQL introspection report is invalid or failed'));
+
+    // Non-candidate JSON report beside valid report
     fs.writeFileSync(bad, JSON.stringify({ overall_status: 'PASSED' }));
+    record.sections.graphql_introspection.evidence = [good, bad];
+    const nonCandidateBesideGood = validateApprovedRecord(record).categoryBlockers.graphql_introspection || [];
+    assert.ok(nonCandidateBesideGood.includes('A referenced GraphQL introspection report is invalid or failed'));
     record.sections.graphql_introspection.evidence = [path.join(dir, '*.json')];
     assert.match((validateApprovedRecord(record).categoryBlockers.graphql_introspection || []).join(' '), /invalid or failed/);
 

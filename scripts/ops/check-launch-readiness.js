@@ -2366,6 +2366,38 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
       }
       continue;
     }
+    if (category === 'secret_references') {
+      if (isSecretReferencePolicyCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock and live requirement.
+        continue;
+      }
+      addBlocker(category, 'A referenced secret-reference policy report is invalid or failed');
+      continue;
+    }
+    if (category === 'data_retention_policy') {
+      if (isDataRetentionPolicyCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock and live requirement.
+        continue;
+      }
+      addBlocker(category, 'A referenced data retention policy report is invalid or failed');
+      continue;
+    }
+    if (category === 'graphql_introspection') {
+      if (isGraphqlIntrospectionCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock and live requirement.
+        continue;
+      }
+      addBlocker(category, 'A referenced GraphQL introspection report is invalid or failed');
+      continue;
+    }
+    if (category === 'optional_ai_posture') {
+      if (isNoAiPostureCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock and live requirement.
+        continue;
+      }
+      addBlocker(category, 'A referenced no-AI production posture report is invalid or failed');
+      continue;
+    }
     const status = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : null;
     const overall = typeof parsed.overall_status === 'string' ? parsed.overall_status.toLowerCase() : null;
     if (status === 'failed' || status === 'failure' || status === 'error') {

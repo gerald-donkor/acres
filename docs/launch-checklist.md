@@ -554,6 +554,11 @@ operator child receipt (`execution_mode: "live"`) when approved:
   simulation reports may accompany a live receipt.
 - Unified dossiers (`stages`, `dossier_version`) are explicitly rejected as candidates
   in `isSecretReferencePolicyCandidate`.
+- Prompt 247: In `checkEvidenceFileContents`, `isSecretReferencePolicyCandidate` is now
+  strictly enforced. Any non-candidate JSON file or disguised dossier fails closed with
+  `'A referenced secret-reference policy report is invalid or failed'`, even when referenced
+  beside a valid live receipt. Referencing only a non-candidate produces both the child report
+  requirement and invalid/failed report blockers.
 - Category 4 is enclosed in the narrow safe evidence boundary (`checkEvidenceFile`),
   mapping any missing, malformed, non-object, non-candidate, or throwing file to the
   fixed blocker `'A referenced secret-reference policy report is invalid or failed'` and suppressing
@@ -1117,7 +1122,11 @@ require exact 8 keys (`drill_type`, `errors`, `execution_mode`, `policy_referenc
 `retention_windows`, `scheduled_cleanup_verified`, `status`, `timestamp`) and may accompany
 live evidence, but cannot approve Category 7 alone. The validator checks internal
 structural consistency; it cannot verify legal compliance or active worker cron
-purging in production.
+purging in production. Prompt 247: in `checkEvidenceFileContents`, `isDataRetentionPolicyCandidate`
+is now strictly enforced. Any non-candidate JSON file or disguised dossier fails closed with
+`'A referenced data retention policy report is invalid or failed'`, even when referenced beside
+a valid live receipt. Referencing only a non-candidate produces both the child report requirement
+and invalid/failed report blockers.
 
 The **legal lead**, **compliance lead**, and **operations lead** must provide
 through the approved operator channel the formal legal/regulatory retention
@@ -1409,6 +1418,11 @@ operator child receipt (`execution_mode: "live"`) when approved:
   simulation reports may accompany a live receipt.
 - Unified dossiers (`stages`, `dossier_version`) are explicitly rejected as candidates
   in `isGraphqlIntrospectionCandidate`.
+- Prompt 247: In `checkEvidenceFileContents`, `isGraphqlIntrospectionCandidate` is now
+  strictly enforced. Any non-candidate JSON file or disguised dossier fails closed with
+  `'A referenced GraphQL introspection report is invalid or failed'`, even when referenced
+  beside a valid live receipt. Referencing only a non-candidate produces both the child report
+  requirement and invalid/failed report blockers.
 - Category 9 is enclosed in the narrow safe evidence boundary (`checkEvidenceFile`),
   mapping any missing, malformed, non-object, non-candidate, or throwing file to the
   fixed blocker `'A referenced GraphQL introspection report is invalid or failed'` and suppressing
@@ -1634,7 +1648,12 @@ assertion, `GEMINI_API_KEY` absence assertion for environments and secret
 mounts, unpaid-provider exclusion policy, or
 analytics/dashboard, governed-report, and export-download result was inspected.
 The Category 11 validator checks child-report structure and consistency; even
-a passing child would require independent inspection of its live sources.
+a passing child would require independent inspection of its live sources. Prompt 247:
+in `checkEvidenceFileContents`, `isNoAiPostureCandidate` is now strictly enforced.
+Any non-candidate JSON file or disguised dossier fails closed with
+`'A referenced no-AI production posture report is invalid or failed'`, even when referenced
+beside a valid live receipt. Referencing only a non-candidate produces both the child report
+requirement and invalid/failed report blockers.
 
 The **product and security leads** must provide opaque references and read-only
 access to the selected deployment/release and restricted evidence store; separate

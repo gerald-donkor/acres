@@ -2614,3 +2614,31 @@ Verification and review (2026-10-01):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open; drill rehearsal remains simulation preflight.
+
+## Prompt 247 — enforce policy and posture evidence candidate contracts (2026-10-02)
+
+`scripts/ops/check-launch-readiness.js`:
+- Closes the evidence candidate evaluation gap across the four non-drill policy and posture categories:
+  - `secret_references` (`isSecretReferencePolicyCandidate`)
+  - `data_retention_policy` (`isDataRetentionPolicyCandidate`)
+  - `graphql_introspection` (`isGraphqlIntrospectionCandidate`)
+  - `optional_ai_posture` (`isNoAiPostureCandidate`)
+- In `checkEvidenceFileContents`, each of these categories directly evaluates candidate eligibility:
+  - If candidate check returns true, execution proceeds to approval-time checks with explicit clocks and live requirements.
+  - If candidate check returns false (such as a disguised dossier with `stages` or `dossier_version`, or a non-candidate JSON report), the validator fails closed immediately with the category-specific blocker:
+    - `'A referenced secret-reference policy report is invalid or failed'`
+    - `'A referenced data retention policy report is invalid or failed'`
+    - `'A referenced GraphQL introspection report is invalid or failed'`
+    - `'A referenced no-AI production posture report is invalid or failed'`
+- Guarantees that non-candidate JSON reports or disguised dossiers referenced alongside valid live receipts (`[good, disguisedDossier]`) fail closed instead of bypassing candidate exclusion.
+- When referenced standalone, produces both the child requirement blocker and the invalid/failed report blocker.
+
+Verification and review (2026-10-02):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 607 passed, 0 failed.
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open.

@@ -1492,3 +1492,31 @@ all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cl
 dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
 Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
 Drill rehearsal remains simulation preflight; operator sign-off remains open.
+
+**Prompt 247 Phase 12K enforce policy and posture evidence candidate contracts (2026-10-02):**
+Closed the evidence candidate evaluation gap across the four non-drill policy and posture categories
+in `scripts/ops/check-launch-readiness.js`:
+- `secret_references` (`isSecretReferencePolicyCandidate`)
+- `data_retention_policy` (`isDataRetentionPolicyCandidate`)
+- `graphql_introspection` (`isGraphqlIntrospectionCandidate`)
+- `optional_ai_posture` (`isNoAiPostureCandidate`)
+
+In `checkEvidenceFileContents` (`scripts/ops/check-launch-readiness.js`), each of these four categories
+now explicitly evaluates candidate eligibility, matching the pattern established for `smtp_delivery`:
+- If an evidence file is not a candidate (e.g. non-object, array, disguised dossier with `stages` or
+  `dossier_version`), `checkEvidenceFileContents` immediately fails closed with the category-specific
+  invalid/failed blocker (`'A referenced secret-reference policy report is invalid or failed'`,
+  `'A referenced data retention policy report is invalid or failed'`,
+  `'A referenced GraphQL introspection report is invalid or failed'`, or
+  `'A referenced no-AI production posture report is invalid or failed'`).
+- Referencing a disguised dossier or non-candidate JSON report beside a valid live receipt
+  (`[good, disguisedDossier]`) now strictly fails closed instead of bypassing candidate exclusion.
+- Referencing only a disguised dossier produces both the required child report blocker and the
+  invalid/failed report blocker.
+
+Verification output: `ops:readiness-test` (607/607), `ops:launch-drill-test` (68/68),
+`ops:readiness-schema-test` (8/8), `ops:templates` and `ops:templates-test` (57/57),
+all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly;
+dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
+Operator sign-off remains open.
