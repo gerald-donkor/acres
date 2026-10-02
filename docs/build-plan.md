@@ -1462,3 +1462,33 @@ template failed closed with 0 approved categories, 11 blocked, and 70 blockers. 
 `ops:templates`, `ops:templates-test` (57/57), all 21 ops test suites, lint, typecheck, build, and
 `git diff --check` passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4
 (GHSA-vcvr-r3jv-pc5j). No production traffic was generated or telemetry scraped; operator sign-off remains open.
+
+**Prompt 246 Phase 12K unify launch drill dossier simulation contracts (2026-10-01):**
+Orchestrator-level simulation contracts and readiness recognition are now unified
+across all drill stages and the published dossier. `scripts/ops/assemble-launch-dossier.js`
+now validates `execution_mode: "simulation"` on Stage 3 (`ingress_deployment`), Stage 5
+(`secret_rotation`), and Stage 6 (`capacity_alerting` during dry-run / synthetic preflight,
+requiring `"live"` on target-bound runs). Emitted dossiers now declare root
+`execution_mode: "simulation"` alongside `environment: "drill"`, and record explicit
+`deploymentPreflight: "simulation"` and `rotationPreflight: "simulation"` in baseline
+and summary blocks.
+
+In `scripts/ops/check-launch-readiness.js`:
+- Added `validSecretDossier(report, file)` helper checking `overall_status === 'PASSED'`,
+  verified `secretRotationBaseline`, verified `supplyChainBaseline` (if present), and
+  unbreached summary flags.
+- Added `validDeploymentDossier(report, file)` helper checking `overall_status === 'PASSED'`,
+  verified `deploymentBaseline`, and unbreached summary flags.
+- `checkEvidenceFileContents` for `deployment_and_rollback` and `secrets_management`
+  safely recognizes valid drill dossiers accompanying live operator receipts without
+  generating false-positive blockers, while strictly failing closed on invalid or breached
+  dossiers.
+- Child candidates are excluded from dossier recognition; a dossier alone never satisfies
+  launch readiness for Category 3 or Category 10 without live operator receipts.
+
+Verification output: `ops:launch-drill-test` (68/68), `ops:readiness-test` (607/607),
+`ops:readiness-schema-test` (8/8), `ops:templates` and `ops:templates-test` (57/57),
+all 21 ops test suites, lint, typecheck, build, and `git diff --check` passed cleanly;
+dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
+Drill rehearsal remains simulation preflight; operator sign-off remains open.

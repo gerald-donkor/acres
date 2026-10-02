@@ -953,3 +953,24 @@ unauthenticated assertions; actual cluster capacity, database saturation, and pa
 subject to independent operator inspection. Aligns with threat model mitigations TM-01
 (tamper resistance / fail closed), TM-04 (information disclosure suppression), TM-05 (evidence boundary enforcement),
 and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.
+
+**Prompt 246 launch drill dossier simulation contract unification (2026-10-01):**
+Orchestrator-level simulation preflight classification is now unified across all drill
+stages and the Unified Launch Evidence Dossier published by `scripts/ops/assemble-launch-dossier.js`:
+- Ingress deployment (Stage 3), secret rotation (Stage 5), and synthetic capacity alerting
+  (Stage 6) receipts must strictly declare `execution_mode: "simulation"`, matching Caddy (Stage 3),
+  volume encryption (Stage 4), and disaster recovery (Stage 7). Target-bound live capacity receipts
+  require `execution_mode: "live"`.
+- Emitted dossiers declare root `execution_mode: "simulation"` alongside `environment: "drill"`.
+- Dossier baselines and summaries explicitly record simulation preflight status (`deploymentPreflight: "simulation"`,
+  `rotationPreflight: "simulation"`, `volumePreflight: "simulation"`, `restorePreflight: "simulation"`,
+  `reconciliationPreflight: "simulation"`).
+- `scripts/ops/check-launch-readiness.js` defines `validSecretDossier` and `validDeploymentDossier`
+  to safely recognize valid drill dossiers in Category 3 and Category 10 evidence arrays without
+  false-positive child blockers, while strictly failing closed on breached or failed dossiers.
+- Dossiers are excluded from candidate child evaluation (`isSecretRotationCandidate`,
+  `isDeploymentDrillCandidate`); a dossier alone never satisfies launch readiness without
+  separately inspected live operator receipts. Aligns with threat model mitigations TM-01
+  (tamper resistance / fail closed), TM-04 (information disclosure suppression), TM-05 (evidence
+  boundary enforcement), and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live
+  sign-off remain open.

@@ -12,8 +12,10 @@ const {
   REQUIRED_SECRET_KEYS,
   isSecretRotationCandidate,
   validateSecretRotationReport,
+  validSecretDossier,
   isDeploymentDrillCandidate,
   validateDeploymentDrillReport,
+  validDeploymentDossier,
   DEPLOYMENT_DRAIN_PERIODS,
   isCapacityAlertingCandidate,
   validateCapacityAlertingReport,
@@ -5296,6 +5298,151 @@ test('Category 3 hides private child, parse, path and dossier failure diagnostic
   assertPrivate();
 });
 
+test('validSecretDossier contract and rejection scenarios', () => {
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'secret_rotation', status: 'PASSED' },
+    ],
+    secretRotationBaseline: {
+      status: 'verified',
+      rotationPreflight: 'simulation',
+    },
+    summary: {
+      secretRotation: 'passed',
+      rotationPreflight: 'simulation',
+    },
+  };
+
+  assert.strictEqual(validSecretDossier(validDossier, 'launch-evidence-dossier.json'), true);
+  assert.strictEqual(validSecretDossier(null), false);
+  assert.strictEqual(validSecretDossier([]), false);
+  assert.strictEqual(validSecretDossier('dossier'), false);
+  assert.strictEqual(validSecretDossier(validDossier, 'secret-rotation-evidence.json'), false);
+
+  assert.strictEqual(validSecretDossier({ ...validDossier, overall_status: 'FAILED' }), false);
+  assert.strictEqual(validSecretDossier({ overall_status: 'PASSED' }), false);
+  assert.strictEqual(
+    validSecretDossier({
+      ...validDossier,
+      stages: [{ stage_id: 'secret_rotation', status: 'FAILED' }],
+    }),
+    false
+  );
+  assert.strictEqual(
+    validSecretDossier({
+      ...validDossier,
+      summary: { secretRotation: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validSecretDossier({
+      ...validDossier,
+      summary: { rotationPreflight: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validSecretDossier({
+      ...validDossier,
+      secretRotationBaseline: { status: 'breached' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validSecretDossier({
+      ...validDossier,
+      secretRotationBaseline: undefined,
+    }),
+    false
+  );
+  assert.strictEqual(
+    validSecretDossier({
+      ...validDossier,
+      secretRotationBaseline: {},
+    }),
+    false
+  );
+});
+
+test('secrets_management accepts valid drill dossier beside live operator receipt and rejects standalone/breached dossiers', (t) => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'readiness-secret-dossier-')
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const dossierFile = path.join(dir, 'launch-evidence-dossier.json');
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'secret_rotation', status: 'PASSED' },
+    ],
+    secretRotationBaseline: {
+      status: 'verified',
+      rotationPreflight: 'simulation',
+    },
+    summary: {
+      secretRotation: 'passed',
+      rotationPreflight: 'simulation',
+    },
+  };
+  fs.writeFileSync(dossierFile, JSON.stringify(validDossier));
+
+  // 1. Valid dossier accompanying live receipt passes with zero blockers
+  const record = buildValidApprovedRecord();
+  record.sections.secrets_management.evidence = [
+    secretRotationFixturePath,
+    dossierFile,
+  ];
+  assert.strictEqual(
+    validateApprovedRecord(record).categoryBlockers.secrets_management,
+    undefined
+  );
+
+  // 2. Dossier alone fails because live child operator receipt is required
+  record.sections.secrets_management.evidence = [dossierFile];
+  const aloneBlockers =
+    validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+  assert.ok(
+    aloneBlockers.includes(
+      'A successful secret rotation child JSON report is required'
+    )
+  );
+
+  // 3. Breached / failed dossier beside live evidence produces failure blocker
+  const failedDossier = {
+    ...validDossier,
+    overall_status: 'FAILED',
+    secretRotationBaseline: { status: 'breached' },
+  };
+  fs.writeFileSync(dossierFile, JSON.stringify(failedDossier));
+  record.sections.secrets_management.evidence = [
+    secretRotationFixturePath,
+    dossierFile,
+  ];
+  const breachedBlockers =
+    validateApprovedRecord(record).categoryBlockers.secrets_management || [];
+  assert.ok(
+    breachedBlockers.includes(
+      'A referenced secret rotation report is invalid or failed'
+    )
+  );
+
+  // 4. Disguised dossier cannot be treated as a child candidate
+  const disguised = { ...validSecretRotationReport, dossier_version: '1.0.0', stages: [] };
+  assert.strictEqual(isSecretRotationCandidate({ parsed: disguised }), false);
+});
 
 // Exercise structural and approval paths against the same independently supplied receipts.
 function deploymentReceiptCase(t, report, extra = []) {
@@ -5862,6 +6009,183 @@ test("deployment sparse execution claims cannot hide beside matching evidence", 
       ),
     );
   }
+});
+
+test('validDeploymentDossier contract and rejection scenarios', () => {
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'ingress_deployment', status: 'PASSED' },
+    ],
+    deploymentBaseline: {
+      status: 'verified',
+      deploymentPreflight: 'simulation',
+    },
+    summary: {
+      deployment: 'passed',
+      deploymentPreflight: 'simulation',
+    },
+  };
+
+  assert.strictEqual(validDeploymentDossier(validDossier, 'launch-evidence-dossier.json'), true);
+  assert.strictEqual(validDeploymentDossier(null), false);
+  assert.strictEqual(validDeploymentDossier([]), false);
+  assert.strictEqual(validDeploymentDossier('dossier'), false);
+  assert.strictEqual(validDeploymentDossier(validDossier, 'deployment-drill-evidence.json'), false);
+
+  assert.strictEqual(validDeploymentDossier({ ...validDossier, overall_status: 'FAILED' }), false);
+  assert.strictEqual(validDeploymentDossier({ overall_status: 'PASSED' }), false);
+  assert.strictEqual(
+    validDeploymentDossier({
+      ...validDossier,
+      stages: [{ stage_id: 'ingress_deployment', status: 'FAILED' }],
+    }),
+    false
+  );
+  assert.strictEqual(
+    validDeploymentDossier({
+      ...validDossier,
+      summary: { deployment: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validDeploymentDossier({
+      ...validDossier,
+      summary: { ingressDeployment: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validDeploymentDossier({
+      ...validDossier,
+      summary: { deploymentPreflight: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validDeploymentDossier({
+      ...validDossier,
+      deploymentBaseline: { status: 'breached' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validDeploymentDossier({
+      ...validDossier,
+      deploymentBaseline: undefined,
+    }),
+    false
+  );
+  assert.strictEqual(
+    validDeploymentDossier({
+      ...validDossier,
+      deploymentBaseline: {},
+    }),
+    false
+  );
+});
+
+test('deployment accepts valid drill dossier beside live operator receipt and rejects standalone/breached dossiers', (t) => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'readiness-deployment-dossier-')
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const dossierFile = path.join(dir, 'launch-evidence-dossier.json');
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'ingress_deployment', status: 'PASSED' },
+    ],
+    deploymentBaseline: {
+      status: 'verified',
+      deploymentPreflight: 'simulation',
+    },
+    summary: {
+      deployment: 'passed',
+      deploymentPreflight: 'simulation',
+    },
+  };
+  fs.writeFileSync(dossierFile, JSON.stringify(validDossier));
+
+  // 1. Valid dossier accompanying live receipt passes with zero blockers
+  const record = buildValidApprovedRecord();
+  record.sections.deployment_and_rollback.evidence = [
+    deploymentDrillFixturePath,
+    dossierFile,
+  ];
+  record.sections.deployment_and_rollback.release.live_drill_evidence =
+    deploymentDrillFixturePath;
+  assert.strictEqual(
+    validateApprovedRecord(record).categoryBlockers.deployment_and_rollback,
+    undefined
+  );
+
+  // 2. Dossier alone fails because live child operator receipt bound to release is required
+  record.sections.deployment_and_rollback.evidence = [dossierFile];
+  record.sections.deployment_and_rollback.release.live_drill_evidence = dossierFile;
+  const aloneBlockers =
+    validateApprovedRecord(record).categoryBlockers.deployment_and_rollback || [];
+  assert.ok(
+    aloneBlockers.some((b) =>
+      b.includes('A successful deployment drill child JSON report is required') ||
+      b.includes('A live deployment drill child bound to the approved release is required')
+    )
+  );
+
+  // 3. Breached / failed dossier beside live evidence produces failure blocker
+  const failedDossier = {
+    ...validDossier,
+    overall_status: 'FAILED',
+    deploymentBaseline: { status: 'breached' },
+  };
+  fs.writeFileSync(dossierFile, JSON.stringify(failedDossier));
+  record.sections.deployment_and_rollback.evidence = [
+    deploymentDrillFixturePath,
+    dossierFile,
+  ];
+  record.sections.deployment_and_rollback.release.live_drill_evidence =
+    deploymentDrillFixturePath;
+  const breachedBlockers =
+    validateApprovedRecord(record).categoryBlockers.deployment_and_rollback || [];
+  assert.ok(
+    breachedBlockers.includes(
+      'A referenced deployment drill report is invalid or failed'
+    )
+  );
+
+  // 4. Dossier with status: 'success' but breached overall_status / baseline still produces failure blocker
+  const sneakyDossier = {
+    ...validDossier,
+    overall_status: 'FAILED',
+    status: 'success',
+    deploymentBaseline: { status: 'breached' },
+  };
+  fs.writeFileSync(dossierFile, JSON.stringify(sneakyDossier));
+  record.sections.deployment_and_rollback.evidence = [
+    deploymentDrillFixturePath,
+    dossierFile,
+  ];
+  record.sections.deployment_and_rollback.release.live_drill_evidence =
+    deploymentDrillFixturePath;
+  const sneakyBlockers =
+    validateApprovedRecord(record).categoryBlockers.deployment_and_rollback || [];
+  assert.ok(
+    sneakyBlockers.includes(
+      'A referenced deployment drill report is invalid or failed'
+    )
+  );
 });
 
 const volumeFailure =

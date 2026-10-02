@@ -2576,3 +2576,41 @@ Verification and review (2026-10-01):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open; no production traffic was generated or telemetry scraped.
+
+## Prompt 246 — unify launch drill dossier simulation contracts (2026-10-01)
+
+`scripts/ops/assemble-launch-dossier.js` and `scripts/ops/run-launch-drills.sh`:
+- Enforces `execution_mode: "simulation"` on child receipts across Stage 3 (`ingress_deployment`),
+  Stage 5 (`secret_rotation`), and synthetic Stage 6 (`capacity_alerting`), matching the contracts
+  enforced on Caddy (Stage 3), volume encryption (Stage 4), and disaster recovery (Stage 7).
+- Live target-bound Stage 6 receipts require `execution_mode: "live"`.
+- Root dossier published by `assemble-launch-dossier.js` declares `execution_mode: "simulation"`
+  alongside `environment: "drill"`.
+- Records `deploymentPreflight: "simulation"` on `deploymentBaseline` and `summary`.
+- Records `rotationPreflight: "simulation"` on `secretRotationBaseline` and `summary`.
+- Records `volumePreflight: "simulation"`, `restorePreflight: "simulation"`, and
+  `reconciliationPreflight: "simulation"` on baselines and summaries.
+
+`scripts/ops/check-launch-readiness.js`:
+- Added `validSecretDossier(report, file)` helper validating `overall_status === 'PASSED'`,
+  verified `secretRotationBaseline`, verified `supplyChainBaseline` (if present), and unbreached summary flags.
+- Added `validDeploymentDossier(report, file)` helper validating `overall_status === 'PASSED'`,
+  verified `deploymentBaseline`, and unbreached summary flags.
+- `checkEvidenceFileContents`:
+  - Category 3 (`secrets_management`): accepts `isSecretRotationCandidate` (deferred to approval),
+    supply chain evidence (SBOM, SAST, container security), or `validSecretDossier`; rejects
+    breached/invalid dossiers or unknown reports with `'A referenced secret rotation report is invalid or failed'`.
+  - Category 10 (`deployment_and_rollback`): accepts `isDeploymentDrillCandidate` (deferred to approval),
+    generic release evidence with `status: "success"`, or `validDeploymentDossier`; rejects
+    breached/invalid dossiers or unknown reports with `'A referenced deployment drill report is invalid or failed'`.
+- Both functions exported in `module.exports`.
+
+Verification and review (2026-10-01):
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 607 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open; drill rehearsal remains simulation preflight.

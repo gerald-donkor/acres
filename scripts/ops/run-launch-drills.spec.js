@@ -213,6 +213,7 @@ function stub(key, args) {
     },
     capacity: {
       ...success,
+      execution_mode: "simulation",
       mode: "synthetic",
       durationMs: 0,
       alerts: {
@@ -284,6 +285,7 @@ function stub(key, args) {
   };
   if (key === "capacity" && args.includes("--target-url")) {
     reports.capacity.mode = "live";
+    reports.capacity.execution_mode = "live";
     reports.capacity.targetId = targetId(new URL(val("--target-url")).href);
     reports.capacity.apiTargetId = targetId(
       new URL(val("--api-url") || "http://localhost:3001").origin,
@@ -594,14 +596,61 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
   assert.equal(r.dossier.secretRotationBaseline.status, "verified");
   assert.equal(r.dossier.summary.secretRotationCompliance, "passed");
   assert.equal(r.dossier.targets.mode, "offline");
+  assert.equal(r.dossier.execution_mode, "simulation");
   assert.equal(r.dossier.volumeEncryptionBaseline.status, "verified");
+  assert.equal(r.dossier.volumeEncryptionBaseline.volumePreflight, "simulation");
   assert.equal(r.dossier.summary.volumeEncryptionCompliance, "passed");
+  assert.equal(r.dossier.summary.volumePreflight, "simulation");
   assert.equal(
     r.dossier.deploymentBaseline.caddyRoutingPreflight,
     "simulation",
   );
   assert.equal(
     r.dossier.summary.caddyRoutingPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.deploymentBaseline.deploymentPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.summary.deploymentPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.secretRotationBaseline.rotationPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.summary.rotationPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.disasterRecoveryBaseline.restorePreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.disasterRecoveryBaseline.reconciliationPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.databaseTelemetryBaseline.capacityPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.summary.restorePreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.summary.reconcilePreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.summary.reconciliationPreflight,
+    "simulation",
+  );
+  assert.equal(
+    r.dossier.summary.capacityPreflight,
     "simulation",
   );
   const caddyChild = JSON.parse(
@@ -612,6 +661,14 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
     ),
   );
   assert.equal(caddyChild.execution_mode, "simulation");
+  const deploymentChild = JSON.parse(
+    fs.readFileSync(
+      r.dossier.stages[2].artifacts.find((file) =>
+        file.endsWith("deployment-drill-evidence-receipt.json"),
+      ),
+    ),
+  );
+  assert.equal(deploymentChild.execution_mode, "simulation");
   const volumeChild = JSON.parse(
     fs.readFileSync(
       r.dossier.stages[3].artifacts.find((file) =>
@@ -620,6 +677,22 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
     ),
   );
   assert.equal(volumeChild.execution_mode, "simulation");
+  const rotationChild = JSON.parse(
+    fs.readFileSync(
+      r.dossier.stages[4].artifacts.find((file) =>
+        file.endsWith("secret-rotation-evidence-receipt.json"),
+      ),
+    ),
+  );
+  assert.equal(rotationChild.execution_mode, "simulation");
+  const capacityChild = JSON.parse(
+    fs.readFileSync(
+      r.dossier.stages[5].artifacts.find((file) =>
+        file.endsWith("capacity-alerting-drill-evidence-receipt.json"),
+      ),
+    ),
+  );
+  assert.equal(capacityChild.execution_mode, "simulation");
   assert.deepEqual(
     f.calls().map((c) => c.key),
     Object.values(children),
@@ -701,6 +774,8 @@ for (const scenario of [
   "sbom:oversized",
   "capacity:oversized",
   "deployment:config",
+  "deployment:legacy-mode",
+  "deployment:live-mode",
   "restore:missing",
   "sast:contradictory",
   "sast:summary-private",
@@ -710,6 +785,10 @@ for (const scenario of [
   "volume:null-check",
   "volume:legacy-mode",
   "volume:live-mode",
+  "rotation:legacy-mode",
+  "rotation:live-mode",
+  "capacity:legacy-mode",
+  "capacity:live-mode",
   "capacity:db-threshold",
   "capacity:nested-missing",
   "capacity:nested-alert",
@@ -765,6 +844,15 @@ test("live fixture preserves target/config/HSTS forwarding and rejects wrong tar
   ];
   const good = f.run(args);
   assert.equal(good.status, 0, good.stderr);
+  const goodDossier = JSON.parse(fs.readFileSync(f.output));
+  assert.equal(
+    goodDossier.databaseTelemetryBaseline.capacityPreflight,
+    "live",
+  );
+  assert.equal(
+    goodDossier.summary.capacityPreflight,
+    "live",
+  );
   for (const key of ["deployment", "capacity"])
     assert.ok(
       f

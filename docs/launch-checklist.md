@@ -278,6 +278,13 @@ private evidence is not relabeled. The receipt is a child JSON contract;
 `readiness.schema.json` and assembler baselines are unchanged. Category 3,
 prompt 201 and Phase 12 operator sign-off remain unresolved.
 
+**Prompt 246 update (2026-10-01):** Unified launch evidence dossiers are safely
+recognized in Category 3 evidence arrays via `validSecretDossier` without
+false-positive blockers when accompanying live operator receipts. Dossiers must
+report `overall_status === 'PASSED'`, verified `secretRotationBaseline`, verified
+`supplyChainBaseline` (if present), and unbreached summary compliance flags. A
+dossier alone cannot approve Category 3.
+
 **Prompt 207 Category 3 intake — 2026-09-26T20:41:49Z UTC.** Reviewed
 `f2f0e1b` on `main`. The repository-visible secrets management material is the
 unresolved `infra/launch/readiness.example.json`, rotation drill scripts, and
@@ -1469,6 +1476,11 @@ operator child receipt (`execution_mode: "live"`) when approved:
   - Requires at least one concrete, successful live release-bound deployment drill child report in `evidence` or `release.live_drill_evidence` for approved status;
   - Rejects deployment drill evidence reporting failure (`status !== 'success'`), schema backward compatibility failure (`schema_backward_compatible: false`), rollback procedure verification failure, Caddy routing verification failure, network isolation verification failure, missing security headers or S3 sigv4 verification, untested routes (< 12), invalid migration counts, or invalid graceful drain periods;
   - Rejects Unified Launch Evidence Dossiers reporting `deploymentBaseline.status: "breached"`, `summary.deploymentCompliance: "failed"`, or `summary.rollbackCompliance: "failed"`.
+- **Prompt 246 update (2026-10-01):** Unified launch evidence dossiers are safely
+  recognized in Category 10 evidence arrays via `validDeploymentDossier` without
+  false-positive blockers when accompanying live operator receipts. Dossiers must
+  report `overall_status === 'PASSED'`, verified `deploymentBaseline`, and
+  unbreached summary compliance flags. A dossier alone cannot approve Category 10.
 - **Container health & edge ingress gating (Prompt 226, 2026-09-28):**
   The production Compose template defines an explicit bounded healthcheck for
   `next` (`wget -qO- http://127.0.0.1:3000/ || exit 1`, interval: 30s, timeout: 5s,
@@ -1710,15 +1722,15 @@ telemetry fails Stage 6. Alert rule simulation remains simulation; operator
 verification of alert delivery, live TLS, promotion/rollback, and sign-off is
 separate. A 7/7 drill dossier alone cannot approve production.
 
-The Unified Launch Evidence Dossier aggregates structured baselines from child evidence across all operational dimensions:
+The Unified Launch Evidence Dossier publishes root `execution_mode: "simulation"` alongside `environment: "drill"` and aggregates structured baselines from child evidence across all operational dimensions:
 - `staticIntegrityBaseline` (stage 1): the three fixed checks, their exit codes, and total/passed/failed counts; `summary.staticIntegrityCompliance` is passed only when the complete child evidence is valid and stage 1 passed;
 - `supplyChainBaseline` (stage 2): package inventory count, license compliance verification, license violations, SAST scanned files, findings count, triaged/expired/blocking findings, container security validity, and container security checks count;
-- `deploymentBaseline` (stage 3, preflight/rehearsal only): schema compatibility heuristic, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
-- `volumeEncryptionBaseline` (stage 4): stateful declaration evaluation, required mount counts, and limited local filename-scan preflight;
-- `secretRotationBaseline` (stage 5): verified 7-step simulation rehearsal (session, CSRF, database, Valkey, storage, compromise response, and credential redaction audit);
-- `databaseTelemetryBaseline` (stage 6): exporter health, database ping, connection pool saturation metrics, pool acquisition p95 latency, SQL query execution p95 latency, lock waits, and transaction age;
-- `disasterRecoveryBaseline` (stage 7): restore drill RTO, table parity, migration parity, PostGIS/foreign-key verification, and storage object reconciliation;
-- `summary`: compliance flags across static integrity, supply chain security, supply chain compliance, SAST compliance, container security compliance, ingress/deployment, volume encryption, secret rotation, capacity alerting, disaster recovery, SLO compliance, recovery compliance, alert verification, DoS resilience, database baseline compliance, restore compliance, reconcile compliance, deployment compliance, rollback compliance, secret rotation compliance, volume encryption compliance, and no-AI posture.
+- `deploymentBaseline` (stage 3, preflight/rehearsal only): `deploymentPreflight: "simulation"`, schema compatibility heuristic, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
+- `volumeEncryptionBaseline` (stage 4): `volumePreflight: "simulation"`, stateful declaration evaluation, required mount counts, and limited local filename-scan preflight;
+- `secretRotationBaseline` (stage 5): `rotationPreflight: "simulation"`, verified 7-step simulation rehearsal (session, CSRF, database, Valkey, storage, compromise response, and credential redaction audit);
+- `databaseTelemetryBaseline` (stage 6): `capacityPreflight: "simulation"` (synthetic) or `"live"` (target-bound), exporter health, database ping, connection pool saturation metrics, pool acquisition p95 latency, SQL query execution p95 latency, lock waits, and transaction age;
+- `disasterRecoveryBaseline` (stage 7): `restorePreflight: "simulation"`, `reconciliationPreflight: "simulation"`, restore drill RTO, table parity, migration parity, PostGIS/foreign-key verification, and storage object reconciliation;
+- `summary`: compliance flags across static integrity, supply chain security, supply chain compliance, SAST compliance, container security compliance, ingress/deployment, volume encryption, secret rotation, capacity alerting, disaster recovery, preflight status markers (`deploymentPreflight`, `volumePreflight`, `rotationPreflight`, `capacityPreflight`, `restorePreflight`, `reconciliationPreflight`/`reconcilePreflight`), SLO compliance, recovery compliance, alert verification, DoS resilience, database baseline compliance, restore compliance, reconcile compliance, deployment compliance, rollback compliance, secret rotation compliance, volume encryption compliance, and no-AI posture.
 
 Implementation notes (prompt 233): Bash allocates a private
 `launch-drill-run-<unique-id>/<stage_id>/` tree under `--evidence-dir`. Stage

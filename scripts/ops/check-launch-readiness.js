@@ -701,6 +701,15 @@ const SECRET_ROTATION_CLASSES = [
 
 function isSecretRotationCandidate({ file, parsed } = {}) {
   const name = typeof file === 'string' ? path.basename(file) : '';
+  if (
+    parsed &&
+    (Object.hasOwn(parsed, 'stages') ||
+      Array.isArray(parsed.stages) ||
+      parsed.dossier_version !== undefined ||
+      parsed.secretRotationBaseline !== undefined)
+  ) {
+    return false;
+  }
   if (name.includes('secret-rotation-evidence-') || name.includes('secret-rotation')) return true;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
   return parsed.drill_type === 'zero_downtime_secret_rotation_and_compromise_response' ||
@@ -817,6 +826,53 @@ function validateSecretRotationReport(
   const blockers = [];
   checkPlaceholdersAndSecrets(report, 'secret_rotation_report', blockers);
   return blockers.length === 0;
+}
+
+function validSecretDossier(report, file) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  if (fileName.startsWith('secret-rotation')) return false;
+
+  if (report.overall_status !== 'PASSED') return false;
+  if (
+    !Array.isArray(report.stages) &&
+    report.dossier_version === undefined &&
+    report.secretRotationBaseline === undefined &&
+    report.supplyChainBaseline === undefined
+  ) {
+    return false;
+  }
+  if (Array.isArray(report.stages)) {
+    if (report.stages.some((s) => s && s.status === 'FAILED')) return false;
+  }
+  const summary = report.summary;
+  if (summary && typeof summary === 'object') {
+    if (
+      summary.secretRotation === 'failed' ||
+      summary.rotationPreflight === 'failed' ||
+      summary.supplyChainCompliance === 'failed' ||
+      summary.sastCompliance === 'failed' ||
+      summary.containerSecurityCompliance === 'failed'
+    ) {
+      return false;
+    }
+  }
+  const baseline = report.secretRotationBaseline;
+  const scBaseline = report.supplyChainBaseline;
+  if (baseline === undefined && scBaseline === undefined) {
+    return false;
+  }
+  if (baseline !== undefined) {
+    if (!baseline || typeof baseline !== 'object' || baseline.status !== 'verified') {
+      return false;
+    }
+  }
+  if (scBaseline !== undefined) {
+    if (!scBaseline || typeof scBaseline !== 'object' || scBaseline.status !== 'verified') {
+      return false;
+    }
+  }
+  return true;
 }
 
 const DEPLOYMENT_DRAIN_PERIODS = {
@@ -1031,6 +1087,39 @@ function validateDeploymentDrillReport(
   const blockers = [];
   checkPlaceholdersAndSecrets(report, "deployment_report", blockers);
   return blockers.length === 0;
+}
+
+function validDeploymentDossier(report, file) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  if (fileName.startsWith('deployment-drill')) return false;
+
+  if (report.overall_status !== 'PASSED') return false;
+  if (
+    !Array.isArray(report.stages) &&
+    report.dossier_version === undefined &&
+    report.deploymentBaseline === undefined
+  ) {
+    return false;
+  }
+  if (Array.isArray(report.stages)) {
+    if (report.stages.some((s) => s && s.status === 'FAILED')) return false;
+  }
+  const summary = report.summary;
+  if (summary && typeof summary === 'object') {
+    if (
+      summary.deployment === 'failed' ||
+      summary.ingressDeployment === 'failed' ||
+      summary.deploymentPreflight === 'failed'
+    ) {
+      return false;
+    }
+  }
+  const baseline = report.deploymentBaseline;
+  if (!baseline || typeof baseline !== 'object' || baseline.status !== 'verified') {
+    return false;
+  }
+  return true;
 }
 
 function validCapacityDossier(report) {
@@ -2134,6 +2223,44 @@ function checkEvidenceFile(ref, category, addBlocker, baseDirs) {
   }
 }
 
+function isSastEvidence(parsed, file) {
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  return Boolean(
+    parsed &&
+    typeof parsed === 'object' &&
+    !Array.isArray(parsed) &&
+    (fileName.includes('sast-scan-evidence-') ||
+      fileName.includes('sast-evidence-') ||
+      parsed.drill_type === 'sast_security_scan' ||
+      (Array.isArray(parsed.blockingActiveFindings) && typeof parsed.passed === 'boolean'))
+  );
+}
+
+function isSbomEvidence(parsed, file) {
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  return Boolean(
+    parsed &&
+    typeof parsed === 'object' &&
+    !Array.isArray(parsed) &&
+    (fileName.includes('sbom-inventory-') ||
+      fileName.includes('sbom-evidence-') ||
+      parsed.bomFormat === 'CycloneDX' ||
+      parsed.licenseCompliance !== undefined)
+  );
+}
+
+function isContainerSecurityEvidence(parsed, file) {
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  return Boolean(
+    parsed &&
+    typeof parsed === 'object' &&
+    !Array.isArray(parsed) &&
+    (fileName.includes('container-security-evidence-') ||
+      parsed.drill_type === 'container_security_verification' ||
+      (Array.isArray(parsed.checks) && typeof parsed.valid === 'boolean'))
+  );
+}
+
 function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const matches = expandEvidenceGlob(ref, baseDirs);
@@ -2197,8 +2324,46 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
       }
       continue;
     }
-    if (category === 'secrets_management' && isSecretRotationCandidate({ file, parsed })) {
-      // The approval call below validates children with its explicit evaluation clock.
+    if (category === 'secrets_management') {
+      if (isSecretRotationCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock.
+        continue;
+      }
+      if (
+        isSastEvidence(parsed, file) ||
+        isSbomEvidence(parsed, file) ||
+        isContainerSecurityEvidence(parsed, file)
+      ) {
+        // Supply chain child evidence is validated by the specific checks below.
+      } else if (!validSecretDossier(parsed, file)) {
+        addBlocker(category, 'A referenced secret rotation report is invalid or failed');
+        continue;
+      } else {
+        continue;
+      }
+    }
+    if (category === 'deployment_and_rollback') {
+      if (isDeploymentDrillCandidate({ file, parsed })) {
+        // The approval call below validates children with its explicit evaluation clock.
+        continue;
+      }
+      const isDossier = Boolean(
+        parsed && (
+          parsed.dossier_version !== undefined ||
+          Array.isArray(parsed.stages) ||
+          parsed.deploymentBaseline !== undefined
+        )
+      );
+      if (isDossier) {
+        if (!validDeploymentDossier(parsed, file)) {
+          addBlocker(category, 'A referenced deployment drill report is invalid or failed');
+        }
+        continue;
+      }
+      if (!(parsed && typeof parsed.status === 'string' && parsed.status.toLowerCase() === 'success')) {
+        addBlocker(category, 'A referenced deployment drill report is invalid or failed');
+        continue;
+      }
       continue;
     }
     const status = typeof parsed.status === 'string' ? parsed.status.toLowerCase() : null;
@@ -3590,10 +3755,12 @@ module.exports = {
   validateVolumeEncryptionReport,
   isSecretRotationCandidate,
   validateSecretRotationReport,
+  validSecretDossier,
   SECRET_ROTATION_STEPS,
   SECRET_ROTATION_CLASSES,
   isDeploymentDrillCandidate,
   validateDeploymentDrillReport,
+  validDeploymentDossier,
   DEPLOYMENT_DRAIN_PERIODS,
   isCapacityAlertingCandidate,
   validCapacityDossier,

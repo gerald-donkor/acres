@@ -620,9 +620,11 @@ function assemble(config) {
     capEvidence.summary?.databaseBaselineCompliance === "passed" &&
     capEvidence.databaseTelemetryBaseline?.status === "verified" &&
     (dryRun === "1"
-      ? capEvidence.mode === "synthetic"
+      ? capEvidence.mode === "synthetic" &&
+        capEvidence.execution_mode === "simulation"
       : explicitLiveTargets &&
         capEvidence.mode === "live" &&
+        capEvidence.execution_mode === "live" &&
         capEvidence.targetId === targetId(new URL(targetUrl).href) &&
         capEvidence.apiTargetId === targetId(new URL(apiUrl).origin) &&
         capEvidence.capacity?.mode === "live" &&
@@ -643,7 +645,12 @@ function assemble(config) {
   );
 
   const databaseTelemetryBaseline =
-    capValid && verifiedDatabase ? verifiedDatabase : { status: "breached" };
+    capValid && verifiedDatabase
+      ? {
+          ...verifiedDatabase,
+          capacityPreflight: dryRun === "1" ? "simulation" : "live",
+        }
+      : { status: "breached" };
 
   const alertVerification =
     capValid && capEvidence?.summary?.alertVerification === "passed"
@@ -689,6 +696,8 @@ function assemble(config) {
   if (restorePassed && reconcilePassed) {
     disasterRecoveryBaseline = {
       status: "verified",
+      restorePreflight: "simulation",
+      reconciliationPreflight: "simulation",
       restoreDrill: {
         rtoSeconds: restoreEvidence.duration_seconds,
         rtoTargetSeconds: restoreEvidence.rto_target_seconds,
@@ -784,6 +793,7 @@ function assemble(config) {
   const depPassed = Boolean(
     depStage?.status === "PASSED" &&
     depEvidence &&
+    depEvidence.execution_mode === "simulation" &&
     depEvidence.status === "success" &&
     depEvidence.schema_backward_compatible === true &&
     depEvidence.caddy_routing_verified === true &&
@@ -803,6 +813,7 @@ function assemble(config) {
       schemaBackwardCompatible: depEvidence.schema_backward_compatible,
       caddyRoutingVerified: depEvidence.caddy_routing_verified,
       caddyRoutingPreflight: "simulation",
+      deploymentPreflight: "simulation",
       rollbackProcedureVerified: depEvidence.rollback_procedure_verified,
       networkIsolationVerified: depEvidence.network_isolation_verified,
       migrationCount: depEvidence.migration_count,
@@ -831,6 +842,7 @@ function assemble(config) {
   const secPassed = Boolean(
     secStage?.status === "PASSED" &&
     secEvidence &&
+    secEvidence.execution_mode === "simulation" &&
     secEvidence.status === "success" &&
     Array.isArray(secEvidence.errors) &&
     secEvidence.errors.length === 0 &&
@@ -849,6 +861,7 @@ function assemble(config) {
   if (secPassed) {
     secretRotationBaseline = {
       status: "verified",
+      rotationPreflight: "simulation",
       steps: {
         sessionRollover: secEvidence.steps.session_rollover.status,
         csrfRollover: secEvidence.steps.csrf_rollover.status,
@@ -900,6 +913,7 @@ function assemble(config) {
   if (volPassed) {
     volumeEncryptionBaseline = {
       status: "verified",
+      volumePreflight: "simulation",
       totalRequiredMounts: volEvidence.totalRequiredMounts,
       validMountsCount: volEvidence.validMountsCount,
       keySeparationVerified: volEvidence.keySeparation.verified,
@@ -1013,6 +1027,7 @@ function assemble(config) {
     version,
     timestamp,
     environment,
+    execution_mode: "simulation",
     overall_status: stages.every((s) => s.status === "PASSED")
       ? "PASSED"
       : "FAILED",
@@ -1049,10 +1064,22 @@ function assemble(config) {
       containerSecurityCompliance,
       ingressDeployment: depStage.status === "PASSED" ? "passed" : "failed",
       caddyRoutingPreflight: depStage.status === "PASSED" ? "simulation" : "failed",
+      deploymentPreflight: depStage.status === "PASSED" ? "simulation" : "failed",
       volumeEncryption: stages[3].status === "PASSED" ? "passed" : "failed",
+      volumePreflight: stages[3].status === "PASSED" ? "simulation" : "failed",
       secretRotation: stages[4].status === "PASSED" ? "passed" : "failed",
+      rotationPreflight: stages[4].status === "PASSED" ? "simulation" : "failed",
       capacityAlerting: capStage.status === "PASSED" ? "passed" : "failed",
+      capacityPreflight:
+        capStage.status === "PASSED"
+          ? dryRun === "1"
+            ? "simulation"
+            : "live"
+          : "failed",
       disasterRecovery: stages[6].status === "PASSED" ? "passed" : "failed",
+      restorePreflight: stages[6].status === "PASSED" ? "simulation" : "failed",
+      reconcilePreflight: stages[6].status === "PASSED" ? "simulation" : "failed",
+      reconciliationPreflight: stages[6].status === "PASSED" ? "simulation" : "failed",
       sloCompliance:
         capStage.status === "PASSED"
           ? "capacity_alerts_verified"
