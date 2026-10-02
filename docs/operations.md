@@ -2693,3 +2693,23 @@ Verification and review (2026-10-02):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open.
+
+## Prompt 250 — consolidate readiness evidence boundaries and eliminate legacy dead code (2026-10-02)
+
+`scripts/ops/check-launch-readiness.js`:
+- Unifies evidence boundary checks and removes legacy dead code across all 11 launch checklist categories:
+  - In `checkEvidenceFile`, replaced the hardcoded 11-category list with canonical `REQUIRED_SECTIONS.includes(category)`.
+  - In `checkEvidenceFileContents`, eliminated 524 lines of unreachable dead code (generic status/overall_status checks, failed_stages, generic stage loops, and legacy drill fragments) shadowed by Prompts 235–249's category-specific candidate and dossier validators.
+  - Added an explicit fail-closed fallback for unrecognized checklist categories in `checkEvidenceFileContents`.
+  - Exported `checkEvidenceFile` and `checkEvidenceFileContents` in `module.exports`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with tests asserting canonical `REQUIRED_SECTIONS` evidence boundary alignment and fail-closed rejection of unrecognized categories.
+
+Verification and review (2026-10-02):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 614 passed, 0 failed.
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open.

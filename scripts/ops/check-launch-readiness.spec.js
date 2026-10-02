@@ -43,6 +43,8 @@ const {
   validateReconciliationReport,
   RECONCILIATION_COUNTS,
   validVolumeDossier,
+  checkEvidenceFile,
+  checkEvidenceFileContents,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -7317,5 +7319,38 @@ test('Category 5 accepts valid drill dossiers alongside live operator receipts a
     (validateApprovedRecord(recDisguised).categoryBlockers.slo_and_alerting || []).includes(
       'A referenced capacity and alerting report is invalid or failed'
     )
+  );
+});
+
+test('Evidence validation boundary enforces REQUIRED_SECTIONS canonical coverage and rejects unrecognized categories', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'unrec-cat-test-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const sampleFile = path.join(dir, 'sample-evidence.json');
+  fs.writeFileSync(sampleFile, JSON.stringify({ status: 'success' }));
+
+  // 1. Every REQUIRED_SECTIONS entry is a non-empty string and covered
+  assert.strictEqual(REQUIRED_SECTIONS.length, 11);
+  for (const section of REQUIRED_SECTIONS) {
+    assert.strictEqual(typeof section, 'string');
+    assert.ok(section.length > 0);
+  }
+
+  // 2. checkEvidenceFile passes unrecognized categories into checkEvidenceFileContents which adds fail-closed blocker
+  const blockers = [];
+  const addBlocker = (_cat, msg) => blockers.push(msg);
+  const parsed = checkEvidenceFile(sampleFile, 'unrecognized_custom_category', addBlocker, [dir]);
+  assert.strictEqual(parsed.length, 1);
+  assert.ok(
+    blockers.includes("Unrecognized launch checklist category 'unrecognized_custom_category'")
+  );
+
+  // 3. checkEvidenceFileContents directly rejects unrecognized category
+  const directBlockers = [];
+  const directAddBlocker = (_cat, msg) => directBlockers.push(msg);
+  const directParsed = checkEvidenceFileContents(sampleFile, 'another_unrecognized_cat', directAddBlocker, [dir]);
+  assert.strictEqual(directParsed.length, 1);
+  assert.ok(
+    directBlockers.includes("Unrecognized launch checklist category 'another_unrecognized_cat'")
   );
 });

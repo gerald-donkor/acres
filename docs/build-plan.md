@@ -1566,3 +1566,17 @@ Verification output: `ops:readiness-test` (613/613), `ops:launch-drill-test` (68
 `ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
 audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
 closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
+
+**Prompt 250 Phase 12K consolidate readiness evidence boundaries and eliminate legacy dead code (2026-10-02):**
+Consolidated evidence validation boundary contracts and eliminated over 520 lines of legacy unreachable dead code in `scripts/ops/check-launch-readiness.js`:
+- In `checkEvidenceFile`, replaced duplicate hardcoded array literal with canonical `REQUIRED_SECTIONS.includes(category)`.
+- In `checkEvidenceFileContents`, verified that all 11 checklist categories (`volume_encryption`, `backup_and_disaster_recovery`, `production_domain_tls`, `smtp_delivery`, `slo_and_alerting`, `secrets_management`, `deployment_and_rollback`, `secret_references`, `data_retention_policy`, `graphql_introspection`, and `optional_ai_posture`) cleanly terminate with `continue;`.
+- Removed lines 2543–3067 of dead code (shadowed generic status/overall_status checks, failed_stages, stages iteration, and old drill/dossier check fragments superseded by Prompts 235–249).
+- Added explicit fail-closed rejection for unrecognized checklist categories in `checkEvidenceFileContents`.
+- Exported `checkEvidenceFile` and `checkEvidenceFileContents` in `module.exports`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with unit tests for canonical `REQUIRED_SECTIONS` coverage and fail-closed rejection of unrecognized categories.
+
+Verification output: `ops:readiness-test` (614/614), `ops:launch-drill-test` (68/68), `ops:readiness-schema-test` (8/8),
+`ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
+audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
+closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.

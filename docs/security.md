@@ -1028,3 +1028,16 @@ and Category 3 (`secrets_management` supply chain evidence):
 - Directly reinforces threat model mitigations TM-01 (tamper resistance / fail-closed parsing), TM-04 (information
   disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary enforcement across all categories),
   and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.
+
+**Prompt 250 readiness evidence boundaries consolidation and legacy dead code elimination (2026-10-02):**
+Unified evidence validation boundary contracts and eliminated over 520 lines of legacy dead code in
+`scripts/ops/check-launch-readiness.js`:
+- In `checkEvidenceFile`, replaced the duplicate hardcoded 11-category list with canonical `REQUIRED_SECTIONS.includes(category)`.
+- In `checkEvidenceFileContents`, verified that all 11 checklist categories cleanly terminate with `continue;`, and
+  eliminated 524 lines of unreachable dead code (shadowed generic status/overall_status checks, failed_stages, generic stage loops,
+  and legacy drill fragments).
+- Added an explicit fail-closed fallback for unrecognized checklist categories in `checkEvidenceFileContents`.
+- Exported `checkEvidenceFile` and `checkEvidenceFileContents` in `module.exports`.
+- Directly reinforces threat model mitigations TM-01 (tamper resistance / fail-closed parsing), TM-04 (information
+  disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary enforcement across all categories),
+  and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.
