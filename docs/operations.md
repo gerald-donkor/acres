@@ -2670,3 +2670,26 @@ Verification and review (2026-10-02):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open.
+
+## Prompt 249 — unify capacity, deployment, and supply chain contracts (2026-10-02)
+
+`scripts/ops/check-launch-readiness.js`:
+- Unifies dossier recognition, candidate filtering, and supply chain evidence handling across Category 5 (`slo_and_alerting`), Category 10 (`deployment_and_rollback`), and Category 3 (`secrets_management`):
+  - Hardened `validCapacityDossier(report, file)` to accept `file`, reject child report files (`capacity-alerting*`), non-object/array reports, and validate `databaseTelemetryBaseline` with `status: "verified"` (matching `scripts/ops/assemble-launch-dossier.js`).
+  - Added summary checks to `validCapacityDossier` ensuring unbreached flags (`capacityAlerting !== 'failed'`, `capacityPreflight !== 'failed'`, `sloCompliance !== 'failed'`, `sloCompliance !== 'capacity_alerts_failed'`, `capacitySloCompliance !== 'failed'`, `databaseBaselineCompliance !== 'failed'`, `alertVerification !== 'failed'`, `dosResilience !== 'failed'`).
+  - Hardened `isCapacityAlertingCandidate` to exclude dossiers reporting `databaseTelemetryBaseline` with capacity summary flags from child candidacy.
+  - In `checkEvidenceFileContents`:
+    - Category 5 (`slo_and_alerting`) now passes `(parsed, file)` to `validCapacityDossier`.
+    - Category 3 (`secrets_management`) encapsulates supply chain child evidence verification (`validateSupplyChainEvidence`) covering SAST, SBOM, and container security, cleanly terminating with `continue;`.
+    - All eleven categories in `checkEvidenceFileContents` now terminate with `continue;`, eliminating fall-through to dead/unrelated drill checks.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive contract tests validating `validCapacityDossier` acceptance alongside live operator receipts, rejection of failing/disguised dossiers, and child filename rejection.
+
+Verification and review (2026-10-02):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 613 passed, 0 failed.
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open.

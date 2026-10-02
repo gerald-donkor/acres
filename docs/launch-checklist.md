@@ -786,9 +786,11 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 - All referenced child reports must pass strict validation; a malformed, failed,
   or unclassified child blocks approval even beside a valid live receipt. Valid
   simulation reports may accompany a live receipt.
-- Unified launch dossiers (`stages`, `dossier_version`, `capacityAlertingBaseline`) are
+- Unified launch dossiers (`stages`, `dossier_version`, `databaseTelemetryBaseline`) are
   explicitly rejected as candidates in `isCapacityAlertingCandidate`, while legitimate
   dossiers accompanying child evidence in Category 5 evidence arrays are safely recognized
+  by `validCapacityDossier(report, file)` (verifying `databaseTelemetryBaseline.status === 'verified'`,
+  unbreached capacity summary flags, and excluding child-named `capacity-alerting*` files)
   without causing false-positive child blockers.
 - Category 5 is enclosed in the narrow safe evidence boundary (`checkEvidenceFile`),
   mapping any missing, malformed, non-candidate, or throwing file to the fixed blocker

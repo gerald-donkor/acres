@@ -1009,3 +1009,22 @@ Unified drill dossier evaluation, candidate filtering, and safe fall-through sem
 - Directly reinforces threat model mitigations TM-01 (tamper resistance / fail-closed parsing), TM-04 (information
   disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary enforcement across all categories),
   and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.
+
+**Prompt 249 capacity, deployment, and supply chain contract unification (2026-10-02):**
+Completed the readiness evidence unification loop across all 11 launch checklist categories in
+`scripts/ops/check-launch-readiness.js` by addressing the remaining dossier validation, candidate
+exclusion, and evidence handling gaps in Category 5 (`slo_and_alerting`), Category 10 (`deployment_and_rollback`),
+and Category 3 (`secrets_management` supply chain evidence):
+- Hardened `validCapacityDossier(report, file)` to reject child-named files (`capacity-alerting*`), non-objects/arrays,
+  validate `databaseTelemetryBaseline` with `status: 'verified'` (aligning with `scripts/ops/assemble-launch-dossier.js`),
+  and check unbreached summary fields (`capacityAlerting`, `capacityPreflight`, `sloCompliance`, `alertVerification`,
+  `dosResilience`, `databaseBaselineCompliance`).
+- Hardened `isCapacityAlertingCandidate` to exclude dossiers reporting `databaseTelemetryBaseline` and summary flags
+  from child candidacy.
+- Encapsulated SAST, SBOM, and container security child validation in `validateSupplyChainEvidence(parsed, file, addBlocker, category)`
+  within Category 3 (`secrets_management`).
+- Updated `checkEvidenceFileContents` so all 11 categories evaluate candidate child contracts and dossiers with
+  strict fail-closed blockers and clean `continue;` termination, eliminating fall-through to dead/unrelated drill checks.
+- Directly reinforces threat model mitigations TM-01 (tamper resistance / fail-closed parsing), TM-04 (information
+  disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary enforcement across all categories),
+  and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.

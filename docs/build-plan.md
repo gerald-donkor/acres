@@ -1543,3 +1543,26 @@ Verification output: `ops:readiness-test` (611/611), `ops:launch-drill-test` (68
 `ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
 audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
 closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
+
+**Prompt 249 Phase 12K unify capacity, deployment, and supply chain dossier and candidate contracts (2026-10-02):**
+Unified dossier recognition, candidate filtering, and supply chain evidence handling in `scripts/ops/check-launch-readiness.js`
+across Category 5 (`slo_and_alerting`), Category 10 (`deployment_and_rollback`), and Category 3 (`secrets_management`):
+- Hardened `validCapacityDossier(report, file)` to accept `file`, reject child report files (`capacity-alerting*`),
+  non-object/array reports, evaluate `databaseTelemetryBaseline` with `status: "verified"` (aligning with
+  `scripts/ops/assemble-launch-dossier.js`), and check unbreached summary fields (`capacityAlerting`, `capacityPreflight`,
+  `sloCompliance`, `alertVerification`, `dosResilience`, `databaseBaselineCompliance`).
+- In `isCapacityAlertingCandidate`, excluded dossiers with `databaseTelemetryBaseline` and summary flags from child candidacy.
+- In `checkEvidenceFileContents`:
+  - Category 5 (`slo_and_alerting`) now passes `(parsed, file)` to `validCapacityDossier`.
+  - Category 3 (`secrets_management`) encapsulates supply chain child evidence verification (`validateSupplyChainEvidence`)
+    covering SAST, SBOM, and container security, and cleanly terminates with `continue;`, eliminating fall-through to
+    unrelated drill checks.
+  - All eleven categories in `checkEvidenceFileContents` now cleanly terminate with `continue;`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive contract tests for `validCapacityDossier`
+  and Category 5 integration tests validating dossier acceptance alongside live receipts and rejection of failing/disguised
+  dossiers.
+
+Verification output: `ops:readiness-test` (613/613), `ops:launch-drill-test` (68/68), `ops:readiness-schema-test` (8/8),
+`ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
+audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
+closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.

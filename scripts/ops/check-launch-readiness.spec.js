@@ -19,6 +19,7 @@ const {
   DEPLOYMENT_DRAIN_PERIODS,
   isCapacityAlertingCandidate,
   validateCapacityAlertingReport,
+  validCapacityDossier,
   parseCapacityAlertingTimestamp,
   isCaddyRoutingCandidate,
   parseCaddyRoutingTimestamp,
@@ -7147,6 +7148,174 @@ test('Categories 1, 6, and 8 accept valid drill dossiers alongside live operator
   assert.ok(
     (validateApprovedRecord(rec8Fail).categoryBlockers.volume_encryption || []).includes(
       'A referenced volume encryption report is invalid or failed'
+    )
+  );
+});
+
+test('validCapacityDossier contract and rejection scenarios', () => {
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'capacity_alerting', status: 'PASSED' },
+    ],
+    databaseTelemetryBaseline: {
+      status: 'verified',
+    },
+    summary: {
+      capacityAlerting: 'passed',
+      capacityPreflight: 'simulation',
+      sloCompliance: 'capacity_alerts_verified',
+      alertVerification: 'passed',
+      dosResilience: 'passed',
+      databaseBaselineCompliance: 'passed',
+    },
+  };
+
+  assert.strictEqual(validCapacityDossier(validDossier, 'launch-evidence-dossier.json'), true);
+  assert.strictEqual(validCapacityDossier(null), false);
+  assert.strictEqual(validCapacityDossier([]), false);
+  assert.strictEqual(validCapacityDossier('dossier'), false);
+  assert.strictEqual(validCapacityDossier(validDossier, 'capacity-alerting-drill-evidence.json'), false);
+
+  assert.strictEqual(validCapacityDossier({ ...validDossier, overall_status: 'FAILED' }), false);
+  assert.strictEqual(validCapacityDossier({ overall_status: 'PASSED' }), false);
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      stages: [{ stage_id: 'capacity_alerting', status: 'FAILED' }],
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, capacityAlerting: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, capacityPreflight: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, sloCompliance: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, sloCompliance: 'capacity_alerts_failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, alertVerification: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, dosResilience: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      summary: { ...validDossier.summary, databaseBaselineCompliance: 'failed' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      databaseTelemetryBaseline: { status: 'breached' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validCapacityDossier({
+      ...validDossier,
+      databaseTelemetryBaseline: undefined,
+      stages: undefined,
+    }),
+    false
+  );
+});
+
+test('Category 5 accepts valid drill dossiers alongside live operator receipts and rejects failing/disguised dossiers', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dossier-cat5-test-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const validDossierFile = path.join(dir, 'launch-evidence-dossier.json');
+  const validDossier = {
+    dossier_version: '1.0',
+    execution_mode: 'simulation',
+    overall_status: 'PASSED',
+    total_stages: 7,
+    passed_stages: 7,
+    failed_stages: 0,
+    stages: [
+      { stage_id: 'capacity_alerting', status: 'PASSED' },
+    ],
+    databaseTelemetryBaseline: {
+      status: 'verified',
+    },
+    summary: {
+      capacityAlerting: 'passed',
+      capacityPreflight: 'simulation',
+      sloCompliance: 'capacity_alerts_verified',
+      alertVerification: 'passed',
+      dosResilience: 'passed',
+      databaseBaselineCompliance: 'passed',
+    },
+  };
+  fs.writeFileSync(validDossierFile, JSON.stringify(validDossier));
+
+  const failingDossierFile = path.join(dir, 'launch-evidence-dossier-failing.json');
+  fs.writeFileSync(failingDossierFile, JSON.stringify({
+    ...validDossier,
+    overall_status: 'FAILED',
+    databaseTelemetryBaseline: { status: 'breached' },
+  }));
+
+  const disguisedDossierFile = path.join(dir, 'capacity-alerting-disguised.json');
+  fs.writeFileSync(disguisedDossierFile, JSON.stringify(validDossier));
+
+  // 1. Valid dossier alongside live receipt passes with zero blockers
+  const rec = buildValidApprovedRecord();
+  rec.sections.slo_and_alerting.evidence = [capacityAlertingFixturePath, validDossierFile];
+  assert.strictEqual(validateApprovedRecord(rec).categoryBlockers.slo_and_alerting, undefined);
+
+  // 2. Failing dossier fails closed
+  const recFail = buildValidApprovedRecord();
+  recFail.sections.slo_and_alerting.evidence = [capacityAlertingFixturePath, failingDossierFile];
+  assert.ok(
+    (validateApprovedRecord(recFail).categoryBlockers.slo_and_alerting || []).includes(
+      'A referenced capacity and alerting report is invalid or failed'
+    )
+  );
+
+  // 3. Disguised child-named dossier fails closed
+  const recDisguised = buildValidApprovedRecord();
+  recDisguised.sections.slo_and_alerting.evidence = [capacityAlertingFixturePath, disguisedDossierFile];
+  assert.ok(
+    (validateApprovedRecord(recDisguised).categoryBlockers.slo_and_alerting || []).includes(
+      'A referenced capacity and alerting report is invalid or failed'
     )
   );
 });
