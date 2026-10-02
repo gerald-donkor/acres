@@ -146,7 +146,8 @@ function isEvidenceFileReference(ev) {
 
 function expandEvidenceGlob(ref, baseDirs) {
   const matches = [];
-  for (const baseDir of baseDirs) {
+  const dirs = Array.isArray(baseDirs) && baseDirs.length > 0 ? baseDirs : [process.cwd()];
+  for (const baseDir of dirs) {
     if (!ref.includes('*')) {
       const abs = path.resolve(baseDir, ref);
       let isFile = false;
@@ -2391,7 +2392,8 @@ function validateSupplyChainEvidence(parsed, file, addBlocker, category) {
 
 function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
-  const matches = expandEvidenceGlob(ref, baseDirs);
+  const dirs = Array.isArray(baseDirs) && baseDirs.length > 0 ? baseDirs : [process.cwd()];
+  const matches = expandEvidenceGlob(ref, dirs);
   if (matches.length === 0) {
     addBlocker(category, `Approved evidence references file '${ref}' but no matching file exists on disk`);
     return parsedFiles;
@@ -2502,7 +2504,17 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
         }
         continue;
       }
-      if (!(parsed && typeof parsed.status === 'string' && parsed.status.toLowerCase() === 'success')) {
+      if (
+        !parsed ||
+        typeof parsed.status !== 'string' ||
+        parsed.status.toLowerCase() !== 'success' ||
+        (parsed.overall_status &&
+          String(parsed.overall_status).toLowerCase() !== 'passed' &&
+          String(parsed.overall_status).toLowerCase() !== 'success') ||
+        parsed.success === false ||
+        parsed.error !== undefined ||
+        (Array.isArray(parsed.errors) ? parsed.errors.length > 0 : Boolean(parsed.errors))
+      ) {
         addBlocker(category, 'A referenced deployment drill report is invalid or failed');
         continue;
       }
@@ -3408,6 +3420,7 @@ module.exports = {
   isVolumeEncryptionCandidate,
   validateVolumeEncryptionReport,
   validVolumeDossier,
+  validVolumeReference,
   isSecretRotationCandidate,
   validateSecretRotationReport,
   validSecretDossier,
@@ -3416,6 +3429,8 @@ module.exports = {
   isDeploymentDrillCandidate,
   validateDeploymentDrillReport,
   validDeploymentDossier,
+  validDeploymentRelease,
+  parseDeploymentDrillTimestamp,
   DEPLOYMENT_DRAIN_PERIODS,
   isCapacityAlertingCandidate,
   validCapacityDossier,
@@ -3426,6 +3441,7 @@ module.exports = {
   validateCaddyRoutingReport,
   validCaddyDossier,
   validCaddyStaticEvidence,
+  validDomainTlsReference,
   isSmtpDeliveryCandidate,
   validSmtpReference,
   validateSmtpDeliveryReport,
@@ -3441,6 +3457,7 @@ module.exports = {
   isRestoreCandidate,
   validateRestoreReport,
   validRecoveryDossier,
+  validRecoveryReference,
   isReconciliationCandidate,
   validateReconciliationReport,
   RECONCILIATION_COUNTS,

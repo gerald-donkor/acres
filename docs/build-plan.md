@@ -1594,3 +1594,19 @@ Verification output: `ops:readiness-test` (617/617), `ops:launch-drill-test` (68
 `ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
 audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
 closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
+
+**Prompt 252 Phase 12K unify deployment evidence contracts and export validation helpers (2026-10-02):**
+Unified deployment release provenance evidence evaluation, defaulted base directory resolution, exported validation helpers, and added dedicated contract tests in `scripts/ops/check-launch-readiness.js`:
+- In `expandEvidenceGlob` and `checkEvidenceFileContents`, defaulted `baseDirs` to `[process.cwd()]`, ensuring robust standalone execution and testability without requiring explicit directory context.
+- Hardened Category 10 (`deployment_and_rollback`) evidence evaluation in `checkEvidenceFileContents`: candidate child drills defer to approval validation, recognized launch dossiers are validated via `validDeploymentDossier`, and local JSON release provenance receipts are strictly validated (requiring string `status === 'success'`, non-failing `overall_status`, `success !== false`, and zero errors across array and singular error fields), failing closed with `'A referenced deployment drill report is invalid or failed'` if any failure condition is present.
+- Exported core validation helpers in `module.exports`: `validDeploymentRelease`, `parseDeploymentDrillTimestamp`, `validRecoveryReference`, `validVolumeReference`, and `validDomainTlsReference`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive contract and unit test suites:
+  - `validDeploymentRelease`: validates passing releases with 40-char hex commit SHA and distinct pinned digests, and tests rejection of malformed commits, missing/malformed current/previous objects, identical current/previous releases, identical client/server roles, unpinned images, and extra keys when `exact: true`.
+  - `parseDeploymentDrillTimestamp`: tests parsing of basic compact UTC timestamps and ISO 8601 UTC timestamps (with and without millis), and rejection of invalid formats, non-strings, and non-UTC dates.
+  - Reference helpers (`validRecoveryReference`, `validVolumeReference`, `validDomainTlsReference`): tests acceptance of clean opaque string references, and rejection of empty/whitespace strings, newlines, control characters, and placeholders (`change-me`, `__REQUIRED_*__`, `<REQUIRED_*>`).
+  - Category 10 evidence discrimination: tests rejection of non-candidates with failed status, truthy errors, or singular error fields, and verifies fail-closed rejection when a failing non-candidate accompanies a live child receipt.
+
+Verification output: `ops:readiness-test` (621/621), `ops:launch-drill-test` (68/68), `ops:readiness-schema-test` (8/8),
+`ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
+audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
+closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.

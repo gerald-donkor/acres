@@ -1513,6 +1513,14 @@ operator child receipt (`execution_mode: "live"`) when approved:
   false-positive blockers when accompanying live operator receipts. Dossiers must
   report `overall_status === 'PASSED'`, verified `deploymentBaseline`, and
   unbreached summary compliance flags. A dossier alone cannot approve Category 10.
+- **Prompt 252 update (2026-10-02):** Hardened release provenance evidence validation
+  in Category 10 (`checkEvidenceFileContents` in `scripts/ops/check-launch-readiness.js`):
+  local JSON files referenced in `client_provenance_evidence`, `server_provenance_evidence`,
+  or `live_drill_evidence` must report string `status: 'success'`, non-failing `overall_status`,
+  `success !== false`, and zero errors (array or singular `error`), failing closed with
+  `'A referenced deployment drill report is invalid or failed'` if any failure condition is present.
+  Exported validation helpers `validDeploymentRelease`, `parseDeploymentDrillTimestamp`,
+  `validRecoveryReference`, `validVolumeReference`, and `validDomainTlsReference` in `module.exports`.
 - **Container health & edge ingress gating (Prompt 226, 2026-09-28):**
   The production Compose template defines an explicit bounded healthcheck for
   `next` (`wget -qO- http://127.0.0.1:3000/ || exit 1`, interval: 30s, timeout: 5s,

@@ -16,6 +16,8 @@ const {
   isDeploymentDrillCandidate,
   validateDeploymentDrillReport,
   validDeploymentDossier,
+  validDeploymentRelease,
+  parseDeploymentDrillTimestamp,
   DEPLOYMENT_DRAIN_PERIODS,
   isCapacityAlertingCandidate,
   validateCapacityAlertingReport,
@@ -25,6 +27,7 @@ const {
   parseCaddyRoutingTimestamp,
   validateCaddyRoutingReport,
   validCaddyDossier,
+  validDomainTlsReference,
   isSmtpDeliveryCandidate,
   validateSmtpDeliveryReport,
   isSecretReferencePolicyCandidate,
@@ -39,10 +42,12 @@ const {
   isRestoreCandidate,
   validateRestoreReport,
   validRecoveryDossier,
+  validRecoveryReference,
   isReconciliationCandidate,
   validateReconciliationReport,
   RECONCILIATION_COUNTS,
   validVolumeDossier,
+  validVolumeReference,
   validCaddyStaticEvidence,
   isSastEvidence,
   isSbomEvidence,
@@ -7562,4 +7567,260 @@ test('validateSupplyChainEvidence contract and rejection scenarios', () => {
     category
   );
   assert.ok(containerFailedCheckBlockers.some((b) => b.includes('reports 1 failed container security check(s): [acres/server] read-only-rootfs')));
+});
+
+test('validDeploymentRelease contract and rejection scenarios', () => {
+  const validRel = {
+    reviewed_source_commit: 'a'.repeat(40),
+    current: {
+      client_image: 'ghcr.io/acres/client@sha256:' + 'b'.repeat(64),
+      server_image: 'ghcr.io/acres/server@sha256:' + 'c'.repeat(64),
+    },
+    previous: {
+      client_image: 'ghcr.io/acres/client@sha256:' + 'd'.repeat(64),
+      server_image: 'ghcr.io/acres/server@sha256:' + 'e'.repeat(64),
+    },
+  };
+
+  assert.strictEqual(validDeploymentRelease(validRel), true);
+  assert.strictEqual(validDeploymentRelease(validRel, true), true);
+
+  // Exact keys checking
+  assert.strictEqual(validDeploymentRelease({ ...validRel, extra: 'bad' }, true), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, extra: 'bad' }, false), true);
+
+  // Null, undefined, non-objects, arrays
+  assert.strictEqual(validDeploymentRelease(null), false);
+  assert.strictEqual(validDeploymentRelease(undefined), false);
+  assert.strictEqual(validDeploymentRelease([]), false);
+  assert.strictEqual(validDeploymentRelease('not-an-object'), false);
+
+  // Commit SHA validation
+  assert.strictEqual(validDeploymentRelease({ ...validRel, reviewed_source_commit: '' }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, reviewed_source_commit: 'not-hex' }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, reviewed_source_commit: 'a'.repeat(39) }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, reviewed_source_commit: 'a'.repeat(41) }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, reviewed_source_commit: 'g'.repeat(40) }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, reviewed_source_commit: null }), false);
+
+  // Current/previous presence and structure
+  assert.strictEqual(validDeploymentRelease({ ...validRel, current: null }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, previous: null }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, current: {} }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, current: { client_image: validRel.current.client_image } }), false);
+  assert.strictEqual(validDeploymentRelease({ ...validRel, current: { ...validRel.current, extra: true } }), false);
+
+  // Unpinned or invalid image references
+  assert.strictEqual(
+    validDeploymentRelease({
+      ...validRel,
+      current: { ...validRel.current, client_image: 'acres/client:latest' },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validDeploymentRelease({
+      ...validRel,
+      current: { ...validRel.current, server_image: 'not an image ref' },
+    }),
+    false
+  );
+
+  // Identical client and server within the same pair
+  assert.strictEqual(
+    validDeploymentRelease({
+      ...validRel,
+      current: { client_image: validRel.current.client_image, server_image: validRel.current.client_image },
+    }),
+    false
+  );
+  assert.strictEqual(
+    validDeploymentRelease({
+      ...validRel,
+      previous: { client_image: validRel.previous.client_image, server_image: validRel.previous.client_image },
+    }),
+    false
+  );
+
+  // Identical current and previous image pairs (no change between releases)
+  assert.strictEqual(
+    validDeploymentRelease({
+      ...validRel,
+      previous: { ...validRel.current },
+    }),
+    false
+  );
+});
+
+test('parseDeploymentDrillTimestamp format and validation scenarios', () => {
+  const basic = parseDeploymentDrillTimestamp('20260925T120000Z');
+  assert.ok(basic instanceof Date);
+  assert.strictEqual(basic.toISOString(), '2026-09-25T12:00:00.000Z');
+
+  const iso = parseDeploymentDrillTimestamp('2026-09-25T12:00:00Z');
+  assert.ok(iso instanceof Date);
+  assert.strictEqual(iso.toISOString(), '2026-09-25T12:00:00.000Z');
+
+  const isoMillis = parseDeploymentDrillTimestamp('2026-09-25T12:00:00.123Z');
+  assert.ok(isoMillis instanceof Date);
+  assert.strictEqual(isoMillis.toISOString(), '2026-09-25T12:00:00.123Z');
+
+  // Rejections
+  assert.strictEqual(parseDeploymentDrillTimestamp(null), null);
+  assert.strictEqual(parseDeploymentDrillTimestamp(undefined), null);
+  assert.strictEqual(parseDeploymentDrillTimestamp(12345), null);
+  assert.strictEqual(parseDeploymentDrillTimestamp(''), null);
+  assert.strictEqual(parseDeploymentDrillTimestamp('2026-09-25'), null);
+  assert.strictEqual(parseDeploymentDrillTimestamp('2026-09-25 12:00:00'), null);
+  assert.strictEqual(parseDeploymentDrillTimestamp('2026-09-25T12:00:00+02:00'), null);
+  assert.strictEqual(parseDeploymentDrillTimestamp('not-a-timestamp'), null);
+});
+
+test('reference validation helpers (validRecoveryReference, validVolumeReference, validDomainTlsReference)', () => {
+  const helpers = [
+    { name: 'validRecoveryReference', fn: validRecoveryReference },
+    { name: 'validVolumeReference', fn: validVolumeReference },
+    { name: 'validDomainTlsReference', fn: validDomainTlsReference },
+  ];
+
+  for (const { name, fn } of helpers) {
+    // Valid references
+    assert.strictEqual(fn('ref-prod-2026-09'), true, `${name} accepts clean string`);
+    assert.strictEqual(fn('vault:k8s/acres/prod'), true, `${name} accepts colon path`);
+    assert.strictEqual(fn('PR-12345'), true, `${name} accepts alphanumeric`);
+
+    // Invalid references
+    assert.strictEqual(fn(''), false, `${name} rejects empty string`);
+    assert.strictEqual(fn('   '), false, `${name} rejects whitespace-only string`);
+    assert.strictEqual(fn(' leading-space'), false, `${name} rejects leading space`);
+    assert.strictEqual(fn('trailing-space '), false, `${name} rejects trailing space`);
+    assert.strictEqual(fn('line1\nline2'), false, `${name} rejects newline`);
+    assert.strictEqual(fn('line1\rline2'), false, `${name} rejects carriage return`);
+    assert.strictEqual(fn('change-me'), false, `${name} rejects change-me placeholder`);
+    assert.strictEqual(fn('__REQUIRED_REF__'), false, `${name} rejects __REQUIRED_ placeholder`);
+    assert.strictEqual(fn('<REQUIRED_REF>'), false, `${name} rejects <REQUIRED_ placeholder`);
+    assert.strictEqual(fn(null), false, `${name} rejects null`);
+    assert.strictEqual(fn(undefined), false, `${name} rejects undefined`);
+    assert.strictEqual(fn(12345), false, `${name} rejects number`);
+    assert.strictEqual(fn({}), false, `${name} rejects object`);
+  }
+});
+
+test('Category 10 candidate and non-candidate discrimination in checkEvidenceFileContents', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dep-cat-test-'));
+  try {
+    const liveChild = path.join(dir, 'deployment-drill-evidence-live.json');
+    fs.writeFileSync(
+      liveChild,
+      JSON.stringify({
+        drill_type: 'deployment_and_rollback_drill',
+        execution_mode: 'live',
+        timestamp: '2026-09-25T12:00:00Z',
+        status: 'success',
+        schema_backward_compatible: true,
+        rollback_procedure_verified: true,
+        caddy_routing_verified: true,
+        caddy_routes_tested: 12,
+        security_headers_verified: true,
+        s3_sigv4_host_preserved: true,
+        migrations_verified: true,
+        migration_count: 5,
+        operational_templates_verified: true,
+        secrets_scan_verified: true,
+        readiness_probes_verified: true,
+        network_isolation_verified: true,
+        graceful_drain_periods_verified: {
+          caddy: '30s',
+          next: '30s',
+          api: '45s',
+          worker: '60s',
+        },
+        release: {
+          reviewed_source_commit: 'a'.repeat(40),
+          current: {
+            client_image: 'ghcr.io/acres/client@sha256:' + 'b'.repeat(64),
+            server_image: 'ghcr.io/acres/server@sha256:' + 'c'.repeat(64),
+          },
+          previous: {
+            client_image: 'ghcr.io/acres/client@sha256:' + 'd'.repeat(64),
+            server_image: 'ghcr.io/acres/server@sha256:' + 'e'.repeat(64),
+          },
+        },
+      })
+    );
+
+    // 1. Non-candidate non-dossier file with failed status
+    const failedNonCandidate = path.join(dir, 'failed-notes.json');
+    fs.writeFileSync(
+      failedNonCandidate,
+      JSON.stringify({
+        status: 'failed',
+        notes: 'failed deploy notes',
+      })
+    );
+
+    const directBlockers = [];
+    const parsedFiles = checkEvidenceFileContents(
+      failedNonCandidate,
+      'deployment_and_rollback',
+      (_c, m) => directBlockers.push(m)
+    );
+    assert.strictEqual(parsedFiles.length, 1);
+    assert.ok(
+      directBlockers.includes('A referenced deployment drill report is invalid or failed'),
+      `Expected failure blocker for non-candidate with status: failed, got: ${JSON.stringify(directBlockers)}`
+    );
+
+    // 2. Non-candidate non-dossier file with success: false or errors
+    const errorNonCandidate = path.join(dir, 'error-notes.json');
+    fs.writeFileSync(
+      errorNonCandidate,
+      JSON.stringify({
+        status: 'success',
+        errors: ['unauthorized registry push'],
+      })
+    );
+    const errorBlockers = [];
+    checkEvidenceFileContents(
+      errorNonCandidate,
+      'deployment_and_rollback',
+      (_c, m) => errorBlockers.push(m)
+    );
+    assert.ok(
+      errorBlockers.includes('A referenced deployment drill report is invalid or failed'),
+      `Expected failure blocker for non-candidate with errors, got: ${JSON.stringify(errorBlockers)}`
+    );
+
+    const singularErrorFile = path.join(dir, 'singular-error-notes.json');
+    fs.writeFileSync(
+      singularErrorFile,
+      JSON.stringify({
+        status: 'success',
+        error: 'internal failure',
+      })
+    );
+    const singularBlockers = [];
+    checkEvidenceFileContents(
+      singularErrorFile,
+      'deployment_and_rollback',
+      (_c, m) => singularBlockers.push(m)
+    );
+    assert.ok(
+      singularBlockers.includes('A referenced deployment drill report is invalid or failed'),
+      `Expected failure blocker for non-candidate with singular error, got: ${JSON.stringify(singularBlockers)}`
+    );
+
+    // 3. Referencing [liveChild, failedNonCandidate] in readiness record fails closed
+    const record = buildValidApprovedRecord();
+    record.sections.deployment_and_rollback.evidence = [liveChild, failedNonCandidate];
+    record.sections.deployment_and_rollback.release.live_drill_evidence = liveChild;
+    const result = validateApprovedRecord(record);
+    const blockers = result.categoryBlockers.deployment_and_rollback || [];
+    assert.ok(
+      blockers.includes('A referenced deployment drill report is invalid or failed'),
+      `Expected readiness validation to fail closed when failing non-candidate is in evidence, got: ${JSON.stringify(blockers)}`
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
