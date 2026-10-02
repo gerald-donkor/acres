@@ -1041,3 +1041,10 @@ Unified evidence validation boundary contracts and eliminated over 520 lines of 
 - Directly reinforces threat model mitigations TM-01 (tamper resistance / fail-closed parsing), TM-04 (information
   disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary enforcement across all categories),
   and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.
+
+**Prompt 251 supply chain and static evidence contract export and verification (2026-10-02):**
+Exported and tested internal evidence validation contracts in `scripts/ops/check-launch-readiness.js`:
+- Relocated `validCaddyDossier` and `validCaddyStaticEvidence` to the Caddy routing section, restoring architectural locality.
+- Exported `validCaddyStaticEvidence`, `isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`, and `validateSupplyChainEvidence` in `module.exports`.
+- Added contract tests in `scripts/ops/check-launch-readiness.spec.js` covering `validCaddyStaticEvidence` (static integrity structure, status, and stages), supply chain discrimination helpers (`isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`), and `validateSupplyChainEvidence` (rejection of non-objects, failed statuses, exit codes, component failures, and acceptance of valid supply chain reports).
+- Directly reinforces threat model mitigations TM-01 (tamper resistance / fail-closed parsing), TM-04 (information disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary enforcement across all categories), and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.

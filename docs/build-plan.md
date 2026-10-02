@@ -1580,3 +1580,17 @@ Verification output: `ops:readiness-test` (614/614), `ops:launch-drill-test` (68
 `ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
 audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
 closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
+
+**Prompt 251 Phase 12K export and test supply chain and static evidence contracts (2026-10-02):**
+Relocated misplaced Caddy routing helpers, exported internal evidence validation helpers, and added dedicated contract tests in `scripts/ops/check-launch-readiness.js`:
+- Relocated `validCaddyDossier` and `validCaddyStaticEvidence` from the disaster recovery section down to the Caddy routing section (directly preceding `isSmtpDeliveryCandidate`), consolidating Caddy helpers together and restoring disaster recovery helper contiguity.
+- Exported `validCaddyStaticEvidence`, `isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`, and `validateSupplyChainEvidence` in `module.exports`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive contract and unit test suites:
+  - `validCaddyStaticEvidence`: validates passing static integrity reports, and rejects missing/null reports, non-objects, non-array stages, failed status, and failed stages.
+  - Supply chain candidate discrimination helpers (`isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`): verifies positive identification of drill types and tool/scan indicators, and negative discrimination against unrelated payloads or missing fields.
+  - `validateSupplyChainEvidence`: tests rejection of non-object/array reports, status/overall_status failures, non-zero exit codes, missing scan components, failed/unhealthy SAST scans, non-compliant SBOM dependencies, and non-compliant container security findings, alongside complete passing supply chain reports.
+
+Verification output: `ops:readiness-test` (617/617), `ops:launch-drill-test` (68/68), `ops:readiness-schema-test` (8/8),
+`ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
+audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
+closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.

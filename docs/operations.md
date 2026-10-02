@@ -2713,3 +2713,23 @@ Verification and review (2026-10-02):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open.
+
+## Prompt 251 — export and test supply chain and static evidence contracts (2026-10-02)
+
+`scripts/ops/check-launch-readiness.js`:
+- Relocates misplaced Caddy routing helpers (`validCaddyDossier` and `validCaddyStaticEvidence`) from the disaster recovery section down to the Caddy routing section, restoring architectural locality and contiguous disaster recovery validation logic.
+- Exports internal evidence helpers `validCaddyStaticEvidence`, `isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`, and `validateSupplyChainEvidence` in `module.exports`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive unit and contract test suites:
+  - `validCaddyStaticEvidence` contract testing: verifies passing static integrity reports (and compliance with `validateStaticEvidence` drill requirements), and rejects missing/null reports, non-objects, non-array stages, failed status, and failed stages.
+  - Supply chain candidate discrimination helpers: tests positive and negative discrimination contracts for `isSastEvidence`, `isSbomEvidence`, and `isContainerSecurityEvidence`.
+  - `validateSupplyChainEvidence` contract testing: tests rejection of non-object/array reports, failed status/overall_status, non-zero summary exitCode, missing scan components, failed/unhealthy SAST findings, non-compliant SBOM packages, and non-compliant container security findings, alongside full acceptance of passing supply chain evidence.
+
+Verification and review (2026-10-02):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 617 passed, 0 failed.
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- All 21 ops test sub-suites passed cleanly; dependency audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j).
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open.

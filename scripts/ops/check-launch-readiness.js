@@ -359,60 +359,6 @@ function validRecoveryDossier(report, file) {
   return true;
 }
 
-function validCaddyDossier(report, file) {
-  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
-  const fileName = typeof file === 'string' ? path.basename(file) : '';
-  if (fileName.startsWith('caddy-routing')) return false;
-
-  if (report.overall_status !== 'PASSED') return false;
-  if (
-    !Array.isArray(report.stages) &&
-    report.dossier_version === undefined &&
-    report.staticIntegrityBaseline === undefined &&
-    report.deploymentBaseline === undefined
-  ) {
-    return false;
-  }
-  if (Array.isArray(report.stages)) {
-    if (report.stages.some((s) => s && s.status === 'FAILED')) return false;
-  }
-  if (report.summary && typeof report.summary === 'object') {
-    if (
-      report.summary.ingressDeployment === 'failed' ||
-      report.summary.caddyRoutingPreflight === 'failed' ||
-      report.summary.staticIntegrity === 'failed' ||
-      report.summary.staticIntegrityCompliance === 'failed'
-    ) {
-      return false;
-    }
-  }
-  if (report.deploymentBaseline && typeof report.deploymentBaseline === 'object') {
-    if (report.deploymentBaseline.caddyRoutingPreflight === 'failed') {
-      return false;
-    }
-  }
-  if (
-    report.staticIntegrityBaseline !== undefined &&
-    report.staticIntegrityBaseline?.status !== 'verified'
-  ) {
-    return false;
-  }
-  return true;
-}
-
-function validCaddyStaticEvidence(report, file) {
-  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
-  const fileName = typeof file === 'string' ? path.basename(file) : '';
-  if (fileName.startsWith('caddy-routing')) return false;
-  if (
-    report.drill_type === 'static_integrity_verification' ||
-    fileName.startsWith('static-integrity-evidence-')
-  ) {
-    return validateStaticEvidence(report).valid === true;
-  }
-  return false;
-}
-
 function validateReconciliationReport(report, now, context = {}) {
   if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
   const mode = report.execution_mode;
@@ -1681,6 +1627,60 @@ function validateCaddyRoutingReport(report, now, approvedDomain, context = {}) {
   } catch {
     return false;
   }
+}
+
+function validCaddyDossier(report, file) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  if (fileName.startsWith('caddy-routing')) return false;
+
+  if (report.overall_status !== 'PASSED') return false;
+  if (
+    !Array.isArray(report.stages) &&
+    report.dossier_version === undefined &&
+    report.staticIntegrityBaseline === undefined &&
+    report.deploymentBaseline === undefined
+  ) {
+    return false;
+  }
+  if (Array.isArray(report.stages)) {
+    if (report.stages.some((s) => s && s.status === 'FAILED')) return false;
+  }
+  if (report.summary && typeof report.summary === 'object') {
+    if (
+      report.summary.ingressDeployment === 'failed' ||
+      report.summary.caddyRoutingPreflight === 'failed' ||
+      report.summary.staticIntegrity === 'failed' ||
+      report.summary.staticIntegrityCompliance === 'failed'
+    ) {
+      return false;
+    }
+  }
+  if (report.deploymentBaseline && typeof report.deploymentBaseline === 'object') {
+    if (report.deploymentBaseline.caddyRoutingPreflight === 'failed') {
+      return false;
+    }
+  }
+  if (
+    report.staticIntegrityBaseline !== undefined &&
+    report.staticIntegrityBaseline?.status !== 'verified'
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function validCaddyStaticEvidence(report, file) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false;
+  const fileName = typeof file === 'string' ? path.basename(file) : '';
+  if (fileName.startsWith('caddy-routing')) return false;
+  if (
+    report.drill_type === 'static_integrity_verification' ||
+    fileName.startsWith('static-integrity-evidence-')
+  ) {
+    return validateStaticEvidence(report).valid === true;
+  }
+  return false;
 }
 
 function isSmtpDeliveryCandidate({ file, parsed } = {}) {
@@ -3425,6 +3425,7 @@ module.exports = {
   parseCaddyRoutingTimestamp,
   validateCaddyRoutingReport,
   validCaddyDossier,
+  validCaddyStaticEvidence,
   isSmtpDeliveryCandidate,
   validSmtpReference,
   validateSmtpDeliveryReport,
@@ -3443,6 +3444,10 @@ module.exports = {
   isReconciliationCandidate,
   validateReconciliationReport,
   RECONCILIATION_COUNTS,
+  isSastEvidence,
+  isSbomEvidence,
+  isContainerSecurityEvidence,
+  validateSupplyChainEvidence,
   checkEvidenceFile,
   checkEvidenceFileContents,
 };

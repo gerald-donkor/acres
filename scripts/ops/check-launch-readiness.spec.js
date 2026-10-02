@@ -43,6 +43,11 @@ const {
   validateReconciliationReport,
   RECONCILIATION_COUNTS,
   validVolumeDossier,
+  validCaddyStaticEvidence,
+  isSastEvidence,
+  isSbomEvidence,
+  isContainerSecurityEvidence,
+  validateSupplyChainEvidence,
   checkEvidenceFile,
   checkEvidenceFileContents,
 } = require('./check-launch-readiness');
@@ -7353,4 +7358,208 @@ test('Evidence validation boundary enforces REQUIRED_SECTIONS canonical coverage
   assert.ok(
     directBlockers.includes("Unrecognized launch checklist category 'another_unrecognized_cat'")
   );
+});
+
+test('validCaddyStaticEvidence contract and rejection scenarios', () => {
+  const validStatic = {
+    drill_type: 'static_integrity_verification',
+    timestamp: new Date().toISOString(),
+    status: 'success',
+    valid: true,
+    totalChecks: 3,
+    passedChecks: 3,
+    failedChecks: 0,
+    checks: [
+      { id: 'production_templates', passed: true, exitCode: 0 },
+      { id: 'docker_runtime', passed: true, exitCode: 0 },
+      { id: 'secret_defaults', passed: true, exitCode: 0 },
+    ],
+  };
+
+  // 1. Accepts valid static report by drill_type or static-integrity filename
+  assert.strictEqual(validCaddyStaticEvidence(validStatic, 'static-integrity-evidence-2026.json'), true);
+  assert.strictEqual(validCaddyStaticEvidence(validStatic, 'custom-static-check.json'), true);
+  assert.strictEqual(validCaddyStaticEvidence(validStatic, 'static-integrity-evidence-test.json'), true);
+
+  // 2. Rejects files starting with caddy-routing
+  assert.strictEqual(validCaddyStaticEvidence(validStatic, 'caddy-routing-evidence.json'), false);
+  assert.strictEqual(validCaddyStaticEvidence(validStatic, 'caddy-routing-test.json'), false);
+
+  // 3. Rejects invalid or failing static reports
+  const failingStatic = { ...validStatic, status: 'failed', valid: false, failedChecks: 1 };
+  assert.strictEqual(validCaddyStaticEvidence(failingStatic, 'static-integrity-evidence-2026.json'), false);
+  assert.strictEqual(validCaddyStaticEvidence({ ...validStatic, checks: [] }, 'static-integrity-evidence-2026.json'), false);
+
+  // 4. Rejects non-objects and unrelated reports
+  assert.strictEqual(validCaddyStaticEvidence(null, 'static-integrity-evidence.json'), false);
+  assert.strictEqual(validCaddyStaticEvidence(undefined, 'static-integrity-evidence.json'), false);
+  assert.strictEqual(validCaddyStaticEvidence([], 'static-integrity-evidence.json'), false);
+  assert.strictEqual(validCaddyStaticEvidence({ drill_type: 'other' }, 'custom.json'), false);
+});
+
+test('Supply chain evidence discrimination helpers (isSastEvidence, isSbomEvidence, isContainerSecurityEvidence)', () => {
+  // SAST discrimination
+  assert.strictEqual(isSastEvidence({ status: 'success' }, 'sast-scan-evidence-2026.json'), true);
+  assert.strictEqual(isSastEvidence({ status: 'success' }, 'sast-evidence-1.json'), true);
+  assert.strictEqual(isSastEvidence({ drill_type: 'sast_security_scan' }, 'custom.json'), true);
+  assert.strictEqual(isSastEvidence({ blockingActiveFindings: [], passed: true }, 'custom.json'), true);
+  assert.strictEqual(isSastEvidence({ status: 'success' }, 'custom.json'), false);
+  assert.strictEqual(isSastEvidence(null, 'sast-scan.json'), false);
+  assert.strictEqual(isSastEvidence([], 'sast-scan.json'), false);
+
+  // SBOM discrimination
+  assert.strictEqual(isSbomEvidence({ status: 'success' }, 'sbom-inventory-2026.json'), true);
+  assert.strictEqual(isSbomEvidence({ status: 'success' }, 'sbom-evidence-1.json'), true);
+  assert.strictEqual(isSbomEvidence({ bomFormat: 'CycloneDX' }, 'custom.json'), true);
+  assert.strictEqual(isSbomEvidence({ licenseCompliance: { compliant: true } }, 'custom.json'), true);
+  assert.strictEqual(isSbomEvidence({ status: 'success' }, 'custom.json'), false);
+  assert.strictEqual(isSbomEvidence(null, 'sbom.json'), false);
+  assert.strictEqual(isSbomEvidence([], 'sbom.json'), false);
+
+  // Container security discrimination
+  assert.strictEqual(isContainerSecurityEvidence({ status: 'success' }, 'container-security-evidence-2026.json'), true);
+  assert.strictEqual(isContainerSecurityEvidence({ drill_type: 'container_security_verification' }, 'custom.json'), true);
+  assert.strictEqual(isContainerSecurityEvidence({ checks: [], valid: true }, 'custom.json'), true);
+  assert.strictEqual(isContainerSecurityEvidence({ status: 'success' }, 'custom.json'), false);
+  assert.strictEqual(isContainerSecurityEvidence(null, 'container.json'), false);
+  assert.strictEqual(isContainerSecurityEvidence([], 'container.json'), false);
+});
+
+test('validateSupplyChainEvidence contract and rejection scenarios', () => {
+  const category = 'secrets_management';
+
+  // 1. Generic drill failure checks across all supply chain reports
+  const failStatuses = ['failed', 'failure', 'error'];
+  for (const st of failStatuses) {
+    const blockers = [];
+    const res = validateSupplyChainEvidence({ status: st }, 'tool.json', (_c, m) => blockers.push(m), category);
+    assert.strictEqual(res, false);
+    assert.ok(blockers.some((b) => b.includes(`reports drill failure (status: "${st}")`)));
+  }
+
+  const overallFailBlockers = [];
+  assert.strictEqual(
+    validateSupplyChainEvidence({ overall_status: 'failed' }, 'tool.json', (_c, m) => overallFailBlockers.push(m), category),
+    false
+  );
+  assert.ok(overallFailBlockers.some((b) => b.includes('reports drill failure (overall_status: "failed")')));
+
+  const successFalseBlockers = [];
+  assert.strictEqual(
+    validateSupplyChainEvidence({ success: false }, 'tool.json', (_c, m) => successFalseBlockers.push(m), category),
+    false
+  );
+  assert.ok(successFalseBlockers.some((b) => b.includes('reports drill failure (success: false)')));
+
+  const exitCodeBlockers = [];
+  assert.strictEqual(
+    validateSupplyChainEvidence({ summary: { exitCode: 1 } }, 'tool.json', (_c, m) => exitCodeBlockers.push(m), category),
+    false
+  );
+  assert.ok(exitCodeBlockers.some((b) => b.includes('reports drill failure (summary.exitCode: 1)')));
+
+  // 2. SAST specific checks
+  const validSast = {
+    drill_type: 'sast_security_scan',
+    status: 'success',
+    passed: true,
+    blockingActiveFindings: [],
+    expiredFindings: [],
+  };
+  const sastPassBlockers = [];
+  assert.strictEqual(
+    validateSupplyChainEvidence(validSast, 'sast-scan-evidence.json', (_c, m) => sastPassBlockers.push(m), category),
+    true
+  );
+  assert.strictEqual(sastPassBlockers.length, 0);
+
+  const sastNonSuccessBlockers = [];
+  validateSupplyChainEvidence({ ...validSast, status: 'warning' }, 'sast-scan-evidence.json', (_c, m) => sastNonSuccessBlockers.push(m), category);
+  assert.ok(sastNonSuccessBlockers.some((b) => b.includes('reports SAST scan verification failure (status: "warning")')));
+
+  const sastPassedFalseBlockers = [];
+  validateSupplyChainEvidence({ ...validSast, passed: false }, 'sast-scan-evidence.json', (_c, m) => sastPassedFalseBlockers.push(m), category);
+  assert.ok(sastPassedFalseBlockers.some((b) => b.includes('reports SAST scan failure (passed: false)')));
+
+  const sastActiveFindingsBlockers = [];
+  validateSupplyChainEvidence({ ...validSast, blockingActiveFindings: [{ id: 'SEC-1' }] }, 'sast-scan-evidence.json', (_c, m) => sastActiveFindingsBlockers.push(m), category);
+  assert.ok(sastActiveFindingsBlockers.some((b) => b.includes('reports 1 active unreviewed SAST blocker finding(s)')));
+
+  const sastExpiredFindingsBlockers = [];
+  validateSupplyChainEvidence({ ...validSast, expiredFindings: [{ id: 'EXP-1' }] }, 'sast-scan-evidence.json', (_c, m) => sastExpiredFindingsBlockers.push(m), category);
+  assert.ok(sastExpiredFindingsBlockers.some((b) => b.includes('reports 1 expired SAST suppression(s) (fail-closed)')));
+
+  // 3. SBOM specific checks
+  const validSbom = {
+    bomFormat: 'CycloneDX',
+    status: 'success',
+    licenseCompliance: {
+      compliant: true,
+      violations: [],
+    },
+    licenseViolations: [],
+  };
+  const sbomPassBlockers = [];
+  assert.strictEqual(
+    validateSupplyChainEvidence(validSbom, 'sbom-inventory.json', (_c, m) => sbomPassBlockers.push(m), category),
+    true
+  );
+  assert.strictEqual(sbomPassBlockers.length, 0);
+
+  const sbomMissingCompBlockers = [];
+  validateSupplyChainEvidence({ bomFormat: 'CycloneDX', status: 'success' }, 'sbom-inventory.json', (_c, m) => sbomMissingCompBlockers.push(m), category);
+  assert.ok(sbomMissingCompBlockers.some((b) => b.includes('missing license compliance verification (licenseCompliance object required)')));
+
+  const sbomNonCompliantBlockers = [];
+  validateSupplyChainEvidence({ ...validSbom, licenseCompliance: { compliant: false } }, 'sbom-inventory.json', (_c, m) => sbomNonCompliantBlockers.push(m), category);
+  assert.ok(sbomNonCompliantBlockers.some((b) => b.includes('reports SBOM license compliance failure (licenseCompliance.compliant: false)')));
+
+  const sbomViolationsBlockers = [];
+  validateSupplyChainEvidence(
+    { ...validSbom, licenseCompliance: { compliant: true, violations: [{ component: 'bad-pkg', license: 'GPL-3.0' }] } },
+    'sbom-inventory.json',
+    (_c, m) => sbomViolationsBlockers.push(m),
+    category
+  );
+  assert.ok(sbomViolationsBlockers.some((b) => b.includes('reports 1 SBOM license compliance violation(s): bad-pkg (GPL-3.0)')));
+
+  const sbomRootViolationsBlockers = [];
+  validateSupplyChainEvidence({ ...validSbom, licenseViolations: ['gpl-tool'] }, 'sbom-inventory.json', (_c, m) => sbomRootViolationsBlockers.push(m), category);
+  assert.ok(sbomRootViolationsBlockers.some((b) => b.includes('reports 1 SBOM license violation(s)')));
+
+  // 4. Container security specific checks
+  const validContainer = {
+    drill_type: 'container_security_verification',
+    status: 'success',
+    valid: true,
+    errors: [],
+    checks: [{ target: 'acres/client', check: 'non-root-user', passed: true }],
+  };
+  const containerPassBlockers = [];
+  assert.strictEqual(
+    validateSupplyChainEvidence(validContainer, 'container-security-evidence.json', (_c, m) => containerPassBlockers.push(m), category),
+    true
+  );
+  assert.strictEqual(containerPassBlockers.length, 0);
+
+  const containerNonSuccessBlockers = [];
+  validateSupplyChainEvidence({ ...validContainer, status: 'warning' }, 'container-security-evidence.json', (_c, m) => containerNonSuccessBlockers.push(m), category);
+  assert.ok(containerNonSuccessBlockers.some((b) => b.includes('reports container security verification failure (status: "warning")')));
+
+  const containerInvalidBlockers = [];
+  validateSupplyChainEvidence({ ...validContainer, valid: false }, 'container-security-evidence.json', (_c, m) => containerInvalidBlockers.push(m), category);
+  assert.ok(containerInvalidBlockers.some((b) => b.includes('reports invalid container security configuration (valid: false)')));
+
+  const containerErrorsBlockers = [];
+  validateSupplyChainEvidence({ ...validContainer, errors: ['privileged container detected'] }, 'container-security-evidence.json', (_c, m) => containerErrorsBlockers.push(m), category);
+  assert.ok(containerErrorsBlockers.some((b) => b.includes('reports container security error(s): privileged container detected')));
+
+  const containerFailedCheckBlockers = [];
+  validateSupplyChainEvidence(
+    { ...validContainer, checks: [{ target: 'acres/server', check: 'read-only-rootfs', passed: false }] },
+    'container-security-evidence.json',
+    (_c, m) => containerFailedCheckBlockers.push(m),
+    category
+  );
+  assert.ok(containerFailedCheckBlockers.some((b) => b.includes('reports 1 failed container security check(s): [acres/server] read-only-rootfs')));
 });
