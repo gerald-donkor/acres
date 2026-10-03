@@ -1708,3 +1708,21 @@ Verification output: `ops:launch-readiness-test` (23/23), `ops:readiness-test` (
 lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit reports the existing upstream advisory on
 Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
 Operator sign-off remains open.
+
+**Prompt 258 Phase 12K modularize and test production template checks (2026-10-03):**
+Modularized the 580-line inline Node.js verification script currently embedded in `scripts/ops/check-production-templates.sh` into a standalone, exported module `scripts/ops/check-production-templates.js`, established comprehensive unit and contract test coverage in `scripts/ops/check-production-templates.spec.js`, wired the test into `npm run ops:templates-test`, and updated template checks and documentation:
+- Created `scripts/ops/check-production-templates.js`:
+  - Extracted and exported discrete template verification functions: `mountDetails`, `assertPostgres18Mount`, `validateRequiredServices`, `validateComposeSecurityAndTopology`, `validateComposeEnvironmentInterpolation`, `validateWorkerAndExporterScrape`, `validateServiceHealthAndSupervision`, `validatePrometheusAlertsAndDashboard`, `validateReadinessTargets`, and `validateDrillScriptIntegrations`.
+  - Implemented high-level `checkProductionTemplates(options, io)` orchestrator resolving repository files relative to `options.cwd`, and CLI entrypoint `main(argv, io)`.
+- Created `scripts/ops/check-production-templates.spec.js`:
+  - Established 37 comprehensive unit and contract tests using Node.js test runner (`node:test`): mount parsing, postgis 18 mount constraints, required services enforcement, security & topology, env interpolation, worker & exporter scrape, health & supervision, Prometheus alerts & dashboard, readiness targets, drill script integration, repository integration, and main CLI entrypoint.
+- Refactored `scripts/ops/check-production-templates.sh`:
+  - Replaced inline heredoc with `node scripts/ops/check-production-templates.js || fail 'production template validation failed'`.
+  - Added `require_file scripts/ops/check-production-templates.js` and `require_file scripts/ops/check-production-templates.spec.js`.
+- Updated `package.json`:
+  - Expanded `"ops:templates-test"` to include `scripts/ops/check-production-templates.spec.js`.
+
+Verification output: `ops:templates-test` (94/94), `ops:templates` (passed), `ops:launch-readiness-test` (23/23), `ops:readiness-test` (649/649),
+`ops:launch-drill-test` (68/68), lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit reports the existing upstream advisory on
+Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
+Operator sign-off remains open.

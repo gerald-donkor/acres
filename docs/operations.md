@@ -2794,3 +2794,52 @@ Verification and review (2026-10-03):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open.
+
+## Prompt 258 — modularize and test production template checks (2026-10-03)
+
+`scripts/ops/check-production-templates.js`:
+- Extracted and modularized the 580-line inline Node.js validation block from `scripts/ops/check-production-templates.sh` into discrete, exported validator functions and orchestrator:
+  - `mountDetails(entry)`: parses string (`ro`/`rw`, modes) and object (`volume`/`bind`) mount definitions into `{ source, target, persistent, writable }`.
+  - `assertPostgres18Mount(composeDocument, filePath)`: enforces that `postgis/postgis:18-*` services mount persistent writable storage at `/var/lib/postgresql` and strictly rejects mounts at `/var/lib/postgresql/data`.
+  - `validateRequiredServices(services)`: validates presence of all 11 required services (`caddy`, `next`, `api`, `worker`, `postgres`, `valkey`, `garage`, `clamav`, `prometheus`, `grafana`, `postgres-exporter`), throwing descriptive errors if any is missing.
+  - `validateComposeSecurityAndTopology(services)`: verifies host port exclusivity (only Caddy publishes host ports), scheduler exclusivity (`api: false`, `worker: true`), encrypted volume placeholder markers (`ENCRYPTED_MOUNT`), absence of `env_file` directives across all services, and Garage-scoped secrets.
+  - `validateComposeEnvironmentInterpolation(composeText, envKeys)`: verifies compose `${VAR}` interpolation placeholders against environment template declarations (allowing bootstrap monitor password) and rejects test role leakage (`ACRES_TEST_PASSWORD`, `bootstrap-roles.sh`).
+  - `validateWorkerAndExporterScrape(services, prom, monitorSql, operationsDoc, caddyfileText)`: verifies private worker metrics on port 3002 (`/health` and `/metrics`), postgres-exporter container profile (`observability`), private network, file password mount (`ACRES_MONITOR_PASSWORD_FILE`), relabel keep rules, and `reconcile-production-monitor.sh` / `docs/operations.md` contracts.
+  - `validateServiceHealthAndSupervision(services)`: enforces `service_healthy` condition on all dependencies of `api`, `worker`, and `grafana`; requires `init: true` and `stop_signal: SIGTERM` for `api`, `worker`, `next`; enforces `restart: unless-stopped` and exact bounded `stop_grace_period` (`caddy: 30s`, `next: 30s`, `api: 45s`, `worker: 60s`).
+  - `validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist)`: validates 11 alert rules in `alerts.yml`, panel queries scoped to corresponding jobs (`acres-api`, `acres-worker`, `acres-postgres`, `prometheus`), absent-data preservation on designated panels, exact duration/request panel units and targets, and matching PromQL and dashboard runbook sections in `docs/launch-checklist.md`.
+  - `validateReadinessTargets(readinessExample, bdrOverride)`: enforces Category 5 SLO targets (99.9% availability, 500ms max p95, 100 RPS capacity, 50ms acquisition, 100ms query), Category 6 RPO/RTO targets (1h RPO, 4h RTO), and backup cron schedule max gap.
+  - `validateDrillScriptIntegrations(launchDrillsScript, deploymentDrillScript, secretRotationScript)`: validates launch drill runner dossier assemblage, deployment drill signal supervision and drain verification, and secret rotation option validation and redaction audit.
+  - `checkProductionTemplates(options, io)`: orchestrates the full template verification suite relative to configurable `cwd`, returning structured `{ success, errors }`.
+  - `main(argv, io)`: CLI entrypoint executing `checkProductionTemplates()` and terminating with code 0 on success or 1 on failure.
+
+`scripts/ops/check-production-templates.spec.js`:
+- Created comprehensive unit and contract test specification with 37 tests using Node.js test runner (`node:test`):
+  - `mountDetails`: string syntax (`ro`, `rw`, modes), object syntax (`type: 'volume'|'bind'`, `read_only`), invalid/empty formats.
+  - `assertPostgres18Mount`: passing mounts at `/var/lib/postgresql`, rejection of missing mounts, non-persistent/read-only mounts, and forbidden mounts at `/var/lib/postgresql/data`.
+  - `validateRequiredServices`: passing when all 11 services exist, throwing when any service is missing.
+  - `validateComposeSecurityAndTopology`: port exposure on non-caddy services, scheduler misconfiguration, missing encrypted mount markers, forbidden `env_file`, and leaked Garage tokens.
+  - `validateComposeEnvironmentInterpolation`: unmapped interpolation keys, allowed monitor bootstrap password, colon and colon-less parameter expansion syntax, and forbidden test role markers.
+  - `validateWorkerAndExporterScrape`: worker port/probe mismatches, exporter configuration errors, monitor role SQL checks, and credential mounting isolation.
+  - `validateServiceHealthAndSupervision`: missing dependency health conditions, missing `init: true` or `stop_signal: SIGTERM`, improper restart policy, and mismatched drain periods.
+  - `validatePrometheusAlertsAndDashboard`: missing alert rules, drifted panel queries, absent data vector masks, and missing runbook sections in checklist.
+  - `validateReadinessTargets`: drifted Category 5 SLO thresholds, drifted Category 6 RPO/RTO targets, and excessive backup cron gaps.
+  - `validateDrillScriptIntegrations`: missing dossier assemblage markers, supervision markers, or rotation redaction audit markers.
+  - `checkProductionTemplates`: running against actual repository templates exiting cleanly with zero errors, and graceful failure without unhandled exceptions on invalid directories.
+  - `main`: exit code and error reporting verification on valid and invalid CLI invocations.
+
+`scripts/ops/check-production-templates.sh`:
+- Replaced the inline heredoc (`node <<'NODE' ... NODE`) with `node scripts/ops/check-production-templates.js || fail 'production template validation failed'`.
+- Added `require_file scripts/ops/check-production-templates.js` and `require_file scripts/ops/check-production-templates.spec.js`.
+
+`package.json`:
+- Updated `"ops:templates-test"` to include `scripts/ops/check-production-templates.spec.js`.
+
+Verification and review (2026-10-03):
+- `npm run ops:templates-test`: 94 passed, 0 failed (37 template checks, 42 garage metrics, 9 proxy environment, 6 application environment, 5 smtp keys).
+- `npm run ops:templates`: passed.
+- `node --test scripts/ops/launch-readiness.spec.js`: 23 passed, 0 failed.
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 649 passed, 0 failed.
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open.
