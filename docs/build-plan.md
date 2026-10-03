@@ -1628,3 +1628,22 @@ Verification output: `ops:readiness-test` (627/627), `ops:launch-drill-test` (68
 `ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
 audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
 closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
+
+**Prompt 254 Phase 12K modularize and test category readiness section validators (2026-10-03):**
+Decomposed the ~770-line inline category-validation block inside `validateReadiness()` into 4 discrete format helpers and 11 dedicated, exported category section validators with 100% behavioral parity:
+- Extracted format helpers in `scripts/ops/check-launch-readiness.js`: `isValidFqdn`, `isValidTlsContactEmail`, `isValidReleaseCommitSha`, and `isValidImageRegistryPath`.
+- Extracted 11 category section validators: `validateProductionDomainTlsSection`, `validateSmtpDeliverySection`, `validateSecretsManagementSection`, `validateSecretReferencesSection`, `validateSloAndAlertingSection`, `validateBackupAndDisasterRecoverySection`, `validateDataRetentionPolicySection`, `validateVolumeEncryptionSection`, `validateGraphqlIntrospectionSection`, `validateDeploymentAndRollbackSection`, and `validateOptionalAiPostureSection`.
+- Refactored `validateReadiness()` to cleanly delegate to these 11 modular section validators, preserving exact blocker messages, error arrays, and fail-closed evaluation behavior.
+- Exported all 15 functions in `module.exports`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive unit and contract test suites:
+  - `isValidFqdn`: tests acceptance of valid FQDNs and rejection of localhost, 127.0.0.1, IPv4/IPv6, protocol schemes, URI paths/queries, and malformed inputs.
+  - `isValidTlsContactEmail`: tests valid emails and rejection of length > 254, local part > 64, missing/multiple `@`, consecutive dots, leading/trailing dots in local part, and `__REQUIRED_` placeholders.
+  - `isValidReleaseCommitSha`: tests valid 40-character ASCII hex commit SHAs and rejection of non-hex characters, invalid lengths, and whitespace.
+  - `isValidImageRegistryPath`: tests valid registry repository prefixes and rejection of empty strings, `@` digest characters, trailing slashes, and invalid prefixes.
+  - Non-approved and null safety: tests that null and pending payloads return empty blocker arrays without throwing or invoking callbacks.
+  - All 11 category section validators: tests positive approval paths with matching live evidence reports (0 blockers) and negative rejection paths verifying specific blocker message assertions.
+
+Verification output: `ops:readiness-test` (640/640), `ops:launch-drill-test` (68/68), `ops:readiness-schema-test` (8/8),
+`ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
+audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
+closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.

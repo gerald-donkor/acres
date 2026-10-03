@@ -72,6 +72,21 @@ const {
   hasExactKeys,
   DEPLOYMENT_OBSERVATIONS,
   NO_AI_JOURNEYS,
+  isValidFqdn,
+  isValidTlsContactEmail,
+  isValidReleaseCommitSha,
+  isValidImageRegistryPath,
+  validateProductionDomainTlsSection,
+  validateSmtpDeliverySection,
+  validateSecretsManagementSection,
+  validateSecretReferencesSection,
+  validateSloAndAlertingSection,
+  validateBackupAndDisasterRecoverySection,
+  validateDataRetentionPolicySection,
+  validateVolumeEncryptionSection,
+  validateGraphqlIntrospectionSection,
+  validateDeploymentAndRollbackSection,
+  validateOptionalAiPostureSection,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -8135,4 +8150,529 @@ test('endpoint, schema shape, and constants: isValidGraphqlEndpoint, hasExactKey
     'governed_report',
     'export_download',
   ]);
+});
+
+test('format helpers: isValidFqdn, isValidTlsContactEmail, isValidReleaseCommitSha, isValidImageRegistryPath', () => {
+  // isValidFqdn
+  assert.strictEqual(isValidFqdn('acres.example.com'), true);
+  assert.strictEqual(isValidFqdn('sub.domain.acres.org'), true);
+  assert.strictEqual(isValidFqdn('example.co.uk'), true);
+  assert.strictEqual(isValidFqdn('my-domain123.com'), true);
+  assert.strictEqual(isValidFqdn(' acres.example.com '), true);
+  assert.strictEqual(isValidFqdn('localhost'), false);
+  assert.strictEqual(isValidFqdn('sub.localhost'), false);
+  assert.strictEqual(isValidFqdn('127.0.0.1'), false);
+  assert.strictEqual(isValidFqdn('192.168.1.1'), false);
+  assert.strictEqual(isValidFqdn('::1'), false);
+  assert.strictEqual(isValidFqdn('https://acres.example.com'), false);
+  assert.strictEqual(isValidFqdn('http://acres.example.com'), false);
+  assert.strictEqual(isValidFqdn('acres.example.com/path'), false);
+  assert.strictEqual(isValidFqdn('acres.example.com?query=1'), false);
+  assert.strictEqual(isValidFqdn('acres.example.com#hash'), false);
+  assert.strictEqual(isValidFqdn('acres domain com'), false);
+  assert.strictEqual(isValidFqdn('com'), false);
+  assert.strictEqual(isValidFqdn('acres'), false);
+  assert.strictEqual(isValidFqdn('acres.'), false);
+  assert.strictEqual(isValidFqdn(''), false);
+  assert.strictEqual(isValidFqdn('   '), false);
+  assert.strictEqual(isValidFqdn(null), false);
+  assert.strictEqual(isValidFqdn(undefined), false);
+  assert.strictEqual(isValidFqdn(12345), false);
+  assert.strictEqual(isValidFqdn({}), false);
+  assert.strictEqual(isValidFqdn([]), false);
+
+  // isValidTlsContactEmail
+  assert.strictEqual(isValidTlsContactEmail('ops@acres.example.com'), true);
+  assert.strictEqual(isValidTlsContactEmail('alerts+prod@domain.org'), true);
+  assert.strictEqual(isValidTlsContactEmail('first.last@sub.example.co.uk'), true);
+  assert.strictEqual(isValidTlsContactEmail(' ops@acres.example.com '), true);
+  assert.strictEqual(isValidTlsContactEmail(''), false);
+  assert.strictEqual(isValidTlsContactEmail('   '), false);
+  assert.strictEqual(isValidTlsContactEmail('not-an-email'), false);
+  assert.strictEqual(isValidTlsContactEmail('ops@'), false);
+  assert.strictEqual(isValidTlsContactEmail('@example.com'), false);
+  assert.strictEqual(isValidTlsContactEmail('ops@@example.com'), false);
+  assert.strictEqual(isValidTlsContactEmail('a@b@c.com'), false);
+  assert.strictEqual(isValidTlsContactEmail('ops..alert@example.com'), false);
+  assert.strictEqual(isValidTlsContactEmail('.ops@example.com'), false);
+  assert.strictEqual(isValidTlsContactEmail('ops.@example.com'), false);
+  assert.strictEqual(isValidTlsContactEmail(`${'a'.repeat(65)}@example.com`), false);
+  assert.strictEqual(isValidTlsContactEmail(`${'a'.repeat(60)}@${'b'.repeat(195)}.com`), false);
+  assert.strictEqual(isValidTlsContactEmail('__REQUIRED_EMAIL__@example.com'), false);
+  assert.strictEqual(isValidTlsContactEmail('ops+__REQUIRED_@example.com'), false);
+  assert.strictEqual(isValidTlsContactEmail(null), false);
+  assert.strictEqual(isValidTlsContactEmail(undefined), false);
+  assert.strictEqual(isValidTlsContactEmail(12345), false);
+  assert.strictEqual(isValidTlsContactEmail({}), false);
+
+  // isValidReleaseCommitSha
+  assert.strictEqual(isValidReleaseCommitSha('a'.repeat(40)), true);
+  assert.strictEqual(isValidReleaseCommitSha('0123456789abcdef0123456789abcdef01234567'), true);
+  assert.strictEqual(isValidReleaseCommitSha('ABCDEF0123456789ABCDEF0123456789ABCDEF01'), true);
+  assert.strictEqual(isValidReleaseCommitSha('a'.repeat(39)), false);
+  assert.strictEqual(isValidReleaseCommitSha('a'.repeat(41)), false);
+  assert.strictEqual(isValidReleaseCommitSha('g'.repeat(40)), false);
+  assert.strictEqual(isValidReleaseCommitSha(`${'a'.repeat(39)}z`), false);
+  assert.strictEqual(isValidReleaseCommitSha(` ${'a'.repeat(40)}`), false);
+  assert.strictEqual(isValidReleaseCommitSha(`${'a'.repeat(40)}\n`), false);
+  assert.strictEqual(isValidReleaseCommitSha(''), false);
+  assert.strictEqual(isValidReleaseCommitSha(null), false);
+  assert.strictEqual(isValidReleaseCommitSha(undefined), false);
+  assert.strictEqual(isValidReleaseCommitSha(12345), false);
+  assert.strictEqual(isValidReleaseCommitSha({}), false);
+
+  // isValidImageRegistryPath
+  assert.strictEqual(isValidImageRegistryPath('registry.example.com/acres/app'), true);
+  assert.strictEqual(isValidImageRegistryPath('ghcr.io/org/repo'), true);
+  assert.strictEqual(isValidImageRegistryPath('docker.io/library/node'), true);
+  assert.strictEqual(isValidImageRegistryPath(''), false);
+  assert.strictEqual(isValidImageRegistryPath('   '), false);
+  assert.strictEqual(isValidImageRegistryPath('registry.example.com/acres/app/'), false);
+  assert.strictEqual(isValidImageRegistryPath('registry.example.com/acres/app@sha256:123'), false);
+  assert.strictEqual(isValidImageRegistryPath('Invalid/Uppercase'), false);
+  assert.strictEqual(isValidImageRegistryPath(null), false);
+  assert.strictEqual(isValidImageRegistryPath(undefined), false);
+  assert.strictEqual(isValidImageRegistryPath(12345), false);
+  assert.strictEqual(isValidImageRegistryPath({}), false);
+});
+
+test('modular category section validators: non-approved / null payloads return empty blockers', () => {
+  const approvalOnlyValidators = [
+    validateProductionDomainTlsSection,
+    validateSmtpDeliverySection,
+    validateSecretsManagementSection,
+    validateSloAndAlertingSection,
+    validateBackupAndDisasterRecoverySection,
+    validateDataRetentionPolicySection,
+    validateVolumeEncryptionSection,
+    validateGraphqlIntrospectionSection,
+    validateDeploymentAndRollbackSection,
+  ];
+
+  for (const validator of approvalOnlyValidators) {
+    let called = false;
+    const addBlocker = () => { called = true; };
+    const nullBlockers = validator(null, { addBlocker });
+    assert.deepStrictEqual(nullBlockers, []);
+    assert.strictEqual(called, false);
+
+    const pendingBlockers = validator({ status: 'pending' }, { addBlocker });
+    assert.deepStrictEqual(pendingBlockers, []);
+    assert.strictEqual(called, false);
+  }
+
+  // validateSecretReferencesSection returns [] for null, and [] when pending with valid keys
+  assert.deepStrictEqual(validateSecretReferencesSection(null), []);
+  assert.deepStrictEqual(validateSecretReferencesSection({ status: 'pending', ...secretReferences }), []);
+
+  // validateOptionalAiPostureSection returns [] for null, and [] when pending with ai_enabled: false
+  assert.deepStrictEqual(validateOptionalAiPostureSection(null), []);
+  assert.deepStrictEqual(validateOptionalAiPostureSection({ status: 'pending', ai_enabled: false }), []);
+});
+
+test('validateProductionDomainTlsSection: approval and rejection scenarios', () => {
+  const caddyEvidence = [{ file: 'caddy.json', parsed: validCaddyRoutingReport }];
+
+  // Valid approved section
+  const validSec = {
+    status: 'approved',
+    domain: 'acres.example.com',
+    tls_contact_email: 'ops@acres.example.com',
+    hsts_approved: true,
+    custom_certificates: false,
+  };
+  const passedBlockers = validateProductionDomainTlsSection(validSec, { now: fixedNow, caddyEvidence });
+  assert.deepStrictEqual(passedBlockers, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    domain: 'localhost',
+    tls_contact_email: 'not-an-email',
+    hsts_approved: false,
+    custom_certificates: 'no',
+  };
+  const recorded = [];
+  const blockers = validateProductionDomainTlsSection(invalidSec, {
+    now: fixedNow,
+    caddyEvidence: [],
+    addBlocker: (cat, msg) => recorded.push({ cat, msg }),
+  });
+  assert.strictEqual(blockers.length, 5);
+  assert.ok(blockers.some((b) => b.includes('valid fully qualified domain name')));
+  assert.ok(blockers.some((b) => b.includes('TLS contact email is missing or invalid')));
+  assert.ok(blockers.some((b) => b.includes('HSTS approval must be explicitly confirmed')));
+  assert.ok(blockers.some((b) => b.includes('"custom_certificates" must be explicitly defined as a boolean')));
+  assert.ok(blockers.some((b) => b.includes('Caddy routing and TLS verification child JSON report is required')));
+  assert.strictEqual(recorded.length, 5);
+  assert.ok(recorded.every((r) => r.cat === 'production_domain_tls'));
+});
+
+test('validateSmtpDeliverySection: approval and rejection scenarios', () => {
+  const smtpEvidence = [{ file: 'smtp.json', parsed: validSmtpReport }];
+  const validSec = {
+    status: 'approved',
+    provider: 'resend',
+    host: 'smtp.resend.com',
+    port: 587,
+    tls_mode: 'STARTTLS',
+    from_address: 'notifications@acres.example.com',
+    credentials_source_reference: 'vault:acres/production/smtp#password',
+    delivery_policy: 'Transactional notifications only',
+    bounce_abuse_handling: 'docs/ops/smtp-bounce.md',
+  };
+  const secretReferencesSection = {
+    smtp_secret_source: 'vault:acres/production/smtp#password',
+  };
+  const passed = validateSmtpDeliverySection(validSec, {
+    now: fixedNow,
+    smtpEvidence,
+    secretReferencesSection,
+  });
+  assert.deepStrictEqual(passed, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    provider: '',
+    host: '',
+    port: 99999,
+    tls_mode: 'PLAIN',
+    from_address: 'invalid-email',
+    credentials_source_reference: 'mismatched-ref',
+    delivery_policy: '',
+    bounce_abuse_handling: '',
+  };
+  const blockers = validateSmtpDeliverySection(invalidSec, {
+    now: fixedNow,
+    smtpEvidence: [],
+    secretReferencesSection,
+  });
+  assert.ok(blockers.some((b) => b.includes('SMTP provider is required')));
+  assert.ok(blockers.some((b) => b.includes('SMTP host is required')));
+  assert.ok(blockers.some((b) => b.includes('SMTP port must be a valid port number')));
+  assert.ok(blockers.some((b) => b.includes('SMTP tls_mode must be STARTTLS or TLS')));
+  assert.ok(blockers.some((b) => b.includes('SMTP from_address is invalid')));
+  assert.ok(blockers.some((b) => b.includes('credentials source reference must match')));
+  assert.ok(blockers.some((b) => b.includes('delivery policy description is required')));
+  assert.ok(blockers.some((b) => b.includes('bounce/abuse handling procedure reference is required')));
+  assert.ok(blockers.some((b) => b.includes('SMTP delivery and DNS verification child JSON report is required')));
+});
+
+test('validateSecretsManagementSection: approval and rejection scenarios', () => {
+  const secretEvidence = [{ file: 'sec.json', parsed: validSecretRotationReport }];
+  const validSec = {
+    status: 'approved',
+    injection_mechanism: 'vault-agent',
+    masking_policy: 'All credentials masked in logs and telemetry',
+    rotation_cadence_days: 90,
+    compromise_response_plan: 'docs/runbooks/compromise-response.md',
+  };
+  const passed = validateSecretsManagementSection(validSec, { now: fixedNow, secretEvidence });
+  assert.deepStrictEqual(passed, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    injection_mechanism: '',
+    masking_policy: '',
+    rotation_cadence_days: 120,
+    compromise_response_plan: '',
+  };
+  const blockers = validateSecretsManagementSection(invalidSec, { now: fixedNow, secretEvidence: [] });
+  assert.ok(blockers.some((b) => b.includes('Secret injection mechanism is required')));
+  assert.ok(blockers.some((b) => b.includes('Secret masking policy is required')));
+  assert.ok(blockers.some((b) => b.includes('Rotation cadence (in days) must be a positive number <= 90 days')));
+  assert.ok(blockers.some((b) => b.includes('Compromise response runbook reference is required')));
+  assert.ok(blockers.some((b) => b.includes('secret rotation child JSON report is required')));
+});
+
+test('validateSecretReferencesSection: approval and rejection scenarios', () => {
+  const secretReferenceEvidence = [{ file: 'ref.json', parsed: validSecretPolicyReport }];
+  const validSec = {
+    status: 'approved',
+    ...secretReferences,
+  };
+  const passed = validateSecretReferencesSection(validSec, { now: fixedNow, secretReferenceEvidence });
+  assert.deepStrictEqual(passed, []);
+
+  // AI contradiction & missing keys
+  const invalidSec = {
+    status: 'approved',
+    gemini_api_key_source: 'vault:gemini',
+    session_secret_source: 'plaintext-raw-secret',
+  };
+  const blockers = validateSecretReferencesSection(invalidSec, { now: fixedNow, secretReferenceEvidence: [] });
+  assert.ok(blockers.some((b) => b.includes('declares an AI/Gemini secret source when AI is excluded from launch')));
+  assert.ok(blockers.some((b) => b.includes("Missing secret source reference for 'db_app_secret_source'")));
+  assert.ok(blockers.some((b) => b.includes("must be an indirect secret-store reference")));
+  assert.ok(blockers.some((b) => b.includes('secret-reference policy child JSON report is required')));
+});
+
+test('validateSloAndAlertingSection: approval and rejection scenarios', () => {
+  const capacityEvidence = [{ file: 'cap.json', parsed: validCapacityAlertingReport }];
+  const validSec = {
+    status: 'approved',
+    availability_target_percent: 99.9,
+    max_p95_latency_ms: 500,
+    capacity_target_rps: 100,
+    max_database_acquisition_p95_latency_ms: 50,
+    max_database_query_p95_latency_ms: 100,
+    alert_recipients: ['pagerduty:acres-production-alerts'],
+    alert_thresholds_defined: true,
+    escalation_runbook_ref: 'docs/runbooks/escalation.md',
+  };
+  const passed = validateSloAndAlertingSection(validSec, { now: fixedNow, capacityEvidence });
+  assert.deepStrictEqual(passed, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    availability_target_percent: 98.5,
+    max_p95_latency_ms: 600,
+    capacity_target_rps: 50,
+    max_database_acquisition_p95_latency_ms: 80,
+    max_database_query_p95_latency_ms: 120,
+    alert_recipients: [],
+    alert_thresholds_defined: false,
+    escalation_runbook_ref: '',
+  };
+  const blockers = validateSloAndAlertingSection(invalidSec, { now: fixedNow, capacityEvidence: [] });
+  assert.ok(blockers.some((b) => b.includes('Availability target percent must be between 99.9 and 100.0')));
+  assert.ok(blockers.some((b) => b.includes('Max p95 latency ceiling must be a positive number <= 500ms')));
+  assert.ok(blockers.some((b) => b.includes('Capacity target RPS must be a positive number >= 100 RPS')));
+  assert.ok(blockers.some((b) => b.includes('Max database pool acquisition p95 latency ceiling must be a positive number <= 50ms')));
+  assert.ok(blockers.some((b) => b.includes('Max database query execution p95 latency ceiling must be a positive number <= 100ms')));
+  assert.ok(blockers.some((b) => b.includes('Alert recipients list must contain at least one contact/destination')));
+  assert.ok(blockers.some((b) => b.includes('Alert thresholds must be explicitly defined and confirmed')));
+  assert.ok(blockers.some((b) => b.includes('Escalation runbook reference is required')));
+  assert.ok(blockers.some((b) => b.includes('capacity and alerting drill child JSON report is required')));
+});
+
+test('validateBackupAndDisasterRecoverySection: approval and rejection scenarios', () => {
+  const recoveryEvidence = [
+    { file: 'restore.json', parsed: validRestoreReport },
+    { file: 'reconcile.json', parsed: validReconciliationReport },
+  ];
+  const validSec = {
+    status: 'approved',
+    rpo_hours: 1,
+    rto_hours: 4,
+    backup_destination: 's3://acres-dr-backups-us-west-2/backups',
+    backup_schedule_cron: '0 * * * *',
+    restore_drill_completed: true,
+    restore_drill_date: '2026-08-28T12:00:00Z',
+    db_object_reconciliation_tested: true,
+  };
+  const passed = validateBackupAndDisasterRecoverySection(validSec, { now: fixedNow, recoveryEvidence });
+  assert.deepStrictEqual(passed, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    rpo_hours: 2,
+    rto_hours: 5,
+    backup_destination: '',
+    backup_schedule_cron: 'bad cron',
+    restore_drill_completed: false,
+    restore_drill_date: '2099-01-01T00:00:00Z',
+    db_object_reconciliation_tested: false,
+  };
+  const blockers = validateBackupAndDisasterRecoverySection(invalidSec, { now: fixedNow, recoveryEvidence: [] });
+  assert.ok(blockers.some((b) => b.includes('RPO hours must be a positive number <= 1 hour')));
+  assert.ok(blockers.some((b) => b.includes('RTO hours must be a positive number <= 4 hours')));
+  assert.ok(blockers.some((b) => b.includes('Off-host backup destination is required')));
+  assert.ok(blockers.some((b) => b.includes('Backup schedule must use a supported every-hour UTC cron expression')));
+  assert.ok(blockers.some((b) => b.includes('Restore drill must be verified and completed')));
+  assert.ok(blockers.some((b) => b.includes('Restore drill date must be a valid, nonfuture UTC date')));
+  assert.ok(blockers.some((b) => b.includes('restore drill child JSON report is required')));
+  assert.ok(blockers.some((b) => b.includes('db_object_reconciliation_tested: true')));
+  assert.ok(blockers.some((b) => b.includes('storage reconciliation child JSON report is required')));
+});
+
+test('validateDataRetentionPolicySection: approval and rejection scenarios', () => {
+  const retentionEvidence = [{ file: 'ret.json', parsed: validRetentionPolicyReport }];
+  const validSec = {
+    status: 'approved',
+    account_retention_policy: '365d',
+    audit_retention_policy: '730d',
+    upload_quarantine_retention_policy: '7d',
+    rejected_object_retention_policy: '1d',
+    export_retention_policy: '30d',
+    report_retention_policy: 'indefinite_until_tenant_deletion',
+    telemetry_retention_policy: '15d',
+    backup_retention_policy: '30d',
+  };
+  const passed = validateDataRetentionPolicySection(validSec, { now: fixedNow, retentionEvidence });
+  assert.deepStrictEqual(passed, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    upload_quarantine_retention_policy: '14d',
+    rejected_object_retention_policy: '2d',
+    export_retention_policy: '15d',
+    telemetry_retention_policy: '30d',
+    backup_retention_policy: '60d',
+    account_retention_policy: 'invalid-dur',
+    audit_retention_policy: 'invalid-dur',
+    report_retention_policy: 'invalid-dur',
+  };
+  const blockers = validateDataRetentionPolicySection(invalidSec, { now: fixedNow, retentionEvidence: [] });
+  assert.ok(blockers.some((b) => b.includes("upload_quarantine_retention_policy must be '7d'")));
+  assert.ok(blockers.some((b) => b.includes("rejected_object_retention_policy must be '1d'")));
+  assert.ok(blockers.some((b) => b.includes("export_retention_policy must be '30d'")));
+  assert.ok(blockers.some((b) => b.includes("telemetry_retention_policy must be '15d'")));
+  assert.ok(blockers.some((b) => b.includes("backup_retention_policy must be '30d'")));
+  assert.ok(blockers.some((b) => b.includes("account_retention_policy must be a positive day duration")));
+  assert.ok(blockers.some((b) => b.includes("audit_retention_policy must be a positive day duration")));
+  assert.ok(blockers.some((b) => b.includes("report_retention_policy must be a positive day duration")));
+  assert.ok(blockers.some((b) => b.includes('data retention policy child JSON report is required')));
+});
+
+test('validateVolumeEncryptionSection: approval and rejection scenarios', () => {
+  const volumeEvidence = [{ file: 'vol.json', parsed: validVolumeEncryptionReport }];
+  const validSec = {
+    status: 'approved',
+    encryption_mechanism: 'luks2-dm-crypt',
+    encrypted_mount_paths: ['/mnt/encrypted/postgres', '/mnt/encrypted/valkey', '/mnt/encrypted/garage'],
+    key_separation_confirmed: true,
+    key_recovery_owner: 'infra-security-team',
+  };
+  const passed = validateVolumeEncryptionSection(validSec, { now: fixedNow, volumeEvidence });
+  assert.deepStrictEqual(passed, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    encryption_mechanism: 'unapproved-crypto',
+    encrypted_mount_paths: ['/mnt/one'],
+    key_separation_confirmed: false,
+    key_recovery_owner: '',
+  };
+  const blockers = validateVolumeEncryptionSection(invalidSec, { now: fixedNow, volumeEvidence: [] });
+  assert.ok(blockers.some((b) => b.includes('Production volume encryption mechanism must be concrete and approved')));
+  assert.ok(blockers.some((b) => b.includes('Encrypted mount paths must include at least 3 unique concrete absolute directory paths')));
+  assert.ok(blockers.some((b) => b.includes('Key separation from data/backups must be explicitly confirmed')));
+  assert.ok(blockers.some((b) => b.includes('Key recovery owner must be concrete and designated')));
+  assert.ok(blockers.some((b) => b.includes('A successful live volume encryption child JSON report matching the approved configuration is required')));
+});
+
+test('validateGraphqlIntrospectionSection: approval and rejection scenarios', () => {
+  const graphqlEvidence = [{ file: 'gql.json', parsed: validGraphqlIntrospectionReport }];
+  const validSec = {
+    status: 'approved',
+    production_introspection_enabled: false,
+    justification: 'Disabled for production attack surface reduction',
+  };
+  const passed = validateGraphqlIntrospectionSection(validSec, { now: fixedNow, graphqlEvidence });
+  assert.deepStrictEqual(passed, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    production_introspection_enabled: true,
+    justification: '',
+  };
+  const blockers = validateGraphqlIntrospectionSection(invalidSec, { now: fixedNow, graphqlEvidence: [] });
+  assert.ok(blockers.some((b) => b.includes('Production GraphQL introspection enabled requires justification')));
+  assert.ok(blockers.some((b) => b.includes('GraphQL introspection probe child JSON report is required')));
+});
+
+test('validateDeploymentAndRollbackSection: approval and rejection scenarios', () => {
+  const deploymentEvidence = [{ file: 'dep.json', parsed: validDeploymentDrillReport }];
+  const clientImg = `registry.example.com/acres/app/client@sha256:${'a'.repeat(64)}`;
+  const serverImg = `registry.example.com/acres/app/server@sha256:${'b'.repeat(64)}`;
+  const validSec = {
+    status: 'approved',
+    target_host_profile: 'dedicated-c2-standard-8',
+    image_registry_path: 'registry.example.com/acres/app',
+    deployment_approver: 'release-manager',
+    rollback_authority: 'on-call-sre',
+    image_provenance_policy: 'cosign-signed-commits-only',
+    live_readiness_drill_completed: true,
+    release: {
+      reviewed_source_commit: 'a'.repeat(40),
+      current: {
+        client_image: clientImg,
+        server_image: serverImg,
+      },
+      previous: {
+        client_image: `old.example.com/acres/client@sha256:${'c'.repeat(64)}`,
+        server_image: `old.example.com/acres/server@sha256:${'d'.repeat(64)}`,
+      },
+      client_provenance_evidence: 'artifact:client-attestation-1',
+      server_provenance_evidence: 'artifact:server-attestation-1',
+      live_drill_evidence: 'artifact:live-drill-receipt-1',
+    },
+  };
+  const env = {
+    ACRES_CLIENT_IMAGE: clientImg,
+    ACRES_SERVER_IMAGE: serverImg,
+  };
+  const passed = validateDeploymentAndRollbackSection(validSec, { now: fixedNow, deploymentEvidence, env });
+  assert.deepStrictEqual(passed, []);
+
+  // Rejection scenarios
+  const invalidSec = {
+    status: 'approved',
+    target_host_profile: '',
+    image_registry_path: '',
+    deployment_approver: '',
+    rollback_authority: '',
+    image_provenance_policy: '',
+    live_readiness_drill_completed: false,
+    release: {
+      reviewed_source_commit: 'short',
+      current: {
+        client_image: clientImg,
+        server_image: clientImg,
+      },
+      previous: {
+        client_image: clientImg,
+        server_image: clientImg,
+      },
+      client_provenance_evidence: '',
+    },
+  };
+  const blockers = validateDeploymentAndRollbackSection(invalidSec, { now: fixedNow, deploymentEvidence: [], env: {} });
+  assert.ok(blockers.some((b) => b.includes('Target host profile / spec is required')));
+  assert.ok(blockers.some((b) => b.includes('OCI image registry path is required')));
+  assert.ok(blockers.some((b) => b.includes('Deployment approver is required')));
+  assert.ok(blockers.some((b) => b.includes('Rollback authority is required')));
+  assert.ok(blockers.some((b) => b.includes('Image provenance policy is required')));
+  assert.ok(blockers.some((b) => b.includes('Live deployment & Caddy routing drill must be completed')));
+  assert.ok(blockers.some((b) => b.includes('release.reviewed_source_commit must be exactly 40 ASCII hex characters')));
+  assert.ok(blockers.some((b) => b.includes('must use distinct client and server images')));
+  assert.ok(blockers.some((b) => b.includes('ACRES_CLIENT_IMAGE is required for approved deployment')));
+  assert.ok(blockers.some((b) => b.includes('deployment drill child JSON report is required')));
+});
+
+test('validateOptionalAiPostureSection: approval and rejection scenarios', () => {
+  const noAiEvidence = [{ file: 'noai.json', parsed: validNoAiReport }];
+  const validSec = {
+    status: 'approved',
+    ai_enabled: false,
+    no_ai_path_verified: true,
+    server_ai_draft_enabled_false: true,
+    no_gemini_api_key_provisioned: true,
+    unpaid_provider_excluded: true,
+    phase11_status: 'implemented_unpaid_preview_excluded_from_launch',
+  };
+  const passed = validateOptionalAiPostureSection(validSec, { now: fixedNow, noAiEvidence });
+  assert.deepStrictEqual(passed, []);
+
+  // Fatal enabled rejection & contradictions
+  const fatalSec = {
+    status: 'approved',
+    ai_enabled: true,
+    gemini_api_key: 'secret-key-material',
+    no_ai_path_verified: false,
+  };
+  const blockers = validateOptionalAiPostureSection(fatalSec, { now: fixedNow, noAiEvidence: [] });
+  assert.ok(blockers.some((b) => b.includes('FATAL: Optional AI is marked enabled')));
+  assert.ok(blockers.some((b) => b.includes('must not contain a Gemini API key or key reference')));
+  assert.ok(blockers.some((b) => b.includes('Launch approval requires ai_enabled: false')));
+  assert.ok(blockers.some((b) => b.includes('Deterministic no-AI product journeys must be verified')));
+  assert.ok(blockers.some((b) => b.includes('A successful no-AI production posture child JSON report is required')));
 });

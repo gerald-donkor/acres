@@ -2562,6 +2562,847 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
   return parsedFiles;
 }
 
+function isValidFqdn(rawDomain) {
+  if (typeof rawDomain !== 'string') return false;
+  const domain = rawDomain.trim();
+  if (!domain) return false;
+  const isIpAddress = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(domain) || domain.includes(':');
+  const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(domain);
+  const hasUriParts = /[\/\?#\s]/.test(domain);
+  const fqdnPattern = /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+  return (
+    fqdnPattern.test(domain) &&
+    !domain.includes('localhost') &&
+    !domain.includes('127.0.0.1') &&
+    !isIpAddress &&
+    !hasProtocol &&
+    !hasUriParts
+  );
+}
+
+function isValidTlsContactEmail(rawEmail) {
+  if (typeof rawEmail !== 'string') return false;
+  const email = rawEmail.trim();
+  if (!email || email.length > 254) return false;
+  const emailPattern = /^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+  const localPart = email.split('@')[0];
+  return (
+    localPart.length <= 64 &&
+    emailPattern.test(email) &&
+    !localPart.startsWith('.') &&
+    !localPart.endsWith('.') &&
+    !email.includes('..') &&
+    !email.includes('__REQUIRED_')
+  );
+}
+
+function isValidReleaseCommitSha(commitSha) {
+  return typeof commitSha === 'string' && /^[a-fA-F0-9]{40}$/.test(commitSha);
+}
+
+function isValidImageRegistryPath(prefix) {
+  if (typeof prefix !== 'string' || prefix.length === 0) return false;
+  if (prefix.includes('@') || prefix.endsWith('/')) return false;
+  try {
+    validateImageReference(`${prefix}/probe@sha256:${'a'.repeat(64)}`, 'image_registry_path');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validateProductionDomainTlsSection(domainSec, options = {}) {
+  const category = 'production_domain_tls';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!domainSec || domainSec.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const caddyEvidence = Array.isArray(options.caddyEvidence) ? options.caddyEvidence : [];
+  const rawDomain = typeof domainSec.domain === 'string' ? domainSec.domain.trim() : '';
+
+  if (!isValidFqdn(domainSec.domain)) {
+    addBlocker(
+      category,
+      `Production domain must be a valid fully qualified domain name (received: "${domainSec.domain}")`
+    );
+  }
+
+  if (!isValidTlsContactEmail(domainSec.tls_contact_email)) {
+    addBlocker(category, `TLS contact email is missing or invalid: "${domainSec.tls_contact_email}"`);
+  }
+
+  if (domainSec.hsts_approved !== true) {
+    addBlocker(category, 'HSTS approval must be explicitly confirmed (hsts_approved: true)');
+  }
+
+  if (typeof domainSec.custom_certificates !== 'boolean') {
+    addBlocker(
+      category,
+      'Field "custom_certificates" must be explicitly defined as a boolean (true or false)'
+    );
+  }
+
+  const caddyCandidates = caddyEvidence.filter(isCaddyRoutingCandidate);
+  if (caddyCandidates.length === 0) {
+    addBlocker(category, 'A successful Caddy routing and TLS verification child JSON report is required');
+  } else {
+    if (caddyCandidates.some(({ parsed }) => !validateCaddyRoutingReport(parsed, now, rawDomain, { expectedSection: domainSec }))) {
+      addBlocker(category, 'A referenced Caddy routing report is invalid or failed');
+    }
+    if (!caddyCandidates.some(({ parsed }) => validateCaddyRoutingReport(parsed, now, rawDomain, { requireLive: true, expectedSection: domainSec }))) {
+      addBlocker(category, 'A live Caddy routing and TLS verification operator receipt is required');
+    }
+  }
+
+  return blockers;
+}
+
+function validateSmtpDeliverySection(smtpSec, options = {}) {
+  const category = 'smtp_delivery';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!smtpSec || smtpSec.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const smtpEvidence = Array.isArray(options.smtpEvidence) ? options.smtpEvidence : [];
+  const secretReferencesSection = options.secretReferencesSection || options.sections?.secret_references;
+
+  if (!validSmtpText(smtpSec.provider)) {
+    addBlocker(category, 'SMTP provider is required');
+  }
+  if (!validSmtpText(smtpSec.host)) {
+    addBlocker(category, 'SMTP host is required');
+  }
+  if (!Number.isInteger(smtpSec.port) || smtpSec.port <= 0 || smtpSec.port > 65535) {
+    addBlocker(category, `SMTP port must be a valid port number (received: ${smtpSec.port})`);
+  }
+  if (!['STARTTLS', 'TLS'].includes(smtpSec.tls_mode)) {
+    addBlocker(category, 'SMTP tls_mode must be STARTTLS or TLS');
+  }
+  if (!validSmtpEmail(smtpSec.from_address)) {
+    addBlocker(category, `SMTP from_address is invalid: "${smtpSec.from_address}"`);
+  }
+  if (!validSmtpSecretReference(smtpSec.credentials_source_reference) ||
+      smtpSec.credentials_source_reference !== secretReferencesSection?.smtp_secret_source) {
+    addBlocker(category, 'SMTP credentials source reference must match the approved secret reference');
+  }
+  if (!validSmtpText(smtpSec.delivery_policy)) {
+    addBlocker(category, 'SMTP delivery policy description is required');
+  }
+  if (!validSmtpText(smtpSec.bounce_abuse_handling)) {
+    addBlocker(category, 'SMTP bounce/abuse handling procedure reference is required');
+  }
+  const smtpCandidates = smtpEvidence.filter(isSmtpDeliveryCandidate);
+  if (smtpCandidates.length === 0) {
+    addBlocker(category, 'A successful SMTP delivery and DNS verification child JSON report is required');
+  } else {
+    if (smtpCandidates.some(({ parsed }) => !validateSmtpDeliveryReport(parsed, now, smtpSec))) {
+      addBlocker(category, 'A referenced SMTP delivery report is invalid or failed');
+    }
+    if (!smtpCandidates.some(({ parsed }) => validateSmtpDeliveryReport(parsed, now, smtpSec, { requireLive: true }))) {
+      addBlocker(category, 'A live SMTP delivery verification operator receipt is required');
+    }
+  }
+
+  return blockers;
+}
+
+function validateSecretsManagementSection(secMgmt, options = {}) {
+  const category = 'secrets_management';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!secMgmt || secMgmt.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const secretEvidence = Array.isArray(options.secretEvidence) ? options.secretEvidence : [];
+
+  if (!secMgmt.injection_mechanism || typeof secMgmt.injection_mechanism !== 'string') {
+    addBlocker(category, 'Secret injection mechanism is required');
+  }
+  if (!secMgmt.masking_policy || typeof secMgmt.masking_policy !== 'string') {
+    addBlocker(category, 'Secret masking policy is required');
+  }
+  if (
+    typeof secMgmt.rotation_cadence_days !== 'number' ||
+    !Number.isFinite(secMgmt.rotation_cadence_days) ||
+    secMgmt.rotation_cadence_days <= 0 ||
+    secMgmt.rotation_cadence_days > 90
+  ) {
+    addBlocker(
+      category,
+      `Rotation cadence (in days) must be a positive number <= 90 days (received: ${secMgmt.rotation_cadence_days})`
+    );
+  }
+  if (!secMgmt.compromise_response_plan || typeof secMgmt.compromise_response_plan !== 'string') {
+    addBlocker(category, 'Compromise response runbook reference is required');
+  }
+  const secretCandidates = secretEvidence.filter(isSecretRotationCandidate);
+  if (secretCandidates.length === 0) {
+    addBlocker(category, 'A successful secret rotation child JSON report is required');
+  } else {
+    if (secretCandidates.some(({ parsed }) => !validateSecretRotationReport(parsed, now))) {
+      addBlocker(category, 'A referenced secret rotation report is invalid or failed');
+    }
+    if (!secretCandidates.some(({ parsed }) => validateSecretRotationReport(parsed, now, { requireLive: true }))) {
+      addBlocker(category, 'A live production secret rotation operator receipt is required');
+    }
+  }
+
+  return blockers;
+}
+
+function validateSecretReferencesSection(secRefs, options = {}) {
+  const category = 'secret_references';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!secRefs || typeof secRefs !== 'object') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const secretReferenceEvidence = Array.isArray(options.secretReferenceEvidence) ? options.secretReferenceEvidence : [];
+
+  for (const key of Object.keys(secRefs)) {
+    if (
+      key.toLowerCase().includes('gemini') ||
+      key.toLowerCase().includes('ai_draft') ||
+      key.toLowerCase().includes('ai_key')
+    ) {
+      addBlocker(
+        'optional_ai_posture',
+        `Contradiction: field 'sections.secret_references.${key}' declares an AI/Gemini secret source when AI is excluded from launch`
+      );
+    }
+  }
+  for (const key of REQUIRED_SECRET_KEYS) {
+    const val = secRefs[key];
+    if (!val || typeof val !== 'string') {
+      addBlocker(category, `Missing secret source reference for '${key}'`);
+    } else if (secRefs.status === 'approved' && !validSmtpSecretReference(val)) {
+      addBlocker(category, `Field '${key}' must be an indirect secret-store reference`);
+    }
+  }
+  if (secRefs.status === 'approved') {
+    const candidates = secretReferenceEvidence.filter(isSecretReferencePolicyCandidate);
+    if (candidates.length === 0) {
+      addBlocker(category, 'A successful secret-reference policy child JSON report is required');
+    } else {
+      if (candidates.some(({ parsed }) => !validateSecretReferencePolicyReport(parsed, now, secRefs))) {
+        addBlocker(category, 'A referenced secret-reference policy report is invalid or failed');
+      }
+      if (!candidates.some(({ parsed }) => validateSecretReferencePolicyReport(parsed, now, secRefs, { requireLive: true }))) {
+        addBlocker(category, 'A live secret-reference policy operator receipt is required');
+      }
+    }
+  }
+
+  return blockers;
+}
+
+function validateSloAndAlertingSection(sloSec, options = {}) {
+  const category = 'slo_and_alerting';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!sloSec || sloSec.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const capacityEvidence = Array.isArray(options.capacityEvidence) ? options.capacityEvidence : [];
+
+  if (
+    typeof sloSec.availability_target_percent !== 'number' ||
+    !Number.isFinite(sloSec.availability_target_percent) ||
+    sloSec.availability_target_percent < 99.9 ||
+    sloSec.availability_target_percent > 100.0
+  ) {
+    addBlocker(category, `Availability target percent must be between 99.9 and 100.0 (received: ${sloSec.availability_target_percent})`);
+  }
+  if (
+    typeof sloSec.max_p95_latency_ms !== 'number' ||
+    !Number.isFinite(sloSec.max_p95_latency_ms) ||
+    sloSec.max_p95_latency_ms <= 0 ||
+    sloSec.max_p95_latency_ms > 500
+  ) {
+    addBlocker(category, `Max p95 latency ceiling must be a positive number <= 500ms (received: ${sloSec.max_p95_latency_ms})`);
+  }
+  if (
+    typeof sloSec.capacity_target_rps !== 'number' ||
+    !Number.isFinite(sloSec.capacity_target_rps) ||
+    sloSec.capacity_target_rps < 100
+  ) {
+    addBlocker(category, `Capacity target RPS must be a positive number >= 100 RPS (received: ${sloSec.capacity_target_rps})`);
+  }
+  if (
+    typeof sloSec.max_database_acquisition_p95_latency_ms !== 'number' ||
+    !Number.isFinite(sloSec.max_database_acquisition_p95_latency_ms) ||
+    sloSec.max_database_acquisition_p95_latency_ms <= 0 ||
+    sloSec.max_database_acquisition_p95_latency_ms > 50
+  ) {
+    addBlocker(
+      category,
+      `Max database pool acquisition p95 latency ceiling must be a positive number <= 50ms (received: ${sloSec.max_database_acquisition_p95_latency_ms})`
+    );
+  }
+  if (
+    typeof sloSec.max_database_query_p95_latency_ms !== 'number' ||
+    !Number.isFinite(sloSec.max_database_query_p95_latency_ms) ||
+    sloSec.max_database_query_p95_latency_ms <= 0 ||
+    sloSec.max_database_query_p95_latency_ms > 100
+  ) {
+    addBlocker(
+      category,
+      `Max database query execution p95 latency ceiling must be a positive number <= 100ms (received: ${sloSec.max_database_query_p95_latency_ms})`
+    );
+  }
+  if (!Array.isArray(sloSec.alert_recipients) || sloSec.alert_recipients.length === 0) {
+    addBlocker(category, 'Alert recipients list must contain at least one contact/destination');
+  }
+  if (sloSec.alert_thresholds_defined !== true) {
+    addBlocker(category, 'Alert thresholds must be explicitly defined and confirmed (alert_thresholds_defined: true)');
+  }
+  if (!sloSec.escalation_runbook_ref || typeof sloSec.escalation_runbook_ref !== 'string') {
+    addBlocker(category, 'Escalation runbook reference is required');
+  }
+  const capacityCandidates = capacityEvidence.filter(isCapacityAlertingCandidate);
+  if (capacityCandidates.length === 0) {
+    addBlocker(category, 'A successful capacity and alerting drill child JSON report is required');
+  } else if (capacityCandidates.some(({ parsed }) => !validateCapacityAlertingReport(parsed, now, { section: sloSec }))) {
+    addBlocker(category, 'A referenced capacity and alerting report is invalid or failed');
+  } else if (!capacityCandidates.some(({ parsed }) => validateCapacityAlertingReport(parsed, now, { section: sloSec, requireLive: true }))) {
+    addBlocker(category, 'A live capacity and alerting operator receipt is required');
+  }
+
+  return blockers;
+}
+
+function validateBackupAndDisasterRecoverySection(bdrSec, options = {}) {
+  const category = 'backup_and_disaster_recovery';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!bdrSec || bdrSec.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const recoveryEvidence = Array.isArray(options.recoveryEvidence) ? options.recoveryEvidence : [];
+
+  const invalidRpo =
+    typeof bdrSec.rpo_hours !== 'number' ||
+    !Number.isFinite(bdrSec.rpo_hours) ||
+    bdrSec.rpo_hours <= 0 ||
+    bdrSec.rpo_hours > 1;
+  if (invalidRpo) {
+    addBlocker(category, `RPO hours must be a positive number <= 1 hour (received: ${bdrSec.rpo_hours})`);
+  }
+  if (
+    typeof bdrSec.rto_hours !== 'number' ||
+    !Number.isFinite(bdrSec.rto_hours) ||
+    bdrSec.rto_hours <= 0 ||
+    bdrSec.rto_hours > 4
+  ) {
+    addBlocker(category, `RTO hours must be a positive number <= 4 hours (received: ${bdrSec.rto_hours})`);
+  }
+  if (
+    !bdrSec.backup_destination ||
+    typeof bdrSec.backup_destination !== 'string' ||
+    !validRecoveryReference(bdrSec.backup_destination)
+  ) {
+    addBlocker(category, 'Off-host backup destination is required');
+  }
+  const schedule = parseBackupScheduleCron(bdrSec.backup_schedule_cron);
+  if (!schedule.valid) {
+    addBlocker(category, 'Backup schedule must use a supported every-hour UTC cron expression');
+  } else if (!invalidRpo && schedule.maxGapMinutes > bdrSec.rpo_hours * 60) {
+    addBlocker(category, 'Backup schedule maximum start gap exceeds the declared RPO');
+  }
+  if (bdrSec.restore_drill_completed !== true) {
+    addBlocker(category, 'Restore drill must be verified and completed (restore_drill_completed: true)');
+  }
+  const declaredDate = typeof bdrSec.restore_drill_date === 'string'
+    ? parseUtcDate(bdrSec.restore_drill_date) : null;
+  if (!declaredDate || declaredDate.getTime() > now.getTime()) {
+    addBlocker(category, 'Restore drill date must be a valid, nonfuture UTC date');
+  }
+  const restoreCandidates = recoveryEvidence.filter(isRestoreCandidate);
+  if (restoreCandidates.length === 0) {
+    addBlocker(category, 'A successful restore drill child JSON report is required');
+  } else {
+    if (
+      restoreCandidates.some(
+        ({ parsed }) =>
+          !validateRestoreReport(parsed, now),
+      )
+    ) {
+      addBlocker(category, 'A referenced restore drill report is invalid or failed');
+    }
+    if (
+      !restoreCandidates.some(({ parsed }) =>
+        validateRestoreReport(parsed, now, {
+          requireLive: true,
+          expectedSection: bdrSec,
+        }),
+      )
+    ) {
+      addBlocker(category, 'A live disaster recovery restore operator receipt is required');
+    }
+    const valid = restoreCandidates
+      .map(({ parsed }) => validateRestoreReport(parsed, now))
+      .filter(Boolean);
+    if (valid.length > 0 && declaredDate) {
+      const latest = valid.reduce((max, date) => (date > max ? date : max));
+      if (declaredDate.toISOString().slice(0, 10) !== latest.toISOString().slice(0, 10)) {
+        addBlocker(category, 'Restore drill date does not match the latest successful report UTC date');
+      }
+    }
+  }
+  if (bdrSec.db_object_reconciliation_tested !== true) {
+    addBlocker(category, 'PostgreSQL and Garage object storage reconciliation drill must be verified (db_object_reconciliation_tested: true)');
+  }
+  const reconciliationCandidates = recoveryEvidence.filter(isReconciliationCandidate);
+  if (reconciliationCandidates.length === 0) {
+    addBlocker(category, 'A successful storage reconciliation child JSON report is required');
+  } else {
+    if (
+      reconciliationCandidates.some(
+        ({ parsed }) =>
+          !validateReconciliationReport(parsed, now, { expectedSection: bdrSec }),
+      )
+    ) {
+      addBlocker(category, 'A referenced storage reconciliation report is invalid or failed');
+    }
+    if (
+      !reconciliationCandidates.some(({ parsed }) =>
+        validateReconciliationReport(parsed, now, {
+          requireLive: true,
+          expectedSection: bdrSec,
+        }),
+      )
+    ) {
+      addBlocker(category, 'A live storage reconciliation operator receipt is required');
+    }
+  }
+
+  return blockers;
+}
+
+function validateDataRetentionPolicySection(retSec, options = {}) {
+  const category = 'data_retention_policy';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!retSec || retSec.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const retentionEvidence = Array.isArray(options.retentionEvidence) ? options.retentionEvidence : [];
+
+  for (const p of REQUIRED_RETENTION_KEYS) {
+    if (!retSec[p] || typeof retSec[p] !== 'string') {
+      addBlocker(category, `Retention policy definition for '${p}' is required`);
+    }
+  }
+  if (retSec.upload_quarantine_retention_policy !== '7d') {
+    addBlocker(category, "upload_quarantine_retention_policy must be '7d'");
+  }
+  if (retSec.rejected_object_retention_policy !== '1d') {
+    addBlocker(category, "rejected_object_retention_policy must be '1d'");
+  }
+  if (retSec.export_retention_policy !== '30d') {
+    addBlocker(category, "export_retention_policy must be '30d'");
+  }
+  if (retSec.telemetry_retention_policy !== '15d') {
+    addBlocker(category, "telemetry_retention_policy must be '15d'");
+  }
+  if (retSec.backup_retention_policy !== '30d') {
+    addBlocker(category, "backup_retention_policy must be '30d'");
+  }
+  if (typeof retSec.account_retention_policy === 'string') {
+    const valid = /^[1-9]\d*d$/.test(retSec.account_retention_policy) ||
+      retSec.account_retention_policy === 'indefinite_until_tenant_deletion';
+    if (!valid) {
+      addBlocker(category, "account_retention_policy must be a positive day duration (e.g. '365d') or 'indefinite_until_tenant_deletion'");
+    }
+  }
+  if (typeof retSec.audit_retention_policy === 'string') {
+    const valid = /^[1-9]\d*d$/.test(retSec.audit_retention_policy);
+    if (!valid) {
+      addBlocker(category, "audit_retention_policy must be a positive day duration (e.g. '730d')");
+    }
+  }
+  if (typeof retSec.report_retention_policy === 'string') {
+    const valid = /^[1-9]\d*d$/.test(retSec.report_retention_policy) ||
+      retSec.report_retention_policy === 'indefinite_until_tenant_deletion';
+    if (!valid) {
+      addBlocker(category, "report_retention_policy must be a positive day duration (e.g. '365d') or 'indefinite_until_tenant_deletion'");
+    }
+  }
+
+  const retentionCandidates = retentionEvidence.filter(isDataRetentionPolicyCandidate);
+  if (retentionCandidates.length === 0) {
+    addBlocker(category, 'A successful data retention policy child JSON report is required');
+  } else {
+    if (retentionCandidates.some(({ parsed }) => !validateDataRetentionPolicyReport(parsed, now, retSec))) {
+      addBlocker(category, 'A referenced data retention policy report is invalid or failed');
+    }
+    if (!retentionCandidates.some(({ parsed }) => validateDataRetentionPolicyReport(parsed, now, retSec, { requireLive: true }))) {
+      addBlocker(category, 'A live data retention policy operator receipt is required');
+    }
+  }
+
+  return blockers;
+}
+
+function validateVolumeEncryptionSection(encSec, options = {}) {
+  const category = 'volume_encryption';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!encSec || encSec.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const volumeEvidence = Array.isArray(options.volumeEvidence) ? options.volumeEvidence : [];
+
+  if (
+    !validVolumeReference(encSec.encryption_mechanism) ||
+    !isApprovedMechanism(encSec.encryption_mechanism)
+  ) {
+    addBlocker(
+      category,
+      'Production volume encryption mechanism must be concrete and approved',
+    );
+  }
+  if (!validVolumePaths(encSec.encrypted_mount_paths)) {
+    addBlocker(
+      category,
+      'Encrypted mount paths must include at least 3 unique concrete absolute directory paths',
+    );
+  }
+  if (encSec.key_separation_confirmed !== true) {
+    addBlocker(
+      category,
+      'Key separation from data/backups must be explicitly confirmed (key_separation_confirmed: true)',
+    );
+  }
+  if (!validVolumeReference(encSec.key_recovery_owner)) {
+    addBlocker(
+      category,
+      'Key recovery owner must be concrete and designated',
+    );
+  }
+  const volumeCandidates = volumeEvidence.filter(isVolumeEncryptionCandidate);
+  if (
+    volumeCandidates.some(
+      ({ parsed }) =>
+        !validateVolumeEncryptionReport(parsed, now, {
+          expectedSection: encSec,
+        }),
+    )
+  ) {
+    addBlocker(
+      category,
+      'A referenced volume encryption report is invalid or failed',
+    );
+  }
+  if (
+    !volumeCandidates.some(({ parsed }) =>
+      validateVolumeEncryptionReport(parsed, now, {
+        requireLive: true,
+        expectedSection: encSec,
+      }),
+    )
+  ) {
+    addBlocker(
+      category,
+      'A successful live volume encryption child JSON report matching the approved configuration is required',
+    );
+  }
+
+  return blockers;
+}
+
+function validateGraphqlIntrospectionSection(gqlSec, options = {}) {
+  const category = 'graphql_introspection';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!gqlSec || gqlSec.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const graphqlEvidence = Array.isArray(options.graphqlEvidence) ? options.graphqlEvidence : [];
+
+  if (typeof gqlSec.production_introspection_enabled !== 'boolean') {
+    addBlocker(category, 'production_introspection_enabled must be a boolean');
+  }
+  if (gqlSec.production_introspection_enabled === true && (!gqlSec.justification || typeof gqlSec.justification !== 'string' || !gqlSec.justification.trim() || gqlSec.justification.includes('__REQUIRED_'))) {
+    addBlocker(category, 'Production GraphQL introspection enabled requires justification');
+  }
+  const graphqlCandidates = graphqlEvidence.filter(isGraphqlIntrospectionCandidate);
+  if (graphqlCandidates.length === 0) {
+    addBlocker(category, 'A successful GraphQL introspection probe child JSON report is required');
+  } else {
+    if (graphqlCandidates.some(({ parsed }) => !validateGraphqlIntrospectionReport(parsed, now, gqlSec))) {
+      addBlocker(category, 'A referenced GraphQL introspection report is invalid or failed');
+    }
+    if (!graphqlCandidates.some(({ parsed }) => validateGraphqlIntrospectionReport(parsed, now, gqlSec, { requireLive: true }))) {
+      addBlocker(category, 'A live GraphQL introspection probe operator receipt is required');
+    }
+  }
+
+  return blockers;
+}
+
+function validateDeploymentAndRollbackSection(depSec, options = {}) {
+  const category = 'deployment_and_rollback';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!depSec || depSec.status !== 'approved') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const deploymentEvidence = Array.isArray(options.deploymentEvidence) ? options.deploymentEvidence : [];
+  const filePath = typeof options.filePath === 'string' ? options.filePath : (typeof options._filePath === 'string' ? options._filePath : '');
+  const env = options.env || (options.options && options.options.env) || {};
+
+  if (!depSec.target_host_profile || typeof depSec.target_host_profile !== 'string') {
+    addBlocker(category, 'Target host profile / spec is required');
+  }
+  if (!depSec.image_registry_path || typeof depSec.image_registry_path !== 'string') {
+    addBlocker(category, 'OCI image registry path is required');
+  }
+  if (!depSec.deployment_approver || typeof depSec.deployment_approver !== 'string') {
+    addBlocker(category, 'Deployment approver is required');
+  }
+  if (!depSec.rollback_authority || typeof depSec.rollback_authority !== 'string') {
+    addBlocker(category, 'Rollback authority is required');
+  }
+  if (!depSec.image_provenance_policy || typeof depSec.image_provenance_policy !== 'string') {
+    addBlocker(category, 'Image provenance policy is required');
+  }
+  if (depSec.live_readiness_drill_completed !== true) {
+    addBlocker(category, 'Live deployment & Caddy routing drill must be completed (live_readiness_drill_completed: true)');
+  }
+  const release = depSec.release;
+  if (!release || typeof release !== 'object' || Array.isArray(release)) {
+    addBlocker(category, 'Release record is required');
+  } else {
+    if (!isValidReleaseCommitSha(release.reviewed_source_commit)) {
+      addBlocker(category, 'release.reviewed_source_commit must be exactly 40 ASCII hex characters');
+    }
+    const images = {};
+    for (const pair of ['current', 'previous']) {
+      images[pair] = {};
+      for (const role of ['client_image', 'server_image']) {
+        const value = release[pair]?.[role];
+        try {
+          validateImageReference(value, `release.${pair}.${role}`);
+          images[pair][role] = value;
+        } catch {
+          addBlocker(category, `release.${pair}.${role} must be a valid immutable image reference`);
+        }
+      }
+      if (images[pair].client_image && images[pair].client_image === images[pair].server_image) {
+        addBlocker(category, `release.${pair} must use distinct client and server images`);
+      }
+    }
+    if (images.current.client_image && images.current.server_image &&
+        images.current.client_image === images.previous.client_image &&
+        images.current.server_image === images.previous.server_image) {
+      addBlocker(category, 'release.current and release.previous must differ');
+    }
+    const prefix = depSec.image_registry_path;
+    const validPrefix = isValidImageRegistryPath(prefix);
+    if (!validPrefix) {
+      addBlocker(category, 'image_registry_path must be a registry host or repository prefix');
+    } else {
+      for (const role of ['client_image', 'server_image']) {
+        if (images.current[role] && !images.current[role].startsWith(`${prefix}/`)) {
+          addBlocker(category, `release.current.${role} is outside image_registry_path`);
+        }
+      }
+    }
+    const refs = [];
+    const baseDirs = [process.cwd()];
+    if (typeof filePath === 'string' && filePath.length > 0) {
+      const fileDir = path.dirname(path.resolve(process.cwd(), filePath));
+      if (!baseDirs.includes(fileDir)) baseDirs.push(fileDir);
+    }
+    for (const field of ['client_provenance_evidence', 'server_provenance_evidence', 'live_drill_evidence']) {
+      const ref = release[field];
+      const external = typeof ref === 'string' && /^[a-z][a-z0-9+.-]*:[^\s]+$/i.test(ref);
+      if (typeof ref !== 'string' || !ref.trim() || ref !== ref.trim() ||
+          ref.includes('__REQUIRED_') || ref.includes('*') ||
+          (!ref.endsWith('.json') && !external)) {
+        addBlocker(category, `release.${field} must be a local JSON path or stable external identifier`);
+        continue;
+      }
+      refs.push(ref);
+      if (!external) {
+        const parsedFiles = checkEvidenceFile(ref, category, addBlocker, baseDirs);
+        if (field === 'live_drill_evidence') {
+          deploymentEvidence.push(...parsedFiles);
+        }
+      }
+    }
+    if (new Set(refs).size !== refs.length) {
+      addBlocker(category, 'Release evidence references must be distinct');
+    }
+    for (const [role, envName] of [['client_image', 'ACRES_CLIENT_IMAGE'], ['server_image', 'ACRES_SERVER_IMAGE']]) {
+      if (typeof env?.[envName] !== 'string' || !env[envName]) {
+        addBlocker(category, `${envName} is required for approved deployment`);
+      } else if (env[envName] !== release.current?.[role]) {
+        addBlocker(category, `${envName} does not match release.current.${role}`);
+      }
+    }
+  }
+  const deploymentCandidates = deploymentEvidence.filter(isDeploymentDrillCandidate);
+  if (deploymentCandidates.length === 0) {
+    addBlocker(category, 'A successful deployment drill child JSON report is required');
+  } else if (deploymentCandidates.some(({ parsed }) => !validateDeploymentDrillReport(parsed, now, { expectedRelease: release }))) {
+    addBlocker(category, 'A referenced deployment drill report is invalid or failed');
+  } else if (!deploymentCandidates.some(({ parsed }) => validateDeploymentDrillReport(parsed, now, { requireLive: true, expectedRelease: release }))) {
+    addBlocker(category, 'A live deployment drill child bound to the approved release is required');
+  }
+
+  return blockers;
+}
+
+function validateOptionalAiPostureSection(aiSec, options = {}) {
+  const category = 'optional_ai_posture';
+  const blockers = [];
+  const addBlocker = (cat, msg) => {
+    blockers.push(msg);
+    if (typeof options.addBlocker === 'function') {
+      options.addBlocker(cat, msg);
+    }
+  };
+  if (!aiSec || typeof aiSec !== 'object') {
+    return blockers;
+  }
+  const now = options.now instanceof Date ? options.now : new Date();
+  const noAiEvidence = Array.isArray(options.noAiEvidence) ? options.noAiEvidence : [];
+
+  if (aiSec.ai_enabled === true) {
+    addBlocker(
+      category,
+      'FATAL: Optional AI is marked enabled (ai_enabled: true), but the Phase 11A unpaid Gemini Developer API preview is excluded from production launch'
+    );
+  }
+  if (typeof aiSec.ai_enabled !== 'boolean') {
+    addBlocker(
+      category,
+      "Field 'ai_enabled' is required and must be a boolean (false)"
+    );
+  }
+  if (aiSec.gemini_api_key || aiSec.gemini_key || aiSec.api_key) {
+    addBlocker(
+      category,
+      'Contradiction: optional_ai_posture must not contain a Gemini API key or key reference'
+    );
+  }
+  if (aiSec.status === 'approved') {
+    if (aiSec.ai_enabled !== false) {
+      addBlocker(
+        category,
+        'Launch approval requires ai_enabled: false because the unpaid Gemini Developer API preview is excluded from production launch'
+      );
+    }
+    if (aiSec.no_ai_path_verified !== true) {
+      addBlocker(
+        category,
+        'Deterministic no-AI product journeys must be verified (no_ai_path_verified: true)'
+      );
+    }
+    if (aiSec.server_ai_draft_enabled_false !== true) {
+      addBlocker(
+        category,
+        'Server configuration must explicitly assert AI_DRAFT_ENABLED=false (server_ai_draft_enabled_false: true)'
+      );
+    }
+    if (aiSec.no_gemini_api_key_provisioned !== true) {
+      addBlocker(
+        category,
+        'Absence of GEMINI_API_KEY in production API/worker runtime secrets must be confirmed (no_gemini_api_key_provisioned: true)'
+      );
+    }
+    if (aiSec.unpaid_provider_excluded !== true) {
+      addBlocker(
+        category,
+        'Exclusion of unpaid Gemini Developer API provider from production launch must be confirmed (unpaid_provider_excluded: true)'
+      );
+    }
+    if (typeof aiSec.phase11_status !== 'string' || !aiSec.phase11_status.trim()) {
+      addBlocker(
+        category,
+        "Field 'phase11_status' is required and must be a non-empty string"
+      );
+    }
+    const noAiCandidates = noAiEvidence.filter(isNoAiPostureCandidate);
+    if (noAiCandidates.length === 0) {
+      addBlocker(category, 'A successful no-AI production posture child JSON report is required');
+    } else {
+      if (noAiCandidates.some(({ parsed }) => !validateNoAiPostureReport(parsed, now, aiSec))) {
+        addBlocker(category, 'A referenced no-AI production posture report is invalid or failed');
+      }
+      if (!noAiCandidates.some(({ parsed }) => validateNoAiPostureReport(parsed, now, aiSec, { requireLive: true }))) {
+        addBlocker(category, 'A live no-AI production posture operator receipt is required');
+      }
+    }
+  }
+
+  return blockers;
+}
+
 function validateReadiness(record, _filePath, options = {}) {
   const categoryBlockers = {};
   let totalApproved = 0;
@@ -2665,672 +3506,75 @@ function validateReadiness(record, _filePath, options = {}) {
   }
 
   // 3. Category-specific validations
+  validateProductionDomainTlsSection(sections.production_domain_tls, {
+    now,
+    caddyEvidence,
+    addBlocker,
+  });
 
-  // 3.1 production_domain_tls
-  const domainSec = sections.production_domain_tls;
-  if (domainSec && domainSec.status === 'approved') {
-    const rawDomain = typeof domainSec.domain === 'string' ? domainSec.domain.trim() : '';
-    const isIpAddress = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(rawDomain) || rawDomain.includes(':');
-    const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(rawDomain);
-    const hasUriParts = /[\/\?#\s]/.test(rawDomain);
-    const fqdnPattern = /^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
-    const isValidFqdn =
-      fqdnPattern.test(rawDomain) &&
-      !rawDomain.includes('localhost') &&
-      !rawDomain.includes('127.0.0.1') &&
-      !isIpAddress &&
-      !hasProtocol &&
-      !hasUriParts;
+  validateSmtpDeliverySection(sections.smtp_delivery, {
+    sections,
+    now,
+    smtpEvidence,
+    addBlocker,
+  });
 
-    if (!isValidFqdn) {
-      addBlocker(
-        'production_domain_tls',
-        `Production domain must be a valid fully qualified domain name (received: "${domainSec.domain}")`
-      );
-    }
+  validateSecretsManagementSection(sections.secrets_management, {
+    now,
+    secretEvidence,
+    addBlocker,
+  });
 
-    const rawEmail = typeof domainSec.tls_contact_email === 'string' ? domainSec.tls_contact_email.trim() : '';
-    const emailPattern = /^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
-    const localPart = rawEmail.split('@')[0];
-    const isValidEmail =
-      rawEmail.length <= 254 &&
-      localPart.length <= 64 &&
-      emailPattern.test(rawEmail) &&
-      !localPart.startsWith('.') &&
-      !localPart.endsWith('.') &&
-      !rawEmail.includes('..') &&
-      !rawEmail.includes('__REQUIRED_');
+  validateSecretReferencesSection(sections.secret_references, {
+    now,
+    secretReferenceEvidence,
+    addBlocker,
+  });
 
-    if (!isValidEmail) {
-      addBlocker('production_domain_tls', `TLS contact email is missing or invalid: "${domainSec.tls_contact_email}"`);
-    }
+  validateSloAndAlertingSection(sections.slo_and_alerting, {
+    now,
+    capacityEvidence,
+    addBlocker,
+  });
 
-    if (domainSec.hsts_approved !== true) {
-      addBlocker('production_domain_tls', 'HSTS approval must be explicitly confirmed (hsts_approved: true)');
-    }
+  validateBackupAndDisasterRecoverySection(sections.backup_and_disaster_recovery, {
+    now,
+    recoveryEvidence,
+    addBlocker,
+  });
 
-    if (typeof domainSec.custom_certificates !== 'boolean') {
-      addBlocker(
-        'production_domain_tls',
-        'Field "custom_certificates" must be explicitly defined as a boolean (true or false)'
-      );
-    }
+  validateDataRetentionPolicySection(sections.data_retention_policy, {
+    now,
+    retentionEvidence,
+    addBlocker,
+  });
 
-    const caddyCandidates = caddyEvidence.filter(isCaddyRoutingCandidate);
-    if (caddyCandidates.length === 0) {
-      addBlocker('production_domain_tls', 'A successful Caddy routing and TLS verification child JSON report is required');
-    } else {
-      if (caddyCandidates.some(({ parsed }) => !validateCaddyRoutingReport(parsed, now, rawDomain, { expectedSection: domainSec }))) {
-        addBlocker('production_domain_tls', 'A referenced Caddy routing report is invalid or failed');
-      }
-      if (!caddyCandidates.some(({ parsed }) => validateCaddyRoutingReport(parsed, now, rawDomain, { requireLive: true, expectedSection: domainSec }))) {
-        addBlocker('production_domain_tls', 'A live Caddy routing and TLS verification operator receipt is required');
-      }
-    }
-  }
+  validateVolumeEncryptionSection(sections.volume_encryption, {
+    now,
+    volumeEvidence,
+    addBlocker,
+  });
 
-  // 3.2 smtp_delivery
-  const smtpSec = sections.smtp_delivery;
-  if (smtpSec && smtpSec.status === 'approved') {
-    if (!validSmtpText(smtpSec.provider)) {
-      addBlocker('smtp_delivery', 'SMTP provider is required');
-    }
-    if (!validSmtpText(smtpSec.host)) {
-      addBlocker('smtp_delivery', 'SMTP host is required');
-    }
-    if (!Number.isInteger(smtpSec.port) || smtpSec.port <= 0 || smtpSec.port > 65535) {
-      addBlocker('smtp_delivery', `SMTP port must be a valid port number (received: ${smtpSec.port})`);
-    }
-    if (!['STARTTLS', 'TLS'].includes(smtpSec.tls_mode)) {
-      addBlocker('smtp_delivery', 'SMTP tls_mode must be STARTTLS or TLS');
-    }
-    if (!validSmtpEmail(smtpSec.from_address)) {
-      addBlocker('smtp_delivery', `SMTP from_address is invalid: "${smtpSec.from_address}"`);
-    }
-    if (!validSmtpSecretReference(smtpSec.credentials_source_reference) ||
-        smtpSec.credentials_source_reference !== sections.secret_references?.smtp_secret_source) {
-      addBlocker('smtp_delivery', 'SMTP credentials source reference must match the approved secret reference');
-    }
-    if (!validSmtpText(smtpSec.delivery_policy)) {
-      addBlocker('smtp_delivery', 'SMTP delivery policy description is required');
-    }
-    if (!validSmtpText(smtpSec.bounce_abuse_handling)) {
-      addBlocker('smtp_delivery', 'SMTP bounce/abuse handling procedure reference is required');
-    }
-    const smtpCandidates = smtpEvidence.filter(isSmtpDeliveryCandidate);
-    if (smtpCandidates.length === 0) {
-      addBlocker('smtp_delivery', 'A successful SMTP delivery and DNS verification child JSON report is required');
-    } else {
-      if (smtpCandidates.some(({ parsed }) => !validateSmtpDeliveryReport(parsed, now, smtpSec))) {
-        addBlocker('smtp_delivery', 'A referenced SMTP delivery report is invalid or failed');
-      }
-      if (!smtpCandidates.some(({ parsed }) => validateSmtpDeliveryReport(parsed, now, smtpSec, { requireLive: true }))) {
-        addBlocker('smtp_delivery', 'A live SMTP delivery verification operator receipt is required');
-      }
-    }
-  }
+  validateGraphqlIntrospectionSection(sections.graphql_introspection, {
+    now,
+    graphqlEvidence,
+    addBlocker,
+  });
 
-  // 3.3 secrets_management
-  const secMgmt = sections.secrets_management;
-  if (secMgmt && secMgmt.status === 'approved') {
-    if (!secMgmt.injection_mechanism || typeof secMgmt.injection_mechanism !== 'string') {
-      addBlocker('secrets_management', 'Secret injection mechanism is required');
-    }
-    if (!secMgmt.masking_policy || typeof secMgmt.masking_policy !== 'string') {
-      addBlocker('secrets_management', 'Secret masking policy is required');
-    }
-    if (
-      typeof secMgmt.rotation_cadence_days !== 'number' ||
-      !Number.isFinite(secMgmt.rotation_cadence_days) ||
-      secMgmt.rotation_cadence_days <= 0 ||
-      secMgmt.rotation_cadence_days > 90
-    ) {
-      addBlocker(
-        'secrets_management',
-        `Rotation cadence (in days) must be a positive number <= 90 days (received: ${secMgmt.rotation_cadence_days})`
-      );
-    }
-    if (!secMgmt.compromise_response_plan || typeof secMgmt.compromise_response_plan !== 'string') {
-      addBlocker('secrets_management', 'Compromise response runbook reference is required');
-    }
-    const secretCandidates = secretEvidence.filter(isSecretRotationCandidate);
-    if (secretCandidates.length === 0) {
-      addBlocker('secrets_management', 'A successful secret rotation child JSON report is required');
-    } else {
-      if (secretCandidates.some(({ parsed }) => !validateSecretRotationReport(parsed, now))) {
-        addBlocker('secrets_management', 'A referenced secret rotation report is invalid or failed');
-      }
-      if (!secretCandidates.some(({ parsed }) => validateSecretRotationReport(parsed, now, { requireLive: true }))) {
-        addBlocker('secrets_management', 'A live production secret rotation operator receipt is required');
-      }
-    }
-  }
+  validateDeploymentAndRollbackSection(sections.deployment_and_rollback, {
+    now,
+    deploymentEvidence,
+    filePath: _filePath,
+    env: options.env,
+    options,
+    addBlocker,
+  });
 
-  // 3.4 secret_references
-  const secRefs = sections.secret_references;
-  if (secRefs) {
-    for (const key of Object.keys(secRefs)) {
-      if (
-        key.toLowerCase().includes('gemini') ||
-        key.toLowerCase().includes('ai_draft') ||
-        key.toLowerCase().includes('ai_key')
-      ) {
-        addBlocker(
-          'optional_ai_posture',
-          `Contradiction: field 'sections.secret_references.${key}' declares an AI/Gemini secret source when AI is excluded from launch`
-        );
-      }
-    }
-    for (const key of REQUIRED_SECRET_KEYS) {
-      const val = secRefs[key];
-      if (!val || typeof val !== 'string') {
-        addBlocker('secret_references', `Missing secret source reference for '${key}'`);
-      } else if (secRefs.status === 'approved' && !validSmtpSecretReference(val)) {
-        addBlocker('secret_references', `Field '${key}' must be an indirect secret-store reference`);
-      }
-    }
-    if (secRefs.status === 'approved') {
-      const candidates = secretReferenceEvidence.filter(isSecretReferencePolicyCandidate);
-      if (candidates.length === 0) {
-        addBlocker('secret_references', 'A successful secret-reference policy child JSON report is required');
-      } else {
-        if (candidates.some(({ parsed }) => !validateSecretReferencePolicyReport(parsed, now, secRefs))) {
-          addBlocker('secret_references', 'A referenced secret-reference policy report is invalid or failed');
-        }
-        if (!candidates.some(({ parsed }) => validateSecretReferencePolicyReport(parsed, now, secRefs, { requireLive: true }))) {
-          addBlocker('secret_references', 'A live secret-reference policy operator receipt is required');
-        }
-      }
-    }
-  }
-
-  // 3.5 slo_and_alerting
-  const sloSec = sections.slo_and_alerting;
-  if (sloSec && sloSec.status === 'approved') {
-    if (
-      typeof sloSec.availability_target_percent !== 'number' ||
-      !Number.isFinite(sloSec.availability_target_percent) ||
-      sloSec.availability_target_percent < 99.9 ||
-      sloSec.availability_target_percent > 100.0
-    ) {
-      addBlocker('slo_and_alerting', `Availability target percent must be between 99.9 and 100.0 (received: ${sloSec.availability_target_percent})`);
-    }
-    if (
-      typeof sloSec.max_p95_latency_ms !== 'number' ||
-      !Number.isFinite(sloSec.max_p95_latency_ms) ||
-      sloSec.max_p95_latency_ms <= 0 ||
-      sloSec.max_p95_latency_ms > 500
-    ) {
-      addBlocker('slo_and_alerting', `Max p95 latency ceiling must be a positive number <= 500ms (received: ${sloSec.max_p95_latency_ms})`);
-    }
-    if (
-      typeof sloSec.capacity_target_rps !== 'number' ||
-      !Number.isFinite(sloSec.capacity_target_rps) ||
-      sloSec.capacity_target_rps < 100
-    ) {
-      addBlocker('slo_and_alerting', `Capacity target RPS must be a positive number >= 100 RPS (received: ${sloSec.capacity_target_rps})`);
-    }
-    if (
-      typeof sloSec.max_database_acquisition_p95_latency_ms !== 'number' ||
-      !Number.isFinite(sloSec.max_database_acquisition_p95_latency_ms) ||
-      sloSec.max_database_acquisition_p95_latency_ms <= 0 ||
-      sloSec.max_database_acquisition_p95_latency_ms > 50
-    ) {
-      addBlocker(
-        'slo_and_alerting',
-        `Max database pool acquisition p95 latency ceiling must be a positive number <= 50ms (received: ${sloSec.max_database_acquisition_p95_latency_ms})`
-      );
-    }
-    if (
-      typeof sloSec.max_database_query_p95_latency_ms !== 'number' ||
-      !Number.isFinite(sloSec.max_database_query_p95_latency_ms) ||
-      sloSec.max_database_query_p95_latency_ms <= 0 ||
-      sloSec.max_database_query_p95_latency_ms > 100
-    ) {
-      addBlocker(
-        'slo_and_alerting',
-        `Max database query execution p95 latency ceiling must be a positive number <= 100ms (received: ${sloSec.max_database_query_p95_latency_ms})`
-      );
-    }
-    if (!Array.isArray(sloSec.alert_recipients) || sloSec.alert_recipients.length === 0) {
-      addBlocker('slo_and_alerting', 'Alert recipients list must contain at least one contact/destination');
-    }
-    if (sloSec.alert_thresholds_defined !== true) {
-      addBlocker('slo_and_alerting', 'Alert thresholds must be explicitly defined and confirmed (alert_thresholds_defined: true)');
-    }
-    if (!sloSec.escalation_runbook_ref || typeof sloSec.escalation_runbook_ref !== 'string') {
-      addBlocker('slo_and_alerting', 'Escalation runbook reference is required');
-    }
-    const capacityCandidates = capacityEvidence.filter(isCapacityAlertingCandidate);
-    if (capacityCandidates.length === 0) {
-      addBlocker('slo_and_alerting', 'A successful capacity and alerting drill child JSON report is required');
-    } else if (capacityCandidates.some(({ parsed }) => !validateCapacityAlertingReport(parsed, now, { section: sloSec }))) {
-      addBlocker('slo_and_alerting', 'A referenced capacity and alerting report is invalid or failed');
-    } else if (!capacityCandidates.some(({ parsed }) => validateCapacityAlertingReport(parsed, now, { section: sloSec, requireLive: true }))) {
-      addBlocker('slo_and_alerting', 'A live capacity and alerting operator receipt is required');
-    }
-  }
-
-  // 3.6 backup_and_disaster_recovery
-  const bdrSec = sections.backup_and_disaster_recovery;
-  if (bdrSec && bdrSec.status === 'approved') {
-    const invalidRpo =
-      typeof bdrSec.rpo_hours !== 'number' ||
-      !Number.isFinite(bdrSec.rpo_hours) ||
-      bdrSec.rpo_hours <= 0 ||
-      bdrSec.rpo_hours > 1;
-    if (invalidRpo) {
-      addBlocker('backup_and_disaster_recovery', `RPO hours must be a positive number <= 1 hour (received: ${bdrSec.rpo_hours})`);
-    }
-    if (
-      typeof bdrSec.rto_hours !== 'number' ||
-      !Number.isFinite(bdrSec.rto_hours) ||
-      bdrSec.rto_hours <= 0 ||
-      bdrSec.rto_hours > 4
-    ) {
-      addBlocker('backup_and_disaster_recovery', `RTO hours must be a positive number <= 4 hours (received: ${bdrSec.rto_hours})`);
-    }
-    if (
-      !bdrSec.backup_destination ||
-      typeof bdrSec.backup_destination !== 'string' ||
-      !validRecoveryReference(bdrSec.backup_destination)
-    ) {
-      addBlocker('backup_and_disaster_recovery', 'Off-host backup destination is required');
-    }
-    const schedule = parseBackupScheduleCron(bdrSec.backup_schedule_cron);
-    if (!schedule.valid) {
-      addBlocker('backup_and_disaster_recovery', 'Backup schedule must use a supported every-hour UTC cron expression');
-    } else if (!invalidRpo && schedule.maxGapMinutes > bdrSec.rpo_hours * 60) {
-      addBlocker('backup_and_disaster_recovery', 'Backup schedule maximum start gap exceeds the declared RPO');
-    }
-    if (bdrSec.restore_drill_completed !== true) {
-      addBlocker('backup_and_disaster_recovery', 'Restore drill must be verified and completed (restore_drill_completed: true)');
-    }
-    const declaredDate = typeof bdrSec.restore_drill_date === 'string'
-      ? parseUtcDate(bdrSec.restore_drill_date) : null;
-    if (!declaredDate || declaredDate.getTime() > now.getTime()) {
-      addBlocker('backup_and_disaster_recovery', 'Restore drill date must be a valid, nonfuture UTC date');
-    }
-    const restoreCandidates = recoveryEvidence.filter(isRestoreCandidate);
-    if (restoreCandidates.length === 0) {
-      addBlocker('backup_and_disaster_recovery', 'A successful restore drill child JSON report is required');
-    } else {
-      if (
-        restoreCandidates.some(
-          ({ parsed }) =>
-            !validateRestoreReport(parsed, now),
-        )
-      ) {
-        addBlocker('backup_and_disaster_recovery', 'A referenced restore drill report is invalid or failed');
-      }
-      if (
-        !restoreCandidates.some(({ parsed }) =>
-          validateRestoreReport(parsed, now, {
-            requireLive: true,
-            expectedSection: bdrSec,
-          }),
-        )
-      ) {
-        addBlocker('backup_and_disaster_recovery', 'A live disaster recovery restore operator receipt is required');
-      }
-      const valid = restoreCandidates
-        .map(({ parsed }) => validateRestoreReport(parsed, now))
-        .filter(Boolean);
-      if (valid.length > 0 && declaredDate) {
-        const latest = valid.reduce((max, date) => (date > max ? date : max));
-        if (declaredDate.toISOString().slice(0, 10) !== latest.toISOString().slice(0, 10)) {
-          addBlocker('backup_and_disaster_recovery', 'Restore drill date does not match the latest successful report UTC date');
-        }
-      }
-    }
-    if (bdrSec.db_object_reconciliation_tested !== true) {
-      addBlocker('backup_and_disaster_recovery', 'PostgreSQL and Garage object storage reconciliation drill must be verified (db_object_reconciliation_tested: true)');
-    }
-    const reconciliationCandidates = recoveryEvidence.filter(isReconciliationCandidate);
-    if (reconciliationCandidates.length === 0) {
-      addBlocker('backup_and_disaster_recovery', 'A successful storage reconciliation child JSON report is required');
-    } else {
-      if (
-        reconciliationCandidates.some(
-          ({ parsed }) =>
-            !validateReconciliationReport(parsed, now, { expectedSection: bdrSec }),
-        )
-      ) {
-        addBlocker('backup_and_disaster_recovery', 'A referenced storage reconciliation report is invalid or failed');
-      }
-      if (
-        !reconciliationCandidates.some(({ parsed }) =>
-          validateReconciliationReport(parsed, now, {
-            requireLive: true,
-            expectedSection: bdrSec,
-          }),
-        )
-      ) {
-        addBlocker('backup_and_disaster_recovery', 'A live storage reconciliation operator receipt is required');
-      }
-    }
-  }
-
-  // 3.7 data_retention_policy
-  const retSec = sections.data_retention_policy;
-  if (retSec && retSec.status === 'approved') {
-    for (const p of REQUIRED_RETENTION_KEYS) {
-      if (!retSec[p] || typeof retSec[p] !== 'string') {
-        addBlocker('data_retention_policy', `Retention policy definition for '${p}' is required`);
-      }
-    }
-    if (retSec.upload_quarantine_retention_policy !== '7d') {
-      addBlocker('data_retention_policy', "upload_quarantine_retention_policy must be '7d'");
-    }
-    if (retSec.rejected_object_retention_policy !== '1d') {
-      addBlocker('data_retention_policy', "rejected_object_retention_policy must be '1d'");
-    }
-    if (retSec.export_retention_policy !== '30d') {
-      addBlocker('data_retention_policy', "export_retention_policy must be '30d'");
-    }
-    if (retSec.telemetry_retention_policy !== '15d') {
-      addBlocker('data_retention_policy', "telemetry_retention_policy must be '15d'");
-    }
-    if (retSec.backup_retention_policy !== '30d') {
-      addBlocker('data_retention_policy', "backup_retention_policy must be '30d'");
-    }
-    if (typeof retSec.account_retention_policy === 'string') {
-      const valid = /^[1-9]\d*d$/.test(retSec.account_retention_policy) ||
-        retSec.account_retention_policy === 'indefinite_until_tenant_deletion';
-      if (!valid) {
-        addBlocker('data_retention_policy', "account_retention_policy must be a positive day duration (e.g. '365d') or 'indefinite_until_tenant_deletion'");
-      }
-    }
-    if (typeof retSec.audit_retention_policy === 'string') {
-      const valid = /^[1-9]\d*d$/.test(retSec.audit_retention_policy);
-      if (!valid) {
-        addBlocker('data_retention_policy', "audit_retention_policy must be a positive day duration (e.g. '730d')");
-      }
-    }
-    if (typeof retSec.report_retention_policy === 'string') {
-      const valid = /^[1-9]\d*d$/.test(retSec.report_retention_policy) ||
-        retSec.report_retention_policy === 'indefinite_until_tenant_deletion';
-      if (!valid) {
-        addBlocker('data_retention_policy', "report_retention_policy must be a positive day duration (e.g. '365d') or 'indefinite_until_tenant_deletion'");
-      }
-    }
-
-    const retentionCandidates = retentionEvidence.filter(isDataRetentionPolicyCandidate);
-    if (retentionCandidates.length === 0) {
-      addBlocker('data_retention_policy', 'A successful data retention policy child JSON report is required');
-    } else {
-      if (retentionCandidates.some(({ parsed }) => !validateDataRetentionPolicyReport(parsed, now, retSec))) {
-        addBlocker('data_retention_policy', 'A referenced data retention policy report is invalid or failed');
-      }
-      if (!retentionCandidates.some(({ parsed }) => validateDataRetentionPolicyReport(parsed, now, retSec, { requireLive: true }))) {
-        addBlocker('data_retention_policy', 'A live data retention policy operator receipt is required');
-      }
-    }
-  }
-
-  // 3.8 volume_encryption
-  const encSec = sections.volume_encryption;
-  if (encSec && encSec.status === 'approved') {
-    if (
-      !validVolumeReference(encSec.encryption_mechanism) ||
-      !isApprovedMechanism(encSec.encryption_mechanism)
-    ) {
-      addBlocker(
-        'volume_encryption',
-        'Production volume encryption mechanism must be concrete and approved',
-      );
-    }
-    if (!validVolumePaths(encSec.encrypted_mount_paths)) {
-      addBlocker(
-        'volume_encryption',
-        'Encrypted mount paths must include at least 3 unique concrete absolute directory paths',
-      );
-    }
-    if (encSec.key_separation_confirmed !== true) {
-      addBlocker(
-        'volume_encryption',
-        'Key separation from data/backups must be explicitly confirmed (key_separation_confirmed: true)',
-      );
-    }
-    if (!validVolumeReference(encSec.key_recovery_owner)) {
-      addBlocker(
-        'volume_encryption',
-        'Key recovery owner must be concrete and designated',
-      );
-    }
-    const volumeCandidates = volumeEvidence.filter(isVolumeEncryptionCandidate);
-    if (
-      volumeCandidates.some(
-        ({ parsed }) =>
-          !validateVolumeEncryptionReport(parsed, now, {
-            expectedSection: encSec,
-          }),
-      )
-    ) {
-      addBlocker(
-        'volume_encryption',
-        'A referenced volume encryption report is invalid or failed',
-      );
-    }
-    if (
-      !volumeCandidates.some(({ parsed }) =>
-        validateVolumeEncryptionReport(parsed, now, {
-          requireLive: true,
-          expectedSection: encSec,
-        }),
-      )
-    ) {
-      addBlocker(
-        'volume_encryption',
-        'A successful live volume encryption child JSON report matching the approved configuration is required',
-      );
-    }
-  }
-
-  // 3.9 graphql_introspection
-  const gqlSec = sections.graphql_introspection;
-  if (gqlSec && gqlSec.status === 'approved') {
-    if (typeof gqlSec.production_introspection_enabled !== 'boolean') {
-      addBlocker('graphql_introspection', 'production_introspection_enabled must be a boolean');
-    }
-    if (gqlSec.production_introspection_enabled === true && (!gqlSec.justification || typeof gqlSec.justification !== 'string' || !gqlSec.justification.trim() || gqlSec.justification.includes('__REQUIRED_'))) {
-      addBlocker('graphql_introspection', 'Production GraphQL introspection enabled requires justification');
-    }
-    const graphqlCandidates = graphqlEvidence.filter(isGraphqlIntrospectionCandidate);
-    if (graphqlCandidates.length === 0) {
-      addBlocker('graphql_introspection', 'A successful GraphQL introspection probe child JSON report is required');
-    } else {
-      if (graphqlCandidates.some(({ parsed }) => !validateGraphqlIntrospectionReport(parsed, now, gqlSec))) {
-        addBlocker('graphql_introspection', 'A referenced GraphQL introspection report is invalid or failed');
-      }
-      if (!graphqlCandidates.some(({ parsed }) => validateGraphqlIntrospectionReport(parsed, now, gqlSec, { requireLive: true }))) {
-        addBlocker('graphql_introspection', 'A live GraphQL introspection probe operator receipt is required');
-      }
-    }
-  }
-
-  // 3.10 deployment_and_rollback
-  const depSec = sections.deployment_and_rollback;
-  if (depSec && depSec.status === 'approved') {
-    if (!depSec.target_host_profile || typeof depSec.target_host_profile !== 'string') {
-      addBlocker('deployment_and_rollback', 'Target host profile / spec is required');
-    }
-    if (!depSec.image_registry_path || typeof depSec.image_registry_path !== 'string') {
-      addBlocker('deployment_and_rollback', 'OCI image registry path is required');
-    }
-    if (!depSec.deployment_approver || typeof depSec.deployment_approver !== 'string') {
-      addBlocker('deployment_and_rollback', 'Deployment approver is required');
-    }
-    if (!depSec.rollback_authority || typeof depSec.rollback_authority !== 'string') {
-      addBlocker('deployment_and_rollback', 'Rollback authority is required');
-    }
-    if (!depSec.image_provenance_policy || typeof depSec.image_provenance_policy !== 'string') {
-      addBlocker('deployment_and_rollback', 'Image provenance policy is required');
-    }
-    if (depSec.live_readiness_drill_completed !== true) {
-      addBlocker('deployment_and_rollback', 'Live deployment & Caddy routing drill must be completed (live_readiness_drill_completed: true)');
-    }
-    const category = 'deployment_and_rollback';
-    const release = depSec.release;
-    if (!release || typeof release !== 'object' || Array.isArray(release)) {
-      addBlocker(category, 'Release record is required');
-    } else {
-      if (typeof release.reviewed_source_commit !== 'string' || !/^[a-fA-F0-9]{40}$/.test(release.reviewed_source_commit)) {
-        addBlocker(category, 'release.reviewed_source_commit must be exactly 40 ASCII hex characters');
-      }
-      const images = {};
-      for (const pair of ['current', 'previous']) {
-        images[pair] = {};
-        for (const role of ['client_image', 'server_image']) {
-          const value = release[pair]?.[role];
-          try {
-            validateImageReference(value, `release.${pair}.${role}`);
-            images[pair][role] = value;
-          } catch {
-            addBlocker(category, `release.${pair}.${role} must be a valid immutable image reference`);
-          }
-        }
-        if (images[pair].client_image && images[pair].client_image === images[pair].server_image) {
-          addBlocker(category, `release.${pair} must use distinct client and server images`);
-        }
-      }
-      if (images.current.client_image && images.current.server_image &&
-          images.current.client_image === images.previous.client_image &&
-          images.current.server_image === images.previous.server_image) {
-        addBlocker(category, 'release.current and release.previous must differ');
-      }
-      const prefix = depSec.image_registry_path;
-      const validPrefix = typeof prefix === 'string' && !prefix.includes('@') &&
-        !prefix.endsWith('/') && (() => {
-          try {
-            validateImageReference(`${prefix}/probe@sha256:${'a'.repeat(64)}`, 'image_registry_path');
-            return true;
-          } catch { return false; }
-        })();
-      if (!validPrefix) {
-        addBlocker(category, 'image_registry_path must be a registry host or repository prefix');
-      } else {
-        for (const role of ['client_image', 'server_image']) {
-          if (images.current[role] && !images.current[role].startsWith(`${prefix}/`)) {
-            addBlocker(category, `release.current.${role} is outside image_registry_path`);
-          }
-        }
-      }
-      const refs = [];
-      const baseDirs = [process.cwd()];
-      if (typeof _filePath === 'string' && _filePath.length > 0) {
-        const fileDir = path.dirname(path.resolve(process.cwd(), _filePath));
-        if (!baseDirs.includes(fileDir)) baseDirs.push(fileDir);
-      }
-      for (const field of ['client_provenance_evidence', 'server_provenance_evidence', 'live_drill_evidence']) {
-        const ref = release[field];
-        const external = typeof ref === 'string' && /^[a-z][a-z0-9+.-]*:[^\s]+$/i.test(ref);
-        if (typeof ref !== 'string' || !ref.trim() || ref !== ref.trim() ||
-            ref.includes('__REQUIRED_') || ref.includes('*') ||
-            (!ref.endsWith('.json') && !external)) {
-          addBlocker(category, `release.${field} must be a local JSON path or stable external identifier`);
-          continue;
-        }
-        refs.push(ref);
-        if (!external) {
-          const parsedFiles = checkEvidenceFile(ref, category, addBlocker, baseDirs);
-          if (field === 'live_drill_evidence') {
-            deploymentEvidence.push(...parsedFiles);
-          }
-        }
-      }
-      if (new Set(refs).size !== refs.length) {
-        addBlocker(category, 'Release evidence references must be distinct');
-      }
-      for (const [role, envName] of [['client_image', 'ACRES_CLIENT_IMAGE'], ['server_image', 'ACRES_SERVER_IMAGE']]) {
-        if (typeof options.env?.[envName] !== 'string' || !options.env[envName]) {
-          addBlocker(category, `${envName} is required for approved deployment`);
-        } else if (options.env[envName] !== release.current?.[role]) {
-          addBlocker(category, `${envName} does not match release.current.${role}`);
-        }
-      }
-    }
-    const deploymentCandidates = deploymentEvidence.filter(isDeploymentDrillCandidate);
-    if (deploymentCandidates.length === 0) {
-      addBlocker('deployment_and_rollback', 'A successful deployment drill child JSON report is required');
-    } else if (deploymentCandidates.some(({ parsed }) => !validateDeploymentDrillReport(parsed, now, { expectedRelease: release }))) {
-      addBlocker('deployment_and_rollback', 'A referenced deployment drill report is invalid or failed');
-    } else if (!deploymentCandidates.some(({ parsed }) => validateDeploymentDrillReport(parsed, now, { requireLive: true, expectedRelease: release }))) {
-      addBlocker('deployment_and_rollback', 'A live deployment drill child bound to the approved release is required');
-    }
-  }
-
-  // 3.11 optional_ai_posture - FAIL-CLOSED on AI enablement
-  const aiSec = sections.optional_ai_posture;
-  if (aiSec) {
-    if (aiSec.ai_enabled === true) {
-      addBlocker(
-        'optional_ai_posture',
-        'FATAL: Optional AI is marked enabled (ai_enabled: true), but the Phase 11A unpaid Gemini Developer API preview is excluded from production launch'
-      );
-    }
-    if (typeof aiSec.ai_enabled !== 'boolean') {
-      addBlocker(
-        'optional_ai_posture',
-        "Field 'ai_enabled' is required and must be a boolean (false)"
-      );
-    }
-    if (aiSec.gemini_api_key || aiSec.gemini_key || aiSec.api_key) {
-      addBlocker(
-        'optional_ai_posture',
-        'Contradiction: optional_ai_posture must not contain a Gemini API key or key reference'
-      );
-    }
-    if (aiSec.status === 'approved') {
-      if (aiSec.ai_enabled !== false) {
-        addBlocker(
-          'optional_ai_posture',
-          'Launch approval requires ai_enabled: false because the unpaid Gemini Developer API preview is excluded from production launch'
-        );
-      }
-      if (aiSec.no_ai_path_verified !== true) {
-        addBlocker(
-          'optional_ai_posture',
-          'Deterministic no-AI product journeys must be verified (no_ai_path_verified: true)'
-        );
-      }
-      if (aiSec.server_ai_draft_enabled_false !== true) {
-        addBlocker(
-          'optional_ai_posture',
-          'Server configuration must explicitly assert AI_DRAFT_ENABLED=false (server_ai_draft_enabled_false: true)'
-        );
-      }
-      if (aiSec.no_gemini_api_key_provisioned !== true) {
-        addBlocker(
-          'optional_ai_posture',
-          'Absence of GEMINI_API_KEY in production API/worker runtime secrets must be confirmed (no_gemini_api_key_provisioned: true)'
-        );
-      }
-      if (aiSec.unpaid_provider_excluded !== true) {
-        addBlocker(
-          'optional_ai_posture',
-          'Exclusion of unpaid Gemini Developer API provider from production launch must be confirmed (unpaid_provider_excluded: true)'
-        );
-      }
-      if (typeof aiSec.phase11_status !== 'string' || !aiSec.phase11_status.trim()) {
-        addBlocker(
-          'optional_ai_posture',
-          "Field 'phase11_status' is required and must be a non-empty string"
-        );
-      }
-      const noAiCandidates = noAiEvidence.filter(isNoAiPostureCandidate);
-      if (noAiCandidates.length === 0) {
-        addBlocker('optional_ai_posture', 'A successful no-AI production posture child JSON report is required');
-      } else {
-        if (noAiCandidates.some(({ parsed }) => !validateNoAiPostureReport(parsed, now, aiSec))) {
-          addBlocker('optional_ai_posture', 'A referenced no-AI production posture report is invalid or failed');
-        }
-        if (!noAiCandidates.some(({ parsed }) => validateNoAiPostureReport(parsed, now, aiSec, { requireLive: true }))) {
-          addBlocker('optional_ai_posture', 'A live no-AI production posture operator receipt is required');
-        }
-      }
-    }
-  }
+  validateOptionalAiPostureSection(sections.optional_ai_posture, {
+    now,
+    noAiEvidence,
+    addBlocker,
+  });
 
   return {
     categoryBlockers,
@@ -3486,4 +3730,19 @@ module.exports = {
   hasExactKeys,
   DEPLOYMENT_OBSERVATIONS,
   NO_AI_JOURNEYS,
+  isValidFqdn,
+  isValidTlsContactEmail,
+  isValidReleaseCommitSha,
+  isValidImageRegistryPath,
+  validateProductionDomainTlsSection,
+  validateSmtpDeliverySection,
+  validateSecretsManagementSection,
+  validateSecretReferencesSection,
+  validateSloAndAlertingSection,
+  validateBackupAndDisasterRecoverySection,
+  validateDataRetentionPolicySection,
+  validateVolumeEncryptionSection,
+  validateGraphqlIntrospectionSection,
+  validateDeploymentAndRollbackSection,
+  validateOptionalAiPostureSection,
 };
