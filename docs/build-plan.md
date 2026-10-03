@@ -1726,3 +1726,26 @@ Verification output: `ops:templates-test` (94/94), `ops:templates` (passed), `op
 `ops:launch-drill-test` (68/68), lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit reports the existing upstream advisory on
 Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
 Operator sign-off remains open.
+
+**Prompt 259 Phase 12K harden production template input validation (2026-10-03):**
+The Node template checker now rejects unsupported/malformed CLI input before
+file reads and validates consumed document/collection shapes before policy
+traversal. Expected read/parse/shape failures return controlled errors with
+relative field locations and suppressed parser/argument content. Regression
+fixtures contain only public inputs; every unmodified fixture first passes.
+Independent review found and verified dashboard layout numeric coercion and
+cyclic YAML alias exceptions; finite-number and iterative reference guards fix
+both while preserving acyclic aliases. Follow-up review completed before commit.
+
+Actual verification: template suite `tests 233`, `pass 233`, `fail 0`;
+`ops:templates-test` `tests 290`, `pass 290`, `fail 0`;
+`ops:templates` `ops template check passed`; launch-readiness/readiness/launch-drill
+suites passed 23/649/68 tests. Node syntax checks, scoped Prettier, root lint,
+typecheck, build and `git diff --check` exited 0. `ops:check` exited 1 at the
+existing dependency audit: `28 vulnerabilities (10 moderate, 17 high, 1 critical)`
+and `audit error: critical vulnerabilities detected in production dependencies`
+(Next 16.3.4, `GHSA-vcvr-r3jv-pc5j`); subsequent aggregate stages did not run.
+The unchanged readiness example exited 1 with 0 approved, 11 blocked and
+70 blockers. Full contracts, command results and verification limitations are
+recorded in `docs/operations.md` prompt 259. No production action, dependency
+upgrade or push occurred; prompt 201 and Phase 12 operator sign-off remain open.

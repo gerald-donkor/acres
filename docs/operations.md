@@ -2843,3 +2843,96 @@ Verification and review (2026-10-03):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open.
+
+## Prompt 259 — harden production template input validation (2026-10-03)
+
+The Node checker previously ignored unknown flags, a bare `--cwd`, and positional
+arguments. Incorrect collection shapes such as Compose `volumes: {}`,
+Prometheus `scrape_configs: {}`, and alert `groups: {}` raised incidental
+`TypeError`s. Input validation now rejects those cases before traversal.
+
+`parseTemplateCliArguments(args, cwd)` accepts application arguments only and
+returns a resolved `{ cwd }`. The supported Node CLI invocations are:
+
+```bash
+node scripts/ops/check-production-templates.js
+node scripts/ops/check-production-templates.js --cwd <repository-root>
+node scripts/ops/check-production-templates.js --cwd=<repository-root>
+```
+
+Only one override is accepted. Relative paths resolve against the supplied base
+cwd; quoted paths with spaces work. Unknown flags (including `--help`/`-h`),
+positionals, duplicates, missing/blank values, options used as split-form values,
+and malformed programmatic arrays/cwd values fail with a fixed reason and usage
+syntax before template reads. `main` retains full `process.argv` input and
+`exitOnError:false`; successful calls return 0, failed calls return/exit 1.
+
+The checker validates consumed mappings, lists, entries and expression strings
+in Compose, Prometheus, alert rules, dashboard panels/targets, readiness
+Categories 5/6, and provisioning roots. Imported validators run only after their
+traversal prerequisites pass. Missing Garage healthcheck tests and prohibited
+`env_file` declarations record failure before the Garage validator is skipped.
+Array-returning helpers return errors on malformed structures; assertion helpers
+throw descriptive validation errors. Shape failures do not suppress independent
+valid document branches. Volume string syntax and bind/volume objects remain
+supported, including encrypted mount placeholders in object sources.
+
+Expected file read, YAML/JSON parse and shape failures return
+`{ success: false, errors }` with file-relative locations. Diagnostics omit
+parser snippets, filesystem exception text and complete argument values. The
+runbook PromQL mismatch diagnostic also omits the supplied expression to avoid
+printing configuration content. Unexpected parser/programmer defects are
+re-thrown; there is no blanket orchestration catch. These guards cover only
+structures consumed here, not the full Compose, Prometheus or Grafana schemas.
+
+The regression suite uses unique, cleaned temporary roots containing only the
+19 public inputs read by the checker. Every fixture first passes unmodified;
+mutations then exercise malformed syntax, roots, nested collections, scalar
+coercion, redaction, captured `main` output and real spawned CLI exit codes.
+No operator record, `.env` instance or raw evidence is copied.
+
+Independent review reproduced two more incidental exceptions: object-valued
+panel 21 `gridPos.y` during PostgreSQL diagnostics, and cyclic YAML aliases
+during imported JSON serialization checks. Present dashboard IDs/layout `y`
+values now require finite numbers, and an iterative ancestor/completed-reference
+walk rejects cycles before traversal while allowing shared acyclic aliases.
+Fixture, helper and real-process regressions cover the repairs.
+
+Verification on 2026-10-03 (actual output excerpts; no live drill or deployment):
+
+| command                                                                          | exit | output / result                                                                                                                      |
+| -------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `node --check scripts/ops/check-production-templates.js`                         | 0    | no output                                                                                                                            |
+| `node --check scripts/ops/check-production-templates.spec.js`                    | 0    | no output                                                                                                                            |
+| `node --test scripts/ops/check-production-templates.spec.js`                     | 0    | `tests 233`, `pass 233`, `fail 0`                                                                                                    |
+| `npm run ops:templates-test`                                                     | 0    | `tests 290`, `pass 290`, `fail 0`                                                                                                    |
+| `npm run ops:templates`                                                          | 0    | `ops template check passed`                                                                                                          |
+| `npm run ops:launch-readiness-test`                                              | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                      |
+| `npm run ops:readiness-test`                                                     | 0    | `tests 649`, `pass 649`, `fail 0`                                                                                                    |
+| `npm run ops:launch-drill-test`                                                  | 0    | `tests 68`, `pass 68`, `fail 0`                                                                                                      |
+| `npm run ops:check`                                                              | 1    | `28 vulnerabilities (10 moderate, 17 high, 1 critical)`; `audit error: critical vulnerabilities detected in production dependencies` |
+| `npm run lint`                                                                   | 0    | all three workspace ESLint commands completed without diagnostics                                                                    |
+| `npm run typecheck`                                                              | 0    | shared/client/server typechecks completed; `Generated Prisma Client (7.9.1)`                                                         |
+| `npm run build`                                                                  | 0    | `Compiled successfully`; `Generating static pages ... (22/22)`; server `prisma generate && nest build` completed                     |
+| `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json` | 1    | `Approved Categories: 0`, `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`, `Result: FAIL-CLOSED`                           |
+| Prettier on changed JS and the approved prompt, with `server/.prettierrc`        | 0    | `All matched files use Prettier code style!`                                                                                         |
+| `git diff --check`                                                               | 0    | no output                                                                                                                            |
+
+The operations aggregate passed templates/tests, release-image tests (22), secret
+scan and Docker runtime inspection, then stopped at its dependency audit. The
+critical advisory reported by that run is `GHSA-vcvr-r3jv-pc5j` against installed
+Next 16.3.4. Remaining aggregate stages did not run through `ops:check`; the
+readiness and launch-drill suites above were run separately. No dependency,
+lockfile or audit policy was changed under this prompt.
+
+Subprocess testing under this session's sandbox returned `EPERM` even when a
+child produced output. Verification was rerun outside that interception through
+approved tool escalation; the final counts above are real process runs, not
+sandbox file-level fallback counts. Root lint/typecheck/build completed before
+review; affected template checks were rerun after the review fixes. Markdown
+additions were formatted separately to preserve historical records.
+
+Phase 12 production exit/sign-off and prompt 201 remain open. The unchanged
+unresolved readiness example is not production evidence. Inspect this repair
+with `npm run ops:templates` or the explicit-root Node invocation above;
+rollback is a normal revert of the local commit.

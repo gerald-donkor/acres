@@ -10,7 +10,9 @@ const { validateComposeImages } = require('./check-release-images');
 const { parseBackupScheduleCron } = require('./check-launch-readiness');
 const { checkSmtpTemplateKeys } = require('./check-smtp-template-keys');
 const { checkProxyEnvironment } = require('./check-proxy-environment');
-const { checkApplicationEnvironment } = require('./check-application-environment');
+const {
+  checkApplicationEnvironment,
+} = require('./check-application-environment');
 const { checkGarageMetrics } = require('./check-garage-metrics');
 
 const REQUIRED_SERVICES = [
@@ -48,40 +50,357 @@ const EXPECTED_DRAIN_PERIODS = {
   worker: '60s',
 };
 
-function readYaml(filePath, errors) {
-  try {
-    return yaml.load(fs.readFileSync(filePath, 'utf8'));
-  } catch (error) {
-    if (errors) {
-      errors.push(`${filePath} is not valid YAML: ${error.message}`);
-    } else {
-      throw error;
+// Validate only structures consumed by this checker and its imported policies.
+const COMPOSE_FILE = 'infra/compose/docker-compose.production.example.yml';
+const PROM_FILE = 'infra/prometheus/prometheus.yml';
+const ALERTS_FILE = 'infra/prometheus/alerts.yml';
+const DASHBOARD_FILE = 'infra/grafana/dashboards/acres-operations.json';
+const READINESS_FILE = 'infra/launch/readiness.example.json';
+
+function isMapping(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    [Object.prototype, null].includes(Object.getPrototypeOf(value))
+  );
+}
+
+// YAML aliases may share acyclic values, but a cycle cannot be safely inspected
+// by the existing JSON serialization policies. Detect it before those calls.
+function referenceShapeErrors(document, location) {
+  const errors = [];
+  const ancestors = new WeakSet();
+  const visited = new WeakSet();
+  const pending = [{ value: document, field: location, leaving: false }];
+  while (pending.length) {
+    const { value, field, leaving } = pending.pop();
+    if (!isMapping(value) && !Array.isArray(value)) continue;
+    if (leaving) {
+      ancestors.delete(value);
+      visited.add(value);
+      continue;
     }
-    return null;
+    if (ancestors.has(value)) {
+      errors.push(`${field} contains a circular reference`);
+      continue;
+    }
+    if (visited.has(value)) continue;
+    ancestors.add(value);
+    pending.push({ value, field, leaving: true });
+    for (const [key, entry] of Object.entries(value).reverse()) {
+      pending.push({
+        value: entry,
+        field: Array.isArray(value) ? `${field}[${key}]` : `${field}.${key}`,
+        leaving: false,
+      });
+    }
+  }
+  return errors;
+}
+
+function requireShape(value, predicate, location, expected, errors) {
+  if (predicate(value)) return true;
+  errors.push(`${location} must be ${expected}`);
+  return false;
+}
+
+function mapping(value, location, errors) {
+  return requireShape(value, isMapping, location, 'a mapping', errors);
+}
+
+function list(value, location, errors, validateEntry) {
+  if (!requireShape(value, Array.isArray, location, 'a list', errors)) return;
+  for (const [index, entry] of value.entries()) {
+    validateEntry(entry, `${location}[${index}]`);
   }
 }
 
-function readJson(filePath, errors) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (error) {
-    if (errors) {
-      errors.push(`${filePath} is not valid JSON: ${error.message}`);
-    } else {
-      throw error;
-    }
-    return null;
+function string(value, location, errors) {
+  return requireShape(
+    value,
+    (v) => typeof v === 'string',
+    location,
+    'a string',
+    errors,
+  );
+}
+
+function validateMountShape(entry, location, errors) {
+  if (typeof entry === 'string') return;
+  if (!mapping(entry, location, errors)) return;
+  for (const key of ['type', 'source', 'target']) {
+    if (Object.hasOwn(entry, key))
+      string(entry[key], `${location}.${key}`, errors);
   }
+  for (const key of ['read_only', 'readOnly']) {
+    if (Object.hasOwn(entry, key)) {
+      requireShape(
+        entry[key],
+        (v) => typeof v === 'boolean',
+        `${location}.${key}`,
+        'a boolean',
+        errors,
+      );
+    }
+  }
+}
+
+function serviceShapeErrors(services, location = `${COMPOSE_FILE}.services`) {
+  const errors = referenceShapeErrors(services, location);
+  if (errors.length) return errors;
+  if (!mapping(services, location, errors)) return errors;
+  for (const [name, service] of Object.entries(services)) {
+    const field = `${location}.${name}`;
+    if (!mapping(service, field, errors)) continue;
+    if (Object.hasOwn(service, 'image'))
+      string(service.image, `${field}.image`, errors);
+    if (Object.hasOwn(service, 'stop_grace_period'))
+      string(service.stop_grace_period, `${field}.stop_grace_period`, errors);
+    if (Object.hasOwn(service, 'volumes')) {
+      list(service.volumes, `${field}.volumes`, errors, (entry, loc) =>
+        validateMountShape(entry, loc, errors),
+      );
+    }
+    for (const key of ['ports', 'expose', 'profiles']) {
+      if (!Object.hasOwn(service, key)) continue;
+      list(service[key], `${field}.${key}`, errors, (entry, loc) => {
+        if (key === 'profiles') string(entry, loc, errors);
+        else
+          requireShape(
+            entry,
+            (v) =>
+              typeof v === 'string' ||
+              typeof v === 'number' ||
+              (key === 'ports' && isMapping(v)),
+            loc,
+            'a port entry',
+            errors,
+          );
+      });
+    }
+    if (
+      Object.hasOwn(service, 'environment') &&
+      mapping(service.environment, `${field}.environment`, errors)
+    ) {
+      for (const [key, value] of Object.entries(service.environment)) {
+        requireShape(
+          value,
+          (v) =>
+            v === null || ['string', 'number', 'boolean'].includes(typeof v),
+          `${field}.environment.${key}`,
+          'a scalar environment value',
+          errors,
+        );
+      }
+    }
+    if (
+      Object.hasOwn(service, 'depends_on') &&
+      mapping(service.depends_on, `${field}.depends_on`, errors)
+    ) {
+      for (const [key, value] of Object.entries(service.depends_on)) {
+        mapping(value, `${field}.depends_on.${key}`, errors);
+      }
+    }
+    if (
+      Object.hasOwn(service, 'healthcheck') &&
+      mapping(service.healthcheck, `${field}.healthcheck`, errors)
+    ) {
+      if (
+        Object.hasOwn(service.healthcheck, 'test') &&
+        typeof service.healthcheck.test !== 'string'
+      ) {
+        list(
+          service.healthcheck.test,
+          `${field}.healthcheck.test`,
+          errors,
+          (entry, loc) => string(entry, loc, errors),
+        );
+      }
+    }
+    // Garage's imported checker traverses env_file; the production policy rejects it.
+    if (
+      Object.hasOwn(service, 'env_file') &&
+      typeof service.env_file !== 'string'
+    ) {
+      list(service.env_file, `${field}.env_file`, errors, (entry, loc) => {
+        requireShape(
+          entry,
+          (v) => typeof v === 'string' || isMapping(v),
+          loc,
+          'an env_file entry',
+          errors,
+        );
+      });
+    }
+  }
+  return errors;
+}
+
+function composeShapeErrors(document, location) {
+  const errors = referenceShapeErrors(document, location);
+  if (errors.length) return errors;
+  if (mapping(document, location, errors))
+    errors.push(
+      ...serviceShapeErrors(document.services, `${location}.services`),
+    );
+  return errors;
+}
+
+function prometheusShapeErrors(document) {
+  const errors = referenceShapeErrors(document, PROM_FILE);
+  if (errors.length) return errors;
+  if (!mapping(document, PROM_FILE, errors)) return errors;
+  list(
+    document.scrape_configs,
+    `${PROM_FILE}.scrape_configs`,
+    errors,
+    (job, loc) => {
+      if (!mapping(job, loc, errors)) return;
+      string(job.job_name, `${loc}.job_name`, errors);
+      if (Object.hasOwn(job, 'authorization'))
+        mapping(job.authorization, `${loc}.authorization`, errors);
+      if (Object.hasOwn(job, 'static_configs')) {
+        list(
+          job.static_configs,
+          `${loc}.static_configs`,
+          errors,
+          (config, field) => {
+            if (!mapping(config, field, errors)) return;
+            list(
+              config.targets,
+              `${field}.targets`,
+              errors,
+              (target, targetField) => string(target, targetField, errors),
+            );
+          },
+        );
+      }
+      if (Object.hasOwn(job, 'metric_relabel_configs')) {
+        list(
+          job.metric_relabel_configs,
+          `${loc}.metric_relabel_configs`,
+          errors,
+          (rule, field) => {
+            if (!mapping(rule, field, errors)) return;
+            for (const key of ['action', 'regex']) {
+              if (Object.hasOwn(rule, key))
+                string(rule[key], `${field}.${key}`, errors);
+            }
+          },
+        );
+      }
+    },
+  );
+  return errors;
+}
+
+function alertShapeErrors(document) {
+  const errors = referenceShapeErrors(document, ALERTS_FILE);
+  if (errors.length) return errors;
+  if (!mapping(document, ALERTS_FILE, errors)) return errors;
+  list(document.groups, `${ALERTS_FILE}.groups`, errors, (group, loc) => {
+    if (!mapping(group, loc, errors)) return;
+    list(group.rules, `${loc}.rules`, errors, (rule, field) => {
+      if (!mapping(rule, field, errors)) return;
+      string(rule.alert, `${field}.alert`, errors);
+      if (Object.hasOwn(rule, 'expr'))
+        string(rule.expr, `${field}.expr`, errors);
+    });
+  });
+  return errors;
+}
+
+function dashboardShapeErrors(document) {
+  const errors = referenceShapeErrors(document, DASHBOARD_FILE);
+  if (errors.length) return errors;
+  if (!mapping(document, DASHBOARD_FILE, errors)) return errors;
+  list(document.panels, `${DASHBOARD_FILE}.panels`, errors, (panel, loc) => {
+    if (!mapping(panel, loc, errors)) return;
+    if (Object.hasOwn(panel, 'id'))
+      requireShape(
+        panel.id,
+        Number.isFinite,
+        `${loc}.id`,
+        'a finite number',
+        errors,
+      );
+    if (Object.hasOwn(panel, 'targets')) {
+      list(panel.targets, `${loc}.targets`, errors, (target, field) => {
+        if (mapping(target, field, errors) && Object.hasOwn(target, 'expr'))
+          string(target.expr, `${field}.expr`, errors);
+      });
+    }
+    if (
+      Object.hasOwn(panel, 'fieldConfig') &&
+      mapping(panel.fieldConfig, `${loc}.fieldConfig`, errors) &&
+      Object.hasOwn(panel.fieldConfig, 'defaults')
+    )
+      mapping(
+        panel.fieldConfig.defaults,
+        `${loc}.fieldConfig.defaults`,
+        errors,
+      );
+    if (
+      Object.hasOwn(panel, 'gridPos') &&
+      mapping(panel.gridPos, `${loc}.gridPos`, errors) &&
+      Object.hasOwn(panel.gridPos, 'y')
+    ) {
+      requireShape(
+        panel.gridPos.y,
+        Number.isFinite,
+        `${loc}.gridPos.y`,
+        'a finite number',
+        errors,
+      );
+    }
+  });
+  return errors;
+}
+
+class TemplateUsageError extends Error {}
+
+function validCwd(cwd) {
+  if (typeof cwd !== 'string' || !cwd.trim()) {
+    throw new TemplateUsageError('cwd requires a non-empty path');
+  }
+  return cwd;
+}
+
+function parseTemplateCliArguments(args, cwd = process.cwd()) {
+  validCwd(cwd);
+  if (
+    !Array.isArray(args) ||
+    [...args].some((arg) => typeof arg !== 'string')
+  ) {
+    throw new TemplateUsageError('arguments must be an array of strings');
+  }
+  let override;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg !== '--cwd' && !arg.startsWith('--cwd=')) {
+      throw new TemplateUsageError('unsupported option or positional argument');
+    }
+    if (override !== undefined)
+      throw new TemplateUsageError('cwd may be specified only once');
+    override = arg === '--cwd' ? args[++index] : arg.slice(6);
+    validCwd(override);
+    if (arg === '--cwd' && override.startsWith('-')) {
+      throw new TemplateUsageError('cwd requires a path instead of an option');
+    }
+  }
+  return { cwd: path.resolve(cwd, override === undefined ? '.' : override) };
 }
 
 function mountDetails(entry) {
   if (typeof entry === 'string') {
     const parts = entry.split(':');
-    const mode = /^(?:ro|rw|z|Z|delegated|cached|consistent)(?:,[A-Za-z]+)*$/.test(
-      parts.at(-1) || '',
-    )
-      ? parts.pop()
-      : undefined;
+    const mode =
+      /^(?:ro|rw|z|Z|delegated|cached|consistent)(?:,[A-Za-z]+)*$/.test(
+        parts.at(-1) || '',
+      )
+        ? parts.pop()
+        : undefined;
     const target = parts.pop();
     return {
       source: parts.join(':'),
@@ -104,8 +423,12 @@ function mountDetails(entry) {
 }
 
 function assertPostgres18Mount(composeDocument, filePath) {
-  const postgresServices = Object.entries(composeDocument?.services || {}).filter(
-    ([, service]) => /^postgis\/postgis:18-/.test(String(service?.image || '')),
+  const shapeErrors = composeShapeErrors(composeDocument, filePath);
+  if (shapeErrors.length) throw new Error(shapeErrors.join('; '));
+  const postgresServices = Object.entries(
+    composeDocument?.services || {},
+  ).filter(([, service]) =>
+    /^postgis\/postgis:18-/.test(String(service?.image || '')),
   );
 
   if (postgresServices.length === 0) {
@@ -114,22 +437,34 @@ function assertPostgres18Mount(composeDocument, filePath) {
 
   for (const [name, service] of postgresServices) {
     const mounts = (service.volumes || []).map(mountDetails);
-    const postgresMount = mounts.find(({ target }) => target === '/var/lib/postgresql');
+    const postgresMount = mounts.find(
+      ({ target }) => target === '/var/lib/postgresql',
+    );
     if (!postgresMount) {
-      throw new Error(`${filePath} ${name} must mount persistent storage at /var/lib/postgresql`);
+      throw new Error(
+        `${filePath} ${name} must mount persistent storage at /var/lib/postgresql`,
+      );
     }
-    if (!postgresMount.source || !postgresMount.persistent || !postgresMount.writable) {
+    if (
+      !postgresMount.source ||
+      !postgresMount.persistent ||
+      !postgresMount.writable
+    ) {
       throw new Error(
         `${filePath} ${name} must use a writable bind or volume mount at /var/lib/postgresql`,
       );
     }
     if (mounts.some(({ target }) => target === '/var/lib/postgresql/data')) {
-      throw new Error(`${filePath} ${name} must not mount /var/lib/postgresql/data`);
+      throw new Error(
+        `${filePath} ${name} must not mount /var/lib/postgresql/data`,
+      );
     }
   }
 }
 
 function validateRequiredServices(services) {
+  const errors = serviceShapeErrors(services);
+  if (errors.length) throw new Error(errors.join('; '));
   for (const service of REQUIRED_SERVICES) {
     if (!services || !services[service]) {
       throw new Error(`compose missing ${service} service`);
@@ -139,25 +474,41 @@ function validateRequiredServices(services) {
 }
 
 function validateComposeSecurityAndTopology(services) {
-  const errors = [];
+  const errors = serviceShapeErrors(services);
+  if (errors.length) return errors;
   const svcEntries = Object.entries(services || {});
 
   for (const [name, service] of svcEntries) {
-    if (name !== 'caddy' && Array.isArray(service?.ports) && service.ports.length > 0) {
+    if (
+      name !== 'caddy' &&
+      Array.isArray(service?.ports) &&
+      service.ports.length > 0
+    ) {
       errors.push(`${name} must not publish host ports`);
     }
   }
 
-  const apiScheduler = services?.api?.environment && services.api.environment.SCHEDULER_ENABLED;
-  const workerScheduler = services?.worker?.environment && services.worker.environment.SCHEDULER_ENABLED;
+  const apiScheduler =
+    services?.api?.environment && services.api.environment.SCHEDULER_ENABLED;
+  const workerScheduler =
+    services?.worker?.environment &&
+    services.worker.environment.SCHEDULER_ENABLED;
   if (apiScheduler !== 'false' || workerScheduler !== 'true') {
     errors.push('compose must enable scheduler only on worker');
   }
 
   for (const service of ['postgres', 'valkey', 'garage']) {
     const volumes = services?.[service]?.volumes || [];
-    if (!volumes.some((entry) => String(entry).includes('ENCRYPTED_MOUNT'))) {
-      errors.push(`${service} must declare an encrypted production mount placeholder`);
+    if (
+      !volumes.some((entry) =>
+        String(typeof entry === 'string' ? entry : entry.source || '').includes(
+          'ENCRYPTED_MOUNT',
+        ),
+      )
+    ) {
+      errors.push(
+        `${service} must declare an encrypted production mount placeholder`,
+      );
     }
   }
 
@@ -177,7 +528,11 @@ function validateComposeSecurityAndTopology(services) {
   for (const [name, service] of svcEntries) {
     if (name === 'garage') continue;
     const env = service?.environment || {};
-    for (const key of ['GARAGE_ADMIN_TOKEN', 'GARAGE_METRICS_TOKEN', 'GARAGE_METRICS_TOKEN_FILE']) {
+    for (const key of [
+      'GARAGE_ADMIN_TOKEN',
+      'GARAGE_METRICS_TOKEN',
+      'GARAGE_METRICS_TOKEN_FILE',
+    ]) {
       if (Object.prototype.hasOwnProperty.call(env, key)) {
         errors.push(`${key} must be scoped to Garage only, not ${name}`);
       }
@@ -189,14 +544,29 @@ function validateComposeSecurityAndTopology(services) {
 
 function validateComposeEnvironmentInterpolation(composeText, envKeys) {
   const errors = [];
+  string(composeText, COMPOSE_FILE, errors);
+  requireShape(
+    envKeys,
+    (v) =>
+      (v instanceof Set || Array.isArray(v)) &&
+      [...v].every((key) => typeof key === 'string'),
+    'environment keys',
+    'a collection of strings',
+    errors,
+  );
+  if (errors.length) return errors;
   const validKeys = envKeys instanceof Set ? envKeys : new Set(envKeys);
   const interpolationKeys = new Set();
-  for (const match of (composeText || '').matchAll(/\$\{([A-Z0-9_]+)(?::?[?+-][^}]*)?\}/g)) {
+  for (const match of (composeText || '').matchAll(
+    /\$\{([A-Z0-9_]+)(?::?[?+-][^}]*)?\}/g,
+  )) {
     interpolationKeys.add(match[1]);
   }
   for (const key of interpolationKeys) {
     if (!validKeys.has(key) && key !== 'ACRES_MONITOR_BOOTSTRAP_PASSWORD') {
-      errors.push(`${key} is used by compose but missing from production.env.example`);
+      errors.push(
+        `${key} is used by compose but missing from production.env.example`,
+      );
     }
   }
 
@@ -210,30 +580,56 @@ function validateComposeEnvironmentInterpolation(composeText, envKeys) {
   return errors;
 }
 
-function validateWorkerAndExporterScrape(services, prom, monitorSql, operationsDoc, caddyfileText = '') {
-  const errors = [];
+function validateWorkerAndExporterScrape(
+  services,
+  prom,
+  monitorSql,
+  operationsDoc,
+  caddyfileText = '',
+) {
+  const errors = [
+    ...serviceShapeErrors(services),
+    ...prometheusShapeErrors(prom),
+  ];
+  for (const [name, value] of Object.entries({
+    monitorSql,
+    operationsDoc,
+    caddyfileText,
+  }))
+    string(value, name, errors);
+  if (errors.length) return errors;
   const scrapeJobs = (prom?.scrape_configs || []).map((c) => c.job_name);
   if (!scrapeJobs.includes('acres-api')) {
     errors.push('Prometheus config missing acres-api scrape target');
   }
 
   const worker = services?.worker;
-  const workerScrape = (prom?.scrape_configs || []).find((job) => job.job_name === 'acres-worker');
+  const workerScrape = (prom?.scrape_configs || []).find(
+    (job) => job.job_name === 'acres-worker',
+  );
   if (
     !workerScrape ||
     workerScrape.metrics_path !== '/metrics' ||
-    !workerScrape.static_configs?.some((entry) => entry.targets?.includes('worker:3002')) ||
+    !workerScrape.static_configs?.some((entry) =>
+      entry.targets?.includes('worker:3002'),
+    ) ||
     !worker?.expose?.includes('3002') ||
     worker.environment?.WORKER_METRICS_HOST !== '0.0.0.0' ||
     worker.environment?.WORKER_METRICS_PORT !== '3002' ||
-    !(JSON.stringify(worker.healthcheck?.test) || '').includes('127.0.0.1:3002/health') ||
+    !(JSON.stringify(worker.healthcheck?.test) || '').includes(
+      '127.0.0.1:3002/health',
+    ) ||
     (JSON.stringify(services?.caddy) || '').includes('worker:3002')
   ) {
-    errors.push('worker metrics must stay on private port 3002 with matching probe and scrape');
+    errors.push(
+      'worker metrics must stay on private port 3002 with matching probe and scrape',
+    );
   }
 
   const exporter = services?.['postgres-exporter'];
-  const exporterScrape = (prom?.scrape_configs || []).find((job) => job.job_name === 'acres-postgres');
+  const exporterScrape = (prom?.scrape_configs || []).find(
+    (job) => job.job_name === 'acres-postgres',
+  );
   const exporterRelabel = exporterScrape?.metric_relabel_configs || [];
   const exporterMounts = (exporter?.volumes || []).map(mountDetails);
   const monitorMount = exporterMounts.find(
@@ -246,27 +642,36 @@ function validateWorkerAndExporterScrape(services, prom, monitorSql, operationsD
     JSON.stringify(exporter.networks) !== JSON.stringify(['private']) ||
     !exporter.expose?.includes('9187') ||
     exporter.ports?.length ||
-    !(JSON.stringify(exporter.healthcheck?.test) || '').includes('127.0.0.1:9187/') ||
+    !(JSON.stringify(exporter.healthcheck?.test) || '').includes(
+      '127.0.0.1:9187/',
+    ) ||
     exporter.depends_on?.postgres?.condition !== 'service_healthy' ||
-    exporter.environment?.DATA_SOURCE_URI !== 'postgres:5432/acres?sslmode=disable' ||
+    exporter.environment?.DATA_SOURCE_URI !==
+      'postgres:5432/acres?sslmode=disable' ||
     exporter.environment?.DATA_SOURCE_USER !== 'acres_monitor' ||
-    exporter.environment?.DATA_SOURCE_PASS_FILE !== '/run/secrets/acres_monitor_password' ||
+    exporter.environment?.DATA_SOURCE_PASS_FILE !==
+      '/run/secrets/acres_monitor_password' ||
     exporter.environment?.PG_EXPORTER_COLLECTION_TIMEOUT !== '10s' ||
     exporter.env_file ||
     exporter.command ||
-    Object.keys(exporter.environment || {}).some((key) => /DATA_SOURCE_(?:PASS|NAME)$/.test(key)) ||
+    Object.keys(exporter.environment || {}).some((key) =>
+      /DATA_SOURCE_(?:PASS|NAME)$/.test(key),
+    ) ||
     Object.keys(exporter.environment || {}).some((key) =>
       /POSTGRES|DATABASE_URL|ACRES_APP|ACRES_MIGRATOR/.test(key),
     ) ||
     exporterMounts.length !== 1 ||
     !monitorMount ||
-    monitorMount.source !== '${ACRES_MONITOR_PASSWORD_FILE:?inject monitor password file path}' ||
+    monitorMount.source !==
+      '${ACRES_MONITOR_PASSWORD_FILE:?inject monitor password file path}' ||
     monitorMount.writable ||
     !exporterScrape ||
     exporterScrape.metrics_path !== '/metrics' ||
     exporterScrape.scrape_interval !== '30s' ||
     exporterScrape.scrape_timeout !== '15s' ||
-    !exporterScrape.static_configs?.some((entry) => entry.targets?.includes('postgres-exporter:9187')) ||
+    !exporterScrape.static_configs?.some((entry) =>
+      entry.targets?.includes('postgres-exporter:9187'),
+    ) ||
     !exporterRelabel.some(
       (rule) =>
         rule.action === 'keep' &&
@@ -282,35 +687,47 @@ function validateWorkerAndExporterScrape(services, prom, monitorSql, operationsD
     exporterRelabel.some((rule) => rule.action === 'labeldrop') ||
     (JSON.stringify(services?.caddy) || '').includes('postgres-exporter') ||
     (caddyfileText && caddyfileText.includes('postgres-exporter')) ||
-    !String(services?.postgres?.environment?.ACRES_MONITOR_BOOTSTRAP_PASSWORD || '').includes(
-      'ACRES_MONITOR_BOOTSTRAP_PASSWORD',
-    ) ||
-    !(JSON.stringify(services?.postgres?.volumes) || '').includes('reconcile-production-monitor.sh')
+    !String(
+      services?.postgres?.environment?.ACRES_MONITOR_BOOTSTRAP_PASSWORD || '',
+    ).includes('ACRES_MONITOR_BOOTSTRAP_PASSWORD') ||
+    !(JSON.stringify(services?.postgres?.volumes) || '').includes(
+      'reconcile-production-monitor.sh',
+    )
   ) {
-    errors.push('postgres exporter must use private file credentials and bounded scrape');
+    errors.push(
+      'postgres exporter must use private file credentials and bounded scrape',
+    );
   }
 
   if (
     !monitorSql ||
     !monitorSql.includes('GRANT pg_monitor TO acres_monitor') ||
-    !monitorSql.includes('NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS') ||
+    !monitorSql.includes(
+      'NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS',
+    ) ||
     !monitorSql.includes('acres_monitor privilege verification failed') ||
     !operationsDoc ||
     !operationsDoc.includes('002-reconcile-production-monitor.sh')
   ) {
-    errors.push('monitor role reconciliation or existing-volume procedure missing');
+    errors.push(
+      'monitor role reconciliation or existing-volume procedure missing',
+    );
   }
 
   for (const [name, service] of Object.entries(services || {})) {
     if (
       name !== 'postgres-exporter' &&
-      JSON.stringify(service?.volumes || []).includes('ACRES_MONITOR_PASSWORD_FILE')
+      JSON.stringify(service?.volumes || []).includes(
+        'ACRES_MONITOR_PASSWORD_FILE',
+      )
     ) {
       errors.push(`monitor password file must not be mounted into ${name}`);
     }
     if (
       name !== 'postgres' &&
-      JSON.stringify(service?.environment || {}).includes('ACRES_MONITOR_BOOTSTRAP_PASSWORD')
+      JSON.stringify(service?.environment || {}).includes(
+        'ACRES_MONITOR_BOOTSTRAP_PASSWORD',
+      )
     ) {
       errors.push(`monitor bootstrap password must not reach ${name}`);
     }
@@ -320,47 +737,67 @@ function validateWorkerAndExporterScrape(services, prom, monitorSql, operationsD
 }
 
 function validateServiceHealthAndSupervision(services) {
-  const errors = [];
+  const errors = serviceShapeErrors(services);
+  if (errors.length) return errors;
   const prometheusSvc = services?.prometheus;
   if (
     !prometheusSvc ||
-    !(JSON.stringify(prometheusSvc.healthcheck?.test) || '').includes('127.0.0.1:9090/-/healthy') ||
+    !(JSON.stringify(prometheusSvc.healthcheck?.test) || '').includes(
+      '127.0.0.1:9090/-/healthy',
+    ) ||
     prometheusSvc.healthcheck?.interval !== '30s' ||
     prometheusSvc.healthcheck?.timeout !== '5s'
   ) {
-    errors.push('Prometheus service must define bounded healthcheck on /-/healthy');
+    errors.push(
+      'Prometheus service must define bounded healthcheck on /-/healthy',
+    );
   }
 
   const grafanaSvc = services?.grafana;
-  if (!grafanaSvc || grafanaSvc.depends_on?.prometheus?.condition !== 'service_healthy') {
+  if (
+    !grafanaSvc ||
+    grafanaSvc.depends_on?.prometheus?.condition !== 'service_healthy'
+  ) {
     errors.push('Grafana service must depend on healthy Prometheus');
   }
 
   for (const dep of ['postgres', 'valkey', 'garage']) {
     if (services?.api?.depends_on?.[dep]?.condition !== 'service_healthy') {
-      errors.push(`api service must depend on ${dep} with condition: service_healthy`);
+      errors.push(
+        `api service must depend on ${dep} with condition: service_healthy`,
+      );
     }
   }
   for (const [dep, config] of Object.entries(services?.api?.depends_on || {})) {
     if (config?.condition !== 'service_healthy') {
-      errors.push(`api service dependency ${dep} must require condition: service_healthy`);
+      errors.push(
+        `api service dependency ${dep} must require condition: service_healthy`,
+      );
     }
   }
   for (const dep of ['postgres', 'valkey', 'garage', 'clamav']) {
     if (services?.worker?.depends_on?.[dep]?.condition !== 'service_healthy') {
-      errors.push(`worker service must depend on ${dep} with condition: service_healthy`);
+      errors.push(
+        `worker service must depend on ${dep} with condition: service_healthy`,
+      );
     }
   }
-  for (const [dep, config] of Object.entries(services?.worker?.depends_on || {})) {
+  for (const [dep, config] of Object.entries(
+    services?.worker?.depends_on || {},
+  )) {
     if (config?.condition !== 'service_healthy') {
-      errors.push(`worker service dependency ${dep} must require condition: service_healthy`);
+      errors.push(
+        `worker service dependency ${dep} must require condition: service_healthy`,
+      );
     }
   }
 
   for (const appSvc of ['api', 'worker', 'next']) {
     const svc = services?.[appSvc];
     if (!svc || svc.init !== true || svc.stop_signal !== 'SIGTERM') {
-      errors.push(`${appSvc} service must configure init: true and stop_signal: SIGTERM`);
+      errors.push(
+        `${appSvc} service must configure init: true and stop_signal: SIGTERM`,
+      );
     }
   }
 
@@ -369,11 +806,21 @@ function validateServiceHealthAndSupervision(services) {
     if (service.restart !== 'unless-stopped') {
       errors.push(`${name} must configure restart: unless-stopped`);
     }
-    if (!service.stop_grace_period || !/^[1-9]\d*s$/.test(service.stop_grace_period)) {
-      errors.push(`${name} must configure a positive bounded stop_grace_period`);
+    if (
+      !service.stop_grace_period ||
+      !/^[1-9]\d*s$/.test(service.stop_grace_period)
+    ) {
+      errors.push(
+        `${name} must configure a positive bounded stop_grace_period`,
+      );
     }
-    if (EXPECTED_DRAIN_PERIODS[name] && service.stop_grace_period !== EXPECTED_DRAIN_PERIODS[name]) {
-      errors.push(`${name} stop_grace_period must be ${EXPECTED_DRAIN_PERIODS[name]}`);
+    if (
+      EXPECTED_DRAIN_PERIODS[name] &&
+      service.stop_grace_period !== EXPECTED_DRAIN_PERIODS[name]
+    ) {
+      errors.push(
+        `${name} stop_grace_period must be ${EXPECTED_DRAIN_PERIODS[name]}`,
+      );
     }
   }
 
@@ -381,8 +828,15 @@ function validateServiceHealthAndSupervision(services) {
 }
 
 function validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist) {
-  const errors = [];
-  const alertNames = (alerts?.groups || []).flatMap((g) => (g.rules || []).map((r) => r.alert));
+  const errors = [
+    ...alertShapeErrors(alerts),
+    ...dashboardShapeErrors(dashboard),
+  ];
+  string(checklist, 'docs/launch-checklist.md', errors);
+  if (errors.length) return errors;
+  const alertNames = (alerts?.groups || []).flatMap((g) =>
+    (g.rules || []).map((r) => r.alert),
+  );
   for (const reqAlert of REQUIRED_ALERTS) {
     if (!alertNames.includes(reqAlert)) {
       errors.push(`Prometheus alerts missing required rule ${reqAlert}`);
@@ -392,7 +846,11 @@ function validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist) {
   if (dashboard?.uid !== 'acres-operations-foundation') {
     errors.push('Grafana dashboard uid drifted');
   }
-  if (!dashboard || !Array.isArray(dashboard.panels) || dashboard.panels.length < 5) {
+  if (
+    !dashboard ||
+    !Array.isArray(dashboard.panels) ||
+    dashboard.panels.length < 5
+  ) {
     errors.push('Grafana dashboard missing operational panels');
   }
 
@@ -476,10 +934,14 @@ function validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist) {
     p25.fieldConfig?.defaults?.unit !== 's' ||
     p26.fieldConfig?.defaults?.unit !== 's' ||
     !p25.targets?.some((t) =>
-      t.expr?.includes('acres_database_query_duration_seconds_bucket{job="acres-api"}'),
+      t.expr?.includes(
+        'acres_database_query_duration_seconds_bucket{job="acres-api"}',
+      ),
     ) ||
     !p26.targets?.some((t) =>
-      t.expr?.includes('acres_database_query_duration_seconds_bucket{job="acres-worker"}'),
+      t.expr?.includes(
+        'acres_database_query_duration_seconds_bucket{job="acres-worker"}',
+      ),
     )
   ) {
     errors.push('database query duration panels drifted');
@@ -492,7 +954,9 @@ function validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist) {
     !p28 ||
     p27.fieldConfig?.defaults?.unit !== 'short' ||
     p28.fieldConfig?.defaults?.unit !== 'percent' ||
-    !p27.targets?.some((t) => t.expr?.includes('acres_http_active_requests{job="acres-api"}')) ||
+    !p27.targets?.some((t) =>
+      t.expr?.includes('acres_http_active_requests{job="acres-api"}'),
+    ) ||
     !p28.targets?.some((t) =>
       t.expr?.includes('acres_http_429_responses_total{job="acres-api"}'),
     )
@@ -501,17 +965,24 @@ function validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist) {
   }
 
   const alertRules =
-    alerts && alerts.groups && alerts.groups[0] && Array.isArray(alerts.groups[0].rules)
+    alerts &&
+    alerts.groups &&
+    alerts.groups[0] &&
+    Array.isArray(alerts.groups[0].rules)
       ? alerts.groups[0].rules
       : [];
 
   if (alertRules.length !== 11) {
-    errors.push(`expected 11 alert rules in alerts.yml, found ${alertRules.length}`);
+    errors.push(
+      `expected 11 alert rules in alerts.yml, found ${alertRules.length}`,
+    );
   }
 
   for (const rule of alertRules) {
     if (!checklist || !checklist.includes(`### ${rule.alert}`)) {
-      errors.push(`docs/launch-checklist.md missing runbook section for ${rule.alert}`);
+      errors.push(
+        `docs/launch-checklist.md missing runbook section for ${rule.alert}`,
+      );
       continue;
     }
     const sectionIdx = checklist.indexOf(`### ${rule.alert}`);
@@ -520,13 +991,15 @@ function validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist) {
       sectionIdx,
       nextSectionIdx !== -1 ? nextSectionIdx : undefined,
     );
-    if (!sectionContent.includes(rule.expr)) {
+    if (typeof rule.expr !== 'string' || !sectionContent.includes(rule.expr)) {
       errors.push(
-        `docs/launch-checklist.md missing exact scoped PromQL for ${rule.alert} in its runbook section: ${rule.expr}`,
+        `docs/launch-checklist.md missing exact scoped PromQL for ${rule.alert} in its runbook section`,
       );
     }
     if (!sectionContent.includes('- Dashboard:')) {
-      errors.push(`docs/launch-checklist.md missing Dashboard panel reference for ${rule.alert}`);
+      errors.push(
+        `docs/launch-checklist.md missing Dashboard panel reference for ${rule.alert}`,
+      );
     }
   }
 
@@ -534,11 +1007,26 @@ function validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist) {
 }
 
 function validateReadinessTargets(readinessExample, bdrOverride) {
-  const errors = [];
-  if (!readinessExample || typeof readinessExample !== 'object' || !readinessExample.sections) {
-    errors.push('infra/launch/readiness.example.json missing sections object');
+  const errors = referenceShapeErrors(readinessExample, READINESS_FILE);
+  if (errors.length) return errors;
+  if (
+    !mapping(readinessExample, READINESS_FILE, errors) ||
+    !mapping(readinessExample.sections, `${READINESS_FILE}.sections`, errors)
+  )
     return errors;
-  }
+  mapping(
+    readinessExample.sections.slo_and_alerting,
+    `${READINESS_FILE}.sections.slo_and_alerting`,
+    errors,
+  );
+  mapping(
+    bdrOverride === undefined
+      ? readinessExample.sections.backup_and_disaster_recovery
+      : bdrOverride,
+    `${READINESS_FILE}.sections.backup_and_disaster_recovery`,
+    errors,
+  );
+  if (errors.length) return errors;
 
   const sloAlerting = readinessExample.sections.slo_and_alerting;
   if (
@@ -554,7 +1042,10 @@ function validateReadinessTargets(readinessExample, bdrOverride) {
     );
   }
 
-  const bdrSec = bdrOverride || readinessExample.sections.backup_and_disaster_recovery;
+  const bdrSec =
+    bdrOverride === undefined
+      ? readinessExample.sections.backup_and_disaster_recovery
+      : bdrOverride;
   if (!bdrSec || bdrSec.rpo_hours !== 1 || bdrSec.rto_hours !== 4) {
     errors.push(
       'infra/launch/readiness.example.json missing required Category 6 RPO/RTO targets (1h RPO, 4h RTO)',
@@ -562,8 +1053,15 @@ function validateReadinessTargets(readinessExample, bdrOverride) {
   }
 
   const backupSchedule = parseBackupScheduleCron(bdrSec?.backup_schedule_cron);
-  if (!backupSchedule || !backupSchedule.valid || backupSchedule.maxGapMinutes > (bdrSec?.rpo_hours || 0) * 60) {
-    errors.push('Category 6 backup UTC start gap exceeds RPO or uses unsupported cron syntax');
+  if (
+    !backupSchedule ||
+    !backupSchedule.valid ||
+    backupSchedule.maxGapMinutes >
+      (typeof bdrSec.rpo_hours === 'number' ? bdrSec.rpo_hours : 0) * 60
+  ) {
+    errors.push(
+      'Category 6 backup UTC start gap exceeds RPO or uses unsupported cron syntax',
+    );
   }
 
   return errors;
@@ -575,7 +1073,17 @@ function validateDrillScriptIntegrations(
   secretRotationScript,
 ) {
   const errors = [];
-  if (!launchDrillsScript || !launchDrillsScript.includes('assemble-launch-dossier.js assemble')) {
+  for (const [name, value] of Object.entries({
+    launchDrillsScript,
+    deploymentDrillScript,
+    secretRotationScript,
+  }))
+    string(value, name, errors);
+  if (errors.length) return errors;
+  if (
+    !launchDrillsScript ||
+    !launchDrillsScript.includes('assemble-launch-dossier.js assemble')
+  ) {
     errors.push('launch runner missing dossier assembler');
   }
 
@@ -602,7 +1110,10 @@ function validateDrillScriptIntegrations(
     'containerSecurityCompliance',
   ];
 
-  if (!launchDrillsScript || requiredMarkers.some((marker) => !launchDrillsScript.includes(marker))) {
+  if (
+    !launchDrillsScript ||
+    requiredMarkers.some((marker) => !launchDrillsScript.includes(marker))
+  ) {
     errors.push(
       'scripts/ops/run-launch-drills.sh missing static integrity or other baseline dossier integration',
     );
@@ -624,7 +1135,9 @@ function validateDrillScriptIntegrations(
   if (
     !secretRotationScript ||
     !secretRotationScript.includes('requires a non-empty value') ||
-    !secretRotationScript.includes('scripts/ops/check-production-templates.sh') ||
+    !secretRotationScript.includes(
+      'scripts/ops/check-production-templates.sh',
+    ) ||
     !secretRotationScript.includes('tested_secret_classes') ||
     !secretRotationScript.includes('redaction_audit')
   ) {
@@ -637,42 +1150,90 @@ function validateDrillScriptIntegrations(
 }
 
 function checkProductionTemplates(options = {}, _io = {}) {
-  const cwd = options.cwd || process.cwd();
   const errors = [];
+  let cwd;
+  try {
+    if (!isMapping(options))
+      throw new TemplateUsageError('options must be a mapping');
+    cwd = parseTemplateCliArguments(
+      [],
+      Object.hasOwn(options, 'cwd') ? options.cwd : process.cwd(),
+    ).cwd;
+  } catch (error) {
+    if (!(error instanceof TemplateUsageError)) throw error;
+    return { success: false, errors: [error.message] };
+  }
 
   const resolvePath = (relPath) => path.resolve(cwd, relPath);
   const readFileSafe = (relPath) => {
     try {
       return fs.readFileSync(resolvePath(relPath), 'utf8');
     } catch (error) {
-      errors.push(`missing or unreadable file: ${relPath} (${error.message})`);
+      if (!error.code) throw error;
+      errors.push(`missing or unreadable file: ${relPath}`);
       return '';
     }
   };
 
-  const compose = readYaml(resolvePath('infra/compose/docker-compose.production.example.yml'), errors);
-  const localCompose = readYaml(resolvePath('docker-compose.yml'), errors);
+  const readDocument = (relPath, format, shapeCheck) => {
+    const text = readFileSafe(relPath);
+    let document;
+    try {
+      document = format === 'YAML' ? yaml.load(text) : JSON.parse(text);
+    } catch (error) {
+      if (
+        !(error instanceof SyntaxError) &&
+        !(error instanceof yaml.YAMLException)
+      )
+        throw error;
+      errors.push(`${relPath} is not valid ${format}`);
+      return null;
+    }
+    const shapeErrors = shapeCheck(document);
+    errors.push(...shapeErrors);
+    return shapeErrors.length ? null : document;
+  };
+  const readCompose = (file) =>
+    readDocument(file, 'YAML', (doc) => composeShapeErrors(doc, file));
+  const compose = readCompose(COMPOSE_FILE);
+  const localCompose = readCompose('docker-compose.yml');
   const services = compose && compose.services ? compose.services : {};
 
   const productionEnv = readFileSafe('infra/env/production.env.example');
-  const garageEnvExample = readFileSafe('infra/env/garage.production.env.example');
+  const garageEnvExample = readFileSafe(
+    'infra/env/garage.production.env.example',
+  );
   const caddyfileText = readFileSafe('infra/caddy/Caddyfile.example');
-  const composeText = readFileSafe('infra/compose/docker-compose.production.example.yml');
+  const composeText = readFileSafe(
+    'infra/compose/docker-compose.production.example.yml',
+  );
   const monitorSql = readFileSafe('scripts/db/reconcile-production-monitor.sh');
   const operationsDoc = readFileSafe('docs/operations.md');
   const checklist = readFileSafe('docs/launch-checklist.md');
   const launchRunner = readFileSafe('scripts/ops/run-launch-drills.sh');
-  const assembleDossier = readFileSafe('scripts/ops/assemble-launch-dossier.js');
-  const deploymentDrillScript = readFileSafe('scripts/ops/run-deployment-drill.sh');
-  const secretRotationScript = readFileSafe('scripts/ops/run-secret-rotation-drill.sh');
+  const assembleDossier = readFileSafe(
+    'scripts/ops/assemble-launch-dossier.js',
+  );
+  const deploymentDrillScript = readFileSafe(
+    'scripts/ops/run-deployment-drill.sh',
+  );
+  const secretRotationScript = readFileSafe(
+    'scripts/ops/run-secret-rotation-drill.sh',
+  );
 
   if (compose && productionEnv) {
-    const applicationEnvironmentErrors = checkApplicationEnvironment(compose, productionEnv);
+    const applicationEnvironmentErrors = checkApplicationEnvironment(
+      compose,
+      productionEnv,
+    );
     errors.push(...applicationEnvironmentErrors);
   }
 
   if (compose && caddyfileText) {
-    const proxyEnvironmentErrors = checkProxyEnvironment(compose, caddyfileText);
+    const proxyEnvironmentErrors = checkProxyEnvironment(
+      compose,
+      caddyfileText,
+    );
     errors.push(...proxyEnvironmentErrors);
   }
 
@@ -700,7 +1261,10 @@ function checkProductionTemplates(options = {}, _io = {}) {
 
   if (compose) {
     try {
-      assertPostgres18Mount(compose, 'infra/compose/docker-compose.production.example.yml');
+      assertPostgres18Mount(
+        compose,
+        'infra/compose/docker-compose.production.example.yml',
+      );
     } catch (error) {
       errors.push(error.message);
     }
@@ -720,13 +1284,32 @@ function checkProductionTemplates(options = {}, _io = {}) {
   }
 
   if (composeText) {
-    errors.push(...validateComposeEnvironmentInterpolation(composeText, envKeys));
+    errors.push(
+      ...validateComposeEnvironmentInterpolation(composeText, envKeys),
+    );
   }
 
-  const prom = readYaml(resolvePath('infra/prometheus/prometheus.yml'), errors);
+  const prom = readDocument(PROM_FILE, 'YAML', prometheusShapeErrors);
   const garageToml = readFileSafe('infra/garage/garage.toml');
 
-  if (compose && productionEnv && garageEnvExample && garageToml && prom && caddyfileText) {
+  if (compose && services.garage?.healthcheck?.test === undefined) {
+    errors.push(
+      `${COMPOSE_FILE}.services.garage.healthcheck.test is required for the Garage metrics check`,
+    );
+  }
+
+  if (
+    compose &&
+    productionEnv &&
+    garageEnvExample &&
+    garageToml &&
+    prom &&
+    caddyfileText &&
+    !Object.values(services).some((service) =>
+      Object.hasOwn(service, 'env_file'),
+    ) &&
+    services.garage?.healthcheck?.test !== undefined
+  ) {
     const garageMetricsErrors = checkGarageMetrics(
       compose,
       productionEnv,
@@ -739,33 +1322,51 @@ function checkProductionTemplates(options = {}, _io = {}) {
   }
 
   errors.push(
-    ...validateWorkerAndExporterScrape(services, prom, monitorSql, operationsDoc, caddyfileText),
+    ...validateWorkerAndExporterScrape(
+      services,
+      prom,
+      monitorSql,
+      operationsDoc,
+      caddyfileText,
+    ),
   );
 
   errors.push(...validateServiceHealthAndSupervision(services));
 
-  readYaml(resolvePath('infra/grafana/provisioning/datasources/prometheus.yml'), errors);
-  readYaml(resolvePath('infra/grafana/provisioning/dashboards/acres.yml'), errors);
-
-  const alerts = readYaml(resolvePath('infra/prometheus/alerts.yml'), errors);
-  const dashboard = readJson(resolvePath('infra/grafana/dashboards/acres-operations.json'), errors);
-
-  if (alerts && dashboard) {
-    errors.push(...validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist));
+  for (const file of [
+    'infra/grafana/provisioning/datasources/prometheus.yml',
+    'infra/grafana/provisioning/dashboards/acres.yml',
+  ]) {
+    readDocument(file, 'YAML', (doc) => {
+      const shapeErrors = [];
+      mapping(doc, file, shapeErrors);
+      return shapeErrors;
+    });
   }
 
-  const exporterScrape = (prom?.scrape_configs || []).find((job) => job.job_name === 'acres-postgres');
+  const alerts = readDocument(ALERTS_FILE, 'YAML', alertShapeErrors);
+  const dashboard = readDocument(DASHBOARD_FILE, 'JSON', dashboardShapeErrors);
+
+  if (alerts && dashboard) {
+    errors.push(
+      ...validatePrometheusAlertsAndDashboard(alerts, dashboard, checklist),
+    );
+  }
+
+  const exporterScrape = (prom?.scrape_configs || []).find(
+    (job) => job.job_name === 'acres-postgres',
+  );
   if (exporterScrape && dashboard) {
-    const diagnosticsErrors = verifyPostgresDiagnostics(exporterScrape, dashboard);
+    const diagnosticsErrors = verifyPostgresDiagnostics(
+      exporterScrape,
+      dashboard,
+    );
     if (diagnosticsErrors.length > 0) {
       errors.push(diagnosticsErrors.join('; '));
     }
   }
 
-  const readinessExample = readJson(resolvePath('infra/launch/readiness.example.json'), errors);
-  if (readinessExample) {
-    errors.push(...validateReadinessTargets(readinessExample));
-  }
+  readDocument(READINESS_FILE, 'JSON', (doc) => validateReadinessTargets(doc));
 
   const launchDrillsScript = launchRunner + assembleDossier;
   errors.push(
@@ -782,16 +1383,33 @@ function checkProductionTemplates(options = {}, _io = {}) {
   };
 }
 
-function main(argv = process.argv, io = { log: console.log, error: console.error }, options = {}) {
-  let cwd = options.cwd || process.cwd();
-  const args = Array.isArray(argv) ? argv.slice(2) : [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--cwd' && i + 1 < args.length) {
-      cwd = args[i + 1];
-      i++;
-    } else if (args[i].startsWith('--cwd=')) {
-      cwd = args[i].slice(6);
+function main(
+  argv = process.argv,
+  io = { log: console.log, error: console.error },
+  options = {},
+) {
+  let cwd;
+  try {
+    if (!isMapping(options))
+      throw new TemplateUsageError('options must be a mapping');
+    if (
+      !Array.isArray(argv) ||
+      [...argv].some((arg) => typeof arg !== 'string')
+    ) {
+      throw new TemplateUsageError('argv must be an array of strings');
     }
+    cwd = parseTemplateCliArguments(
+      argv.slice(2),
+      Object.hasOwn(options, 'cwd') ? options.cwd : process.cwd(),
+    ).cwd;
+  } catch (error) {
+    if (!(error instanceof TemplateUsageError)) throw error;
+    io.error(`ops template usage error: ${error.message}`);
+    io.error(
+      'Usage: node scripts/ops/check-production-templates.js [--cwd <path> | --cwd=<path>]',
+    );
+    if (options?.exitOnError !== false) process.exit(1);
+    return 1;
   }
 
   const result = checkProductionTemplates({ cwd }, io);
@@ -826,5 +1444,6 @@ module.exports = {
   validateReadinessTargets,
   validateDrillScriptIntegrations,
   checkProductionTemplates,
+  parseTemplateCliArguments,
   main,
 };
