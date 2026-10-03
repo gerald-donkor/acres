@@ -136,7 +136,9 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `infra/launch/readiness.example.json` | Inert, structured launch-readiness decision template covering all 11 operator categories with explicit placeholders |
 | `infra/launch/readiness.schema.json` | Draft 7 structural/editor contract for the readiness record; does not attest production readiness |
 | `scripts/ops/check-launch-readiness.js` | Deterministic fail-closed launch readiness validator enforcing approval status, secret source references, recovery drills, and no-AI posture |
+| `scripts/ops/check-launch-readiness.spec.js` | Unit and contract test suite covering all 11 readiness categories, evidence validators, and CLI runner |
 | `scripts/ops/launch-readiness.sh` | Aggregates operational checks and runs the fail-closed launch readiness validator |
+| `scripts/ops/launch-readiness.spec.js` | Subprocess unit and contract test specification covering CLI argument parsing, fail-closed preflights, and drill execution |
 | `.github/workflows/ci.yml` | Pinned GitHub Actions (full 40-char commit SHAs) running `npm run ops:check` and verification suite |
 | `scripts/db/bootstrap-production-roles.sh` | Production Postgres bootstrap for `acres_migrator`, `acres_app`, and `acres`; deliberately omits local `acres_test` database |
 
@@ -169,6 +171,7 @@ npm run ops:alert-test
 npm run ops:alert-drill
 npm run ops:dos-drill
 npm run ops:capacity-alerting-drill
+npm run ops:launch-readiness-test
 npm run ops:check
 npm run ops:launch-readiness
 ```
@@ -2750,6 +2753,41 @@ Verification and review (2026-10-02):
   - `main`: tests programmatic CLI entrypoint execution, usage errors on invalid arguments, fail-closed exit code on example records, and passing exit code on approved records.
 
 Verification and review (2026-10-03):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 649 passed, 0 failed.
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open.
+
+## Prompt 257 — harden and test launch readiness shell orchestrator (2026-10-03)
+
+`scripts/ops/launch-readiness.sh`:
+- Hardened command-line interface and argument parsing:
+  - Enforced single positional argument validation: rejects multiple positional arguments (e.g. `scripts/ops/launch-readiness.sh file1.json file2.json`) with exit code 1 and error `Error: Too many arguments; expected single readiness JSON path` followed by usage instructions.
+  - Maintained `--help` / `-h` usage flag handling (exit 0) and fail-closed rejection of unknown options (e.g. `--dry-run`, exit 1).
+  - Maintained sequential fail-closed preflight checks: `check-production-templates.sh`, `scan-secrets.sh`, `check-docker-runtime.sh`, and `node --test scripts/ops/check-launch-readiness.spec.js`.
+  - Maintained optional drill execution under `--with-drills` with fail-closed dossier hint emission on failure.
+  - Propagated execution exit code from `check-launch-readiness.js`.
+
+`scripts/ops/launch-readiness.spec.js`:
+- Created comprehensive unit and contract test specification using Node.js built-in test runner (`node:test` and `node:child_process`):
+  - CLI usage & flags: tests `--help`, `-h`, unknown flag rejection, unknown `--dry-run` rejection, single-dash unknown flag rejection, and excessive positional argument rejection.
+  - Fail-closed preflight pipeline: verifies immediate execution halt when any preflight script fails (`check-production-templates.sh`, `scan-secrets.sh`, `check-docker-runtime.sh`, or `check-launch-readiness.spec.js`).
+  - Drill flag flow: tests omitting vs including `--with-drills`, drill failure handling and dossier stderr hint, and ordering of drill execution prior to readiness check.
+  - Target forwarding & exit code propagation: tests default and custom readiness file path forwarding, argument order invariance (`--with-drills` before or after target path), and exit code propagation.
+  - Real repository execution: verifies fail-closed execution against `infra/launch/readiness.example.json` returning exit code 1 with 70 unresolved blockers detected.
+
+`scripts/ops/check-production-templates.sh`:
+- Added `require_file scripts/ops/check-launch-readiness.spec.js`.
+- Added `require_file scripts/ops/launch-readiness.spec.js`.
+
+`package.json`:
+- Added `"ops:launch-readiness-test": "node --test scripts/ops/launch-readiness.spec.js"`.
+- Integrated `npm run ops:launch-readiness-test` into `"ops:check"`.
+
+Verification and review (2026-10-03):
+- `node --test scripts/ops/launch-readiness.spec.js`: 23 passed, 0 failed.
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 649 passed, 0 failed.
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
 - `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.

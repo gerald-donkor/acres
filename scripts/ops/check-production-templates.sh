@@ -24,6 +24,7 @@ require_file infra/grafana/dashboards/acres-operations.json
 require_file infra/launch/readiness.example.json
 require_file infra/launch/readiness.schema.json
 require_file scripts/ops/check-launch-readiness.js
+require_file scripts/ops/check-launch-readiness.spec.js
 require_file scripts/ops/check-smtp-template-keys.js
 require_file scripts/ops/check-smtp-template-keys.spec.js
 require_file scripts/ops/check-garage-metrics.js
@@ -63,6 +64,7 @@ require_file scripts/ops/assemble-launch-dossier.spec.js
 require_file scripts/ops/run-static-integrity-checks.js
 require_file scripts/ops/run-static-integrity-checks.spec.js
 require_file scripts/ops/launch-readiness.sh
+require_file scripts/ops/launch-readiness.spec.js
 require_file docs/launch-checklist.md
 
 node <<'NODE'

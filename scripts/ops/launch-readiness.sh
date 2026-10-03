@@ -2,6 +2,7 @@
 set -eu
 
 READINESS_FILE="infra/launch/readiness.example.json"
+CUSTOM_FILE_SPECIFIED=0
 WITH_DRILLS=0
 
 while [ $# -gt 0 ]; do
@@ -14,12 +15,19 @@ while [ $# -gt 0 ]; do
       printf 'Usage: scripts/ops/launch-readiness.sh [--with-drills] [readiness.json]\n'
       exit 0
       ;;
-    --*)
+    -*)
       printf 'Error: Unknown option "%s"\n' "$1" >&2
+      printf 'Usage: scripts/ops/launch-readiness.sh [--with-drills] [readiness.json]\n' >&2
       exit 1
       ;;
     *)
+      if [ "$CUSTOM_FILE_SPECIFIED" -eq 1 ]; then
+        printf 'Error: Too many arguments; expected single readiness JSON path\n' >&2
+        printf 'Usage: scripts/ops/launch-readiness.sh [--with-drills] [readiness.json]\n' >&2
+        exit 1
+      fi
       READINESS_FILE="$1"
+      CUSTOM_FILE_SPECIFIED=1
       shift
       ;;
   esac

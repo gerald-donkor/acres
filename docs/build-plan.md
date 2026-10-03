@@ -1686,3 +1686,25 @@ Verification output: `ops:readiness-test` (649/649), `ops:launch-drill-test` (68
 lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit reports the existing upstream advisory on
 Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
 Operator sign-off remains open.
+
+**Prompt 257 Phase 12K harden and test launch readiness shell orchestrator (2026-10-03):**
+Hardened command-line interface and argument parsing in `scripts/ops/launch-readiness.sh`, established comprehensive unit and contract test coverage in `scripts/ops/launch-readiness.spec.js`, added template requirements in `scripts/ops/check-production-templates.sh`, and wired root scripts:
+- In `scripts/ops/launch-readiness.sh`:
+  - Added single positional argument validation via `CUSTOM_FILE_SPECIFIED`, rejecting multiple positional arguments with exit code 1 and error message `Error: Too many arguments; expected single readiness JSON path` followed by usage instructions.
+  - Retained `--help` / `-h` handling (exit 0) and fail-closed rejection of unknown options (e.g. `--dry-run`, exit 1).
+  - Maintained sequential fail-closed preflight checks: `check-production-templates.sh`, `scan-secrets.sh`, `check-docker-runtime.sh`, and `node --test scripts/ops/check-launch-readiness.spec.js`.
+  - Maintained optional drill execution under `--with-drills` with fail-closed dossier hint emission on failure.
+  - Propagated execution exit code from `check-launch-readiness.js`.
+- Created `scripts/ops/launch-readiness.spec.js`:
+  - CLI usage & flags (6 tests): tests `--help`, `-h`, unknown flag rejection, unknown `--dry-run` rejection, single-dash unknown flag rejection, and excessive positional argument rejection.
+  - Fail-closed preflight pipeline (4 tests): verifies immediate execution halt when any preflight script fails (`check-production-templates.sh`, `scan-secrets.sh`, `check-docker-runtime.sh`, or `check-launch-readiness.spec.js`).
+  - Drill flag flow (3 tests): tests omitting vs including `--with-drills`, drill failure handling and dossier stderr hint, and ordering of drill execution prior to readiness check.
+  - Target forwarding & exit code propagation (4 tests): tests default and custom readiness file path forwarding, argument order invariance (`--with-drills` before or after target path), and exit code propagation.
+  - Real repository execution (1 test): verifies fail-closed execution against `infra/launch/readiness.example.json` returning exit code 1 with 70 unresolved blockers detected.
+- In `scripts/ops/check-production-templates.sh`: added `require_file scripts/ops/check-launch-readiness.spec.js` and `require_file scripts/ops/launch-readiness.spec.js`.
+- In `package.json`: added `"ops:launch-readiness-test": "node --test scripts/ops/launch-readiness.spec.js"` and integrated into `"ops:check"`.
+
+Verification output: `ops:launch-readiness-test` (23/23), `ops:readiness-test` (649/649), `ops:launch-drill-test` (68/68), `ops:templates` and `ops:templates-test` (57/57),
+lint, typecheck, build, and `git diff --check` passed cleanly; dependency audit reports the existing upstream advisory on
+Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed closed (0 approved categories, 11 blocked, 70 blockers).
+Operator sign-off remains open.
