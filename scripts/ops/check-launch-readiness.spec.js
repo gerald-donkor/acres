@@ -92,6 +92,10 @@ const {
   scanDocumentPlaceholdersAndSecrets,
   validateSectionStructuralRequirements,
   collectApprovedCategoryEvidence,
+  parseCliArguments,
+  formatReadinessSummary,
+  runReadinessCheck,
+  main,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -8989,6 +8993,184 @@ test('collectApprovedCategoryEvidence: aggregates evidence for approved categori
     const bucketsMissing = collectApprovedCategoryEvidence(missingSections, '', addBlocker);
     assert.strictEqual(bucketsMissing.production_domain_tls.length, 0);
     assert.ok(blockers.some((b) => b.cat === 'production_domain_tls' && b.msg.includes('A referenced Caddy routing report is invalid or failed')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('parseCliArguments: default, custom paths, flag rejection, and argument count', () => {
+  // Default arguments
+  const defaultRes = parseCliArguments([]);
+  assert.strictEqual(defaultRes.valid, true);
+  assert.strictEqual(defaultRes.targetPath, path.resolve(process.cwd(), 'infra/launch/readiness.example.json'));
+
+  // Custom relative path
+  const customRes = parseCliArguments(['my-readiness.json']);
+  assert.strictEqual(customRes.valid, true);
+  assert.strictEqual(customRes.targetPath, path.resolve(process.cwd(), 'my-readiness.json'));
+
+  // Custom cwd
+  const customCwdRes = parseCliArguments(['target.json'], '/opt/acres');
+  assert.strictEqual(customCwdRes.valid, true);
+  assert.strictEqual(customCwdRes.targetPath, '/opt/acres/target.json');
+
+  // Flag rejection
+  for (const flag of ['--help', '--h', '--with-drills', '--dry-run', '--flag=val']) {
+    const flagRes = parseCliArguments([flag]);
+    assert.strictEqual(flagRes.valid, false);
+    assert.strictEqual(flagRes.error, 'Usage: check-launch-readiness.js [readiness.json]');
+  }
+
+  // Multiple arguments rejection
+  const multiRes = parseCliArguments(['a.json', 'b.json']);
+  assert.strictEqual(multiRes.valid, false);
+  assert.strictEqual(multiRes.error, 'Usage: check-launch-readiness.js [readiness.json]');
+
+  // Non-array input rejection
+  assert.strictEqual(parseCliArguments(null).valid, false);
+  assert.strictEqual(parseCliArguments('str').valid, false);
+  assert.strictEqual(parseCliArguments([123]).valid, false);
+});
+
+test('formatReadinessSummary: report banners, blocker categorization, metrics, and conclusions', () => {
+  // Passed summary
+  const passedSummary = formatReadinessSummary({
+    categoryBlockers: {},
+    totalApproved: 11,
+    totalSections: 11,
+    targetPath: '/opt/acres/readiness.json',
+    cwd: '/opt/acres',
+  });
+  assert.strictEqual(passedSummary.passed, true);
+  assert.strictEqual(passedSummary.totalBlockersCount, 0);
+  assert.strictEqual(passedSummary.unapprovedCount, 0);
+  assert.strictEqual(passedSummary.relativePath, 'readiness.json');
+  assert.ok(passedSummary.text.includes('Target: readiness.json'));
+  assert.ok(passedSummary.text.includes('Approved Categories:       11'));
+  assert.ok(passedSummary.text.includes('Result: PASSED. All launch criteria approved with verified evidence.'));
+
+  // Failing / blocked summary
+  const blockedSummary = formatReadinessSummary({
+    categoryBlockers: {
+      smtp_delivery: ['Missing host', 'Missing port'],
+      volume_encryption: ['Unencrypted volume /data'],
+    },
+    totalApproved: 9,
+    totalSections: 11,
+    targetPath: '/opt/acres/readiness.json',
+    cwd: '/opt/acres',
+  });
+  assert.strictEqual(blockedSummary.passed, false);
+  assert.strictEqual(blockedSummary.totalBlockersCount, 3);
+  assert.strictEqual(blockedSummary.unapprovedCount, 2);
+  assert.ok(blockedSummary.text.includes('Unresolved Launch Blockers by Category:'));
+  assert.ok(blockedSummary.text.includes('[SMTP_DELIVERY]'));
+  assert.ok(blockedSummary.text.includes('  - Missing host'));
+  assert.ok(blockedSummary.text.includes('  - Missing port'));
+  assert.ok(blockedSummary.text.includes('[VOLUME_ENCRYPTION]'));
+  assert.ok(blockedSummary.text.includes('  - Unencrypted volume /data'));
+  assert.ok(blockedSummary.text.includes('Total Blockers Detected:   3'));
+  assert.ok(blockedSummary.text.includes('Unresolved / Blocked:      2'));
+  assert.ok(blockedSummary.text.includes('Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.'));
+});
+
+test('runReadinessCheck: file existence, parse error handling, fail-closed evaluation, and passing runs', () => {
+  // Invalid or non-string targetPath
+  const invalidTypeErrors = [];
+  const invalidRes = runReadinessCheck(null, {}, { error: (e) => invalidTypeErrors.push(e) });
+  assert.strictEqual(invalidRes.success, false);
+  assert.strictEqual(invalidRes.exitCode, 1);
+  assert.ok(invalidTypeErrors.some((e) => e.includes('must be a non-empty string')));
+
+  const emptyStringErrors = [];
+  const emptyRes = runReadinessCheck('   ', {}, { error: (e) => emptyStringErrors.push(e) });
+  assert.strictEqual(emptyRes.success, false);
+  assert.strictEqual(emptyRes.exitCode, 1);
+  assert.ok(emptyStringErrors.some((e) => e.includes('must be a non-empty string')));
+
+  // File not found
+  const missingErrors = [];
+  const missingRes = runReadinessCheck(
+    '/tmp/definitely-missing-readiness-12345.json',
+    {},
+    { error: (e) => missingErrors.push(e) }
+  );
+  assert.strictEqual(missingRes.success, false);
+  assert.strictEqual(missingRes.exitCode, 1);
+  assert.ok(missingErrors.some((e) => e.includes('Readiness record file not found')));
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-runner-test-'));
+  try {
+    // Malformed JSON
+    const badJsonFile = path.join(tmpDir, 'malformed.json');
+    fs.writeFileSync(badJsonFile, '{ not valid json');
+    const parseErrors = [];
+    const parseRes = runReadinessCheck(badJsonFile, {}, { error: (e) => parseErrors.push(e) });
+    assert.strictEqual(parseRes.success, false);
+    assert.strictEqual(parseRes.exitCode, 1);
+    assert.ok(parseErrors.some((e) => e.includes('Failed to parse readiness JSON file')));
+
+    // Unresolved example file
+    const exampleLogs = [];
+    const exampleRes = runReadinessCheck(
+      path.resolve('infra/launch/readiness.example.json'),
+      {},
+      { log: (l) => exampleLogs.push(l) }
+    );
+    assert.strictEqual(exampleRes.success, false);
+    assert.strictEqual(exampleRes.exitCode, 1);
+    assert.strictEqual(exampleRes.totalApproved, 0);
+    assert.strictEqual(exampleRes.totalSections, 11);
+    assert.strictEqual(exampleRes.totalBlockersCount, 70);
+    assert.ok(exampleLogs.some((l) => l.includes('FAIL-CLOSED')));
+
+    // Passing valid record
+    const validFile = path.join(tmpDir, 'valid.json');
+    const validRecord = buildValidApprovedRecord();
+    fs.writeFileSync(validFile, JSON.stringify(validRecord));
+    const validLogs = [];
+    const validRes = runReadinessCheck(
+      validFile,
+      { now: fixedNow, env: expectedImageEnv(validRecord) },
+      { log: (l) => validLogs.push(l) }
+    );
+    assert.strictEqual(validRes.success, true);
+    assert.strictEqual(validRes.exitCode, 0);
+    assert.strictEqual(validRes.totalApproved, 11);
+    assert.strictEqual(validRes.totalBlockersCount, 0);
+    assert.ok(validLogs.some((l) => l.includes('Result: PASSED')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('main: programmatic execution, usage errors, and exitCode contracts', () => {
+  // Usage error on invalid CLI arguments
+  const cliErrors = [];
+  const badCode = main(['--flag'], { error: (e) => cliErrors.push(e) });
+  assert.strictEqual(badCode, 1);
+  assert.ok(cliErrors.some((e) => e.includes('Usage: check-launch-readiness.js [readiness.json]')));
+
+  // Unresolved example record fails closed with code 1
+  const exampleLogs = [];
+  const exampleCode = main([], { log: (l) => exampleLogs.push(l) });
+  assert.strictEqual(exampleCode, 1);
+  assert.ok(exampleLogs.some((l) => l.includes('FAIL-CLOSED')));
+
+  // Passing record succeeds with code 0
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-main-test-'));
+  try {
+    const validFile = path.join(tmpDir, 'valid-main.json');
+    const validRecord = buildValidApprovedRecord();
+    fs.writeFileSync(validFile, JSON.stringify(validRecord));
+    const validLogs = [];
+    const validCode = main(
+      [validFile],
+      { log: (l) => validLogs.push(l) },
+      { now: fixedNow, env: expectedImageEnv(validRecord) }
+    );
+    assert.strictEqual(validCode, 0);
+    assert.ok(validLogs.some((l) => l.includes('Result: PASSED')));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

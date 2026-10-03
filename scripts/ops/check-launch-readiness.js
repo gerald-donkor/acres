@@ -3625,73 +3625,179 @@ function validateReadiness(record, _filePath, options = {}) {
   };
 }
 
-function main() {
-  const args = process.argv.slice(2);
-  if (args.length > 1 || args.some((arg) => arg.startsWith('--'))) {
-    console.error('Usage: check-launch-readiness.js [readiness.json]');
-    process.exit(1);
+function parseCliArguments(args = [], cwd = process.cwd()) {
+  if (
+    !Array.isArray(args) ||
+    args.length > 1 ||
+    args.some((arg) => typeof arg !== 'string' || arg.startsWith('--'))
+  ) {
+    return {
+      valid: false,
+      error: 'Usage: check-launch-readiness.js [readiness.json]',
+    };
   }
   const targetPath = args[0]
-    ? path.resolve(process.cwd(), args[0])
-    : path.resolve(process.cwd(), 'infra/launch/readiness.example.json');
+    ? path.resolve(cwd, args[0])
+    : path.resolve(cwd, 'infra/launch/readiness.example.json');
+  return {
+    valid: true,
+    targetPath,
+  };
+}
 
-  const relativePath = path.relative(process.cwd(), targetPath);
-
-  console.log('================================================================================');
-  console.log('ACRES LAUNCH READINESS EVALUATION');
-  console.log(`Target: ${relativePath}`);
-  console.log('================================================================================\n');
-
-  if (!fs.existsSync(targetPath)) {
-    console.error(`ERROR: Readiness record file not found at: ${targetPath}\n`);
-    process.exit(1);
-  }
-
-  let record;
-  try {
-    const raw = fs.readFileSync(targetPath, 'utf8');
-    record = JSON.parse(raw);
-  } catch (err) {
-    console.error(`ERROR: Failed to parse readiness JSON file (${targetPath}): ${err.message}\n`);
-    process.exit(1);
-  }
-
-  const { categoryBlockers, totalApproved, totalSections } = validateReadiness(record, targetPath, { env: process.env });
+function formatReadinessSummary({
+  categoryBlockers = {},
+  totalApproved = 0,
+  totalSections = REQUIRED_SECTIONS.length,
+  targetPath,
+  cwd = process.cwd(),
+}) {
+  const relativePath = targetPath ? path.relative(cwd, targetPath) : '';
+  const lines = [
+    '================================================================================',
+    'ACRES LAUNCH READINESS EVALUATION',
+    `Target: ${relativePath}`,
+    '================================================================================',
+    '',
+  ];
 
   const categoriesWithBlockers = Object.keys(categoryBlockers);
   let totalBlockersCount = 0;
 
   if (categoriesWithBlockers.length > 0) {
-    console.log('Unresolved Launch Blockers by Category:\n');
+    lines.push('Unresolved Launch Blockers by Category:', '');
     for (const cat of categoriesWithBlockers) {
-      const blockers = categoryBlockers[cat];
+      const blockers = categoryBlockers[cat] || [];
       totalBlockersCount += blockers.length;
-      console.log(`[${cat.toUpperCase()}]`);
+      lines.push(`[${cat.toUpperCase()}]`);
       for (const b of blockers) {
-        console.log(`  - ${b}`);
+        lines.push(`  - ${b}`);
       }
-      console.log('');
+      lines.push('');
     }
   }
 
   const unapprovedCount = totalSections - totalApproved;
 
-  console.log('--------------------------------------------------------------------------------');
-  console.log('SUMMARY:');
-  console.log(`  Total Required Categories: ${totalSections}`);
-  console.log(`  Approved Categories:       ${totalApproved}`);
-  console.log(`  Unresolved / Blocked:      ${unapprovedCount}`);
-  console.log(`  Total Blockers Detected:   ${totalBlockersCount}`);
-  console.log('================================================================================');
+  lines.push(
+    '--------------------------------------------------------------------------------',
+    'SUMMARY:',
+    `  Total Required Categories: ${totalSections}`,
+    `  Approved Categories:       ${totalApproved}`,
+    `  Unresolved / Blocked:      ${unapprovedCount}`,
+    `  Total Blockers Detected:   ${totalBlockersCount}`,
+    '================================================================================'
+  );
 
-  if (totalBlockersCount > 0 || unapprovedCount > 0) {
-    console.log('\nResult: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.');
-    console.log('This repository intentionally fails closed until real operator decisions and live drills are recorded.\n');
-    process.exit(1);
+  const passed = totalBlockersCount === 0 && unapprovedCount === 0;
+  if (!passed) {
+    lines.push(
+      '',
+      'Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.',
+      'This repository intentionally fails closed until real operator decisions and live drills are recorded.',
+      ''
+    );
+  } else {
+    lines.push('', 'Result: PASSED. All launch criteria approved with verified evidence.', '');
   }
 
-  console.log('\nResult: PASSED. All launch criteria approved with verified evidence.\n');
-  process.exit(0);
+  return {
+    lines,
+    text: lines.join('\n'),
+    passed,
+    totalBlockersCount,
+    unapprovedCount,
+    relativePath,
+  };
+}
+
+function runReadinessCheck(targetPath, options = {}, io = {}) {
+  const log = typeof io.log === 'function' ? io.log : console.log;
+  const error = typeof io.error === 'function' ? io.error : console.error;
+  const cwd = options.cwd || process.cwd();
+
+  if (typeof targetPath !== 'string' || targetPath.trim().length === 0) {
+    error('ERROR: Target readiness file path must be a non-empty string\n');
+    return {
+      success: false,
+      exitCode: 1,
+      targetPath: '',
+      error: 'Target readiness file path must be a non-empty string',
+    };
+  }
+
+  const resolvedPath = path.isAbsolute(targetPath)
+    ? targetPath
+    : path.resolve(cwd, targetPath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    error(`ERROR: Readiness record file not found at: ${resolvedPath}\n`);
+    return {
+      success: false,
+      exitCode: 1,
+      targetPath: resolvedPath,
+      error: `Readiness record file not found at: ${resolvedPath}`,
+    };
+  }
+
+  let record;
+  try {
+    const raw = fs.readFileSync(resolvedPath, 'utf8');
+    record = JSON.parse(raw);
+  } catch (err) {
+    error(`ERROR: Failed to parse readiness JSON file (${resolvedPath}): ${err.message}\n`);
+    return {
+      success: false,
+      exitCode: 1,
+      targetPath: resolvedPath,
+      error: `Failed to parse readiness JSON file (${resolvedPath}): ${err.message}`,
+    };
+  }
+
+  const validationResult = validateReadiness(record, resolvedPath, {
+    env: options.env !== undefined ? options.env : process.env,
+    now: options.now,
+  });
+
+  const summary = formatReadinessSummary({
+    categoryBlockers: validationResult.categoryBlockers,
+    totalApproved: validationResult.totalApproved,
+    totalSections: validationResult.totalSections,
+    targetPath: resolvedPath,
+    cwd,
+  });
+
+  summary.lines.forEach((line) => log(line));
+
+  return {
+    success: summary.passed,
+    exitCode: summary.passed ? 0 : 1,
+    targetPath: resolvedPath,
+    relativePath: summary.relativePath,
+    totalApproved: validationResult.totalApproved,
+    totalSections: validationResult.totalSections,
+    totalBlockersCount: summary.totalBlockersCount,
+    categoryBlockers: validationResult.categoryBlockers,
+    summary,
+  };
+}
+
+function main(argv = process.argv.slice(2), io = {}, options = {}) {
+  const error = typeof io.error === 'function' ? io.error : console.error;
+  const cli = parseCliArguments(argv);
+  if (!cli.valid) {
+    error(cli.error);
+    if (require.main === module) {
+      process.exit(1);
+    }
+    return 1;
+  }
+
+  const result = runReadinessCheck(cli.targetPath, { env: process.env, ...options }, io);
+  if (require.main === module) {
+    process.exit(result.exitCode);
+  }
+  return result.exitCode;
 }
 
 if (require.main === module) {
@@ -3792,4 +3898,8 @@ module.exports = {
   scanDocumentPlaceholdersAndSecrets,
   validateSectionStructuralRequirements,
   collectApprovedCategoryEvidence,
+  parseCliArguments,
+  formatReadinessSummary,
+  runReadinessCheck,
+  main,
 };

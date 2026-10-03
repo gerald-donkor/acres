@@ -2733,3 +2733,26 @@ Verification and review (2026-10-02):
 - `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
 - Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
 - Operator sign-off remains open.
+
+## Prompt 256 — modularize and test readiness CLI argument parsing, summary formatting, and execution runner (2026-10-03)
+
+`scripts/ops/check-launch-readiness.js`:
+- Decomposed the remaining command-line interface, human-readable summary formatting, end-to-end execution runner, and main entrypoint:
+  - Extracted `parseCliArguments(args, cwd)`: parses command-line arguments, rejects invalid flags (e.g. `--help`, `--dry-run`), rejects excessive positional arguments, and resolves target readiness file relative to `cwd` (defaulting to `infra/launch/readiness.example.json`).
+  - Extracted `formatReadinessSummary({ categoryBlockers, totalApproved, totalSections, targetPath, cwd })`: encapsulates rendering the human-readable report banner, per-category blocker listings, statistics summary table (total required, approved, unresolved, total blockers), and fail-closed vs. passing result notice.
+  - Extracted `runReadinessCheck(targetPath, options, io)`: orchestrates defensive target path resolution and string validation, asserts file existence, parses JSON contents, delegates to `validateReadiness()`, renders the summary via `formatReadinessSummary()`, dispatches lines to configurable `io` logging/error callbacks, and returns a structured result object `{ success, exitCode, targetPath, relativePath, totalApproved, totalSections, totalBlockersCount, categoryBlockers, summary, error }`.
+  - Refactored `main(argv, io, options)`: delegates cleanly to `parseCliArguments()` and `runReadinessCheck()`, calling `process.exit(result.exitCode)` when executed directly as the script entrypoint (`require.main === module`), and returning `result.exitCode` when invoked programmatically.
+  - Exported all 4 functions (`parseCliArguments`, `formatReadinessSummary`, `runReadinessCheck`, and `main`) in `module.exports`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive unit and contract test suites:
+  - `parseCliArguments`: tests default target path resolution (`infra/launch/readiness.example.json`), explicit custom paths, custom cwd resolution, flag rejection (`--help`, `--with-drills`, `--dry-run`), multiple argument rejection, and non-array/non-string input guards.
+  - `formatReadinessSummary`: tests passing summary rendering (banner, counts, result notice), blocked/failing summary rendering with uppercase category headers and itemized blockers, and accurate calculation of blockers and unapproved counts.
+  - `runReadinessCheck`: tests defensive non-string/empty target path rejection, file-not-found error handling, malformed JSON parse error handling, fail-closed evaluation of `infra/launch/readiness.example.json` (70 blockers, 0 approved, exitCode 1), passing evaluation of approved record fixtures (0 blockers, 11 approved, exitCode 0), and clean output capture without console pollution.
+  - `main`: tests programmatic CLI entrypoint execution, usage errors on invalid arguments, fail-closed exit code on example records, and passing exit code on approved records.
+
+Verification and review (2026-10-03):
+- `node --test scripts/ops/check-launch-readiness.spec.js`: 649 passed, 0 failed.
+- `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
+- `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
+- `npm run lint`, `npm run typecheck`, `npm run build`, and `git diff --check` passed cleanly.
+- Unresolved example readiness template failed closed: 0 approved categories, 11 blocked, 70 blockers.
+- Operator sign-off remains open.
