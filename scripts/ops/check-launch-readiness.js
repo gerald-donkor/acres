@@ -2392,6 +2392,155 @@ function validateSupplyChainEvidence(parsed, file, addBlocker, category) {
   return true;
 }
 
+function validateEvidenceFileCategory(category, file, parsed, ref, addBlocker) {
+  const callAddBlocker = typeof addBlocker === 'function' ? addBlocker : () => {};
+  if (category === 'volume_encryption') {
+    if (isVolumeEncryptionCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    if (!validVolumeDossier(parsed, file)) {
+      callAddBlocker(category, 'A referenced volume encryption report is invalid or failed');
+    }
+    return;
+  }
+  if (category === 'backup_and_disaster_recovery') {
+    if (isRestoreCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    if (isReconciliationCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    if (!validRecoveryDossier(parsed, file)) {
+      callAddBlocker(
+        category,
+        typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
+          ? 'A referenced storage reconciliation report is invalid or failed'
+          : 'A referenced restore drill report is invalid or failed'
+      );
+    }
+    return;
+  }
+  if (category === 'production_domain_tls') {
+    if (isCaddyRoutingCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    if (!validCaddyDossier(parsed, file) && !validCaddyStaticEvidence(parsed, file)) {
+      callAddBlocker(category, 'A referenced Caddy routing report is invalid or failed');
+    }
+    return;
+  }
+  if (category === 'smtp_delivery') {
+    if (isSmtpDeliveryCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    callAddBlocker(category, 'A referenced SMTP delivery report is invalid or failed');
+    return;
+  }
+  if (category === 'slo_and_alerting') {
+    if (isCapacityAlertingCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    if (!validCapacityDossier(parsed, file)) {
+      callAddBlocker(category, 'A referenced capacity and alerting report is invalid or failed');
+    }
+    return;
+  }
+  if (category === 'secrets_management') {
+    if (isSecretRotationCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock.
+      return;
+    }
+    if (
+      isSastEvidence(parsed, file) ||
+      isSbomEvidence(parsed, file) ||
+      isContainerSecurityEvidence(parsed, file)
+    ) {
+      validateSupplyChainEvidence(parsed, file, callAddBlocker, category);
+      return;
+    }
+    if (!validSecretDossier(parsed, file)) {
+      callAddBlocker(category, 'A referenced secret rotation report is invalid or failed');
+    }
+    return;
+  }
+  if (category === 'deployment_and_rollback') {
+    if (isDeploymentDrillCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock.
+      return;
+    }
+    const isDossier = Boolean(
+      parsed && (
+        parsed.dossier_version !== undefined ||
+        Array.isArray(parsed.stages) ||
+        parsed.deploymentBaseline !== undefined
+      )
+    );
+    if (isDossier) {
+      if (!validDeploymentDossier(parsed, file)) {
+        callAddBlocker(category, 'A referenced deployment drill report is invalid or failed');
+      }
+      return;
+    }
+    if (
+      !parsed ||
+      typeof parsed.status !== 'string' ||
+      parsed.status.toLowerCase() !== 'success' ||
+      (parsed.overall_status &&
+        String(parsed.overall_status).toLowerCase() !== 'passed' &&
+        String(parsed.overall_status).toLowerCase() !== 'success') ||
+      parsed.success === false ||
+      parsed.error !== undefined ||
+      (Array.isArray(parsed.errors) ? parsed.errors.length > 0 : Boolean(parsed.errors))
+    ) {
+      callAddBlocker(category, 'A referenced deployment drill report is invalid or failed');
+      return;
+    }
+    return;
+  }
+  if (category === 'secret_references') {
+    if (isSecretReferencePolicyCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    callAddBlocker(category, 'A referenced secret-reference policy report is invalid or failed');
+    return;
+  }
+  if (category === 'data_retention_policy') {
+    if (isDataRetentionPolicyCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    callAddBlocker(category, 'A referenced data retention policy report is invalid or failed');
+    return;
+  }
+  if (category === 'graphql_introspection') {
+    if (isGraphqlIntrospectionCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    callAddBlocker(category, 'A referenced GraphQL introspection report is invalid or failed');
+    return;
+  }
+  if (category === 'optional_ai_posture') {
+    if (isNoAiPostureCandidate({ file, parsed })) {
+      // The approval call below validates children with its explicit evaluation clock and live requirement.
+      return;
+    }
+    callAddBlocker(category, 'A referenced no-AI production posture report is invalid or failed');
+    return;
+  }
+  if (!REQUIRED_SECTIONS.includes(category)) {
+    callAddBlocker(category, `Unrecognized launch checklist category '${category}'`);
+    return;
+  }
+}
+
 function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
   const parsedFiles = [];
   const dirs = Array.isArray(baseDirs) && baseDirs.length > 0 ? baseDirs : [process.cwd()];
@@ -2413,151 +2562,7 @@ function checkEvidenceFileContents(ref, category, addBlocker, baseDirs) {
       continue;
     }
     parsedFiles.push({ file, parsed });
-    if (category === 'volume_encryption') {
-      if (isVolumeEncryptionCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      if (!validVolumeDossier(parsed, file)) {
-        addBlocker(category, 'A referenced volume encryption report is invalid or failed');
-      }
-      continue;
-    }
-    if (category === 'backup_and_disaster_recovery') {
-      if (isRestoreCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      if (isReconciliationCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      if (!validRecoveryDossier(parsed, file)) {
-        addBlocker(
-          category,
-          typeof ref === 'string' && (ref.includes('reconcil') || ref.includes('storage'))
-            ? 'A referenced storage reconciliation report is invalid or failed'
-            : 'A referenced restore drill report is invalid or failed'
-        );
-      }
-      continue;
-    }
-    if (category === 'production_domain_tls') {
-      if (isCaddyRoutingCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      if (!validCaddyDossier(parsed, file) && !validCaddyStaticEvidence(parsed, file)) {
-        addBlocker(category, 'A referenced Caddy routing report is invalid or failed');
-      }
-      continue;
-    }
-    if (category === 'smtp_delivery') {
-      if (isSmtpDeliveryCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      addBlocker(category, 'A referenced SMTP delivery report is invalid or failed');
-      continue;
-    }
-    if (category === 'slo_and_alerting') {
-      if (isCapacityAlertingCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      if (!validCapacityDossier(parsed, file)) {
-        addBlocker(category, 'A referenced capacity and alerting report is invalid or failed');
-      }
-      continue;
-    }
-    if (category === 'secrets_management') {
-      if (isSecretRotationCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock.
-        continue;
-      }
-      if (
-        isSastEvidence(parsed, file) ||
-        isSbomEvidence(parsed, file) ||
-        isContainerSecurityEvidence(parsed, file)
-      ) {
-        validateSupplyChainEvidence(parsed, file, addBlocker, category);
-        continue;
-      }
-      if (!validSecretDossier(parsed, file)) {
-        addBlocker(category, 'A referenced secret rotation report is invalid or failed');
-      }
-      continue;
-    }
-    if (category === 'deployment_and_rollback') {
-      if (isDeploymentDrillCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock.
-        continue;
-      }
-      const isDossier = Boolean(
-        parsed && (
-          parsed.dossier_version !== undefined ||
-          Array.isArray(parsed.stages) ||
-          parsed.deploymentBaseline !== undefined
-        )
-      );
-      if (isDossier) {
-        if (!validDeploymentDossier(parsed, file)) {
-          addBlocker(category, 'A referenced deployment drill report is invalid or failed');
-        }
-        continue;
-      }
-      if (
-        !parsed ||
-        typeof parsed.status !== 'string' ||
-        parsed.status.toLowerCase() !== 'success' ||
-        (parsed.overall_status &&
-          String(parsed.overall_status).toLowerCase() !== 'passed' &&
-          String(parsed.overall_status).toLowerCase() !== 'success') ||
-        parsed.success === false ||
-        parsed.error !== undefined ||
-        (Array.isArray(parsed.errors) ? parsed.errors.length > 0 : Boolean(parsed.errors))
-      ) {
-        addBlocker(category, 'A referenced deployment drill report is invalid or failed');
-        continue;
-      }
-      continue;
-    }
-    if (category === 'secret_references') {
-      if (isSecretReferencePolicyCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      addBlocker(category, 'A referenced secret-reference policy report is invalid or failed');
-      continue;
-    }
-    if (category === 'data_retention_policy') {
-      if (isDataRetentionPolicyCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      addBlocker(category, 'A referenced data retention policy report is invalid or failed');
-      continue;
-    }
-    if (category === 'graphql_introspection') {
-      if (isGraphqlIntrospectionCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      addBlocker(category, 'A referenced GraphQL introspection report is invalid or failed');
-      continue;
-    }
-    if (category === 'optional_ai_posture') {
-      if (isNoAiPostureCandidate({ file, parsed })) {
-        // The approval call below validates children with its explicit evaluation clock and live requirement.
-        continue;
-      }
-      addBlocker(category, 'A referenced no-AI production posture report is invalid or failed');
-      continue;
-    }
-    if (!REQUIRED_SECTIONS.includes(category)) {
-      addBlocker(category, `Unrecognized launch checklist category '${category}'`);
-      continue;
-    }
+    validateEvidenceFileCategory(category, file, parsed, ref, addBlocker);
   }
   return parsedFiles;
 }
@@ -3403,20 +3408,112 @@ function validateOptionalAiPostureSection(aiSec, options = {}) {
   return blockers;
 }
 
+function validateReadinessDocument(record, addBlocker) {
+  const callAddBlocker = typeof addBlocker === 'function' ? addBlocker : () => {};
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    callAddBlocker('root', 'Invalid readiness document: root must be an object');
+    return false;
+  }
+
+  const sections = record.sections;
+  if (!sections || typeof sections !== 'object' || Array.isArray(sections)) {
+    callAddBlocker('root', "Missing required top-level 'sections' object");
+    return false;
+  }
+
+  return true;
+}
+
+function scanDocumentPlaceholdersAndSecrets(record, addBlocker) {
+  const callAddBlocker = typeof addBlocker === 'function' ? addBlocker : () => {};
+  const rawScanBlockers = [];
+  checkPlaceholdersAndSecrets(record, '', rawScanBlockers);
+  for (const b of rawScanBlockers) {
+    const sectionMatch = b.match(/Field 'sections\.([a-z_]+)/);
+    const category = sectionMatch ? sectionMatch[1] : 'general';
+    callAddBlocker(category, b);
+  }
+  return rawScanBlockers;
+}
+
+function validateSectionStructuralRequirements(sectionName, sec, addBlocker) {
+  const callAddBlocker = typeof addBlocker === 'function' ? addBlocker : () => {};
+  if (!sec || typeof sec !== 'object' || Array.isArray(sec)) {
+    callAddBlocker(sectionName, `Missing required section '${sectionName}'`);
+    return { exists: false, isApproved: false };
+  }
+
+  const status = sec.status;
+  let isApproved = false;
+  if (status !== 'approved') {
+    callAddBlocker(
+      sectionName,
+      `Section status is '${status || 'missing'}'; must be 'approved' with verified evidence for launch readiness`
+    );
+  } else {
+    isApproved = true;
+  }
+
+  const evidence = sec.evidence;
+  if (!Array.isArray(evidence) || evidence.length === 0) {
+    callAddBlocker(sectionName, 'Evidence array is empty or missing; launch approval requires auditable evidence items');
+  } else {
+    evidence.forEach((ev, idx) => {
+      if (typeof ev !== 'string' || ev.trim() === '') {
+        callAddBlocker(sectionName, `Evidence item [${idx}] is empty or not a valid string`);
+      }
+    });
+  }
+
+  return { exists: true, isApproved };
+}
+
+function collectApprovedCategoryEvidence(sections, filePath, addBlocker) {
+  const callAddBlocker = typeof addBlocker === 'function' ? addBlocker : () => {};
+  const categoryEvidence = {
+    production_domain_tls: [],
+    smtp_delivery: [],
+    secrets_management: [],
+    secret_references: [],
+    slo_and_alerting: [],
+    backup_and_disaster_recovery: [],
+    data_retention_policy: [],
+    volume_encryption: [],
+    graphql_introspection: [],
+    deployment_and_rollback: [],
+    optional_ai_posture: [],
+  };
+
+  if (!sections || typeof sections !== 'object' || Array.isArray(sections)) {
+    return categoryEvidence;
+  }
+
+  const baseDirs = [process.cwd()];
+  if (typeof filePath === 'string' && filePath.length > 0) {
+    const fileDir = path.dirname(path.resolve(process.cwd(), filePath));
+    if (!baseDirs.includes(fileDir)) baseDirs.push(fileDir);
+  }
+
+  for (const sectionName of REQUIRED_SECTIONS) {
+    const sec = sections[sectionName];
+    if (sec && sec.status === 'approved' && Array.isArray(sec.evidence)) {
+      sec.evidence.forEach((ev) => {
+        if (isEvidenceFileReference(ev)) {
+          const parsedFiles = checkEvidenceFile(ev.trim(), sectionName, callAddBlocker, baseDirs);
+          if (categoryEvidence[sectionName]) {
+            categoryEvidence[sectionName].push(...parsedFiles);
+          }
+        }
+      });
+    }
+  }
+
+  return categoryEvidence;
+}
+
 function validateReadiness(record, _filePath, options = {}) {
   const categoryBlockers = {};
   let totalApproved = 0;
-  const recoveryEvidence = [];
-  const volumeEvidence = [];
-  const secretEvidence = [];
-  const deploymentEvidence = [];
-  const capacityEvidence = [];
-  const caddyEvidence = [];
-  const smtpEvidence = [];
-  const secretReferenceEvidence = [];
-  const retentionEvidence = [];
-  const graphqlEvidence = [];
-  const noAiEvidence = [];
   const now = options.now instanceof Date ? options.now : new Date();
 
   function addBlocker(category, message) {
@@ -3426,144 +3523,89 @@ function validateReadiness(record, _filePath, options = {}) {
     categoryBlockers[category].push(message);
   }
 
-  if (!record || typeof record !== 'object') {
-    addBlocker('root', 'Invalid readiness document: root must be an object');
+  if (!validateReadinessDocument(record, addBlocker)) {
     return { categoryBlockers, totalApproved: 0, totalSections: REQUIRED_SECTIONS.length };
   }
 
   const sections = record.sections;
-  if (!sections || typeof sections !== 'object') {
-    addBlocker('root', "Missing required top-level 'sections' object");
-    return { categoryBlockers, totalApproved: 0, totalSections: REQUIRED_SECTIONS.length };
-  }
 
   // 1. Generic placeholder & dev secret scan across entire document
-  const rawScanBlockers = [];
-  checkPlaceholdersAndSecrets(record, '', rawScanBlockers);
-  for (const b of rawScanBlockers) {
-    const sectionMatch = b.match(/Field 'sections\.([a-z_]+)/);
-    const category = sectionMatch ? sectionMatch[1] : 'general';
-    addBlocker(category, b);
-  }
+  scanDocumentPlaceholdersAndSecrets(record, addBlocker);
 
-  // 2. Validate each required section
+  // 2. Validate structural requirements of each section
   for (const sectionName of REQUIRED_SECTIONS) {
-    const sec = sections[sectionName];
-    if (!sec || typeof sec !== 'object') {
-      addBlocker(sectionName, `Missing required section '${sectionName}'`);
-      continue;
-    }
-
-    const status = sec.status;
-    if (status !== 'approved') {
-      addBlocker(
-        sectionName,
-        `Section status is '${status || 'missing'}'; must be 'approved' with verified evidence for launch readiness`
-      );
-    } else {
+    const { isApproved } = validateSectionStructuralRequirements(
+      sectionName,
+      sections[sectionName],
+      addBlocker
+    );
+    if (isApproved) {
       totalApproved += 1;
     }
-
-    const evidence = sec.evidence;
-    if (!Array.isArray(evidence) || evidence.length === 0) {
-      addBlocker(sectionName, 'Evidence array is empty or missing; launch approval requires auditable evidence items');
-    } else {
-      evidence.forEach((ev, idx) => {
-        if (typeof ev !== 'string' || ev.trim() === '') {
-          addBlocker(sectionName, `Evidence item [${idx}] is empty or not a valid string`);
-        }
-      });
-      // Cross-validation: approved sections referencing evidence JSON files on
-      // disk must point at files that exist, parse as JSON, and do not report
-      // drill failure. Relative paths resolve against the current working
-      // directory first (the documented `backups/…` form) and then against
-      // the readiness file's own directory, so records kept next to the
-      // template (e.g. infra/launch/operator.json) still validate.
-      if (status === 'approved') {
-        const baseDirs = [process.cwd()];
-        if (typeof _filePath === 'string' && _filePath.length > 0) {
-          const fileDir = path.dirname(path.resolve(process.cwd(), _filePath));
-          if (!baseDirs.includes(fileDir)) baseDirs.push(fileDir);
-        }
-        evidence.forEach((ev) => {
-          if (isEvidenceFileReference(ev)) {
-            const parsedFiles = checkEvidenceFile(ev.trim(), sectionName, addBlocker, baseDirs);
-            if (sectionName === 'backup_and_disaster_recovery') recoveryEvidence.push(...parsedFiles);
-            if (sectionName === 'volume_encryption') volumeEvidence.push(...parsedFiles);
-            if (sectionName === 'secrets_management') secretEvidence.push(...parsedFiles);
-            if (sectionName === 'deployment_and_rollback') deploymentEvidence.push(...parsedFiles);
-            if (sectionName === 'slo_and_alerting') capacityEvidence.push(...parsedFiles);
-            if (sectionName === 'production_domain_tls') caddyEvidence.push(...parsedFiles);
-            if (sectionName === 'smtp_delivery') smtpEvidence.push(...parsedFiles);
-            if (sectionName === 'secret_references') secretReferenceEvidence.push(...parsedFiles);
-            if (sectionName === 'data_retention_policy') retentionEvidence.push(...parsedFiles);
-            if (sectionName === 'graphql_introspection') graphqlEvidence.push(...parsedFiles);
-            if (sectionName === 'optional_ai_posture') noAiEvidence.push(...parsedFiles);
-          }
-        });
-      }
-    }
   }
 
-  // 3. Category-specific validations
+  // 3. Collect evidence files for approved sections
+  const evidenceBuckets = collectApprovedCategoryEvidence(sections, _filePath, addBlocker);
+
+  // 4. Category-specific validations
   validateProductionDomainTlsSection(sections.production_domain_tls, {
     now,
-    caddyEvidence,
+    caddyEvidence: evidenceBuckets.production_domain_tls,
     addBlocker,
   });
 
   validateSmtpDeliverySection(sections.smtp_delivery, {
     sections,
     now,
-    smtpEvidence,
+    smtpEvidence: evidenceBuckets.smtp_delivery,
     addBlocker,
   });
 
   validateSecretsManagementSection(sections.secrets_management, {
     now,
-    secretEvidence,
+    secretEvidence: evidenceBuckets.secrets_management,
     addBlocker,
   });
 
   validateSecretReferencesSection(sections.secret_references, {
     now,
-    secretReferenceEvidence,
+    secretReferenceEvidence: evidenceBuckets.secret_references,
     addBlocker,
   });
 
   validateSloAndAlertingSection(sections.slo_and_alerting, {
     now,
-    capacityEvidence,
+    capacityEvidence: evidenceBuckets.slo_and_alerting,
     addBlocker,
   });
 
   validateBackupAndDisasterRecoverySection(sections.backup_and_disaster_recovery, {
     now,
-    recoveryEvidence,
+    recoveryEvidence: evidenceBuckets.backup_and_disaster_recovery,
     addBlocker,
   });
 
   validateDataRetentionPolicySection(sections.data_retention_policy, {
     now,
-    retentionEvidence,
+    retentionEvidence: evidenceBuckets.data_retention_policy,
     addBlocker,
   });
 
   validateVolumeEncryptionSection(sections.volume_encryption, {
     now,
-    volumeEvidence,
+    volumeEvidence: evidenceBuckets.volume_encryption,
     addBlocker,
   });
 
   validateGraphqlIntrospectionSection(sections.graphql_introspection, {
     now,
-    graphqlEvidence,
+    graphqlEvidence: evidenceBuckets.graphql_introspection,
     addBlocker,
   });
 
   validateDeploymentAndRollbackSection(sections.deployment_and_rollback, {
     now,
-    deploymentEvidence,
+    deploymentEvidence: evidenceBuckets.deployment_and_rollback,
     filePath: _filePath,
     env: options.env,
     options,
@@ -3572,7 +3614,7 @@ function validateReadiness(record, _filePath, options = {}) {
 
   validateOptionalAiPostureSection(sections.optional_ai_posture, {
     now,
-    noAiEvidence,
+    noAiEvidence: evidenceBuckets.optional_ai_posture,
     addBlocker,
   });
 
@@ -3745,4 +3787,9 @@ module.exports = {
   validateGraphqlIntrospectionSection,
   validateDeploymentAndRollbackSection,
   validateOptionalAiPostureSection,
+  validateEvidenceFileCategory,
+  validateReadinessDocument,
+  scanDocumentPlaceholdersAndSecrets,
+  validateSectionStructuralRequirements,
+  collectApprovedCategoryEvidence,
 };

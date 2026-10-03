@@ -87,6 +87,11 @@ const {
   validateGraphqlIntrospectionSection,
   validateDeploymentAndRollbackSection,
   validateOptionalAiPostureSection,
+  validateEvidenceFileCategory,
+  validateReadinessDocument,
+  scanDocumentPlaceholdersAndSecrets,
+  validateSectionStructuralRequirements,
+  collectApprovedCategoryEvidence,
 } = require('./check-launch-readiness');
 const { runChecks } = require('./run-static-integrity-checks');
 
@@ -8675,4 +8680,316 @@ test('validateOptionalAiPostureSection: approval and rejection scenarios', () =>
   assert.ok(blockers.some((b) => b.includes('Launch approval requires ai_enabled: false')));
   assert.ok(blockers.some((b) => b.includes('Deterministic no-AI product journeys must be verified')));
   assert.ok(blockers.some((b) => b.includes('A successful no-AI production posture child JSON report is required')));
+});
+
+test('validateEvidenceFileCategory: candidate acceptance, dossier handling, and rejection scenarios', () => {
+  const recordedBlockers = [];
+  const addBlocker = (cat, msg) => recordedBlockers.push({ cat, msg });
+
+  // 1. Candidate acceptance: candidates do not record blockers
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory(
+    'volume_encryption',
+    'vol.json',
+    validVolumeEncryptionReport,
+    'vol.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'production_domain_tls',
+    'caddy.json',
+    validCaddyRoutingReport,
+    'caddy.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'smtp_delivery',
+    'smtp.json',
+    validSmtpReport,
+    'smtp.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'backup_and_disaster_recovery',
+    'restore.json',
+    validRestoreReport,
+    'restore.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'slo_and_alerting',
+    'cap.json',
+    validCapacityAlertingReport,
+    'cap.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'secrets_management',
+    'sec.json',
+    validSecretRotationReport,
+    'sec.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  // Supply chain evidence in secrets_management
+  validateEvidenceFileCategory(
+    'secrets_management',
+    'sast-scan-evidence-2026.json',
+    { status: 'success', passed: true, blockingActiveFindings: [], expiredFindings: [] },
+    'sast-scan-evidence-2026.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'deployment_and_rollback',
+    'dep.json',
+    validDeploymentDrillReport,
+    'dep.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'secret_references',
+    'ref.json',
+    validSecretPolicyReport,
+    'ref.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'data_retention_policy',
+    'ret.json',
+    validRetentionPolicyReport,
+    'ret.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'graphql_introspection',
+    'gql.json',
+    validGraphqlIntrospectionReport,
+    'gql.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  validateEvidenceFileCategory(
+    'optional_ai_posture',
+    'noai.json',
+    validNoAiReport,
+    'noai.json',
+    addBlocker
+  );
+  assert.strictEqual(recordedBlockers.length, 0);
+
+  // 2. Rejection scenarios for non-candidate / invalid dossiers
+  const nonCandidate = { arbitrary: 'payload' };
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('volume_encryption', 'vol.json', nonCandidate, 'vol.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('volume encryption report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('backup_and_disaster_recovery', 'restore.json', nonCandidate, 'restore.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('restore drill report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('backup_and_disaster_recovery', 'reconcil.json', nonCandidate, 'reconcil.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('storage reconciliation report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('production_domain_tls', 'caddy.json', nonCandidate, 'caddy.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('Caddy routing report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('smtp_delivery', 'smtp.json', nonCandidate, 'smtp.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('SMTP delivery report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('slo_and_alerting', 'cap.json', nonCandidate, 'cap.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('capacity and alerting report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('secrets_management', 'sec.json', nonCandidate, 'sec.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('secret rotation report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('deployment_and_rollback', 'dep.json', { status: 'failed' }, 'dep.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('deployment drill report is invalid or failed')));
+
+  const dossierPayload = { dossier_version: '1.0' };
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('secret_references', 'ref.json', dossierPayload, 'ref.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('secret-reference policy report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('data_retention_policy', 'ret.json', dossierPayload, 'ret.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('data retention policy report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('graphql_introspection', 'gql.json', dossierPayload, 'gql.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('GraphQL introspection report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('optional_ai_posture', 'noai.json', dossierPayload, 'noai.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes('no-AI production posture report is invalid or failed')));
+
+  recordedBlockers.length = 0;
+  validateEvidenceFileCategory('unrecognized_category', 'file.json', nonCandidate, 'file.json', addBlocker);
+  assert.ok(recordedBlockers.some((b) => b.msg.includes("Unrecognized launch checklist category 'unrecognized_category'")));
+});
+
+test('validateReadinessDocument: structural root and sections validation', () => {
+  const blockers = [];
+  const addBlocker = (cat, msg) => blockers.push({ cat, msg });
+
+  // Valid root with sections
+  assert.strictEqual(validateReadinessDocument({ sections: {} }, addBlocker), true);
+  assert.strictEqual(blockers.length, 0);
+
+  // Invalid root
+  assert.strictEqual(validateReadinessDocument(null, addBlocker), false);
+  assert.strictEqual(blockers.at(-1)?.cat, 'root');
+  assert.ok(blockers.at(-1)?.msg.includes('root must be an object'));
+
+  assert.strictEqual(validateReadinessDocument('string', addBlocker), false);
+  assert.strictEqual(validateReadinessDocument([1, 2], addBlocker), false);
+
+  // Missing or non-object sections
+  assert.strictEqual(validateReadinessDocument({}, addBlocker), false);
+  assert.strictEqual(blockers.at(-1)?.cat, 'root');
+  assert.ok(blockers.at(-1)?.msg.includes("Missing required top-level 'sections' object"));
+
+  assert.strictEqual(validateReadinessDocument({ sections: 'bad' }, addBlocker), false);
+  assert.strictEqual(validateReadinessDocument({ sections: [1, 2] }, addBlocker), false);
+});
+
+test('scanDocumentPlaceholdersAndSecrets: detects placeholders, dev passwords, and routes categories', () => {
+  const blockers = [];
+  const addBlocker = (cat, msg) => blockers.push({ cat, msg });
+
+  // Clean document
+  const cleanDoc = {
+    sections: {
+      smtp_delivery: { host: 'mail.example.com' },
+    },
+  };
+  const rawClean = scanDocumentPlaceholdersAndSecrets(cleanDoc, addBlocker);
+  assert.deepStrictEqual(rawClean, []);
+  assert.strictEqual(blockers.length, 0);
+
+  // Placeholder in section routes to that category
+  const placeholderDoc = {
+    sections: {
+      smtp_delivery: { host: '__REQUIRED_SMTP_HOST__' },
+    },
+  };
+  const rawPlaceholder = scanDocumentPlaceholdersAndSecrets(placeholderDoc, addBlocker);
+  assert.strictEqual(rawPlaceholder.length, 1);
+  assert.strictEqual(blockers.length, 1);
+  assert.strictEqual(blockers[0].cat, 'smtp_delivery');
+  assert.ok(blockers[0].msg.includes('contains unresolved placeholder'));
+
+  // Dev password at top level routes to general
+  blockers.length = 0;
+  const devPassDoc = {
+    notes: 'used acres_test_dev_password here',
+  };
+  const rawDevPass = scanDocumentPlaceholdersAndSecrets(devPassDoc, addBlocker);
+  assert.strictEqual(rawDevPass.length, 1);
+  assert.strictEqual(blockers.length, 1);
+  assert.strictEqual(blockers[0].cat, 'general');
+  assert.ok(blockers[0].msg.includes('references local dev password'));
+});
+
+test('validateSectionStructuralRequirements: existence, approval status, and evidence string contracts', () => {
+  const blockers = [];
+  const addBlocker = (cat, msg) => blockers.push({ cat, msg });
+
+  // Missing section
+  blockers.length = 0;
+  const missing = validateSectionStructuralRequirements('smtp_delivery', null, addBlocker);
+  assert.deepStrictEqual(missing, { exists: false, isApproved: false });
+  assert.strictEqual(blockers.length, 1);
+  assert.ok(blockers[0].msg.includes("Missing required section 'smtp_delivery'"));
+
+  // Pending status
+  blockers.length = 0;
+  const pending = validateSectionStructuralRequirements('smtp_delivery', { status: 'pending', evidence: [] }, addBlocker);
+  assert.deepStrictEqual(pending, { exists: true, isApproved: false });
+  assert.ok(blockers.some((b) => b.msg.includes("Section status is 'pending'")));
+  assert.ok(blockers.some((b) => b.msg.includes('Evidence array is empty or missing')));
+
+  // Approved status with empty evidence string
+  blockers.length = 0;
+  const invalidEv = validateSectionStructuralRequirements('smtp_delivery', { status: 'approved', evidence: ['   '] }, addBlocker);
+  assert.deepStrictEqual(invalidEv, { exists: true, isApproved: true });
+  assert.ok(blockers.some((b) => b.msg.includes('Evidence item [0] is empty or not a valid string')));
+
+  // Valid approved section
+  blockers.length = 0;
+  const valid = validateSectionStructuralRequirements('smtp_delivery', { status: 'approved', evidence: ['receipt.json'] }, addBlocker);
+  assert.deepStrictEqual(valid, { exists: true, isApproved: true });
+  assert.strictEqual(blockers.length, 0);
+});
+
+test('collectApprovedCategoryEvidence: aggregates evidence for approved categories and ignores pending', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'collect-ev-test-'));
+  try {
+    const evFile = path.join(tmpDir, 'caddy-receipt.json');
+    fs.writeFileSync(evFile, JSON.stringify(validCaddyRoutingReport));
+
+    const blockers = [];
+    const addBlocker = (cat, msg) => blockers.push({ cat, msg });
+
+    const sections = {
+      production_domain_tls: {
+        status: 'approved',
+        evidence: [evFile],
+      },
+      smtp_delivery: {
+        status: 'pending',
+        evidence: [evFile],
+      },
+    };
+
+    const buckets = collectApprovedCategoryEvidence(sections, '', addBlocker);
+    assert.strictEqual(buckets.production_domain_tls.length, 1);
+    assert.strictEqual(buckets.production_domain_tls[0].file, evFile);
+    assert.strictEqual(buckets.smtp_delivery.length, 0);
+    assert.strictEqual(blockers.length, 0);
+
+    // Calling without addBlocker does not throw even if file is missing
+    const missingSections = {
+      production_domain_tls: {
+        status: 'approved',
+        evidence: ['missing-file.json'],
+      },
+    };
+    const bucketsWithoutCallback = collectApprovedCategoryEvidence(missingSections, '');
+    assert.strictEqual(bucketsWithoutCallback.production_domain_tls.length, 0);
+
+    // Missing file in approved section records blocker when callback is provided
+    const bucketsMissing = collectApprovedCategoryEvidence(missingSections, '', addBlocker);
+    assert.strictEqual(bucketsMissing.production_domain_tls.length, 0);
+    assert.ok(blockers.some((b) => b.cat === 'production_domain_tls' && b.msg.includes('A referenced Caddy routing report is invalid or failed')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });

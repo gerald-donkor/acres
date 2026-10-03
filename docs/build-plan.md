@@ -1647,3 +1647,24 @@ Verification output: `ops:readiness-test` (640/640), `ops:launch-drill-test` (68
 `ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
 audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
 closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
+
+**Prompt 255 Phase 12K modularize and test readiness structure, placeholder scanning, and evidence collection (2026-10-03):**
+Decomposed the remaining document-level validation, placeholder scanning, section structural checking, category evidence file routing, and per-category evidence evaluation in `scripts/ops/check-launch-readiness.js`:
+- Extracted `validateEvidenceFileCategory(category, file, parsed, ref, addBlocker)` from `checkEvidenceFileContents`, delegating category-specific candidate, dossier, supply-chain, and report rules while preserving exact blocker messages and fail-closed category boundaries.
+- Extracted `validateReadinessDocument(record, addBlocker)` verifying document root object and top-level `sections` object with array-rejection guards.
+- Extracted `scanDocumentPlaceholdersAndSecrets(record, addBlocker)` encapsulating document-wide placeholder and dev password detection with category-specific blocker routing.
+- Extracted `validateSectionStructuralRequirements(sectionName, sec, addBlocker)` verifying section existence, approval status, and evidence string array contracts.
+- Extracted `collectApprovedCategoryEvidence(sections, filePath, addBlocker)` collecting and routing resolved evidence file objects into the 11 categorized buckets with defensive callback normalization.
+- Refactored `validateReadiness()` and `checkEvidenceFileContents()` into clear, high-level orchestrators delegating cleanly to these modular functions.
+- Exported all 5 functions in `module.exports`.
+- Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive unit and contract test suites:
+  - `validateEvidenceFileCategory`: tests candidate acceptance and dossier handling across all 11 categories (including supply-chain SAST evidence in `secrets_management`), and verifies fail-closed blocker generation on invalid/failing payloads and unrecognized categories.
+  - `validateReadinessDocument`: tests root and sections object validation, rejecting null, primitives, arrays, and missing sections.
+  - `scanDocumentPlaceholdersAndSecrets`: tests clean document execution, category routing for section placeholders, and general routing for root/unmapped dev passwords.
+  - `validateSectionStructuralRequirements`: tests section existence, pending vs approved statuses, empty evidence arrays, and invalid/empty evidence strings.
+  - `collectApprovedCategoryEvidence`: tests evidence aggregation for approved categories, pending section exclusion, defensive execution without callbacks, and missing file blocker recording wrapped in try/finally fixture cleanup.
+
+Verification output: `ops:readiness-test` (645/645), `ops:launch-drill-test` (68/68), `ops:readiness-schema-test` (8/8),
+`ops:templates` and `ops:templates-test` (57/57), lint, typecheck, build, and `git diff --check` passed cleanly; dependency
+audit reports the existing upstream advisory on Next 16.3.4 (GHSA-vcvr-r3jv-pc5j). Unresolved example readiness template failed
+closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remains open.
