@@ -114,7 +114,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `client/e2e/product-journeys.spec.ts` | Full product journey E2E suite (auth, dashboards, saved views, reports, revisions, exports, downloads) |
 | `client/e2e/multi-tenant-isolation.spec.ts` | Multi-tenant browser isolation suite (independent contexts, cross-tenant report blocking, org switching) |
 | `client/e2e/accessibility-responsive.spec.ts` | WCAG 2.2 Level AA accessibility audit, responsive overflow at 375/800/1280px, touch targets, and telemetry check |
-| `scripts/ops/backup-postgres.sh` | Structured PostgreSQL `pg_dump` backup helper with fail-closed credentials and permission hardening |
+| `scripts/ops/backup-postgres.sh` & `.spec.js` | Structured PostgreSQL `pg_dump` backup script with POSIX CLI argument validation, directory targeting, `--dry-run`, tool prerequisite verification, credential fallbacks, and comprehensive contract test suite |
 | `scripts/ops/restore-postgres.sh` | Structured PostgreSQL restore helper with connection verification and table count validation |
 | `scripts/ops/run-restore-drill.sh` | Automated disaster recovery restore drill runner validating backup integrity, isolated database restore, schema/migration parity, and RTO |
 | `scripts/ops/reconcile-storage-objects.js` | Object storage reconciliation utility comparing PostgreSQL stored objects against bucket keys, detecting leaks, missing objects, and mismatches |
@@ -3167,3 +3167,56 @@ Integration and prerequisite wiring:
 | `git diff --check` | 0 | clean, no whitespace errors |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:audit-test`; rollback is a normal revert of the local commit.
+
+## Prompt 264 — harden and test postgres backup (2026-10-04)
+
+`scripts/ops/backup-postgres.sh`:
+- Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
+  - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>` / `--cwd=<path>`, `--backup-dir <dir>` / `--backup-dir=<dir>` (default: `$BACKUP_DIR` or `backups`), `--host <host>` / `--host=<host>` (default: `$PGHOST` or `localhost`), `--port <port>` / `--port=<port>` (default: `$PGPORT` or `5432`), `--user <user>` / `--user=<user>` (default: `$PGUSER` or `$POSTGRES_USER` or `postgres`), `--dbname <db>` / `--dbname=<db>` (default: `$PGDATABASE` or `$POSTGRES_DB` or `acres`), `--output-file <file>` / `--output-file=<file>`, and `--dry-run`.
+  - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
+  - Rejects unexpected positional arguments (`Error: Unexpected argument "<arg>"` with usage to stderr, exit 1).
+  - Rejects missing, empty, whitespace-only, and repeated options with descriptive errors and usage to stderr, exit 1.
+  - Validates port numbers: must be integer in range 1-65535 (`Error: Invalid --port "<port>" (expected integer 1-65535)` or `backup error: invalid port: <port> (expected integer 1-65535)`).
+  - Validates that target directory exists (`backup error: target directory does not exist: <path>`, exit 1).
+  - Prerequisite tool check: verifies `pg_dump` exists in `$PATH` (`backup error: pg_dump utility not found in PATH`, exit 1).
+  - Credential fallback: checks `PGPASSWORD`, then `POSTGRES_PASSWORD`, then `POSTGRES_SUPERUSER_PASSWORD`, then `ACRES_MIGRATOR_PASSWORD`. Fails closed if empty: `backup error: PGPASSWORD environment variable is required`. Secrets are never echoed or logged.
+  - Path and permission handling: creates backup directory and output parent directories with `chmod 700`, sets output archive file permissions to `chmod 600`.
+  - Dry-run mode (`--dry-run`): validates arguments, credentials, directory permissions, and tool prerequisites, prints planned parameters, and exits 0 without invoking `pg_dump`.
+  - Execution verification: executes `pg_dump --format=custom --no-owner --no-privileges --file=...`, asserts generated archive file is present and non-empty (`[ -s <file> ]`), cleans up corrupt/empty files on failure, and outputs formatted file byte size.
+
+`scripts/ops/backup-postgres.spec.js`:
+- Established comprehensive 53-test unit and contract test suite using Node.js test runner (`node:test` and `node:assert/strict`):
+  - 34 CLI argument parsing tests: `--help`, `-h`, unknown long/short options, unexpected positional arguments, missing/empty/whitespace/repeated/invalid values for all CLI options.
+  - 7 prerequisite and credential validation tests: missing `pg_dump` in PATH, missing all password env vars, fallback across all four credential environment variables, invalid `PGPORT` env var.
+  - 2 dry-run mode tests: directory creation with 0700 permissions, parameter plan output without creating dump file.
+  - 3 mock execution tests: successful custom archive dump with 0600 file / 0700 dir permissions, empty file cleanup and fail-closed error, non-zero exit propagation from `pg_dump`.
+  - 3 directory targeting tests: relative `--output-file` with `--cwd`, absolute `--output-file`, and relative `--backup-dir`.
+
+Integration and prerequisite wiring:
+- `package.json`: added `"ops:backup-test": "node --test scripts/ops/backup-postgres.spec.js"` and wired into `"ops:check"`.
+- `scripts/ops/check-production-templates.sh`: added `require_file scripts/ops/backup-postgres.sh` and `require_file scripts/ops/backup-postgres.spec.js`.
+- `scripts/ops/check-production-templates-shell.spec.js`: added both files to `REQUIRED_FILES` list.
+
+| command | exit | output / result |
+| --- | --- | --- |
+| `sh -n scripts/ops/backup-postgres.sh` | 0 | syntax valid, no output |
+| `node -c scripts/ops/backup-postgres.spec.js` | 0 | syntax valid, no output |
+| `node --test scripts/ops/backup-postgres.spec.js` | 0 | `tests 53`, `pass 53`, `fail 0` |
+| `npm run ops:backup-test` | 0 | `tests 53`, `pass 53`, `fail 0` |
+| `scripts/ops/backup-postgres.sh --help` | 0 | `Usage: scripts/ops/backup-postgres.sh [--cwd <path> \| --cwd=<path>] [--backup-dir <dir> \| --backup-dir=<dir>] [--host <host> \| --host=<host>] [--port <port> \| --port=<port>] [--user <user> \| --user=<user>] [--dbname <db> \| --dbname=<db>] [--output-file <file> \| --output-file=<file>] [--dry-run]` |
+| `scripts/ops/backup-postgres.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
+| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
+| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
+| `npm run ops:templates` | 0 | `ops template check passed` |
+| `npm run ops:audit-test` | 0 | `tests 51`, `pass 51`, `fail 0` |
+| `npm run ops:scan-secrets-test` | 0 | `tests 42`, `pass 42`, `fail 0` |
+| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
+| `npm run ops:launch-readiness-test` | 0 | `tests 23`, `pass 23`, `fail 0` |
+| `npm run ops:launch-drill-test` | 0 | `tests 68`, `pass 68`, `fail 0` |
+| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
+| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
+| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
+| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
+| `git diff --check` | 0 | clean, no whitespace errors |
+
+Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:backup-test`; rollback is a normal revert of the local commit.

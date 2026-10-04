@@ -1830,3 +1830,27 @@ Node syntax checks, Prettier, root lint, typecheck, build, and `git diff --check
 Full contracts, command results, and verification limitations are recorded in
 `docs/operations.md` prompt 263. No production action, dependency upgrade, or push occurred;
 prompt 201 and Phase 12 operator sign-off remain open.
+
+**Prompt 264 Phase 12K harden and test postgres backup (2026-10-04):**
+The operational shell script `scripts/ops/backup-postgres.sh` now enforces strict POSIX
+CLI argument validation (`--help`, `-h`, `--cwd <path>`, `--cwd=<path>`, `--backup-dir <dir>`,
+`--backup-dir=<dir>`, `--host <host>`, `--host=<host>`, `--port <port>`, `--port=<port>`,
+`--user <user>`, `--user=<user>`, `--dbname <db>`, `--dbname=<db>`, `--output-file <file>`,
+`--output-file=<file>`, `--dry-run`), rejects unknown options, unexpected arguments,
+repeated/missing/empty/whitespace option arguments, invalid port numbers (1-65535), and non-existent
+directories. It verifies that `pg_dump` exists in `$PATH`, resolves database credentials across
+four fallback environment variables without echoing secrets, creates archive directories with 0700
+permissions, sets 0600 permissions on backup files, validates non-empty archive generation, and supports
+`--dry-run` inspection. Dedicated unit and contract test suite `scripts/ops/backup-postgres.spec.js` covers
+argument parsing, tool prerequisites, credential fallbacks, directory creation and permissions, mock
+`pg_dump` execution, empty file failure cleanup, error code propagation, and directory targeting.
+
+Actual verification: backup postgres spec suite `tests 53`, `pass 53`, `fail 0`;
+`npm run ops:backup-test` passed cleanly; `ops:templates-shell-test` passed 34/34 tests;
+`ops:templates-test` passed 324/324 tests; `ops:templates` `ops template check passed`;
+`ops:audit-test` passed 51/51 tests; `ops:scan-secrets-test` passed 42/42 tests;
+`ops:docker-runtime-test` passed 45/45 tests; `ops:launch-readiness-test` passed 23/23 tests;
+`ops:launch-drill-test` passed 68/68 tests. Node syntax checks, Prettier, root lint, typecheck, build,
+and `git diff --check` exited 0. Full contracts, command results, and verification limitations are
+recorded in `docs/operations.md` prompt 264. No production action, live dump, or push occurred;
+prompt 201 and Phase 12 operator sign-off remain open.
