@@ -150,6 +150,8 @@ require_file scripts/ops/audit-dependencies.sh
 require_file scripts/ops/audit-dependencies.spec.js
 require_file scripts/ops/backup-postgres.sh
 require_file scripts/ops/backup-postgres.spec.js
+require_file scripts/ops/restore-postgres.sh
+require_file scripts/ops/restore-postgres.spec.js
 require_file scripts/ops/launch-readiness.sh
 require_file scripts/ops/launch-readiness.spec.js
 require_file scripts/ops/check-production-templates.js

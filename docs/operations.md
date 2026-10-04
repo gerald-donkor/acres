@@ -115,7 +115,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `client/e2e/multi-tenant-isolation.spec.ts` | Multi-tenant browser isolation suite (independent contexts, cross-tenant report blocking, org switching) |
 | `client/e2e/accessibility-responsive.spec.ts` | WCAG 2.2 Level AA accessibility audit, responsive overflow at 375/800/1280px, touch targets, and telemetry check |
 | `scripts/ops/backup-postgres.sh` & `.spec.js` | Structured PostgreSQL `pg_dump` backup script with POSIX CLI argument validation, directory targeting, `--dry-run`, tool prerequisite verification, credential fallbacks, and comprehensive contract test suite |
-| `scripts/ops/restore-postgres.sh` | Structured PostgreSQL restore helper with connection verification and table count validation |
+| `scripts/ops/restore-postgres.sh` & `.spec.js` | Structured PostgreSQL restore script with POSIX CLI argument validation, directory targeting, named/positional file support, clean mode toggle, `--dry-run`, tool prerequisite verification, credential fallbacks, and comprehensive contract test suite |
 | `scripts/ops/run-restore-drill.sh` | Automated disaster recovery restore drill runner validating backup integrity, isolated database restore, schema/migration parity, and RTO |
 | `scripts/ops/reconcile-storage-objects.js` | Object storage reconciliation utility comparing PostgreSQL stored objects against bucket keys, detecting leaks, missing objects, and mismatches |
 | `scripts/ops/verify-caddy-routing.js` | Pure Node.js Caddyfile parser and route evaluator validating same-origin ingress dispatching, proxy headers, S3 SigV4 preservation, and security headers |
@@ -383,7 +383,7 @@ PostgreSQL and Garage coverage, freshness, and restore under actual load.
 ### Restore & Drill Execution
 
 1. **Ad-hoc Restore**:
-   Use `scripts/ops/restore-postgres.sh <backup-file.dump>` to restore into a target database (`PGDATABASE=<target>`). Restores run using `pg_restore --clean --if-exists`, verify connection readiness, and assert public schema table counts.
+   Use `scripts/ops/restore-postgres.sh [<backup-file>] [--file <file>] [--host <host>] [--port <port>] [--user <user>] [--dbname <db>] [--clean | --no-clean] [--dry-run]` to restore into a target database (`PGDATABASE=<target>`). Restores run using `pg_restore` (with `--clean --if-exists` by default, or without clean if `--no-clean` is specified), verify PostgreSQL connection readiness via `pg_isready`, and assert public schema table counts via `psql`. Credentials resolve securely across `PGPASSWORD`, `POSTGRES_PASSWORD`, `POSTGRES_SUPERUSER_PASSWORD`, and `ACRES_MIGRATOR_PASSWORD`. `--dry-run` validates inputs, credentials, file presence, and prerequisites without modifying the database.
 2. **Automated Restore Drill**:
    Execute `npm run ops:restore-drill` (or `scripts/ops/run-restore-drill.sh [options]`). The runner:
    - Authenticates to the source and `postgres` maintenance database and rejects an existing drill target before taking a dump;
@@ -3220,3 +3220,71 @@ Integration and prerequisite wiring:
 | `git diff --check` | 0 | clean, no whitespace errors |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:backup-test`; rollback is a normal revert of the local commit.
+
+## Prompt 265 — harden and test postgres restore (2026-10-04)
+
+`scripts/ops/restore-postgres.sh`:
+- Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
+  - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>` / `--cwd=<path>`, `--host <host>` / `--host=<host>` (default: `$PGHOST` or `localhost`), `--port <port>` / `--port=<port>` (default: `$PGPORT` or `5432`), `--user <user>` / `--user=<user>` (default: `$PGUSER` or `$POSTGRES_USER` or `postgres`), `--dbname <db>` / `--dbname=<db>` (default: `$PGDATABASE` or `$POSTGRES_DB` or `acres`), `--file <file>` / `--file=<file>` / `--input-file <file>` / `--input-file=<file>`, positional `<backup-file>` (fully backward-compatible with `run-restore-drill.sh`), `--clean` (default: enabled), `--no-clean` (omits `--clean --if-exists`), and `--dry-run`.
+  - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
+  - Rejects unexpected arguments when multiple positional arguments are passed (`Error: Unexpected argument "<arg>"` with usage to stderr, exit 1).
+  - Rejects missing, empty, whitespace-only, and repeated options with descriptive errors and usage to stderr, exit 1.
+  - Rejects clashing `--file` with positional backup argument (`Error: Repeated backup file option`, exit 1).
+  - Rejects conflicting `--clean` and `--no-clean` options (`Error: Conflicting --clean and --no-clean options`, exit 1).
+  - Validates `--port` integer bounds (1..65535).
+- Directory and backup file validation:
+  - Resolves target working directory with canonical absolute path (`RESOLVED_CWD`).
+  - Ensures backup file is provided; fails closed if omitted: `restore error: backup file path is required`.
+  - Resolves relative backup file path against `$RESOLVED_CWD`.
+  - Validates that backup file exists (`restore error: backup file does not exist: <file>`), is a regular file (`restore error: backup target is not a regular file: <file>`), is readable (`restore error: backup file is not readable: <file>`), and is non-empty (`restore error: backup file is empty: <file>`).
+- Prerequisites and credentials:
+  - Verifies `pg_restore`, `psql`, and `pg_isready` exist in `$PATH`.
+  - Resolves credentials across `PGPASSWORD`, `POSTGRES_PASSWORD`, `POSTGRES_SUPERUSER_PASSWORD`, and `ACRES_MIGRATOR_PASSWORD`. Fails closed if empty: `restore error: PGPASSWORD environment variable is required`. Secrets are never echoed or logged.
+  - Fixes credential propagation defect: explicitly passes `PGPASSWORD="$RESOLVED_PGPASSWORD"` to all subshell invocations of `pg_isready`, `pg_restore`, and `psql`.
+- Dry-run mode (`--dry-run`):
+  - Validates inputs, tools, credentials, and non-empty backup file, outputs planned parameters and clean mode status, and exits 0 without modifying the database.
+- Execution and verification:
+  - Verifies PostgreSQL server readiness via `pg_isready` before running restore statements.
+  - Invokes `pg_restore` with `--clean --if-exists --no-owner --no-privileges --dbname=...` (or without clean flags if `--no-clean` is specified).
+  - Verifies restored public schema table count using `psql`, asserts numeric count validity, and outputs verified table count upon success.
+
+`scripts/ops/restore-postgres.spec.js`:
+- Established comprehensive 80-test unit and contract test suite using Node.js test runner (`node:test` and `node:assert/strict`):
+  - 43 CLI argument parsing tests: `--help`, `-h`, unknown long/short options, repeated/missing/empty/whitespace option arguments, invalid/out-of-range ports, multi-digit port overflow, conflicting clean/no-clean flags, repeated file flags, clashing positional arguments, and extra arguments.
+  - 4 backup file validation tests: missing backup file argument, non-existent file, directory target, empty backup file.
+  - 11 prerequisite and credential validation tests: missing `pg_restore`, `psql`, and `pg_isready` in PATH, missing all password env vars, fallback across all four credential environment variables, invalid and overflow `PGPORT` environment variables, and password leak prevention.
+  - 4 dry-run mode tests: parameter plan output without invoking tools, clean mode reporting with `--no-clean`, fail-closed credential checks, fail-closed file checks.
+  - 8 mock execution tests: successful restore flow with table verification, `--no-clean` flag exclusion, explicit `--clean` flag inclusion, `pg_isready` connection failure, `pg_restore` failure propagation, `psql` query failure, `psql` non-numeric table count rejection, and `psql` empty table count rejection.
+  - 4 directory targeting tests: relative `--file` with `--cwd`, relative positional argument with `--cwd`, `--input-file` and `--file=` syntax, and custom database connection parameters.
+
+Integration and prerequisite wiring:
+- `package.json`: added `"ops:restore-test": "node --test scripts/ops/restore-postgres.spec.js"` and wired into `"ops:check"`.
+- `scripts/ops/check-production-templates.sh`: added `require_file scripts/ops/restore-postgres.sh` and `require_file scripts/ops/restore-postgres.spec.js`.
+- `scripts/ops/check-production-templates-shell.spec.js`: added both files to `REQUIRED_FILES` list.
+- `scripts/ops/run-restore-drill.sh`: verified 100% backward-compatible execution (`npm run ops:restore-drill-test` passed 28/28 tests).
+
+| command | exit | output / result |
+| --- | --- | --- |
+| `sh -n scripts/ops/restore-postgres.sh` | 0 | syntax valid, no output |
+| `node -c scripts/ops/restore-postgres.spec.js` | 0 | syntax valid, no output |
+| `node --test scripts/ops/restore-postgres.spec.js` | 0 | `tests 80`, `pass 80`, `fail 0` |
+| `npm run ops:restore-test` | 0 | `tests 80`, `pass 80`, `fail 0` |
+| `scripts/ops/restore-postgres.sh --help` | 0 | `Usage: scripts/ops/restore-postgres.sh [<backup-file>] [--file <file> \| --file=<file>] [--input-file <file> \| --input-file=<file>] [--cwd <path> \| --cwd=<path>] [--host <host> \| --host=<host>] [--port <port> \| --port=<port>] [--user <user> \| --user=<user>] [--dbname <db> \| --dbname=<db>] [--clean \| --no-clean] [--dry-run]` |
+| `scripts/ops/restore-postgres.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
+| `npm run ops:restore-drill-test` | 0 | `tests 28`, `pass 28`, `fail 0` |
+| `npm run ops:backup-test` | 0 | `tests 53`, `pass 53`, `fail 0` |
+| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
+| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
+| `npm run ops:templates` | 0 | `ops template check passed` |
+| `npm run ops:audit-test` | 0 | `tests 51`, `pass 51`, `fail 0` |
+| `npm run ops:scan-secrets-test` | 0 | `tests 42`, `pass 42`, `fail 0` |
+| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
+| `npm run ops:launch-readiness-test` | 0 | `tests 23`, `pass 23`, `fail 0` |
+| `npm run ops:launch-drill-test` | 0 | `tests 68`, `pass 68`, `fail 0` |
+| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
+| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
+| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
+| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
+| `git diff --check` | 0 | clean, no whitespace errors |
+
+Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:restore-test`; rollback is a normal revert of the local commit.

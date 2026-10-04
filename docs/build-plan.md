@@ -1854,3 +1854,32 @@ Actual verification: backup postgres spec suite `tests 53`, `pass 53`, `fail 0`;
 and `git diff --check` exited 0. Full contracts, command results, and verification limitations are
 recorded in `docs/operations.md` prompt 264. No production action, live dump, or push occurred;
 prompt 201 and Phase 12 operator sign-off remain open.
+
+**Prompt 265 Phase 12K harden and test postgres restore (2026-10-04):**
+The operational shell script `scripts/ops/restore-postgres.sh` now enforces strict POSIX
+CLI argument validation (`--help`, `-h`, `--cwd <path>`, `--cwd=<path>`, `--host <host>`,
+`--host=<host>`, `--port <port>`, `--port=<port>`, `--user <user>`, `--user=<user>`,
+`--dbname <db>`, `--dbname=<db>`, `--file <file>`, `--file=<file>`, `--input-file <file>`,
+`--input-file=<file>`, positional `<backup-file>`, `--clean`, `--no-clean`, `--dry-run`), rejects
+unknown options, unexpected arguments, repeated/missing/empty/whitespace option arguments,
+conflicting `--clean` and `--no-clean` flags, clashing `--file` with positional backup arguments,
+invalid port numbers (1-65535), and non-existent directories. It verifies that `pg_restore`, `psql`,
+and `pg_isready` exist in `$PATH`, resolves database credentials across four fallback environment
+variables without echoing secrets, fixes credential propagation to subshell commands, validates
+that backup files exist, are regular, readable, and non-empty, checks server connection via `pg_isready`,
+executes `pg_restore` (with or without `--clean --if-exists`), verifies restored public schema table
+counts with `psql`, and supports `--dry-run` inspection. Dedicated unit and contract test suite
+`scripts/ops/restore-postgres.spec.js` covers argument parsing, backup file validation, tool prerequisites,
+credential fallbacks, dry-run mode, mock `pg_restore` execution, `--no-clean` and `--clean` flags,
+`pg_isready` and `psql` failure propagation, table count validation, and directory targeting.
+
+Actual verification: restore postgres spec suite `tests 80`, `pass 80`, `fail 0`;
+`npm run ops:restore-test` passed cleanly; `npm run ops:restore-drill-test` passed 28/28 tests;
+`ops:backup-test` passed 53/53 tests; `ops:templates-shell-test` passed 34/34 tests;
+`ops:templates-test` passed 324/324 tests; `ops:templates` `ops template check passed`;
+`ops:audit-test` passed 51/51 tests; `ops:scan-secrets-test` passed 42/42 tests;
+`ops:docker-runtime-test` passed 45/45 tests; `ops:launch-readiness-test` passed 23/23 tests;
+`ops:launch-drill-test` passed 68/68 tests. Node syntax checks, Prettier, root lint, typecheck, build,
+and `git diff --check` exited 0. Full contracts, command results, and verification limitations are
+recorded in `docs/operations.md` prompt 265. No production action, live restore, or push occurred;
+prompt 201 and Phase 12 operator sign-off remain open.

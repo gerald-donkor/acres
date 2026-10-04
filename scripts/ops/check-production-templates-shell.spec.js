@@ -70,6 +70,8 @@ const REQUIRED_FILES = [
   "scripts/ops/audit-dependencies.spec.js",
   "scripts/ops/backup-postgres.sh",
   "scripts/ops/backup-postgres.spec.js",
+  "scripts/ops/restore-postgres.sh",
+  "scripts/ops/restore-postgres.spec.js",
   "scripts/ops/launch-readiness.sh",
   "scripts/ops/launch-readiness.spec.js",
   "scripts/ops/check-production-templates.js",
