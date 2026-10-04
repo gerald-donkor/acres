@@ -43,6 +43,7 @@ const REQUIRED_FILES = [
   "scripts/ops/verify-volume-encryption.spec.js",
   "scripts/ops/run-secret-rotation-drill.sh",
   "scripts/ops/run-secret-rotation-drill.spec.js",
+  "scripts/ops/run-restore-drill.sh",
   "scripts/ops/run-restore-drill.spec.js",
   "scripts/ops/verify-alert-rules.js",
   "scripts/ops/verify-alert-rules.spec.js",

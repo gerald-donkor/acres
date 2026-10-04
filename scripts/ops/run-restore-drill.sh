@@ -2,39 +2,10 @@
 set -euo pipefail
 
 # Restores a fresh source dump into a database created and owned by this run.
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-${POSTGRES_USER:-postgres}}"
-SOURCE_DB="${SOURCE_DB:-${PGDATABASE:-acres}}"
-DRILL_DB="${DRILL_DB:-acres_restore_drill}"
-BACKUP_DIR="${BACKUP_DIR:-backups}"
-RTO_TARGET_SECONDS="${RTO_TARGET_SECONDS:-300}"
-EVIDENCE_FILE="${EVIDENCE_FILE:-}"
-KEEP_DRILL_DB=0
-KEEP_BACKUP=0
-DRY_RUN=0
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-while (($#)); do
-  case "$1" in
-    --source-db|--drill-db|--backup-dir|--evidence-file|--rto-target-seconds)
-      option="$1"
-      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
-        printf 'drill error: %s requires a nonempty value\n' "$option" >&2
-        exit 1
-      fi
-      case "$option" in
-        --source-db) SOURCE_DB="$2" ;;
-        --drill-db) DRILL_DB="$2" ;;
-        --backup-dir) BACKUP_DIR="$2" ;;
-        --evidence-file) EVIDENCE_FILE="$2" ;;
-        --rto-target-seconds) RTO_TARGET_SECONDS="$2" ;;
-      esac
-      shift 2 ;;
-    --keep-drill-db) KEEP_DRILL_DB=1; shift ;;
-    --keep-backup) KEEP_BACKUP=1; shift ;;
-    --dry-run) DRY_RUN=1; shift ;;
-    --help|-h)
-      cat <<'HELP'
+usage() {
+  cat <<'HELP'
 Usage: scripts/ops/run-restore-drill.sh [options]
 
 Rehearsal drill: creates an isolated drill database, restores a fresh source dump,
@@ -47,52 +18,355 @@ Options:
   --backup-dir <dir>           Private archive directory (default: backups)
   --evidence-file <file>       Success JSON destination (default: backup-dir/restore-drill-evidence-<timestamp>-<pid>.json)
   --rto-target-seconds <sec>   Positive integer target (default: 300)
+  --host <host>                Database host (default: localhost or $PGHOST)
+  --port <port>                Database port 1-65535 (default: 5432 or $PGPORT)
+  --user <user>                Database user (default: postgres or $PGUSER)
+  --cwd <path>                 Working directory for relative paths (default: .)
   --keep-drill-db              Retain the database created by this invocation
   --keep-backup                Retain the archive created by this invocation
   --dry-run                    Check input and server readiness; no dump or restore
   --help, -h                   Show this help
 HELP
-      exit 0 ;;
-    *) printf 'drill error: unknown option %s\n' "$1" >&2; exit 1 ;;
+}
+
+fail() { printf 'drill error: %s\n' "$*" >&2; exit 1; }
+
+PGHOST="${PGHOST:-localhost}"
+PGPORT="${PGPORT:-5432}"
+PGUSER="${PGUSER:-${POSTGRES_USER:-postgres}}"
+SOURCE_DB="${SOURCE_DB:-${PGDATABASE:-acres}}"
+DRILL_DB="${DRILL_DB:-acres_restore_drill}"
+BACKUP_DIR="${BACKUP_DIR:-backups}"
+RTO_TARGET_SECONDS="${RTO_TARGET_SECONDS:-300}"
+EVIDENCE_FILE="${EVIDENCE_FILE:-}"
+KEEP_DRILL_DB=0
+KEEP_BACKUP=0
+DRY_RUN=0
+TARGET_CWD="."
+
+CWD_SPECIFIED=0
+HOST_SPECIFIED=0
+PORT_SPECIFIED=0
+USER_SPECIFIED=0
+SOURCE_DB_SPECIFIED=0
+DRILL_DB_SPECIFIED=0
+BACKUP_DIR_SPECIFIED=0
+EVIDENCE_FILE_SPECIFIED=0
+RTO_SPECIFIED=0
+
+while (($#)); do
+  case "$1" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --cwd=*)
+      if ((CWD_SPECIFIED)); then
+        fail 'repeated --cwd option; expected single directory path'
+      fi
+      val="${1#--cwd=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--cwd requires a nonempty value'
+      fi
+      TARGET_CWD="$val"
+      CWD_SPECIFIED=1
+      shift ;;
+    --cwd)
+      if ((CWD_SPECIFIED)); then
+        fail 'repeated --cwd option; expected single directory path'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--cwd requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--cwd requires a nonempty value'
+      fi
+      TARGET_CWD="$2"
+      CWD_SPECIFIED=1
+      shift 2 ;;
+    --host=*)
+      if ((HOST_SPECIFIED)); then
+        fail 'repeated --host option; expected single host'
+      fi
+      val="${1#--host=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--host requires a nonempty value'
+      fi
+      PGHOST="$val"
+      HOST_SPECIFIED=1
+      shift ;;
+    --host)
+      if ((HOST_SPECIFIED)); then
+        fail 'repeated --host option; expected single host'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--host requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--host requires a nonempty value'
+      fi
+      PGHOST="$2"
+      HOST_SPECIFIED=1
+      shift 2 ;;
+    --port=*)
+      if ((PORT_SPECIFIED)); then
+        fail 'repeated --port option; expected single port'
+      fi
+      val="${1#--port=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--port requires a nonempty value'
+      fi
+      PGPORT="$val"
+      PORT_SPECIFIED=1
+      shift ;;
+    --port)
+      if ((PORT_SPECIFIED)); then
+        fail 'repeated --port option; expected single port'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--port requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--port requires a nonempty value'
+      fi
+      PGPORT="$2"
+      PORT_SPECIFIED=1
+      shift 2 ;;
+    --user=*)
+      if ((USER_SPECIFIED)); then
+        fail 'repeated --user option; expected single user'
+      fi
+      val="${1#--user=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--user requires a nonempty value'
+      fi
+      PGUSER="$val"
+      USER_SPECIFIED=1
+      shift ;;
+    --user)
+      if ((USER_SPECIFIED)); then
+        fail 'repeated --user option; expected single user'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--user requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--user requires a nonempty value'
+      fi
+      PGUSER="$2"
+      USER_SPECIFIED=1
+      shift 2 ;;
+    --source-db=*)
+      if ((SOURCE_DB_SPECIFIED)); then
+        fail 'repeated --source-db option; expected single value'
+      fi
+      val="${1#--source-db=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--source-db requires a nonempty value'
+      fi
+      SOURCE_DB="$val"
+      SOURCE_DB_SPECIFIED=1
+      shift ;;
+    --source-db)
+      if ((SOURCE_DB_SPECIFIED)); then
+        fail 'repeated --source-db option; expected single value'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--source-db requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--source-db requires a nonempty value'
+      fi
+      SOURCE_DB="$2"
+      SOURCE_DB_SPECIFIED=1
+      shift 2 ;;
+    --drill-db=*)
+      if ((DRILL_DB_SPECIFIED)); then
+        fail 'repeated --drill-db option; expected single value'
+      fi
+      val="${1#--drill-db=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--drill-db requires a nonempty value'
+      fi
+      DRILL_DB="$val"
+      DRILL_DB_SPECIFIED=1
+      shift ;;
+    --drill-db)
+      if ((DRILL_DB_SPECIFIED)); then
+        fail 'repeated --drill-db option; expected single value'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--drill-db requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--drill-db requires a nonempty value'
+      fi
+      DRILL_DB="$2"
+      DRILL_DB_SPECIFIED=1
+      shift 2 ;;
+    --backup-dir=*)
+      if ((BACKUP_DIR_SPECIFIED)); then
+        fail 'repeated --backup-dir option; expected single value'
+      fi
+      val="${1#--backup-dir=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--backup-dir requires a nonempty value'
+      fi
+      BACKUP_DIR="$val"
+      BACKUP_DIR_SPECIFIED=1
+      shift ;;
+    --backup-dir)
+      if ((BACKUP_DIR_SPECIFIED)); then
+        fail 'repeated --backup-dir option; expected single value'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--backup-dir requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--backup-dir requires a nonempty value'
+      fi
+      BACKUP_DIR="$2"
+      BACKUP_DIR_SPECIFIED=1
+      shift 2 ;;
+    --evidence-file=*)
+      if ((EVIDENCE_FILE_SPECIFIED)); then
+        fail 'repeated --evidence-file option; expected single value'
+      fi
+      val="${1#--evidence-file=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--evidence-file requires a nonempty value'
+      fi
+      EVIDENCE_FILE="$val"
+      EVIDENCE_FILE_SPECIFIED=1
+      shift ;;
+    --evidence-file)
+      if ((EVIDENCE_FILE_SPECIFIED)); then
+        fail 'repeated --evidence-file option; expected single value'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--evidence-file requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--evidence-file requires a nonempty value'
+      fi
+      EVIDENCE_FILE="$2"
+      EVIDENCE_FILE_SPECIFIED=1
+      shift 2 ;;
+    --rto-target-seconds=*)
+      if ((RTO_SPECIFIED)); then
+        fail 'repeated --rto-target-seconds option; expected single value'
+      fi
+      val="${1#--rto-target-seconds=}"
+      trimmed="$(printf '%s' "$val" | tr -d '[:space:]')"
+      if [[ -z "$val" || -z "$trimmed" ]]; then
+        fail '--rto-target-seconds requires a nonempty value'
+      fi
+      RTO_TARGET_SECONDS="$val"
+      RTO_SPECIFIED=1
+      shift ;;
+    --rto-target-seconds)
+      if ((RTO_SPECIFIED)); then
+        fail 'repeated --rto-target-seconds option; expected single value'
+      fi
+      if (($# < 2)) || [[ -z "$2" || "$2" == -* ]]; then
+        fail '--rto-target-seconds requires a nonempty value'
+      fi
+      trimmed="$(printf '%s' "$2" | tr -d '[:space:]')"
+      if [[ -z "$trimmed" ]]; then
+        fail '--rto-target-seconds requires a nonempty value'
+      fi
+      RTO_TARGET_SECONDS="$2"
+      RTO_SPECIFIED=1
+      shift 2 ;;
+    --keep-drill-db) KEEP_DRILL_DB=1; shift ;;
+    --keep-backup) KEEP_BACKUP=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    -*)
+      fail "unknown option $1"
+      ;;
+    *)
+      fail "unexpected argument $1"
+      ;;
   esac
 done
 
+if [[ ! -d "$TARGET_CWD" ]]; then
+  fail "target directory does not exist: $TARGET_CWD"
+fi
+RESOLVED_CWD="$(cd "$TARGET_CWD" && pwd)"
+
 for db in "$SOURCE_DB" "$DRILL_DB"; do
   if [[ ! "$db" =~ ^[A-Za-z_][A-Za-z_0-9]{0,62}$ ]]; then
-    printf 'drill error: invalid database identifier: %s\n' "$db" >&2
-    exit 1
+    fail "invalid database identifier: $db"
   fi
 done
 if [[ "$SOURCE_DB" == "$DRILL_DB" ]]; then
-  printf 'drill error: source and drill databases must differ\n' >&2
-  exit 1
+  fail "source and drill databases must differ"
 fi
 case "$DRILL_DB" in
   postgres|template0|template1|acres)
-    printf 'drill error: protected drill database: %s\n' "$DRILL_DB" >&2
-    exit 1 ;;
+    fail "protected drill database: $DRILL_DB"
+    ;;
 esac
-if [[ ! "$RTO_TARGET_SECONDS" =~ ^[1-9][0-9]*$ ]] || (( ${#RTO_TARGET_SECONDS} > 9 )) || (( RTO_TARGET_SECONDS > 2147483 )); then
-  printf 'drill error: RTO target must be a positive integer no greater than 2147483\n' >&2
-  exit 1
+
+case "$PGPORT" in
+  ''|*[!0-9]*|??????*)
+    fail "invalid port: $PGPORT (expected integer 1-65535)"
+    ;;
+esac
+if (( 10#$PGPORT < 1 || 10#$PGPORT > 65535 )); then
+  fail "invalid port: $PGPORT (expected integer 1-65535)"
 fi
+
+if [[ ! "$RTO_TARGET_SECONDS" =~ ^[1-9][0-9]*$ ]] || (( ${#RTO_TARGET_SECONDS} > 9 )) || (( RTO_TARGET_SECONDS > 2147483 )); then
+  fail "RTO target must be a positive integer no greater than 2147483"
+fi
+
+for tool in pg_dump pg_restore psql pg_isready node date mktemp; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    fail "$tool utility not found in PATH"
+  fi
+done
+
 PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-${POSTGRES_SUPERUSER_PASSWORD:-${ACRES_MIGRATOR_PASSWORD:-}}}}"
-if [[ -z "$PGPASSWORD" ]]; then
-  printf 'drill error: PGPASSWORD is required\n' >&2
-  exit 1
+TRIMMED_PGPASSWORD="$(printf '%s' "$PGPASSWORD" | tr -d '[:space:]')"
+if [[ -z "$PGPASSWORD" || -z "$TRIMMED_PGPASSWORD" ]]; then
+  fail "PGPASSWORD is required"
 fi
 export PGHOST PGPORT PGUSER PGPASSWORD
+
+if [[ "$BACKUP_DIR" != /* ]]; then
+  BACKUP_DIR="$RESOLVED_CWD/$BACKUP_DIR"
+fi
+
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 if [[ -z "$EVIDENCE_FILE" ]]; then
   EVIDENCE_FILE="$BACKUP_DIR/restore-drill-evidence-$TIMESTAMP-$$.json"
+elif [[ "$EVIDENCE_FILE" != /* ]]; then
+  EVIDENCE_FILE="$RESOLVED_CWD/$EVIDENCE_FILE"
 fi
+
 if [[ -e "$EVIDENCE_FILE" || -L "$EVIDENCE_FILE" ]]; then
-  printf 'drill error: evidence destination already exists: %s\n' "$EVIDENCE_FILE" >&2
-  exit 1
+  fail "evidence destination already exists: $EVIDENCE_FILE"
 fi
 
 sql() { psql -X -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$1" -v ON_ERROR_STOP=1 -t -A -c "$2"; }
-fail() { printf 'drill error: %s\n' "$*" >&2; exit 1; }
 count() {
   local result
   result="$(sql "$1" "$2")" || fail "count query failed on $1"
@@ -192,7 +466,7 @@ sql postgres "CREATE DATABASE \"$DRILL_DB\";" >/dev/null || fail "could not crea
 DRILL_DB_CREATED=1
 CREATED_DB_ID="$(sql postgres "SELECT oid::text || ':' || datdba::text FROM pg_database WHERE datname = '$DRILL_DB';")" || fail "could not confirm created database identity: $DRILL_DB"
 [[ "$CREATED_DB_ID" =~ ^[0-9]+:[0-9]+$ ]] || fail "invalid created database identity: $DRILL_DB"
-PGDATABASE="$DRILL_DB" scripts/ops/restore-postgres.sh "$CREATED_BACKUP" || fail 'restore failed'
+"$SCRIPT_DIR/restore-postgres.sh" "--cwd=$RESOLVED_CWD" "--host=$PGHOST" "--port=$PGPORT" "--user=$PGUSER" "--dbname=$DRILL_DB" "$CREATED_BACKUP" || fail 'restore failed'
 TABLES_RESTORED="$(count "$DRILL_DB" "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';")"
 MIGRATIONS_RESTORED="$(count "$DRILL_DB" 'SELECT count(*) FROM "_prisma_migrations" WHERE rolled_back_at IS NULL;')"
 POSTGIS_COUNT="$(count "$DRILL_DB" "SELECT count(*) FROM pg_extension WHERE extname = 'postgis';")"

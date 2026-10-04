@@ -1883,3 +1883,29 @@ Actual verification: restore postgres spec suite `tests 80`, `pass 80`, `fail 0`
 and `git diff --check` exited 0. Full contracts, command results, and verification limitations are
 recorded in `docs/operations.md` prompt 265. No production action, live restore, or push occurred;
 prompt 201 and Phase 12 operator sign-off remain open.
+
+**Prompt 266 Phase 12K harden and test restore drill (2026-10-04):**
+The runner now accepts attached/separate options, target-directory and connection
+options, rejects duplicate/missing/empty/whitespace value arguments, validates
+bounded decimal ports, checks client/Node/date/mktemp prerequisites, validates
+credential fallback, and anchors the restore helper independently of caller cwd.
+Relative archives and evidence resolve against the target directory. The helper
+receives attached options; owned-resource cleanup, atomic evidence and simulation
+classification remain intact. Production template checks require the runner.
+
+Actual verification: restore drill `tests 41`, `pass 41`, `fail 0`; restore 80/80,
+backup 53/53, template shell 34/34, templates 324/324, scan 42/42, Docker 45/45,
+audit contracts 51/51, readiness 649/649, launch readiness 23/23 and launch drill
+68/68 passed. Root lint, typecheck and normal-process production build exited 0.
+Shell/Node syntax, changed JavaScript/prompt Prettier and diff checks passed.
+Existing whole-document Markdown formatting warnings and absent shell formatter
+support are recorded in `docs/operations.md`; new sections were formatted
+separately. Independent review and verified fixes passed follow-up review.
+
+Full `ops:check` exited 1 at production dependency audit:
+`28 vulnerabilities (10 moderate, 17 high, 1 critical)`;
+`audit error: critical vulnerabilities detected in production dependencies`.
+No dependencies changed and no aggregate gate pass is claimed. Full command
+results and execution limits are recorded in `docs/operations.md` prompt 266.
+No live restore, production action or push occurred; prompt 201 and Phase 12
+operator sign-off remain open.

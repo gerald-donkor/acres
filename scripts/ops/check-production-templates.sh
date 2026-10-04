@@ -123,6 +123,7 @@ require_file scripts/ops/verify-volume-encryption.js
 require_file scripts/ops/verify-volume-encryption.spec.js
 require_file scripts/ops/run-secret-rotation-drill.sh
 require_file scripts/ops/run-secret-rotation-drill.spec.js
+require_file scripts/ops/run-restore-drill.sh
 require_file scripts/ops/run-restore-drill.spec.js
 require_file scripts/ops/verify-alert-rules.js
 require_file scripts/ops/verify-alert-rules.spec.js
