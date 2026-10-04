@@ -132,7 +132,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `scripts/ops/run-capacity-alerting-drill.sh` | Automated top-level drill orchestrator executing alert simulation, capacity evaluation, and DoS resilience checks with unified JSON evidence emission |
 | `scripts/ops/check-production-templates.sh` | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, readiness schema, and env placeholder checks |
 | `scripts/ops/scan-secrets.sh` | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names |
-| `scripts/ops/check-docker-runtime.sh` | Static server Dockerfile check for Node 24, non-root runtime, healthcheck, and direct Node startup |
+| `scripts/ops/check-docker-runtime.sh` & `.spec.js` | Static server Dockerfile check for Node 24 Alpine, non-root runtime, healthcheck, direct Node startup, with POSIX CLI argument validation and unit/contract suite |
 | `infra/launch/readiness.example.json` | Inert, structured launch-readiness decision template covering all 11 operator categories with explicit placeholders |
 | `infra/launch/readiness.schema.json` | Draft 7 structural/editor contract for the readiness record; does not attest production readiness |
 | `scripts/ops/check-launch-readiness.js` | Deterministic fail-closed launch readiness validator enforcing approval status, secret source references, recovery drills, and no-AI posture |
@@ -2987,3 +2987,66 @@ Verification on 2026-10-04 (actual output excerpts; no live drill or deployment)
 | `git diff --check` | 0 | clean, no whitespace errors |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:templates-shell-test` or `npm run ops:templates`; rollback is a normal revert of the local commit.
+
+## Prompt 261 — harden and test docker runtime check (2026-10-04)
+
+`scripts/ops/check-docker-runtime.sh`:
+- Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
+  - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>`, `--cwd=<path>`, `--dockerfile <path>`, and `--dockerfile=<path>`.
+  - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
+  - Rejects unexpected positional arguments (`Error: Unexpected argument "<arg>"` with usage to stderr, exit 1).
+  - Rejects missing `--cwd` value (`Error: --cwd requires a non-empty directory path` with usage to stderr, exit 1).
+  - Rejects empty/whitespace `--cwd` value (`Error: --cwd path cannot be empty` with usage to stderr, exit 1).
+  - Rejects repeated `--cwd` (`Error: Repeated --cwd option; expected single directory path` with usage to stderr, exit 1).
+  - Rejects missing `--dockerfile` value (`Error: --dockerfile requires a non-empty file path` with usage to stderr, exit 1).
+  - Rejects empty/whitespace `--dockerfile` value (`Error: --dockerfile path cannot be empty` with usage to stderr, exit 1).
+  - Rejects repeated `--dockerfile` (`Error: Repeated --dockerfile option; expected single file path` with usage to stderr, exit 1).
+  - Validates target directory exists (`docker runtime check failed: target directory does not exist: <path>`, exit 1).
+  - Resolves target directory and Dockerfile path (supporting both relative to `--cwd` and absolute paths).
+  - Validates resolved Dockerfile exists (`docker runtime check failed: missing <path>`, exit 1).
+  - Preserves four static server Dockerfile assertions:
+    1. Node 24 Alpine stage (`grep -Eq '^FROM node:24-alpine( AS |$)'`).
+    2. Non-root user (`grep -Eq '^USER node$'`).
+    3. Healthcheck directive (`grep -Eq '^HEALTHCHECK '`).
+    4. Direct Node startup command (`grep -Fq 'CMD ["node", "server/dist/main.js"]'`).
+  - Outputs `docker runtime check passed\n` on success, exit 0.
+
+`scripts/ops/check-docker-runtime.spec.js`:
+- Created dedicated unit and contract test specification with 45 tests using Node.js test runner (`node:test` and `node:assert/strict`):
+  - CLI argument validation (24 tests): `--help`, `-h`, unknown options (`--invalid-flag`, `-x`), unexpected positionals, missing/empty/whitespace `--cwd`, repeated `--cwd`, non-existent directory, missing/empty/whitespace `--dockerfile`, repeated `--dockerfile`, non-existent Dockerfile.
+  - Fail-closed Dockerfile assertions (7 tests): valid Dockerfile passes, missing Node 24 Alpine stage fails, missing non-root USER node fails, completely missing USER fails, missing HEALTHCHECK fails, indirect npm startup CMD fails, different node entrypoint CMD fails.
+  - Directory targeting and options (6 tests): `--cwd <path>`, `--cwd=<path>`, relative `--dockerfile <path>`, relative `--dockerfile=<path>`, absolute `--dockerfile`, and combined `--cwd` + `--dockerfile`.
+  - Real repository execution (4 tests): direct invocation without args, invocation with explicit `--cwd .`, invocation with explicit `--dockerfile server/Dockerfile`, and execution from `server/` subdirectory with `--cwd ..`.
+
+`package.json`:
+- Added `"ops:docker-runtime-test": "node --test scripts/ops/check-docker-runtime.spec.js"`.
+- Updated `"ops:check"` to include `npm run ops:docker-runtime-test`.
+
+`scripts/ops/check-production-templates.sh` & `check-production-templates-shell.spec.js`:
+- Added `require_file scripts/ops/check-docker-runtime.sh`.
+- Added `require_file scripts/ops/check-docker-runtime.spec.js`.
+- Updated `REQUIRED_FILES` in `check-production-templates-shell.spec.js`.
+
+Verification on 2026-10-04 (actual output excerpts; no live drill or deployment):
+
+| command | exit | output / result |
+| --- | --- | --- |
+| `sh -n scripts/ops/check-docker-runtime.sh` | 0 | syntax valid, no output |
+| `node -c scripts/ops/check-docker-runtime.spec.js` | 0 | syntax valid, no output |
+| `node --test scripts/ops/check-docker-runtime.spec.js` | 0 | `tests 45`, `pass 45`, `fail 0` |
+| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
+| `npm run ops:docker-runtime` | 0 | `docker runtime check passed` |
+| `(cd server && ../scripts/ops/check-docker-runtime.sh --cwd ..)` | 0 | `docker runtime check passed` |
+| `scripts/ops/check-docker-runtime.sh --help` | 0 | `Usage: scripts/ops/check-docker-runtime.sh [--cwd <path> \| --cwd=<path>] [--dockerfile <path> \| --dockerfile=<path>]` |
+| `scripts/ops/check-docker-runtime.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
+| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
+| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
+| `npm run ops:templates` | 0 | `ops template check passed` |
+| `node --test scripts/ops/launch-readiness.spec.js scripts/ops/run-static-integrity-checks.spec.js scripts/ops/run-deployment-drill.spec.js` | 0 | `tests 45`, `pass 45`, `fail 0` |
+| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
+| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
+| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
+| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
+| `git diff --check` | 0 | clean, no whitespace errors |
+
+Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:docker-runtime-test` or `npm run ops:docker-runtime`; rollback is a normal revert of the local commit.

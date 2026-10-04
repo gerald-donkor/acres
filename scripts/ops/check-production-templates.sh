@@ -142,6 +142,8 @@ require_file scripts/ops/assemble-launch-dossier.js
 require_file scripts/ops/assemble-launch-dossier.spec.js
 require_file scripts/ops/run-static-integrity-checks.js
 require_file scripts/ops/run-static-integrity-checks.spec.js
+require_file scripts/ops/check-docker-runtime.sh
+require_file scripts/ops/check-docker-runtime.spec.js
 require_file scripts/ops/launch-readiness.sh
 require_file scripts/ops/launch-readiness.spec.js
 require_file scripts/ops/check-production-templates.js

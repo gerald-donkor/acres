@@ -1767,3 +1767,22 @@ passed cleanly. Node syntax checks, scoped Prettier, root lint, typecheck, build
 `git diff --check` exited 0. Full contracts, command results, and verification limitations are
 recorded in `docs/operations.md` prompt 260. No production action, dependency upgrade, or push
 occurred; prompt 201 and Phase 12 operator sign-off remain open.
+
+**Prompt 261 Phase 12K harden and test docker runtime check (2026-10-04):**
+The shell runner `scripts/ops/check-docker-runtime.sh` now enforces strict POSIX
+CLI argument validation (`--help`, `-h`, `--cwd <path>`, `--cwd=<path>`, `--dockerfile <path>`, `--dockerfile=<path>`),
+rejects unknown options, unexpected arguments, repeated/missing/empty directory and Dockerfile paths,
+and non-existent directories/files, while preserving the four static server Dockerfile assertions
+(Node 24 Alpine stage, USER node, HEALTHCHECK, direct Node startup CMD). Dedicated unit and contract test
+suite `scripts/ops/check-docker-runtime.spec.js` covers argument parsing, fail-closed assertions,
+directory targeting, and end-to-end repository execution.
+
+Actual verification: docker runtime spec suite `tests 45`, `pass 45`, `fail 0`;
+`npm run ops:docker-runtime-test` and `npm run ops:docker-runtime` passed cleanly;
+`ops:templates-shell-test` passed 34/34 tests; `ops:templates-test` passed 324/324 tests;
+`ops:templates` `ops template check passed`; launch-readiness/static-integrity/deployment suites
+passed 45 tests. Subdirectory invocation `(cd server && ../scripts/ops/check-docker-runtime.sh --cwd ..)`
+passed cleanly. Node syntax checks, Prettier, root lint, typecheck, build, and `git diff --check`
+exited 0. Full contracts, command results, and verification limitations are recorded in
+`docs/operations.md` prompt 261. No production action, dependency upgrade, or push occurred;
+prompt 201 and Phase 12 operator sign-off remain open.
