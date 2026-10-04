@@ -1809,3 +1809,24 @@ Node syntax checks, Prettier, root lint, typecheck, build, and `git diff --check
 Full contracts, command results, and verification limitations are recorded in
 `docs/operations.md` prompt 262. No production action, dependency upgrade, or push occurred;
 prompt 201 and Phase 12 operator sign-off remain open.
+
+**Prompt 263 Phase 12K harden and test audit dependencies (2026-10-04):**
+The operational shell script `scripts/ops/audit-dependencies.sh` now enforces strict POSIX
+CLI argument validation (`--help`, `-h`, `--cwd <path>`, `--cwd=<path>`, `--audit-level <level>`,
+`--audit-level=<level>`, `--omit <type>`, `--omit=<type>`), rejects unknown options, unexpected
+arguments, repeated/missing/empty/whitespace option arguments, and non-existent directories, and
+verifies that the target directory contains `package.json` and `package-lock.json` before executing
+`npm audit`. It defaults to `--audit-level=critical` and `--omit=dev` while supporting configurable
+level inspection and target directories. Dedicated unit and contract test suite
+`scripts/ops/audit-dependencies.spec.js` covers argument parsing, directory targeting, prerequisite
+validation, clean fixture execution, mock npm failure handling, and argument propagation.
+
+Actual verification: audit dependencies spec suite `tests 51`, `pass 51`, `fail 0`;
+`npm run ops:audit-test` passed cleanly; `ops:templates-shell-test` passed 34/34 tests;
+`ops:templates-test` passed 324/324 tests; `ops:templates` `ops template check passed`;
+`ops:scan-secrets-test` passed 42/42 tests; `ops:docker-runtime-test` passed 45/45 tests;
+`ops:launch-readiness-test` passed 23/23 tests; `ops:launch-drill-test` passed 68/68 tests.
+Node syntax checks, Prettier, root lint, typecheck, build, and `git diff --check` exited 0.
+Full contracts, command results, and verification limitations are recorded in
+`docs/operations.md` prompt 263. No production action, dependency upgrade, or push occurred;
+prompt 201 and Phase 12 operator sign-off remain open.

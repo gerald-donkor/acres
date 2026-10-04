@@ -121,7 +121,7 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `scripts/ops/verify-caddy-routing.js` | Pure Node.js Caddyfile parser and route evaluator validating same-origin ingress dispatching, proxy headers, S3 SigV4 preservation, and security headers |
 | `scripts/ops/verify-caddy-routing.spec.js` | Unit test suite (10/10 tests) asserting Caddy routing rules, SigV4 host preservation, security headers, timeouts, and HSTS gate invariants |
 | `scripts/ops/run-deployment-drill.sh` | Configuration preflight/rehearsal: Caddy/Compose checks, migration heuristic, optional health observations and simulation evidence |
-| `scripts/ops/audit-dependencies.sh` | Deterministic dependency security audit script for production dependencies |
+| `scripts/ops/audit-dependencies.sh` & `.spec.js` | Production dependency security audit script with POSIX CLI argument validation, configurable audit level, directory targeting, and comprehensive contract test suite |
 | `scripts/ops/generate-sbom.js` & `.spec.js` | Deterministic CycloneDX v1.5 JSON SBOM generator and license compliance validator (purls, hashes, permissive allowlist, copyleft rejection) |
 | `scripts/ops/run-sast-scan.js` & `.spec.js` | Pure Node.js static application security testing (SAST) engine evaluating SAST-01 through SAST-08 across source trees with triage policy enforcement |
 | `infra/security/sast-triage.json` & `.schema.json` | Actionable SAST triage policy registry with schema, rationale, approved owners, and fail-closed expiration gating |
@@ -3116,3 +3116,54 @@ Verification on 2026-10-04 (actual output excerpts; no live drill or deployment)
 | `git diff --check` | 0 | clean, no whitespace errors |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:scan-secrets-test` or `npm run ops:scan-secrets`; rollback is a normal revert of the local commit.
+
+## Prompt 263 — harden and test audit dependencies (2026-10-04)
+
+`scripts/ops/audit-dependencies.sh`:
+- Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
+  - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>` / `--cwd=<path>`, `--audit-level <level>` / `--audit-level=<level>` (default: `critical`), and `--omit <type>` / `--omit=<type>` (default: `dev`).
+  - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
+  - Rejects unexpected positional arguments (`Error: Unexpected argument "<arg>"` with usage to stderr, exit 1).
+  - Rejects missing, empty, whitespace-only, and repeated `--cwd`, `--audit-level`, and `--omit` options with descriptive error and usage to stderr, exit 1.
+  - Enforces valid `--audit-level` enum: `info`, `low`, `moderate`, `high`, `critical`. Rejects invalid levels with `Error: Invalid --audit-level "<level>" (allowed: info, low, moderate, high, critical)`.
+  - Validates that target directory exists (`audit error: target directory does not exist: <path>`, exit 1).
+  - Validates that target directory contains `package.json` and `package-lock.json` (`audit error: target directory does not contain <file>: <path>`, exit 1).
+  - Executes `npm audit --omit="$OMIT" --audit-level="$AUDIT_LEVEL"` inside canonicalized target directory.
+  - Emits fail-closed error on detection of vulnerabilities: `audit error: <level> vulnerabilities detected in production dependencies`.
+  - Emits success message on zero vulnerabilities: `Production dependency security audit passed (0 <level> vulnerabilities)`.
+
+`scripts/ops/audit-dependencies.spec.js`:
+- Established comprehensive 51-test unit and contract test suite using Node.js test runner (`node:test` and `node:assert/strict`):
+  - 34 CLI argument parsing tests: `--help`, `-h`, unknown long/short options, unexpected positional arguments, missing/empty/whitespace/repeated/invalid values for `--cwd`, `--audit-level`, and `--omit`.
+  - 2 prerequisite validation tests: missing `package.json`, missing `package-lock.json`.
+  - 8 clean fixture execution tests: default options, `--cwd=` syntax, all audit levels (`high`, `moderate`, `low`, `info`), and custom omit options (`optional`, `peer`).
+  - 3 mock npm failure and argument propagation tests: failure detection, audit level propagation, CLI flag logging.
+  - 4 directory targeting & integration tests: execution from subdirectory with repo targeting, subdirectory `--cwd ..` execution, paths containing spaces, and invalid flag handling.
+
+Integration and prerequisite wiring:
+- `package.json`: added `"ops:audit-test": "node --test scripts/ops/audit-dependencies.spec.js"` and wired into `"ops:check"`.
+- `scripts/ops/check-production-templates.sh`: added `require_file scripts/ops/audit-dependencies.sh` and `require_file scripts/ops/audit-dependencies.spec.js`.
+- `scripts/ops/check-production-templates-shell.spec.js`: added both files to `REQUIRED_FILES` list.
+
+| command | exit | output / result |
+| --- | --- | --- |
+| `sh -n scripts/ops/audit-dependencies.sh` | 0 | syntax valid, no output |
+| `node -c scripts/ops/audit-dependencies.spec.js` | 0 | syntax valid, no output |
+| `node --test scripts/ops/audit-dependencies.spec.js` | 0 | `tests 51`, `pass 51`, `fail 0` |
+| `npm run ops:audit-test` | 0 | `tests 51`, `pass 51`, `fail 0` |
+| `scripts/ops/audit-dependencies.sh --help` | 0 | `Usage: scripts/ops/audit-dependencies.sh [--cwd <path> \| --cwd=<path>] [--audit-level <level> \| --audit-level=<level>] [--omit <type> \| --omit=<type>]` |
+| `scripts/ops/audit-dependencies.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
+| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
+| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
+| `npm run ops:templates` | 0 | `ops template check passed` |
+| `npm run ops:scan-secrets-test` | 0 | `tests 42`, `pass 42`, `fail 0` |
+| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
+| `npm run ops:launch-readiness-test` | 0 | `tests 23`, `pass 23`, `fail 0` |
+| `npm run ops:launch-drill-test` | 0 | `tests 68`, `pass 68`, `fail 0` |
+| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
+| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
+| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
+| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
+| `git diff --check` | 0 | clean, no whitespace errors |
+
+Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:audit-test`; rollback is a normal revert of the local commit.
