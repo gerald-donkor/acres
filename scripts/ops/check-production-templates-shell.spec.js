@@ -64,6 +64,8 @@ const REQUIRED_FILES = [
   "scripts/ops/run-static-integrity-checks.spec.js",
   "scripts/ops/check-docker-runtime.sh",
   "scripts/ops/check-docker-runtime.spec.js",
+  "scripts/ops/scan-secrets.sh",
+  "scripts/ops/scan-secrets.spec.js",
   "scripts/ops/launch-readiness.sh",
   "scripts/ops/launch-readiness.spec.js",
   "scripts/ops/check-production-templates.js",

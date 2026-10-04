@@ -3050,3 +3050,69 @@ Verification on 2026-10-04 (actual output excerpts; no live drill or deployment)
 | `git diff --check` | 0 | clean, no whitespace errors |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:docker-runtime-test` or `npm run ops:docker-runtime`; rollback is a normal revert of the local commit.
+
+## Prompt 262 — harden and test scan secrets (2026-10-04)
+
+`scripts/ops/scan-secrets.sh`:
+- Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
+  - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>`, and `--cwd=<path>`.
+  - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
+  - Rejects unexpected positional arguments (`Error: Unexpected argument "<arg>"` with usage to stderr, exit 1).
+  - Rejects missing `--cwd` value (`Error: --cwd requires a non-empty directory path` with usage to stderr, exit 1).
+  - Rejects empty/whitespace `--cwd` value (`Error: --cwd path cannot be empty` with usage to stderr, exit 1).
+  - Rejects repeated `--cwd` (`Error: Repeated --cwd option; expected single directory path` with usage to stderr, exit 1).
+  - Validates target directory exists (`secret scan failed: target directory does not exist: <path>`, exit 1).
+  - Validates target directory is a git repository (`secret scan failed: target directory is not a git repository: <path>`, exit 1).
+  - Uses safe temporary file creation with `mktemp` and signal traps (`EXIT INT TERM HUP`).
+  - Preserves four static secret detection patterns:
+    1. Local development passwords: `acres_(superuser|migrator|app|test|valkey)_dev_password`.
+    2. Change-me placeholders: `change-me(-|_|[A-Za-z0-9])`.
+    3. Launch placeholder sentinels: `__REQUIRED_[A-Z0-9_]+__`.
+    4. Client-exposed secrets: `NEXT_PUBLIC_[A-Z0-9_]*(SECRET|PASSWORD|TOKEN|KEY)`.
+  - Scans inside canonical `$RESOLVED_CWD` with exclusions (`package-lock.json`, `.agents`, `node_modules`, `.next`, `server/src/generated`).
+  - Normalizes match paths and preserves allowed path exemptions.
+  - Outputs `secret/default scan passed\n` on success, exit 0.
+
+`scripts/ops/scan-secrets.spec.js`:
+- Created dedicated unit and contract test specification with 42 tests using Node.js test runner (`node:test` and `node:assert/strict`):
+  - CLI argument validation (14 tests): `--help`, `-h`, unknown options (`--invalid-flag`, `-x`), unexpected positionals, missing/empty/whitespace `--cwd`, repeated `--cwd`, non-existent directory.
+  - Git repository validation (1 test): fails closed with clean error when target directory is not a git repo.
+  - Isolated fixture pattern detection (14 tests): clean repo passes, detects development passwords across 5 roles, change-me placeholders with hyphen/underscore/alphanumeric, launch sentinels, client-exposed secret names (`API_SECRET`, `AUTH_PASSWORD`, `MAP_KEY`, `USER_TOKEN`).
+  - Allowed paths and exclusions (2 tests): tolerates development passwords in 18 allowed files/patterns; ignores matches inside excluded paths.
+  - Directory targeting and options (2 tests): `--cwd <path>` and `--cwd=<path>`.
+  - Real repository execution (3 tests): direct invocation without args, invocation with explicit `--cwd .`, and invocation from `server/` subdirectory with `--cwd ..`.
+
+`package.json`:
+- Added `"ops:scan-secrets-test": "node --test scripts/ops/scan-secrets.spec.js"`.
+- Updated `"ops:check"` to include `npm run ops:scan-secrets-test`.
+
+`scripts/ops/check-production-templates.sh` & `check-production-templates-shell.spec.js`:
+- Added `require_file scripts/ops/scan-secrets.sh`.
+- Added `require_file scripts/ops/scan-secrets.spec.js`.
+- Updated `REQUIRED_FILES` in `check-production-templates-shell.spec.js`.
+
+Verification on 2026-10-04 (actual output excerpts; no live drill or deployment):
+
+| command | exit | output / result |
+| --- | --- | --- |
+| `sh -n scripts/ops/scan-secrets.sh` | 0 | syntax valid, no output |
+| `node -c scripts/ops/scan-secrets.spec.js` | 0 | syntax valid, no output |
+| `node --test scripts/ops/scan-secrets.spec.js` | 0 | `tests 42`, `pass 42`, `fail 0` |
+| `npm run ops:scan-secrets-test` | 0 | `tests 42`, `pass 42`, `fail 0` |
+| `npm run ops:scan-secrets` | 0 | `secret/default scan passed` |
+| `(cd server && ../scripts/ops/scan-secrets.sh --cwd ..)` | 0 | `secret/default scan passed` |
+| `scripts/ops/scan-secrets.sh --help` | 0 | `Usage: scripts/ops/scan-secrets.sh [--cwd <path> \| --cwd=<path>]` |
+| `scripts/ops/scan-secrets.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
+| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
+| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
+| `npm run ops:templates` | 0 | `ops template check passed` |
+| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
+| `npm run ops:docker-runtime` | 0 | `docker runtime check passed` |
+| `node --test scripts/ops/launch-readiness.spec.js scripts/ops/run-static-integrity-checks.spec.js scripts/ops/run-deployment-drill.spec.js` | 0 | `tests 45`, `pass 45`, `fail 0` |
+| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
+| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
+| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
+| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
+| `git diff --check` | 0 | clean, no whitespace errors |
+
+Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:scan-secrets-test` or `npm run ops:scan-secrets`; rollback is a normal revert of the local commit.

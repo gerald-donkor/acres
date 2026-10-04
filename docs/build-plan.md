@@ -1786,3 +1786,26 @@ passed cleanly. Node syntax checks, Prettier, root lint, typecheck, build, and `
 exited 0. Full contracts, command results, and verification limitations are recorded in
 `docs/operations.md` prompt 261. No production action, dependency upgrade, or push occurred;
 prompt 201 and Phase 12 operator sign-off remain open.
+
+**Prompt 262 Phase 12K harden and test scan secrets (2026-10-04):**
+The shell runner `scripts/ops/scan-secrets.sh` now enforces strict POSIX
+CLI argument validation (`--help`, `-h`, `--cwd <path>`, `--cwd=<path>`),
+rejects unknown options, unexpected arguments, repeated/missing/empty directory paths,
+and non-existent directories, and verifies that the target directory is a git repository
+before scanning. It creates temporary match files safely via `mktemp` with clean signal
+traps, while preserving all four static secret detection patterns (development passwords,
+change-me placeholders, launch sentinels, and client-exposed secrets) and allowed path
+exemptions. Dedicated unit and contract test suite `scripts/ops/scan-secrets.spec.js`
+covers argument parsing, git validation, pattern detection in isolated fixtures,
+allowed path exemptions, exclusions, directory targeting, and end-to-end repository execution.
+
+Actual verification: scan secrets spec suite `tests 42`, `pass 42`, `fail 0`;
+`npm run ops:scan-secrets-test` and `npm run ops:scan-secrets` passed cleanly;
+`ops:templates-shell-test` passed 34/34 tests; `ops:templates-test` passed 324/324 tests;
+`ops:templates` `ops template check passed`; `ops:docker-runtime-test` passed 45/45 tests;
+launch-readiness/static-integrity/deployment suites passed 45 tests. Subdirectory invocation
+`(cd server && ../scripts/ops/scan-secrets.sh --cwd ..)` passed cleanly.
+Node syntax checks, Prettier, root lint, typecheck, build, and `git diff --check` exited 0.
+Full contracts, command results, and verification limitations are recorded in
+`docs/operations.md` prompt 262. No production action, dependency upgrade, or push occurred;
+prompt 201 and Phase 12 operator sign-off remain open.
