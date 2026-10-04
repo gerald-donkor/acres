@@ -2936,3 +2936,54 @@ Phase 12 production exit/sign-off and prompt 201 remain open. The unchanged
 unresolved readiness example is not production evidence. Inspect this repair
 with `npm run ops:templates` or the explicit-root Node invocation above;
 rollback is a normal revert of the local commit.
+
+## Prompt 260 — harden and test production template shell runner (2026-10-04)
+
+`scripts/ops/check-production-templates.sh`:
+- Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
+  - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>`, and `--cwd=<path>`.
+  - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
+  - Rejects unexpected positional arguments (`Error: Unexpected argument "<arg>"` with usage to stderr, exit 1).
+  - Rejects missing `--cwd` value (`Error: --cwd requires a non-empty directory path` with usage to stderr, exit 1).
+  - Rejects empty/whitespace `--cwd` value (`Error: --cwd path cannot be empty` with usage to stderr, exit 1).
+  - Rejects repeated `--cwd` (`Error: Repeated --cwd option; expected single directory path` with usage to stderr, exit 1).
+  - Validates target directory exists (`ops template check failed: target directory does not exist: <path>`, exit 1).
+  - Canonicalizes resolved target directory and script directory.
+  - Updates `require_file` assertions to target `$RESOLVED_CWD/$1`.
+  - Added `require_file scripts/ops/check-production-templates-shell.spec.js`.
+  - Forwards `--cwd "$RESOLVED_CWD"` to `check-production-templates.js`.
+  - Targets `$RESOLVED_CWD/infra/env/production.env.example` and `$RESOLVED_CWD/infra/caddy/Caddyfile.example` for security greps.
+  - Passes explicit target paths to downstream verifiers (`verify-caddy-routing.js`, `verify-volume-encryption.js`) and runs context-dependent verifiers in `(cd "$RESOLVED_CWD" && node "$SCRIPT_DIR/...")`.
+
+`scripts/ops/check-production-templates-shell.spec.js`:
+- Created dedicated unit and contract test specification with 34 tests using Node.js test runner (`node:test`):
+  - CLI flag and argument validation (16 tests): `--help`, `-h`, unknown options (`--invalid`, `-x`), unexpected positionals, missing/empty/whitespace `--cwd`, repeated `--cwd`, non-existent directory, and explicit targeting (`--cwd <path>` and `--cwd=<path>`).
+  - Fail-closed step ordering and assertions (14 tests): missing template file, missing shell spec file, `check-production-templates.js` failure, leaked secret in `production.env.example`, missing `__REQUIRED_` placeholder sentinels, missing `Strict-Transport-Security` in `Caddyfile.example`, downstream verifier failures (`verify-caddy-routing.js`, `verify-volume-encryption.js`, `verify-alert-rules.js`, `verify-capacity-load.js`), and full successful execution sequence.
+  - Real repository execution (4 tests): direct invocation without args, invocation with `--cwd .`, invocation with `--cwd=<ROOT>`, and execution from an external working directory with `--cwd <ROOT>`.
+
+`package.json`:
+- Added `"ops:templates-shell-test": "node --test scripts/ops/check-production-templates-shell.spec.js"`.
+- Updated `"ops:templates-test"` to include `scripts/ops/check-production-templates-shell.spec.js`.
+- Updated `"ops:check"` to include `npm run ops:templates-shell-test`.
+
+Verification on 2026-10-04 (actual output excerpts; no live drill or deployment):
+
+| command | exit | output / result |
+| --- | --- | --- |
+| `sh -n scripts/ops/check-production-templates.sh` | 0 | syntax valid, no output |
+| `node --test scripts/ops/check-production-templates-shell.spec.js` | 0 | `tests 34`, `pass 34`, `fail 0` |
+| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
+| `npm run ops:templates` | 0 | `ops template check passed` |
+| `(cd server && ../scripts/ops/check-production-templates.sh --cwd ..)` | 0 | `ops template check passed` |
+| `scripts/ops/check-production-templates.sh --help` | 0 | `Usage: scripts/ops/check-production-templates.sh [--cwd <path> \| --cwd=<path>]` |
+| `scripts/ops/check-production-templates.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
+| `npm run ops:launch-readiness-test` | 0 | `tests 23`, `pass 23`, `fail 0` |
+| `npm run ops:readiness-test` | 0 | `tests 649`, `pass 649`, `fail 0` |
+| `npm run ops:launch-drill-test` | 0 | `tests 68`, `pass 68`, `fail 0` |
+| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
+| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
+| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
+| Prettier on changed JS/JSON with `server/.prettierrc` | 0 | `All matched files use Prettier code style!` |
+| `git diff --check` | 0 | clean, no whitespace errors |
+
+Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:templates-shell-test` or `npm run ops:templates`; rollback is a normal revert of the local commit.

@@ -1749,3 +1749,21 @@ The unchanged readiness example exited 1 with 0 approved, 11 blocked and
 70 blockers. Full contracts, command results and verification limitations are
 recorded in `docs/operations.md` prompt 259. No production action, dependency
 upgrade or push occurred; prompt 201 and Phase 12 operator sign-off remain open.
+
+**Prompt 260 Phase 12K harden and test production template shell runner (2026-10-04):**
+The shell runner `scripts/ops/check-production-templates.sh` now enforces strict POSIX
+CLI argument validation (`--help`, `-h`, `--cwd <path>`, `--cwd=<path>`), rejects unknown options,
+unexpected arguments, repeated/missing/empty directory paths, and non-existent directories,
+and executes all prerequisite checks, security greps, and downstream verifiers relative to
+the canonicalized target directory. Dedicated unit and contract test suite
+`scripts/ops/check-production-templates-shell.spec.js` covers argument parsing, fail-closed
+ordering, and end-to-end repository execution.
+
+Actual verification: shell spec suite `tests 34`, `pass 34`, `fail 0`;
+`ops:templates-test` `tests 324`, `pass 324`, `fail 0`;
+`ops:templates` `ops template check passed`; launch-readiness/readiness/launch-drill
+suites passed 23/649/68 tests. Subdirectory invocation `(cd server && ../scripts/ops/check-production-templates.sh --cwd ..)`
+passed cleanly. Node syntax checks, scoped Prettier, root lint, typecheck, build, and
+`git diff --check` exited 0. Full contracts, command results, and verification limitations are
+recorded in `docs/operations.md` prompt 260. No production action, dependency upgrade, or push
+occurred; prompt 201 and Phase 12 operator sign-off remain open.
