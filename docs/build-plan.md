@@ -2108,3 +2108,33 @@ No real benchmark, unstubbed parent/unified drill, deployment, production
 evidence inspection/approval, credential mutation, dependency change or push
 occurred. Phase 12, prompt 201, dependency findings and operator sign-offs remain
 open; synthetic parent acceptance stays structural and cannot approve Category 5.
+
+**Prompt 274 Phase 12K standalone alert verifier hardening (2026-10-07):**
+Strict CLI/direct-option validation precedes source work; standalone help/import
+perform no evaluation or saving. Installation defaults and literal caller-relative
+source paths remain. Regular-source checks, nonblocking descriptor verification,
+1 MiB growth-aware reads, owned closure, explicit YAML nesting/merge limits and
+10,000-entry traversal limits are engineering bounds. Invalid shapes/required
+fields/duplicate required identities fail safely; missing API scrape now fails
+both its check and the overall report. Invalid fields and private source/parser
+diagnostics are not reflected. Eleven ordered fixed predicates, public exports
+and exactly 25 successful check identities retain parent compatibility. Natural
+output draining and stream handlers preserve complete JSON/nonzero failure.
+Review-driven bounded selector scanning preserves legacy selector/job policy.
+
+Actual checks: final alerts `tests 112`, `pass 112`, `fail 0`; parent 144/144
+plus final actual-child integration 1/1; capacity 54/54; DoS 91/91; launch/dossier
+164/164; readiness 649/649; launch readiness 23/23; templates 324/324 and
+`ops template check passed`. Lint, sequential typecheck/build, Node syntax,
+changed-file/new-region Prettier and diff check passed. `ops:check` exited 1 at
+unchanged audit: `37 vulnerabilities (9 moderate, 26 high, 2 critical)` and
+`audit error: critical vulnerabilities detected in production dependencies`;
+later aggregate stages were unreached. Sandbox subprocess `EPERM`/Next
+`--showConfig` parsing failures were followed by successful normal-permission
+hermetic checks/build. Final review found no remaining findings; the final
+112-case alert suite and actual-parent integration verify review fixes.
+Full behavior, outputs and limits are in `docs/operations.md` Prompt 274.
+No live monitoring/load/DoS/unified drill, production evidence inspection,
+deployment, credential/dependency change or push occurred. Fixed synthetic
+predicates and static heuristics cannot approve Category 5; Phase 12, prompt 201,
+dependency findings and operator decisions remain unresolved.

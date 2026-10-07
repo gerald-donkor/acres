@@ -1098,3 +1098,36 @@ test('stopped active child remains owned until termination and is killed on inte
   assert.equal(fs.existsSync(file), false);
   assert.deepEqual(fs.readdirSync(f.tmp), []);
 });
+
+test("actual installed alert CLI passes isolated parent and malformed sources fail closed", (t) => {
+  const f = fixture(t);
+  fs.copyFileSync(
+    path.join(__dirname, "verify-alert-rules.js"),
+    path.join(f.ops, "verify-alert-rules.js"),
+  );
+  const success = f.run(["--dry-run"]);
+  assert.equal(success.status, 0, success.output);
+  assert.equal(success.evidence.alerts.valid, true);
+  assert.equal(success.evidence.alerts.checks.length, 25);
+  assert.equal(
+    validateCapacityAlertingReport(success.evidence, new Date()),
+    true,
+  );
+  assert.equal(
+    validateCapacityAlertingReport(success.evidence, new Date(), {
+      requireLive: true,
+    }),
+    false,
+  );
+  fs.writeFileSync(
+    path.join(f.dir, "infra/prometheus/alerts.yml"),
+    "groups: [null]",
+  );
+  const failure = f.run(["--dry-run"]);
+  assert.notEqual(failure.status, 0);
+  assert.equal(failure.evidence.summary.alertVerification, "failed");
+  assert.equal(
+    validateCapacityAlertingReport(failure.evidence, new Date()),
+    false,
+  );
+});

@@ -4189,3 +4189,123 @@ inspection/approval, deployment, credential mutation or push occurred. Phase 12,
 prompt 201, dependency findings and operator sign-offs remain open. Rollback is a
 reviewed normal revert preserving published evidence; reverting to the former
 replacing writer does not make destination reuse or unchecked live inputs safe.
+
+## Prompt 274 — standalone alert-rule verifier hardening (2026-10-07)
+
+`scripts/ops/verify-alert-rules.js` now validates the complete invocation before
+source reads. It retains `--json`, `--alerts-file`, and `--prom-file`, adds
+standalone `--help`/`-h`, and accepts separate or attached value options.
+Unknown/positional, repeated, missing/blank/control-containing, switch-attached
+and conflicting-help arguments reject without reflecting their values. Separate
+values cannot consume another option; attached dash-leading and spaced paths
+remain literal. Defaults resolve from the installation; explicit relative paths
+resolve from caller cwd. Direct `verifyAlertRules` accepts only a plain options
+record with valid optional source strings, preserving no-argument use. Help and
+import do no source evaluation, writes, network or child launches. There is no
+report-saving/output option. No dedicated standalone Node CLI reference is
+installed in the security skill; changed Node APIs were verified from installed
+declarations and YAML behavior from installed js-yaml 4.3.1 documentation/source.
+
+Source loading rejects absent/unreadable/non-regular files with fixed errors.
+Regular read-only symlinks remain supported. Stat before open rejects ordinary
+FIFOs/devices/directories; nonblocking open and descriptor stat also reject a
+non-regular replacement. Each read is capped at 1 MiB including growth after
+fstat; owned descriptors close on success, read/parse failure and size rejection.
+A close error receives one owned-descriptor retry but still fails verification;
+persistent close failure may retain the descriptor until process shutdown.
+Installed YAML limits remain explicit: depth 100 and 10,000 total merge keys,
+with duplicate-key and multi-document rejection unchanged. Unknown cyclic alias
+keys are not recursively traversed or projected. Traversed groups, expanded
+rules, scrapes and rule-file entries are capped at 10,000 before expensive
+expansion. These are engineering resource limits, not measured production needs;
+checked-in alerts and Prometheus sources measure 4,188 and 1,139 bytes, with
+11 rules.
+
+Root/collection/record validation precedes field access. Required expression,
+duration, labels and annotations are checked before string operations or output;
+invalid evaluations omit all source textual fields. Duplicate required identities
+across or within groups fail rather than selecting the last definition. Missing
+API scrape now fails `valid` as missing worker scrape already did; failed checks
+cannot coexist with a passing report. `rule_files` remains a presence/string
+check, without mounted-path resolution. Review identified inherited quadratic
+selector matching for repeated unclosed braces. The final scan preserves the
+legacy metric-name and selector/job heuristic while consuming disjoint spans and
+advancing the next closing-brace position; it no longer repeatedly scans malformed
+suffixes. An actual roughly 720 KB unclosed-expression fixture completed with a
+controlled failure in 47 ms; this is fixture evidence, not a production SLO.
+Legacy-policy comparisons cover nested/absent braces, prefixes and multiple selectors. Extra ordinary alerts and recording
+rules remain counted; they receive no claim of full semantic validation.
+
+Successful JSON retains all public fields, eleven ordered required evaluations
+and fixed predicates, and exactly 25 successful check identities used by the
+parent. Controlled source/shape failures return coherent failed reports with
+empty evaluations where none ran, zero total rules when unavailable, and eleven
+required rules. Diagnostics use fixed categories/check identities, excluding
+paths, parser snippets/exceptions, invalid field values, arbitrary objects and
+stacks. Validated textual fields remain in successful JSON for compatibility;
+the verifier cannot detect credentials intentionally inserted into otherwise
+valid expressions/annotations. Human output uses safe headings and rule identities.
+JSON emits one complete report for completed verification; evaluated failure
+exits 1. Invalid invocation, internal/serialization or output failures use fixed
+stderr `Alert verification invocation or output failed` and exit nonzero without
+success-shaped fallback. Write callbacks, stream error handlers and natural
+shutdown preserve complete output and broken-pipe failure status.
+
+Tests use disposable installations/source fixtures, explicit installed YAML
+resolution, allowlisted child environments, bounded subprocess timeouts and
+owned teardown. They cover actual CLI/default-cwd/literal-path behavior,
+zero-work help/import, malformed shapes/required values/duplicates/scrapes,
+YAML depth/merge/key/document failures (limit cases assert source-load failure), canary redaction, extra rules/aliases,
+size/growth/non-regular/symlink handling, injected stat/open/fstat/read/close/parse
+faults, serialization/output faults, complete large output and an actual broken
+pipe. The actual installed alert CLI passes the isolated dry capacity parent;
+malformed source fails the parent. The accepted dry receipt still fails
+`requireLive: true`, so this supplies no Category 5 sign-off.
+
+Verification:
+
+| Command                                            | Exit | Actual concise output                                                                                                               |
+| -------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `node --check` producer/spec                       | 0    | no output                                                                                                                           |
+| `node scripts/ops/verify-alert-rules.js --help`    | 0    | `Usage: scripts/ops/verify-alert-rules.js [options]`                                                                                |
+| `npm run ops:alert-test`                           | 0    | `tests 112`, `pass 112`, `fail 0`                                                                                                   |
+| `npm run ops:capacity-alerting-test`               | 0    | `tests 144`, `pass 144`, `fail 0`                                                                                                   |
+| Final actual alert-child parent integration        | 0    | `tests 1`, `pass 1`, `fail 0`                                                                                                       |
+| `npm run ops:capacity-test`                        | 0    | `tests 54`, `pass 54`, `fail 0`                                                                                                     |
+| `npm run ops:dos-test`                             | 0    | `tests 91`, `pass 91`, `fail 0`                                                                                                     |
+| `npm run ops:launch-drill-test`                    | 0    | `tests 164`, `pass 164`, `fail 0`                                                                                                   |
+| `npm run ops:readiness-test`                       | 0    | `tests 649`, `pass 649`, `fail 0`                                                                                                   |
+| `npm run ops:launch-readiness-test`                | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                     |
+| `npm run ops:templates-test`                       | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                   |
+| `npm run ops:templates`                            | 0    | `ops template check passed`                                                                                                         |
+| `npm run ops:check`                                | 1    | `37 vulnerabilities (9 moderate, 26 high, 2 critical)`; `audit error: critical vulnerabilities detected in production dependencies` |
+| `npm run lint`                                     | 0    | all three workspaces; `eslint "{src,test}/**/*.ts"`, no diagnostics                                                                 |
+| `npm run typecheck`                                | 0    | shared/client/server completed; `Generated Prisma Client (7.9.1)`                                                                   |
+| `npm run build` with normal subprocess permissions | 0    | `Compiled successfully in 3.9s`; `Generating static pages using 7 workers (22/22) in 1363ms`; `prisma generate && nest build`       |
+| Prettier producer/spec/prompt                      | 0    | `All matched files use Prettier code style!`                                                                                        |
+| `git diff --check`                                 | 0    | no output                                                                                                                           |
+
+The aggregate stopped at the unchanged production dependency audit; later
+aggregate stages were unreached. Affected isolated suites ran independently.
+Sandboxed child launches returned `spawnSync ... EPERM`; normal subprocess
+access passed the hermetic suites. Sandboxed build failed with `Could not parse
+output from TypeScript's --showConfig`; normal subprocess access passed the build.
+Typecheck and build ran sequentially. New documentation and the parent edited
+region were formatted separately, preserving historical formatting.
+
+Static expression checks remain heuristics, and simulations remain fixed
+JavaScript predicates. They do not parse full PromQL, execute supplied YAML
+expressions, verify evaluation windows, observe deployed monitoring or deliver
+notifications. No live query/load/DoS/unified drill, production evidence inspection,
+deployment, credential change, dependency upgrade or push occurred. Phase 12,
+prompt 201, Category 5, dependency findings and operator launch decisions remain
+open. Safe standalone inspection is `node scripts/ops/verify-alert-rules.js --help`,
+`npm run ops:alert-test`, or `node scripts/ops/verify-alert-rules.js --json` against
+checked-in sources. A reviewed normal revert is the rollback.
+
+Independent review verified and resolved the inherited selector CPU finding and
+the YAML-limit assertion gap; follow-up review found no remaining Critical,
+Important or Minor findings. Reviewer policy comparisons matched 100,000 generated
+expressions. The final alert suite passed 112/112 and final actual-child parent
+integration passed 1/1 after those fixes; unaffected root gates and regression
+suites were not repeated.

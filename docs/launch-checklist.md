@@ -612,6 +612,23 @@ and actual-child integration 1/1. Complete checks, audit failure and residual
 publication limits are recorded in `docs/operations.md` Prompt 273. No live
 benchmark or operator production evidence inspection/approval occurred.
 
+**Prompt 274 standalone alert inspection (2026-10-07):** Safe repository-source
+inspection uses `node scripts/ops/verify-alert-rules.js --help`,
+`npm run ops:alert-test`, and `node scripts/ops/verify-alert-rules.js --json`.
+No reports are saved. Defaults remain installation-anchored; explicit relative
+`--alerts-file`/`--prom-file` values resolve from caller cwd and also accept
+attached forms. Strict invocation/source validation and fixed diagnostics reject
+malformed inputs without exposing paths, snippets or invalid field values.
+Byte/YAML/traversal limits are engineering safety bounds, not production capacity.
+Success retains eleven required rules/predicates and 25 passing checks. Invalid
+verification/output exits nonzero; complete JSON drains before shutdown. Final
+alerts passed 112/112, parent 144/144 and final actual alert-child integration
+1/1; full gate output and audit blocker are in `docs/operations.md` Prompt 274.
+Static selector heuristics and fixed JavaScript predicates do not execute YAML
+PromQL, validate full grammar/evaluation windows, observe deployed monitoring or
+prove notification delivery. Simulation acceptance cannot approve Category 5;
+bound live evidence and named operator acceptance remain required.
+
 - Offline drill/verify: `bash scripts/ops/run-capacity-alerting-drill.sh --dry-run`,
   `node scripts/ops/verify-alert-rules.js`, `node scripts/ops/verify-capacity-load.js --synthetic`
 - Evidence: `backups/capacity-alerting-drill-evidence-<uuid>.json` or an absent exact `--evidence-file` destination
