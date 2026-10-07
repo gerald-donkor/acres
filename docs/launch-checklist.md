@@ -1921,6 +1921,46 @@ compliance failure. Reference the child artifact alongside the dossier when
 reviewing Category 4 secret references; neither substitutes for the remaining
 operator sign-off and live drill evidence.
 
+Current Stage 1 publication contract (prompt 272): the static producer accepts
+exactly one separate/attached `--output`/`-o` path, resolved against caller cwd.
+The effective destination must be absent. Existing regular files, directories,
+symlinks/dangling links and unusable/symlink ancestors reject before checks or
+output allocation. Installed children/Bash are preflighted; children still run
+from the installation root. Standalone help/import have no execution or
+filesystem side effects. Regeneration requires a fresh absent path; preserve
+all retained receipts and their referenced evidence.
+
+Fixed success and evaluated failure receipts are consistency-checked and
+projected without diagnostic extras. Missing/signalled/malformed/spawn-error
+results use generic `spawn_failed` and null exit; ordinary integer exits are
+0–255. Only error-free unsignalled zero passes. New directories/staging are
+0700/0600; existing parent permissions remain. Closed staging is independently
+read/checked before exclusive atomic hard-link publication. Competing writers
+may both execute checks, but only one publishes at a shared destination; the
+loser preserves the winner and removes only its staging. Cleanup failure after
+publication preserves final evidence and exits nonzero. Empty new directories
+or persistently unremovable owned staging may remain after later failure;
+there is no shared sweep. Abrupt termination/host loss/arbitrary directory
+writers remain outside these cleanup guarantees. Synchronous child execution
+adds no descendant supervision guarantee; unified caller group ownership
+remains unchanged. Static evidence still supplies no production category
+approval or cryptographic provenance.
+
+Safe inspection from the repository root (without running real children):
+
+```bash
+node scripts/ops/run-static-integrity-checks.js --help
+npm run ops:static-integrity-test
+```
+
+Prompt 272 verification: final static `tests 71`, `pass 71`, `fail 0`;
+launch/dossier 164/164, including actual producer success/failure consumed by
+Stage 1 and the readiness helper. Independent review's FIFO dead-reader test
+hang was fixed using a bounded supervised writer. Follow-up review found no remaining Critical, Important or Minor findings.
+The production audit still blocks: `37 vulnerabilities (9 moderate, 26 high,
+2 critical)`; no unstubbed static/unified invocation or production approval
+occurred. Phase 12, prompt 201 and operator sign-off remain open.
+
 ## 5. Incident Response Runbooks (11 Prometheus Alerts)
 
 Alert rules live in `infra/prometheus/alerts.yml`. Severity `critical` pages

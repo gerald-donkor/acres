@@ -1643,3 +1643,74 @@ for (const kind of ["invalid-clock", "missing-helper-export"]) {
     assert.ok(!fs.existsSync(path.join(f.dir, "backups")));
   });
 }
+
+for (const failStatic of ["", "docker_runtime"]) {
+  test(`actual isolated static producer integrates with Stage 1: ${failStatic || "passed"}`, (t) => {
+    const f = fixture(t);
+    fs.copyFileSync(
+      path.join(__dirname, "run-static-integrity-checks.js"),
+      path.join(f.ops, "run-static-integrity-checks.js"),
+    );
+    const {
+      CHECKS,
+      validateStaticEvidence,
+    } = require("./run-static-integrity-checks");
+    const { validCaddyStaticEvidence } = require("./check-launch-readiness");
+    const staticLog = path.join(f.dir, "static-calls");
+    for (const { id, script } of CHECKS) {
+      fs.writeFileSync(
+        path.join(f.dir, script),
+        `printf '%s|%s\\n' '${id}' "$PWD" >> "$STATIC_LOG"
+printf 'private-static-canary\\n' >&2
+[[ "$FAIL_STATIC" == '${id}' ]] && exit 7
+exit 0
+`,
+      );
+    }
+    const r = f.run(
+      [
+        "--dry-run",
+        "--evidence-dir",
+        path.dirname(f.output),
+        "--output",
+        f.output,
+      ],
+      "",
+      {
+        env: { STATIC_LOG: staticLog, FAIL_STATIC: failStatic },
+      },
+    );
+    assert.ifError(r.error);
+    assert.equal(r.status, failStatic ? 1 : 0, r.stderr);
+    const dossier = JSON.parse(fs.readFileSync(f.output));
+    invariant(dossier);
+    assert.equal(dossier.stages[0].status, failStatic ? "FAILED" : "PASSED");
+    assert.equal(
+      dossier.staticIntegrityBaseline.status,
+      failStatic ? "breached" : "verified",
+    );
+    assert.equal(
+      dossier.summary.staticIntegrityCompliance,
+      failStatic ? "failed" : "passed",
+    );
+    assert.deepEqual(
+      fs.readFileSync(staticLog, "utf8").trim().split("\n"),
+      CHECKS.map((c) => `${c.id}|${f.dir}`),
+    );
+    const receiptPath = dossier.stages[0].artifacts.find((file) =>
+      file.endsWith("static-integrity-evidence-receipt.json"),
+    );
+    assert.ok(receiptPath);
+    const receipt = JSON.parse(fs.readFileSync(receiptPath));
+    assert.equal(validateStaticEvidence(receipt).valid, !failStatic);
+    assert.equal(validCaddyStaticEvidence(receipt, receiptPath), !failStatic);
+    assert.ok(
+      !(
+        r.stdout +
+        r.stderr +
+        JSON.stringify(dossier) +
+        JSON.stringify(receipt)
+      ).includes("private-static-canary"),
+    );
+  });
+}

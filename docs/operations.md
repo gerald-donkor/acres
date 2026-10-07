@@ -3947,3 +3947,130 @@ remaining Critical, Important or Minor findings and independently passed
 `tests 14`, `pass 14`, `fail 0`. No live drill, deployment, credential mutation,
 production approval or push occurred. Operator launch gates and the critical
 production dependency audit remain unresolved.
+
+## Prompt 272 — static-integrity evidence publication hardening (2026-10-07)
+
+This supersedes prompt 187's producer publication behavior without changing its
+Stage 1 receipt identity, ordered checks, dossier projection or production
+readiness consumers. `run-static-integrity-checks.js` remains importable without
+child execution, filesystem preflight/allocation or executable discovery. No
+HTTP route, UI, topology, dependency, scanner policy or operator value changed.
+
+The CLI accepts exactly one output using separate/attached `--output` or `-o`.
+Standalone `--help`/`-h` is side-effect free; mixed help, duplicates, unknown or
+positional input, missing/blank/control values, separate dash-leading values
+and trailing separators reject with fixed diagnostics. Attached dash-leading
+names and ordinary spaces/quotes remain literal paths. Output still resolves
+against caller cwd; all three fixed children execute from the installed root.
+Before child execution, the runner checks readable regular child scripts,
+Bash availability, the entire existing ancestor chain, directory traversal and
+nearest-parent writability, and an absent final destination. Files, directories,
+symlinks (including dangling links), non-directory/symlink ancestors and
+unusable parents reject without allocating output resources. Access checks are
+advisory; exclusive operations and repeated preflight still handle races/errors.
+
+Checks remain `production_templates`, `docker_runtime`, `secret_defaults`, in
+that order. Ordinary failures do not stop later checks. Only an error-free,
+unsignalled integer zero status passes; normal exit codes are integers 0–255.
+Thrown, absent/malformed, signalled or spawn-error results become the fixed
+`spawn_failed`/null-code failure. Receipts contain the existing drill type,
+canonical ISO UTC milliseconds timestamp, three ordered check entries and
+consistent status/validity/counts. The complete-receipt validator permits truthful
+failed receipts for publication; exported `validateStaticEvidence` continues
+accepting successful launch-compatible receipts only, returning its existing
+`{ valid, failedCheckId }` shape. Wrong field types, IDs/order, timestamps,
+exit/pass/failure-kind combinations and contradictory verdicts/counts reject.
+Only fixed producer fields are projected; caller extras, `toJSON`, child
+stdout/stderr, exceptions, environments, commands and paths are not evidence.
+
+`writeEvidence` enforces the same publication rules directly. It independently
+checks serialization before allocation, creates only missing directories with
+0700 mode, preserves existing parent permissions and does not change umask.
+Random same-directory staging uses exclusive `wx` creation and 0600 mode.
+Descriptor/path ownership is recorded before writing/closing; complete JSON is
+closed, independently read back and checked for exact content/receipt equality
+before atomic exclusive hard-link publication. Unsupported link operations
+fail safely with no replacement fallback. Retained or racing files, directories
+and links survive. A complete evaluated failed receipt publishes and exits 1.
+Two overlapping writers may both execute checks; at most one publishes to a
+shared destination. The loser preserves the winner, returns nonzero and removes
+only its owned staging. No final-destination reread supplies the verdict.
+
+Catchable I/O, serialization/readback, publication, console and cleanup failures
+cannot yield success. Cleanup retries still-owned close/unlink resources after
+partial failures and preserves foreign staging. If publication succeeds but
+staging cleanup fails, final evidence remains and the invocation exits nonzero;
+persistent cleanup failure may retain owned staging for explicit inspection.
+New empty directories can remain after later execution/publication failure.
+No evidence-tree removal or shared sweep is implemented. Abrupt termination,
+SIGKILL, host loss and arbitrary directory modification by another actor remain
+outside cleanup guarantees. Controlled installed scripts/executables/filesystem
+access are prerequisites, not cryptographic provenance. Synchronous `runChecks`
+remains synchronous: a terminated parent does not guarantee supervision of child
+descendants. The unified caller's existing owned-group supervision is unchanged.
+
+The unsafe real-runner/directory test was replaced before suite execution.
+Actual-process fixtures copy only this producer and three deterministic stubs,
+allowlist environments/tools and invoke Node through `process.execPath`.
+There is no inherited service/proxy credential environment, `NODE_OPTIONS`,
+`BASH_ENV`/`ENV` or fallback network-capable tool. Markers/FIFOs establish race
+milestones; subprocesses have bounded timeouts and owned-group teardown.
+Publication fault injection uses local dependency injection, without persistent
+fs mocks. New Stage 1 integration cases replace just the static stub with the
+real copied producer; its children and all other stages remain deterministic.
+The real dossier assembler and readiness helper accept its success receipt and
+reject its evaluated failure. `ops:static-integrity-test` is a dedicated root
+script and runs in `ops:check` before the unchanged production audit; it never
+invokes the unstubbed evidence producer.
+
+Verification (actual output excerpts):
+
+| Command                                                          | Exit | Output/result                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node --check` on producer and both changed specs                | 0    | no output                                                                                                                                                                                                                        |
+| `node scripts/ops/run-static-integrity-checks.js --help`         | 0    | `Usage: node scripts/ops/run-static-integrity-checks.js --output <file> \| -o <file> \| --output=<file> \| -o=<file>`                                                                                                            |
+| `npm run ops:static-integrity-test`                              | 0    | `tests 71`, `pass 71`, `fail 0`                                                                                                                                                                                                  |
+| `npm run ops:launch-drill-test`                                  | 0    | `tests 164`, `pass 164`, `fail 0`                                                                                                                                                                                                |
+| Final actual-producer integration by test-name pattern           | 0    | `tests 2`, `pass 2`, `fail 0`                                                                                                                                                                                                    |
+| `npm run ops:readiness-test`                                     | 0    | `tests 649`, `pass 649`, `fail 0`                                                                                                                                                                                                |
+| `npm run ops:launch-readiness-test`                              | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                                                                                                                  |
+| `npm run ops:templates-test`                                     | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                                                                                                                |
+| `npm run ops:docker-runtime-test`                                | 0    | `tests 45`, `pass 45`, `fail 0`                                                                                                                                                                                                  |
+| `npm run ops:scan-secrets-test`                                  | 0    | `tests 42`, `pass 42`, `fail 0`                                                                                                                                                                                                  |
+| `npm run ops:templates`                                          | 0    | `ops template check passed`                                                                                                                                                                                                      |
+| Final `npm run ops:check`                                        | 1    | static suite `tests 70`, `pass 70`, `fail 0` before the final test-only review fix; audit `37 vulnerabilities (9 moderate, 26 high, 2 critical)` and `audit error: critical vulnerabilities detected in production dependencies` |
+| `npm run lint`                                                   | 0    | all three workspaces; final `eslint "{src,test}/**/*.ts"`, no diagnostics                                                                                                                                                        |
+| `npm run typecheck`                                              | 0    | shared/client/server completed; `Generated Prisma Client (7.9.1)`                                                                                                                                                                |
+| `npm run build` with normal permissions                          | 0    | `Compiled successfully in 11.2s`; `Generating static pages using 7 workers (22/22) in 731ms`; server `prisma generate && nest build`                                                                                             |
+| Prettier on changed JS/JSON/prompt and new documentation regions | 0    | `All matched files use Prettier code style!`                                                                                                                                                                                     |
+| `git diff --check`                                               | 0    | no output                                                                                                                                                                                                                        |
+
+The aggregate stopped at the unchanged audit; its later stages were not reached.
+Affected isolated suites ran independently. No dependency/policy change was
+made. Sandbox process tests initially failed with `spawnSync /usr/bin/mkfifo
+EPERM`; normal-permission hermetic suites passed. The sandboxed build reported
+`Could not parse output from TypeScript's --showConfig.`; its normal-permission
+rerun passed. Typecheck/build ran sequentially. No formatting claim is made for
+untouched baseline files or shell scripts.
+
+Independent review identified a fixture robustness issue: synchronous FIFO
+release could block after the reader died, preventing test watchdogs/teardown.
+Release now runs in a supervised credential-free Node writer with a 1000 ms
+SIGKILL timeout, and callers await it. The dead-reader regression completed in
+1039 ms; the complete final suite passed 71/71. Follow-up review found no remaining Critical, Important or Minor findings.
+
+Safe inspection from the repository root:
+
+```bash
+node scripts/ops/run-static-integrity-checks.js --help
+npm run ops:static-integrity-test
+```
+
+Regeneration requires a fresh absent output path; preserve earlier receipts and
+all evidence they reference. No unstubbed static/unified runner, live drill,
+benchmark/probe/restore/reconciliation, deployment, credential mutation,
+production approval or push occurred. Static receipts remain narrower than
+assurance of the deployed system. Phase 12, prompt 201, critical dependency
+findings and all operator sign-offs remain open. Rollback is a reviewed normal
+revert preserving published evidence; the former replacing writer/real-child
+test does not make retained-path reuse or rollback test execution safe.

@@ -2051,3 +2051,33 @@ Next's TypeScript `--showConfig` parse failure were followed by successful
 normal-permission tests/build. No dependency upgrade, live drill, deployment,
 production approval or push occurred. Phase 12, prompt 201 and operator sign-offs
 remain open.
+
+**Prompt 272 Phase 12K static-integrity producer hardening (2026-10-07):**
+Strict CLI/output/ancestor/child/Bash validation precedes all checks/allocation.
+The three fixed ordered checks produce consistent success or evaluated failure
+receipts with bounded integer statuses and generic spawn failures. Publication
+projects only fixed fields, validates serialization and closed-staging readback,
+creates private resources and links exclusively; retained/racing destinations,
+foreign staging and published receipts survive. Cleanup/output failures cannot
+imply success. Synchronous child supervision limits remain; the unified caller
+and production consumers are unchanged. A dedicated isolated root suite runs
+before the existing audit. No unstubbed producer or live drill was run.
+
+Actual final isolated checks: static `tests 71`, `pass 71`, `fail 0`;
+launch/dossier 164/164 plus final producer integration 2/2; readiness 649/649;
+launch readiness 23/23; templates 324/324; Docker runtime 45/45; secret scan
+42/42. Template check, root lint/typecheck/build, Node syntax, changed-file/new
+region formatting and diff checks passed. Independent review's dead-reader FIFO
+release finding was verified and fixed with a supervised bounded writer;
+the new regression completed in 1039 ms. Follow-up review found no remaining Critical, Important or Minor findings.
+Full behavior, real output and limits are in `docs/operations.md` Prompt 272;
+current operator inspection/regeneration rules are in checklist §4.
+
+Final `ops:check` exited 1 at the unchanged audit: `37 vulnerabilities
+(9 moderate, 26 high, 2 critical)`; `audit error: critical vulnerabilities
+detected in production dependencies`. It exercised the 70-case static suite
+before the final test-only review fix; the final dedicated suite passed 71/71.
+Later aggregate stages did not run. Sandbox subprocess denial and Next's
+TypeScript `--showConfig` parse failure were followed by successful
+normal-permission tests/build. No dependency change, production action or push
+occurred. Phase 12, prompt 201 and operator launch sign-offs remain unresolved.
