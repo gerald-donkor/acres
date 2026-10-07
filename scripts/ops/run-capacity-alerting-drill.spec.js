@@ -191,7 +191,10 @@ test('parent accepts complete offline child and fresh target-bound live child', 
       assert.equal(r.evidence.mode, 'live');
       assert.equal(r.evidence.environment, 'production');
       assert.equal(r.evidence.operator_reference, 'sre-lead-01');
-      assert.equal(r.evidence.authorization_reference, 'auth-launch-sre-window-42');
+      assert.equal(
+        r.evidence.authorization_reference,
+        'auth-launch-sre-window-42',
+      );
       assert.equal(r.evidence.benchmark_reference, 'bench-run-20260828-p95');
     }
     assert.equal(r.children.at(-1).args.includes('--dry-run'), dry);
@@ -293,4 +296,55 @@ test('concurrent invocations own distinct temporary child receipts and clean the
   assert.equal(new Set(entries.map((e) => e.file)).size, 2);
   for (const e of entries)
     assert.equal(fs.existsSync(path.dirname(e.file)), false);
+});
+
+test('parent accepts real offline child in its owned absent destination and rejects real static failure', (t) => {
+  const f = fixture(t),
+    ops = path.join(f.dir, 'scripts/ops');
+  fs.copyFileSync(
+    path.join(__dirname, 'run-dos-resilience-drill.sh'),
+    path.join(ops, 'run-dos-resilience-drill.sh'),
+  );
+  for (const relative of [
+    'infra/caddy/Caddyfile.example',
+    'server/src/config/env.validation.ts',
+    'server/src/security/security.module.ts',
+    'server/src/common/api-exception.filter.ts',
+    'server/src/auth/auth.controller.ts',
+    'server/src/forms/forms.controller.ts',
+    'server/src/health/health.controller.ts',
+    'server/src/metrics/metrics.controller.ts',
+    'server/src/graphql/graphql-limits.ts',
+    'server/src/app.setup.ts',
+    'server/src/auth/auth.service.ts',
+  ]) {
+    const dest = path.join(f.dir, relative);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(path.join(root, relative), dest);
+  }
+  const bin = path.join(f.dir, 'bin');
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, 'curl'), '#!/usr/bin/bash\nexit 99\n', {
+    mode: 0o700,
+  });
+  const run = () => {
+    const file = path.join(f.dir, 'real-parent.json');
+    const r = spawnSync('/usr/bin/bash', f.args(file), {
+      cwd: f.dir,
+      encoding: 'utf8',
+      timeout: 10000,
+      env: { PATH: bin + ':/usr/bin:/bin', LANG: 'C', LC_ALL: 'C' },
+    });
+    assert.equal(r.error, undefined);
+    return { ...r, evidence: JSON.parse(fs.readFileSync(file, 'utf8')) };
+  };
+  const success = run();
+  assert.equal(success.status, 0, success.stdout + success.stderr);
+  assert.equal(success.evidence.summary.dosResilience, 'passed');
+  assert.equal(success.evidence.dosResilience.mode, 'simulated');
+  fs.rmSync(path.join(f.dir, 'server/src/auth/auth.service.ts'));
+  const failed = run();
+  assert.notEqual(failed.status, 0);
+  assert.equal(failed.evidence.summary.dosResilience, 'failed');
+  assert.deepEqual(failed.evidence.dosResilience, { status: 'failed' });
 });

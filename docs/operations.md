@@ -1733,9 +1733,10 @@ verdict, zero counters, and false probe flags. Live reports bind
 attempted/throttled/auth-rejected/unexpected/transport counts plus pre-health,
 CSRF, and post-health booleans. Failed live runs cannot report a passing burst.
 Evidence publication serializes JSON to an owned temporary file in the destination
-directory and renames it atomically; UUID default names retain the discoverable
-`dos-resilience-evidence-` prefix. Existing destination receipts are invalidated
-before work so an interruption cannot reuse stale success.
+directory and publishes it atomically without replacing evidence (prompt 269);
+UUID default names retain the discoverable `dos-resilience-evidence-` prefix.
+Existing destinations are rejected and retained. Consumers reject nonzero exit
+and stale receipts independently; interruption never deletes prior evidence.
 
 The capacity-alerting consumer allocates a unique owned child directory, reads
 at most 64 KiB of regular JSON, and validates report type, empty failures, all
@@ -3584,3 +3585,109 @@ Phase 12 and prompt 201 remain open pending authentic live evidence, dependency
 security gates and operator sign-off. These commands inspect help or isolated
 contracts; do not run a default or targeted rehearsal against real services to
 demonstrate this patch.
+
+
+## Prompt 269 — DoS resilience drill runner hardening (2026-10-07)
+
+The four value options (`--cwd`, `--evidence-dir`, `--evidence-file`, `--api-url`)
+accept attached and separate values once each. Blank, missing, repeated,
+option-looking separate values and unexpected input fail before static work,
+traffic or output creation. Help remains side-effect-free. The default target
+cwd is the installation repository root, independently of caller cwd; explicit
+relative cwd resolves from the caller. Static reads and relative output use the
+canonical target cwd, while the installed evidence helper stays anchored to the
+installation root.
+
+An unset `API_URL` defaults to `http://localhost:3001`; an explicitly empty value
+fails. Origins use `safeUrl`, must have a root path, and exclude credentials,
+controls, queries and fragments (including bare delimiters). Requests and live
+hashing use `URL.origin`. Diagnostics do not reflect private origins, paths,
+responses, tokens, cookies or injected exceptions. There is no dedicated installed
+Bash/curl skill: flags were checked against installed Bash/coreutils/curl help,
+and Node filesystem/process APIs against installed runtime source.
+
+Mode-required utilities and the installed helper are checked before work. Curl
+is required only for live mode. Missing static source or pattern failures remain
+failed evaluated drills, publish complete failed receipts at absent destinations,
+and prevent every curl request. The five static identities and six-layer receipt
+contract are unchanged. Offline runs have no traffic and a skipped burst; live
+runs retain the CSRF-paired, at-most-15 sequential invalid-login requests, validated
+401/429 counts, pre/post liveness and existing connect/time/body limits. These
+observations remain narrower than deployed multi-layer protection or readiness.
+
+Explicit files override evidence-dir and must be absent paths without trailing
+separators. Files, directories and symlinks (including dangling links), unusable
+parents and missing machinery fail early. Unused evidence-dir is never created.
+New parents and response directories use umask 077; receipts and private files
+are 0600. Existing parent permissions are unchanged. Serialization writes an owned
+same-directory temporary receipt; an independent completeness read precedes
+exclusive `ln -T --` publication. The independent check compares the target and
+every burst field to invocation values, and requires canonical fresh UTC time
+and a bounded duration; valid JSON with missing or altered fields cannot pass.
+This prevents replacing retained/concurrent
+files or links and prevents a concurrent directory from redirecting publication.
+Publication/serialization errors never fall back to direct writes. EXIT/INT/TERM/HUP
+cleanup removes only owned response/staging resources; cleanup failure prevents
+successful exit/summary. No uncatchable-SIGKILL cleanup guarantee is made.
+
+The actual-process DoS fixtures allowlist their environments and tool paths,
+always stub curl and omit private origin/token/cookie data from persisted call
+logs. They cover CLI/cwd/origin validation, unavailable prerequisites, private
+files, failed static/live envelopes, retained evidence, exclusive publication
+races, serialization/preparation failures, concurrent UUID names and catchable
+interruptions. The capacity fixture additionally exercises the real offline
+child within the parent's owned absent destination and rejects its static failure.
+Shared validators, parent runner, dossier and launch orchestrator are unchanged.
+
+Safe inspection (repository root):
+
+```bash
+bash scripts/ops/run-dos-resilience-drill.sh --help
+npm run ops:dos-test
+npm run ops:capacity-alerting-test
+```
+
+A fully offline source inspection with an absent receipt can use
+`bash scripts/ops/run-dos-resilience-drill.sh --dry-run --cwd=. --evidence-file=<absent-path>`.
+Without `--dry-run`, separate operator authorization is still required. No live
+service requests, launch approval or production sign-off were performed here.
+
+Verification and review (2026-10-07):
+
+| Command                                                                   | Actual concise output / result                                                                                                                                |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bash -n scripts/ops/run-dos-resilience-drill.sh`                         | exit 0, no output                                                                                                                                             |
+| `node --check scripts/ops/run-dos-resilience-drill.spec.js`               | exit 0, no output                                                                                                                                             |
+| `node --check scripts/ops/run-capacity-alerting-drill.spec.js`            | exit 0, no output                                                                                                                                             |
+| `npm run ops:dos-test`                                                    | `tests 91`, `pass 91`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:capacity-alerting-test`                                      | `tests 18`, `pass 18`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:templates`                                                   | `ops template check passed`; exit 0                                                                                                                           |
+| `npm run ops:templates-test`                                              | `tests 324`, `pass 324`, `fail 0`; exit 0                                                                                                                     |
+| `npm run ops:readiness-test`                                              | `tests 649`, `pass 649`, `fail 0`; exit 0                                                                                                                     |
+| `npm run ops:launch-readiness-test`                                       | `tests 23`, `pass 23`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:launch-drill-test`                                           | `tests 68`, `pass 68`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:check`                                                       | exit 1 at `ops:audit`: `37 vulnerabilities (9 moderate, 26 high, 2 critical)` and `audit error: critical vulnerabilities detected in production dependencies` |
+| `npm run lint`                                                            | completed all workspaces; final `eslint "{src,test}/**/*.ts"`; exit 0                                                                                         |
+| `npm run typecheck`                                                       | completed shared/client/server checks; `Generated Prisma Client (7.9.1)`; exit 0                                                                              |
+| `npm run build`                                                           | `Compiled successfully in 7.6s`, `Generating static pages using 7 workers (22/22) in 1185ms`, then server `prisma generate && nest build`; exit 0             |
+| Installed Prettier with `--single-quote --check` on changed JS and prompt | `All matched files use Prettier code style!`; exit 0                                                                                                          |
+| `git diff --check`                                                        | exit 0, no output                                                                                                                                             |
+
+Typecheck and build ran sequentially. The initial sandbox process suite failed;
+detailed sandbox execution showed `spawnSync bash EPERM`. Stub-only process
+checks ran with normal subprocess permissions and passed. No live drill ran.
+The aggregate was attempted once and stopped at the critical production audit;
+later aggregate stages were not reached. The listed independent suites ran
+separately. No dependency update or registry retry was made.
+
+Whole-document Prettier checks warn on operations, launch-checklist and
+build-plan; the same warnings were reproduced on their committed baseline
+copies. New documentation content was formatted separately, preserving unrelated
+historical text. No installed shell formatter was used or claimed.
+
+Independent review found one Important issue: syntactically valid partial receipts
+could pass the original completeness read. The fix compares the target and all
+burst values and adds valid-JSON omission/alteration and timestamp regressions.
+The affected DoS and capacity suites were re-run; follow-up review approved the
+fix with no remaining Critical, Important or Minor findings. Phase 12 exit,
+Category 5 operator evidence and launch sign-off remain open.

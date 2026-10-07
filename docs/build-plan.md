@@ -1960,3 +1960,27 @@ Later aggregate stages did not run; affected suites ran independently. Full
 command evidence and execution limits are recorded in `docs/operations.md`
 prompt 268. No dependency change, live exercise, production action or push
 occurred; Phase 12 and prompt 201 operator sign-off remain open.
+
+**Prompt 269 Phase 12K DoS resilience runner hardening (2026-10-07):**
+`scripts/ops/run-dos-resilience-drill.sh` now validates attached/separate options,
+duplicates, cwd, API origin, prerequisites and effective absent output before
+work. Static reads use canonical target cwd; helpers stay installation-anchored.
+Offline mode remains fully traffic-free; the live path retains its existing
+bounded CSRF-paired invalid-login/liveness contract. Private temporary receipts
+are independently checked against invocation target/burst/time values and
+published exclusively with `ln -T`, preserving prior and concurrent evidence.
+Owned response/staging cleanup covers normal failure and catchable interruption.
+
+Actual-process fixtures allowlist environments/tools and stub curl. Final
+`ops:dos-test` output was `tests 91`, `pass 91`, `fail 0`; capacity consumer
+coverage was `tests 18`, `pass 18`, `fail 0`, including the real offline child and
+its static-failure rejection. Templates, template tests (324), readiness (649),
+launch readiness (23), launch/dossier (68), lint, typecheck, production build,
+syntax, changed-JS/prompt formatting and diff checks passed. The aggregate
+`ops:check` stopped at the critical production audit: `37 vulnerabilities
+(9 moderate, 26 high, 2 critical)`; downstream aggregate stages were not reached.
+Sandbox process tests initially reported `spawnSync bash EPERM`; isolated stubs
+passed under normal subprocess permissions. No live requests were authorized or
+performed. Independent review's incomplete-receipt finding was fixed, re-tested
+and approved on follow-up. Full behavior/check evidence is in `docs/operations.md`
+Prompt 269. Phase 12 and Category 5 operator sign-off remain unresolved.

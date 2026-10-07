@@ -706,7 +706,16 @@ handshake and observes invalid-login throttling and liveness only. It cannot
 prove deployed protection across all five layers, constant-time behavior, or
 sustained DoS capacity. Operator inspection and Category 5 sign-off remain
 mandatory. Default child files use `dos-resilience-evidence-<uuid>.json` and
-atomic publication. Safe tests: `npm run ops:dos-test` (39 passed) and
+atomic publication. Prompt 269 requires absent exact destinations, supports
+attached/separate value options and `--cwd`, and retains prior receipts on
+failure/interruption. Relative output resolves against the canonical static-source
+cwd; helpers remain installation-anchored. `--dry-run` is completely offline,
+while default live execution still requires separate operator authorization.
+Runner hardening does not supply Category 5 approval. Prompt 269 verification
+passed 91 DoS tests and 18 capacity tests; its reviewed runner/check record is in
+`docs/operations.md`.
+
+Historical prompt 232 checks: `npm run ops:dos-test` (39 passed) and
 `npm run ops:capacity-alerting-test` (16 passed), with no real traffic. Local
 lint/typecheck/build and offline regressions passed after subprocess permission;
 after explicit user authorization of registry egress, the audit passed its
