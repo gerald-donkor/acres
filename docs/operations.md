@@ -817,11 +817,11 @@ Implemented in Prompt 66:
 
 4. **Top-Level Capacity & Alerting Drill Runner (`scripts/ops/run-capacity-alerting-drill.sh`)**:
    - Unified drill orchestrator executing alert verification, capacity evaluation, and DoS resilience checks.
-   - Emits consolidated JSON audit evidence reports (`backups/capacity-alerting-drill-evidence-<timestamp>.json`).
+   - Emits private, exclusively published JSON reports (`backups/capacity-alerting-drill-evidence-<uuid>.json`); exact destinations must be absent (prompt 270).
 5. **Capacity, Load & Alerting Drill Runbook**:
    - Offline command: `npm run ops:capacity-alerting-drill -- --dry-run` (or `npm run ops:dos-drill -- --dry-run`). Non-dry DoS invocations require separate operator authorization.
    - Offline criteria: alert rules valid and simulated, synthetic capacity SLOs satisfied, and five repository protection assertions passing. Live acceptance still requires operator evidence; the bounded DoS exercise observes login throttling and liveness only.
-   - Evidence: Inspect generated report in `backups/capacity-alerting-drill-evidence-<timestamp>.json`.
+   - Evidence: Inspect the new `backups/capacity-alerting-drill-evidence-<uuid>.json` report, or select an absent path with `--evidence-file`. Target sources/relative paths can use `--cwd`.
 6. **Operations & CI Integration**:
    - Added root package scripts: `npm run ops:capacity-test`, `npm run ops:capacity-drill`, `npm run ops:alert-test`, `npm run ops:alert-drill`, `npm run ops:dos-drill`, `npm run ops:capacity-alerting-drill`.
    - Integrated `npm run ops:capacity-test` and `npm run ops:alert-test` into `npm run ops:check`.
@@ -3691,3 +3691,121 @@ burst values and adds valid-JSON omission/alteration and timestamp regressions.
 The affected DoS and capacity suites were re-run; follow-up review approved the
 fix with no remaining Critical, Important or Minor findings. Phase 12 exit,
 Category 5 operator evidence and launch sign-off remain open.
+
+## Prompt 270 — capacity and alerting runner hardening (2026-10-07)
+
+The parent now validates attached/separate value options, duplicates, blank and
+control-containing inputs, target cwd, origins/endpoints, effective live
+references, telemetry pairing/freshness, installed dependencies and absent
+output selection before children or output creation. Default source cwd is the
+installation repository root; explicit relative cwd resolves from the caller.
+Alert reads use that target's Prometheus files and the DoS child receives its
+canonical cwd. Executable children and validators remain installation-anchored.
+An explicit evidence file overrides the directory without creating the unused
+path. Default names use `capacity-alerting-drill-evidence-<uuid>.json`.
+
+Child stdout/stderr and DoS receipts live in private owned directories. Capacity
+uses `--json --no-save`, avoiding a second benchmark artifact. Every child exit
+and bounded JSON receipt is checked independently. Eleven unique alert
+rule/simulation pairs and successful checks, 429 isolation, current canonical
+capacity timestamps, expected mode/hash, complete finite distributions,
+request totals and recomputed SLOs must agree. Database evidence is checked
+before live traffic and again against the completed run; the existing
+60-second scrape tolerance is retained. Synthetic DB percentiles derive only
+from checked synthetic distributions. DoS validation retains the child's
+unchanged bounded CSRF-paired login/liveness contract.
+
+Receipt sections explicitly project allowed fields. Unknown child fields,
+raw annotations/expressions, messages, stderr, paths and responses are omitted;
+invalid sections receive fixed failed shapes/messages. Synthetic receipts have
+null targets and no production references. Stubbed live receipts bind benchmark
+`href` and API `origin` separately. Explicit incompatible production environment
+or invalid live references fail preflight; scaffold references remain metadata,
+not authorization. Non-dry execution without a benchmark retains live DoS
+traffic and fails for missing live database evidence; it never qualifies
+Category 5. No real live exercise was performed or authorized here.
+
+New parents are private without changing existing permissions. Complete JSON
+is written to an owned same-directory 0600 staging file, independently checked
+for completeness, invocation values, verdict/exit consistency and the existing
+consumer success contract, then published atomically and exclusively with
+`ln -T --`. Existing and concurrently inserted files/directories/symlinks survive.
+Evaluated failures can publish controlled failed receipts; serialization and
+publication failures cannot print a passing summary. Owned staging/private
+resources are removed before the final summary. Cleanup failure returns nonzero.
+Bash monitor mode gives each background child its own process group; `wait -f`
+retains ownership until termination, including stopped jobs. Catchable
+interruption stops that active owned group and removes private resources.
+Descendants that deliberately detach into other groups and SIGKILL cleanup are
+not guaranteed. The parent also supplies private `TMPDIR` to its children.
+
+Actual-process tests allowlist tools/environment and use absent destinations.
+Fake live producers cannot call real network tools. Real offline children run
+with HTTP(S) requests forbidden and their receipt passes readiness and the
+Stage 6 dossier consumer. Missing alert/static sources fail safely. The existing
+readiness producer fixture needed a narrow compatibility update beyond the
+prompt's primary file list: copy the validator dependency closure, retain real
+capacity module exports in its CLI stub, and use an explicit PATH. No readiness
+validator or child implementation was changed or weakened.
+
+Safe inspection from the repository root:
+
+```bash
+bash scripts/ops/run-capacity-alerting-drill.sh --help
+npm run ops:capacity-alerting-test
+```
+
+An offline evaluation can use
+`bash scripts/ops/run-capacity-alerting-drill.sh --dry-run --cwd=. --evidence-file=<absent-path>`.
+Every non-dry invocation still requires separate operator authorization. Category
+5 adoption, alert routing/delivery, sustained production capacity and Phase 12
+operator sign-off remain unresolved.
+
+Verification:
+
+| Command                                                   | Actual concise output / result                                                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bash -n scripts/ops/run-capacity-alerting-drill.sh`      | exit 0, no output                                                                                                                                             |
+| `node --check` on both changed specs                      | exit 0, no output                                                                                                                                             |
+| `npm run ops:capacity-alerting-test`                      | `tests 143`, `pass 143`, `fail 0`; exit 0                                                                                                                     |
+| `npm run ops:capacity-test`                               | `tests 15`, `pass 15`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:alert-test`                                  | `tests 23`, `pass 23`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:dos-test`                                    | `tests 91`, `pass 91`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:templates`                                   | `ops template check passed`; exit 0                                                                                                                           |
+| `npm run ops:templates-test`                              | `tests 324`, `pass 324`, `fail 0`; exit 0                                                                                                                     |
+| `npm run ops:readiness-test`                              | `tests 649`, `pass 649`, `fail 0`; exit 0                                                                                                                     |
+| Focused final readiness producer fixture                  | `tests 1`, `pass 1`, `fail 0`; exit 0                                                                                                                         |
+| `npm run ops:launch-readiness-test`                       | `tests 23`, `pass 23`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:launch-drill-test`                           | `tests 68`, `pass 68`, `fail 0`; exit 0                                                                                                                       |
+| `npm run ops:check`                                       | exit 1 at `ops:audit`: `37 vulnerabilities (9 moderate, 26 high, 2 critical)` and `audit error: critical vulnerabilities detected in production dependencies` |
+| `npm run lint`                                            | all workspaces completed; final `eslint "{src,test}/**/*.ts"`; exit 0                                                                                         |
+| `npm run typecheck`                                       | shared/client/server checks completed; `Generated Prisma Client (7.9.1)`; exit 0                                                                              |
+| `npm run build`                                           | `Compiled successfully in 6.7s`, `Generating static pages using 7 workers (22/22) in 1395ms`, server `prisma generate && nest build`; exit 0                  |
+| Prettier with `--single-quote --check` on new spec/prompt | `All matched files use Prettier code style!`; exit 0                                                                                                          |
+| `git diff --check`                                        | exit 0, no output                                                                                                                                             |
+
+Typecheck/build ran sequentially. Baseline sandbox tests reported
+`ERR_TEST_FAILURE`; detailed execution identified `spawnSync bash EPERM`.
+Stub/offline suites passed with normal subprocess permissions. The sandboxed
+build exited 1 with `Could not parse output from TypeScript's --showConfig.`;
+the normal-permission build passed. Initial fixture integration failures were
+corrected before final verification. The aggregate stopped at the production
+audit; later aggregate gates did not run, and affected suites ran independently.
+No dependency change, live request, deployment, launch approval or push occurred.
+
+The existing full readiness spec still reports `Code style issues found in the
+above file`; the same warning reproduces on its committed baseline. Its edited
+section and inline runner JavaScript were formatted separately, as were the new
+documentation sections. No dedicated Bash/coreutils skill or shell formatter
+is installed; APIs were verified against installed help, and no shell formatting
+pass is claimed.
+
+Independent review identified monitor-mode `wait` returning on a stopped job.
+Installed Bash help and an owned SIGSTOP reproduction verified status `147`
+before termination. Main/cleanup waits now use `wait -f`; the stopped-child
+interruption regression and helper-preflight checks passed in a focused run
+(`tests 10`, `pass 10`, `fail 0`).
+
+Follow-up independent review passed the corrected implementation with no
+unresolved critical, important or minor findings. The reviewer independently
+ran selected offline/stubbed tests (15/15) and final export/stop regressions (5/5).

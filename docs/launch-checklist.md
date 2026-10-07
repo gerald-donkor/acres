@@ -579,9 +579,23 @@ operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 5. SLOs, Alerting & Capacity (`slo_and_alerting`)
 
-- Drill/verify: `bash scripts/ops/run-capacity-alerting-drill.sh`,
+**Prompt 270 capacity parent usage/publication (2026-10-07):** Offline preflight
+uses `--dry-run`; `--cwd` selects source reads and relative paths while children
+remain installation-anchored. An explicit evidence file must be absent and
+overrides the directory; new UUID receipts are private, complete and published
+atomically without replacing existing/concurrent files, directories or links.
+The launch orchestrator's owned `capacity-alerting-drill-evidence-receipt.json`
+name remains supported. Child exits and complete alert/capacity/database/DoS
+contracts are checked before success. Non-dry default execution retains live DoS
+traffic and fails for missing live database evidence. Every non-dry exercise
+still requires separate operator authorization. Synthetic receipts and scaffold
+references do not supply Category 5 acceptance or sign-off. Actual-process parent
+coverage passed 143/143; full command evidence and the unresolved production
+dependency audit are recorded in `docs/operations.md` Prompt 270.
+
+- Offline drill/verify: `bash scripts/ops/run-capacity-alerting-drill.sh --dry-run`,
   `node scripts/ops/verify-alert-rules.js`, `node scripts/ops/verify-capacity-load.js --synthetic`
-- Evidence: `backups/capacity-alerting-drill-evidence-<timestamp>.json`
+- Evidence: `backups/capacity-alerting-drill-evidence-<uuid>.json` or an absent exact `--evidence-file` destination
 - Accept: availability target ≥ 99.9% (error rate < 0.1%), HTTP p95 latency ceiling ≤ 500ms,
   capacity target ≥ 100 RPS, database connection pool acquisition p95 latency ceiling ≤ 50ms,
   database query execution p95 latency ceiling ≤ 100ms, ≥ 1 alert recipient,

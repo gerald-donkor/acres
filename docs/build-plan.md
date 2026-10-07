@@ -1984,3 +1984,38 @@ passed under normal subprocess permissions. No live requests were authorized or
 performed. Independent review's incomplete-receipt finding was fixed, re-tested
 and approved on follow-up. Full behavior/check evidence is in `docs/operations.md`
 Prompt 269. Phase 12 and Category 5 operator sign-off remain unresolved.
+
+**Prompt 270 Phase 12K capacity and alerting runner hardening (2026-10-07):**
+The parent validates attached/separate options, canonical target cwd, safe
+origins/endpoints, live references, telemetry pairing/freshness, helper exports
+and effective absent output before work. Children remain installation-anchored
+and use target sources. Capacity uses `--no-save`; private bounded child data
+and actual exits must satisfy complete consumer contracts before passing.
+Explicit checked-field projection suppresses private/unknown child content.
+UUID defaults and independently checked private receipts publish exclusively
+with `ln -T`, preserving retained and concurrent destinations. Catchable cleanup
+owns active groups and waits for termination with `wait -f`, including stopped
+children. Default mixed execution remains failed evidence; synthetic receipts
+cannot approve Category 5.
+
+Actual checks: capacity parent `tests 143`, `pass 143`, `fail 0`; capacity 15/15;
+alerts 23/23; DoS 91/91; templates 324/324; readiness 649/649 plus final producer
+fixture 1/1; launch readiness 23/23; launch/dossier 68/68. Operational templates,
+root lint/typecheck/build, Bash/Node syntax, new-JS/prompt formatting and diff
+checks passed. Existing readiness whole-file formatting warnings reproduce on
+the committed baseline; its edited section and new documentation were formatted
+separately. The readiness producer fixture needed the validator dependency
+closure and preserved module exports; no validator or child was weakened.
+Independent review's stopped-job wait finding was verified/fixed; focused
+fixes passed 10/10 and follow-up review has no unresolved findings.
+
+Full `ops:check` exited 1 at the existing production dependency audit:
+`37 vulnerabilities (9 moderate, 26 high, 2 critical)`;
+`audit error: critical vulnerabilities detected in production dependencies`.
+Later aggregate stages did not run; affected suites ran independently. Sandbox
+nested process tests reported `spawnSync bash EPERM`; stub/offline tests passed
+under normal permissions. The sandboxed build's TypeScript `--showConfig`
+parse failure was followed by a successful normal-permission build. Full
+behavior/check evidence is in `docs/operations.md` Prompt 270. No dependency
+change, live traffic, deployment, launch approval or push occurred. Phase 12,
+prompt 201 and Category 5 operator sign-off remain open.

@@ -4609,6 +4609,18 @@ test('actual capacity parent output separates rehearsal from bound live-shaped a
   ]) {
     fs.copyFileSync(path.join(__dirname, file), path.join(ops, file));
   }
+  for (const file of [
+    'check-launch-readiness.js',
+    'verify-volume-encryption.js',
+    'check-release-images.js',
+    'run-static-integrity-checks.js',
+  ]) {
+    fs.copyFileSync(path.join(__dirname, file), path.join(ops, file));
+  }
+  fs.copyFileSync(
+    path.join(ops, 'verify-capacity-load.js'),
+    path.join(ops, 'capacity-engine.js'),
+  );
   // Resolve the installed YAML parser without installing or inheriting service credentials.
   fs.symlinkSync(
     path.resolve(__dirname, '../../node_modules'),
@@ -4657,7 +4669,7 @@ test('actual capacity parent output separates rehearsal from bound live-shaped a
       file,
     ],
     {
-      env: { PATH: process.env.PATH, LANG: 'C.UTF-8', TMPDIR: dir },
+      env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', TMPDIR: dir },
       encoding: 'utf8',
       timeout: 10000,
     },
@@ -4704,8 +4716,9 @@ test('actual capacity parent output separates rehearsal from bound live-shaped a
   const liveCapacity = structuredClone(validCapacityAlertingReport.capacity);
   fs.writeFileSync(
     path.join(ops, 'verify-capacity-load.js'),
-    `const e=${JSON.stringify(liveCapacity)};
-    e.timestamp=new Date().toISOString();process.stdout.write(JSON.stringify(e));`,
+    `module.exports=require('./capacity-engine');
+    if(require.main===module) {const e=${JSON.stringify(liveCapacity)};
+    e.timestamp=new Date().toISOString();process.stdout.write(JSON.stringify(e));}`,
   );
   const producedPath = path.join(dir, 'actual-parent-live.json');
   const liveResult = spawnSync(
@@ -4722,7 +4735,7 @@ test('actual capacity parent output separates rehearsal from bound live-shaped a
       producedPath,
     ],
     {
-      env: { PATH: process.env.PATH, LANG: 'C.UTF-8', TMPDIR: dir },
+      env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', TMPDIR: dir },
       encoding: 'utf8',
       timeout: 10000,
     },
