@@ -12,9 +12,9 @@
  *
  * Supports:
  * - Deterministic synthetic simulation mode (default / offline / CI testable);
- * - Live HTTP benchmarking mode (--target-url, --concurrency, --duration-sec, --rps);
+ * - Live HTTP benchmarking mode (--target-url, --concurrency, --duration-sec);
  * - Full statistical distribution calculations (min, p50, p90, p95, p99, max, mean, stddev);
- * - Structured audit evidence emission to backups/capacity-load-report-<timestamp>.json.
+ * - Structured audit evidence emission to backups/capacity-load-report-<uuid>.json.
  */
 
 const fs = require('fs');
@@ -22,6 +22,9 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+const crypto = require('node:crypto');
+const { isDeepStrictEqual } = require('node:util');
+const { safeUrl, targetId } = require('./launch-target-evidence');
 
 const DEFAULT_SLO_TARGETS = {
   availabilityTargetPercent: 99.9,
@@ -32,6 +35,242 @@ const DEFAULT_SLO_TARGETS = {
 };
 
 const DEFAULT_BACKUPS_DIR = path.resolve(__dirname, '../../backups');
+
+const HELP = `Usage: scripts/ops/verify-capacity-load.js [options]
+  --synthetic                Offline deterministic evaluation (default)
+  --target-url <url>          HTTP(S), no credentials, query, fragment or controls
+  --duration-sec <integer>    1–300 seconds (default 5)
+  --concurrency <integer>     1–100 workers (default 10)
+  --output <file>             Absent exact destination, relative to caller cwd
+  --json                     One report on stdout, without private paths
+  --no-save                  Evaluate without filesystem work
+  --allow-failure            Override only an evaluated SLO failure
+  --help, -h                 Standalone help, without side effects
+Value options accept separate or attached = values once. Attached dash-leading paths work.
+Unknown/duplicate/missing/blank/control values and partial integers reject.
+Synthetic/target and output/no-save conflict. No --rps pacing is implemented.
+Standalone saving defaults to private UUID reports under installed backups/.
+Bounds are engineering limits, not production capacity measurements.
+Live benchmarking requires separate operator authorization. Synthetic results cannot approve launch.
+`;
+
+function valueString(value) {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    !/[\x00-\x1f\x7f-\x9f]/.test(value)
+  );
+}
+
+function boundedInteger(value, maximum) {
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum)
+    throw new Error('Invalid capacity invocation');
+  return value;
+}
+
+function validateOptions(options) {
+  const result = {
+    ...options,
+    durationSeconds: boundedInteger(
+      options.durationSeconds === undefined ? 5 : options.durationSeconds,
+      300,
+    ),
+    concurrency: boundedInteger(
+      options.concurrency === undefined ? 10 : options.concurrency,
+      100,
+    ),
+  };
+  if (options.targetUrl !== undefined) {
+    if (
+      !valueString(options.targetUrl) ||
+      options.targetUrl !== options.targetUrl.trim() ||
+      /[?#]/.test(options.targetUrl) ||
+      options.synthetic === true
+    )
+      throw new Error('Invalid capacity invocation');
+    result.targetUrl = safeUrl(options.targetUrl);
+  }
+  if (options.outputFile !== undefined) {
+    if (
+      !options.saveReport ||
+      !valueString(options.outputFile) ||
+      options.outputFile.endsWith(path.sep)
+    )
+      throw new Error('Invalid capacity invocation');
+  }
+  return result;
+}
+
+function parseArgs(args) {
+  if (args.length === 1 && ['--help', '-h'].includes(args[0]))
+    return { help: true };
+  const booleans = new Map([
+    ['--synthetic', 'synthetic'],
+    ['--json', 'jsonOutput'],
+    ['--no-save', 'noSave'],
+    ['--allow-failure', 'allowFailure'],
+  ]);
+  const values = new Map([
+    ['--target-url', 'targetUrl'],
+    ['--duration-sec', 'durationSeconds'],
+    ['--concurrency', 'concurrency'],
+    ['--output', 'outputFile'],
+  ]);
+  const seen = new Set(),
+    result = { saveReport: true };
+  for (let i = 0; i < args.length; i++) {
+    const at = args[i].indexOf('='),
+      key = at < 0 ? args[i] : args[i].slice(0, at);
+    if (seen.has(key)) throw new Error('Invalid capacity invocation');
+    seen.add(key);
+    if (booleans.has(key) && at < 0) {
+      result[booleans.get(key)] = true;
+    } else if (values.has(key)) {
+      const value = at < 0 ? args[++i] : args[i].slice(at + 1);
+      if (!valueString(value) || (at < 0 && value.startsWith('-')))
+        throw new Error('Invalid capacity invocation');
+      const name = values.get(key);
+      if (name === 'durationSeconds' || name === 'concurrency') {
+        if (!/^[0-9]+$/.test(value))
+          throw new Error('Invalid capacity invocation');
+        result[name] = Number(value);
+      } else result[name] = value;
+    } else throw new Error('Invalid capacity invocation');
+  }
+  result.saveReport = !result.noSave;
+  return validateOptions(result);
+}
+
+function absent(file, io) {
+  try {
+    io.lstatSync(file);
+  } catch (error) {
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+  throw new Error('Report destination unavailable');
+}
+
+// Inspect every existing ancestor without following symlinks. This is advisory;
+// exclusive open/link and boundary checks still enforce operation failures.
+function parents(file, io, create = false) {
+  const parent = path.dirname(file),
+    chain = [];
+  for (let current = parent; ; current = path.dirname(current)) {
+    chain.unshift(current);
+    if (current === path.dirname(current)) break;
+  }
+  let nearest;
+  for (const current of chain) {
+    let stat;
+    try {
+      stat = io.lstatSync(current);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (!stat && create) {
+      io.mkdirSync(current, { mode: 0o700 });
+      stat = io.lstatSync(current);
+    }
+    if (stat) {
+      if (!stat.isDirectory() || stat.isSymbolicLink())
+        throw new Error('Report parent unavailable');
+      io.accessSync(current, io.constants.X_OK);
+      nearest = current;
+    }
+  }
+  io.accessSync(nearest, io.constants.W_OK | io.constants.X_OK);
+}
+
+function preflightDestination(file, io) {
+  if (!valueString(file) || file.endsWith(path.sep))
+    throw new Error('Report destination unavailable');
+  file = path.resolve(file);
+  parents(file, io);
+  absent(file, io);
+  return file;
+}
+
+function publishReport(report, file, io, uuid, serialize) {
+  let fd,
+    owned = false,
+    stage,
+    identity;
+  const cleanup = () => {
+    let failed = false;
+    if (fd !== undefined) {
+      try {
+        io.closeSync(fd);
+        fd = undefined;
+      } catch {
+        failed = true;
+      }
+    }
+    if (owned) {
+      try {
+        const stat = io.lstatSync(stage);
+        if (
+          identity &&
+          (stat.dev !== identity.dev ||
+            stat.ino !== identity.ino ||
+            !stat.isFile())
+        )
+          throw new Error('Staging ownership changed');
+        io.unlinkSync(stage);
+        owned = false;
+      } catch {
+        failed = true;
+      }
+    }
+    return !failed;
+  };
+  try {
+    parents(file, io, true);
+    absent(file, io);
+    stage = path.join(path.dirname(file), `.capacity-report-${uuid()}.tmp`);
+    fd = io.openSync(stage, 'wx', 0o600);
+    owned = true; // Ownership precedes write, fstat and close failures.
+    identity = io.fstatSync(fd);
+    const serialized = serialize(report, null, 2);
+    if (
+      typeof serialized !== 'string' ||
+      !isDeepStrictEqual(JSON.parse(serialized), report)
+    )
+      throw new Error('Report serialization failed');
+    io.writeFileSync(fd, serialized, 'utf8');
+    io.closeSync(fd);
+    fd = undefined;
+    parents(file, io);
+    const stat = io.lstatSync(stage);
+    if (
+      !stat.isFile() ||
+      stat.dev !== identity.dev ||
+      stat.ino !== identity.ino
+    )
+      throw new Error('Staging ownership changed');
+    const readback = io.readFileSync(stage, 'utf8');
+    if (
+      readback !== serialized ||
+      !isDeepStrictEqual(JSON.parse(readback), report)
+    )
+      throw new Error('Report verification failed');
+    parents(file, io);
+    absent(file, io);
+    io.linkSync(stage, file); // Atomic, exclusive, same-filesystem publication.
+    if (!cleanup()) throw new Error('Report cleanup failed');
+  } catch {
+    cleanup();
+    throw new Error('Report publication failed');
+  }
+}
+
+function writeOutput(stream, value) {
+  return new Promise((resolve, reject) => {
+    stream.write(value, (error) =>
+      error ? reject(new Error('Capacity output failed')) : resolve(),
+    );
+  });
+}
 
 /**
  * Computes exact statistical percentiles from a sorted numeric array.
@@ -96,13 +335,21 @@ function calculateLatencySummary(latenciesMs) {
 /**
  * Computes full statistical summary across request latencies.
  */
-function calculateDistribution(latenciesMs, totalRequests, successfulRequests, durationSeconds, databaseLatency = null) {
+function calculateDistribution(
+  latenciesMs,
+  totalRequests,
+  successfulRequests,
+  durationSeconds,
+  databaseLatency = null,
+) {
   const count = latenciesMs.length;
   const total = totalRequests || count;
-  const success = typeof successfulRequests === 'number' ? successfulRequests : count;
+  const success =
+    typeof successfulRequests === 'number' ? successfulRequests : count;
   const failed = total - success;
   const availabilityPercent = total > 0 ? (success / total) * 100 : 0;
-  const safeDuration = durationSeconds && durationSeconds > 0 ? durationSeconds : 1;
+  const safeDuration =
+    durationSeconds && durationSeconds > 0 ? durationSeconds : 1;
   const throughputRps = total / safeDuration;
 
   const result = {
@@ -127,8 +374,7 @@ function calculateDistribution(latenciesMs, totalRequests, successfulRequests, d
 function evaluateSloCompliance(distribution, targets = DEFAULT_SLO_TARGETS) {
   const availabilityPassed =
     distribution.availabilityPercent >= targets.availabilityTargetPercent;
-  const latencyPassed =
-    distribution.latencyMs.p95 <= targets.maxP95LatencyMs;
+  const latencyPassed = distribution.latencyMs.p95 <= targets.maxP95LatencyMs;
   const throughputPassed =
     distribution.throughputRps >= targets.capacityTargetRps;
 
@@ -161,38 +407,62 @@ function evaluateSloCompliance(distribution, targets = DEFAULT_SLO_TARGETS) {
     );
   }
   if (!monotonicLatency) {
-    violations.push('Statistical distribution violated monotonicity invariant (min <= p50 <= p90 <= p95 <= p99 <= max)');
+    violations.push(
+      'Statistical distribution violated monotonicity invariant (min <= p50 <= p90 <= p95 <= p99 <= max)',
+    );
   }
 
   if (distribution.databaseLatency) {
     const acq = distribution.databaseLatency.acquisitionLatencyMs;
     const qry = distribution.databaseLatency.queryLatencyMs;
 
-    if (acq && typeof acq.p95 === 'number' && typeof targets.maxDatabaseAcquisitionP95LatencyMs === 'number') {
-      databaseAcquisitionLatencyPassed = acq.p95 <= targets.maxDatabaseAcquisitionP95LatencyMs;
+    if (
+      acq &&
+      typeof acq.p95 === 'number' &&
+      typeof targets.maxDatabaseAcquisitionP95LatencyMs === 'number'
+    ) {
+      databaseAcquisitionLatencyPassed =
+        acq.p95 <= targets.maxDatabaseAcquisitionP95LatencyMs;
       if (!databaseAcquisitionLatencyPassed) {
         violations.push(
           `Database pool acquisition p95 latency ${acq.p95}ms breached ceiling ${targets.maxDatabaseAcquisitionP95LatencyMs}ms`,
         );
       }
       monotonicDbAcquisition =
-        acq.min <= acq.p50 && acq.p50 <= acq.p90 && acq.p90 <= acq.p95 && acq.p95 <= acq.p99 && acq.p99 <= acq.max;
+        acq.min <= acq.p50 &&
+        acq.p50 <= acq.p90 &&
+        acq.p90 <= acq.p95 &&
+        acq.p95 <= acq.p99 &&
+        acq.p99 <= acq.max;
       if (!monotonicDbAcquisition) {
-        violations.push('Database pool acquisition latency violated monotonicity invariant');
+        violations.push(
+          'Database pool acquisition latency violated monotonicity invariant',
+        );
       }
     }
 
-    if (qry && typeof qry.p95 === 'number' && typeof targets.maxDatabaseQueryP95LatencyMs === 'number') {
-      databaseQueryLatencyPassed = qry.p95 <= targets.maxDatabaseQueryP95LatencyMs;
+    if (
+      qry &&
+      typeof qry.p95 === 'number' &&
+      typeof targets.maxDatabaseQueryP95LatencyMs === 'number'
+    ) {
+      databaseQueryLatencyPassed =
+        qry.p95 <= targets.maxDatabaseQueryP95LatencyMs;
       if (!databaseQueryLatencyPassed) {
         violations.push(
           `Database SQL query execution p95 latency ${qry.p95}ms breached ceiling ${targets.maxDatabaseQueryP95LatencyMs}ms`,
         );
       }
       monotonicDbQuery =
-        qry.min <= qry.p50 && qry.p50 <= qry.p90 && qry.p90 <= qry.p95 && qry.p95 <= qry.p99 && qry.p99 <= qry.max;
+        qry.min <= qry.p50 &&
+        qry.p50 <= qry.p90 &&
+        qry.p90 <= qry.p95 &&
+        qry.p95 <= qry.p99 &&
+        qry.p99 <= qry.max;
       if (!monotonicDbQuery) {
-        violations.push('Database SQL query execution latency violated monotonicity invariant');
+        violations.push(
+          'Database SQL query execution latency violated monotonicity invariant',
+        );
       }
     }
   }
@@ -245,7 +515,8 @@ function generateSyntheticDatabaseLatencies(options = {}, rng) {
   const acqBaseMs = options.baseDatabaseAcquisitionLatencyMs || 0.45;
   const queryBaseMs = options.baseDatabaseQueryLatencyMs || 7.5;
   const spikeMultiplier = options.spikeMultiplier || 1.0;
-  const acqSpikeMultiplier = options.acquisitionSpikeMultiplier || spikeMultiplier;
+  const acqSpikeMultiplier =
+    options.acquisitionSpikeMultiplier || spikeMultiplier;
   const querySpikeMultiplier = options.querySpikeMultiplier || spikeMultiplier;
 
   const acqLatencies = [];
@@ -254,14 +525,21 @@ function generateSyntheticDatabaseLatencies(options = {}, rng) {
   for (let i = 0; i < queryCount; i++) {
     const u1 = Math.max(1e-6, prng());
     const u2 = prng();
-    const boxMuller = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+    const boxMuller =
+      Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
 
     const acqLogFactor = Math.exp(0.3 * boxMuller);
-    const acqLatency = Math.max(0.05, (acqBaseMs * acqLogFactor + (prng() * 0.15)) * acqSpikeMultiplier);
+    const acqLatency = Math.max(
+      0.05,
+      (acqBaseMs * acqLogFactor + prng() * 0.15) * acqSpikeMultiplier,
+    );
     acqLatencies.push(acqLatency);
 
     const queryLogFactor = Math.exp(0.4 * boxMuller);
-    const queryLatency = Math.max(0.5, (queryBaseMs * queryLogFactor + (prng() * 2.0)) * querySpikeMultiplier);
+    const queryLatency = Math.max(
+      0.5,
+      (queryBaseMs * queryLogFactor + prng() * 2.0) * querySpikeMultiplier,
+    );
     queryLatencies.push(queryLatency);
   }
 
@@ -278,7 +556,8 @@ function generateSyntheticDatabaseLatencies(options = {}, rng) {
 function generateSyntheticWorkload(options = {}) {
   const requestCount = options.requestCount || 1000;
   const durationSeconds = options.durationSeconds || 5;
-  const errorRate = typeof options.errorRate === 'number' ? options.errorRate : 0.0;
+  const errorRate =
+    typeof options.errorRate === 'number' ? options.errorRate : 0.0;
   const baseLatencyMs = options.baseLatencyMs || 28;
   const spikeMultiplier = options.spikeMultiplier || 1.0;
   const seed = options.seed || 42;
@@ -296,26 +575,42 @@ function generateSyntheticWorkload(options = {}) {
     // Generate realistic right-skewed latency distribution
     const u1 = Math.max(1e-6, rng());
     const u2 = rng();
-    const boxMuller = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+    const boxMuller =
+      Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
     // Log-normal shape: exp(mu + sigma * normal)
     const logNormalFactor = Math.exp(0.4 * boxMuller);
-    const latency = (baseLatencyMs * logNormalFactor + (rng() * 10)) * spikeMultiplier;
+    const latency =
+      (baseLatencyMs * logNormalFactor + rng() * 10) * spikeMultiplier;
     latencies.push(Math.max(1.0, latency));
   }
 
   const databaseLatency = generateSyntheticDatabaseLatencies(options, rng);
-  return calculateDistribution(latencies, requestCount, successful, durationSeconds, databaseLatency);
+  return calculateDistribution(
+    latencies,
+    requestCount,
+    successful,
+    durationSeconds,
+    databaseLatency,
+  );
 }
 
 /**
  * Executes a live HTTP/HTTPS load test against a target URL.
  */
-async function runLiveBenchmark(options) {
+async function runLiveBenchmark(options = {}) {
+  options = validateOptions(options);
+  if (!options.targetUrl) throw new Error('Invalid capacity invocation');
+  return runValidatedLiveBenchmark(options);
+}
+
+async function runValidatedLiveBenchmark(options) {
   const targetUrl = options.targetUrl;
-  const concurrency = options.concurrency || 10;
-  const durationSeconds = options.durationSeconds || 5;
+  const concurrency = options.concurrency;
+  const durationSeconds = options.durationSeconds;
   const method = options.method || 'GET';
-  const headers = options.headers || { 'User-Agent': 'AcresCapacityLoadTester/1.0' };
+  const headers = options.headers || {
+    'User-Agent': 'AcresCapacityLoadTester/1.0',
+  };
 
   const parsedUrl = new URL(targetUrl);
   if (!parsedUrl.pathname || parsedUrl.pathname === '/') {
@@ -390,108 +685,115 @@ async function runLiveBenchmark(options) {
 /**
  * Top-level evaluation function combining synthetic or live run with SLO verification.
  */
-async function evaluateCapacity(options = {}) {
-  const isSynthetic = !options.targetUrl || options.synthetic === true;
-  const targets = {
-    availabilityTargetPercent:
-      options.availabilityTargetPercent || DEFAULT_SLO_TARGETS.availabilityTargetPercent,
-    maxP95LatencyMs:
-      options.maxP95LatencyMs || DEFAULT_SLO_TARGETS.maxP95LatencyMs,
-    capacityTargetRps:
-      options.capacityTargetRps || DEFAULT_SLO_TARGETS.capacityTargetRps,
-    maxDatabaseAcquisitionP95LatencyMs:
-      options.maxDatabaseAcquisitionP95LatencyMs || DEFAULT_SLO_TARGETS.maxDatabaseAcquisitionP95LatencyMs,
-    maxDatabaseQueryP95LatencyMs:
-      options.maxDatabaseQueryP95LatencyMs || DEFAULT_SLO_TARGETS.maxDatabaseQueryP95LatencyMs,
-  };
+async function evaluateCapacity(options = {}, dependencies = {}) {
+  try {
+    options = validateOptions(options);
+    const io = dependencies.fs || fs;
+    const uuid = dependencies.randomUUID || crypto.randomUUID;
+    const destination = options.saveReport
+      ? preflightDestination(
+          options.outputFile ||
+            path.join(
+              options.backupsDir || DEFAULT_BACKUPS_DIR,
+              `capacity-load-report-${uuid()}.json`,
+            ),
+          io,
+        )
+      : null;
+    const isSynthetic = !options.targetUrl || options.synthetic === true;
+    const targets = {
+      availabilityTargetPercent:
+        options.availabilityTargetPercent ||
+        DEFAULT_SLO_TARGETS.availabilityTargetPercent,
+      maxP95LatencyMs:
+        options.maxP95LatencyMs || DEFAULT_SLO_TARGETS.maxP95LatencyMs,
+      capacityTargetRps:
+        options.capacityTargetRps || DEFAULT_SLO_TARGETS.capacityTargetRps,
+      maxDatabaseAcquisitionP95LatencyMs:
+        options.maxDatabaseAcquisitionP95LatencyMs ||
+        DEFAULT_SLO_TARGETS.maxDatabaseAcquisitionP95LatencyMs,
+      maxDatabaseQueryP95LatencyMs:
+        options.maxDatabaseQueryP95LatencyMs ||
+        DEFAULT_SLO_TARGETS.maxDatabaseQueryP95LatencyMs,
+    };
 
-  let distribution;
-  if (isSynthetic) {
-    distribution = generateSyntheticWorkload({
-      ...options,
-      requestCount: options.requestCount || 1000,
-      durationSeconds: options.durationSeconds || 5,
-      errorRate: options.errorRate || 0.0,
-      baseLatencyMs: options.baseLatencyMs || 28,
-      spikeMultiplier: options.spikeMultiplier || 1.0,
-      seed: options.seed || 42,
-    });
-  } else {
-    distribution = await runLiveBenchmark(options);
-  }
-
-  const compliance = evaluateSloCompliance(distribution, targets);
-
-  const report = {
-    timestamp: new Date().toISOString(),
-    mode: isSynthetic ? 'synthetic' : 'live',
-    targetUrl: options.targetUrl
-      ? require('./launch-target-evidence').targetId(new URL(options.targetUrl).href)
-      : 'synthetic://in-process-evaluation',
-    targets,
-    distribution,
-    compliance,
-  };
-
-  if (options.saveReport) {
-    const backupsDir = options.backupsDir || DEFAULT_BACKUPS_DIR;
-    if (!fs.existsSync(backupsDir)) {
-      fs.mkdirSync(backupsDir, { recursive: true });
+    let distribution;
+    if (isSynthetic) {
+      distribution = (
+        dependencies.generateSyntheticWorkload || generateSyntheticWorkload
+      )({
+        ...options,
+        requestCount: options.requestCount || 1000,
+        durationSeconds: options.durationSeconds || 5,
+        errorRate: options.errorRate || 0.0,
+        baseLatencyMs: options.baseLatencyMs || 28,
+        spikeMultiplier: options.spikeMultiplier || 1.0,
+        seed: options.seed || 42,
+      });
+    } else {
+      distribution = await (
+        dependencies.runLiveBenchmark || runValidatedLiveBenchmark
+      )(options);
     }
-    const filename = `capacity-load-report-${Date.now()}.json`;
-    const reportPath = path.join(backupsDir, filename);
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
-    report.reportPath = reportPath;
-  }
 
-  return report;
+    const compliance = evaluateSloCompliance(distribution, targets);
+
+    const report = {
+      timestamp: new Date().toISOString(),
+      mode: isSynthetic ? 'synthetic' : 'live',
+      targetUrl: options.targetUrl
+        ? targetId(options.targetUrl)
+        : 'synthetic://in-process-evaluation',
+      targets,
+      distribution,
+      compliance,
+    };
+
+    if (destination) {
+      publishReport(
+        report,
+        destination,
+        io,
+        uuid,
+        dependencies.serialize || JSON.stringify,
+      );
+      report.reportPath = destination;
+    }
+    return report;
+  } catch {
+    throw new Error('Capacity evaluation or report publication failed');
+  }
 }
 
-async function runCli() {
-  const args = process.argv.slice(2);
-  let synthetic = true;
-  let targetUrl;
-  let durationSec = 5;
-  let concurrency = 10;
-  let jsonOutput = false;
-  let saveReport = true;
-  let allowFailure = false;
-
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--synthetic') {
-      synthetic = true;
-    } else if (args[i] === '--target-url' && args[i + 1]) {
-      targetUrl = args[++i];
-      synthetic = false;
-    } else if (args[i] === '--duration-sec' && args[i + 1]) {
-      durationSec = parseInt(args[++i], 10);
-    } else if (args[i] === '--concurrency' && args[i + 1]) {
-      concurrency = parseInt(args[++i], 10);
-    } else if (args[i] === '--json') {
-      jsonOutput = true;
-    } else if (args[i] === '--no-save') {
-      saveReport = false;
-    } else if (args[i] === '--allow-failure') {
-      allowFailure = true;
-    }
+async function runCli(args = process.argv.slice(2), dependencies = {}) {
+  const options = parseArgs(args);
+  const output =
+    dependencies.output || ((value) => writeOutput(process.stdout, value));
+  if (options.help) {
+    await output(HELP);
+    return 0;
   }
-
-  const report = await evaluateCapacity({
-    synthetic,
-    targetUrl,
-    durationSeconds: durationSec,
-    concurrency,
-    saveReport,
-  });
-
-  if (jsonOutput) {
-    console.log(JSON.stringify(report, null, 2));
-    process.exit(report.compliance.overallPassed || allowFailure ? 0 : 1);
+  const report = await evaluateCapacity(options, dependencies);
+  const { reportPath: _privatePath, ...publicReport } = report;
+  if (options.jsonOutput) {
+    await output(JSON.stringify(publicReport, null, 2) + '\n');
+    return report.compliance.overallPassed || options.allowFailure ? 0 : 1;
   }
-
-  console.log('\n=================================================================');
-  console.log('Acres Capacity, Load & Latency Evaluation (TM-20, Category 5 SLOs)');
-  console.log('=================================================================\n');
+  const durationSec = options.durationSeconds;
+  const lines = [];
+  const console = {
+    log: (line) => lines.push(line),
+    error: (line) => lines.push(line),
+  };
+  console.log(
+    '\n=================================================================',
+  );
+  console.log(
+    'Acres Capacity, Load & Latency Evaluation (TM-20, Category 5 SLOs)',
+  );
+  console.log(
+    '=================================================================\n',
+  );
 
   console.log(`Evaluation Mode:   ${report.mode.toUpperCase()}`);
   console.log(`Target:            ${report.targetUrl}`);
@@ -499,32 +801,50 @@ async function runCli() {
   console.log(`Duration:          ${durationSec}s\n`);
 
   console.log('Latency Distribution (ms):');
-  console.log('-----------------------------------------------------------------');
+  console.log(
+    '-----------------------------------------------------------------',
+  );
   const lat = report.distribution.latencyMs;
-  console.log(`  Min:  ${lat.min} ms  |  Mean: ${lat.mean} ms  |  StdDev: ${lat.stddev} ms`);
+  console.log(
+    `  Min:  ${lat.min} ms  |  Mean: ${lat.mean} ms  |  StdDev: ${lat.stddev} ms`,
+  );
   console.log(`  p50:  ${lat.p50} ms  |  p90:  ${lat.p90} ms`);
-  console.log(`  p95:  ${lat.p95} ms  (SLO Ceiling: <= ${report.targets.maxP95LatencyMs} ms)`);
+  console.log(
+    `  p95:  ${lat.p95} ms  (SLO Ceiling: <= ${report.targets.maxP95LatencyMs} ms)`,
+  );
   console.log(`  p99:  ${lat.p99} ms  |  Max:  ${lat.max} ms\n`);
 
   if (report.distribution.databaseLatency) {
     console.log('Database Latency Baseline (ms):');
-    console.log('-----------------------------------------------------------------');
+    console.log(
+      '-----------------------------------------------------------------',
+    );
     const acq = report.distribution.databaseLatency.acquisitionLatencyMs;
     const qry = report.distribution.databaseLatency.queryLatencyMs;
     console.log('  Pool Acquisition Latency (Panels 23 & 24):');
-    console.log(`    Min:  ${acq.min} ms  |  Mean: ${acq.mean} ms  |  StdDev: ${acq.stddev} ms`);
+    console.log(
+      `    Min:  ${acq.min} ms  |  Mean: ${acq.mean} ms  |  StdDev: ${acq.stddev} ms`,
+    );
     console.log(`    p50:  ${acq.p50} ms  |  p90:  ${acq.p90} ms`);
-    console.log(`    p95:  ${acq.p95} ms  (SLO Ceiling: <= ${report.targets.maxDatabaseAcquisitionP95LatencyMs} ms)`);
+    console.log(
+      `    p95:  ${acq.p95} ms  (SLO Ceiling: <= ${report.targets.maxDatabaseAcquisitionP95LatencyMs} ms)`,
+    );
     console.log(`    p99:  ${acq.p99} ms  |  Max:  ${acq.max} ms\n`);
     console.log('  SQL Query Execution Latency (Panels 25 & 26):');
-    console.log(`    Min:  ${qry.min} ms  |  Mean: ${qry.mean} ms  |  StdDev: ${qry.stddev} ms`);
+    console.log(
+      `    Min:  ${qry.min} ms  |  Mean: ${qry.mean} ms  |  StdDev: ${qry.stddev} ms`,
+    );
     console.log(`    p50:  ${qry.p50} ms  |  p90:  ${qry.p90} ms`);
-    console.log(`    p95:  ${qry.p95} ms  (SLO Ceiling: <= ${report.targets.maxDatabaseQueryP95LatencyMs} ms)`);
+    console.log(
+      `    p95:  ${qry.p95} ms  (SLO Ceiling: <= ${report.targets.maxDatabaseQueryP95LatencyMs} ms)`,
+    );
     console.log(`    p99:  ${qry.p99} ms  |  Max:  ${qry.max} ms\n`);
   }
 
   console.log('SLO Compliance Evaluation:');
-  console.log('-----------------------------------------------------------------');
+  console.log(
+    '-----------------------------------------------------------------',
+  );
   const comp = report.compliance;
   console.log(
     `  ${comp.availabilityPassed ? '✓' : '✗'} Availability:     ${report.distribution.availabilityPercent}% (target >= ${report.targets.availabilityTargetPercent}%)`,
@@ -550,34 +870,58 @@ async function runCli() {
     );
   }
 
-  if (report.reportPath) {
-    console.log(`\nAudit Evidence:    ${report.reportPath}`);
-  }
-
   if (!comp.overallPassed) {
     console.error('\nSLO Violations:');
     for (const v of comp.violations) {
       console.error(`  ✗ ${v}`);
     }
-    console.log('=================================================================\n');
+    console.log(
+      '=================================================================\n',
+    );
     console.log('Result: FAILED. Category 5 SLO requirements breached.\n');
-    process.exit(allowFailure ? 0 : 1);
+    await output(lines.join('\n') + '\n');
+    return options.allowFailure ? 0 : 1;
   }
 
-  console.log('\n=================================================================');
+  console.log(
+    '\n=================================================================',
+  );
   console.log('Result: PASSED. All Category 5 SLO targets satisfied.\n');
-  process.exit(0);
+  await output(lines.join('\n') + '\n');
+  return 0;
 }
 
 if (require.main === module) {
-  runCli().catch((err) => {
-    console.error(`Unhandled capacity evaluation error: ${err.message}`);
-    process.exit(1);
-  });
+  // Keep stream error listeners through natural process shutdown: write callbacks
+  // precede error events, and immediate process.exit can truncate piped output.
+  let outputFailed = false;
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', () => {
+      outputFailed = true;
+      process.exitCode = 1;
+    });
+  }
+  runCli()
+    .then((status) => {
+      process.exitCode = outputFailed ? 1 : status;
+    })
+    .catch(async () => {
+      process.exitCode = 1;
+      try {
+        await writeOutput(
+          process.stderr,
+          'Capacity invocation, evaluation or publication failed\n',
+        );
+      } catch {
+        process.exitCode = 1;
+      }
+    });
 }
 
 module.exports = {
   DEFAULT_SLO_TARGETS,
+  parseArgs,
+  runCli,
   calculatePercentile,
   calculateLatencySummary,
   calculateDistribution,

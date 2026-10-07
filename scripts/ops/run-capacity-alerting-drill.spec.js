@@ -894,6 +894,12 @@ test('real offline children against copied sources pass readiness and the launch
     r = f.run(['--dry-run'], { NETWORK_LOG: networkLog });
   assert.equal(r.status, 0, r.output);
   assert.equal(validateCapacityAlertingReport(r.evidence, new Date()), true);
+  assert.equal(
+    validateCapacityAlertingReport(r.evidence, new Date(), {
+      requireLive: true,
+    }),
+    false,
+  );
   assert.equal(fs.existsSync(networkLog), false);
   assert.equal(
     fs.existsSync(path.join(f.dir, 'backups')),
@@ -931,6 +937,21 @@ test('real offline children against copied sources pass readiness and the launch
     dossier.stages.find((stage) => stage.stage_id === 'capacity_alerting')
       .status,
     'PASSED',
+  );
+  fs.writeFileSync(
+    path.join(f.ops, 'verify-capacity-load.js'),
+    `const p=require('./producer-verify-capacity-load');module.exports=p;if(require.main===module){p.runCli(['--synthetic','--json','--no-save','--duration-sec=300']).then(status=>{process.exitCode=status;});}\n`,
+  );
+  const failedChild = f.run(['--dry-run'], { NETWORK_LOG: networkLog });
+  assert.notEqual(failedChild.status, 0);
+  assert.equal(failedChild.evidence.summary.capacitySloCompliance, 'failed');
+  assert.equal(
+    validateCapacityAlertingReport(failedChild.evidence, new Date()),
+    false,
+  );
+  fs.copyFileSync(
+    path.join(__dirname, 'verify-capacity-load.js'),
+    path.join(f.ops, 'verify-capacity-load.js'),
   );
   fs.rmSync(path.join(f.dir, 'infra/prometheus/alerts.yml'));
   const missing = f.run(['--dry-run'], { NETWORK_LOG: networkLog });

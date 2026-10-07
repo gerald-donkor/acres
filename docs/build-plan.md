@@ -2081,3 +2081,30 @@ Later aggregate stages did not run. Sandbox subprocess denial and Next's
 TypeScript `--showConfig` parse failure were followed by successful
 normal-permission tests/build. No dependency change, production action or push
 occurred. Phase 12, prompt 201 and operator launch sign-offs remain unresolved.
+
+**Prompt 273 Phase 12K standalone capacity evaluator hardening (2026-10-07):**
+Strict CLI/direct-call validation precedes evaluation, transport and save
+allocation; duration 1–300 seconds and concurrency 1–100 are engineering limits,
+not measured capacity. Standalone help/import and no-save have no destination
+work. Canonical safe `href` hashing and unchanged worker/statistics/SLO contracts
+remain. New exact `--output` destinations and UUID defaults preflight absent
+paths/ancestors; 0700 new directories and 0600 owned verified staging publish
+with exclusive hard links. Retained/racing destinations and foreign staging are
+preserved. Cleanup/output failure retains published evidence and exits nonzero;
+`--allow-failure` overrides only evaluated SLO failure. CLI diagnostics exclude
+raw errors/URLs/paths and natural stdout draining preserves truthful status.
+
+Actual checks: final capacity `tests 54`, `pass 54`, `fail 0`; parent 143/143 plus
+final actual-child integration 1/1; alerts 23/23; DoS 91/91; launch/dossier
+164/164; readiness 649/649; launch readiness 23/23; templates 324/324. Templates,
+lint, sequential typecheck/build, selected Prettier and diff check exited 0.
+`ops:check` exited 1 at the unchanged audit: `37 vulnerabilities (9 moderate,
+26 high, 2 critical)` and `audit error: critical vulnerabilities detected in
+production dependencies`; later aggregate stages were unreached. Approved
+normal subprocess access passed hermetic fixtures after sandbox `spawnSync`
+`EPERM`. Independent review found no Critical, Important or Minor findings.
+Full contracts/check output and limits are in `docs/operations.md` Prompt 273.
+No real benchmark, unstubbed parent/unified drill, deployment, production
+evidence inspection/approval, credential mutation, dependency change or push
+occurred. Phase 12, prompt 201, dependency findings and operator sign-offs remain
+open; synthetic parent acceptance stays structural and cannot approve Category 5.

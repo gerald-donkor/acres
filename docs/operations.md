@@ -4074,3 +4074,118 @@ assurance of the deployed system. Phase 12, prompt 201, critical dependency
 findings and all operator sign-offs remain open. Rollback is a reviewed normal
 revert preserving published evidence; the former replacing writer/real-child
 test does not make retained-path reuse or rollback test execution safe.
+
+## Prompt 273 — standalone capacity evaluator hardening (2026-10-07)
+
+`scripts/ops/verify-capacity-load.js` now rejects unknown/positional, repeated,
+missing/blank/control-containing, conflicting and partial integer CLI input.
+Separate and attached value options remain supported; new `--output` selects an
+absent exact file relative to caller cwd. Attached dash-leading and quoted/spaced
+paths are literal data. Standalone `--help`/`-h` and import perform no evaluation,
+network or destination work. Unsupported `--rps` rejects; no pacing was added.
+Default evaluation is still synthetic, five seconds and ten workers. Duration
+1–300 seconds and concurrency 1–100 also bind direct evaluation/live calls;
+these bounds are engineering judgments for invocation safety, not measured
+production capacity or changed SLOs. Invalid inputs reject before workload,
+transport or save allocation. HTTP(S) targets reuse `safeUrl`, reject outer
+whitespace, controls, credentials, query/fragment delimiters and conflicting
+synthetic mode. Canonical `href` (including root slash) remains the benchmark
+hash input; the live worker still rewrites only root paths to `/health`.
+
+This contract supersedes the historical standalone millisecond/default-mode,
+direct-replacing save descriptions above. Standalone saving defaults to
+installation-root `backups/capacity-load-report-<uuid>.json`, independent of
+caller cwd. Direct `evaluateCapacity` still saves only when `saveReport` is true
+and retains `backupsDir`; `outputFile` selects an exact destination only with
+saving enabled. `--no-save` does no destination preflight or allocation. Direct
+callers retain the returned `reportPath`; saved JSON and CLI output omit this
+private path. Existing report fields, synthetic database distributions,
+statistics/rounding, five SLO targets, compliance flags and violation strings
+retain their meanings. HTTP benchmarking still does not measure live DB latency;
+separately bound live telemetry remains required by the parent/launch consumer.
+
+Save destinations and all existing ancestors receive symlink-aware read-only
+preflight before evaluation. Retained files/directories/symlinks/dangling links,
+trailing separators, non-directory or symlink parents and inaccessible ancestors
+reject. New directories are 0700; existing modes and global umask remain intact.
+Random same-directory staging opens exclusively at 0600; descriptor/path ownership
+is recorded before fstat/write/close. Complete serialized reports are closed,
+independently read and compared with both serialization and evaluated fields.
+Exclusive same-filesystem hard-link publication cannot replace a retained or
+racing destination; unsupported filesystems fail without a replacing fallback.
+No final reservation is promised: competing evaluations may both run, but at most
+one can publish to an exact destination. Foreign staging and earlier reports
+remain untouched. Cleanup retries only owned descriptors/staging. Publication
+followed by cleanup/output failure retains complete final evidence and exits
+nonzero, even with `--allow-failure`. Newly created empty directories and staging
+whose cleanup persistently fails can remain for operator inspection. No evidence
+sweep, cryptographic provenance, arbitrary ancestor mutation, SIGKILL/host-loss
+cleanup guarantee or async process supervisor is introduced.
+
+CLI failures emit only `Capacity invocation, evaluation or publication failed`
+and exit nonzero; raw exception text, private paths, URLs and stacks are not
+projected. One JSON report follows completed evaluation/publication; evaluated
+SLO failure preserves `overallPassed: false` and normally exits 1. The override
+changes only that SLO status. Human statistics remain available. Output uses
+write callbacks and natural process shutdown; stream errors cannot be overwritten
+by a passing evaluation status or an override.
+
+Tests use `node:test`, disposable actual installations with the helper closure,
+allowlisted environments, bounded process timeouts and owned teardown. Actual
+CLI paths are synthetic or network-guarded; HTTP/HTTPS behavior uses mocked
+transport and clock without a socket/DNS request. Coverage includes strict input,
+zero-work help/import, no-save, literal paths, permissive-umask privacy, existing
+modes, retained destinations/ancestors, injected open/fstat/write/close/read/link/
+unlink/serialization/output failures, readback mismatches, foreign staging,
+fixed-clock UUID uniqueness, deterministic competing publication and actual
+concurrent writers. The isolated real parent accepts the actual synthetic child
+structurally, still rejects it for production (`requireLive: true`), and fails
+when a real child returns a genuine low-throughput SLO failure. No consumer
+production implementation or acceptance policy changed.
+
+Verification:
+
+| Command                                                   | Exit | Actual concise output                                                                                                               |
+| --------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `node --check` on producer/spec                           | 0    | no output                                                                                                                           |
+| `node scripts/ops/verify-capacity-load.js --help`         | 0    | `Usage: scripts/ops/verify-capacity-load.js [options]`                                                                              |
+| `npm run ops:capacity-test` (final)                       | 0    | `tests 54`, `pass 54`, `fail 0`                                                                                                     |
+| `npm run ops:capacity-alerting-test`                      | 0    | `tests 143`, `pass 143`, `fail 0`                                                                                                   |
+| Final actual-child parent integration                     | 0    | `tests 1`, `pass 1`, `fail 0`                                                                                                       |
+| `npm run ops:alert-test`                                  | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                     |
+| `npm run ops:dos-test`                                    | 0    | `tests 91`, `pass 91`, `fail 0`                                                                                                     |
+| `npm run ops:launch-drill-test`                           | 0    | `tests 164`, `pass 164`, `fail 0`                                                                                                   |
+| `npm run ops:readiness-test`                              | 0    | `tests 649`, `pass 649`, `fail 0`                                                                                                   |
+| `npm run ops:launch-readiness-test`                       | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                     |
+| `npm run ops:templates-test`                              | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                   |
+| `npm run ops:templates`                                   | 0    | `ops template check passed`                                                                                                         |
+| `npm run ops:check`                                       | 1    | `37 vulnerabilities (9 moderate, 26 high, 2 critical)`; `audit error: critical vulnerabilities detected in production dependencies` |
+| `npm run lint`                                            | 0    | all three workspaces; final `eslint "{src,test}/**/*.ts"`, no diagnostics                                                           |
+| `npm run typecheck`                                       | 0    | shared/client/server completed; `Generated Prisma Client (7.9.1)`                                                                   |
+| `npm run build`                                           | 0    | `Compiled successfully in 3.3s`; `Generating static pages using 7 workers (22/22) in 684ms`; server `prisma generate && nest build` |
+| Prettier on producer/spec/prompt and parent edited region | 0    | `All matched files use Prettier code style!`                                                                                        |
+| `git diff --check`                                        | 0    | no output                                                                                                                           |
+
+The aggregate stopped at the unchanged dependency audit; later aggregate stages
+were not reached. Affected isolated suites ran independently. No dependency or
+audit-policy changes occurred. Sandboxed process fixtures first reported
+`spawnSync ... EPERM`; approved normal subprocess permissions passed. Typecheck
+and build ran sequentially. New documentation regions were formatted separately,
+without changing unrelated historical formatting.
+
+Independent read-only review found no Critical, Important or Minor findings.
+
+Safe inspection from the repository root:
+
+```bash
+node scripts/ops/verify-capacity-load.js --help
+npm run ops:capacity-test
+```
+
+To regenerate standalone synthetic evidence when requested, choose a new absent
+`--output` destination or use the default UUID save; preserve prior reports.
+No real HTTP benchmark, unstubbed parent/unified drill, production evidence
+inspection/approval, deployment, credential mutation or push occurred. Phase 12,
+prompt 201, dependency findings and operator sign-offs remain open. Rollback is a
+reviewed normal revert preserving published evidence; reverting to the former
+replacing writer does not make destination reuse or unchecked live inputs safe.

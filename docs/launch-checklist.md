@@ -593,6 +593,25 @@ references do not supply Category 5 acceptance or sign-off. Actual-process paren
 coverage passed 143/143; full command evidence and the unresolved production
 dependency audit are recorded in `docs/operations.md` Prompt 270.
 
+**Prompt 273 standalone capacity inspection/publication (2026-10-07):** Inspect
+safely with `node scripts/ops/verify-capacity-load.js --help` and
+`npm run ops:capacity-test`. Requested synthetic standalone regeneration uses
+`--synthetic --output <new-absent-file>` or the default
+`backups/capacity-load-report-<uuid>.json`; exact relative outputs use caller cwd,
+while default backups remain installation-anchored. Preserve earlier receipts.
+New directories are 0700 and complete verified 0600 reports publish exclusively,
+without replacing existing or competing destinations. No-save does no destination
+work. Direct callers keep `reportPath`, but CLI/saved JSON do not disclose it.
+Setup, publication, cleanup and output failures exit nonzero even with
+`--allow-failure`; that flag changes only evaluated SLO exit status and preserves
+failed evidence. Duration/concurrency bounds are engineering limits, not live
+capacity evidence. Standalone synthetic statistics and the real isolated dry
+parent cannot approve Category 5; bound live DB telemetry and separate operator
+acceptance remain necessary. Final capacity coverage passed 54/54, parent 143/143
+and actual-child integration 1/1. Complete checks, audit failure and residual
+publication limits are recorded in `docs/operations.md` Prompt 273. No live
+benchmark or operator production evidence inspection/approval occurred.
+
 - Offline drill/verify: `bash scripts/ops/run-capacity-alerting-drill.sh --dry-run`,
   `node scripts/ops/verify-alert-rules.js`, `node scripts/ops/verify-capacity-load.js --synthetic`
 - Evidence: `backups/capacity-alerting-drill-evidence-<uuid>.json` or an absent exact `--evidence-file` destination
