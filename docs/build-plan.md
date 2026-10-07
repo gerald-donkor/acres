@@ -1934,3 +1934,29 @@ Independent requesting/receiving review found no critical, important or minor
 issues and confirmed catchable-interruption temp cleanup.
 Full command results and limitations are recorded in `docs/operations.md` prompt 267. No dependency change, live exercise, production action or push occurred;
 Phase 12 and prompt 201 operator sign-off remain open.
+
+**Prompt 268 Phase 12K harden and test secret-rotation drill (2026-10-07):**
+The simulation runner now validates attached/separate options, target cwd,
+origins, connection fields, decimal ports, prerequisites and absent output
+paths before rehearsal. Baseline children are anchored; optional observations
+are bounded and truthful. Receipt publication uses private temporary files
+and atomic exclusive links, preserving retained and concurrent destinations.
+Algorithm failure messages are fixed and I/O failures stay distinct. Early
+process exits cannot publish empty receipts. All seven existing mock exercises
+and consumer contracts remain simulation-only; no live rotation is proved.
+
+Actual checks: rotation `tests 99`, `pass 99`, `fail 0`; focused review regression
+1/1; templates 324/324; scan contracts 42/42; volume 18/18; readiness 649/649;
+launch readiness 23/23; launch drill 68/68. Operational templates, root
+lint/typecheck/build, Bash/Node syntax, changed JavaScript/prompt formatting and
+diff checks passed. New documentation content is formatted separately from
+existing whole-document warnings. Independent review's trailing-slash path
+finding was verified/fixed and passed follow-up review; no unresolved findings.
+
+Full `ops:check` exited 1 at dependency audit:
+`37 vulnerabilities (9 moderate, 26 high, 2 critical)`;
+`audit error: critical vulnerabilities detected in production dependencies`.
+Later aggregate stages did not run; affected suites ran independently. Full
+command evidence and execution limits are recorded in `docs/operations.md`
+prompt 268. No dependency change, live exercise, production action or push
+occurred; Phase 12 and prompt 201 operator sign-off remain open.

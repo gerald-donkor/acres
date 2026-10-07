@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# scripts/ops/run-secret-rotation-drill.sh
-#
-# Secret rotation protocol/algorithm rehearsal (TM-15), always simulation.
-# Local HMAC/SigV4 examples and mocked PostgreSQL, Valkey and session state machines
-# exercise rollover and compromise response without rotating production credentials.
-# The seven-class list describes intended coverage; SMTP and Grafana are not rotated.
-# Reachability is metadata only and cannot establish production rotation or zero downtime.
-# Emits simulation JSON to backups/secret-rotation-evidence-<timestamp>.json.
-
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT_DIR"
-
+# Always a local algorithm/state-machine rehearsal, never production rotation.
+# Reachability is metadata only; SMTP/Grafana are not independently exercised.
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+TARGET_CWD="$ROOT_DIR"
 DRY_RUN=0
 EVIDENCE_DIR="backups"
 EVIDENCE_FILE=""
@@ -23,135 +15,196 @@ PGUSER="${PGUSER:-${POSTGRES_USER:-postgres}}"
 PGDATABASE="${PGDATABASE:-acres}"
 VALKEY_HOST="${VALKEY_HOST:-localhost}"
 VALKEY_PORT="${VALKEY_PORT:-6379}"
-
-# Parse command line options
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --dry-run)
-      DRY_RUN=1
-      shift
-      ;;
-    --evidence-dir|--evidence-file|--api-url|--pghost|--pgport|--valkey-host|--valkey-port)
-      if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
-        printf 'Error: %s requires a non-empty value\n' "$1" >&2
-        exit 1
-      fi
-      case "$1" in
-        --evidence-dir) EVIDENCE_DIR="$2" ;;
-        --evidence-file) EVIDENCE_FILE="$2" ;;
-        --api-url) API_URL="$2" ;;
-        --pghost) PGHOST="$2" ;;
-        --pgport) PGPORT="$2" ;;
-        --valkey-host) VALKEY_HOST="$2" ;;
-        --valkey-port) VALKEY_PORT="$2" ;;
-      esac
-      shift 2
-      ;;
-    --help|-h)
-      cat <<'HELP'
+fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+usage() {
+cat <<'HELP'
 Usage: scripts/ops/run-secret-rotation-drill.sh [options]
 
 Secret rotation protocol/algorithm rehearsal (TM-15), always simulation.
 Executes local cryptographic examples and mocked state machines without rotating live credentials.
 The seven-class list is intended coverage; SMTP and Grafana are not independently verified.
 Reachability and --dry-run metadata never authorize production approval.
+--dry-run records metadata; optional reachability observations may still run.
 
-Options:
-  --dry-run                Explicitly flag drill execution in dry-run mode
-  --evidence-dir <dir>     Directory for JSON drill evidence (default: backups)
-  --evidence-file <file>   Exact destination path for JSON evidence file
-  --api-url <url>          Target API URL for live probes (default: http://localhost:3001)
-  --pghost <host>          PostgreSQL host (default: localhost)
-  --pgport <port>          PostgreSQL port (default: 5432)
-  --valkey-host <host>     Valkey host (default: localhost)
-  --valkey-port <port>     Valkey port (default: 6379)
-  --help, -h               Show this help message
+Options (value options accept separate and attached = forms):
+  --cwd <directory>       Target cwd (default: installation repository root)
+  --dry-run               Flag receipt dry-run metadata
+  --evidence-dir <dir>    JSON evidence directory (default: backups)
+  --evidence-file <file>  Absent exact destination, overrides evidence-dir
+  --api-url <origin>      HTTP(S) origin (default: http://localhost:3001)
+  --pghost <host>         PostgreSQL host (default: localhost)
+  --pgport <port>         PostgreSQL decimal port (default: 5432)
+  --valkey-host <host>    Valkey host (default: localhost)
+  --valkey-port <port>    Valkey decimal port (default: 6379)
+  --help, -h              Show help without running the rehearsal
 HELP
-      exit 0
-      ;;
-    *)
-      printf 'Error: Unknown option "%s"\n' "$1" >&2
-      exit 1
-      ;;
+}
+declare -A SEEN=()
+while (($#)); do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --cwd|--cwd=*|--evidence-dir|--evidence-dir=*|--evidence-file|--evidence-file=*|--api-url|--api-url=*|--pghost|--pghost=*|--pgport|--pgport=*|--valkey-host|--valkey-host=*|--valkey-port|--valkey-port=*)
+      opt="${1%%=*}"
+      [[ -z "${SEEN[$opt]:-}" ]] || fail "Repeated $opt option"
+      if [[ "$1" == *=* ]]; then
+        val="${1#*=}"; shift
+      else
+        (($# >= 2)) && [[ "$2" != -* ]] || fail "$opt requires a non-empty value"
+        val="$2"; shift 2
+      fi
+      [[ "$val" =~ [^[:space:]] ]] || fail "$opt requires a non-empty value"
+      SEEN[$opt]=1
+      case "$opt" in
+        --cwd) TARGET_CWD="$val" ;;
+        --evidence-dir) EVIDENCE_DIR="$val" ;;
+        --evidence-file) EVIDENCE_FILE="$val" ;;
+        --api-url) API_URL="$val" ;;
+        --pghost) PGHOST="$val" ;;
+        --pgport) PGPORT="$val" ;;
+        --valkey-host) VALKEY_HOST="$val" ;;
+        --valkey-port) VALKEY_PORT="$val" ;;
+      esac ;;
+    *) fail 'Unknown option or unexpected positional argument' ;;
   esac
 done
-
+[[ -d "$TARGET_CWD" && -r "$TARGET_CWD" && -x "$TARGET_CWD" ]] || fail 'Invalid --cwd directory'
+TARGET_CWD="$(cd -- "$TARGET_CWD" 2>/dev/null && pwd -P)" || fail 'Invalid --cwd directory'
+cd -- "$TARGET_CWD" || fail 'Invalid --cwd directory'
+for tool in node bash date dirname mkdir mktemp chmod ln rm curl; do
+  command -v "$tool" >/dev/null 2>&1 || fail "Required utility unavailable: $tool"
+done
+for file in check-production-templates.sh scan-secrets.sh; do
+  [[ -f "$ROOT_DIR/scripts/ops/$file" && -r "$ROOT_DIR/scripts/ops/$file" && -x "$ROOT_DIR/scripts/ops/$file" ]] || fail 'Required shell checker unavailable'
+done
+for file in verify-volume-encryption.js launch-target-evidence.js; do
+  [[ -f "$ROOT_DIR/scripts/ops/$file" && -r "$ROOT_DIR/scripts/ops/$file" ]] || fail 'Required local helper unavailable'
+done
+API_URL="$(node - "$ROOT_DIR" "$API_URL" <<'NODE'
+try {
+  const { safeUrl } = require(process.argv[2] + '/scripts/ops/launch-target-evidence');
+  const url = new URL(safeUrl(process.argv[3]));
+  if (url.pathname !== '/') throw new Error();
+  process.stdout.write(url.origin);
+} catch {
+  console.error('Error: Invalid --api-url; expected an HTTP(S) origin'); process.exit(1);
+}
+NODE
+)" || exit 1
+for field in PGHOST PGUSER PGDATABASE VALKEY_HOST; do
+  [[ "${!field}" =~ [^[:space:]] && ! "${!field}" =~ [[:cntrl:]] && "${!field}" != -* ]] || fail "Invalid connection field: $field"
+done
+for field in PGPORT VALKEY_PORT; do
+  [[ "${!field}" =~ ^[0-9]{1,5}$ ]] && ((10#${!field} >= 1 && 10#${!field} <= 65535)) || fail "Invalid $field; expected decimal 1-65535"
+  printf -v "$field" '%s' "$((10#${!field}))"
+done
+DB_SELECTED=0
+if [[ -n "${PGPASSWORD:-}" || -n "${POSTGRES_PASSWORD:-}" ]]; then
+  PGPASSWORD="${PGPASSWORD:-$POSTGRES_PASSWORD}"
+  [[ "$PGPASSWORD" =~ [^[:space:]] ]] || fail 'Invalid database password'
+  export PGPASSWORD
+  DB_SELECTED=1
+  command -v pg_isready >/dev/null 2>&1 || fail 'Required database client unavailable: pg_isready'
+fi
+if command -v valkey-cli >/dev/null 2>&1; then
+  command -v timeout >/dev/null 2>&1 || fail 'Required utility unavailable: timeout'
+fi
+# Check only the selected destination, never create an unused evidence-dir.
+node - "$EVIDENCE_DIR" "$EVIDENCE_FILE" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+try {
+  const [dir, file] = process.argv.slice(2);
+  if (file) {
+    if (file.endsWith(path.sep)) throw new Error();
+    try { fs.lstatSync(file); throw new Error(); }
+    catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  let parent = path.resolve(file ? path.dirname(file) : dir);
+  while (true) {
+    try {
+      if (!fs.statSync(parent).isDirectory()) throw new Error();
+      fs.accessSync(parent, fs.constants.W_OK | fs.constants.X_OK);
+      break;
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+      try { fs.lstatSync(parent); throw new Error(); }
+      catch (l) { if (l.code !== 'ENOENT') throw l; }
+      parent = path.dirname(parent);
+    }
+  }
+} catch {
+  console.error('Error: Evidence destination exists or output parent is unavailable'); process.exit(1);
+}
+NODE
+for field in EVIDENCE_DIR EVIDENCE_FILE; do
+  if [[ -n "${!field}" && "${!field}" != /* ]]; then
+    printf -v "$field" '%s/%s' "$TARGET_CWD" "${!field}"
+  fi
+done
 get_time_ms() {
   local ms
   ms="$(date +%s%3N 2>/dev/null || true)"
-  if [[ "$ms" =~ ^[0-9]+$ ]]; then
-    echo "$ms"
-  else
-    echo "$(( $(date +%s) * 1000 ))"
-  fi
+  if [[ "$ms" =~ ^[0-9]+$ ]]; then echo "$ms";
+  else echo "$(( $(date +%s) * 1000 ))"; fi
 }
-
 START_TIME_MS="$(get_time_ms)"
 TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
-mkdir -p "$EVIDENCE_DIR"
-
-if [ -z "$EVIDENCE_FILE" ]; then
-  EVIDENCE_FILE="${EVIDENCE_DIR}/secret-rotation-evidence-${TIMESTAMP}.json"
-fi
-mkdir -p "$(dirname "$EVIDENCE_FILE")"
-
-printf '=================================================================\n'
-printf '      Acres Automated Secret Rotation & Compromise Drill (TM-15) \n'
-printf '=================================================================\n'
-printf 'Timestamp:           %s\n' "$TIMESTAMP"
-printf 'Dry Run Mode:        %s\n' "$([ "$DRY_RUN" -eq 1 ] && echo "YES" || echo "NO")"
-printf 'Evidence File:       %s\n' "$EVIDENCE_FILE"
-printf 'Target API:          %s\n' "$API_URL"
-printf 'PostgreSQL Target:   %s:%s\n' "$PGHOST" "$PGPORT"
-printf 'Valkey Target:       %s:%s\n' "$VALKEY_HOST" "$VALKEY_PORT"
-printf '=================================================================\n\n'
-
-# 1. Pre-rotation Validation & Operational Baseline Check
-printf '1. Validating secret configuration baseline & operational templates...\n'
-scripts/ops/check-production-templates.sh
-scripts/ops/scan-secrets.sh
-node scripts/ops/verify-volume-encryption.js >/dev/null
-printf '   ✓ Operational templates, secrets scan, and volume encryption verified.\n\n'
-
-# 2. Check Live Service Reachability (Non-blocking)
-printf '2. Checking environment topology & live service reachability...\n'
+printf 'Secret rotation rehearsal (SIMULATION ONLY)\nTimestamp: %s\n' "$TIMESTAMP"
+printf 'Target API:          %s\nPostgreSQL Target:   %s:%s\nValkey Target:       %s:%s\n' "$API_URL" "$PGHOST" "$PGPORT" "$VALKEY_HOST" "$VALKEY_PORT"
+printf '1. Checking operational baseline...\n'
+"$ROOT_DIR/scripts/ops/check-production-templates.sh" "--cwd=$TARGET_CWD"
+"$ROOT_DIR/scripts/ops/scan-secrets.sh" "--cwd=$TARGET_CWD"
+# This verifier's defaults intentionally remain installation-root configuration.
+node "$ROOT_DIR/scripts/ops/verify-volume-encryption.js" >/dev/null
+printf '   Baseline configuration preflights passed (simulation only).\n'
 LIVE_POSTGRES=false
 LIVE_VALKEY=false
 LIVE_API=false
-
-if [ -n "${PGPASSWORD:-}" ] || [ -n "${POSTGRES_PASSWORD:-}" ]; then
-  if pg_isready -h "$PGHOST" -p "$PGPORT" -q 2>/dev/null; then
-    LIVE_POSTGRES=true
-    printf '   ✓ Live PostgreSQL detected at %s:%s\n' "$PGHOST" "$PGPORT"
-  fi
+if ((DB_SELECTED)) && pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -t 3 -q >/dev/null 2>&1; then
+  LIVE_POSTGRES=true
+  printf '   PostgreSQL server reachable; authentication/rotation not verified.\n'
+else
+  printf '   PostgreSQL observation unavailable or skipped; using simulation.\n'
 fi
-
-if [ "$LIVE_POSTGRES" = "false" ]; then
-  printf '   ℹ Live PostgreSQL not reachable or credentials unconfigured (proceeding with verified simulation)\n'
-fi
-
 if command -v valkey-cli >/dev/null 2>&1; then
-  if valkey-cli -h "$VALKEY_HOST" -p "$VALKEY_PORT" ping 2>/dev/null | grep -q PONG; then
+  if reply="$(timeout --kill-after=1s 2s valkey-cli -h "$VALKEY_HOST" -p "$VALKEY_PORT" ping 2>/dev/null)" &&
+     node - "$reply" <<'NODE'
+if (process.argv[2].trim() !== 'PONG') process.exit(1);
+NODE
+  then
     LIVE_VALKEY=true
-    printf '   ✓ Live Valkey detected at %s:%s\n' "$VALKEY_HOST" "$VALKEY_PORT"
+    printf '   Valkey PONG observed; unauthenticated reachability only.\n'
   fi
 fi
-if [ "$LIVE_VALKEY" = "false" ]; then
-  printf '   ℹ Live Valkey not reachable (proceeding with verified simulation)\n'
-fi
-
+if [[ "$LIVE_VALKEY" == false ]]; then printf '   Valkey observation unavailable; using simulation.\n'; fi
 if curl -fsS -m 2 "${API_URL}/health" >/dev/null 2>&1; then
   LIVE_API=true
-  printf '   ✓ Live API detected at %s\n' "$API_URL"
+  printf '   API HTTP success observed; rotation not verified.\n'
 else
-  printf '   ℹ Live API not reachable (proceeding with verified simulation)\n'
+  printf '   API observation unavailable; using simulation.\n'
 fi
-printf '\n'
-
-# 3. Execute Deterministic Secret Rotation & Compromise Response Suite in Node.js
-printf '3. Rehearsing cryptographic rollover algorithms and mocked service behavior...\n'
-
-node - "$EVIDENCE_FILE" "$TIMESTAMP" "$DRY_RUN" "$LIVE_POSTGRES" "$LIVE_VALKEY" "$LIVE_API" <<'NODE'
+umask 077
+if [[ -z "$EVIDENCE_FILE" ]]; then
+  EVIDENCE_FILE="${EVIDENCE_DIR}/secret-rotation-evidence-${TIMESTAMP}-$$-$(node -e 'process.stdout.write(require("node:crypto").randomUUID())').json"
+fi
+mkdir -p -- "$(dirname -- "$EVIDENCE_FILE")" 2>/dev/null || fail 'Could not create evidence parent'
+TEMP_EVIDENCE=""
+cleanup() {
+  local status=$?
+  trap - EXIT INT TERM HUP
+  if [[ -n "$TEMP_EVIDENCE" ]]; then rm -f -- "$TEMP_EVIDENCE" || status=1; fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+TEMP_EVIDENCE="$(mktemp "$(dirname -- "$EVIDENCE_FILE")/.secret-rotation-evidence.XXXXXXXX")" || fail 'Could not create temporary evidence'
+chmod 600 "$TEMP_EVIDENCE" || fail 'Could not protect temporary evidence'
+# Evaluation failure returns 1 only after writing a complete failed temp receipt.
+ALGORITHM_STATUS=0
+node - "$TEMP_EVIDENCE" "$TIMESTAMP" "$DRY_RUN" "$LIVE_POSTGRES" "$LIVE_VALKEY" "$LIVE_API" <<'NODE' || ALGORITHM_STATUS=$?
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
@@ -642,22 +695,36 @@ console.log('   -> Auditing Secret Masking & Redaction...');
   };
   console.log('      ✓ Redaction audit passed: zero raw credentials present in output.');
 
-  // Write Evidence JSON
-  fs.writeFileSync(evidenceFilePath, JSON.stringify(drillResults, null, 2), 'utf8');
-  console.log(`\nEvidence written to: ${evidenceFilePath}`);
-} catch (err) {
+} catch {
   drillResults.status = 'failed';
-  drillResults.errors.push(err.message);
-  try {
-    fs.writeFileSync(evidenceFilePath, JSON.stringify(drillResults, null, 2), 'utf8');
-    console.error(`\nDrill failed: ${err.message}`);
-    console.error(`Failure evidence written to: ${evidenceFilePath}`);
-  } catch (_writeErr) {
-    // Ignore secondary write error
-  }
-  process.exit(1);
+  drillResults.errors.push('Secret rotation algorithm rehearsal failed');
+  console.error('Error: Secret rotation algorithm rehearsal failed');
 }
+try {
+  fs.writeFileSync(evidenceFilePath, JSON.stringify(drillResults, null, 2) + '\n', 'utf8');
+} catch {
+  console.error('Error: Could not write temporary evidence');
+  process.exit(2);
+}
+if (drillResults.status === 'failed') process.exit(1);
 NODE
+
+if ((ALGORITHM_STATUS > 1)); then fail 'Could not generate evidence'; fi
+# An early Node failure must not publish the still-empty temp as a receipt.
+if ! node - "$TEMP_EVIDENCE" "$ALGORITHM_STATUS" <<'NODE'
+try {
+  const report = JSON.parse(require('node:fs').readFileSync(process.argv[2], 'utf8'));
+  if (report.execution_mode !== 'simulation' ||
+      report.status !== (process.argv[3] === '0' ? 'success' : 'failed') ||
+      !Array.isArray(report.errors)) throw new Error();
+} catch { process.exit(1); }
+NODE
+then fail 'Could not generate complete evidence'; fi
+ln -T -- "$TEMP_EVIDENCE" "$EVIDENCE_FILE" 2>/dev/null || fail 'Could not publish evidence without replacing destination'
+rm -f -- "$TEMP_EVIDENCE" || fail 'Could not clean temporary evidence'
+TEMP_EVIDENCE=""
+printf 'Evidence Artifact: %s\n' "$EVIDENCE_FILE"
+if ((ALGORITHM_STATUS)); then exit 1; fi
 
 END_TIME_MS="$(get_time_ms)"
 DURATION_MS="$(( END_TIME_MS - START_TIME_MS ))"

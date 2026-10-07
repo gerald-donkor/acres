@@ -238,6 +238,12 @@ operator child receipt (`execution_mode: "live"`) when approved:
   `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`. The runner always
   emits `execution_mode: "simulation"`, even without `--dry-run` or with
   successful service reachability. Stage 5 remains a drill, never live approval.
+- Prompt 268: explicit rotation receipt destinations must be absent file paths
+  without a trailing slash. Attached/separate options and `--cwd` are supported;
+  the volume verifier retains installation-root configuration defaults.
+  Optional observations remain bounded reachability metadata, and `--dry-run`
+  does not disable probes. Receipts publish privately without replacing retained
+  evidence. See `docs/operations.md` prompt 268 for checked behavior and results.
 - Approval evidence: separately authorized, operator-supplied live child JSON
   plus independently inspected production sources. No repository command
   produces the live receipt or performs the production rotation.

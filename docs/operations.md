@@ -3480,3 +3480,107 @@ npm run ops:deployment-test
 targeted rehearsal requires separately scoped operator authorization. Phase 12
 and prompt 201 remain open pending live evidence, dependency security gates and
 operator sign-off. Nothing was pushed.
+
+## Prompt 268 — Secret-rotation rehearsal runner hardening (2026-10-07)
+
+The runner accepts attached/separate value options and `--cwd`; its default cwd
+is the installation repository root, while explicit relative cwd resolves from
+its caller. Relative evidence paths resolve against the canonical target.
+Anchored template/scan children execute there and receive `--cwd=<target>`.
+The volume verifier runs there but retains its existing installation-root
+configuration defaults; `--cwd` does not retarget that verifier's configuration.
+
+Duplicate/missing/blank/option-looking separate values, positional/unknown
+inputs, unavailable prerequisites, unsafe API origins, invalid connection fields,
+out-of-range decimal ports and unusable output parents fail before preflights,
+probes or output creation. Ports normalize leading-zero decimal values. URL
+validation uses `safeUrl` plus a root-path requirement and prints fixed errors
+without reflecting rejected input. Explicit receipt paths must be absent regular
+file destinations: prior files/directories/symlinks (including dangling links)
+and trailing-slash paths fail early. Explicit file selection creates no unused
+evidence directory. Help does not run preflights or probes.
+
+PostgreSQL observation requires the first nonempty `PGPASSWORD` or
+`POSTGRES_PASSWORD`; whitespace-only selected credentials fail. The password
+travels only through the environment. `pg_isready -t 3` observes server
+availability, not successful authentication or role rotation. No SQL runs.
+Optional unauthenticated Valkey ping uses `timeout --kill-after=1s 2s` and
+requires command success plus exactly `PONG` after surrounding whitespace.
+Missing CLI, timed-out pings, failed or malformed replies remain unavailable metadata.
+HTTP reachability retains its bounded `curl -fsS -m 2` request against the
+validated origin. Client flags and deadlines were verified against installed
+`pg_isready`, coreutils `timeout`/`ln` and curl help. No new Valkey-specific
+flags or credentials were introduced.
+
+Every result remains `execution_mode: "simulation"`, with either dry-run state
+and even when every optional observation succeeds. `--dry-run` remains metadata
+and does not disable probes. The seven algorithm/mock exercises retain their
+semantics and receipt fields; SMTP/Grafana are intended classes, not independently
+rotated systems. Reachability and mock pool behavior cannot establish live
+rotation, zero downtime or Category 3 approval.
+
+Default receipt names now include timestamp, PID and UUID. New evidence
+parents are private without changing existing directory permissions. Complete
+JSON is written to an owned 0600 temporary file and published atomically using
+exclusive `ln -T`; existing or concurrently inserted final destinations are
+preserved. Exit/error/catchable-interruption cleanup removes only the owned temp.
+An early Node exit cannot publish an empty receipt. Algorithm failures publish
+complete failed simulation evidence with the fixed message
+`Secret rotation algorithm rehearsal failed`. Arbitrary Error/non-Error values
+cannot become diagnostic or receipt messages. Write/publication failures are
+reported separately, never silently retried as direct writes or followed by a
+success summary.
+
+Actual verification (exit 0 unless stated):
+
+| Command                                                                                                 | Output                                                                                            |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run ops:rotation-test`                                                                             | `tests 99`, `pass 99`, `fail 0`                                                                   |
+| `node --test --test-name-pattern='absent trailing-slash' scripts/ops/run-secret-rotation-drill.spec.js` | `tests 1`, `pass 1`, `fail 0`                                                                     |
+| `npm run ops:templates`                                                                                 | `ops template check passed`                                                                       |
+| `npm run ops:templates-test`                                                                            | `tests 324`, `pass 324`, `fail 0`                                                                 |
+| `npm run ops:scan-secrets-test`                                                                         | `tests 42`, `pass 42`, `fail 0`                                                                   |
+| `npm run ops:volume-test`                                                                               | `tests 18`, `pass 18`, `fail 0`                                                                   |
+| `npm run ops:readiness-test`                                                                            | `tests 649`, `pass 649`, `fail 0`                                                                 |
+| `npm run ops:launch-readiness-test`                                                                     | `tests 23`, `pass 23`, `fail 0`                                                                   |
+| `npm run ops:launch-drill-test`                                                                         | `tests 68`, `pass 68`, `fail 0`                                                                   |
+| `npm run lint`                                                                                          | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`                                   |
+| `npm run typecheck`                                                                                     | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`                                |
+| `npm run build`                                                                                         | `Compiled successfully in 5.8s`, completed Next route generation, `prisma generate && nest build` |
+
+`npm run ops:check` exited 1 at production dependency audit:
+`37 vulnerabilities (9 moderate, 26 high, 2 critical)` and
+`audit error: critical vulnerabilities detected in production dependencies`.
+Later aggregate stages did not run; affected suites above ran independently.
+No dependencies or lockfile changed. Root checks preceded the narrow review
+fix; affected runner contracts and syntax/diff checks passed after it.
+
+Bash/Node syntax and diff checks exited 0 without output; changed JavaScript
+and prompt formatting reported `All matched files use Prettier code style!`.
+Existing whole-document formatting warnings for operations, build-plan and
+launch-checklist were reproduced before documentation edits; new content is
+formatted separately. Neither shfmt nor shellcheck is installed; no shell
+formatter/linter success is claimed. An initial sandbox test run suppressed
+individual test results; normal-process isolated reruns provide the passing
+counts. The initial normal run found two help-fixture failures (missing `cat`);
+the fixture was corrected before the successful runs above.
+
+Independent requesting/receiving review identified one valid input-validation
+finding: an absent trailing-slash explicit file path ran the rehearsal before
+publication failed. It now fails during preflight, with both option forms and
+nested paths covered. Follow-up review found no unresolved issues and approved
+commit readiness. The reviewer also reproduced owned-temp cleanup on TERM
+during temporary-file creation. No live rotation, service-probe demonstration,
+production action, launch approval or push occurred.
+
+Safe inspection from the repository root:
+
+```bash
+bash scripts/ops/run-secret-rotation-drill.sh --help
+npm run ops:rotation-test
+```
+
+Phase 12 and prompt 201 remain open pending authentic live evidence, dependency
+security gates and operator sign-off. These commands inspect help or isolated
+contracts; do not run a default or targeted rehearsal against real services to
+demonstrate this patch.
