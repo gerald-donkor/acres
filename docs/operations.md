@@ -3377,3 +3377,106 @@ source authentication and target absence before running a restore. Dry-run
 contacts PostgreSQL but creates no archive, database or success receipt. Prompt
 201 and Phase 12 operator sign-off remain open; no production action or push
 occurred.
+
+## Prompt 267 — harden and test deployment drill (2026-10-07)
+
+The deployment configuration rehearsal accepts attached and separate forms for
+all value options and adds `--cwd`. Its default is the installation repository
+root, even from another caller directory; explicit relative cwd resolves from
+the invocation directory. Config and evidence paths resolve against the
+canonical target. Children run in that target and the three shell checkers
+receive `--cwd=<target>`. Value-option duplicates, missing/blank/option-looking
+separate values, unknown options and positional inputs fail without reflecting
+supplied values. Boolean flags remain idempotent. Attached path values preserve
+spaces and leading dashes.
+
+Before children, probes or output-directory creation, validation checks required
+utilities/local inputs, readable Caddy/Compose files, migration directory,
+Compose parse/root shape, API origin, optional database configuration and
+absent evidence destinations/writable parent chains. API targets use the
+existing `safeUrl` helper plus a root-path restriction; rejected credentials,
+query, fragment, controls, non-HTTP schemes and nonroot paths produce a fixed
+option diagnostic. Probes use the canonical origin; receipt identity keeps
+`targetId(safeUrl(origin))`, preserving the assembler's canonical `href` hash.
+
+Without either supported password, database observations remain offline.
+`PGPASSWORD` takes precedence over `POSTGRES_PASSWORD`; the first nonempty
+value is exported as `PGPASSWORD` and whitespace-only selected credentials fail.
+Connection fields and decimal port 1–65535 are checked before probes, with
+leading-zero decimal normalization and bounded input length. Installed client
+help verified `pg_isready -t 3` and `psql -X -w -v ON_ERROR_STOP=1`; queries
+also inherit `PGCONNECT_TIMEOUT=3`, verified against the
+[PostgreSQL libpq environment-variable documentation](https://www.postgresql.org/docs/current/libpq-envars.html). A readiness failure prints observation
+unavailability and falls back to offline inspection. After readiness succeeds,
+query/authentication failures and empty, negative, fractional, multiline or
+unsafe-integer counts abort; they cannot become zero-valued successful
+observations. Successful output reports counts without claiming migration
+parity, foreign-key validity or production verification. Health fallback and
+bounded curl/payload checks retain their contracts.
+
+Default receipt names include timestamp, process ID and UUID. Explicit output
+must be absent, including directories and dangling symlinks. New directories
+are private without changing existing permissions. Complete JSON is written to
+a uniquely owned 0600 temporary file beside the destination and published with
+an exclusive hard link (`ln -T` prevents directory-race redirection). Existing
+or concurrently inserted destinations are preserved. Exit, error and catchable
+interruption cleanup remove only the owned temp. Success and destructive-DDL
+failure receipts remain `execution_mode: "simulation"` with either dry-run flag,
+including successful optional probes. Early input/child failures emit no success
+receipt. The DDL search remains a heuristic and drain periods configuration;
+no live promotion, rollback, database/service probe or launch approval ran.
+
+The expanded suite executes the actual runner in disposable repositories with
+allowlisted environments, stubbed PostgreSQL/curl/preflight children and
+in-stub password comparisons. It covers target/default cwd, all option forms,
+prerequisite/URL/output failures before side effects, observation failures,
+consumer/hash compatibility, private receipt modes, deterministic concurrent
+insertion, write/publication failures and interruption cleanup.
+
+Actual verification (exit 0 unless indicated):
+
+| Command                                                                                                    | Output                                                                                             |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `npm run ops:deployment-test`                                                                              | `tests 104`, `pass 104`, `fail 0`                                                                  |
+| `node --test --test-name-pattern='all attached/separate options' scripts/ops/run-deployment-drill.spec.js` | `tests 1`, `pass 1`, `fail 0`                                                                      |
+| `npm run ops:caddy-test`                                                                                   | `tests 18`, `pass 18`, `fail 0`                                                                    |
+| `npm run ops:templates`                                                                                    | `ops template check passed`                                                                        |
+| `npm run ops:templates-test`                                                                               | `tests 324`, `pass 324`, `fail 0`                                                                  |
+| `npm run ops:readiness-test`                                                                               | `tests 649`, `pass 649`, `fail 0`                                                                  |
+| `npm run ops:launch-readiness-test`                                                                        | `tests 23`, `pass 23`, `fail 0`                                                                    |
+| `npm run ops:launch-drill-test`                                                                            | `tests 68`, `pass 68`, `fail 0`                                                                    |
+| `npm run lint`                                                                                             | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`                                    |
+| `npm run typecheck`                                                                                        | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`                                 |
+| `npm run build`                                                                                            | `Compiled successfully in 21.7s`, completed Next route generation, `prisma generate && nest build` |
+
+`npm run ops:check` exited 1 at production dependency audit:
+`37 vulnerabilities (9 moderate, 26 high, 2 critical)` and
+`audit error: critical vulnerabilities detected in production dependencies`.
+Later aggregate stages did not run; the affected suites above ran independently.
+Dependencies and lockfile were not changed and the audit/launch gate remains open.
+
+Bash/Node syntax checks and `git diff --check` exited 0 without output.
+Changed JavaScript/prompt Prettier exited 0:
+`All matched files use Prettier code style!`. An initial sandbox test run
+suppressed individual results; normal-process reruns supplied the passing counts.
+Whole-document formatting warnings for `operations.md` and `build-plan.md` were
+reproduced from committed HEAD; new sections are formatted separately. No shell
+formatter pass is claimed.
+
+Independent requesting/receiving review found no critical, important or minor
+issues. Its deterministic TERM injection during temporary-file creation exited
+143 and removed the owned temp. Reviewer sandbox reruns also reproduced
+subprocess-output suppression and do not independently establish a suite pass;
+the coordinator normal-process checks above provide the passing evidence.
+
+Safe inspection from the repository root:
+
+```bash
+bash scripts/ops/run-deployment-drill.sh --help
+npm run ops:deployment-test
+```
+
+`--dry-run` records metadata and does not disable all optional probes. A real
+targeted rehearsal requires separately scoped operator authorization. Phase 12
+and prompt 201 remain open pending live evidence, dependency security gates and
+operator sign-off. Nothing was pushed.

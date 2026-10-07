@@ -1452,8 +1452,13 @@ operator child receipt (`execution_mode: "live"`) when approved:
 
 - Preflight/rehearsal: `bash scripts/ops/run-deployment-drill.sh --dry-run`;
   separately supplied live, release-bound operator child receipt is required.
-- Preflight evidence: `backups/deployment-drill-evidence-<timestamp>.json`
+- Preflight evidence: `backups/deployment-drill-evidence-<timestamp>-<pid>-<uuid>.json`
   always declares `execution_mode: "simulation"`, regardless of dry-run/probe flags.
+  Explicit `--evidence-file` destinations must be absent, including symlinks and
+  directories; receipts are published privately without replacing retained files.
+  `--cwd` selects the target repository for relative config/evidence paths.
+  `--dry-run` records metadata and does not disable all optional probes; use the
+  isolated `npm run ops:deployment-test` suite for safe repository verification.
 - Release evidence: reviewed source commit, client and server manifest digests,
   approved provenance verification for each, and both previous known-good
   digests. Include the release-image preflight and Compose `config --quiet`

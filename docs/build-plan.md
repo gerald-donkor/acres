@@ -1909,3 +1909,28 @@ No dependencies changed and no aggregate gate pass is claimed. Full command
 results and execution limits are recorded in `docs/operations.md` prompt 266.
 No live restore, production action or push occurred; prompt 201 and Phase 12
 operator sign-off remain open.
+
+**Prompt 267 Phase 12K harden and test deployment drill (2026-10-07):**
+The simulation runner accepts attached/separate value options and target cwd,
+rejects ambiguous/unsafe inputs before execution, validates optional database
+credentials/decimal ports and aborts on SQL failures or malformed counts.
+Unavailable servers fall back truthfully to offline inspection. Canonical-origin
+probes preserve the dossier's `href` hash identity. Receipts use private,
+collision-resistant destinations and atomic exclusive publication; retained
+files/directories/symlinks and concurrent insertions are preserved. Catchable
+interruption/error cleanup removes only owned temp evidence. Destructive-DDL
+failures and successful optional probes remain simulation-only.
+
+Actual checks: deployment 104/104; strengthened bounded-probe assertion 1/1;
+Caddy 18/18; templates 324/324; readiness 649/649; launch readiness 23/23;
+launch drill 68/68. Operational templates, root lint/typecheck/build, Bash/Node
+syntax, changed JavaScript/prompt formatting and diff checks passed. New record
+sections are formatted separately from existing whole-document warnings.
+Full `ops:check` exited 1 at dependency audit:
+`37 vulnerabilities (9 moderate, 26 high, 2 critical)`;
+`audit error: critical vulnerabilities detected in production dependencies`.
+Later aggregate stages were not run; affected suites ran independently.
+Independent requesting/receiving review found no critical, important or minor
+issues and confirmed catchable-interruption temp cleanup.
+Full command results and limitations are recorded in `docs/operations.md` prompt 267. No dependency change, live exercise, production action or push occurred;
+Phase 12 and prompt 201 operator sign-off remain open.

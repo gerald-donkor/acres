@@ -10,7 +10,6 @@ set -euo pipefail
 # Never promotes, drains or rolls back a release; receipts always describe simulation.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT_DIR"
 
 DRY_RUN=0
 ALLOW_HSTS=0
@@ -24,33 +23,9 @@ PGPORT="${PGPORT:-5432}"
 PGUSER="${PGUSER:-${POSTGRES_USER:-postgres}}"
 PGDATABASE="${PGDATABASE:-acres}"
 
-# Parse command line arguments
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --dry-run)
-      DRY_RUN=1
-      shift
-      ;;
-    --allow-hsts)
-      ALLOW_HSTS=1
-      shift
-      ;;
-    --caddyfile|--compose-file|--evidence-dir|--evidence-file|--api-url)
-      if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == --* ]]; then
-        printf 'Error: %s requires a non-empty value\n' "$1" >&2
-        exit 1
-      fi
-      case "$1" in
-        --caddyfile) CONFIG_FILE="$2" ;;
-        --compose-file) COMPOSE_FILE="$2" ;;
-        --evidence-dir) EVIDENCE_DIR="$2" ;;
-        --evidence-file) EVIDENCE_FILE="$2" ;;
-        --api-url) API_URL="$2" ;;
-      esac
-      shift 2
-      ;;
-    --help|-h)
-      cat <<'EOF'
+fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+usage() {
+cat <<'EOF'
 Usage: scripts/ops/run-deployment-drill.sh [options]
 
 Deployment configuration preflight/rehearsal runner for Acres.
@@ -58,22 +33,149 @@ Checks Caddy/Compose configuration, a migration DDL heuristic and operational te
 Optionally observes health and displays a suggested rollback command; never deploys or rolls back.
 
 Options:
+  --cwd <path>               Target repository (default: installation root)
   --dry-run                  Record dry-run invocation metadata (default: false; always preflight)
   --allow-hsts               Accept active approved HSTS in selected Caddyfile
   --caddyfile <file>         Path to Caddyfile template (default: infra/caddy/Caddyfile.example)
   --compose-file <file>      Path to production Compose template (default: infra/compose/docker-compose.production.example.yml)
   --evidence-dir <dir>       Directory for JSON drill evidence (default: backups)
-  --evidence-file <file>     Exact destination path for JSON evidence file
-  --api-url <url>            URL to target API instance (default: http://localhost:3001)
+  --evidence-file <file>     Absent destination path for JSON evidence file
+  --api-url <url>            HTTP(S) origin for target API instance (default: http://localhost:3001)
   --help, -h                 Show this help message
+
+Value options accept --option=value too; duplicates are errors. Boolean flags are idempotent.
+Relative config/evidence paths resolve against --cwd. Receipts always describe simulation.
 EOF
-      exit 0
-      ;;
-    *)
-      printf 'Error: Unknown option "%s"\n' "$1" >&2
-      exit 1
-      ;;
+}
+TARGET_CWD="$ROOT_DIR"
+declare -A SEEN=()
+while (($#)); do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --allow-hsts) ALLOW_HSTS=1; shift ;;
+    --cwd|--cwd=*|--caddyfile|--caddyfile=*|--compose-file|--compose-file=*|--evidence-dir|--evidence-dir=*|--evidence-file|--evidence-file=*|--api-url|--api-url=*)
+      opt="${1%%=*}"
+      [[ -z "${SEEN[$opt]:-}" ]] || fail "Repeated $opt option"
+      if [[ "$1" == *=* ]]; then
+        val="${1#*=}"; shift
+      else
+        (($# >= 2)) && [[ "$2" != -* ]] || fail "$opt requires a non-empty value"
+        val="$2"; shift 2
+      fi
+      [[ "$val" =~ [^[:space:]] ]] || fail "$opt requires a non-empty value"
+      SEEN[$opt]=1
+      case "$opt" in
+        --cwd) TARGET_CWD="$val" ;;
+        --caddyfile) CONFIG_FILE="$val" ;;
+        --compose-file) COMPOSE_FILE="$val" ;;
+        --evidence-dir) EVIDENCE_DIR="$val" ;;
+        --evidence-file) EVIDENCE_FILE="$val" ;;
+        --api-url) API_URL="$val" ;;
+      esac ;;
+    *) fail 'Unknown option or unexpected positional argument' ;;
   esac
+done
+
+[[ -d "$TARGET_CWD" && -r "$TARGET_CWD" && -x "$TARGET_CWD" ]] || fail 'Invalid --cwd directory'
+TARGET_CWD="$(cd -- "$TARGET_CWD" 2>/dev/null && pwd -P)" || fail 'Invalid --cwd directory'
+cd -- "$TARGET_CWD" || fail 'Invalid --cwd directory'
+for tool in node bash date dirname find wc grep mkdir mktemp chmod ln rm curl; do
+  command -v "$tool" >/dev/null 2>&1 || fail "Required utility unavailable: $tool"
+done
+for file in "$CONFIG_FILE" "$COMPOSE_FILE" \
+  server/src/health/health.controller.ts scripts/ops/verify-caddy-routing.js \
+  scripts/ops/verify-caddy-routing.spec.js scripts/ops/launch-target-evidence.js; do
+  [[ -f "$file" && -r "$file" ]] || fail 'Required configuration or local input is not a readable regular file'
+done
+for file in check-production-templates.sh scan-secrets.sh check-docker-runtime.sh; do
+  [[ -f "scripts/ops/$file" && -r "scripts/ops/$file" && -x "scripts/ops/$file" ]] || fail 'Required shell checker unavailable'
+done
+MIGRATIONS_DIR="server/prisma/migrations"
+[[ -d "$MIGRATIONS_DIR" && -r "$MIGRATIONS_DIR" && -x "$MIGRATIONS_DIR" ]] || fail 'Prisma migrations directory unavailable'
+
+# Parse selected Compose input before children, probes or output creation.
+node - "$COMPOSE_FILE" <<'NODE'
+try {
+  const fs = require('node:fs');
+  const yaml = require('js-yaml');
+  const c = yaml.load(fs.readFileSync(process.argv[2], 'utf8'));
+  if (!c || typeof c !== 'object' || Array.isArray(c) ||
+      !c.services || typeof c.services !== 'object' || Array.isArray(c.services)) throw new Error();
+} catch {
+  console.error('Error: Invalid Compose document or YAML prerequisite unavailable'); process.exit(1);
+}
+NODE
+
+# Validate before logging/probing; keep URL href identity compatible with the dossier.
+API_URL="$(node - "$API_URL" <<'NODE'
+try {
+  const { safeUrl } = require('./scripts/ops/launch-target-evidence');
+  const href = safeUrl(process.argv[2]);
+  const url = new URL(href);
+  if (url.pathname !== '/') throw new Error();
+  process.stdout.write(url.origin);
+} catch {
+  console.error('Error: Invalid --api-url; expected an HTTP(S) origin');
+  process.exit(1);
+}
+NODE
+)" || exit 1
+
+DB_SELECTED=0
+if [[ -n "${PGPASSWORD:-}" || -n "${POSTGRES_PASSWORD:-}" ]]; then
+  PGPASSWORD="${PGPASSWORD:-$POSTGRES_PASSWORD}"
+  [[ "$PGPASSWORD" =~ [^[:space:]] ]] || fail 'Invalid database password'
+  export PGPASSWORD
+  DB_SELECTED=1
+  for field in PGHOST PGUSER PGDATABASE; do
+    [[ "${!field}" =~ [^[:space:]] ]] || fail "Invalid database connection field: $field"
+  done
+  [[ "$PGPORT" =~ ^[0-9]{1,5}$ ]] && ((10#$PGPORT >= 1 && 10#$PGPORT <= 65535)) || fail 'Invalid PGPORT; expected decimal 1-65535'
+  PGPORT=$((10#$PGPORT))
+  for tool in pg_isready psql; do
+    command -v "$tool" >/dev/null 2>&1 || fail "Required database client unavailable: $tool"
+  done
+  export PGCONNECT_TIMEOUT=3
+fi
+
+# Preflight existing parent chains without creating anything. lstat catches dangling links.
+node - "$EVIDENCE_DIR" "$EVIDENCE_FILE" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+try {
+  const [dir, file] = process.argv.slice(2);
+  if (file) {
+    try { fs.lstatSync(file); throw new Error('exists'); }
+    catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  for (let parent of [dir, ...(file ? [path.dirname(file)] : [])]) {
+    parent = path.resolve(parent);
+    while (true) {
+      try {
+        if (!fs.statSync(parent).isDirectory()) throw new Error();
+        fs.accessSync(parent, fs.constants.W_OK | fs.constants.X_OK);
+        break;
+      } catch (e) {
+        if (e.code !== 'ENOENT') throw e;
+        // A dangling parent symlink cannot be made into a directory.
+        try { fs.lstatSync(parent); throw new Error(); }
+        catch (l) { if (l.code !== 'ENOENT') throw l; }
+        parent = path.dirname(parent);
+      }
+    }
+  }
+} catch {
+  console.error('Error: Evidence destination exists or output parent is unavailable');
+  process.exit(1);
+}
+NODE
+
+# Absolutize paths so attached dash-leading path values never become utility options.
+for field in CONFIG_FILE COMPOSE_FILE EVIDENCE_DIR EVIDENCE_FILE; do
+  if [[ -n "${!field}" && "${!field}" != /* ]]; then
+    printf -v "$field" '%s/%s' "$TARGET_CWD" "${!field}"
+  fi
 done
 
 get_time_ms() {
@@ -88,12 +190,26 @@ get_time_ms() {
 
 START_TIME_MS="$(get_time_ms)"
 TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
-mkdir -p "$EVIDENCE_DIR"
+umask 077
+mkdir -p -- "$EVIDENCE_DIR" 2>/dev/null || fail 'Could not create evidence directory'
 
 if [ -z "$EVIDENCE_FILE" ]; then
-  EVIDENCE_FILE="${EVIDENCE_DIR}/deployment-drill-evidence-${TIMESTAMP}.json"
+  EVIDENCE_FILE="${EVIDENCE_DIR}/deployment-drill-evidence-${TIMESTAMP}-$$-$(node -e 'process.stdout.write(require("node:crypto").randomUUID())').json"
 fi
-mkdir -p "$(dirname "$EVIDENCE_FILE")"
+mkdir -p -- "$(dirname -- "$EVIDENCE_FILE")" 2>/dev/null || fail 'Could not create evidence parent'
+TEMP_EVIDENCE=""
+cleanup() {
+  local status=$?
+  trap - EXIT INT TERM HUP
+  if [[ -n "$TEMP_EVIDENCE" ]]; then
+    rm -f -- "$TEMP_EVIDENCE" || status=1
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 DRILL_STATUS="success"
 SCHEMA_BACKWARD_COMPATIBLE=true
@@ -119,12 +235,6 @@ printf '   ✓ Caddy routing, S3 SigV4 preservation, and security headers verifi
 
 # 2. Database Migration Chain & Backward Compatibility Check
 printf '2. Inspecting database migration chain and backward compatibility...\n'
-MIGRATIONS_DIR="server/prisma/migrations"
-if [ ! -d "$MIGRATIONS_DIR" ]; then
-  printf 'Error: Prisma migrations directory missing at %s\n' "$MIGRATIONS_DIR" >&2
-  exit 1
-fi
-
 MIGRATION_COUNT="$(find "$MIGRATIONS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)"
 printf '   Found %s migration directories in %s\n' "$MIGRATION_COUNT" "$MIGRATIONS_DIR"
 
@@ -138,26 +248,39 @@ else
   printf '   ✓ No destructive DDL matched by the heuristic (compatibility still needs live inspection).\n'
 fi
 
-# Optional live database check if credentials exist and pg_isready succeeds
+# Optional observations never establish production verification or migration parity.
 DB_LIVE_CHECK=false
-if [ -n "${PGPASSWORD:-}" ] || [ -n "${POSTGRES_PASSWORD:-}" ]; then
-  if pg_isready -h "$PGHOST" -p "$PGPORT" -q 2>/dev/null; then
-    APPLIED_MIGRATIONS="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -t -A -c "SELECT count(*) FROM \"_prisma_migrations\" WHERE rolled_back_at IS NULL;" 2>/dev/null || echo "0")"
-    UNVALIDATED_FKS="$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -t -A -c "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated;" 2>/dev/null || echo "0")"
-    printf '   ✓ Live database verified: %s applied migrations, %s unvalidated foreign keys.\n' "$APPLIED_MIGRATIONS" "$UNVALIDATED_FKS"
+count_query() {
+  local result
+  result="$(psql -X -w -v ON_ERROR_STOP=1 -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -t -A -c "$1" 2>/dev/null)" || fail 'Database count query failed'
+  node - "$result" <<'NODE'
+const value = process.argv[2].trim();
+if (!/^[0-9]+$/.test(value) || !Number.isSafeInteger(Number(value))) {
+  console.error('Error: Invalid database count result'); process.exit(1);
+}
+process.stdout.write(String(Number(value)));
+NODE
+}
+if ((DB_SELECTED)); then
+  if pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -t 3 -q 2>/dev/null; then
+    APPLIED_MIGRATIONS="$(count_query 'SELECT count(*) FROM "_prisma_migrations" WHERE rolled_back_at IS NULL;')" || exit 1
+    UNVALIDATED_FKS="$(count_query "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated;")" || exit 1
+    printf '   Observed database counts: %s applied migrations, %s unvalidated foreign keys.\n' "$APPLIED_MIGRATIONS" "$UNVALIDATED_FKS"
     DB_LIVE_CHECK=true
+  else
+    printf '   Live database observation unavailable; using offline inspection.\n'
   fi
 fi
 if [ "$DB_LIVE_CHECK" = "false" ]; then
-  printf '   ✓ Offline migration structure verified (%s local migration directories).\n' "$MIGRATION_COUNT"
+  printf '   Offline migration structure inspected (%s local migration directories).\n' "$MIGRATION_COUNT"
 fi
 printf '\n'
 
 # 3. Operational Templates, Runtime & Secret Scans
 printf '3. Running operational template validation and secret scans...\n'
-scripts/ops/check-production-templates.sh
-scripts/ops/scan-secrets.sh
-scripts/ops/check-docker-runtime.sh
+scripts/ops/check-production-templates.sh "--cwd=$TARGET_CWD"
+scripts/ops/scan-secrets.sh "--cwd=$TARGET_CWD"
+scripts/ops/check-docker-runtime.sh "--cwd=$TARGET_CWD"
 printf '   ✓ Operational templates, Dockerfile runtime, and secret scans passed cleanly.\n\n'
 
 # 4. Service Health & Readiness Probe Verification
@@ -199,11 +322,15 @@ const fs = require('fs');
 const yaml = require('js-yaml');
 
 const composeFile = process.argv[2] || 'infra/compose/docker-compose.production.example.yml';
-if (!fs.existsSync(composeFile)) {
-  console.error(`Error: Compose file does not exist at "${composeFile}"`);
-  process.exit(1);
+let compose;
+try {
+  compose = yaml.load(fs.readFileSync(composeFile, 'utf8'));
+  if (!compose || typeof compose !== 'object' || Array.isArray(compose) ||
+      !compose.services || typeof compose.services !== 'object' || Array.isArray(compose.services)) throw new Error();
+} catch {
+  console.error('Error: Invalid Compose document'); process.exit(1);
 }
-const compose = yaml.load(fs.readFileSync(composeFile, 'utf8'));
+try {
 const services = compose?.services || {};
 
 // 1. Verify restart policy and bounded stop_grace_period across all services
@@ -310,6 +437,7 @@ for (const svc of ['next', 'api', 'worker', 'postgres', 'valkey', 'garage', 'cla
 console.log('   ✓ Verified graceful drain configuration (Caddy: 30s, Next: 30s, API: 45s, Worker: 60s).');
 console.log('   ✓ Verified application dependency health gating and process signal supervision.');
 console.log('   ✓ Verified network isolation (public edge strictly restricted to Caddy ingress).');
+} catch { console.error('Error: Invalid Compose policy field shape'); process.exit(1); }
 NODE
 
 printf '   ✓ Suggested rollback command (not executed):\n'
@@ -320,7 +448,9 @@ END_TIME_MS="$(get_time_ms)"
 DURATION_MS=$(( END_TIME_MS - START_TIME_MS ))
 DURATION_SEC=$(( DURATION_MS / 1000 ))
 
-node - "$EVIDENCE_FILE" "$TIMESTAMP" "$DURATION_MS" "$CONFIG_FILE" "$COMPOSE_FILE" "$DRY_RUN" "$MIGRATION_COUNT" "$SCHEMA_BACKWARD_COMPATIBLE" "$PROBE_LIVE_TESTED" "$DRILL_STATUS" "$API_URL" <<'NODE'
+TEMP_EVIDENCE="$(mktemp "$(dirname -- "$EVIDENCE_FILE")/.deployment-drill-evidence.XXXXXXXX")" || fail 'Could not create temporary evidence'
+chmod 600 "$TEMP_EVIDENCE" || fail 'Could not protect temporary evidence'
+if ! node - "$TEMP_EVIDENCE" "$TIMESTAMP" "$DURATION_MS" "$CONFIG_FILE" "$COMPOSE_FILE" "$DRY_RUN" "$MIGRATION_COUNT" "$SCHEMA_BACKWARD_COMPATIBLE" "$PROBE_LIVE_TESTED" "$DRILL_STATUS" "$API_URL" <<'NODE'
 const fs = require('node:fs');
 const { safeUrl, targetId } = require('./scripts/ops/launch-target-evidence');
 const [file, timestamp, duration, caddyfile, compose, dry, migrations, compatible, probe, status, apiUrl] = process.argv.slice(2);
@@ -335,8 +465,14 @@ const evidence = {
   graceful_drain_periods_verified: { caddy: '30s', next: '30s', api: '45s', worker: '60s' },
   network_isolation_verified: true, rollback_procedure_verified: true, status,
 };
-fs.writeFileSync(file, JSON.stringify(evidence, null, 2) + '\n');
+try { fs.writeFileSync(file, JSON.stringify(evidence, null, 2) + '\n'); }
+catch { console.error('Error: Could not write evidence'); process.exit(1); }
 NODE
+then fail 'Could not generate evidence'; fi
+# -T prevents a directory inserted at the destination from receiving a nested link.
+ln -T -- "$TEMP_EVIDENCE" "$EVIDENCE_FILE" 2>/dev/null || fail 'Could not publish evidence without replacing destination'
+rm -f -- "$TEMP_EVIDENCE" || fail 'Could not clean temporary evidence'
+TEMP_EVIDENCE=""
 
 printf 'Structured drill evidence emitted to: %s\n\n' "$EVIDENCE_FILE"
 
