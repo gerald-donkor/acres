@@ -1755,25 +1755,44 @@ these repository checks establishes a production runtime or journey result.
 ## 4. Unified Drill Execution & Evidence Dossier
 
 `scripts/ops/run-launch-drills.sh` runs all 7 stages and writes
-`backups/launch-evidence-dossier-<timestamp>-<run-id>.json`:
+`backups/launch-evidence-dossier-<uuid>.json`:
 
-| # | `stage_id` | covers |
-| --- | --- | --- |
-| 1 | `static_templates` | production templates, docker runtime, secret scan; `static-integrity-evidence-<timestamp>.json` |
-| 2 | `supply_chain_sast` | SBOM + licenses, SAST scan, container security |
-| 3 | `ingress_deployment` | Caddy routing verify, deployment configuration preflight/rehearsal |
-| 4 | `volume_encryption` | volume declarations + limited local filename scan preflight |
-| 5 | `secret_rotation` | secret rotation drill |
-| 6 | `capacity_alerting` | capacity benchmark, DoS resilience, alert simulation |
-| 7 | `disaster_recovery` | restore drill + storage reconciliation |
+| #   | `stage_id`           | covers                                                                                          |
+| --- | -------------------- | ----------------------------------------------------------------------------------------------- |
+| 1   | `static_templates`   | production templates, docker runtime, secret scan; `static-integrity-evidence-<timestamp>.json` |
+| 2   | `supply_chain_sast`  | SBOM + licenses, SAST scan, container security                                                  |
+| 3   | `ingress_deployment` | Caddy routing verify, deployment configuration preflight/rehearsal                              |
+| 4   | `volume_encryption`  | volume declarations + limited local filename scan preflight                                     |
+| 5   | `secret_rotation`    | secret rotation drill                                                                           |
+| 6   | `capacity_alerting`  | capacity benchmark, DoS resilience, alert simulation                                            |
+| 7   | `disaster_recovery`  | restore drill + storage reconciliation                                                          |
 
-Flags: `--dry-run` (offline where the underlying tool supports it),
-`--json` (print dossier to stdout), `--output <path>`, `--evidence-dir <dir>`,
-`--verbose`, `--help`. Exit 0 only when every stage passes; any failure exits
-1 with the failing stage named in the dossier (`error_message`) and on the
-console. The real static-integrity child may contact npm; Stage 7 needs drill
-infra and complete recovery evidence (§3.6). Only the fixture test suite is
-fully isolated from live services.
+Flags: `--dry-run`, `--json`, `--verbose`, `--allow-hsts`, `--help`/`-h`,
+and value options `--output`, `--evidence-dir`, `--caddyfile`, `--compose-file`,
+`--target-url`, `--api-url`, `--database-telemetry-file`. Value options accept
+separate or attached `=` values once each. Duplicates, blanks, controls, unknown
+flags and positional input fail before resources or children. Relative paths
+resolve against the installed repository regardless of caller cwd. Explicit
+`--output` still retains logs/receipts under `--evidence-dir`; it does not
+suppress that directory. The final dossier must be absent, including files,
+directories and links. Output equal to or above the evidence directory is
+rejected before creation. Parent directories must be usable directories without
+symlink ancestors. Existing parent permissions are preserved.
+
+Exit 0 requires seven passing stages and successful verification/publication/
+cleanup. Evaluated stage failures continue through all seven stages, publish a
+complete FAILED dossier and exit 1. Invocation, machinery, publication or
+unverified termination failures can stop without a dossier. Child exits and
+receipt validity are independently required. Completion output remains pending
+receipt checks until the final validated verdict. Console errors are fixed;
+private child diagnostics stay in retained logs.
+
+`--dry-run` disables supported child mutation/traffic. Static integrity can
+contact npm, rotation preflight can observe configured reachability, and
+reconciliation needs drill services. Rotation and reconciliation always receive
+`--dry-run`; dry restore lacks successful recovery evidence. Only fixture tests
+are isolated from services. No live unified execution is authorized by the
+repository implementation workflow.
 
 **Targeted drill invocation (prompt 202):** In a separately approved drill window,
 use `bash scripts/ops/run-launch-drills.sh --caddyfile <materialized-Caddyfile>
@@ -1805,11 +1824,14 @@ process.argv[1])))' '<approved-benchmark-URL>'`. It must include
 `poolAcquisitionLatency` and `queryExecutionDuration` p50Ms/p95Ms/p99Ms for
 both roles, and `serverActivity.lockWaits/maxTransactionDurationSec`.
 The file is capped at 64 KiB. Missing, stale, mismatched, nonfinite, or breached
-telemetry fails Stage 6. Alert rule simulation remains simulation; operator
+telemetry rejects the invocation before resources, stages or service probes;
+Stage 6 also revalidates it against the completed run using the existing
+60-second scrape tolerance. Alert rule simulation remains simulation; operator
 verification of alert delivery, live TLS, promotion/rollback, and sign-off is
 separate. A 7/7 drill dossier alone cannot approve production.
 
 The Unified Launch Evidence Dossier publishes root `execution_mode: "simulation"` alongside `environment: "drill"` and aggregates structured baselines from child evidence across all operational dimensions:
+
 - `staticIntegrityBaseline` (stage 1): the three fixed checks, their exit codes, and total/passed/failed counts; `summary.staticIntegrityCompliance` is passed only when the complete child evidence is valid and stage 1 passed;
 - `supplyChainBaseline` (stage 2): package inventory count, license compliance verification, license violations, SAST scanned files, findings count, triaged/expired/blocking findings, container security validity, and container security checks count;
 - `deploymentBaseline` (stage 3, preflight/rehearsal only): `deploymentPreflight: "simulation"`, schema compatibility heuristic, Caddy routing verification, rollback procedure verification, network isolation, migration count, and tested routes;
@@ -1831,18 +1853,37 @@ Limits are 16 MiB SBOM, 64 KiB capacity aggregate, and 1 MiB other reports.
 Every required baseline/compliance failure updates its stage and the final
 counts/summary before `overall_status` is computed.
 
-Selected output destinations have exclusive invocation locks. Existing regular
-output is invalidated before children start, then complete JSON is published by
-an atomic rename from an owned temporary file. `--output` keeps its exact name,
-including non-JSON extensions; `--json` prints that published dossier. Normal
-failed drills publish complete failed dossiers. Catchable interruption removes
-only the owned publication temp/lock and terminates its stage group; retained
-run trees/logs remain available. A SIGKILL or host loss can leave a lock/temp:
-confirm its owner is stopped before operator cleanup; the runner never steals
-it. Preserve trees referenced by active evidence and dispose only explicitly
-selected inactive runs, never a shared-directory sweep. Controlled filesystem
-access is required; freshness/private paths do not prove cryptographic
-provenance or production acceptance.
+Current publication/cleanup contract (prompt 271): invocation-token locks
+reserve absent outputs. Existing dossiers survive byte-for-byte; operators must
+select a fresh absent destination to regenerate evidence. Complete JSON is
+written to owned same-directory staging, read back with a 1 MiB bound and checked
+against the real assembler and exact invocation before exclusive atomic hard-link
+publication. A non-cooperating concurrent destination wins without replacement.
+Schema `1.0.0`, seven ordered IDs, counts, verdict, simulation/drill root markers,
+target hashes and registered artifact paths remain checked. The parent's private
+snapshot is independently verified before counts/`--json`; the final destination
+is never reread for its verdict. Human progress still precedes JSON, including
+on evaluated failure. Cleanup failure cannot print a passing summary.
+
+Linux procfs with visible process-group states is required. Main/cleanup use
+Bash `wait -f`, so stopping a job does not complete it. Ownership remains until
+active same-group members terminate. Descendants outliving a successful leader
+fail that stage and are terminated before later work; bounded TERM polling
+escalates to KILL only for that owned group. INT/TERM/HUP stop later stages and
+preserve signal exits 130/143/129 when cleanup succeeds. Failure to verify
+termination exits nonzero and retains the reservation for operator inspection.
+The runner reaps its direct leader; terminated orphan zombies are host-owned.
+
+Catchable cleanup removes only owned publication staging/lock and private
+control snapshots. Run trees/logs/receipts remain, including failed and
+interrupted runs. Partial staging-close failures remain owned for cleanup;
+failed unlink retains the token lock for retry. SIGKILL, host loss or deliberate
+detachment into another group can leave resources/processes. Confirm ownership
+and termination before explicit operator cleanup; the runner never steals a
+reservation or sweeps shared directories. Preserve trees referenced by evidence.
+Controlled filesystem/process visibility is required; arbitrary write access to
+owned directories is outside these guarantees. Freshness/private paths do not
+prove cryptographic provenance or production acceptance.
 
 Secret rotation always runs `--dry-run`; reconciliation remains read-only and
 requires live services. Dry restore preflight supplies no successful receipt,
@@ -1851,12 +1892,21 @@ nested capacity, alert, DoS, and database gates. Prompt 234 (2026-09-30) resolve
 the readiness Category 5 producer-field mismatch and aligns the capacity-specific
 API identity with the DoS origin hash; see `docs/operations.md`. Its separate
 production gate stays fail-closed.
-Safe inspection is `npm run ops:launch-drill-test` (57/57 hermetic tests),
-not an unstubbed unified dry run. The real runner may audit dependencies and
-read drill services. Operator sign-off remains required.
+Safe inspection from the repository root:
+
+```bash
+bash scripts/ops/run-launch-drills.sh --help
+npm run ops:launch-drill-test
+```
+
+Prompt 271 verification: `tests 162`, `pass 162`, `fail 0`. Independent follow-up
+review passed all three reviewed fixes with focused `tests 14`, `pass 14`,
+`fail 0`. No unstubbed unified dry or live run was performed. Production audit
+still blocks (`37 vulnerabilities (9 moderate, 26 high, 2 critical)`), and
+operator sign-off remains required.
 
 Reference a dossier from an approved readiness section by placing its
-`backups/launch-evidence-dossier-<timestamp>-<run-id>.json` path in that section's
+`backups/launch-evidence-dossier-<uuid>.json` path in that section's
 `evidence` array; the validator confirms the file exists, parses as JSON, and
 rejects dossiers whose `overall_status`/`status` is `"FAILED"`, or whose
 underlying baselines report breach or compliance failure.
@@ -2253,7 +2303,7 @@ operators own authentic live evidence and human sign-off.
 | 11 | optional_ai_posture | Preflight posture check; separately inspected live operator receipt required on approval | product-and-security-lead | |
 
 Launch is approved only when all 11 rows are signed, the unified dossier
-(`backups/launch-evidence-dossier-<timestamp>-<run-id>.json`) reports `PASSED`, and
+(`backups/launch-evidence-dossier-<uuid>.json`) reports `PASSED`, and
 `node scripts/ops/check-launch-readiness.js <operator-readiness.json>` exits 0.
 Category 5 (`slo_and_alerting`) approval requires operator confirmation of all
 11 operational alert rules, availability target ≥ 99.9%, HTTP p95 latency ≤ 500ms,

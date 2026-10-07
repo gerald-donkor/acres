@@ -141,33 +141,80 @@ function temporaryPath(outputPath, token) {
   );
 }
 
+// Read-only preflight: check every existing ancestor before creating anything.
+function outputPreflight(outputPath, evidenceDirectory) {
+  const text = (v) =>
+    typeof v === "string" && v.trim() && !/[\x00-\x1f\x7f-\x9f]/.test(v);
+  if (
+    !text(outputPath) ||
+    outputPath.endsWith(path.sep) ||
+    !text(evidenceDirectory)
+  )
+    throw Error("invalid output paths");
+  const output = path.resolve(outputPath);
+  const evidence = path.resolve(evidenceDirectory);
+  if (evidence === output || evidence.startsWith(output + path.sep))
+    throw Error("conflicting output paths");
+  const checkParents = (value) => {
+    const resolved = path.resolve(value);
+    let current = path.parse(resolved).root;
+    for (const part of resolved
+      .slice(current.length)
+      .split(path.sep)
+      .filter(Boolean)) {
+      fs.accessSync(current, fs.constants.X_OK);
+      const parent = current;
+      current = path.join(current, part);
+      try {
+        const stat = fs.lstatSync(current);
+        if (!stat.isDirectory() || stat.isSymbolicLink())
+          throw Error("invalid parent");
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+        // Remaining descendants do not exist. No mkdir is performed here.
+        fs.accessSync(parent, fs.constants.W_OK | fs.constants.X_OK);
+        return;
+      }
+    }
+    fs.accessSync(current, fs.constants.W_OK | fs.constants.X_OK);
+  };
+  checkParents(evidenceDirectory);
+  checkParents(path.dirname(path.resolve(outputPath)));
+  for (const value of [outputPath, `${outputPath}.lock`]) {
+    try {
+      fs.lstatSync(value);
+      throw Error("destination exists");
+    } catch (e) {
+      if (e.code !== "ENOENT") throw e;
+    }
+  }
+}
+
 function prepareOutput(outputPath, token) {
+  if (typeof token !== "string" || !token || /[\x00-\x1f\x7f-\x9f]/.test(token))
+    throw Error("invalid ownership token");
+  outputPreflight(outputPath, path.dirname(outputPath));
   directory(path.dirname(outputPath), true);
   const lock = `${outputPath}.lock`;
   const fd = fs.openSync(lock, "wx", 0o600);
   let temporaryOwned = false;
   try {
     fs.writeFileSync(fd, token);
-    fs.closeSync(fs.openSync(temporaryPath(outputPath, token), "wx", 0o600));
+    const temporaryFd = fs.openSync(
+      temporaryPath(outputPath, token),
+      "wx",
+      0o600,
+    );
     temporaryOwned = true;
-    if (
-      fs.existsSync(outputPath) ||
-      fs.lstatSync(path.dirname(outputPath)).isSymbolicLink()
-    ) {
-      const stat = fs.lstatSync(outputPath);
-      if (!stat.isFile() || stat.isSymbolicLink())
-        throw Error("invalid output destination");
-      fs.unlinkSync(outputPath);
-    } else {
-      // existsSync returns false for dangling symlinks.
-      try {
-        fs.lstatSync(outputPath);
-        throw Error("invalid output destination");
-      } catch (e) {
-        if (e.code !== "ENOENT") throw e;
-      }
+    fs.closeSync(temporaryFd);
+    try {
+      fs.lstatSync(outputPath);
+      throw Error("destination exists");
+    } catch (e) {
+      if (e.code !== "ENOENT") throw e;
     }
   } catch (e) {
+    // Retain the ownership lock if staging cleanup fails so release can retry.
     if (temporaryOwned) fs.unlinkSync(temporaryPath(outputPath, token));
     fs.unlinkSync(lock);
     throw e;
@@ -214,8 +261,32 @@ function releaseOutput(outputPath, token) {
     if (fd !== undefined) fs.closeSync(fd);
   }
 }
-function publish(outputPath, dossier, token) {
+function publish(outputPath, dossier, token, verify = () => {}) {
   directory(path.dirname(outputPath));
+  if (token) {
+    const lock = `${outputPath}.lock`;
+    const fd = fs.openSync(
+      lock,
+      fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
+    );
+    try {
+      const stat = fs.fstatSync(fd);
+      if (!stat.isFile() || stat.size > 4096)
+        throw Error("invalid reservation");
+      const bytes = Buffer.alloc(4097);
+      const size = fs.readSync(fd, bytes, 0, bytes.length, 0);
+      const named = fs.lstatSync(lock);
+      if (
+        size !== stat.size ||
+        bytes.subarray(0, size).toString("utf8") !== token ||
+        named.ino !== stat.ino ||
+        named.dev !== stat.dev
+      )
+        throw Error("unowned reservation");
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
   const temporary = token
     ? temporaryPath(outputPath, token)
     : path.join(
@@ -226,6 +297,8 @@ function publish(outputPath, dossier, token) {
     fd;
   try {
     const json = JSON.stringify(dossier, null, 2) + "\n";
+    if (!dossier || typeof dossier !== "object" || Array.isArray(dossier))
+      throw Error("invalid dossier");
     fd = token
       ? fs.openSync(
           temporary,
@@ -241,14 +314,17 @@ function publish(outputPath, dossier, token) {
     fs.writeFileSync(fd, json);
     fs.closeSync(fd);
     fd = undefined;
-    try {
-      const stat = fs.lstatSync(outputPath);
-      if (!stat.isFile() || stat.isSymbolicLink())
-        throw Error("invalid output destination");
-    } catch (e) {
-      if (e.code !== "ENOENT") throw e;
-    }
-    fs.renameSync(temporary, outputPath);
+    const written = readReceipt(
+      temporary,
+      path.dirname(outputPath),
+      1024 * 1024,
+    );
+    if (JSON.stringify(written, null, 2) + "\n" !== json)
+      throw Error("incomplete write");
+    verify(written);
+    // link(2) fails atomically if any competing destination exists.
+    fs.linkSync(temporary, outputPath);
+    return json;
   } finally {
     if (fd !== undefined) fs.closeSync(fd);
     if (owned) {
@@ -260,7 +336,6 @@ function publish(outputPath, dossier, token) {
     }
   }
 }
-
 const count = (n) => Number.isSafeInteger(n) && n >= 0;
 const finite = (n) => typeof n === "number" && Number.isFinite(n) && n >= 0;
 function validSummaryFields(key, e) {
@@ -1103,68 +1178,122 @@ function assemble(config) {
   return dossier;
 }
 
+// This verifies the serialized representation independently of the producer object.
+function validateDossier(dossier, config) {
+  const expected = assemble(config);
+  if (JSON.stringify(dossier) !== JSON.stringify(expected))
+    throw Error("dossier does not match invocation");
+  if (
+    dossier.version !== "1.0.0" ||
+    dossier.environment !== "drill" ||
+    dossier.execution_mode !== "simulation" ||
+    !finite(dossier.duration_seconds) ||
+    !freshTimestamp(dossier.timestamp, config.startedAt, config.endedAt) ||
+    dossier.total_stages !== 7 ||
+    dossier.passed_stages + dossier.failed_stages !== 7 ||
+    dossier.passed_stages !==
+      dossier.stages.filter((s) => s.status === "PASSED").length ||
+    dossier.overall_status !== (dossier.failed_stages ? "FAILED" : "PASSED")
+  )
+    throw Error("incomplete dossier");
+  for (const stage of dossier.stages) {
+    const dir = path.join(config.runDir, stage.stage_id);
+    const registered = [
+      path.join(dir, `launch-drill-stage-${stage.stage_id}.log`),
+      ...Object.values(RECEIPTS[stage.stage_id]).map((name) =>
+        path.join(dir, name),
+      ),
+      config.outputPath,
+    ];
+    if (JSON.stringify(stage.artifacts) !== JSON.stringify(registered))
+      throw Error("unexpected artifacts");
+  }
+}
+
+function assemblyConfig(outputPath, args) {
+  if (args.length !== 17) throw Error("invalid arguments");
+  const [
+    timestamp,
+    seconds,
+    idsRaw,
+    descRaw,
+    statusesRaw,
+    msRaw,
+    errorsRaw,
+    logsRaw,
+    caddyfile,
+    composeFile,
+    targetUrl,
+    apiUrl,
+    allowHsts,
+    dryRun,
+    start,
+    end,
+    runDir,
+  ] = args;
+  const [ids, descriptions, statuses, durations, errors, logs] = [
+    idsRaw,
+    descRaw,
+    statusesRaw,
+    msRaw,
+    errorsRaw,
+    logsRaw,
+  ].map(JSON.parse);
+  if (
+    ![ids, descriptions, statuses, durations, errors, logs].every(
+      (v) => Array.isArray(v) && v.length === 7,
+    )
+  )
+    throw Error("invalid manifest");
+  const stages = ids.map((id, i) => ({
+    stage_id: id,
+    description: descriptions[i],
+    status: statuses[i],
+    duration_ms: durations[i],
+    error_message: errors[i] || null,
+    artifacts: [
+      logs[i],
+      ...Object.values(RECEIPTS[id]).map((name) => path.join(runDir, id, name)),
+    ],
+  }));
+  return {
+    outputPath,
+    timestamp,
+    durationS: Number(seconds),
+    caddyfile,
+    composeFile,
+    targetUrl,
+    apiUrl,
+    allowHsts,
+    dryRun,
+    startedAt: Number(start),
+    endedAt: Number(end),
+    runDir,
+    stages,
+  };
+}
+
 function main(args) {
   const [command, outputPath, ...rest] = args;
   try {
     if (command === "prepare") prepareOutput(outputPath, rest[0]);
     else if (command === "release") releaseOutput(outputPath, rest[0]);
     else if (command === "assemble") {
-      const [
-        timestamp,
-        seconds,
-        idsRaw,
-        descRaw,
-        statusesRaw,
-        msRaw,
-        errorsRaw,
-        logsRaw,
-        caddyfile,
-        composeFile,
-        targetUrl,
-        apiUrl,
-        allowHsts,
-        dryRun,
-        start,
-        end,
-        runDir,
-      ] = rest;
-      const [ids, descriptions, statuses, durations, errors, logs] = [
-        idsRaw,
-        descRaw,
-        statusesRaw,
-        msRaw,
-        errorsRaw,
-        logsRaw,
-      ].map(JSON.parse);
-      const stages = ids.map((id, i) => ({
-        stage_id: id,
-        description: descriptions[i],
-        status: statuses[i],
-        duration_ms: durations[i],
-        error_message: errors[i] || null,
-        artifacts: [
-          logs[i],
-          ...Object.values(RECEIPTS[id]).map((name) =>
-            path.join(runDir, id, name),
-          ),
-        ],
-      }));
-      const dossier = assemble({
-        outputPath,
-        timestamp,
-        durationS: Number(seconds),
-        caddyfile,
-        composeFile,
-        targetUrl,
-        apiUrl,
-        allowHsts,
-        dryRun,
-        startedAt: Number(start),
-        endedAt: Number(end),
-        runDir,
-        stages,
-      });
-      publish(outputPath, dossier, runDir);
+      const config = assemblyConfig(outputPath, rest);
+      const dossier = assemble(config);
+      const json = publish(outputPath, dossier, config.runDir, (written) =>
+        validateDossier(written, config),
+      );
+      // The parent uses this private snapshot instead of re-reading a raced destination.
+      process.stdout.write(json);
+    } else if (command === "verify") {
+      const [snapshot, ...arguments_] = rest;
+      const config = assemblyConfig(outputPath, arguments_);
+      const dossier = readReceipt(snapshot, config.runDir, 1024 * 1024);
+      validateDossier(dossier, config);
+      process.stdout.write(
+        `${dossier.overall_status} ${dossier.passed_stages}`,
+      );
     } else throw Error("invalid command");
     return 0;
   } catch {
@@ -1176,6 +1305,9 @@ if (require.main === module) process.exitCode = main(process.argv.slice(2));
 module.exports = {
   RECEIPTS,
   directory,
+  outputPreflight,
+  validateDossier,
+  main,
   freshTimestamp,
   readReceipt,
   prepareOutput,

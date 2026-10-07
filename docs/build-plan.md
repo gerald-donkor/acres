@@ -2019,3 +2019,35 @@ parse failure was followed by a successful normal-permission build. Full
 behavior/check evidence is in `docs/operations.md` Prompt 270. No dependency
 change, live traffic, deployment, launch approval or push occurred. Phase 12,
 prompt 201 and Category 5 operator sign-off remain open.
+
+**Prompt 271 Phase 12K unified launch-drill runner hardening (2026-10-07):**
+The seven-stage parent validates strict attached/separate values, installed
+helpers/utilities, canonical target/telemetry pairing and both output/evidence
+paths before work. Existing dossiers and competing destinations are preserved;
+UUID defaults require an absent destination. Owned private staging is serialized,
+read back and invocation-checked before exclusive hard-link publication. Counts
+and JSON use an independently verified private snapshot. No receipt validator,
+child algorithm, schema or target-hash convention changed. Stage ownership
+persists through stopped jobs and leader-first exits until active same-group
+descendants terminate; unverified termination stops and retains the reservation.
+Partial-close/unlink cleanup preserves retryable ownership. Logs/receipts/run
+trees remain. Dry mode remains service-dependent; no real unified run occurred.
+
+Actual checks: launch/dossier `tests 162`, `pass 162`, `fail 0`; final helper
+31/31; combined related runner and readiness regressions 1059/1059;
+templates 324/324. Template check, root
+lint/typecheck/build, Bash/Node syntax, changed-spec/prompt/region formatting
+and diff checks passed. Whole-helper formatting warnings reproduce on baseline;
+edited/new regions were formatted separately. Independent review's three
+Important findings were fixed and approved on follow-up (14/14 focused tests,
+no remaining findings). Full details are in `docs/operations.md` Prompt 271 and
+current operator instructions in `docs/launch-checklist.md` §4.
+
+`ops:check` exited 1 at the unchanged production audit: `37 vulnerabilities
+(9 moderate, 26 high, 2 critical)`; `audit error: critical vulnerabilities
+detected in production dependencies`. Later aggregate stages did not run;
+affected isolated suites ran independently. Sandbox subprocess denial and
+Next's TypeScript `--showConfig` parse failure were followed by successful
+normal-permission tests/build. No dependency upgrade, live drill, deployment,
+production approval or push occurred. Phase 12, prompt 201 and operator sign-offs
+remain open.

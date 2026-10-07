@@ -3809,3 +3809,141 @@ interruption regression and helper-preflight checks passed in a focused run
 Follow-up independent review passed the corrected implementation with no
 unresolved critical, important or minor findings. The reviewer independently
 ran selected offline/stubbed tests (15/15) and final export/stop regressions (5/5).
+
+## Prompt 271 — unified launch-drill runner hardening (2026-10-07)
+
+Approved `prompts/271-harden-and-test-unified-launch-drill.md` hardens the
+seven-stage orchestrator and its existing dossier helper. The committed
+baseline was `462a67d662da5406690f893d9b26c99c0690b96a`. No child implementation,
+receipt validator, target-hash convention, dependency, root script or launch
+sign-off changed. Prompt 233's invalidation/rename record above describes the
+former behavior; the current contract below and checklist §4 supersede it.
+
+All value options accept separate/attached forms once. Duplicates, missing,
+blank/control or unknown input fail safely. Paths resolve against the installed
+repository independently of caller cwd, including attached dash-leading paths.
+Installed child/helper paths and required exports/utilities are checked before
+work. Caddy/Compose inputs must be readable regular files; content failure
+remains an evaluated Stage 3 failure. Explicit benchmark/API arguments require
+paired fresh bounded database telemetry before earlier stages or service probes.
+Benchmark normalization retains `href` hashes, capacity/DoS API retains `origin`
+hashes and deployment retains its established href identity. Bare query/fragment
+delimiters, credentials, non-HTTP(S), bad ports and API paths reject. The existing
+telemetry freshness/health/target contract and completed-run recheck remain.
+
+Both evidence directory and final output are checked read-only before creation,
+including nearest existing ancestors, symlinks, retained destinations and
+conflicting output/evidence directory relationships. Explicit output still
+retains logs/receipts in the evidence directory. UUID defaults use
+`launch-evidence-dossier-<uuid>.json`. Existing outputs are preserved exactly;
+operators must choose an absent path to regenerate evidence. New directories
+are private and existing permissions remain. Traps/resource ownership precede
+allocation. Locks contain invocation tokens, and a competing writer cannot
+consume or release another owner's staging or reservation.
+
+Owned same-directory 0600 staging is serialized, independently read with a
+1 MiB bound and checked against the real assembler's complete invocation before
+atomic exclusive `fs.linkSync` publication. Existing or racing regular files,
+directories and links survive. Version `1.0.0`, seven ordered stage IDs, finite
+timing, counts/verdict, root `drill`/`simulation`, selected mode/config/hash and
+registered artifact paths are verified. The assembler returns the exact private
+snapshot; the parent independently verifies that snapshot before counts/JSON
+and never rereads the raced final destination for a verdict. Serialization,
+parseability, publication, output and cleanup failures cannot imply success.
+Complete evaluated FAILED dossiers still publish and exit 1; human progress
+plus `--json` behavior remains. Private child diagnostics are not projected into
+console errors or arbitrary dossier fields.
+
+Stage exits and bounded receipts independently determine the final verdict;
+all seven stages still collect ordinary evaluated failures. Bash monitor mode
+uses `wait -f` for main and cleanup, including stopped jobs. Linux procfs is now
+required for visible process-group states, distinguishing active/stopped
+members from terminated zombies (verified against the
+[Linux proc_pid_stat manual](https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html),
+fields 3/5). Descendants outliving their leader fail the stage and are terminated
+before later stages or publication ownership release. TERM polling is bounded,
+then KILL escalation targets only the owned group; termination is checked before
+clearing ownership. The runner reaps its direct leader; the host owns terminated
+orphan zombies. If termination cannot be verified, the runner exits nonzero,
+stops further work and retains its reservation. Process visibility/controlled
+filesystem access are required; deliberately detached descendants, SIGKILL,
+host loss and arbitrary directory writers are outside these guarantees.
+
+Catchable INT/TERM/HUP stop later stages and preserve exits 130/143/129 when
+cleanup succeeds. Only owned lock/staging and private control snapshots are
+removed; run trees, logs and receipts remain for diagnosis and artifact links.
+Staging ownership is recorded immediately after exclusive open, so failed close
+still cleans its path. Failed unlink preserves the ownership lock for retry.
+Resource cleanup failure exits nonzero before a passing summary. Foreign locks,
+temps and prior evidence remain intact. Operator cleanup requires inspecting a
+specific inactive owner; no shared sweep is authorized.
+
+Dry mode disables supported child mutation/traffic but static integrity may
+contact npm, rotation may observe configured reachability and reconciliation
+needs services. Rotation/reconciliation always stay dry; dry restore lacks
+successful recovery evidence. Default non-dry execution retains Stage 6's dry
+child selection and failed default-drill qualification. Targeted execution stays
+a drill, never production approval. No unstubbed unified invocation, even dry,
+was authorized or run. Safe inspection from the repository root:
+
+```bash
+bash scripts/ops/run-launch-drills.sh --help
+npm run ops:launch-drill-test
+```
+
+Actual-process fixtures allowlist environments and executable tools; fake live
+URLs/telemetry are deterministic stubs. They cannot invoke real network,
+Docker, npm, PostgreSQL or Garage tools. Regressions cover inputs/preflight,
+private permissions, retained and racing destinations, concurrent writers,
+complete/invalid receipts, serializer/publication faults, partial-close/retry,
+cleanup errors, INT/TERM/HUP, stopped/nested/TERM-resistant jobs and the leader
+exiting before its descendant. The next-stage fixture observes termination
+before work, rather than checking only eventual process exit.
+
+Verification:
+
+| Command                                                                        | Actual concise output / result                                                                                                                             |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bash -n scripts/ops/run-launch-drills.sh`                                     | exit 0, no output                                                                                                                                          |
+| `node --check` on helper and both specs                                        | exit 0, no output                                                                                                                                          |
+| `bash scripts/ops/run-launch-drills.sh --help`                                 | updated `Usage: scripts/ops/run-launch-drills.sh [options]`; exit 0                                                                                        |
+| `npm run ops:launch-drill-test`                                                | `tests 162`, `pass 162`, `fail 0`; exit 0                                                                                                                  |
+| Final helper suite with `--test-isolation=none`                                | `tests 31`, `pass 31`, `fail 0`; exit 0                                                                                                                    |
+| `node --test` on six related specs listed below                                | `tests 1059`, `pass 1059`, `fail 0`; exit 0                                                                                                                |
+| `npm run ops:templates`                                                        | `ops template check passed`; exit 0                                                                                                                        |
+| `npm run ops:templates-test`                                                   | `tests 324`, `pass 324`, `fail 0`; exit 0                                                                                                                  |
+| `npm run ops:check`                                                            | exit 1 at `ops:audit`: `37 vulnerabilities (9 moderate, 26 high, 2 critical)`; `audit error: critical vulnerabilities detected in production dependencies` |
+| `npm run lint`                                                                 | all workspaces completed; final `eslint "{src,test}/**/*.ts"`; exit 0                                                                                      |
+| `npm run typecheck`                                                            | shared/client/server completed; `Generated Prisma Client (7.9.1)`; exit 0                                                                                  |
+| `npm run build` with normal permissions                                        | `Compiled successfully in 3.9s`; `Generating static pages using 7 workers (22/22) in 847ms`; server `prisma generate && nest build`; exit 0                |
+| Prettier on both specs/prompt, helper edited regions and both inline JS blocks | `All matched files use Prettier code style!`; exit 0                                                                                                       |
+| `git diff --check`                                                             | exit 0, no output                                                                                                                                          |
+
+The six related specs were `run-capacity-alerting-drill.spec.js`,
+`run-deployment-drill.spec.js`, `run-secret-rotation-drill.spec.js`,
+`run-restore-drill.spec.js`, `check-launch-readiness.spec.js` and
+`launch-readiness.spec.js`, run together under `scripts/ops/` with normal
+subprocess permissions. These are the existing root-script test entrypoints;
+no consumer was weakened. The aggregate stopped at the audit; its subsequent
+stages were not reached. Affected isolated suites ran independently. Dependencies
+and audit policy were unchanged; Phase 12 and prompt 201 remain open.
+
+Typecheck/build ran sequentially. Sandbox process tests initially reported
+`ERR_TEST_FAILURE`; detailed execution identified `spawnSync bash EPERM`.
+Normal-permission hermetic tests passed. The sandboxed build failed with
+`Could not parse output from TypeScript's --showConfig.`; the normal-permission
+retry passed. Initial related integration failures came from existing template
+checks requiring literal launch/static command markers; installed absolute
+commands retain those genuine markers and final related/template suites pass.
+Whole-helper Prettier warnings reproduce on its committed baseline; only edited
+regions were formatted to avoid unrelated rewrites. New documentation sections
+were formatted separately. No shell formatter pass is claimed.
+
+Independent review identified three Important findings: leader exit could leave
+an active owned descendant, staging-close failure could orphan a temporary file,
+and overlapping output/evidence paths could allocate resources before rejection.
+Each was verified, fixed and regression-tested. Follow-up review found no
+remaining Critical, Important or Minor findings and independently passed
+`tests 14`, `pass 14`, `fail 0`. No live drill, deployment, credential mutation,
+production approval or push occurred. Operator launch gates and the critical
+production dependency audit remain unresolved.

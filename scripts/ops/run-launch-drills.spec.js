@@ -5,6 +5,29 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync, spawn } = require("node:child_process");
 
+function liveTelemetry(target, timestamp = new Date().toISOString()) {
+  const { targetId } = require("./launch-target-evidence");
+  const pool = {
+    totalConnections: 2,
+    idleConnections: 1,
+    maxConnections: 10,
+    requestsWaiting: 0,
+  };
+  const latency = { p50Ms: 1, p95Ms: 2, p99Ms: 3 };
+  return {
+    source: "prometheus-live-scrape",
+    targetId: targetId(new URL(target).href),
+    timestamp,
+    probeHealthy: true,
+    postgresExporter: { up: 1, lastScrapeError: 0 },
+    postgresServer: { pgUp: 1, maxConnections: 100, activeConnections: 2 },
+    connectionPool: { api: { ...pool }, worker: { ...pool } },
+    poolAcquisitionLatency: { api: { ...latency }, worker: { ...latency } },
+    queryExecutionDuration: { api: { ...latency }, worker: { ...latency } },
+    serverActivity: { lockWaits: 0, maxTransactionDurationSec: 0 },
+  };
+}
+
 const children = {
   "run-static-integrity-checks.js": "static",
   "generate-sbom.js": "sbom",
@@ -410,6 +433,48 @@ function stub(key, args) {
     }
     if (scenario === "duplicate")
       fs.writeFileSync(file + ".duplicate.json", JSON.stringify(e));
+    if (scenario === "leader-exits") {
+      fs.writeFileSync(file, JSON.stringify(e));
+      const descendant = require("node:child_process").spawn(
+        process.execPath,
+        [
+          "-e",
+          "process.on('SIGTERM',()=>{});process.send('ready');setInterval(()=>{},1000);",
+        ],
+        { stdio: ["ignore", "ignore", "ignore", "ipc"] },
+      );
+      descendant.once("message", () => {
+        fs.writeFileSync(
+          process.env.MARKER,
+          JSON.stringify({
+            pid: process.pid,
+            descendant: descendant.pid,
+            file,
+          }),
+        );
+        descendant.disconnect();
+        descendant.unref();
+      });
+      return;
+    }
+    if (["hold", "stop", "nested", "resist"].includes(scenario)) {
+      let descendant;
+      if (scenario === "nested" || scenario === "resist") {
+        descendant = require("node:child_process").spawn(
+          process.execPath,
+          ["-e", "process.on('SIGTERM',()=>{});setInterval(()=>{},1000);"],
+          { stdio: "ignore" },
+        );
+      }
+      if (scenario === "resist") process.on("SIGTERM", () => {});
+      fs.writeFileSync(
+        process.env.MARKER,
+        JSON.stringify({ pid: process.pid, descendant: descendant?.pid, file }),
+      );
+      setInterval(() => {}, 1000);
+      if (scenario === "stop") process.kill(process.pid, "SIGSTOP");
+      return;
+    }
     if (scenario === "delay") {
       fs.writeFileSync(process.env.MARKER, file);
       setTimeout(() => {
@@ -471,18 +536,33 @@ function fixture(t) {
   const log = path.join(dir, "child-calls.jsonl");
   const output = path.join(dir, "evidence/dossier.json");
   // Allow-list environment: no inherited service credentials, NODE_OPTIONS or test context.
+  const bin = path.join(dir, "bin");
+  fs.mkdirSync(bin);
+  for (const tool of [
+    "bash",
+    "dirname",
+    "date",
+    "mkdir",
+    "mktemp",
+    "sleep",
+    "cat",
+    "rm",
+    "mkfifo",
+  ])
+    fs.symlinkSync(`/usr/bin/${tool}`, path.join(bin, tool));
+  fs.symlinkSync(process.execPath, path.join(bin, "node"));
   const env = (scenario) => ({
-    PATH: process.env.PATH,
+    PATH: bin,
     TMPDIR: os.tmpdir(),
     SCENARIO: scenario || "",
     CHILD_LOG: log,
     MARKER: path.join(dir, "marker"),
     OUTPUT_DEST: output,
   });
-  const run = (args = [], scenario = "") =>
+  const run = (args = [], scenario = "", options = {}) =>
     spawnSync("bash", [path.join(ops, "run-launch-drills.sh"), ...args], {
-      cwd: dir,
-      env: env(scenario),
+      cwd: options.cwd || dir,
+      env: { ...env(scenario), ...(options.env || {}) },
       encoding: "utf8",
       timeout: 15000,
       maxBuffer: 2 * 1024 * 1024,
@@ -511,6 +591,7 @@ function fixture(t) {
   return {
     dir,
     ops,
+    bin,
     log,
     output,
     env,
@@ -598,33 +679,24 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
   assert.equal(r.dossier.targets.mode, "offline");
   assert.equal(r.dossier.execution_mode, "simulation");
   assert.equal(r.dossier.volumeEncryptionBaseline.status, "verified");
-  assert.equal(r.dossier.volumeEncryptionBaseline.volumePreflight, "simulation");
+  assert.equal(
+    r.dossier.volumeEncryptionBaseline.volumePreflight,
+    "simulation",
+  );
   assert.equal(r.dossier.summary.volumeEncryptionCompliance, "passed");
   assert.equal(r.dossier.summary.volumePreflight, "simulation");
   assert.equal(
     r.dossier.deploymentBaseline.caddyRoutingPreflight,
     "simulation",
   );
-  assert.equal(
-    r.dossier.summary.caddyRoutingPreflight,
-    "simulation",
-  );
-  assert.equal(
-    r.dossier.deploymentBaseline.deploymentPreflight,
-    "simulation",
-  );
-  assert.equal(
-    r.dossier.summary.deploymentPreflight,
-    "simulation",
-  );
+  assert.equal(r.dossier.summary.caddyRoutingPreflight, "simulation");
+  assert.equal(r.dossier.deploymentBaseline.deploymentPreflight, "simulation");
+  assert.equal(r.dossier.summary.deploymentPreflight, "simulation");
   assert.equal(
     r.dossier.secretRotationBaseline.rotationPreflight,
     "simulation",
   );
-  assert.equal(
-    r.dossier.summary.rotationPreflight,
-    "simulation",
-  );
+  assert.equal(r.dossier.summary.rotationPreflight, "simulation");
   assert.equal(
     r.dossier.disasterRecoveryBaseline.restorePreflight,
     "simulation",
@@ -637,22 +709,10 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
     r.dossier.databaseTelemetryBaseline.capacityPreflight,
     "simulation",
   );
-  assert.equal(
-    r.dossier.summary.restorePreflight,
-    "simulation",
-  );
-  assert.equal(
-    r.dossier.summary.reconcilePreflight,
-    "simulation",
-  );
-  assert.equal(
-    r.dossier.summary.reconciliationPreflight,
-    "simulation",
-  );
-  assert.equal(
-    r.dossier.summary.capacityPreflight,
-    "simulation",
-  );
+  assert.equal(r.dossier.summary.restorePreflight, "simulation");
+  assert.equal(r.dossier.summary.reconcilePreflight, "simulation");
+  assert.equal(r.dossier.summary.reconciliationPreflight, "simulation");
+  assert.equal(r.dossier.summary.capacityPreflight, "simulation");
   const caddyChild = JSON.parse(
     fs.readFileSync(
       r.dossier.stages[2].artifacts.find((file) =>
@@ -827,6 +887,10 @@ test("live fixture preserves target/config/HSTS forwarding and rejects wrong tar
   const f = fixture(t);
   const caddy = path.join(f.dir, "production.Caddyfile");
   fs.writeFileSync(caddy, "fixture");
+  fs.writeFileSync(
+    path.join(f.dir, "telemetry"),
+    JSON.stringify(liveTelemetry("https://launch.example.test/path")),
+  );
   const args = [
     "--output",
     f.output,
@@ -845,14 +909,8 @@ test("live fixture preserves target/config/HSTS forwarding and rejects wrong tar
   const good = f.run(args);
   assert.equal(good.status, 0, good.stderr);
   const goodDossier = JSON.parse(fs.readFileSync(f.output));
-  assert.equal(
-    goodDossier.databaseTelemetryBaseline.capacityPreflight,
-    "live",
-  );
-  assert.equal(
-    goodDossier.summary.capacityPreflight,
-    "live",
-  );
+  assert.equal(goodDossier.databaseTelemetryBaseline.capacityPreflight, "live");
+  assert.equal(goodDossier.summary.capacityPreflight, "live");
   for (const key of ["deployment", "capacity"])
     assert.ok(
       f
@@ -861,9 +919,12 @@ test("live fixture preserves target/config/HSTS forwarding and rejects wrong tar
         .args.includes("--api-url"),
     );
   for (const scenario of ["capacity:target", "capacity:legacy-api-hash"]) {
-    const bad = f.run(args, scenario);
+    const destination = path.join(f.dir, `${scenario.replace(":", "-")}.json`);
+    const badArgs = [...args];
+    badArgs[1] = destination;
+    const bad = f.run(badArgs, scenario);
     assert.equal(bad.status, 1, bad.stderr);
-    const d = JSON.parse(fs.readFileSync(f.output));
+    const d = JSON.parse(fs.readFileSync(destination));
     assert.equal(d.stages[5].status, "FAILED");
   }
 });
@@ -933,10 +994,9 @@ test("concurrent default runs share parent but never consume or delete unrelated
   assert.equal(fs.readFileSync(unrelated, "utf8"), '{"status":"success"}');
   assert.ok(!JSON.stringify([x, y]).includes("unrelated"));
 });
-test("explicit output rejects second writer; interruption removes old success and owned lock", async (t) => {
+test("explicit output rejects second writer; interruption releases owned lock without publishing", async (t) => {
   const f = fixture(t);
   fs.mkdirSync(path.dirname(f.output));
-  fs.writeFileSync(f.output, '{"overall_status":"PASSED"}');
   const args = [
     "--dry-run",
     "--output",
@@ -983,7 +1043,7 @@ test("nonregular output and symlink evidence destinations reject before child ca
   assert.equal(f.run(["--evidence-dir", path.join(f.dir, "link")]).status, 1);
   assert.equal(f.calls().length, 0);
 });
-test("publication rename failure exits nonzero and leaves no temporary dossier or lock", (t) => {
+test("publication exclusive-link failure exits nonzero and leaves no temporary dossier or lock", (t) => {
   const f = fixture(t),
     r = f.execute("reconcile:publish-blocked");
   assert.equal(r.status, 1);
@@ -1006,6 +1066,10 @@ test("live missing Caddy receipt publishes a complete failed dossier", (t) => {
   const f = fixture(t),
     caddy = path.join(f.dir, "production.Caddyfile");
   fs.writeFileSync(caddy, "fixture");
+  fs.writeFileSync(
+    path.join(f.dir, "telemetry"),
+    JSON.stringify(liveTelemetry("https://launch.example.test/path")),
+  );
   const r = f.run(
     [
       "--output",
@@ -1019,6 +1083,8 @@ test("live missing Caddy receipt publishes a complete failed dossier", (t) => {
       "https://launch.example.test/path",
       "--api-url",
       "https://api.example.test",
+      "--database-telemetry-file",
+      path.join(f.dir, "telemetry"),
     ],
     "caddy:missing",
   );
@@ -1037,3 +1103,543 @@ test("custom output is exact even without a JSON extension", (t) => {
   invariant(d);
   assert.equal(d.overall_status, "PASSED");
 });
+
+const valueFlags = [
+  "--output",
+  "--evidence-dir",
+  "--caddyfile",
+  "--compose-file",
+  "--target-url",
+  "--api-url",
+  "--database-telemetry-file",
+];
+for (const flag of valueFlags) {
+  test(`strict separate/attached arguments reject duplicates and blanks for ${flag}`, (t) => {
+    const f = fixture(t);
+    for (const args of [
+      [`${flag}=`],
+      [`${flag}=   `],
+      [`${flag}=x\x7fcanary`],
+      [flag, " \t "],
+      [flag, "x", flag, "y"],
+      [`${flag}=x`, `${flag}=y`],
+      [flag, "x", `${flag}=y`],
+      [`${flag}=x`, flag, "y"],
+    ]) {
+      const result = f.run(args);
+      assert.notEqual(result.status, 0);
+      assert.ok(
+        !result.stdout.includes("canary") && !result.stderr.includes("canary"),
+      );
+    }
+    assert.deepEqual(f.calls(), []);
+    assert.ok(!fs.existsSync(path.join(f.dir, "backups")));
+  });
+}
+
+test("attached path options, dash-leading paths and different caller cwd preserve installation-root semantics", (t) => {
+  const f = fixture(t),
+    caller = path.join(f.dir, "caller");
+  fs.mkdirSync(caller);
+  const result = f.run(
+    [
+      "--dry-run",
+      "--json",
+      "--verbose",
+      "--output=-receipt.json",
+      "--evidence-dir=-stage-evidence",
+      "--caddyfile=infra/caddy/Caddyfile.example",
+      "--compose-file=infra/compose/docker-compose.production.example.yml",
+    ],
+    "",
+    { cwd: caller },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const output = path.join(f.dir, "-receipt.json");
+  invariant(JSON.parse(fs.readFileSync(output)));
+  assert.ok(!fs.existsSync(path.join(caller, "-receipt.json")));
+  assert.ok(fs.existsSync(path.join(f.dir, "-stage-evidence")));
+  assert.match(result.stdout, /Running stage static_templates/);
+});
+
+for (const kind of ["file", "directory", "symlink", "dangling"]) {
+  test(`retained ${kind} prevents children and preserves all evidence`, (t) => {
+    const f = fixture(t);
+    fs.mkdirSync(path.dirname(f.output));
+    if (kind === "file")
+      fs.writeFileSync(
+        f.output,
+        '{"overall_status":"PASSED","canary":"retained"}',
+      );
+    if (kind === "directory") fs.mkdirSync(f.output);
+    if (kind === "symlink" || kind === "dangling") {
+      const target = path.join(f.dir, "target");
+      if (kind === "symlink") fs.writeFileSync(target, "retained");
+      fs.symlinkSync(target, f.output);
+    }
+    const before = fs.lstatSync(f.output);
+    const result = f.run([
+      "--dry-run",
+      "--output",
+      f.output,
+      "--evidence-dir=unused",
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(fs.lstatSync(f.output).ino, before.ino);
+    assert.equal(f.calls().length, 0);
+    assert.ok(!fs.existsSync(path.join(f.dir, "unused")));
+    assert.ok(!fs.existsSync(f.output + ".lock"));
+    assert.ok(!result.stdout.includes("Overall Result: PASSED"));
+  });
+}
+
+for (const kind of [
+  "trailing",
+  "non-directory",
+  "symlink-parent",
+  "dangling-parent",
+  "invalid-evidence-dir",
+]) {
+  test(`invalid output parents reject before any creation: ${kind}`, (t) => {
+    const f = fixture(t),
+      parent = path.join(f.dir, "parent");
+    let output = path.join(parent, "out"),
+      evidence = path.join(f.dir, "unused");
+    if (kind === "trailing") output += "/";
+    if (kind === "non-directory") fs.writeFileSync(parent, "canary");
+    if (kind === "symlink-parent") fs.symlinkSync(f.dir, parent);
+    if (kind === "dangling-parent")
+      fs.symlinkSync(path.join(f.dir, "missing"), parent);
+    if (kind === "invalid-evidence-dir") {
+      fs.writeFileSync(parent, "canary");
+      evidence = parent;
+    }
+    assert.equal(
+      f.run(["--dry-run", "--output", output, "--evidence-dir", evidence])
+        .status,
+      1,
+    );
+    assert.equal(f.calls().length, 0);
+    assert.ok(!fs.existsSync(path.join(f.dir, "unused")));
+  });
+}
+
+test("private creation preserves existing output/evidence directory permissions and retains logs with explicit output", (t) => {
+  const f = fixture(t),
+    evidence = path.join(f.dir, "logs"),
+    outputDir = path.dirname(f.output);
+  fs.mkdirSync(evidence, { mode: 0o755 });
+  fs.mkdirSync(outputDir, { mode: 0o750 });
+  const r = f.run([
+    "--dry-run",
+    "--output",
+    f.output,
+    "--evidence-dir",
+    evidence,
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fs.statSync(evidence).mode & 0o777, 0o755);
+  assert.equal(fs.statSync(outputDir).mode & 0o777, 0o750);
+  assert.equal(fs.statSync(f.output).mode & 0o777, 0o600);
+  const run = fs
+    .readdirSync(evidence)
+    .find((n) => n.startsWith("launch-drill-run-"));
+  assert.equal(fs.statSync(path.join(evidence, run)).mode & 0o777, 0o700);
+  assert.ok(!fs.existsSync(path.join(evidence, run, ".dossier-view.json")));
+  assert.ok(
+    fs.existsSync(
+      path.join(
+        evidence,
+        run,
+        "static_templates",
+        "launch-drill-stage-static_templates.log",
+      ),
+    ),
+  );
+});
+
+for (const tool of ["node", "date", "mkdir", "mktemp", "sleep", "cat", "rm"]) {
+  test(`missing ${tool} fails before children or evidence`, (t) => {
+    const f = fixture(t);
+    fs.unlinkSync(path.join(f.bin, tool));
+    assert.notEqual(f.run(["--dry-run"]).status, 0);
+    assert.equal(f.calls().length, 0);
+    assert.ok(!fs.existsSync(path.join(f.dir, "backups")));
+  });
+}
+for (const file of [
+  "assemble-launch-dossier.js",
+  "run-restore-drill.sh",
+  "verify-volume-encryption.js",
+  "run-capacity-alerting-drill.sh",
+]) {
+  test(`missing installed ${file} fails before stages`, (t) => {
+    const f = fixture(t);
+    fs.unlinkSync(path.join(f.ops, file));
+    assert.equal(f.run(["--dry-run"]).status, 1);
+    assert.equal(f.calls().length, 0);
+    assert.ok(!fs.existsSync(path.join(f.dir, "backups")));
+  });
+}
+
+function liveArgs(f, changes = {}) {
+  const target = changes.target || "https://launch.example.test/path",
+    api = changes.api || "https://api.example.test";
+  const telemetryFile = path.join(f.dir, "live-telemetry.json"),
+    caddy = path.join(f.dir, "production.Caddyfile");
+  fs.writeFileSync(caddy, "fixture");
+  fs.writeFileSync(
+    telemetryFile,
+    JSON.stringify(changes.telemetry || liveTelemetry(target)),
+  );
+  return [
+    "--target-url=" + target,
+    "--api-url=" + api,
+    "--database-telemetry-file=" + telemetryFile,
+    "--caddyfile=" + caddy,
+    "--allow-hsts",
+    "--output=" + f.output,
+    "--evidence-dir=" + path.dirname(f.output),
+  ];
+}
+for (const scenario of [
+  "missing",
+  "malformed",
+  "oversized",
+  "primitive",
+  "stale",
+  "future",
+  "target",
+  "exporter",
+  "database",
+  "latency",
+]) {
+  test(`invalid live telemetry ${scenario} prevents earlier probes and all stages`, (t) => {
+    const f = fixture(t),
+      args = liveArgs(f),
+      file = path.join(f.dir, "live-telemetry.json");
+    const telemetry = liveTelemetry("https://launch.example.test/path");
+    if (scenario === "stale")
+      telemetry.timestamp = new Date(Date.now() - 120000).toISOString();
+    if (scenario === "future")
+      telemetry.timestamp = new Date(Date.now() + 120000).toISOString();
+    if (scenario === "target") telemetry.targetId = "wrong-private-canary";
+    if (scenario === "exporter") telemetry.postgresExporter.up = 0;
+    if (scenario === "database") telemetry.postgresServer.pgUp = 0;
+    if (scenario === "latency")
+      telemetry.queryExecutionDuration.api.p95Ms = 101;
+    fs.writeFileSync(
+      file,
+      scenario === "malformed"
+        ? "{private-canary"
+        : scenario === "oversized"
+          ? "x".repeat(65537)
+          : scenario === "primitive"
+            ? "null"
+            : JSON.stringify(telemetry),
+    );
+    if (scenario === "missing") fs.unlinkSync(file);
+    const result = f.run(args);
+    assert.equal(result.status, 1);
+    assert.equal(f.calls().length, 0);
+    assert.ok(!fs.existsSync(path.dirname(f.output)));
+    assert.ok(!result.stderr.includes("private-canary"));
+  });
+}
+
+for (const target of [
+  "https://launch.example.test/path?",
+  "https://launch.example.test/path#",
+  "https://user:private-canary@launch.example.test",
+  "ftp://launch.example.test",
+  "https://launch.example.test:65536",
+]) {
+  test(`bad benchmark URL rejects before stages: ${target}`, (t) => {
+    const f = fixture(t),
+      args = liveArgs(f);
+    args[0] = "--target-url=" + target;
+    const result = f.run(args);
+    assert.equal(result.status, 1);
+    assert.equal(f.calls().length, 0);
+    assert.ok(!result.stderr.includes("private-canary"));
+  });
+}
+for (const api of [
+  "https://api.example.test/path",
+  "https://api.example.test?",
+  "https://api.example.test#",
+  "https://user:private-canary@api.example.test",
+  "https://api.example.test:65536",
+]) {
+  test(`bad API origin rejects before stages: ${api}`, (t) => {
+    const f = fixture(t),
+      args = liveArgs(f);
+    args[1] = "--api-url=" + api;
+    assert.equal(f.run(args).status, 1);
+    assert.equal(f.calls().length, 0);
+  });
+}
+
+test("canonical benchmark href and API origin are forwarded with their existing different hashes", (t) => {
+  const f = fixture(t),
+    args = liveArgs(f, {
+      target: "https://LAUNCH.example.test:443/path",
+      api: "https://API.example.test:443/",
+    });
+  const result = f.run(args);
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls(),
+    capacity = calls.find((c) => c.key === "capacity"),
+    deployment = calls.find((c) => c.key === "deployment");
+  assert.equal(
+    capacity.args[capacity.args.indexOf("--target-url") + 1],
+    "https://launch.example.test/path",
+  );
+  assert.equal(
+    capacity.args[capacity.args.indexOf("--api-url") + 1],
+    "https://api.example.test",
+  );
+  const { targetId } = require("./launch-target-evidence");
+  const report = JSON.parse(fs.readFileSync(capacity.file));
+  assert.equal(report.targetId, targetId("https://launch.example.test/path"));
+  assert.equal(report.apiTargetId, targetId("https://api.example.test"));
+  assert.equal(
+    JSON.parse(fs.readFileSync(deployment.file)).api_target_id,
+    targetId("https://api.example.test/"),
+  );
+});
+
+function injectAssembler(f, condition) {
+  const file = path.join(f.ops, "assemble-launch-dossier.js");
+  const original = fs.readFileSync(file, "utf8");
+  const entry =
+    "if (require.main === module) process.exitCode = main(process.argv.slice(2));";
+  assert.ok(original.includes(entry));
+  fs.writeFileSync(
+    file,
+    original.replace(
+      entry,
+      `if (require.main === module) {${condition};process.exitCode = main(process.argv.slice(2));}`,
+    ),
+  );
+}
+for (const json of ["", "{}", '{"overall_status":"PASSED"}', "{"]) {
+  test(`empty/incomplete success-exit assembler output cannot publish or print pass: ${JSON.stringify(json)}`, (t) => {
+    const f = fixture(t);
+    injectAssembler(
+      f,
+      `if(process.argv[2]==='assemble'){process.stdout.write(${JSON.stringify(json)});process.exit(0)}`,
+    );
+    const result = f.execute();
+    assert.equal(result.status, 1);
+    assert.equal(result.dossier, null);
+    assert.ok(!result.stdout.includes("Overall Result: PASSED"));
+    assert.ok(!fs.existsSync(f.output + ".lock"));
+  });
+}
+
+test("prepare failure after reservation cleans owned temp and lock without starting children", (t) => {
+  const f = fixture(t);
+  injectAssembler(
+    f,
+    "if(process.argv[2]==='prepare'){main(process.argv.slice(2));process.exit(1)}",
+  );
+  const result = f.execute();
+  assert.equal(result.status, 1);
+  assert.equal(f.calls().length, 0);
+  assert.ok(!fs.existsSync(f.output + ".lock"));
+  assert.ok(
+    fs
+      .readdirSync(path.dirname(f.output))
+      .every((n) => !n.startsWith(".launch-dossier-")),
+  );
+});
+
+test("owned cleanup failure prevents passing summary and preserves diagnostic run tree", (t) => {
+  const f = fixture(t);
+  injectAssembler(f, "if(process.argv[2]==='release'){process.exit(1)}");
+  const result = f.execute();
+  assert.equal(result.status, 1);
+  assert.ok(!result.stdout.includes("Overall Result: PASSED"));
+  assert.ok(fs.existsSync(f.output + ".lock"));
+  assert.ok(fs.existsSync(result.dossier.stages[0].artifacts[0]));
+});
+
+for (const kind of ["file", "directory", "symlink", "dangling"]) {
+  test(`publication race preserves competing ${kind} without printing success`, (t) => {
+    const f = fixture(t);
+    const insertion =
+      kind === "file"
+        ? "fs.writeFileSync(process.argv[3], 'concurrent-canary', {flag:'wx'})"
+        : kind === "directory"
+          ? "fs.mkdirSync(process.argv[3])"
+          : `fs.symlinkSync(${kind === "symlink" ? "process.env.CHILD_LOG" : "process.argv[3]+'.missing'"}, process.argv[3])`;
+    injectAssembler(f, `if(process.argv[2]==='assemble'){${insertion}}`);
+    const result = f.run([
+      "--dry-run",
+      "--output",
+      f.output,
+      "--evidence-dir",
+      path.dirname(f.output),
+    ]);
+    assert.equal(result.status, 1);
+    assert.ok(!result.stdout.includes("Overall Result: PASSED"));
+    assert.ok(!fs.existsSync(f.output + ".lock"));
+    if (kind === "file")
+      assert.equal(fs.readFileSync(f.output, "utf8"), "concurrent-canary");
+    if (kind === "directory") assert.ok(fs.lstatSync(f.output).isDirectory());
+    if (kind === "symlink" || kind === "dangling")
+      assert.ok(fs.lstatSync(f.output).isSymbolicLink());
+  });
+}
+
+function processAlive(pid) {
+  try {
+    // Zombies are terminated and cannot perform any more work; the host reaps them.
+    const status = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    return status.slice(status.lastIndexOf(")") + 2).split(" ")[0] !== "Z";
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+test("leader exit cannot pass while an owned descendant continues running", async (t) => {
+  const f = fixture(t);
+  // The next stage records the descendant's state at its own start, proving
+  // termination precedes further work rather than merely happening at exit.
+  const child = path.join(f.ops, "generate-sbom.js");
+  fs.writeFileSync(
+    child,
+    `const fs=require('node:fs');const m=JSON.parse(fs.readFileSync(process.env.MARKER));let active=false;try{const s=fs.readFileSync('/proc/'+m.descendant+'/stat','utf8');active=s.slice(s.lastIndexOf(')')+2).split(' ')[0]!=='Z';}catch(e){if(e.code!=='ENOENT')throw e;}fs.writeFileSync(process.env.MARKER+'.next',JSON.stringify({active}));require('./stub')('sbom',process.argv.slice(2));`,
+  );
+  const run = asynchronous(
+    f,
+    [
+      "--dry-run",
+      "--output",
+      f.output,
+      "--evidence-dir",
+      path.dirname(f.output),
+    ],
+    "static:leader-exits",
+  );
+  let marked;
+  t.after(() => {
+    if (processAlive(run.child.pid)) run.child.kill("SIGKILL");
+    for (const pid of [marked?.pid, marked?.descendant])
+      if (pid && processAlive(pid)) process.kill(pid, "SIGKILL");
+  });
+  await marker(path.join(f.dir, "marker"));
+  marked = JSON.parse(fs.readFileSync(path.join(f.dir, "marker")));
+  const result = await run.done;
+  assert.equal(result.status, 1, result.stderr);
+  assert.ok(!processAlive(marked.descendant));
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(f.dir, "marker.next"))).active,
+    false,
+  );
+  assert.equal(f.calls().length, 11);
+  const dossier = JSON.parse(fs.readFileSync(f.output));
+  assert.equal(dossier.overall_status, "FAILED");
+  assert.equal(dossier.stages[0].status, "FAILED");
+  assert.ok(!fs.existsSync(f.output + ".lock"));
+  assert.ok(!result.stdout.includes("Overall Result: PASSED"));
+});
+
+for (const suffix of ["", "/nested", "/nested/deeper"]) {
+  test(`conflicting output/evidence directories reject before allocation: ${suffix}`, (t) => {
+    const f = fixture(t),
+      output = path.join(f.dir, "absent");
+    const result = f.run([
+      "--dry-run",
+      "--output",
+      output,
+      "--evidence-dir",
+      output + suffix,
+    ]);
+    assert.equal(result.status, 1);
+    assert.equal(f.calls().length, 0);
+    assert.ok(!fs.existsSync(output));
+    assert.ok(!fs.existsSync(output + ".lock"));
+  });
+}
+
+for (const [scenario, signal, code] of [
+  ["hold", "SIGINT", 130],
+  ["hold", "SIGTERM", 143],
+  ["hold", "SIGHUP", 129],
+  ["stop", "SIGTERM", 143],
+  ["nested", "SIGTERM", 143],
+  ["resist", "SIGTERM", 143],
+]) {
+  test(`catchable ${signal} stops owned ${scenario} stage before release and preserves logs`, async (t) => {
+    const f = fixture(t);
+    const run = asynchronous(
+      f,
+      [
+        "--dry-run",
+        "--output",
+        f.output,
+        "--evidence-dir",
+        path.dirname(f.output),
+      ],
+      `static:${scenario}`,
+    );
+    let marked;
+    t.after(() => {
+      if (processAlive(run.child.pid)) run.child.kill("SIGKILL");
+      for (const pid of [marked?.pid, marked?.descendant])
+        if (pid && processAlive(pid)) process.kill(pid, "SIGKILL");
+    });
+    await marker(path.join(f.dir, "marker"));
+    marked = JSON.parse(fs.readFileSync(path.join(f.dir, "marker")));
+    if (scenario === "stop") {
+      await new Promise((r) => setTimeout(r, 100));
+      assert.equal(
+        f.calls().length,
+        1,
+        "stopped job must not start later stages",
+      );
+      assert.ok(fs.existsSync(f.output + ".lock"));
+    }
+    run.child.kill(signal);
+    const result = await run.done;
+    assert.equal(result.status, code, result.stderr);
+    assert.equal(f.calls().length, 1);
+    assert.ok(!processAlive(marked.pid));
+    if (marked.descendant) assert.ok(!processAlive(marked.descendant));
+    assert.ok(!fs.existsSync(f.output));
+    assert.ok(!fs.existsSync(f.output + ".lock"));
+    assert.ok(fs.existsSync(path.dirname(marked.file)));
+    assert.ok(
+      fs
+        .readdirSync(path.dirname(f.output))
+        .every((n) => !n.startsWith(".launch-dossier-")),
+    );
+    assert.ok(!result.stdout.includes("Overall Result: PASSED"));
+  });
+}
+
+for (const kind of ["invalid-clock", "missing-helper-export"]) {
+  test(`preflight ${kind} fails before output resources or stages`, (t) => {
+    const f = fixture(t);
+    if (kind === "invalid-clock") {
+      const tool = path.join(f.bin, "date");
+      fs.unlinkSync(tool);
+      fs.writeFileSync(
+        tool,
+        '#!/usr/bin/env bash\nprintf "invalid-clock\\n"\n',
+        { mode: 0o700 },
+      );
+    } else {
+      fs.appendFileSync(
+        path.join(f.ops, "assemble-launch-dossier.js"),
+        "\nmodule.exports.validateDossier = undefined;\n",
+      );
+    }
+    const result = f.run(["--dry-run"]);
+    assert.equal(result.status, 1);
+    assert.equal(f.calls().length, 0);
+    assert.ok(!fs.existsSync(path.join(f.dir, "backups")));
+  });
+}
