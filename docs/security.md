@@ -1090,3 +1090,16 @@ custody, dual control or recovery. Hostile same-UID administration, source
 confinement and durable crash recovery are outside this preflight. TM-21 and
 Category 8 live operator acceptance remain open; prompt 201 and Phase 12
 sign-off remain open.
+
+**Prompt 279 Caddy producer metadata boundary (2026-10-08):** Stage 3 now
+validates a complete CLI invocation, bounds regular-file source reads and
+supported parsing, and projects only allowlisted simulation evidence. Fixed
+policy findings replace source-derived header, email, timeout, upstream and
+parser diagnostics. The canonical source path and safe domain remain intentional
+restricted evidence identities required by unchanged consumers, so receipts
+are not anonymous. Private verified staging and exclusive hard-link publication
+preserve retained evidence and fail closed on ordinary races or faults. This
+narrows TM-01/TM-04/TM-05 exposure. Source symlink support is not confinement;
+hostile same-UID changes, crash orphans and lack of durable recovery remain
+operator limits. Category 1 live DNS/TLS/HTTPS approval, prompt 201 and Phase
+12 sign-off remain open.

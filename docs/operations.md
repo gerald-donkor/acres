@@ -4755,3 +4755,96 @@ Safe inspection from the repository root:
 node scripts/ops/verify-volume-encryption.js --help
 npm run ops:volume-test
 ```
+
+## Prompt 279 — Caddy verifier invocation and receipt publication hardening (2026-10-08)
+
+The Stage 3 static Caddy child now validates the complete command line before
+reading a source or inspecting a destination. It accepts one optional Caddyfile,
+`--json`, `--allow-hsts`, one `--output FILE`/`-o FILE` or attached
+`--output=FILE`, and standalone help. Explicit relative paths use caller cwd;
+the default example remains installation-anchored. Invalid or repeated options,
+mixed help, control-bearing or blank paths (including Unicode format and
+line controls), and ambiguous split dash-leading values fail with a fixed
+diagnostic and no report. Import/help perform no filesystem
+work; no-save runs never allocate evidence resources.
+
+CLI paths are always source paths. Direct calls retain the existing content or
+path heuristic and options contract. Regular-file sources are opened
+nonblocking through a bounded descriptor with identity, size, growth/truncation
+and metadata checks, then closed. Ordinary symlinks to regular files are
+accepted. Inline text and source files have a 1 MiB UTF-8 byte ceiling; parsed
+entry and block-depth judgments are 10,000 and 100. The supported parser subset
+now rejects incomplete/over-nested blocks while preserving global/site, header,
+request-body, matcher, reverse-proxy and transport behavior, comments, quoted
+hashes and placeholder braces. This is not full Caddy syntax validation. The
+previously accepted malformed missing-closing-block shape is deliberately
+rejected. A missing, unreadable, oversized or malformed CLI source yields a
+complete failed simulation report with zero evaluated routes and fixed finding;
+successfully parsed policy failures retain actual route counts.
+
+Human, JSON and saved output use a fresh allowlisted projection. It retains
+`targetPath` for the unchanged Stage 3 same-file identity check, plus only a
+safe plain domain or the exact standard domain placeholder, the twelve fixed
+route identities, actual verdicts/counts, policy booleans and fixed
+predicate-family findings. The source path and approved domain are intentional
+restricted evidence identity fields; they are not anonymous. Private headers,
+email, comments, timeouts, request limits, arbitrary site headers, unexpected
+upstream strings and parser/OS diagnostics stay in direct helper results, never
+CLI evidence. Unknown upstreams become `unrecognized` with failed routes;
+route success is not synthesized. HSTS approval requires active valid HSTS,
+explicit `--allow-hsts` and overall passing verification. All receipts remain
+`execution_mode: "simulation"` and cannot approve live Category 1.
+
+An explicit output is preflighted as absent, including dangling symlinks;
+existing nonsymlink ancestor identities are recorded and rechecked. Missing
+parents are created at 0700; existing modes stay unchanged. A complete
+newline-terminated report must fit the 1 MiB consumer limit before allocation.
+Exclusive 0600 staging in the destination directory is written with short-write
+handling, closed, reopened no-follow/nonblocking, checked for identical full
+bytes and independently parsed/validated, then published through an exclusive
+hard link. Existing/late racing files, links and directories survive. Cleanup
+removes only provably owned staging, retries bounded close/unlink faults once
+and stays nonzero on any fault, including after a successful publication.
+Standard streams drain naturally with fixed output-fault diagnostics.
+
+The four public exports, well-formed security/routing predicates, twelve route
+cases and HSTS policy remain intact. Compared with the committed baseline, the
+example, missing-header and approved-HSTS fixtures matched valid verdicts,
+private error arrays and route order/upstreams/passes. The Caddy suite covers
+strict invocation, installed defaults, literals and symlinks, source and parser
+limits, private projection, retained/racing destinations, parent changes,
+staging/readback/cleanup faults, output failures, complete slow-reader
+JSON and unchanged readiness acceptance. The real Caddy child was installed into the isolated unified-runner
+fixture with all other stages stubbed: clean, policy failure, malformed block
+and a one-shot child source read fault; failed Caddy exits blocked deployment
+and produced failed Stage 3 dossiers.
+
+Verification: `npm run ops:caddy-test` **83/83**; focused actual-child Stage 3
+**4/4**; readiness **649/649**; launch readiness **23/23**; deployment
+**104/104**; volume **151/151**; templates **324/324** and
+`ops template check passed`. Full launch/dossier **182/182**. Root lint,
+sequential typecheck/build, Node syntax, standalone help, selected JS/prompt
+Prettier and diff checks passed.
+Aggregate `npm run ops:check` stopped at the unchanged production dependency
+audit: `37 vulnerabilities (9 moderate, 26 high, 2 critical)` and
+`audit error: critical vulnerabilities detected in production dependencies`;
+later aggregate stages were unreached. Independent review found one Important
+Unicode control-path gap. The path guard now rejects Unicode control, format
+and line-separator characters before work; U+2028/U+202E cases passed, and
+follow-up review found no remaining issue.
+
+Hard-link support is required. Interrupted writes can leave staging. Persistent
+close/unlink faults or unprovable ownership preserve conservative orphans for
+operator inspection. Ancestor checks narrow ordinary races, not hostile
+same-UID administration; source confinement and durable crash recovery are not
+provided. Direct helper diagnostics remain local private data. No live DNS,
+TLS, HTTPS, Caddy or Docker execution occurred. Prompt 201, Category 1 live
+sign-off, Phase 12 exit and dependency advisories remain open. Rollback is a
+reviewed normal revert preserving retained receipts.
+
+Safe inspection from the repository root:
+
+```bash
+node scripts/ops/verify-caddy-routing.js --help
+npm run ops:caddy-test
+```

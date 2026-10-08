@@ -2080,3 +2080,75 @@ for (const scenario of [
     }
   });
 }
+
+for (const scenario of [
+  "clean",
+  "predicate",
+  "malformed-block",
+  "source-fault",
+]) {
+  test(`actual Caddy child and unchanged Stage 3 consumers: ${scenario}`, (t) => {
+    const f = fixture(t),
+      root = path.resolve(__dirname, "../..");
+    const installed = path.join(f.ops, "verify-caddy-routing.js");
+    fs.copyFileSync(path.join(__dirname, "verify-caddy-routing.js"), installed);
+    const source = path.join(f.dir, "infra/caddy/Caddyfile.example");
+    let content = fs.readFileSync(
+      path.join(root, "infra/caddy/Caddyfile.example"),
+      "utf8",
+    );
+    if (scenario === "predicate")
+      content = content.replace(
+        'X-Frame-Options "DENY"',
+        'X-Frame-Options "CanaryPrivate"',
+      );
+    if (scenario === "malformed-block")
+      content = content.slice(0, content.lastIndexOf("}"));
+    fs.writeFileSync(source, content);
+    if (scenario === "source-fault") {
+      const raw = fs.readFileSync(installed, "utf8");
+      const injection =
+        'const fs = require("fs");\nconst originalRead = fs.readSync; let failOnce = true; fs.readSync = (...args) => { if (failOnce) { failOnce = false; throw Error("CanaryPrivate"); } return originalRead(...args); };';
+      fs.writeFileSync(
+        installed,
+        raw.replace('const fs = require("fs");', injection),
+      );
+    }
+    const r = f.execute(),
+      passing = scenario === "clean";
+    assert.equal(r.status, passing ? 0 : 1, r.stderr);
+    assert.ok(r.dossier);
+    invariant(r.dossier);
+    const stage = r.dossier.stages[2];
+    assert.equal(stage.stage_id, "ingress_deployment");
+    assert.equal(stage.status, passing ? "PASSED" : "FAILED");
+    const receiptPath = stage.artifacts.find(
+      (p) => path.basename(p) === "caddy-routing-evidence-receipt.json",
+    );
+    assert.ok(receiptPath);
+    assert.ok(
+      fs.existsSync(receiptPath),
+      JSON.stringify({ stderr: r.stderr, stage }),
+    );
+    const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+    assert.equal(receipt.targetPath, source);
+    assert.equal(receipt.execution_mode, "simulation");
+    assert.equal(receipt.routesEvaluated, passing ? 12 : 0);
+    assert.equal(receipt.routesPassed, passing ? 12 : 0);
+    assert.equal(receipt.valid, passing);
+    assert.ok(!JSON.stringify(receipt).includes("CanaryPrivate"));
+    assert.equal(
+      r.dossier.deploymentBaseline.status,
+      passing ? "verified" : "breached",
+    );
+    assert.equal(
+      r.dossier.summary.ingressDeployment,
+      passing ? "passed" : "failed",
+    );
+    if (!passing)
+      assert.equal(
+        f.calls().some((c) => c.key === "deployment"),
+        false,
+      );
+  });
+}

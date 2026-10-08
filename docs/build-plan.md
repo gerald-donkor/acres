@@ -2246,3 +2246,17 @@ the full contracts, tests and residual limits. No live unified drill, host
 inspection, production action, dependency/credential change or push occurred.
 TM-21, Category 8 live sign-off, prompt 201 and Phase 12 remain open; rollback
 is a reviewed normal revert preserving retained receipts.
+
+**Prompt 279 Phase 12K Caddy-verifier invocation/publication hardening (2026-10-08):**
+The Stage 3 Caddy simulation child now validates invocation before work,
+reads regular sources within a 1 MiB bound, rejects incomplete supported
+blocks, and publishes only an allowlisted, independently validated receipt to
+a fresh destination through private staging and an exclusive hard link.
+Actual route verdicts, twelve-case order, HSTS and security predicates, source
+identity and four exports remain compatible; private source values are withheld
+from CLI evidence. A failed source saves a complete failed simulation report.
+The unchanged dossier/readiness contracts and focused real-child Stage 3
+scenarios passed. The full checks, review and conservative limits are recorded
+in `docs/operations.md` Prompt 279. Prompt 201, Category 1 live sign-off,
+Phase 12 exit and dependency advisories remain open; rollback preserves
+retained receipts.

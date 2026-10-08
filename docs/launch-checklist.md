@@ -52,6 +52,11 @@ do not report failure.
 ### 1. Production Domain & TLS (`production_domain_tls`)
 
 - Drill/verify: `node scripts/ops/verify-caddy-routing.js <materialized-production-Caddyfile> --allow-hsts --output backups/caddy-routing-evidence-<timestamp>.json`, `scripts/ops/check-production-templates.sh`
+  Use a fresh absent restricted output filename for each run. The verifier
+  never overwrites a retained receipt; failed source/policy reports remain
+  simulation evidence and cannot approve this category. Its source path and
+  safe domain are intentional evidence identities. Inspect private staging
+  orphans after interrupted runs rather than deleting retained evidence.
 - Evidence: `backups/caddy-routing-evidence-<timestamp>.json`, DNS A/AAAA record printout, Caddyfile HSTS approval
 - Accept: real (non-localhost) domain, valid TLS contact email, `hsts_approved: true`, boolean `custom_certificates` flag
 - An approved record must reference a concrete, successful Caddy routing
