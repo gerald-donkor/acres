@@ -4971,3 +4971,92 @@ Those journeys need rerunning with a real test API/database. Read-only review
 found no dependency issue, identified a missing high-severity path inventory,
 and verified the completed inventory above on follow-up. Rollback is a reviewed
 normal revert, with affected-release exposure reassessed before deployment.
+
+## Prompt 282 — patch the proxy address security release (2026-10-08)
+
+The root lockfile now resolves the single transitive `proxy-addr` node to
+**2.0.8**. Express 4.22.2 under Apollo (`~2.0.7`) and Express 5.2.1 under
+Nest/the Express 5 integration (`^2.0.7`) both accept and resolve that node.
+The targeted `npm update proxy-addr --package-lock-only --ignore-scripts
+--no-audit --no-fund` changed only its version, tarball, integrity and new
+funding metadata. No manifest, server source, Express version, proxy trust
+setting, throttling budget or audit threshold changed.
+
+The [maintainer advisory](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h)
+and [2.0.8 release](https://github.com/jshttp/proxy-addr/releases/tag/v2.0.8)
+were checked during execution. GHSA-jqcg-44mw-7w3h / CVE-2026-90711 affects
+`>=1.1.0 <2.0.8`; 2.0.8 repairs IPv4 matching against IPv6 trust subnets.
+Registry metadata verified the tarball at
+`https://registry.npmjs.org/proxy-addr/-/proxy-addr-2.0.8.tgz`, SHA-1
+`624e760fd8ab06b1b8320c2f8506d4422cf8e932`, and lockfile integrity:
+
+```text
+sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==
+```
+
+Fresh production audit JSON fell from **36** findings (9 moderate, 26 high,
+1 critical) to **35** (9 moderate, 26 high, **0 critical**). `proxy-addr` was
+the only removed audited package; none appeared. The remaining high package
+and representative path inventory is the Prompt 281 table above, excluding
+its critical `proxy-addr` row. The `@graphql-tools/utils` advisory, range,
+severity and nodes stayed the same, while npm changed its suggested major
+fix from Apollo 5.5.1 to Nest GraphQL 14.0.3; neither migration was applied.
+Raw audit JSON remains disposable `/tmp` evidence. The first restricted audit
+failed with `getaddrinfo EAI_AGAIN registry.npmjs.org`; permitted registry
+requests then completed, so transport failure was not treated as a clean audit.
+Both `npm audit --omit=dev --audit-level=critical` and `npm run ops:audit`
+exited 0. The latter printed:
+
+```text
+35 vulnerabilities (9 moderate, 26 high)
+Production dependency security audit passed (0 critical vulnerabilities)
+```
+
+`npm ci --no-audit --no-fund` exited 0 (`added 1481 packages in 31s`), and
+`npm ls proxy-addr express --all` / `npm explain proxy-addr` verified both
+Express paths at 2.0.8 without nested affected copies. Audit wrapper tests
+reported `pass 1, fail 0`. Lint, typecheck and the full production build
+exited 0; Next 16.3.8 generated `22/22` static pages and Nest built after
+Prisma generation. Selected Prettier and `git diff --check` passed.
+
+The root test wrapper ignored the supplied Jest filter arguments and ran the
+whole existing server suite: `Test Suites: 6 passed, 6 total` and
+`Tests: 143 passed, 143 total`. This includes the real migrated `acres_test`
+database suites; external storage and queue providers are test doubles.
+The correctly forwarded focused command was:
+
+```bash
+npm run test:e2e --workspace=@acres/server -- --runInBand --testPathPatterns='api.e2e-spec|auth-recovery.e2e-spec|env-validation.e2e-spec'
+```
+
+It reported `Test Suites: 3 passed, 3 total` and `Tests: 102 passed, 102 total`.
+Those suites exercise Nest/Express bootstrap, health, auth/session, CSRF,
+validation and throttling with recorded database/external-service doubles.
+The SMTP timeout log is an expected recovery-failure test case, not a test
+failure or a live SMTP check. These results supply no production proxy-topology
+evidence. `server/src/app.setup.ts` does not configure `trust proxy`; deployed
+exploitability was not established. The explicit reverse-proxy trust and
+client-IP-aware/shared throttling conditions in `docs/backend.md` remain open.
+
+Independent read-only review found no Critical, Important or Minor issue in
+the dependency repair. Prompt 201, operator sign-offs and Phase 12 exit remain
+open. A passing critical audit does not resolve the residual high advisories
+or authorize launch. Rollback is a reviewed normal revert of this commit,
+with affected-version exposure reassessed before deployment.
+
+The complete `npm run ops:check` exited **0**, reaching every stage after the
+now-passing audit. Its final launch/dossier group reported `tests 182`,
+`pass 182`, `fail 0`; all preceding aggregate test groups also reported zero
+failures. This ran repository preflights and isolated simulations/fixtures,
+including SBOM, SAST and container static gates, not a live operator launch
+drill. Whole-file Prettier flagged both large owning docs; checks on their
+committed baseline confirmed those findings predated this patch. Only the new
+Prompt 282 sections were formatted and checked, alongside the full lockfile
+and approved prompt.
+
+Safe inspection from the repository root:
+
+```bash
+npm ls proxy-addr express --all
+npm run ops:audit
+```

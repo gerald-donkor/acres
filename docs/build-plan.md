@@ -2285,3 +2285,24 @@ fails closed. Browser auth/recovery checks lacked the Nest API fixture and are
 not sign-off evidence. The audit paths, review and validation limits are in
 `docs/operations.md` Prompt 281. A separately scoped server dependency repair,
 prompt 201, live operator sign-offs and the Phase 12 exit remain open.
+
+**Prompt 282 Phase 12K proxy address security patch (2026-10-08):**
+The root lockfile resolves `proxy-addr` 2.0.8 for both Express 4.22.2 and
+5.2.1; only that package's registry metadata changed. Clean install, complete
+dependency-tree inspection, lint, typecheck, production build and diff checks
+passed. The full server suite passed **143/143**, including real test database
+suites, and the focused HTTP/bootstrap/auth/CSRF/health/throttling suites
+passed **102/102**. The fresh production audit fell from 36 findings with
+1 critical to 35 with **0 critical** (26 high, 9 moderate); `proxy-addr`
+cleared and the unchanged critical audit gate passed. Independent review found
+no issues. `docs/operations.md` Prompt 282 records integrity, advisory, audit
+inventory and fixture limits. Residual high advisories, production proxy trust
+and shared throttling evidence, prompt 201, live sign-offs and Phase 12 exit
+remain open. Rollback is a reviewed normal revert with affected-version
+exposure reassessed before deployment.
+
+The complete `ops:check` exited **0** through the final launch/dossier
+**182/182** suite. These repository checks and isolated fixtures supply no live
+operator launch approval. New documentation sections, the lockfile and prompt
+passed selected formatting checks; existing whole-document formatting findings
+were preserved.
