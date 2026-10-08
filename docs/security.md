@@ -585,6 +585,18 @@ As of 2026-09-09, deterministic SBOM inventory generation, license compliance va
     - Tracks approved suppressions with unique ID, rule ID, path, line, severity, rationale, owner, and expiration date.
     - Fail-closed expiration gating: any expired suppression immediately fails the security gate.
   - Unit test suite (`scripts/ops/run-sast-scan.spec.js`): 12/12 unit tests passing in 130ms.
+  - **Prompt 276 update (2026-10-08):** CLI/human/saved evidence projects every
+    detected SAST-04 finding snippet and matching suppression snippet as a fixed
+    redacted marker, including triaged/expired and duplicate blocking references.
+    Direct results, policy matching, identities/counts and eight rules remain.
+    Other source/reason/rationale metadata is intentional local evidence; this is
+    targeted detected-secret projection, not universal detection/redaction.
+    Fixed failure diagnostics suppress rejected values/private paths/raw errors;
+    private verified staging and exclusive publication preserve retained evidence.
+    Existing regex/discovery/malformed-policy limits remain. This improves TM-15
+    local disclosure handling; dependency findings, cryptographic provenance and
+    production/operator acceptance remain open.
+
 - **Container Image & Compose Security Hardening (TM-18)**:
   - `scripts/ops/verify-container-security.js` statically evaluates `server/Dockerfile`, `infra/docker/client.Dockerfile.example`, and `infra/compose/docker-compose.production.example.yml`.
   - Verifies Node 24 Alpine pinned base, multi-stage separation (`deps`, `build`, `prod-deps`, `runtime`), `USER node` non-root runtime enforcement, bounded healthchecks (`--interval=30s --timeout=5s`), direct exec JSON array CMD for POSIX signal propagation, and layer hygiene (zero inclusion of `.env`, `*.pem`, `*.key`).

@@ -1790,6 +1790,21 @@ these repository checks establishes a production runtime or journey result.
 
 ## 4. Unified Drill Execution & Evidence Dossier
 
+**Standalone SAST inspection/regeneration (prompt 276):** Run
+`node scripts/ops/run-sast-scan.js --help`, `npm run ops:sast-test`, or
+`npm run ops:sast` without output for local inspection. Explicit saving requires
+a fresh absent destination and stable directory ancestors without symlinks;
+choose a new path instead of deleting/overwriting retained evidence. The producer
+creates private missing parents/staging and exclusively publishes a verified
+receipt at most 1 MiB. Completed blocker/expired-suppression reports may be saved
+for diagnosis, but exit 1 and fail stage/dossier/readiness consumers. Output or
+cleanup failure after publication retains the receipt and remains nonzero.
+Detected-secret finding/matching suppression snippets are redacted; other local
+source/triage metadata remains intentional evidence, so this is not universal
+redaction. Unsupported hard links fail without destructive fallback; interruptions
+can leave staging and require ownership inspection before operator cleanup.
+These commands supply local regex evidence, not production sign-off.
+
 **Standalone SBOM inspection/regeneration (prompt 275):** Run
 `node scripts/ops/generate-sbom.js --help`, `npm run ops:sbom-test`, or
 `npm run ops:sbom` without output for local inspection. Explicit saving requires

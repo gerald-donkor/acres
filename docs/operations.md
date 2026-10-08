@@ -4411,3 +4411,116 @@ The reviewer's sandbox suite had the same opaque file-level failure; full suite
 evidence is the coordinator's normal subprocess run. Final SBOM tests passed 90/90
 and actual-child integration passed 2/2 after the fix. Unaffected root gates were
 not repeated.
+
+## Prompt 276 — SAST invocation and artifact publication hardening (2026-10-08)
+
+The standalone producer validates its entire invocation before scanning, triage
+reads or allocation. It retains `--json`, `--format json`, `--fail-on LEVEL`,
+`--triage FILE`, `--output FILE` and `-o FILE`, adds attached value forms and
+standalone `--help`/`-h`, and rejects unknown/positional/repeated/conflicting
+switches, boolean attached values, missing/blank/control-bearing values,
+ambiguous separate dash-leading paths, root output and trailing separators.
+Severity is case-insensitive BLOCKER/HIGH/MEDIUM/LOW and normalized once;
+BLOCKER remains the default. Attached dash-leading paths and spaces are literal;
+no shell, environment-variable or tilde expansion occurs. Default scanning and
+policy use the installation root; explicit relative triage/output uses caller
+cwd. Import/help does no scanning/allocation. Direct options validate object,
+present paths, root arrays (including sparse entries), severity and valid Date
+before source work; valid custom/empty/relative roots, synchronous results and
+all exports remain. Missing triage still means empty policy.
+
+CLI evidence is a separate projection. Every SAST-04 finding snippet, including
+triaged/expired and duplicate blocking references, becomes
+`[redacted detected secret]`; its matching suppression snippet is also redacted.
+Direct results and policy objects are unchanged. Other source snippets,
+reasons/rationale and approved metadata remain intentional local evidence.
+This is targeted detected-secret redaction, not universal detection/redaction
+of arbitrary text. Rule identity, location, order, counts and verdict remain.
+Complete blocking/expired evaluation emits/saves a real failed report and exits
+`1`. Internal failure emits fixed invocation, scanning, serialization, publication,
+cleanup or output diagnostics without paths, rejected values, raw errors or
+stacks. Stream handlers/callbacks and `process.exitCode` naturally drain JSON;
+broken pipes fail cleanly. Human output omits raw policy/output path banners.
+
+Only explicit output saves. Read-only preflight requires an absent destination,
+including dangling links, directory ancestors without symlinks and recorded
+parent identities. Allocation/publication rechecks parents, rejects disappeared
+recorded parents, creates missing parents at 0700 and preserves existing modes.
+Serialized UTF-8 receipt including newline must fit the unchanged consumer's
+1 MiB ceiling before allocation; no-save JSON has no save-only ceiling. This is
+an engineering compatibility bound, not measured scanner capacity. A private
+0600 same-directory exclusive staging file handles short/zero writes, closes,
+reopens with no-follow/nonblocking flags and verifies regular-file identity,
+bounded size, complete bytes, unchanged metadata and independently validated
+parsed report/counts/verdict. Exclusive atomic hard linking publishes without
+rename, overwrite or destructive fallback. Late competing outputs survive.
+Cleanup closes only owned descriptors, checks staging identity, retains ownership
+on failure and retries once; a recorded cleanup fault remains nonzero even if
+retry succeeds. Foreign replacements, competing outputs and published receipts
+survive. Output/cleanup failure after publication retains evidence. New parents
+are never recursively removed.
+
+Fixed-time comparison at `2026-10-08T00:00:00Z` against planning commit
+`4f696d78559b9bfe03c06f534cab63ac22a0e6ca` deep-matched direct results across all
+four thresholds. All eight rule functions/metadata matched after formatting,
+and existing exports matched. Both versions scanned 371 files with 12 findings,
+9 triaged, 0 expired, 3 active and 0 default blockers; default passed. No count
+change, rule change or suppression edit was needed. Exact ANALYZE and granular
+path/line/lines/snippet/first-match/expiry-boundary regressions remain. The real
+SAST child installed into disposable launch fixtures accepts clean evidence and
+rejects active blockers and expired matches through unchanged stage/dossier and
+readiness consumers; every unrelated stage stays stubbed. A retained failed
+receipt cannot pass stage 2. Synthetic acceptance is not production sign-off.
+
+Verification (actual concise output):
+
+| Command                                   | Exit | Output                                                                                                                              |
+| ----------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Node syntax, producer/spec/integration    | 0    | no output                                                                                                                           |
+| Standalone help                           | 0    | `Usage: scripts/ops/run-sast-scan.js [options]`                                                                                     |
+| `ops:sast-test`                           | 0    | `tests 136`, `pass 136`, `fail 0`                                                                                                   |
+| `ops:sast`                                | 0    | `Files scanned: 371`; `Total rule matches: 12`; `SAST Gate: PASSED (Zero unreviewed blockers and zero expired suppressions)`        |
+| `ops:launch-drill-test`                   | 0    | `tests 169`, `pass 169`, `fail 0`                                                                                                   |
+| Focused actual SAST child integration     | 0    | `tests 3`, `pass 3`, `fail 0`                                                                                                       |
+| `ops:readiness-test`                      | 0    | `tests 649`, `pass 649`, `fail 0`                                                                                                   |
+| `ops:launch-readiness-test`               | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                     |
+| `ops:sbom-test`                           | 0    | `tests 90`, `pass 90`, `fail 0`                                                                                                     |
+| `ops:container-test`                      | 0    | `tests 22`, `pass 22`, `fail 0`                                                                                                     |
+| `ops:templates-test`                      | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                   |
+| `ops:templates`                           | 0    | `ops template check passed`                                                                                                         |
+| `ops:check`                               | 1    | `37 vulnerabilities (9 moderate, 26 high, 2 critical)`; `audit error: critical vulnerabilities detected in production dependencies` |
+| Root lint                                 | 0    | all three ESLint workspace commands; no diagnostics                                                                                 |
+| Root typecheck                            | 0    | all three workspaces; `Generated Prisma Client (7.9.1)`                                                                             |
+| Root build with normal subprocess access  | 0    | `Compiled successfully in 6.2s`; `Generating static pages using 7 workers (22/22) in 1363ms`; `prisma generate && nest build`       |
+| Changed JS/prompt and new-region Prettier | 0    | `All matched files use Prettier code style!`                                                                                        |
+| Diff check                                | 0    | no output                                                                                                                           |
+
+The aggregate stopped at unchanged audit; later aggregate stages were unreached,
+and affected suites ran independently. Sandbox SAST tests returned only an
+opaque file-level failure; normal subprocess access passed. Sandbox build failed
+with `Could not parse output from TypeScript's --showConfig`; normal subprocess
+access passed. Typecheck and build were sequential.
+
+Independent read-only review found no Critical, Important or Minor issues and
+verified baseline parity/exports/diff. Its sandbox child reruns reported `EPERM`
+and unavailable child output, so it did not claim independent full-suite success;
+the successful normal-subprocess checks above supply that evidence. Feedback was
+evaluated against the approved contracts; no implementation fix was required.
+
+Residual limits: existing regex/discovery coverage, malformed-policy dates/schema,
+recursive source resource bounds and source-path confinement remain unchanged.
+Hard-link support is required; unsupported filesystems fail without destructive
+fallback. Interruption/host loss can leave staging; confirm ownership before
+explicit operator cleanup. Persistent close/unlink or unprovable ownership may
+leave conservative orphans. Identity checks narrow ordinary replacement races,
+not a hostile same-UID administrator. No signal framework, full SAST certification,
+cryptographic provenance, production approval or dependency remediation is implied.
+Phase 12, prompt 201, dependency advisories and operator sign-offs remain open.
+Rollback is a reviewed normal revert; never delete retained evidence to roll back.
+Safe inspection from repository root:
+
+```bash
+node scripts/ops/run-sast-scan.js --help
+npm run ops:sast-test
+npm run ops:sast
+```

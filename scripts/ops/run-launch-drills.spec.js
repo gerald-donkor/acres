@@ -1772,3 +1772,96 @@ for (const license of ["MIT", "GPL-3.0"]) {
     } else assert.equal(r.dossier.summary.supplyChainSecurity, "failed");
   });
 }
+
+for (const scenario of ["clean", "active-blocker", "expired-match"]) {
+  test(`actual SAST child and unchanged dossier/readiness consumers: ${scenario}`, (t) => {
+    const f = fixture(t);
+    fs.copyFileSync(
+      path.join(__dirname, "run-sast-scan.js"),
+      path.join(f.ops, "run-sast-scan.js"),
+    );
+    // Install only the dependency-free scanner. Every other runner stage stays stubbed.
+    const content =
+      scenario === "clean"
+        ? "const safe = 1;"
+        : 'const token = "sk-' + "CanarySecret".repeat(3) + '";';
+    fs.mkdirSync(path.join(f.dir, "client"));
+    fs.writeFileSync(path.join(f.dir, "client/source.js"), content);
+    fs.mkdirSync(path.join(f.dir, "infra/security"));
+    fs.writeFileSync(
+      path.join(f.dir, "infra/security/sast-triage.json"),
+      JSON.stringify({
+        suppressions:
+          scenario === "expired-match"
+            ? [
+                {
+                  id: "SUP-100",
+                  rule_id: "SAST-04",
+                  path: "client/source.js",
+                  snippet: content,
+                  expires_at: "2000-01-01",
+                },
+              ]
+            : [],
+      }),
+    );
+    // Existing fixture JS lives under scanned scripts/. It has no unsafe rule matches.
+    const r = f.execute();
+    const passing = scenario === "clean";
+    assert.equal(r.status, passing ? 0 : 1, r.stderr);
+    assert.ok(r.dossier);
+    invariant(r.dossier);
+    const stage = r.dossier.stages.find(
+      (s) => s.stage_id === "supply_chain_sast",
+    );
+    assert.equal(stage.status, passing ? "PASSED" : "FAILED");
+    const receiptPath = stage.artifacts.find(
+      (p) => path.basename(p) === "sast-scan-evidence-receipt.json",
+    );
+    assert.ok(receiptPath);
+    const raw = fs.readFileSync(receiptPath, "utf8");
+    const receipt = JSON.parse(raw);
+    assert.equal(receipt.drill_type, "sast_security_scan");
+    assert.equal(receipt.status, passing ? "success" : "failed");
+    assert.equal(receipt.passed, passing);
+    assert.equal(
+      receipt.expiredFindings.length,
+      scenario === "expired-match" ? 1 : 0,
+    );
+    assert.equal(
+      receipt.blockingActiveFindings.length,
+      scenario === "active-blocker" ? 1 : 0,
+    );
+    assert.ok(!raw.includes("CanarySecret"));
+    const {
+      isSastEvidence,
+      validateSupplyChainEvidence,
+    } = require("./check-launch-readiness");
+    assert.equal(isSastEvidence(receipt, receiptPath), true);
+    const blockers = [];
+    assert.equal(
+      validateSupplyChainEvidence(
+        receipt,
+        receiptPath,
+        (_c, m) => blockers.push(m),
+        "supply_chain",
+      ),
+      passing,
+    );
+    assert.equal(blockers.length, passing ? 0 : 1);
+    assert.equal(
+      r.dossier.summary.sastCompliance,
+      passing ? "passed" : "failed",
+    );
+    if (passing) {
+      assert.equal(
+        r.dossier.supplyChainBaseline.sast.filesScanned,
+        receipt.scannedFilesCount,
+      );
+      assert.equal(
+        r.dossier.supplyChainBaseline.sast.totalFindingsCount,
+        receipt.totalFindingsCount,
+      );
+    } else assert.equal(r.dossier.summary.supplyChainSecurity, "failed");
+  });
+}

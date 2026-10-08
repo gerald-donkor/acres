@@ -2162,3 +2162,30 @@ Conservative staging-orphan limits are documented in `docs/operations.md` Prompt
 No live unified drill, production inspection/approval, deployment, credential or
 dependency change, or push occurred. Phase 12, prompt 201 and operator sign-offs
 remain unresolved.
+
+**Prompt 276 Phase 12K SAST invocation/publication hardening (2026-10-08):**
+Strict CLI/direct options precede scanning/allocation; standalone help/import and
+no-save allocate no output. CLI evidence redacts all detected SAST-04 snippets and
+matching suppression snippets without mutating direct results. Fresh destinations,
+stable directory ancestors, private staging, a 1 MiB save ceiling, closed byte and
+report consistency verification, and exclusive hard links preserve retained/racing
+evidence. Cleanup/output faults stay nonzero; completed failed reports fully drain
+and remain failed through unchanged stage/dossier/readiness consumers.
+
+Exact baseline parity at all four thresholds: 371 files, 12 findings, 9 triaged,
+0 expired, 3 active, 0 default blockers; eight rules and exports unchanged.
+Actual SAST `tests 136`, `pass 136`, `fail 0`; launch/dossier 169/169; readiness
+649/649; launch readiness 23/23; SBOM 90/90; container 22/22; templates 324/324
+and `ops template check passed`. Syntax, selected formatting, diff check and root
+lint/typecheck/build passed. Sandbox opaque SAST child failures and Next
+`--showConfig` failure resolved with normal subprocess access. Aggregate
+`ops:check` exited 1 at unchanged audit: `37 vulnerabilities (9 moderate, 26 high,
+2 critical)` and `audit error: critical vulnerabilities detected in production
+dependencies`; later aggregate stages were unreached. Affected suites ran
+independently. Read-only review found no Critical, Important or Minor issues.
+
+`docs/operations.md` Prompt 276 records targeted-redaction, regex/policy coverage,
+unsupported hard-link, orphan-staging and same-UID limits. Rollback is a reviewed
+normal revert preserving receipts. Phase 12, prompt 201, dependency advisories and
+operator sign-offs remain open. No unstubbed launch drill, production action,
+dependency/credential change or push occurred.
