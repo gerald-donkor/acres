@@ -4848,3 +4848,46 @@ Safe inspection from the repository root:
 node scripts/ops/verify-caddy-routing.js --help
 npm run ops:caddy-test
 ```
+
+## Prompt 280 — SMTP template credential-key validation (2026-10-08)
+
+The pure `checkSmtpTemplateKeys` helper still exports one function and returns
+static, value-free errors. It counts canonical `SMTP_USER=` and `SMTP_PASS=`
+declarations exactly once, rejects `SMTP_USERNAME` and `SMTP_PASSWORD`, and
+rejects watched-key lines with leading whitespace, an `export` prefix,
+whitespace around the delimiter, or another malformed separator. A nonstring
+call returns the fixed `production.env.example must be text` error. LF and CRLF,
+blank lines, comments, and one initial UTF-8 BOM are accepted. A `#` or legacy
+key inside an unrelated value is not treated as a declaration. The helper
+does not parse general dotenv syntax, inspect credential values, or validate
+live SMTP delivery.
+
+Review found and the implementation fixed two boundary cases: watched-key
+prefixes followed by lowercase name characters are unrelated variables, and
+whitespace immediately after `=` is ambiguous. Both have regression tests.
+
+The integrated checker still calls this helper on the production env example.
+Fixture tests show ambiguous watched-key declarations fail the full template
+gate without including a canary value in diagnostics, while comments and
+unrelated values pass. The current example passes unchanged. Category 2
+requires separate live provider delivery and DNS evidence with operator
+approval; this template preflight supplies none of it.
+
+Verification: SMTP helper spec passed; `ops:templates-test` **346/346**;
+`ops:templates` printed `ops template check passed`; launch/dossier
+**182/182**; lint, typecheck, production build, syntax, selected Prettier and
+diff checks passed. The first sandboxed build failed while Next parsed
+TypeScript subprocess output; the permitted retry passed. Aggregate
+`ops:check` stopped at dependency audit with `37 vulnerabilities (9 moderate,
+26 high, 2 critical)` and `audit error: critical vulnerabilities detected in
+production dependencies`; later stages were unreached. Independent review
+found two Important boundary bugs; both were fixed and follow-up review was
+ready with no remaining findings. Prompt 201, Category 2 live sign-off, Phase 12 exit and dependency
+advisories remain open. Rollback is a reviewed normal revert.
+
+Safe inspection from the repository root:
+
+```bash
+node --test scripts/ops/check-smtp-template-keys.spec.js
+npm run ops:templates
+```

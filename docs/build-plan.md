@@ -2260,3 +2260,17 @@ scenarios passed. The full checks, review and conservative limits are recorded
 in `docs/operations.md` Prompt 279. Prompt 201, Category 1 live sign-off,
 Phase 12 exit and dependency advisories remain open; rollback preserves
 retained receipts.
+
+**Prompt 280 Phase 12K SMTP template-key validation hardening (2026-10-08):**
+The Stage 1 pure validator now rejects ambiguous watched-key declarations
+(leading whitespace, `export`, delimiter spacing and malformed separators),
+continues to require one canonical `SMTP_USER` and `SMTP_PASS`, forbids both
+legacy names, and returns fixed value-free errors for nonstring input. The
+integrated template gate rejects fixture ambiguity and accepts comments or
+unrelated values naming legacy keys. The production example is unchanged.
+Helper tests, templates **346/346**, template preflight, launch/dossier
+**182/182**, lint, typecheck, build, syntax, formatting and diff checks passed.
+Aggregate `ops:check` stopped at the existing critical dependency audit
+(37 vulnerabilities); subsequent aggregate stages were unreached. Review and
+the exact parsing contract are in `docs/operations.md` Prompt 280. Prompt 201,
+Category 2 live SMTP sign-off and Phase 12 exit remain open.

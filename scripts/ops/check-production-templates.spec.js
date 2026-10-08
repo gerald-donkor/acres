@@ -1053,6 +1053,51 @@ function templateFixture(t) {
   return cwd;
 }
 
+test('SMTP declaration ambiguity fails the integrated template gate without leaking values', (t) => {
+  const cwd = templateFixture(t);
+  const target = path.join(cwd, 'infra/env/production.env.example');
+  const original = fs.readFileSync(target, 'utf8');
+  const canary = 'private-smtp-integration-canary';
+  for (const declaration of [
+    ` SMTP_USER=${canary}`,
+    `export SMTP_PASS=${canary}`,
+    `SMTP_USERNAME =${canary}`,
+    `export SMTP_PASSWORD=${canary}`,
+  ]) {
+    fs.writeFileSync(target, `${original}\n${declaration}\n`);
+    const result = checkProductionTemplates({ cwd });
+    assert.equal(result.success, false);
+    assert.ok(result.errors.some((error) => error.includes('ambiguous SMTP_')));
+    assert.doesNotMatch(
+      result.errors.join(' '),
+      /private-smtp-integration-canary/,
+    );
+  }
+  fs.writeFileSync(
+    target,
+    original.replace(/^SMTP_USER=.*$/m, `SMTP_USER= ${canary}`),
+  );
+  const spacedValue = checkProductionTemplates({ cwd });
+  assert.equal(spacedValue.success, false);
+  assert.ok(
+    spacedValue.errors.includes(
+      'production.env.example has an ambiguous SMTP_USER assignment',
+    ),
+  );
+  assert.doesNotMatch(
+    spacedValue.errors.join(' '),
+    /private-smtp-integration-canary/,
+  );
+  fs.writeFileSync(
+    target,
+    `${original}\nOTHER=${canary}#SMTP_USERNAME\n# SMTP_PASSWORD=${canary}\n`,
+  );
+  assert.deepEqual(checkProductionTemplates({ cwd }), {
+    success: true,
+    errors: [],
+  });
+});
+
 const COMPOSE_INPUT = FIXTURE_FILES[0];
 const PROM_INPUT = 'infra/prometheus/prometheus.yml';
 const ALERT_INPUT = 'infra/prometheus/alerts.yml';
