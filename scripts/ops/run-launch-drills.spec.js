@@ -1972,3 +1972,111 @@ for (const scenario of [
       );
   });
 }
+
+for (const scenario of [
+  "clean",
+  "predicate",
+  "key-file",
+  "malformed-readiness",
+  "source-failure",
+]) {
+  test(`actual volume child and unchanged consumers: ${scenario}`, (t) => {
+    const f = fixture(t),
+      root = path.resolve(__dirname, "../..");
+    fs.copyFileSync(
+      path.join(__dirname, "verify-volume-encryption.js"),
+      path.join(f.ops, "verify-volume-encryption.js"),
+    );
+    fs.rmSync(path.join(f.dir, "node_modules/js-yaml"), { recursive: true });
+    for (const pkg of ["js-yaml", "argparse"])
+      fs.cpSync(
+        path.dirname(require.resolve(pkg + "/package.json")),
+        path.join(f.dir, "node_modules", pkg),
+        { recursive: true },
+      );
+    for (const file of [
+      "infra/compose/docker-compose.production.example.yml",
+      "infra/env/production.env.example",
+      "infra/launch/readiness.example.json",
+    ]) {
+      const dest = path.join(f.dir, file);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(path.join(root, file), dest);
+    }
+    fs.mkdirSync(path.join(f.dir, ".git"));
+    fs.mkdirSync(path.join(f.dir, "backups"));
+    fs.writeFileSync(
+      path.join(f.bin, "git"),
+      '#!/bin/sh\nprintf "dataset.csv\\n"\n',
+      { mode: 0o700 },
+    );
+    if (scenario === "predicate")
+      fs.appendFileSync(
+        path.join(f.dir, "infra/env/production.env.example"),
+        "\nPRODUCTION_VOLUME_ENCRYPTION=CanaryPrivate",
+      );
+    if (scenario === "key-file")
+      fs.writeFileSync(
+        path.join(f.dir, "backups/CanaryPrivate.key"),
+        "fixture",
+      );
+    if (scenario === "malformed-readiness")
+      fs.writeFileSync(
+        path.join(f.dir, "infra/launch/readiness.example.json"),
+        "CanaryPrivate: [",
+      );
+    if (scenario === "source-failure") {
+      const file = path.join(f.dir, "infra/env/production.env.example");
+      fs.unlinkSync(file);
+      fs.mkdirSync(file);
+    }
+    const r = f.execute(),
+      passing = scenario === "clean";
+    assert.equal(r.status, passing ? 0 : 1, r.stderr);
+    assert.ok(r.dossier);
+    invariant(r.dossier);
+    const stage = r.dossier.stages[3];
+    assert.equal(stage.status, passing ? "PASSED" : "FAILED");
+    const receiptPath = stage.artifacts.find(
+      (p) => path.basename(p) === "volume-encryption-evidence-receipt.json",
+    );
+    assert.ok(receiptPath);
+    assert.equal(
+      r.dossier.summary.volumeEncryptionCompliance,
+      passing ? "passed" : "failed",
+    );
+    assert.equal(
+      r.dossier.volumeEncryptionBaseline.status,
+      passing ? "verified" : "breached",
+    );
+    if (["malformed-readiness", "source-failure"].includes(scenario)) {
+      assert.equal(fs.existsSync(receiptPath), false);
+      return;
+    }
+    const raw = fs.readFileSync(receiptPath, "utf8"),
+      receipt = JSON.parse(raw);
+    assert.ok(!raw.includes("CanaryPrivate"));
+    assert.ok(!raw.includes(f.dir));
+    assert.equal(receipt.valid, passing);
+    assert.equal(receipt.execution_mode, "simulation");
+    assert.equal(receipt.totalRequiredMounts, 9);
+    assert.equal(receipt.validMountsCount, 9);
+    assert.equal(receipt.keySeparation.scannedPaths.length, 1);
+    assert.equal(
+      receipt.keySeparation.detectedViolations.length,
+      scenario === "key-file" ? 1 : 0,
+    );
+    const {
+      validateVolumeEncryptionReport,
+    } = require("./check-launch-readiness");
+    assert.equal(validateVolumeEncryptionReport(receipt), passing);
+    assert.equal(
+      validateVolumeEncryptionReport(receipt, undefined, { requireLive: true }),
+      false,
+    );
+    if (passing) {
+      assert.equal(r.dossier.volumeEncryptionBaseline.scannedPathsCount, 1);
+      assert.equal(r.dossier.volumeEncryptionBaseline.violationsDetected, 0);
+    }
+  });
+}

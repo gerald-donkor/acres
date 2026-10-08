@@ -2218,3 +2218,31 @@ filesystem/static-analysis limits are in `docs/operations.md` Prompt 277.
 No unstubbed unified drill, Docker execution, production action, dependency or
 credential change, or push occurred. Phase 12, prompt 201, advisories and operator
 sign-offs remain open; rollback is a reviewed normal revert preserving receipts.
+
+**Prompt 278 Phase 12K volume-verifier invocation/publication hardening (2026-10-08):**
+The Stage 4 volume child now rejects invalid/ambiguous invocation before work;
+reads Compose, env and readiness through bounded regular-file descriptors; and
+rejects malformed readiness/Compose structures with verified YAML and traversal
+limits. It preserves nine exact mount identities, mechanism/filename predicates,
+well-formed verdict/count parity and eight exports. A new fixed CLI projection
+keeps actual scan and violation counts while excluding private source, owner,
+mount, filename and parser metadata; direct helper results remain private.
+Fresh destinations, stable ancestor identities, private verified staging, the
+1 MiB saved-byte ceiling and exclusive hard links preserve retained/racing
+evidence. Publication, cleanup and output failures stay nonzero; completed
+failed policies can save truthful failed receipts. No Stage 4, dossier or
+readiness consumer changed.
+
+Final volume **151/151**, launch/dossier **178/178**, actual-volume focused
+**5/5**, readiness **649/649**, launch readiness **23/23**, container **136/136**,
+rotation **99/99**, templates **324/324** and template preflight passed. Lint,
+typecheck, build, syntax, formatting and diff checks passed. Aggregate
+`ops:check` stopped at the unchanged audit: `37 vulnerabilities (9 moderate,
+26 high, 2 critical)` and `audit error: critical vulnerabilities detected in
+production dependencies`; later aggregate stages were unreached. Independent
+review found no blocking issue; a Minor early-work test-hook gap was fixed and
+its focused **29/29** regressions passed. `docs/operations.md` Prompt 278 owns
+the full contracts, tests and residual limits. No live unified drill, host
+inspection, production action, dependency/credential change or push occurred.
+TM-21, Category 8 live sign-off, prompt 201 and Phase 12 remain open; rollback
+is a reviewed normal revert preserving retained receipts.

@@ -1245,6 +1245,17 @@ none of these repository results supplies Category 7 evidence.
   Every CLI receipt is `execution_mode: "simulation"`, including concrete paths.
   It checks declarations and limited local filenames; no host/custody/recovery
   inspection is performed. Legacy receipts need regeneration, never relabeling.
+- Prompt 278: inspect safely with `node scripts/ops/verify-volume-encryption.js
+  --help` and `npm run ops:volume-test`. For a saved preflight choose a fresh,
+  restricted path. The producer rejects retained files, directories and links,
+  publishes a verified private receipt exclusively, and never overwrites prior
+  evidence. Completed failed policy checks can publish a failed receipt and exit
+  nonzero; unreadable or malformed sources leave no receipt. CLI output omits
+  private source, mount, owner, key filename and Git metadata while retaining
+  evaluated identities and scan/violation counts. Direct helper results still
+  contain private local metadata. Hard-link support is required; interruptions
+  or uncertain ownership can leave staging for operator inspection before
+  cleanup. A clean filename scan is not live custody or encryption proof.
 - Accept: approved mechanism, at least three unique concrete absolute POSIX
   root paths, `key_separation_confirmed: true`, designated recovery owner,
   approver and at least one separately supplied live production child matching
@@ -1789,6 +1800,22 @@ build with `Could not parse output from TypeScript's --showConfig`. None of
 these repository checks establishes a production runtime or journey result.
 
 ## 4. Unified Drill Execution & Evidence Dossier
+
+**Standalone volume-verifier regeneration (prompt 278):** Run
+`node scripts/ops/verify-volume-encryption.js --help` and
+`npm run ops:volume-test` for safe inspection. Save only to a fresh absent
+restricted path; do not delete or overwrite retained receipts. Explicit saves
+use private verified staging and exclusive hard-link publication with a 1 MiB
+ceiling. A completed failed policy evaluation may save a failed simulation
+receipt and exit nonzero. Invalid/unreadable sources, publication, cleanup or
+output faults fail; a published receipt remains retained even if later cleanup
+or output fails. No-save and help create no receipt. The CLI projection contains
+fixed findings, nine identities and actual scan counts without source paths,
+owner values or filenames. Direct helper results remain private caller data.
+Hard-link support is required. Interruptions and uncertain ownership may leave
+staging that needs ownership inspection before operator cleanup. Stage 4 and
+its dossier remain simulation preflight; Category 8 live sign-off requires
+separate operator evidence.
 
 **Standalone container-verifier inspection/regeneration (prompt 277):** Run
 `node scripts/ops/verify-container-security.js --help`,

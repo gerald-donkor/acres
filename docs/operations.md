@@ -4655,3 +4655,103 @@ node scripts/ops/verify-container-security.js --help
 npm run ops:container-test
 npm run ops:container-security
 ```
+
+## Prompt 278 — volume-verifier invocation and artifact publication hardening (2026-10-08)
+
+The standalone volume preflight validates the whole CLI invocation before
+source reads, local scans, Git calls or output checks. It accepts `--json`,
+`--compose FILE`, `--env FILE`, `--readiness FILE`, repeatable `--mount-path DIR`,
+one `--output FILE`/`-o FILE`, and standalone `--help`/`-h`. Long value options
+also accept `--name=value`. Explicit relative paths resolve against the caller's
+cwd; installed Compose/env/readiness, backup and Git defaults remain anchored to
+the installed script. Paths are literal. Duplicate singleton or boolean flags,
+mixed help, unknown/positional, missing/blank/control-bearing arguments and
+ambiguous split dash-leading values fail with a fixed diagnostic. Import/help
+perform no source or output work; no-save runs allocate no receipt resources.
+
+Compose and env are required. The default readiness source is optional only on
+confirmed absence; an explicit or present unreadable, malformed or invalid
+readiness file fails without a success receipt. Each source is read through a
+regular nonblocking descriptor with type/identity/size/change checks and a
+1 MiB ceiling. Ordinary source symlinks to regular files are allowed. YAML uses
+the installed parser's verified depth 100 and 10,000 merge-key options; expanded
+traversal has a 10,000-entry budget and rejects cycles and dereferenced invalid
+collection/types. These limits are engineering judgments, not capacity
+measurements. Malformed direct parameters return a fixed invalid result before
+scanning. Well-formed policy parity was checked against `963de07`: nine mount
+identities in order, valid mount counts and verdicts, approved mechanisms, short
+and object mount syntax, readiness decisions, and all eight public exports.
+The existing filename patterns and scanner/Git skip behavior are unchanged.
+
+The CLI builds a fresh allowlisted simulation receipt. It preserves the exact
+nine service/container/env identities, actual mount statuses and booleans,
+counts, canonical UTC timestamp, key-separation verdict and scan/violation
+array lengths. Fixed findings and labels replace private Compose source values,
+environment/recovery values, host mount and backup paths, readiness source
+pointers, key/Git filenames and parser diagnostics in saved JSON, stdout and
+stderr. Direct helper returns still contain private local scan metadata and
+must remain within the caller's trust boundary. The projection is checked before
+serialization and on parsed staging readback; raw bytes are independently
+compared. Missing mounts, mechanism/custody/readiness failures and detected key
+filenames retain truthful failure counts and nonzero exit status. A completed
+failed evaluation can publish its failed diagnostic receipt. Source/evaluation
+machinery failure cannot publish success.
+
+Only explicit output saves. Destination preflight requires an absent target,
+including dangling links, and records nonsymlink ancestor identities before
+evaluation. New parents are 0700; existing modes are preserved. The newline
+terminated receipt must fit the consumer's 1 MiB ceiling before allocation.
+Staging is exclusive and 0600 in the destination directory, handles short/zero
+writes, closes and reopens with no-follow/nonblocking checks, verifies identity,
+full bytes and parsed consistency, and publishes through an atomic exclusive
+hard link. Late competing files/directories/links and retained receipts survive.
+Owned staging is cleaned conservatively, with one bounded retry if cleanup
+faults; a successful retry does not erase the failure. Cleanup, publication and
+output errors stay nonzero even when a valid receipt was published. Streams
+drain naturally; asynchronous callbacks/events and broken pipes have fixed
+diagnostics without stack/source reflection.
+
+Hermetic tests install the real parser closure, isolated roots and a stub Git
+executable. They cover argv ordering, defaults/caller cwd, literal paths,
+malformed/oversized/growing/special sources, YAML limits, redaction, private
+publication and ownership faults, retained/racing artifacts, complete large
+failed JSON and output faults. The actual volume child ran through Stage 4 with
+the other children stubbed: clean, predicate failure, planted key filename,
+malformed readiness and child-only env source failure. Unchanged dossier and
+readiness consumers accepted only a passing simulation preflight and rejected
+failed receipts or simulation for live approval. No fixture scans host mounts
+or the real backup/repository tree.
+
+Final checks: `npm run ops:volume-test` **151/151**; full
+`npm run ops:launch-drill-test` **178/178** (focused actual child **5/5**);
+`npm run ops:readiness-test` **649/649**; launch readiness **23/23**;
+container **136/136**; rotation **99/99**; template tests **324/324** and
+`ops template check passed`. Root lint, sequential typecheck/build, Node syntax,
+selected Prettier and `git diff --check` passed. An initial sandbox child-test
+failure resolved with normal subprocess access. Independent review found no
+Critical or Important issue; its Minor early-work hook gap was reproduced,
+expanded to include env/readiness reads and Git calls, and the focused review
+fix passed **29/29** before the final volume suite. Aggregate `npm run ops:check`
+stopped at unchanged production dependency audit: `37 vulnerabilities (9
+moderate, 26 high, 2 critical)` and `audit error: critical vulnerabilities
+detected in production dependencies`. Later aggregate stages were unreached.
+
+Limits: the preflight does not inspect block/cloud encryption, custody, dual
+control or recovery. Missing/inaccessible paths, depth limits and suppressed
+filesystem/Git errors make the filename scan incomplete; it can also match TLS
+files unrelated to volume unlock material. Scanner/Git resource redesign remains
+open. Hard-link support is required; interruptions/host loss can leave staging.
+Persistent close/unlink or unprovable ownership leaves conservative orphans for
+operator inspection. Ancestor/inode checks narrow ordinary races, not hostile
+same-UID administration, descriptor-relative confinement or durable crash
+recovery. No live inspection, production action, dependency/credential change,
+unstubbed unified drill or push occurred. TM-21, Category 8 operator sign-off,
+prompt 201 and Phase 12 exit remain open. Rollback is a reviewed normal revert
+that preserves retained evidence.
+
+Safe inspection from the repository root:
+
+```bash
+node scripts/ops/verify-volume-encryption.js --help
+npm run ops:volume-test
+```

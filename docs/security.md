@@ -1070,3 +1070,23 @@ Exported and tested internal evidence validation contracts in `scripts/ops/check
 - Exported `validCaddyStaticEvidence`, `isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`, and `validateSupplyChainEvidence` in `module.exports`.
 - Added contract tests in `scripts/ops/check-launch-readiness.spec.js` covering `validCaddyStaticEvidence` (static integrity structure, status, and stages), supply chain discrimination helpers (`isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`), and `validateSupplyChainEvidence` (rejection of non-objects, failed statuses, exit codes, component failures, and acceptance of valid supply chain reports).
 - Directly reinforces threat model mitigations TM-01 (tamper resistance / fail-closed parsing), TM-04 (information disclosure suppression via fixed diagnostic blockers), TM-05 (strict evidence boundary enforcement across all categories), and TM-15 (preflight / live separation). Prompt 201 and Phase 12 live sign-off remain open.
+
+**Prompt 278 volume producer metadata boundary (2026-10-08):** The Stage 4
+standalone CLI now accepts only a strict complete invocation, bounds
+Compose/env/readiness regular-source reads, rejects malformed consumed data,
+and writes only a freshly projected simulation report. CLI human, JSON and
+saved receipts retain nine required service/container identities and actual
+mount/filename-scan verdicts/counts, using fixed findings and labels instead
+of private Compose source, host path, recovery owner, key/Git filename or
+parser diagnostics. Direct helper returns still contain private scan metadata
+for local callers and must not be published as CLI evidence. Fresh absent
+destinations, stable directory-ancestor checks, private verified staging and
+exclusive hard links prevent ordinary overwrite/substitution; output/cleanup
+faults remain nonzero. This narrows TM-01/TM-04/TM-05 exposure for simulation
+receipts. Existing depth-limited filename scans skip missing/inaccessible paths
+and suppress filesystem/Git errors, and broad patterns can match unrelated TLS
+files. The scan cannot prove absence of key material, block/cloud encryption,
+custody, dual control or recovery. Hostile same-UID administration, source
+confinement and durable crash recovery are outside this preflight. TM-21 and
+Category 8 live operator acceptance remain open; prompt 201 and Phase 12
+sign-off remain open.
