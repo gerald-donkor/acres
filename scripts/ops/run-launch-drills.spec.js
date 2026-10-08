@@ -1865,3 +1865,110 @@ for (const scenario of ["clean", "active-blocker", "expired-match"]) {
     } else assert.equal(r.dossier.summary.supplyChainSecurity, "failed");
   });
 }
+
+for (const scenario of [
+  "clean",
+  "failed-check",
+  "malformed-source",
+  "unreadable-source",
+]) {
+  test(`actual container verifier and unchanged dossier/readiness consumers: ${scenario}`, (t) => {
+    const f = fixture(t),
+      root = path.resolve(__dirname, "../..");
+    fs.copyFileSync(
+      path.join(__dirname, "verify-container-security.js"),
+      path.join(f.ops, "verify-container-security.js"),
+    );
+    // Replace only the fixture parser stub with the installed parser closure.
+    fs.rmSync(path.join(f.dir, "node_modules/js-yaml"), { recursive: true });
+    for (const pkg of ["js-yaml", "argparse"])
+      fs.cpSync(
+        path.dirname(require.resolve(`${pkg}/package.json`)),
+        path.join(f.dir, "node_modules", pkg),
+        { recursive: true },
+      );
+    for (const file of [
+      "server/Dockerfile",
+      "infra/docker/client.Dockerfile.example",
+      "infra/compose/docker-compose.production.example.yml",
+    ]) {
+      const destination = path.join(f.dir, file);
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.copyFileSync(path.join(root, file), destination);
+    }
+    const compose = path.join(
+      f.dir,
+      "infra/compose/docker-compose.production.example.yml",
+    );
+    if (scenario === "failed-check") {
+      const file = path.join(f.dir, "server/Dockerfile");
+      fs.writeFileSync(
+        file,
+        fs
+          .readFileSync(file, "utf8")
+          .replace("USER node", "USER CanaryPrivate"),
+      );
+    }
+    if (scenario === "malformed-source")
+      fs.writeFileSync(compose, "CanaryPrivate: [");
+    if (scenario === "unreadable-source") {
+      // Compose is also parent-preflight input; fault the child-only Dockerfile.
+      const file = path.join(f.dir, "server/Dockerfile");
+      fs.unlinkSync(file);
+      fs.mkdirSync(file);
+    }
+    const r = f.execute(),
+      passing = scenario === "clean";
+    assert.equal(r.status, passing ? 0 : 1, r.stderr);
+    assert.ok(r.dossier);
+    invariant(r.dossier);
+    const stage = r.dossier.stages.find(
+      (s) => s.stage_id === "supply_chain_sast",
+    );
+    assert.equal(stage.status, passing ? "PASSED" : "FAILED");
+    const receiptPath = stage.artifacts.find(
+      (p) => path.basename(p) === "container-security-evidence-receipt.json",
+    );
+    assert.ok(receiptPath);
+    assert.equal(
+      r.dossier.summary.containerSecurityCompliance,
+      passing ? "passed" : "failed",
+    );
+    assert.equal(
+      r.dossier.supplyChainBaseline.status,
+      passing ? "verified" : "breached",
+    );
+    if (scenario === "unreadable-source") {
+      assert.equal(fs.existsSync(receiptPath), false);
+      return;
+    }
+    const raw = fs.readFileSync(receiptPath, "utf8"),
+      receipt = JSON.parse(raw);
+    assert.equal(receipt.drill_type, "container_security_verification");
+    assert.equal(receipt.valid, passing);
+    assert.equal(receipt.status, passing ? "success" : "failed");
+    assert.ok(!raw.includes("CanaryPrivate"));
+    const {
+      isContainerSecurityEvidence,
+      validateSupplyChainEvidence,
+    } = require("./check-launch-readiness");
+    assert.equal(isContainerSecurityEvidence(receipt, receiptPath), true);
+    const blockers = [];
+    assert.equal(
+      validateSupplyChainEvidence(
+        receipt,
+        receiptPath,
+        (_c, m) => blockers.push(m),
+        "supply_chain",
+      ),
+      passing,
+    );
+    assert.equal(blockers.length, passing ? 0 : 1);
+    assert.ok(!blockers.join("").includes("CanaryPrivate"));
+    if (passing)
+      assert.equal(
+        r.dossier.supplyChainBaseline.containerSecurity.totalChecks,
+        22,
+      );
+  });
+}

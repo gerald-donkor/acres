@@ -4524,3 +4524,134 @@ node scripts/ops/run-sast-scan.js --help
 npm run ops:sast-test
 npm run ops:sast
 ```
+
+## Prompt 277 — container-verifier invocation and artifact publication hardening (2026-10-08)
+
+The standalone producer validates its whole invocation before evaluation or
+allocation. It retains `--json`, `--output FILE` and `-o FILE`, adds attached
+output values and standalone `--help`/`-h`, and rejects unknown/positional,
+repeated/alias-conflicting, boolean-attached, missing/blank/control-bearing and
+mixed-help options. Separate dash-leading paths are ambiguous; attached values
+and spaces are literal. Root/trailing-separator outputs fail. No shell, variable
+or tilde expansion occurs. Sources remain installation-anchored; explicit
+relative output uses caller cwd. Import/help performs no evaluation/allocation;
+no-save allocates no output. Direct options validate records and present paths
+before reading, preserving valid custom/external/relative source semantics and
+all four synchronous read-only exports.
+
+Each of the three sources requires a regular file and verified nonblocking
+opened descriptor. Growth-aware reads are bounded at 1 MiB, detect ordinary
+source modification and close owned descriptors; regular source symlinks remain
+supported. Missing sources are fixed slot-specific evaluated failures. Read,
+nonregular-source or closure faults produce controlled execution failure without
+fabricating a receipt. YAML uses verified installed `maxDepth: 100` and
+`maxTotalMergeKeys: 10000`; expanded traversal has a 10,000-entry budget and
+active-ancestry cycle rejection. These are engineering limits, not measured
+production capacity. Ordinary finite aliases and established small fixtures
+remain supported. Malformed dereferenced structures fail with a fixed result;
+missing optional security fields still reach existing predicates. Lifecycle
+objects are rejected before diagnostic coercion, while scalar failures retain
+existing checks. This is a bounded shape guard, not a complete Compose schema.
+
+CLI human/JSON/saved evidence is a separate non-reflecting projection. It keeps
+fixed source slots, check identities/order, boolean verdicts, counts, UTC time
+and existing discriminator/status fields. Details use fixed check-specific
+remediation; source/command/credential values, dynamic service/environment/
+dependency names, private paths, parser messages and raw errors are excluded.
+Supplemental missing/malformed source errors have fixed categories. Direct
+helper diagnostics remain intentional local caller data and must not be treated
+as safe published evidence. Complete evaluated failure prints/saves a real
+failed report and exits 1; internal execution/publication faults cannot claim
+success. Natural draining, callbacks and stream handlers keep large finite JSON
+complete and broken pipes nonzero without stacks.
+
+Only explicit output saves. Read-only preflight requires an absent destination,
+including dangling links, and directory ancestors without symlinks. Existing
+ancestor identities are recorded/rechecked; disappeared parents are not silently
+recreated. Missing parents use 0700 and existing modes remain. Serialization
+including newline must fit the unchanged dossier's 1 MiB receipt ceiling before
+allocation. Exclusive 0600 same-directory staging handles short/zero writes and
+owned descriptor faults, closes/reopens with no-follow/nonblocking checks and
+independently verifies regular-file identity, bounded full bytes, metadata and
+parsed report/count/verdict consistency. Exclusive atomic hard links preserve
+retained and late competing destinations without destructive fallback. Cleanup
+only touches owned staging/descriptors, preserves foreign replacements and
+published receipts, retains retryable ownership and records faults even after
+successful bounded retry. Post-publication output/cleanup failure retains the
+receipt and exits nonzero; new parents are never recursively removed.
+
+Baseline comparison against `7a939e218a5f1a125488bbdb666d7f20b54e0624` matched
+production results (22 passing checks, zero errors), existing direct diagnostics
+and 18 well-formed Docker/Compose cases after deliberate boolean normalization.
+All four exports matched. Optional observability predicates still permit a valid
+21-check report; 22 is the current template observation, not a new invariant.
+No security predicate, template, dependency, triage policy or production consumer
+changed. SAST still reports 371 files, 12 findings, 9 triaged, 0 expired and
+3 active at the unchanged BLOCKER threshold.
+
+Verification (actual concise output):
+
+| Command/check                                    | Exit | Actual output                                                                                                                       |
+| ------------------------------------------------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Final `ops:container-test`                       | 0    | `tests 136`, `pass 136`, `fail 0`                                                                                                   |
+| Full `ops:launch-drill-test`                     | 0    | `tests 173`, `pass 173`, `fail 0`                                                                                                   |
+| Final focused actual-container-child integration | 0    | `tests 4`, `pass 4`, `fail 0`                                                                                                       |
+| `ops:readiness-test`                             | 0    | `tests 649`, `pass 649`, `fail 0`                                                                                                   |
+| `ops:launch-readiness-test`                      | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                     |
+| `ops:sbom-test`                                  | 0    | `tests 90`, `pass 90`, `fail 0`                                                                                                     |
+| `ops:sast-test`                                  | 0    | `tests 136`, `pass 136`, `fail 0`                                                                                                   |
+| Final `ops:container-security`                   | 0    | `Container Security Gate: PASSED (All Dockerfiles and Compose templates verified)`                                                  |
+| Final `ops:sast`                                 | 0    | `SAST Gate: PASSED (Zero unreviewed blockers and zero expired suppressions)`                                                        |
+| `ops:templates-test`                             | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                   |
+| `ops:templates`                                  | 0    | `ops template check passed`                                                                                                         |
+| `ops:check`                                      | 1    | `37 vulnerabilities (9 moderate, 26 high, 2 critical)`; `audit error: critical vulnerabilities detected in production dependencies` |
+| Root lint                                        | 0    | all three ESLint workspace commands, no diagnostics                                                                                 |
+| Root typecheck                                   | 0    | all three workspaces; `Generated Prisma Client (7.9.1)`                                                                             |
+| Root build with normal subprocess access         | 0    | `Compiled successfully in 5.4s`; `Generating static pages using 7 workers (22/22) in 1144ms`; `prisma generate && nest build`       |
+| Final changed-JS Node syntax                     | 0    | no output                                                                                                                           |
+| Final changed-JS/prompt Prettier                 | 0    | `All matched files use Prettier code style!`                                                                                        |
+| Diff check                                       | 0    | no output                                                                                                                           |
+| Manual baseline comparison                       | 0    | `{"baselineChecks":22,"baselineParity":true,"wellFormedCases":18,"exportsUnchanged":true}`                                          |
+
+The aggregate stopped at unchanged dependency audit; later stages were
+unreached, and affected suites ran independently. Initial sandbox container
+subprocess tests had an opaque file-level failure; normal-permission fixtures
+passed. Sandbox baseline comparison reported `spawnSync git EPERM`; reading the
+baseline through shell `git show` then compiling in memory passed. Sandbox build
+reported `Could not parse output from TypeScript's --showConfig`; normal
+subprocess access passed. Typecheck and build were sequential.
+
+Initial full launch coverage passed 172/173: a directory at the Compose input
+correctly failed parent preflight before reaching the child. The fixture was
+corrected to fault the child-only Dockerfile without weakening any validator;
+full rerun passed 173/173. Real-child fixtures retain all unrelated stage stubs
+and prove clean receipt acceptance, real failed-check/malformed-source rejection,
+and absent receipt after execution failure. Synthetic acceptance cannot approve
+production launch. Independent review's Important lifecycle object-coercion
+finding was reproduced, fixed and covered with direct/CLI/save/scalar regressions.
+Final verifier 136/136 and focused integration 4/4 verify that fix; follow-up
+review independently checked all four lifecycle fields and found no remaining
+Critical, Important or Minor issues. Root and broad adjacent checks preceded
+that local fix; final focused checks, syntax and formatting cover the changed
+standalone CLI.
+
+Residual limits: static string/regex predicates, incomplete Dockerfile/Compose
+syntax understanding and direct helper diagnostics remain local limitations.
+Hard-link support is required; unsupported filesystems fail without overwrite
+fallback. Interruptions/host loss can leave staging. Persistent close/unlink or
+unprovable ownership can leave conservative orphans; inspect ownership before
+operator cleanup. Ancestor/inode checks narrow ordinary races, not hostile
+same-UID administration, descriptor-relative confinement or durable crash
+recovery. No signal framework, runtime image certification, cryptographic
+provenance, live production evidence or approval is implied. Phase 12, prompt 201,
+dependency findings and operator sign-offs remain open. No Docker execution,
+unstubbed unified drill, production action, credential/dependency change or push
+occurred. Rollback is a reviewed normal revert preserving retained receipts.
+
+Safe inspection from repository root:
+
+```bash
+node scripts/ops/verify-container-security.js --help
+npm run ops:container-test
+npm run ops:container-security
+```

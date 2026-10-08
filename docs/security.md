@@ -598,6 +598,16 @@ As of 2026-09-09, deterministic SBOM inventory generation, license compliance va
     production/operator acceptance remain open.
 
 - **Container Image & Compose Security Hardening (TM-18)**:
+  - **Prompt 277 update (2026-10-08):** Strict invocation and bounded
+    regular-source/YAML/shape handling precede evaluation. CLI/human/saved
+    receipts project fixed source/check identities and remediation without raw
+    instructions, credentials, dynamic names, private paths or parser errors.
+    Direct helper diagnostics remain local caller data. Verified private staging
+    and exclusive hard links preserve retained/racing evidence; cleanup/output
+    faults remain nonzero. Malformed lifecycle objects produce controlled failed
+    results before coercion, with scalar security predicates unchanged. Static
+    heuristics, same-UID/orphan-staging limits, dependency findings, provenance
+    verification and operator production acceptance remain unresolved.
   - `scripts/ops/verify-container-security.js` statically evaluates `server/Dockerfile`, `infra/docker/client.Dockerfile.example`, and `infra/compose/docker-compose.production.example.yml`.
   - Verifies Node 24 Alpine pinned base, multi-stage separation (`deps`, `build`, `prod-deps`, `runtime`), `USER node` non-root runtime enforcement, bounded healthchecks (`--interval=30s --timeout=5s`), direct exec JSON array CMD for POSIX signal propagation, and layer hygiene (zero inclusion of `.env`, `*.pem`, `*.key`).
   - Verifies Compose network isolation (`networks.private.internal: true`), datastore network binding (`postgres`, `valkey`, `garage`, `clamav`, `prometheus` isolated to private network), mandatory `${VAR:?msg}` credential injection syntax, and service healthchecks.

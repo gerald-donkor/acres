@@ -2189,3 +2189,32 @@ unsupported hard-link, orphan-staging and same-UID limits. Rollback is a reviewe
 normal revert preserving receipts. Phase 12, prompt 201, dependency advisories and
 operator sign-offs remain open. No unstubbed launch drill, production action,
 dependency/credential change or push occurred.
+
+**Prompt 277 Phase 12K container-verifier invocation/publication hardening (2026-10-08):**
+Strict CLI/direct options precede work; help/import and no-save allocate no output.
+Regular-source reads are bounded at 1 MiB, YAML at depth 100/10,000 merge keys,
+and expanded traversal at 10,000 entries. Malformed structures fail safely;
+ordinary aliases/source symlinks and scalar security predicates remain. Fixed
+CLI projection excludes raw source/private values while preserving identities,
+counts and verdicts. Private verified staging and exclusive hard links preserve
+retained/racing/foreign evidence; cleanup/output faults stay nonzero. Baseline
+22 checks and 18 well-formed cases match; variable optional check counts and
+four exports remain. No security predicate, template or consumer was changed.
+
+Actual final container `tests 136`, `pass 136`, `fail 0`; launch/dossier 173/173;
+final actual-child integration 4/4; readiness 649/649; launch readiness 23/23;
+SBOM 90/90; SAST 136/136; templates 324/324 and `ops template check passed`.
+Container/SAST inspection, root lint/typecheck/build, final syntax/selected
+formatting and diff checks passed. Full `ops:check` stopped at unchanged audit:
+`37 vulnerabilities (9 moderate, 26 high, 2 critical)` and `audit error: critical
+vulnerabilities detected in production dependencies`; later aggregate stages
+were unreached. Sandbox subprocess/Next `--showConfig` failures resolved with
+normal subprocess access. The unreadable-source integration fixture was corrected
+to a child-only Dockerfile fault after parent preflight correctly rejected its
+Compose directory; full rerun passed. Independent review's lifecycle-coercion
+finding was reproduced/fixed, with complete failed receipt/scalar regressions;
+follow-up review found no remaining issues. Full results and conservative
+filesystem/static-analysis limits are in `docs/operations.md` Prompt 277.
+No unstubbed unified drill, Docker execution, production action, dependency or
+credential change, or push occurred. Phase 12, prompt 201, advisories and operator
+sign-offs remain open; rollback is a reviewed normal revert preserving receipts.

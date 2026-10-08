@@ -1790,6 +1790,22 @@ these repository checks establishes a production runtime or journey result.
 
 ## 4. Unified Drill Execution & Evidence Dossier
 
+**Standalone container-verifier inspection/regeneration (prompt 277):** Run
+`node scripts/ops/verify-container-security.js --help`,
+`npm run ops:container-test`, or `npm run ops:container-security` without output
+for local inspection. Explicit saving requires a fresh absent destination and
+stable directory ancestors without symlinks; choose a new path instead of
+deleting/overwriting retained evidence. Private verified staging publishes
+exclusively, with a 1 MiB receipt ceiling. Completed failed evaluations can be
+saved, but exit 1 and fail stage/dossier/readiness consumers. Source read and
+publication faults cannot fabricate success. Output/cleanup failure after
+publication preserves the receipt and stays nonzero. CLI evidence uses fixed
+check/source identities and safe messages; direct helper diagnostics remain
+local caller data. Hard-link support is required, and interruption or uncertain
+ownership can leave staging requiring inspection before operator cleanup.
+Bounded static template checks do not certify images, running containers,
+cryptographic provenance or production launch.
+
 **Standalone SAST inspection/regeneration (prompt 276):** Run
 `node scripts/ops/run-sast-scan.js --help`, `npm run ops:sast-test`, or
 `npm run ops:sast` without output for local inspection. Explicit saving requires
