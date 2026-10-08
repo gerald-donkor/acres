@@ -2138,3 +2138,27 @@ No live monitoring/load/DoS/unified drill, production evidence inspection,
 deployment, credential/dependency change or push occurred. Fixed synthetic
 predicates and static heuristics cannot approve Category 5; Phase 12, prompt 201,
 dependency findings and operator decisions remain unresolved.
+
+**Prompt 275 Phase 12K SBOM invocation/publication hardening (2026-10-08):**
+Strict CLI/direct options precede generation/allocation; help/import and no-save
+allocate no output. Caller-relative literal output requires absent destinations
+and stable directory ancestors. Bounded serialized bytes, private staging, closed
+byte-comparison/compliance verification and exclusive hard links preserve retained
+and racing evidence; cleanup/output failures stay nonzero. Inventory/policy parity:
+708 components/hashes, 834 excluded, unchanged license counts. Failed-license JSON
+fully drains, saves the evaluated failure and fails unchanged consumers.
+
+Actual final SBOM `tests 90`, `pass 90`, `fail 0`; launch/dossier 166/166 and final
+actual-child integration 2/2; readiness 649/649; launch readiness 23/23; SAST 14/14;
+container 22/22; templates 324/324 and `ops template check passed`. Node syntax,
+selected formatting, diff check and root lint/typecheck/build passed. Normal
+subprocess access passed after sandbox opaque test failures and Next `--showConfig`
+parsing failure. Aggregate `ops:check` exited 1 at unchanged audit:
+`37 vulnerabilities (9 moderate, 26 high, 2 critical)` and
+`audit error: critical vulnerabilities detected in production dependencies`; later
+aggregate stages were unreached. Independent review's recorded-parent recreation
+finding was verified/fixed; final review found no remaining implementation defects.
+Conservative staging-orphan limits are documented in `docs/operations.md` Prompt 275.
+No live unified drill, production inspection/approval, deployment, credential or
+dependency change, or push occurred. Phase 12, prompt 201 and operator sign-offs
+remain unresolved.

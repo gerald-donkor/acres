@@ -1790,6 +1790,17 @@ these repository checks establishes a production runtime or journey result.
 
 ## 4. Unified Drill Execution & Evidence Dossier
 
+**Standalone SBOM inspection/regeneration (prompt 275):** Run
+`node scripts/ops/generate-sbom.js --help`, `npm run ops:sbom-test`, or
+`npm run ops:sbom` without output for local inspection. Explicit saving requires
+an absent destination with directory ancestors without symlinks; choose a new
+path rather than deleting or overwriting retained evidence. The producer creates
+private missing parents/staging and exclusively publishes a verified receipt no
+larger than 16 MiB. A completed license-failed BOM may be saved for diagnosis,
+but the command exits 1 and consumers reject it. Output/cleanup failure after
+publication retains the receipt and exits nonzero. These commands supply local
+inventory evidence, not production sign-off.
+
 `scripts/ops/run-launch-drills.sh` runs all 7 stages and writes
 `backups/launch-evidence-dossier-<uuid>.json`:
 

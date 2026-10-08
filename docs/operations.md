@@ -4309,3 +4309,105 @@ Important or Minor findings. Reviewer policy comparisons matched 100,000 generat
 expressions. The final alert suite passed 112/112 and final actual-child parent
 integration passed 1/1 after those fixes; unaffected root gates and regression
 suites were not repeated.
+
+## Prompt 275 — SBOM invocation and artifact publication hardening (2026-10-08)
+
+The standalone producer now validates all CLI arguments before inventory reads
+or output allocation. It retains `--verify-licenses`, `--json`, `--output FILE`
+and `-o FILE`, adds attached output values and standalone `--help`/`-h`, and
+rejects unknown/positional/repeated/conflicting switches, boolean attached values,
+missing/blank/control-bearing paths, root targets and trailing separators. An
+attached dash-leading path is literal data; ordinary spaces are supported.
+Installation-root inventory defaults remain independent of caller cwd; relative
+output uses caller cwd. Import/help performs no inventory or allocation work.
+Direct `generateSbom` options validate object shape and present root/lockfile/
+timestamp/version strings before source work; valid existing callers and exports
+remain. Direct generation has no save side effect.
+
+Only explicit output saves. Read-only preflight requires an absent destination
+(including dangling links), directory ancestors without symlinks, and recorded
+ancestor identities. Allocation rechecks identities, rejects disappeared recorded
+parents, creates only missing directories with 0700 mode, and preserves existing
+modes. Complete serialized UTF-8 bytes including newline must fit the unchanged
+consumer's 16 MiB ceiling before any directory allocation; this is an engineering
+compatibility bound, not measured capacity. An exclusive 0600 same-directory
+staging file handles short/zero writes, closes, reopens with no-follow/nonblocking
+flags, checks regular-file identity/size, reads bounded bytes, compares every byte
+and independently validates BOM/compliance fields. Atomic exclusive hard linking
+publishes without rename/overwrite fallback. A late competing destination wins
+unchanged. Cleanup checks ownership and retries its own failures once; foreign
+staging, competing outputs and published evidence survive. Cleanup failure remains
+nonzero even if retry succeeds. Newly created parents are not recursively removed.
+
+Completed license failure attaches the actual evaluation to the same saved/printed
+BOM, drains complete JSON and exits 1. Successful exit requires generation,
+requested verification/publication/cleanup and output to succeed. Fixed invocation,
+generation, serialization, publication, cleanup and output diagnostics suppress
+rejected args, private paths, raw parser exceptions and stacks. Stream error
+handlers/write callbacks and natural process exit handle broken pipes without an
+uncaught stack. Human output retains intentional inventory/license data and omits
+raw source/output paths. Valid metadata is not a secret-detection surface.
+
+Baseline deep comparison against pre-change generation preserved 708 sorted
+components, all 708 hashes, 834 excluded entries and every license count. The
+unchanged evaluation reports `compliant: true`, `violations: []`,
+`totalComponents: 708`. Components are deterministically sorted; complete artifacts
+vary by UUID and timestamp. Inventory extraction, exclusions, purls, integrity
+decoding, disk-license fallback and compound-expression policy remain unchanged.
+Finite fixtures also verify fallback manifests, hashes and ordering. Actual-child
+launch fixtures stub all unrelated stages: MIT passes the unchanged dossier and
+readiness consumers; GPL saves complete failed evidence, exits nonzero and fails
+both consumers. Synthetic acceptance cannot approve production.
+
+Verification (actual concise output):
+
+| Command                                         | Exit | Output                                                                                                                                                 |
+| ----------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Node syntax, producer/spec and integration spec | 0    | no output                                                                                                                                              |
+| Standalone help                                 | 0    | `Usage: scripts/ops/generate-sbom.js [options]`                                                                                                        |
+| Final `ops:sbom-test`                           | 0    | `tests 90`, `pass 90`, `fail 0`                                                                                                                        |
+| `ops:sbom`                                      | 0    | `Total production components: 708`; `Excluded dev/test packages: 834`; `License Compliance: PASSED (100% compliant with approved permissive licenses)` |
+| `ops:launch-drill-test`                         | 0    | `tests 166`, `pass 166`, `fail 0`                                                                                                                      |
+| Final actual SBOM child integration             | 0    | `tests 2`, `pass 2`, `fail 0`                                                                                                                          |
+| `ops:readiness-test`                            | 0    | `tests 649`, `pass 649`, `fail 0`                                                                                                                      |
+| `ops:launch-readiness-test`                     | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                                        |
+| `ops:sast-test`                                 | 0    | `tests 14`, `pass 14`, `fail 0`                                                                                                                        |
+| `ops:container-test`                            | 0    | `tests 22`, `pass 22`, `fail 0`                                                                                                                        |
+| `ops:templates-test`                            | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                                      |
+| `ops:templates`                                 | 0    | `ops template check passed`                                                                                                                            |
+| `ops:check`                                     | 1    | `37 vulnerabilities (9 moderate, 26 high, 2 critical)`; `audit error: critical vulnerabilities detected in production dependencies`                    |
+| Root lint                                       | 0    | all three ESLint workspace commands; no diagnostics                                                                                                    |
+| Root typecheck                                  | 0    | all three workspaces; `Generated Prisma Client (7.9.1)`                                                                                                |
+| Root build with normal subprocess access        | 0    | `Compiled successfully in 3.7s`; `Generating static pages using 7 workers (22/22) in 1254ms`; `prisma generate && nest build`                          |
+| Changed JS/prompt/new-region Prettier           | 0    | `All matched files use Prettier code style!`                                                                                                           |
+| Diff check                                      | 0    | no output                                                                                                                                              |
+
+The aggregate stopped at the unchanged audit; later aggregate stages were
+unreached and affected suites ran independently. Sandbox test execution reported
+only failed file-level results; normal subprocess access passed hermetic suites.
+Sandbox build failed with `Could not parse output from TypeScript's --showConfig`;
+normal subprocess access completed the build. Typecheck and build were sequential.
+
+Residual limits: this does not certify the full CycloneDX schema, validate npm
+package reachability, parse SPDX expressions, confine disk-fallback paths, bound
+source lockfile memory, or change permissive integrity decoding. Path identity
+checks narrow ordinary substitution races; they do not resist a hostile same-UID
+filesystem administrator. Unsupported hard links fail without destructive fallback.
+Uncatchable interruption or persistent identity/close/unlink faults can leave
+owned private staging; inspect ownership before operator cleanup. If output or
+cleanup fails after publication, evidence remains and process status is nonzero.
+No crash-durability/fsync guarantee is added. No live unified drill, production
+inspection/approval, deployment, credential/dependency change or push occurred.
+Phase 12, prompt 201, dependency findings and operator sign-offs remain open.
+Safe inspection: standalone help, `npm run ops:sbom-test`, and `npm run ops:sbom`
+without output. Rollback is a reviewed normal revert, preserving retained evidence.
+
+Independent review confirmed the recorded-parent removal finding and verified the
+fix with an independent disposable fixture. Final review found no remaining
+Critical/Important implementation findings; its minor orphan-staging documentation
+request is recorded above. When both initial and cleanup descriptor identity reads
+fail, ownership cannot be established safely and staging is conservatively retained.
+The reviewer's sandbox suite had the same opaque file-level failure; full suite
+evidence is the coordinator's normal subprocess run. Final SBOM tests passed 90/90
+and actual-child integration passed 2/2 after the fix. Unaffected root gates were
+not repeated.

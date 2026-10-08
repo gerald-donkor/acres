@@ -1714,3 +1714,61 @@ exit 0
     );
   });
 }
+
+for (const license of ["MIT", "GPL-3.0"]) {
+  test(`actual SBOM child and unchanged dossier/readiness consumers: ${license}`, (t) => {
+    const f = fixture(t);
+    fs.copyFileSync(
+      path.join(__dirname, "generate-sbom.js"),
+      path.join(f.ops, "generate-sbom.js"),
+    );
+    fs.writeFileSync(
+      path.join(f.dir, "package-lock.json"),
+      JSON.stringify({
+        packages: {
+          "": { name: "acres" },
+          "node_modules/fixture-package": { version: "1.0.0", license },
+        },
+      }),
+    );
+    const r = f.execute();
+    assert.equal(r.status, license === "MIT" ? 0 : 1, r.stderr);
+    assert.ok(r.dossier);
+    invariant(r.dossier);
+    const stage = r.dossier.stages.find(
+      (s) => s.stage_id === "supply_chain_sast",
+    );
+    assert.equal(stage.status, license === "MIT" ? "PASSED" : "FAILED");
+    const receiptPath = stage.artifacts.find(
+      (p) => path.basename(p) === "sbom-inventory-receipt.json",
+    );
+    assert.ok(receiptPath);
+    const bom = JSON.parse(fs.readFileSync(receiptPath));
+    assert.equal(bom.components.length, 1);
+    assert.equal(bom.licenseCompliance.totalComponents, 1);
+    assert.equal(bom.licenseCompliance.compliant, license === "MIT");
+    const {
+      isSbomEvidence,
+      validateSupplyChainEvidence,
+    } = require("./check-launch-readiness");
+    assert.equal(isSbomEvidence(bom, receiptPath), true);
+    const blockers = [];
+    assert.equal(
+      validateSupplyChainEvidence(
+        bom,
+        receiptPath,
+        (_c, message) => blockers.push(message),
+        "supply_chain",
+      ),
+      license === "MIT",
+    );
+    assert.equal(blockers.length, license === "MIT" ? 0 : 1);
+    if (license === "MIT") {
+      assert.equal(r.dossier.supplyChainBaseline.sbom.packagesCount, 1);
+      assert.equal(
+        r.dossier.supplyChainBaseline.sbom.licenseComplianceVerified,
+        true,
+      );
+    } else assert.equal(r.dossier.summary.supplyChainSecurity, "failed");
+  });
+}
