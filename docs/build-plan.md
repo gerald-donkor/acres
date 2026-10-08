@@ -2274,3 +2274,14 @@ Aggregate `ops:check` stopped at the existing critical dependency audit
 (37 vulnerabilities); subsequent aggregate stages were unreached. Review and
 the exact parsing contract are in `docs/operations.md` Prompt 280. Prompt 201,
 Category 2 live SMTP sign-off and Phase 12 exit remain open.
+
+**Prompt 281 Phase 12K Next.js security patch (2026-10-08):**
+The client and root lockfile pin `next` and `eslint-config-next` to 16.3.8.
+Clean install, lint, typecheck and the permitted production build passed;
+the focused client API-helper suite passed 10/10. A fresh production audit
+fell from 37 findings with 2 critical to 36 with 1 critical; `next` cleared,
+but `proxy-addr` 2.0.7 through Express remains critical and `ops:check` still
+fails closed. Browser auth/recovery checks lacked the Nest API fixture and are
+not sign-off evidence. The audit paths, review and validation limits are in
+`docs/operations.md` Prompt 281. A separately scoped server dependency repair,
+prompt 201, live operator sign-offs and the Phase 12 exit remain open.

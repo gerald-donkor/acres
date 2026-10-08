@@ -4891,3 +4891,83 @@ Safe inspection from the repository root:
 node --test scripts/ops/check-smtp-template-keys.spec.js
 npm run ops:templates
 ```
+
+## Prompt 281 — patch the Next.js security release (2026-10-08)
+
+The client manifest and root lockfile now pin `next` and
+`eslint-config-next` to **16.3.8**, with matching `@next/*` package entries and
+integrity hashes. The [Next.js security release](https://nextjs.org/blog/september-2026-security-release)
+recommends 16.3.8 for the 16.3 Active LTS line; the
+[critical `next/og` advisory](https://github.com/vercel/next.js/security/advisories/GHSA-vcvr-r3jv-pc5j)
+affects 16.2.0 through versions below 16.3.6. The app uses static root OG and
+Twitter PNGs, and source search found no `next/og` or `ImageResponse` import.
+This narrows apparent exposure to that advisory but does not substitute for the
+package repair. No client source, other dependency family, image reference, or
+audit threshold changed.
+
+The fresh production audit against `registry.npmjs.org` reported **37** findings
+before the patch (9 moderate, 26 high, 2 critical) and **36** after it (9
+moderate, 26 high, 1 critical). `next` disappeared from the post-patch audit.
+The remaining critical is [`proxy-addr` GHSA-jqcg-44mw-7w3h](https://github.com/advisories/GHSA-jqcg-44mw-7w3h),
+installed at 2.0.7 through both Express 4 under `@apollo/server` and Express 5
+under `@as-integrations/express5`. It needs a separately scoped server
+dependency repair. The raw audit JSON remained in disposable `/tmp` files and
+is not committed. `npm run ops:check` exited 1 at the production audit with
+`36 vulnerabilities (9 moderate, 26 high, 1 critical)` and
+`audit error: critical vulnerabilities detected in production dependencies`;
+later aggregate stages were unreached. No launch approval follows from this patch.
+
+The post-patch high/critical inventory below gives a representative installed
+dependency path for **each** finding (`client` = `@acres/client`; `server` =
+`@acres/server`). `npm explain --json`, the audit's vulnerable `nodes`, and the
+lockfile supplied the paths; several packages have additional parents. The
+`deepmerge-ts` path is read from `prisma`/`@prisma/config` lockfile dependencies
+because `npm explain deepmerge-ts` returned no dependent for that node.
+
+| severity | audited package | representative dependency path |
+| --- | --- | --- |
+| critical | `proxy-addr` | server → `@nestjs/platform-express` → `express` → `proxy-addr`; also server → `@as-integrations/express5` → `express` → `proxy-addr` |
+| high | `@apollo/server` | server → `@apollo/server` |
+| high | `@graphql-tools/schema` | server → `@apollo/server` → `@graphql-tools/schema` |
+| high | `@graphql-tools/merge` | server → `@apollo/server` → `@graphql-tools/schema` → `@graphql-tools/merge` |
+| high | `@graphql-tools/utils` | server → `@nestjs/graphql` → `@graphql-tools/utils` |
+| high | `@modelcontextprotocol/sdk` | client → `shadcn` → `@modelcontextprotocol/sdk`; also server → `@google/genai` → `@modelcontextprotocol/sdk` |
+| high | `@nestjs/apollo` | server → `@nestjs/apollo` |
+| high | `@nestjs/graphql` | server → `@nestjs/graphql` |
+| high | `@nestjs/platform-express` | server → `@nestjs/platform-express` |
+| high | `@prisma/config` | server → `prisma` → `@prisma/config` |
+| high | `@ts-morph/common` | client → `shadcn` → `ts-morph` → `@ts-morph/common`; also server → `@nestjs/graphql` → `ts-morph` → `@ts-morph/common` |
+| high | `brace-expansion` | client → `shadcn` → `ts-morph` → `@ts-morph/common` → `minimatch` → `brace-expansion` |
+| high | `braces` | client → `shadcn` → `fast-glob` → `micromatch` → `braces` |
+| high | `deepmerge-ts` | server → `prisma` → `@prisma/config` → `deepmerge-ts` |
+| high | `fast-glob` | client → `shadcn` → `fast-glob`; also server → `@nestjs/graphql` → `ts-morph` → `@ts-morph/common` → `fast-glob` |
+| high | `fast-uri` | client → `shadcn` → `@modelcontextprotocol/sdk` → `ajv` → `fast-uri` |
+| high | `js-yaml` | server → `@nestjs/swagger` → `js-yaml` |
+| high | `micromatch` | client → `shadcn` → `fast-glob` → `micromatch` |
+| high | `multer` | server → `@nestjs/platform-express` → `multer` |
+| high | `mysql2` | server → `prisma` → `mysql2` |
+| high | `nodemailer` | server → `nodemailer` |
+| high | `prisma` | server → `prisma` |
+| high | `shadcn` | client → `shadcn` |
+| high | `sharp` | client → `next` → `sharp` |
+| high | `source-map-js` | client → `next` → `postcss` → `source-map-js` |
+| high | `ts-morph` | client → `shadcn` → `ts-morph`; also server → `@nestjs/graphql` → `ts-morph` |
+| high | `undici` | client → `shadcn` → `undici` |
+
+Verification: `npm ci` exited 0 from the updated lockfile; `npm ls next
+eslint-config-next --depth=0` showed both at 16.3.8. `npm run ops:audit-test`
+reported `pass 1, fail 0`; `npm run ops:templates` printed
+`ops template check passed`; lint and typecheck exited 0; selected Prettier and
+`git diff --check` passed. The restricted first `npm run build` failed at
+`Could not parse output from TypeScript's --showConfig`; a permitted retry
+compiled Next 16.3.8, generated 22/22 static pages, and completed the server
+build with exit 0. The production Next server returned 200 for `/`, static
+`/opengraph-image.png`, `/twitter-image.png`, `/login`, and `/register`, and
+404 for an unknown route. `client/tests/api-helpers.spec.ts` passed 10/10.
+Three selected browser tests for anonymous `/app` redirect and account recovery
+failed while the Nest API fixture was absent (`ECONNREFUSED 127.0.0.1:3101`);
+the resulting `/app` 200 was an API-error rendering, not protected-route proof.
+Those journeys need rerunning with a real test API/database. Read-only review
+found no dependency issue, identified a missing high-severity path inventory,
+and verified the completed inventory above on follow-up. Rollback is a reviewed
+normal revert, with affected-release exposure reassessed before deployment.
