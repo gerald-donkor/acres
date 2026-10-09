@@ -44,8 +44,8 @@ implementing session (2026-08-21), never recalled. Toolchain: **Node v26.7.0**,
 | `graphql-query-complexity`                                     | `2.0.0`                                   | cost guard for GraphQL abuse controls                                                                                                                                                                                   |
 | `dataloader`                                                   | `2.2.3`                                   | per-request GraphQL lookup caching                                                                                                                                                                                      |
 | `bcryptjs`                                                     | `^3.0.3`                                  | password hashing. Pure JavaScript and **ships no install script**, which matters here: this machine's npm blocks unapproved install scripts, so a native hashing binding would not have built                           |
-| `nodemailer`                                                   | `^10.0.0`                                 | provider-neutral mail delivery abstraction supporting SMTP (Mailpit in dev) and test memory transport (MIT)                                                                                                             |
-| `@types/nodemailer`                                            | `^8.0.1`                                  | TypeScript type definitions for Nodemailer                                                                                                                                                                              |
+| `nodemailer` | `10.0.13` | exact security pin verified in prompt 284; provider-neutral SMTP adapter and test memory transport (MIT-0) |
+| `@types/nodemailer` | `^8.0.1` | retained unchanged; NodeNext resolves Nodemailer 10.0.13 bundled declarations without an observed conflict |
 | `prom-client`                                                  | `^15.1.3`                                 | Prometheus application metrics exposition client (Apache-2.0, pure JS, Node 24 compatible)                                                                                                                              |
 | `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7`            | from the verified Nest scaffold           |
 
@@ -2921,3 +2921,25 @@ starting and failed its database suites. After the container reported healthy,
 the unchanged suite passed. A concurrent contract build briefly removed the
 compiled parser child artifact during a unit run; the final unit verification
 was rerun after build completion.
+
+## Prompt 284 — Nodemailer security and compatibility (2026-10-09)
+
+The server now pins Nodemailer **10.0.13** exactly. Registry/lock metadata
+verify Node `>=20.0.0` and MIT-0; clean installation resolves one copy.
+The existing compiled CommonJS SMTP adapter loads its `dist/cjs/nodemailer.js`
+export; TypeScript NodeNext resolves bundled `dist/cjs/nodemailer.d.ts`.
+`@types/nodemailer` **8.0.1** remains unchanged without a reproduced conflict.
+No mail port, adapter, template, auth/invitation flow or SMTP setting changed.
+
+Mail/auth/organization units passed **84/84** in five suites; full server e2e
+passed **143/143** in six suites, including guarded real `acres_test` database
+coverage and provider doubles. Four real offline JSON/MIME compositions and
+one compiled-adapter dispatch passed using synthetic addresses and links.
+These prove composition/module compatibility, not live SMTP/TLS delivery.
+Lint, typecheck, full production build and the complete operations aggregate
+passed. Independent review found no issues. Fresh production audit removed
+Nodemailer, leaving **32** findings (23 high, nine moderate, zero critical).
+[`operations.md`](operations.md) Prompt 284 records all nine relevant maintainer
+advisories, integrity, audit comparison, command output, fixture/sandbox limits
+and reviewed-revert rollback. Residual advisories and operator launch gates
+remain open.

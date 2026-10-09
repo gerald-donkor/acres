@@ -5182,3 +5182,151 @@ npm ls multer @nestjs/platform-express --all
 npm explain multer
 npm run ops:audit
 ```
+
+## Prompt 284 — patch the Nodemailer security release (2026-10-09)
+
+The server manifest now pins **Nodemailer 10.0.13** exactly, replacing
+`^10.0.0`. The npm-generated lockfile changes only `node_modules/nodemailer`
+and the server workspace reference. Existing `deepmerge-ts` and parent-scoped
+Multer overrides are unchanged. No production source, route, template,
+SMTP configuration, provider, audit threshold or launch approval changed.
+
+Execution checked all 22 entries across three pages of the
+[maintainer advisory index](https://github.com/nodemailer/nodemailer/security/advisories),
+the individual advisory pages and the
+[10.0.13 release](https://github.com/nodemailer/nodemailer/releases/tag/v10.0.13).
+Nine maintainer advisories affect the old 10.0.0 inventory:
+
+| Advisory                                                                                                | Severity | Affected range      | Patched version | Baseline npm audit |
+| ------------------------------------------------------------------------------------------------------- | -------- | ------------------- | --------------- | ------------------ |
+| [GHSA-4ffr-jq9g-5ffx](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-4ffr-jq9g-5ffx) | high     | `>=3.0.0 <=10.0.12` | 10.0.13         | absent             |
+| [GHSA-g73g-hqqh-jr95](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-g73g-hqqh-jr95) | moderate | `>=3.0.0 <=10.0.12` | 10.0.13         | absent             |
+| [GHSA-39m8-27wv-hr27](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-39m8-27wv-hr27) | moderate | `>=3.0.0 <=10.0.9`  | 10.0.10         | absent             |
+| [GHSA-4g23-2xm8-66gc](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-4g23-2xm8-66gc) | moderate | `>=3.0.0 <=10.0.9`  | 10.0.10         | absent             |
+| [GHSA-g57g-f23g-4646](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-g57g-f23g-4646) | moderate | `>=9.1.0 <10.0.9`   | 10.0.9          | present            |
+| [GHSA-v53p-9fqp-m79j](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-v53p-9fqp-m79j) | high     | `<=10.0.5`          | 10.0.6          | present            |
+| [GHSA-prgh-xp8r-p3m5](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-prgh-xp8r-p3m5) | high     | `>=9.1.0 <=10.0.4`  | 10.0.5          | present            |
+| [GHSA-6vj9-mwq6-2f5v](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-6vj9-mwq6-2f5v) | moderate | `>=5.0.0 <10.0.2`   | 10.0.2          | present            |
+| [GHSA-8vvx-rff5-p5rq](https://github.com/nodemailer/nodemailer/security/advisories/GHSA-8vvx-rff5-p5rq) | moderate | `<10.0.2`           | 10.0.2          | present            |
+
+The other 13 maintainer entries have affected ranges below 10.0.0.
+10.0.13 is outside every checked affected range. npm's baseline contains only
+five of these advisories; a missing npm entry is not proof of safety. The
+structured patched fields control where older advisory narratives still say
+no patch was available. The 10.0.13 release repairs SMTP AUTH backtracking and
+angle-address comment stripping; stopping at 10.0.12 would leave both open.
+
+`SmtpMailAdapter` creates a transport from operator-configured host, port,
+secure and optional user/password values, and forwards from/to/subject/text/HTML.
+Auth recovery and organization invitations call its mail port. This is a real
+runtime dependency, but affected inventory does not prove a deployed exploit.
+The adapter does not expose structured recipient arrays, raw messages, custom
+headers, DKIM or OAuth2 options through its message contract. Production
+SMTP peer trust, network interception and live deliverability were not tested.
+
+Registry metadata verified Node `>=20.0.0`, MIT-0, no runtime dependencies,
+the tarball `https://registry.npmjs.org/nodemailer/-/nodemailer-10.0.13.tgz`,
+SHA-1 `eb73ba9afd755e5480d1dfa8abe39756baad2dfb`, and lockfile integrity:
+
+```text
+sha512-SzG86OlvcW/NNhUFC6uROMwRTL4n7MswfQqC/T8mhkmnY1YVa23zUEMYi4ijSeXSl9GLz9ZeTJDUatEDuY5FeQ==
+```
+
+With Node **26.11.0** and npm **11.20.0**, the exact workspace install printed
+`changed 1 package in 2s`. `npm ci --no-audit --no-fund` exited **0** and printed
+`added 1479 packages in 27s`, running the shared build. The lockfile SHA-256
+remained `65dc4e438cf5bbcbd499e9b10440c8d7a9ffd080bf11b7639b982c4bbafe9f5b`
+before and after clean installation. Existing deprecation and unapproved
+install-script warnings remain; no script-approval policy changed.
+`npm ls nodemailer @types/nodemailer --all` and `npm explain nodemailer` verify
+one Nodemailer **10.0.13** node under `@acres/server`, with unchanged
+`@types/nodemailer` **8.0.1**. TypeScript's actual NodeNext resolution selects
+`nodemailer/dist/cjs/nodemailer.d.ts`; no declaration conflict was reproduced.
+The compiled adapter uses `require('nodemailer')`, selecting the package's
+`dist/cjs/nodemailer.js` export with its CommonJS package boundary.
+
+Complete before/after production audit JSON requests succeeded, each exiting
+**1** for residual findings. Inventory fell from **33** (24 high, nine moderate,
+zero critical) to **32** (23 high, nine moderate, **zero critical**). Only
+`nodemailer` disappeared; no finding appeared. Retained finding objects were
+identical except `@graphql-tools/utils.fixAvailable`: the registry recommendation
+changed from `@apollo/server` 5.5.1 to `@nestjs/graphql` 14.0.3, both major upgrades.
+Its advisory identities and vulnerable nodes stayed unchanged; no such upgrade
+was performed. The residual high/path inventory is the Prompt 281 table above
+excluding `proxy-addr`, `multer`, `@nestjs/platform-express` and `nodemailer`.
+The remaining moderate packages are `@apollo/server-plugin-landing-page-graphql-playground`,
+`@nestjs/swagger`, `body-parser`, `express`, `hono`, `ip-address`,
+`postcss-selector-parser`, `qs` and `uuid`.
+
+Both `npm audit --omit=dev --audit-level=critical` and `npm run ops:audit`
+exited **0**, preserving the existing policy. The wrapper printed:
+
+```text
+32 vulnerabilities (9 moderate, 23 high)
+Production dependency security audit passed (0 critical vulnerabilities)
+```
+
+The initial restricted baseline request failed with
+`getaddrinfo EAI_AGAIN registry.npmjs.org`; the network-enabled retry permitted
+under the approved prompt completed. Raw audit JSON and command logs remain in
+restricted disposable `/tmp/acres-284` files, outside git.
+
+Verification from the approved prompt:
+
+- Mail service, SMTP/memory adapters, auth service and organization service
+  units: exit **0**, `Test Suites: 5 passed, 5 total`;
+  `Tests: 84 passed, 84 total`. SMTP units mock Nodemailer; MailService uses
+  memory transport and lifecycle services use doubles.
+- `node /tmp/acres-284/mail-smoke.cjs`: exit **0**,
+  `Nodemailer 10.0.13: 4 offline compositions passed (2 JSON, 2 buffered MIME); synthetic fixtures only; no SMTP connection`.
+  Fixtures use `Acres <no-reply@example.test>`, `reader@example.test` and
+  `invitee@example.test`, recovery/invitation subjects, text and HTML containing
+  `https://example.test/reset-password?token=synthetic` or
+  `https://example.test/accept-invitation?token=synthetic`. Envelope, recipient,
+  subject, both bodies and MIME part headers were asserted. An initial scratch
+  assertion overlooked quoted-printable soft wrapping; after unfolding those
+  breaks the original body assertion passed. No production fix was needed.
+  A separate Node smoke also loaded the actual compiled CommonJS adapter,
+  injected a real JSON transporter and asserted its envelope/text, printing
+  `Compiled CommonJS SmtpMailAdapter loaded and offline dispatch passed`.
+  These checks prove offline composition/module compatibility, not SMTP/TLS
+  interoperability, delivery, DNS authentication or DoS resistance.
+- Full server e2e: exit **0**, `Test Suites: 6 passed, 6 total`;
+  `Tests: 143 passed, 143 total`. Includes real guarded `acres_test`
+  PostgreSQL/PostGIS and HTTP suites with database/provider doubles;
+  storage/queues use doubles. The SMTP timeout log is an expected failure-path
+  case. Initial sandbox execution failed with socket `EPERM`; the same command
+  passed with permitted local socket/database access.
+- `npm run ops:audit-test`: normal-subprocess rerun exited **0**,
+  `tests 51`, `pass 51`, `fail 0`. The restricted initial runner reported the
+  file-level `tests 1`, `pass 1`, `fail 0`; the permitted aggregate also ran
+  all 51 assertions.
+- Complete `npm run ops:check`: exit **0** through final launch/dossier group,
+  `tests 182`, `pass 182`, `fail 0`; all preceding groups had zero failures.
+  These repository checks/isolated fixtures are not a live launch drill.
+- Root lint and typecheck: exit **0**, all three workspaces. Full root build:
+  exit **0**, Next **16.3.8** webpack printed `Compiled successfully in 4.2s`
+  and generated `22/22` static pages; shared, Prisma and Nest builds completed.
+  Initial restricted build failed at
+  `Could not parse output from TypeScript's --showConfig`; the identical
+  permitted rerun passed without code/config changes.
+- Selected Prettier checks: `All matched files use Prettier code style!` for
+  the server manifest, root lockfile, prompt and new document sections.
+  Historical document formatting is preserved. `git diff --check`: exit
+  **0**, no output.
+
+Independent read-only review found no Critical, Important or Minor issues,
+verified the audit comparison/logs and reproduced all four offline compositions.
+Residual advisories, prompt 201, operator sign-offs and Phase 12 exit remain
+open. Rollback is a reviewed normal revert of manifest and lockfile together,
+reassessing affected-version exposure before deployment. No push, deployment,
+live email or launch approval occurred.
+
+Inspection from the repository root:
+
+```bash
+npm ls nodemailer @types/nodemailer --all
+npm explain nodemailer
+npm run ops:audit
+npm run test --workspace=@acres/server -- --runInBand --testPathPatterns='mail.service.spec|smtp-mail.adapter.spec|memory-mail.adapter.spec|auth.service.spec|organizations.service.spec'
+```

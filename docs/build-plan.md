@@ -2325,3 +2325,21 @@ implemented or added; signed PUT uploads remain unchanged. Residual advisories,
 prompt 201, live operator sign-offs and Phase 12 exit remain open. Rollback is
 a reviewed normal revert of manifest and lockfile together with exposure
 reassessed before deployment; no push or launch action is included.
+
+**Prompt 284 Phase 12K Nodemailer security patch (2026-10-09):**
+The server manifest pins Nodemailer **10.0.13**, with only its package node
+and workspace reference changed in the root lockfile. Clean installation
+preserves the lock; CommonJS loading and bundled declaration resolution work
+with unchanged `@types/nodemailer`. Mail/auth/organization units passed
+**84/84**, full server e2e **143/143**, audit-wrapper tests **51/51**, and the
+full operations aggregate through its final **182/182** suite. Four offline
+JSON/MIME compositions and a compiled-adapter dispatch passed. Lint, typecheck,
+production build, selected formatting and diff checks passed. Independent
+review found no issues. Fresh production audit removes only Nodemailer,
+falling from 33 to **32** findings (23 high, nine moderate, **zero critical**);
+one unrelated GraphQL remedy recommendation changed upstream. The critical
+gate remains unchanged. `docs/operations.md` Prompt 284 records the nine
+relevant maintainer advisories, integrity, fixture limits and rollback.
+No live SMTP/TLS deliverability or launch acceptance follows from offline
+composition. Residual dependency repairs, prompt 201, operator sign-offs and
+Phase 12 exit remain open.
