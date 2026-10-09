@@ -2586,3 +2586,24 @@ Braces has no published patch; other advisories, prompt 201, operator
 sign-offs and Phase 12 exit stay open. No push, deployment, real
 database/browser or live acceptance occurred. Independent read-only review
 found no issues.
+
+**Prompt 298 — graphql-tools/utils security release (2026-10-09):** root override
+updates @graphql-tools/utils **9.2.1 / 12.0.0 → 12.0.3** in `package.json`, satisfying
+@apollo/server 4.13.0 schema callers and deduplicating @nestjs/graphql 13.4.5's pinned
+12.0.0. In `package-lock.json`, the nested @nestjs/graphql node is removed, root utils
+moves to 12.0.3, and helper @whatwg-node/promise-helpers updates 1.3.2 → 2.0.0. Manifests,
+application source, contracts, routes and scanner policy remain unchanged. Public
+metadata, clean-install hash and deduplicated caller tree pass. Bounded real fixtures
+verify guard key recognition (isDangerousObjectKey), mergeDeep prototype pollution
+rejection for `__proto__` and `constructor.prototype` payloads (CVE-2026-104852),
+ApolloServer executable schema generation and query execution, contracts check, and
+CJS/ESM exports. Lint, typecheck, contracts check, build (**22/22** pages), selected
+formatting and diff checks pass. All **32 independent offline operations stages** pass
+(**26 suite invocations / 2857 tests / zero failures**, final **182/182**). Online
+audit remains omitted under the existing metadata-disclosure restriction; no fresh
+reduction or full ops:check pass is claimed. `docs/operations.md` Prompt 298 records
+provenance, actual outputs, environment limits and normal-revert rollback. No direct
+graphql-tools/utils import or reachable exploit is established in Acres. Braces has no
+published patch; other advisories, prompt 201, operator sign-offs and Phase 12 exit
+stay open. No push, deployment, real database/browser or live acceptance occurred.
+Independent read-only review found no issues.

@@ -6824,3 +6824,85 @@ The reviewer reproduced the fixtures and caller tree, verified registry/lock
 scope and hash, and independently counted all operations logs. No review-led
 implementation correction was required. Disposable `/tmp/acres-297` fixtures
 and logs are execution evidence, not future prerequisites.
+
+## Prompt 298 — patch graphql-tools/utils security release (2026-10-09)
+
+The shared transitive `@graphql-tools/utils` resolution updates **9.2.1 / 12.0.0 → 12.0.3**
+via root `package.json` override `{"@graphql-tools/utils": "12.0.3"}`, satisfying both
+`@apollo/server@4.13.0`'s `@graphql-tools/schema@9.0.19` (`^9.2.1`) and deduplicating
+`@nestjs/graphql@13.4.5`'s pinned `12.0.0`. In `package-lock.json`, the nested
+`node_modules/@nestjs/graphql/node_modules/@graphql-tools/utils` is removed, the root
+`node_modules/@graphql-tools/utils` is updated to 12.0.3, and internal helper
+`@whatwg-node/promise-helpers` moves `1.3.2 → 2.0.0`. All other manifests, overrides,
+lock nodes, application source, contracts, routes and scanner policy are unchanged.
+
+The upstream advisory (CVE-2026-104852 / GHSA-7mx3-vvmw-hjmv) identifies prototype
+pollution in `mergeDeep` where sensitive object keys (`__proto__`, `constructor`,
+`prototype`) were not excluded during recursive property merging, allowing
+unauthenticated clients to cause prototype pollution or denial-of-service crashes
+(`TypeError: Cannot assign to read only property 'prototype' of function 'Object'`).
+This is inventory remediation: no direct `@graphql-tools/utils` imports or `mergeDeep`
+calls exist in Acres application source. `@graphql-tools/utils` is used transitively
+by NestJS GraphQL schema synthesis and Apollo Server schema composition. No reachable
+application exploit is established in Acres.
+
+### Provenance and compatibility
+
+Public npm metadata verifies stable 12.0.3, MIT, Node >=16.0.0, and this integrity:
+
+```text
+sha512-M+04bHvI1SKoug7W2EkwfKjig2mdtgIIlFY8p2jLHmxPNVs5bC/3R+58JrD+7ZXWgPILWTwuqJ9AqTjPlahroA==
+```
+
+Targeted `npm update @graphql-tools/utils --package-lock-only --ignore-scripts --no-audit --no-fund`
+updated `package-lock.json` in 3s. `npm ci --no-audit --no-fund` on Node **v26.11.0**,
+npm **11.20.0** printed `added 1477 packages in 45s`; lock hash verification printed
+`package-lock.json: OK`. The valid caller tree deduplicates both parent trees to 12.0.3.
+
+Disposable timeout-bounded real-library fixtures exercise guard key recognition
+(`isDangerousObjectKey`), prototype pollution rejection with `__proto__` and
+`constructor.prototype` payloads (verifying the CVE-2026-104852 fix and lack of 12.0.0
+TypeError crash), benign object and array merging, ApolloServer real query execution
+with schema synthesis, `npm run contracts:check`, and CJS/ESM exports.
+
+```text
+PASS: lock deduplication; registry integrity; deduplicated callers; mergeDeep prototype pollution rejection (CVE-2026-104852); ApolloServer real query execution; contracts check; CJS/ESM exports
+```
+
+### Checks and limits
+
+| check                             | exit | actual output/result                                                       |
+| --------------------------------- | ---- | -------------------------------------------------------------------------- |
+| Clean install/hash                | 0    | `added 1477 packages in 45s`; `package-lock.json: OK`                      |
+| Caller tree and real fixtures     | 0    | Valid 12.0.3 caller tree and PASS above                                    |
+| `npm run contracts:check`         | 0    | Generated Prisma Client (7.9.1); contracts verified without drift          |
+| `npm run lint`                    | 0    | Three workspace ESLint commands complete without diagnostics               |
+| `npm run typecheck`               | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
+| `npm run build`                   | 0    | `Compiled successfully in 3.5s`; static pages `22/22`; Nest build complete |
+| Selected Prettier                 | 0    | `All matched files use Prettier code style!`                               |
+| `git diff --check`                | 0    | No whitespace diagnostics                                                  |
+
+All **32 independent offline operations stages** passed: **26 suite
+invocations / 2857 tests / zero failures**, including audit-wrapper **51/51**
+and final launch/dossier **182/182**. Runner output: `All 32 independent offline
+operations stages passed; online audit gate was not run`. Only ops:audit was
+omitted under the existing dependency-metadata disclosure restriction. No fresh
+audit count, vulnerability reduction or complete ops:check pass is claimed.
+
+Public registry lookup still reports braces latest 3.0.3, with no patched release.
+Cross-major GraphQL ecosystem upgrades (`@apollo/server` v5, `@nestjs/graphql` v14,
+`uuid` v11) remain separate tasks. Other advisories, prompt 201, operator sign-offs
+and Phase 12 exit remain open. Host verification does not establish Node 24, Docker,
+real database/server E2E, browser or production acceptance. No push or deployment
+occurred. Rollback is a reviewed normal revert restoring root `package.json` overrides
+and `package-lock.json`; reassess exposure before deployment. Inspect from repository root:
+
+```bash
+npm ls @graphql-tools/utils --all
+```
+
+Independent read-only review found no Critical, Important or Minor findings.
+The reviewer reproduced the fixtures and caller tree, verified registry/lock scope
+and hash, and independently counted all operations logs. No review-led implementation
+correction was required. Disposable `/tmp/acres-298` fixtures and logs are execution
+evidence, not future prerequisites.
