@@ -5060,3 +5060,125 @@ Safe inspection from the repository root:
 npm ls proxy-addr express --all
 npm run ops:audit
 ```
+
+## Prompt 283 — patch the Multer security release (2026-10-09)
+
+The root manifest applies an exact, parent-scoped override from
+`@nestjs/platform-express` to **Multer 2.4.0**, preserving the existing
+`deepmerge-ts` override. The installed adapter remains **11.2.1** and declares
+Multer **2.2.0**; its exact pin required this supported npm exception. Remove
+the exception in a later reviewed change when the supported adapter itself
+resolves a safe Multer release. No production source, upload route, dependency
+version outside this closure, audit threshold, or launch approval changed.
+
+Execution checked the [maintainer advisory index](https://github.com/expressjs/multer/security/advisories),
+[2.4.0 release](https://github.com/expressjs/multer/releases/tag/v2.4.0), and
+[npm parent-scoped override documentation](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#overrides).
+The baseline audit identifies five Multer advisories:
+
+| Advisory                                                                                           | Severity | Affected range   |
+| -------------------------------------------------------------------------------------------------- | -------- | ---------------- |
+| [GHSA-wc9g-mqfw-jrwm](https://github.com/expressjs/multer/security/advisories/GHSA-wc9g-mqfw-jrwm) | high     | `<2.3.0`         |
+| [GHSA-qfvm-cv95-jqjf](https://github.com/expressjs/multer/security/advisories/GHSA-qfvm-cv95-jqjf) | high     | `=2.2.0`         |
+| [GHSA-qvfw-j98x-7q72](https://github.com/expressjs/multer/security/advisories/GHSA-qvfw-j98x-7q72) | low      | `<2.3.0`         |
+| [GHSA-535w-7cp7-47q4](https://github.com/expressjs/multer/security/advisories/GHSA-535w-7cp7-47q4) | high     | `<2.3.0`         |
+| [GHSA-3pph-fpjx-jg34](https://github.com/expressjs/multer/security/advisories/GHSA-3pph-fpjx-jg34) | moderate | `>=2.2.0 <2.4.0` |
+
+The affected installed path was server → `@nestjs/platform-express` → Multer.
+`npm ls multer @nestjs/platform-express --all`, `npm explain multer`, every
+locked Multer node, and adapter-relative `createRequire` resolution now verify
+one **2.4.0 overridden** node. `server/src` has no Multer import or multipart
+interceptor; `UploadsController` accepts JSON metadata and returns signed PUT
+URLs. Nest's installed interceptor constructs Multer with module/local options;
+Multer defaults to memory storage absent storage/destination options. This
+inventory repair does not establish a reachable Acres multipart parser or
+production exploit, and no synthetic or production multipart route was added.
+
+Registry metadata verified Node `>=10.16.0`, the tarball
+`https://registry.npmjs.org/multer/-/multer-2.4.0.tgz`, SHA-1
+`969ab025c207829967c923172c51a75cbf171be1`, and lockfile integrity:
+
+```text
+sha512-7dqa0ZcFfzbefdTuIkzOSMvZWC0J7FLqBOjJUZvDCXShIURWKxAyTT1wHhnE5q19c7jOJf43IYYKjBmZVZmvhg==
+```
+
+With npm **11.20.0**, `npm install --package-lock-only --ignore-scripts
+--no-audit --no-fund` initially retained 2.2.0. A targeted
+`npm update multer --package-lock-only --ignore-scripts --no-audit --no-fund`
+then refreshed it to 2.4.0. No lockfile integrity was hand-edited. Multer removes
+`concat-stream`; its otherwise-unused `typedarray` child also disappears.
+Retained `buffer-from`, `readable-stream`, and `string_decoder` become dev-only
+without version changes. These are the complete six changed lock nodes.
+The final `npm ci --no-audit --no-fund` exited **0**:
+
+```text
+added 1479 packages in 32s
+```
+
+The clean install preserved the updated lockfile, accepted the override without
+invalid-dependency errors, and ran the shared build. Existing deprecation and
+unapproved dependency-install-script warnings were reported; their approval
+policy was not changed. Restricted registry requests failed with
+`getaddrinfo EAI_AGAIN registry.npmjs.org`; permitted retries completed. Fresh
+baseline audit comparison used the committed lockfile and all three workspace
+manifests in a disposable directory; a preliminary copy lacking those manifests
+reported zero and was discarded as incomplete evidence. Raw JSON remains in
+`/tmp`, outside git.
+
+The complete production audit changed from **35** findings (26 high, 9 moderate,
+0 critical) to **33** (24 high, 9 moderate, **0 critical**). Only `multer` and
+its propagated `@nestjs/platform-express` finding disappeared; none appeared,
+and every retained finding object, including remedy, remained identical.
+The remaining high/path inventory is the Prompt 281 table, excluding its
+`proxy-addr`, `multer`, and `@nestjs/platform-express` rows. Remaining moderate
+packages are `@apollo/server-plugin-landing-page-graphql-playground`,
+`@nestjs/swagger`, `body-parser`, `express`, `hono`, `ip-address`,
+`postcss-selector-parser`, `qs`, and `uuid`. These findings are unresolved;
+passing the unchanged critical gate is not a clean audit or launch approval.
+Both `npm audit --omit=dev --audit-level=critical` and `npm run ops:audit`
+exited **0**. The wrapper printed:
+
+```text
+33 vulnerabilities (9 moderate, 24 high)
+Production dependency security audit passed (0 critical vulnerabilities)
+```
+
+Verification commands in the approved prompt all completed:
+
+- Existing upload controller/service/DTO unit selection: exit **0**,
+  `Test Suites: 3 passed, 3 total`; `Tests: 52 passed, 52 total`.
+  These fixtures test metadata validation, controller/service boundaries and
+  upload lifecycle using doubles; they do not exercise multipart parsing or
+  live Garage.
+- Full server e2e suite: exit **0**, `Test Suites: 6 passed, 6 total`;
+  `Tests: 143 passed, 143 total`. Includes real migrated `acres_test`
+  PostgreSQL/PostGIS suites and HTTP suites with recorded database doubles;
+  external storage and queue providers are doubles. The SMTP timeout log is
+  an expected failure-path case, not a live SMTP result.
+- `npm run ops:audit-test`: exit **0**, `tests 51`, `pass 51`, `fail 0`.
+- Complete `npm run ops:check`: exit **0**, through the final launch/dossier
+  group (`tests 182`, `pass 182`, `fail 0`); every earlier test group had zero
+  failures. These are repository gates and isolated fixtures, not a live drill.
+- Root lint and typecheck: exit **0**, all three workspaces.
+- Full root build: exit **0**; Next **16.3.8** printed
+  `Compiled successfully in 3.9s` and generated `22/22` static pages; Prisma
+  generation and Nest build completed.
+- Selected Prettier checks: `All matched files use Prettier code style!` for
+  the full manifest, lockfile, prompt and new owning-document sections.
+  Historical document formatting was preserved. `git diff --check`: exit
+  **0**, no output.
+
+Independent read-only review found no Critical, Important or Minor issue;
+its tree, diff, source, audit comparison and log claims were verified before
+recording this result. Prompt 201, operator sign-offs, residual advisory
+repairs and Phase 12 exit remain open. Rollback is a reviewed normal revert of
+manifest and lockfile together, reassessing affected-version exposure before
+any deployment. No push, deployment, live attack or launch action occurred.
+
+Inspection from the repository root:
+
+```bash
+npm ls multer @nestjs/platform-express --all
+npm explain multer
+npm run ops:audit
+```

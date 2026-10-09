@@ -2306,3 +2306,22 @@ The complete `ops:check` exited **0** through the final launch/dossier
 operator launch approval. New documentation sections, the lockfile and prompt
 passed selected formatting checks; existing whole-document formatting findings
 were preserved.
+
+**Prompt 283 Phase 12K Multer security patch (2026-10-09):**
+The root manifest scopes a Multer **2.4.0** override to the unchanged Nest
+Express adapter **11.2.1**, which declares exactly 2.2.0. The lockfile changes
+only Multer and its necessary closure; remove the exception when a supported
+adapter resolves a safe release. Clean install and adapter-relative resolution
+verified a single overridden 2.4.0 node. Upload units passed **52/52**, server
+e2e **143/143**, audit-wrapper tests **51/51**, and full `ops:check` through
+its final **182/182** suite. Lint, typecheck, production build, selected
+formatting and diff checks passed. Fresh complete production audit comparison
+fell from 35 to **33** findings (**24 high, 9 moderate, 0 critical**); only
+Multer and its propagated adapter finding cleared, with every retained finding
+unchanged. Independent review found no issues. `docs/operations.md` Prompt 283
+records all five advisories, integrity, lock regeneration, source exposure,
+fixture limits and override removal condition. No Acres multipart route is
+implemented or added; signed PUT uploads remain unchanged. Residual advisories,
+prompt 201, live operator sign-offs and Phase 12 exit remain open. Rollback is
+a reviewed normal revert of manifest and lockfile together with exposure
+reassessed before deployment; no push or launch action is included.
