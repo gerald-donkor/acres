@@ -6341,3 +6341,91 @@ Inspect from the repository root:
 npm ls sharp --all
 node -e 'console.log(require("sharp").versions)'
 ```
+
+## Prompt 293 — patch selector parser security release (2026-10-09)
+
+The root lockfile updates **postcss-selector-parser 7.1.5 → 7.1.6** within
+unchanged shadcn 4.18.0's `^7.1.0` range. The
+[maintainer advisory](https://github.com/postcss/postcss-selector-parser/security/advisories/GHSA-rj75-hqrm-r3gf)
+identifies CVE-2026-104844, quadratic flat-selector parsing, and 7.1.6 as the
+repair. Installed source uses Set membership in the three affected passes.
+This is dependency inventory remediation; no attacker-controlled selector
+request path or deployed exploitability is established by this work.
+
+### Exact scope and provenance
+
+Targeted `npm update postcss-selector-parser --package-lock-only --ignore-scripts
+--no-audit --no-fund` printed `up to date in 624ms` and changed exactly one
+existing lock node, only its version, tarball URL and integrity. Every other
+node, manifest, parent and override stays unchanged. The patch retains MIT,
+Node >=4, and the cssesc/util-deprecate ranges. Public registry metadata matched
+its URL and integrity:
+
+```text
+sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw==
+```
+
+Clean install on Node **v26.11.0**, npm **11.20.0** printed
+`added 1478 packages in 24s`; subsequent SHA-256 verification printed
+`package-lock.json: OK`. Existing third-party install-script approvals and
+restrictions were preserved. `npm ls postcss-selector-parser --all` exited 0:
+client → shadcn 4.18.0 → postcss-selector-parser 7.1.6.
+
+### Compatibility and actual checks
+
+Disposable fixtures use the installed shadcn-relative parser and its documented
+API. Nine small selectors round-trip byte-for-byte in synchronous/asynchronous
+processing, including escaped utilities, pseudos, attributes, combinators,
+comments and nesting. A 128-node mixed class/id selector preserves exact order
+and count. Class rewriting, malformed-selector rejection, CommonJS/ESM identity
+and actual shadcn `createStyleMap` output pass. No large attack input or timing
+benchmark is used. Actual output:
+
+```text
+PASS: single-node lock scope and registry integrity; shadcn-relative 7.1.6; CJS/ESM; 9 sync/async round trips; 128 ordered flat nodes; class rewrite; malformed input; actual shadcn createStyleMap; Set-membership repair
+```
+
+The first disposable fixture attempted shadcn's unexported `package.json`
+subpath and failed `ERR_PACKAGE_PATH_NOT_EXPORTED`. Corrected caller-relative
+resolution uses its inspected installed `dist/utils/index.js`; no tracked
+implementation was altered for that fixture correction.
+
+| Check                                 | Exit | Actual output/result                                                        |
+| ------------------------------------- | ---- | --------------------------------------------------------------------------- |
+| Clean install                         | 0    | `added 1478 packages in 24s`; `package-lock.json: OK`                       |
+| Dependency tree and semantic fixtures | 0    | shadcn → parser 7.1.6; PASS above                                           |
+| `npm run lint`                        | 0    | all three workspace ESLint commands completed without diagnostics           |
+| `npm run typecheck`                   | 0    | all three workspaces completed; `Generated Prisma Client (7.9.1)`           |
+| Permitted `npm run build`             | 0    | `Compiled successfully in 3.7s`; static pages `22/22`; Nest build completed |
+| Selected Prettier                     | 0    | `All matched files use Prettier code style!`                                |
+| `git diff --check`                    | 0    | no whitespace diagnostics                                                   |
+
+Initial sandboxed build failed with `Could not parse output from TypeScript's
+--showConfig`; unchanged permitted rerun passed. Initial sandbox offline runner
+stopped at `ops:templates-test` with a subprocess `test failed` without an
+assertion reason. The permitted offline runner supplies the successful results
+below. These execution limits did not require tracked implementation changes.
+
+### Review, audit limits and rollback
+
+Independent read-only review found no Critical, Important or Minor issues and
+reproduced the focused real-library fixtures and dependency-tree verification.
+
+All **32 independent offline operations stages** passed (**26 suite invocations /
+2857 tests / zero failures**), including audit-wrapper **51/51** and final
+launch/dossier **182/182**. Actual final runner output:
+`All 32 independent offline operations stages passed; online audit gate was not run`.
+Only online `ops:audit` was omitted under the existing dependency-metadata
+disclosure restriction. No fresh npm audit, before/after count reduction or
+complete `npm run ops:check` pass is claimed. Gate thresholds and scanner policy
+are unchanged.
+
+Host fixtures do not establish Node 24, Docker, production, real database or
+browser acceptance. Phase 12, prompt 201, other advisories and operator sign-offs
+remain open. No push or deployment occurred. Rollback is a reviewed normal
+revert of the lockfile repair with affected security exposure reassessed before
+deployment. Inspect from the repository root:
+
+```bash
+npm ls postcss-selector-parser --all
+```

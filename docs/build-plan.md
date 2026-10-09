@@ -2487,3 +2487,21 @@ pass is claimed. `docs/operations.md` Prompt 292 records exact scope, provenance
 actual outputs, sandbox/fixture limits and normal-revert rollback. Other
 advisories, prompt 201, operator sign-offs and Phase 12 exit remain open;
 no push, deployment, other-platform execution or live acceptance occurred.
+
+
+**Prompt 293 — selector parser security release (2026-10-09):** targeted
+npm-generated lock-only repair **7.1.5 → 7.1.6** updates one
+postcss-selector-parser node within unchanged shadcn 4.18.0's `^7.1.0` range.
+Only version, URL and integrity change; all other nodes/manifests/overrides
+remain unchanged. Public metadata integrity, clean-install lock hash and
+bounded real-library selector/AST/CJS/ESM/async/shadcn style-map fixtures pass.
+Lint, typecheck, permitted build (**22/22** pages), selected formatting and
+diff checks pass. All **32 independent offline operations stages** pass
+(**26 suite invocations / 2857 tests**, final launch/dossier **182/182**).
+Independent read-only review found no issues and reproduced focused fixtures.
+Online npm audit remains omitted under the existing metadata disclosure
+restriction; no fresh reduction or complete `ops:check` pass is claimed.
+`docs/operations.md` Prompt 293 records exact outputs, provenance, execution/
+fixture corrections, environment limits and normal-revert rollback. Phase 12,
+prompt 201, other advisories and operator sign-offs remain open; no push,
+deployment, browser/database or live acceptance occurred.
