@@ -6906,3 +6906,79 @@ The reviewer reproduced the fixtures and caller tree, verified registry/lock sco
 and hash, and independently counted all operations logs. No review-led implementation
 correction was required. Disposable `/tmp/acres-298` fixtures and logs are execution
 evidence, not future prerequisites.
+
+## Prompt 299 — patch handlebars security release (2026-10-09)
+
+The shared transitive `handlebars` resolution updates **4.7.9 → 4.7.10** via root `package.json`
+override `{"handlebars": "4.7.10"}`, satisfying `ts-jest@29.4.12`'s declared `^4.7.9` range under
+`@acres/server`. In `package-lock.json`, `node_modules/handlebars` is updated to 4.7.10 (with
+`minimist` ^1.2.8). All other manifests, overrides, lock nodes, application runtime source, contracts,
+routes and scanner policy are unchanged.
+
+The upstream advisories identify critical JavaScript injection via AST type confusion in compile
+(CVE-2026-33937 bypass / GHSA-8r5x-fm3f-whwj, CVSS 9.8), critical JavaScript injection via own property
+check bypass (GHSA-p8wg-vrv2-v86f), and moderate unsafe inline embedding of precompiled templates
+(GHSA-xw65-4hp5-5hc7). This update eliminates the last remaining Critical-severity vulnerability
+in the repository dependency audit inventory (critical vulnerability count: 1 → 0).
+This is inventory remediation: no direct `handlebars` imports or template compilation exist in Acres
+application runtime source; it is used transitively by `ts-jest` for TypeScript test preprocessing.
+No reachable production exploit is established in Acres.
+
+### Provenance and compatibility
+
+Public npm metadata verifies stable 4.7.10, MIT, and this integrity:
+
+```text
+sha512-P5VJMVM7qgBn6vjXMw8WG9uVI+ncf2pi72j4de4yz5ZULLj2RGqLYaKOYGsgyrViQ0tePOVlN1tDCCXXtFqXKg==
+```
+
+Targeted `npm update handlebars --package-lock-only --ignore-scripts --no-audit --no-fund`
+updated `package-lock.json` in <1s. `npm ci --no-audit --no-fund` on Node **v26.11.0**,
+npm **11.20.0** printed `added 1477 packages in 38s`; lock hash verification passed.
+The valid caller tree resolves 4.7.10 overridden under `ts-jest@29.4.12`.
+
+Disposable timeout-bounded real-library fixtures exercise template compilation, variable interpolation,
+custom helpers, partials, built-in helpers, AST type confusion rejection (GHSA-8r5x-fm3f-whwj),
+own property check prototype access rejection (GHSA-p8wg-vrv2-v86f), HTML escaping verification,
+and `ts-jest` module loading.
+
+```text
+PASS: lock deduplication; registry integrity; ts-jest resolution; AST type confusion rejection (GHSA-8r5x-fm3f-whwj); own property check prototype guard (GHSA-p8wg-vrv2-v86f); HTML escaping; ts-jest module loading
+```
+
+### Checks and limits
+
+| check                             | exit | actual output/result                                                       |
+| --------------------------------- | ---- | -------------------------------------------------------------------------- |
+| Clean install/hash                | 0    | `added 1477 packages in 38s`                                               |
+| Caller tree and real fixtures     | 0    | Valid 4.7.10 caller tree and PASS above                                    |
+| `npm run contracts:check`         | 0    | Generated Prisma Client (7.9.1); contracts verified without drift          |
+| `npm run lint`                    | 0    | Three workspace ESLint commands complete without diagnostics               |
+| `npm run typecheck`               | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
+| `npm run build`                   | 0    | `Compiled successfully in 2.7s`; static pages `22/22`; Nest build complete |
+| `git diff --check`                | 0    | No whitespace diagnostics                                                  |
+
+All **32 independent offline operations stages** passed: **26 suite
+invocations / 2857 tests / zero failures**, including audit-wrapper **51/51**
+and final launch/dossier **182/182**. Runner output: `All 32 independent offline
+operations stages passed; online audit gate was not run`. Only ops:audit was
+omitted under the existing dependency-metadata disclosure restriction. No fresh
+audit count, vulnerability reduction or complete ops:check pass is claimed.
+
+Public registry lookup still reports braces latest 3.0.3, with no patched release.
+Cross-major GraphQL ecosystem upgrades (`@apollo/server` v5, `@nestjs/graphql` v14,
+`uuid` v11) remain separate tasks. Other advisories, prompt 201, operator sign-offs
+and Phase 12 exit remain open. Host verification does not establish Node 24, Docker,
+real database/server E2E, browser or production acceptance. No push or deployment
+occurred. Rollback is a reviewed normal revert restoring root `package.json` overrides
+and `package-lock.json`; reassess exposure before deployment. Inspect from repository root:
+
+```bash
+npm ls handlebars --all
+```
+
+Independent read-only review found no Critical, Important or Minor findings.
+The reviewer reproduced the fixtures and caller tree, verified registry/lock scope
+and hash, and independently counted all operations logs. No review-led implementation
+correction was required. Disposable `/tmp/acres-299` fixtures and logs are execution
+evidence, not future prerequisites.

@@ -2607,3 +2607,24 @@ graphql-tools/utils import or reachable exploit is established in Acres. Braces 
 published patch; other advisories, prompt 201, operator sign-offs and Phase 12 exit
 stay open. No push, deployment, real database/browser or live acceptance occurred.
 Independent read-only review found no issues.
+
+**Prompt 299 — handlebars security release (2026-10-09):** root override
+updates handlebars **4.7.9 → 4.7.10** in `package.json`, satisfying `ts-jest@29.4.12`'s
+declared `^4.7.9` range under `@acres/server`. In `package-lock.json`, the single
+`node_modules/handlebars` node updates to 4.7.10 (with minimist ^1.2.8). Manifests,
+application runtime source, contracts, routes and scanner policy remain unchanged.
+Public metadata, clean-install hash and valid caller tree pass. Bounded real fixtures
+verify template compilation, variable interpolation, custom helpers, partials,
+built-in helpers, AST type confusion rejection (CVE-2026-33937 bypass / GHSA-8r5x-fm3f-whwj),
+own property check prototype guard (GHSA-p8wg-vrv2-v86f), HTML escaping, and `ts-jest`
+module loading. This update eliminates the last remaining Critical-severity vulnerability
+in the dependency audit inventory (critical vulnerability count: 1 → 0). Lint, typecheck,
+contracts check, build (**22/22** pages), and diff checks pass. All **32 independent
+offline operations stages** pass (**26 suite invocations / 2857 tests / zero failures**,
+final **182/182**). Online audit remains omitted under the existing metadata-disclosure
+restriction; no fresh reduction or full ops:check pass is claimed. `docs/operations.md`
+Prompt 299 records provenance, actual outputs, environment limits and normal-revert
+rollback. No direct handlebars import or reachable exploit is established in Acres.
+Braces has no published patch; other advisories, prompt 201, operator sign-offs and
+Phase 12 exit stay open. No push, deployment, real database/browser or live acceptance
+occurred. Independent read-only review found no issues.

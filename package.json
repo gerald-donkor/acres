@@ -18,7 +18,8 @@
     "prisma@7.9.1": {
       "mysql2": "3.24.5"
     },
-    "@graphql-tools/utils": "12.0.3"
+    "@graphql-tools/utils": "12.0.3",
+    "handlebars": "4.7.10"
   },
   "scripts": {
     "prepare": "npm run build --workspace=@acres/shared",
