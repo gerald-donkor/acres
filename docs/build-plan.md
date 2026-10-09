@@ -2469,3 +2469,21 @@ reduction or complete `ops:check` pass is claimed. `docs/operations.md` Prompt
 is reflected in the `AGENTS.md` approval exception. PostgreSQL and routes remain
 unchanged. Phase 12, prompt 201, other advisories and operator sign-offs stay
 open; no push, deployment or live acceptance occurred.
+
+**Prompt 292 — sharp security release (2026-10-09):** targeted npm-generated
+lock repair updates sharp **0.35.4 → 0.35.5**, 16 native/WASM packages to
+0.35.5, and 10 libvips packages to 1.3.4 within Next 16.3.8's unchanged
+`^0.35.4` range. No manifest/override or unrelated node changed; platform
+coverage and metadata are preserved. All 27 registry URLs/integrities match;
+clean installation preserves the lock hash. Bounded native PNG/JPEG/WebP/AVIF,
+SVG, invalid input/pixel bounds, CJS/ESM and installed Next optimizer/no-upscale
+fixtures pass; Linux x64 glibc runtime reports librsvg **2.63.2**. Lint,
+typecheck, permitted build (**22/22** pages), formatting and diff checks pass.
+Independent implementation review found no findings. All **32 independent
+offline operations stages** pass (**26 suite invocations / 2857 tests**, ending
+**182/182**). Online npm audit remains omitted pending existing metadata
+disclosure authorization; no fresh audit reduction or complete `ops:check`
+pass is claimed. `docs/operations.md` Prompt 292 records exact scope, provenance,
+actual outputs, sandbox/fixture limits and normal-revert rollback. Other
+advisories, prompt 201, operator sign-offs and Phase 12 exit remain open;
+no push, deployment, other-platform execution or live acceptance occurred.

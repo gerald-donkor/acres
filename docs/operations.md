@@ -6243,3 +6243,101 @@ together with exposure reassessed before deployment. Inspect from repository roo
 ```bash
 npm ls mysql2 --all
 ```
+
+## Prompt 292 — patch sharp security release (2026-10-09)
+
+The root lockfile updates **sharp 0.35.4 → 0.35.5** within unchanged Next
+16.3.8's optional `^0.35.4` range. The
+[maintainer advisory](https://github.com/lovell/sharp/security/advisories/GHSA-wq5f-xc86-pv6w)
+identifies versions <0.35.5 as affected by CVE-2026-96889 in librsvg and
+0.35.5 as patched with librsvg 2.63.2. The
+[release](https://github.com/lovell/sharp/releases/tag/v0.35.5) also updates
+sharp-libvips to 1.3.4. Transitive installation does not establish deployed
+exploitability; production image policy and target runtime were not inspected.
+
+### Provenance and exact dependency closure
+
+Targeted `npm update sharp --package-lock-only --ignore-scripts --no-audit
+--no-fund` changed exactly **27 existing lock nodes**: sharp, 16 native/WASM
+packages (0.35.4 → 0.35.5), and 10 libvips packages (1.3.3 → 1.3.4). Every
+other node and all workspace manifests/overrides remain unchanged. No nodes
+were added or removed; optional platform coverage, licenses, CPU/OS/libc and
+engine metadata are preserved. Internal sharp-family dependency references
+advance together. No direct dependency or override was necessary.
+
+All 27 changed tarball URLs and integrity values matched public npm registry
+version metadata. Sharp remains Apache-2.0 with Node >=20.9.0. Its registry/lock
+integrity is:
+
+```text
+sha512-Ywn4OnzGukp7CDMrp08RQ50YKmuwG47brZgIVPTvBaaAfQlRlygrRqSrxdCiL9M+LlzLBiJ68IR1QqvzHyjC7g==
+```
+
+### Compatibility and actual checks
+
+Host toolchain: Node **v26.11.0**, npm **11.20.0**, Linux x64 glibc. Clean
+install completed with `added 1478 packages in 22s`; lock hash verification
+printed `package-lock.json: OK`. Existing npm install-script restrictions were
+preserved. `npm ls sharp --all` resolved Next 16.3.8 → sharp 0.35.5 without
+invalid ranges. Native package metadata identifies sharp-linux-x64 0.35.5 and
+sharp-libvips-linux-x64 1.3.4; loaded runtime reports sharp 0.35.5, libvips
+8.18.7 and librsvg 2.63.2.
+
+Disposable fixtures use a generated 32×16 raw raster and small benign SVG.
+They assert decoded dimensions, format and bounded pixel-color error for
+PNG/JPEG/WebP/AVIF, exact SVG pixels, invalid input and pixel-limit rejection,
+CJS/ESM loading, and the installed Next `optimizeImage` helper's four output
+formats, pixel bound and no-upscaling behavior. Actual output:
+
+```text
+PASS: native round-trip and Next optimizeImage image/png
+PASS: native round-trip and Next optimizeImage image/jpeg
+PASS: native round-trip and Next optimizeImage image/webp
+PASS: native round-trip and Next optimizeImage image/avif
+PASS: native sharp 0.35.5/libvips 8.18.7/librsvg 2.63.2; CJS/ESM; SVG pixels; invalid input; pixel bounds; Next no-upscale
+```
+
+| Command/check                          | Exit | Actual output/result                                                               |
+| -------------------------------------- | ---- | ---------------------------------------------------------------------------------- |
+| `npm ci --no-audit --no-fund`          | 0    | `added 1478 packages in 22s`; lock hash unchanged                                  |
+| `npm ls sharp --all`                   | 0    | Next 16.3.8 → sharp 0.35.5                                                         |
+| Public metadata integrity verification | 0    | `PASS: all 27 changed lock nodes match public registry tarball URLs and integrity` |
+| Bounded native/Next fixtures           | 0    | PASS output above                                                                  |
+| `npm run lint`                         | 0    | all three workspace ESLint commands completed without diagnostics                  |
+| `npm run typecheck`                    | 0    | all three workspaces completed; `Generated Prisma Client (7.9.1)`                  |
+| Permitted `npm run build`              | 0    | `Compiled successfully in 3.4s`; static pages `22/22`; Nest build completed        |
+| Selected Prettier check                | 0    | `All matched files use Prettier code style!`                                       |
+| `git diff --check`                     | 0    | no whitespace diagnostics                                                          |
+
+The initial sandbox build failed with `Could not parse output from TypeScript's
+--showConfig`; the unchanged permitted rerun passed. The initial sandbox offline
+operations run stopped at `ops:templates-test` with a subprocess `test failed`
+without an assertion explanation. A supplemental closure-count probe accidentally
+loaded the runner and repeated that sandbox failure; it changed no tracked
+implementation. The permitted operations run is the successful evidence below.
+
+### Review, audit limits and rollback
+
+Independent read-only implementation review found no Critical, Important or
+Minor findings and reproduced the real-library fixtures. All **32 independent
+offline operations stages** passed (**26 suite invocations / 2857 tests / zero
+failures**), including audit-wrapper **51/51** and final launch/dossier
+**182/182**. Actual runner output:
+`All 32 independent offline operations stages passed; online audit gate was not run`.
+This is not a complete `npm run ops:check` pass: only online `ops:audit` was
+omitted, pending the existing dependency-metadata disclosure authorization.
+No new npm audit was performed and no fresh audit-count reduction is claimed.
+
+No production launch, deployment, push, Docker/musl/other-platform execution,
+Node 24 verification, real database/server E2E or browser journey is established.
+The other platforms' locked packages were integrity-checked, not executed. Other
+advisories, prompt 201, operator sign-offs and Phase 12 exit remain open.
+Rollback is a reviewed normal revert of this lockfile repair, with affected
+security exposure reassessed before deployment.
+
+Inspect from the repository root:
+
+```bash
+npm ls sharp --all
+node -e 'console.log(require("sharp").versions)'
+```
