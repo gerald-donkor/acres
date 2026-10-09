@@ -2417,3 +2417,19 @@ found no findings. `docs/operations.md` Prompt 288 records exact outputs,
 sandbox/temporary-fixture corrections, residual inventory and rollback.
 No real DB/browser/production acceptance, launch approval or push. Phase 12,
 prompt 201 and operator sign-offs remain open.
+
+**Prompt 289 — brace-expansion security releases (2026-10-09):** targeted
+npm-generated lock repair updates seven nodes to **1.1.21**, **2.1.7**, and
+**5.0.12** within unchanged parent ranges. Only versions, URLs and integrity
+changed; all other nodes/manifests/overrides remain unchanged. Registry integrity,
+clean-install lock hash, all seven actual minimatch callers, bounded recursion/
+append/rewrite fixtures and v5 ESM passed. Lint, typecheck, permitted build
+(**22/22** pages), audit-wrapper tests (**51/51**), formatting and diff checks
+passed. Independent review found no findings. Independent offline operations
+stages passed **26 suites / 2857 tests**, ending **182/182**; online audit was
+explicitly omitted. Auto-review rejected npm audit disclosure of dependency
+metadata to registry.npmjs.org; user authorization remains pending. No fresh
+before/after audit reduction, online audit gate or complete `ops:check` pass is
+claimed. `docs/operations.md` Prompt 289 records restrictions, provenance,
+actual results and normal-revert rollback. Other advisories, prompt 201,
+operator sign-offs and Phase 12 exit remain open; no push or live acceptance.

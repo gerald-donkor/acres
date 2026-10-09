@@ -5902,3 +5902,116 @@ Inspect the installed result from repository root:
 npm ls ip-address --all
 npm run ops:audit
 ```
+
+## Prompt 289 — patch brace-expansion security releases (2026-10-09)
+
+Implemented the bounded Phase 12K repair in
+`prompts/289-patch-brace-expansion-security-releases.md`, starting from clean
+`main` at `c52c35cfb3ff38ce5557d1e300c1bae86844e2be`. The user requested immediate
+implementation after prompt preparation. Toolchain: Node **v26.11.0**, npm
+**11.20.0**.
+
+### Scope and provenance
+
+The targeted npm update changed **seven brace-expansion lock nodes only**:
+**1.1.18 → 1.1.21** (one node), **2.1.4 → 2.1.7** (three nodes), and
+**5.0.9 → 5.0.12** (three nodes). Only each node's version, resolved URL and
+integrity changed. Every other package node, workspace manifest, parent version,
+engine/dependency declaration and override is unchanged. Actual minimatch v3,
+v9 and v10 parent ranges remain satisfied.
+
+Public registry integrity matched all seven nodes. All three versions are MIT;
+v5 retains Node `20 || >=22` and balanced-match `^4.0.2`; the older branches
+retain their own existing dependency declarations. Checked upstream sources:
+[comma-parser recursion and append exhaustion](https://github.com/advisories/GHSA-6j4f-fj2g-mc7p),
+[nested brace recursion](https://github.com/advisories/GHSA-qhr7-859c-m2p7),
+[quadratic rewrite](https://github.com/advisories/GHSA-q2hr-2g5m-vwhr), and the
+[tagged v5 source](https://raw.githubusercontent.com/juliangruber/brace-expansion/v5.0.12/src/index.ts).
+Selected versions are outside all three affected ranges. No customer-facing
+exploit path is established solely by these transitive dependencies.
+
+### Compatibility and actual checks
+
+Disposable offline fixtures exercise ordinary literals/sets/nested alternatives,
+ascending/descending/stepped/padded ranges, escaping and malformed groups,
+plus positive/negative matching and brace expansion through **all seven actual
+minimatch parent branches**. Timeout-bounded child processes exercise both
+comma-parser vectors, both nesting shapes and the exact rewrite shape on every
+installed branch. Their arrays remain within the chosen `max: 8` and
+`maxLength: 100000` budgets. v5 CommonJS and ESM entrypoints both pass.
+Upstream now bounds nesting and rewrite passes, returning literal residuals at
+limits; the parser uses iteration/elementwise appends. These are bounded
+semantic fixtures, not a production capacity benchmark or universal DoS proof.
+
+Exact successful fixture output:
+
+```text
+Benign expansion and actual minimatch compatibility passed on 7 parent branches
+Bounded comma-recursion, nested-group and rewrite fixtures passed on 7 package branches; v5 ESM passed
+Seven package nodes only; registry integrity/dependencies, patched versions and every parent range verified
+```
+
+| Command/check                                         | Exit | Actual result                                                                 |
+| ----------------------------------------------------- | ---- | ----------------------------------------------------------------------------- |
+| Targeted npm lock update, scripts/audit/fund disabled | 0    | `up to date in 652ms`                                                         |
+| `npm ci --no-audit --no-fund`                         | 0    | `added 1479 packages in 46s`                                                  |
+| Lock hash after installation/checks                   | 0    | `package-lock.json: OK`                                                       |
+| `npm ls brace-expansion --all`                        | 0    | all seven nodes resolve patched versions                                      |
+| Offline semantic and lock validation fixtures         | 0    | output above                                                                  |
+| `npm run ops:audit-test` (permitted)                  | 0    | `tests 51`, `pass 51`, `fail 0`                                               |
+| `npm run lint`                                        | 0    | all three workspace ESLint commands completed without diagnostics             |
+| `npm run typecheck`                                   | 0    | all three workspaces completed; `Generated Prisma Client (7.9.1)`             |
+| `npm run build` (permitted rerun)                     | 0    | `Compiled successfully in 4.7s`; static pages `22/22`; server build completed |
+| Selected Prettier and `git diff --check`              | 0    | `All matched files use Prettier code style!`; diff check empty                |
+
+Initial restricted registry/audit calls failed DNS with `EAI_AGAIN`. An
+in-flight restricted registry lookup overwrote its shared temporary output
+when it failed; a separate successful public metadata fetch was used for final
+integrity verification. The first temporary lock validator detected that
+invalid JSON and was corrected to use the verified file; no registry value was
+invented. The restricted semantic fixture failed at `spawnSync node EPERM`;
+the unchanged permitted rerun passed. The restricted build failed
+`Could not parse output from TypeScript's --showConfig`; the unchanged permitted
+rerun passed. Existing deprecated-package and unapproved install-script warnings
+remain; no install-script permissions changed.
+
+Independent read-only implementation review found no Critical, Important or
+Minor findings. It independently verified complete lock scope, registry
+metadata, parent ranges and benign compatibility. Its subprocess rerun hit the
+same sandbox EPERM; source inspection and the successful permitted fixture log
+support the recorded bounded completion evidence. No review-led fixes were
+required. Rewrite checks establish completion, not performance scaling.
+
+All independent offline operations stages completed with exit 0: **26 suite
+invocations, 2857 tests, zero failures**, ending with launch/dossier **182/182**.
+A temporary runner enumerated the existing `ops:check` commands and explicitly
+omitted only `ops:audit`; scanners and local/synthetic tests passed. Its final
+output was `All independent offline operations stages passed; online audit gate
+was not run`. This does **not** count as a passing `npm run ops:check`.
+
+### Audit limitation, review and remaining work
+
+Automatic approval review rejected the online npm audit because it would send
+repository dependency names/versions, potentially including private workspace
+metadata, to `registry.npmjs.org` without explicit payload authorization.
+Permission was requested; no rejected call was bypassed. Until authorized,
+fresh baseline/post-change audit comparisons, `npm run ops:audit` and complete
+`npm run ops:check` remain pending. Historical counts are not presented as
+current counts or proof of reduction. The baseline lock is retained in a
+disposable temporary evidence directory for a later isolated comparison.
+
+Phase 12, other dependency advisories, prompt 201 and operator sign-offs remain
+open. No deployment, push, live production acceptance, Node 24 verification,
+real database/server E2E or browser journey occurred. Rollback is a normal
+reviewed revert of this lock repair with exposure reassessment. No policy
+suppression was added. Temporary fixtures and logs are disposable evidence,
+not prerequisites for future implementation.
+
+Inspect installed versions from repository root:
+
+```bash
+npm ls brace-expansion --all
+```
+
+Once metadata disclosure is authorized, run fresh audits and the complete
+operations aggregate before treating dependency verification as complete.
