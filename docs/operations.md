@@ -5520,3 +5520,126 @@ the successful permitted execution remains the relevant result. No review-led
 implementation change was required. Final documentation review identified two
 historical test-command edits from an overbroad formatting replacement; the
 entire historical operations record was restored byte-for-byte from HEAD.
+
+## Prompt 286 — patch the source-map-js security release (2026-10-09)
+
+The root lockfile updates `source-map-js` to **1.2.2** across its single lockfile
+node, satisfying all three parents under their declared `^1.2.1` range:
+- root `postcss@8.5.26` (direct dependency of `shadcn@4.18.0` and `@tailwindcss/postcss@4.3.3`)
+- `@tailwindcss/node@4.3.3` (dependency of `@tailwindcss/postcss@4.3.3`)
+- `next/node_modules/postcss@8.5.23` (nested dependency of `next@16.3.8`)
+
+No root `package.json` manifest edit, dependency override, or new direct
+dependency was added. Existing deepmerge-ts, Multer, and Swagger overrides remain
+unchanged. No application source code, stylesheet, design token, UI component,
+PostCSS configuration, Next configuration, generated contract, or server manifest
+changed.
+
+Advisory [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)
+(high severity) affects `source-map-js` `>=1.0.0 <1.2.2` via uncontrolled resource
+consumption from unvalidated section offsets in indexed source maps. Upstream PR 79
+adds `isValidOffset` validation, caps section offset lines at 10,000,000, and bounds
+nested summed offsets. Affected package presence in the CSS build pipeline does not
+establish that untrusted source maps reach Acres or enable customer exploitation.
+
+### Resolution, publication and clean install
+
+Execution used **Node v26.11.0**, **npm 11.20.0**, on `main` with base
+`bd1c08a11ada389f1b35f9ad394e43c1d52b42b6`. The registry published `source-map-js@1.2.2`
+on 2026-09-30T14:08:09.382Z. It declares `engines: { "node": ">=0.10.0" }`,
+BSD-3-Clause license, CommonJS main `./source-map.js`, bundled TypeScript
+declarations, and zero runtime dependencies.
+
+Registry and lockfile SHA-512 integrity matched:
+
+| Release | Integrity |
+| ------- | --------- |
+| 1.2.2   | `sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==` |
+
+`npm update source-map-js --package-lock-only --ignore-scripts --no-audit --no-fund`
+updated only the single `node_modules/source-map-js` node.
+`npm ci --no-audit --no-fund` cleanly installed the dependency tree, running the shared
+prepare build and preserving the lockfile SHA-256:
+`007555b3f714382213d523f33ff108c26d19c8ba83cf1affe49b711a2834e10b`.
+
+`npm ls source-map-js --all` and `npm explain source-map-js` confirmed deduplication to
+a single root node at `1.2.2`. Caller-relative `createRequire` checks confirmed root PostCSS,
+nested Next PostCSS, and `@tailwindcss/node` all resolve to root `1.2.2`.
+
+### Compatibility and verification
+
+Disposable offline fixtures in restricted `/tmp/acres-286` exercised real CommonJS APIs
+and real caller integration:
+1. Basic map generation, source content embedding, and original/generated position lookup.
+2. Indexed-to-flat map conversion via `eachMapping` and `SourceNode` round-trip.
+3. Negative offset validation: rejection of 20 malformed offset types (`-1`, `1.5`, `NaN`,
+   `Infinity`, `-Infinity`, `MAX_SAFE_INTEGER + 1`, strings, null, undefined, objects),
+   line offset > 10,000,000, and nested summed offset bounds.
+4. Nested source lists, bounded line-gap serialization (`A;;;...A`), and absence of spurious
+   `undefined` padding in `SourceNode`.
+5. Real `postcss@8.5.26` and `next/node_modules/postcss@8.5.23` synthetic CSS transformation
+   and incoming previous-map composition (`sourcesContent` and positions survived).
+6. Real `@tailwindcss/node@4.3.3` `toSourceMap` API emitting encoded mapping, inline data URL,
+   and comment.
+
+Actual output from `node /tmp/acres-286/smoke.cjs` (exit **0**):
+
+```text
+Basic map: names, positions and source content passed
+Indexed/nested maps: generator conversion and SourceNode round-trip passed
+Malformed offsets (20), over-limit line and nested summed bound rejected at construction
+Nested source lists, bounded line-gap serialization and short-code SourceNode passed
+postcss 8.5.26: CSS transform and previous-map composition passed
+next/node_modules/postcss 8.5.23: CSS transform and previous-map composition passed
+Tailwind Node 4.3.3 actual toSourceMap: encoded mapping, content, inline and external comment passed
+```
+
+| Command | Actual result |
+| ------- | ------------- |
+| `npm ls source-map-js --all` | exit 0; single deduped root 1.2.2 |
+| `npm explain source-map-js` | exit 0; resolved by root PostCSS, Tailwind Node, and Next PostCSS |
+| `npm run ops:audit-test` | exit 0; `ℹ tests 51`, `ℹ pass 51`, `ℹ fail 0` |
+| `npm audit --omit=dev --audit-level=critical` | exit 0; 0 critical vulnerabilities |
+| `npm run ops:audit` | exit 0; `Production dependency security audit passed (0 critical vulnerabilities)` |
+| `npm run ops:check` | exit 0 through final launch/dossier suite: `ℹ tests 182`, `ℹ pass 182`, `ℹ fail 0` |
+| `npm run lint` | exit 0 across all three workspaces |
+| `npm run typecheck` | exit 0 across all three workspaces |
+| `npm run build` | exit 0; `✓ Generating static pages using 7 workers (22/22) in 1261ms`, then successful server build |
+| `git diff --check` | exit 0; clean whitespace |
+
+### Complete audit comparison and remaining limits
+
+Fresh before/after production JSON retrieval both exited **1** for noncritical findings.
+Comparison removes only `source-map-js` (advisory source GHSA-68fv-2mgg-jv7q).
+No finding was added. Totals fell **30 → 29**, **22 → 21 high**, **8 moderate**, with
+**zero critical** throughout. All retained finding objects were unchanged.
+The residual inventory is the Prompt 281 table, excluding Next, proxy-addr,
+Multer/its propagated adapter, Nodemailer, js-yaml/Swagger, and now source-map-js.
+
+`npm audit --omit=dev --audit-level=critical` and `npm run ops:audit` both exited
+**0**, as did the same unchanged policy inside the aggregate. Actual output:
+
+```text
+29 vulnerabilities (8 moderate, 21 high)
+Production dependency security audit passed (0 critical vulnerabilities)
+```
+
+Raw manifests, audit JSON, synthetic smoke scripts and logs remain disposable
+`/tmp` evidence outside git. Repository checks do not establish live production
+capacity, deployment, provenance, Node 24 compatibility testing, SMTP delivery,
+or launch acceptance. Prompt 201, residual dependency findings, operator sign-offs
+and Phase 12 exit remain open. Rollback is a reviewed normal revert of the lockfile,
+preserving retained evidence and reassessing affected-version exposure before deployment.
+No push or live action is included.
+
+Safe inspection from repository root:
+
+```bash
+npm ls source-map-js --all
+npm run ops:templates
+npm run ops:audit
+```
+
+Initial implementation review found no critical, important or minor findings.
+It independently verified the lock diff, registry integrity, resolution deduplication,
+audit comparison, real PostCSS and Tailwind Node smoke checks, and retained test evidence.

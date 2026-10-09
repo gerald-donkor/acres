@@ -2363,3 +2363,22 @@ integrity, compatibility, actual outputs and sandbox/fixture limits;
 operator sign-offs and Phase 12 exit remain open. Rollback is a reviewed normal
 revert of manifest and lockfile together with exposure reassessed before
 deployment; no live action or push is included.
+
+**Prompt 286 Phase 12K source-map-js security patch (2026-10-09):**
+The root lockfile updates source-map-js from 1.2.1 to **1.2.2** across its single
+node, satisfying all three parents (root PostCSS 8.5.26, Next nested PostCSS
+8.5.23, and `@tailwindcss/node` 4.3.3) under `^1.2.1`. No root manifest edit,
+new override, or direct dependency was added. Clean install preserved the lock
+hash; offline smoke checks verified basic mapping/content lookup, indexed-map
+conversion, SourceNode round-trip, malformed/over-limit/nested offset rejection,
+both PostCSS transform/composition branches, and Tailwind Node `toSourceMap`.
+Audit-wrapper tests **51/51**, full operations aggregate `ops:check` exited **0**
+through launch/dossier **182/182**, lint, typecheck, production build (22/22
+pages), and diff checks passed. Fresh production audit removes source-map-js only,
+falling from 30 to **29** findings (**21 high, eight moderate, zero critical**).
+The critical audit gate remains unchanged. Independent review found no issues.
+`docs/operations.md` Prompt 286 records integrity, compatibility, actual outputs,
+and fixture/sandbox limits. Residual dependency findings, prompt 201, operator
+sign-offs and Phase 12 exit remain open. Rollback is a reviewed normal revert of
+the lockfile with exposure reassessed before deployment; no live action or push
+is included.
