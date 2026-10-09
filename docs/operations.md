@@ -6745,3 +6745,82 @@ Whole-file Prettier checks flag pre-existing formatting in both owning docs;
 the unchanged HEAD versions reproduce those warnings. The appended records,
 prompt and lockfile pass selected formatting. Historical text was preserved
 to avoid unrelated formatting churn.
+
+## Prompt 297 — patch hono security release (2026-10-09)
+
+The shared transitive `hono` resolution moves **4.13.3 → 4.13.13** beneath
+unchanged @modelcontextprotocol/sdk **1.32.1** (`^4.11.4`) and @hono/node-server
+**2.1.1** (`peer ^4`). Only one lock node changes, and only its version,
+tarball URL and integrity fields change. All manifests, overrides, other lock
+nodes, application source, routes, schemas and scanner policy are unchanged.
+
+The upstream advisories (CVE-2026-93981 / GHSA-5629-43c9-83vf and CVE-2026-84365 /
+GHSA-p297-f5wh-h97w) identify XSS in `hono/jsx` when plain strings are unescaped
+in Suspense, ErrorBoundary, Context.Provider or root renderToString, and path
+traversal in `toSSG()`. This is inventory remediation: no direct Hono imports
+or SSG usage exist in Acres application source. Hono is brought in transitively
+via MCP SDK, used by shadcn (MCP server/stdio) and optionally @google/genai. No
+reachable application exploit is established in Acres.
+
+### Provenance and compatibility
+
+Public npm metadata verifies stable 4.13.13, MIT, Node >=16.9.0, zero runtime
+dependencies, and this integrity:
+
+```text
+sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA==
+```
+
+Targeted `npm update hono --workspace=@acres/client --package-lock-only
+--ignore-scripts --no-audit --no-fund` updated `package-lock.json` in 942ms.
+`npm ci --no-audit --no-fund` on Node **v26.11.0**, npm **11.20.0** printed
+`added 1478 packages in 29s`; lock hash verification printed
+`package-lock.json: OK`. The valid caller tree deduplicates both parents
+to 4.13.13.
+
+Disposable timeout-bounded real-library fixtures exercise basic routing,
+JSON response formatting, query/param extraction, HTML template tag escaping,
+`hono/jsx` Suspense, ErrorBoundary, Context.Provider and root renderToString
+escaping (verifying the CVE-2026-93981 fix), `toSSG` path traversal rejection
+(verifying the CVE-2026-84365 fix), MCP server/client in-memory handshake,
+listTools, callTool execution with Zod schemas, and CJS/ESM exports.
+
+```text
+PASS: one-node lock scope; registry integrity; deduplicated callers; basic routing/params/json; hono/html and hono/jsx XSS escaping (CVE-2026-93981); SSG traversal guard (CVE-2026-84365); real MCP handshake/list/call tools; CJS/ESM exports
+```
+
+### Checks and limits
+
+| check                             | exit | actual output/result                                                       |
+| --------------------------------- | ---- | -------------------------------------------------------------------------- |
+| Clean install/hash                | 0    | `added 1478 packages in 29s`; `package-lock.json: OK`                      |
+| Caller tree and real fixtures     | 0    | Valid 4.13.13 caller tree and PASS above                                   |
+| `npm run lint`                    | 0    | Three workspace ESLint commands complete without diagnostics               |
+| `npm run typecheck`               | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
+| `npm run build`                   | 0    | `Compiled successfully in 2.7s`; static pages `22/22`; Nest build complete |
+| Selected Prettier                 | 0    | `All matched files use Prettier code style!`                               |
+| `git diff --check`                | 0    | No whitespace diagnostics                                                  |
+
+All **32 independent offline operations stages** passed: **26 suite
+invocations / 2857 tests / zero failures**, including audit-wrapper **51/51**
+and final launch/dossier **182/182**. Runner output: `All 32 independent offline
+operations stages passed; online audit gate was not run`. Only ops:audit was
+omitted under the existing dependency-metadata disclosure restriction. No fresh
+audit count, vulnerability reduction or complete ops:check pass is claimed.
+
+Public registry lookup still reports braces latest 3.0.3, with no patched
+release. Other advisories, prompt 201, operator sign-offs and Phase 12 exit
+remain open. Host verification does not establish Node 24, Docker, real
+database/server E2E, browser or production acceptance. No push or deployment
+occurred. Rollback is a reviewed normal revert restoring affected inventory;
+reassess exposure before deployment. Inspect from repository root:
+
+```bash
+npm ls hono --all
+```
+
+Independent read-only review found no Critical, Important or Minor findings.
+The reviewer reproduced the fixtures and caller tree, verified registry/lock
+scope and hash, and independently counted all operations logs. No review-led
+implementation correction was required. Disposable `/tmp/acres-297` fixtures
+and logs are execution evidence, not future prerequisites.

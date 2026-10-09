@@ -2564,3 +2564,25 @@ patch; other advisories, prompt 201, operator sign-offs and Phase 12 exit stay
 open. No push, deployment, real database/browser or live acceptance occurred.
 Independent read-only review found no issues and reproduced the fixtures and
 caller tree, verified the one-node lock scope, and counted the check logs.
+
+**Prompt 297 — hono security release (2026-10-09):** targeted npm-generated
+one-node lock repair updates transitive hono **4.13.3 → 4.13.13** under
+unchanged @modelcontextprotocol/sdk 1.32.1 and @hono/node-server 2.1.1, within
+both declared ranges. Only version/tarball/integrity change; manifests, exports,
+dependencies, peers, application source and scanner policy remain unchanged.
+Public metadata, clean-install hash and valid deduplicated caller tree pass.
+Bounded real fixtures verify basic routing/params/JSON, hono/html escaping,
+hono/jsx Suspense, ErrorBoundary, Context.Provider and root renderToString
+escaping (CVE-2026-93981), toSSG path traversal rejection (CVE-2026-84365),
+real in-memory MCP handshake/tool calls with Zod schemas, and CJS/ESM exports.
+Lint, typecheck, build (**22/22** pages), selected formatting and diff checks
+pass. All **32 independent offline operations stages** pass (**26 suite
+invocations / 2857 tests / zero failures**, final **182/182**). Online audit
+remains omitted under the existing metadata-disclosure restriction; no fresh
+reduction or full ops:check pass is claimed. `docs/operations.md` Prompt 297
+records provenance, actual outputs, environment limits and normal-revert
+rollback. No direct Hono import or reachable exploit is established in Acres.
+Braces has no published patch; other advisories, prompt 201, operator
+sign-offs and Phase 12 exit stay open. No push, deployment, real
+database/browser or live acceptance occurred. Independent read-only review
+found no issues.
