@@ -6015,3 +6015,116 @@ npm ls brace-expansion --all
 
 Once metadata disclosure is authorized, run fresh audits and the complete
 operations aggregate before treating dependency verification as complete.
+
+## Prompt 290 — patch undici security release (2026-10-09)
+
+Implemented the bounded Phase 12K dependency repair from
+`prompts/290-patch-undici-security-release.md`, starting from clean `main`
+at `e100dadccf0b29641ae7d9c6d66517c6440c01e2`. The user approved execution via `y`.
+Toolchain: Node **v26.11.0**, npm **11.20.0**.
+
+### Scope and provenance
+
+The targeted update changed the single `node_modules/undici` lock node only:
+**7.29.0 → 7.29.1**. Only its version, resolved registry tarball URL and SHA-512
+integrity changed. Every other package node, workspace manifest, parent version,
+engine requirement and override remains unchanged. Both parent ranges admit
+the patch directly:
+
+- `client/node_modules/shadcn@4.18.0` declares `"undici": "^7.27.2"`
+- `client/node_modules/shadcn/node_modules/@dotenvx/dotenvx@1.75.1` declares `"undici": "^7.11.0"`
+
+Public npm registry metadata confirms MIT, Node `>=20.18.1`, zero runtime
+dependencies and published SHA-512 integrity:
+
+```text
+sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==
+```
+
+Upstream release notes and GitHub Advisory Database document ten advisories
+resolved by `7.29.1`:
+
+- GHSA-pmjh-fq2x-6v4x (CVE-2026-18149): DoS via orphaned RetryHandler response body (`>= 7.11.0, < 7.29.1`)
+- GHSA-r53p-7pc4-xj5r: downstream response splitting via retry interceptor (`>= 7.0.0, < 7.29.1`)
+- GHSA-rfgv-xxqx-mfg5: DoS via unrequested WebSocket subprotocol (`>= 7.0.0, < 7.29.1`)
+- GHSA-3xpg-4rpp-hhhm: DoS via unbounded decompression of compressed responses (`>= 7.15.0, < 7.29.1`)
+- GHSA-2jfj-6hjv-fm6j: cross-user cookie disclosure via Set-Cookie caching in shared caches (`>= 7.0.0, < 7.29.1`)
+- GHSA-2gqq-gqf2-x968: response truncation via oversized chunked responses in dump interceptor (`>= 7.1.0, < 7.29.1`)
+- GHSA-w293-vg96-wgc3: TLS certificate validation bypass via dropped connect options in BalancedPool (`>= 7.24.1, < 7.29.1`)
+- GHSA-8436-99hf-9mmv: caching and replay of unsafe HTTP method responses (`>= 7.0.0, < 7.29.1`)
+- GHSA-rx4f-c7p8-82vq: DoS via WebSocketStream unclean close (`>= 7.0.0, < 7.29.1`)
+- GHSA-3wwx-pv8p-q78v: DoS via unhandled error in WebSocket permessage-deflate decompression (`>= 7.28.0, < 7.29.1`)
+
+Selected version 7.29.1 clears all ten affected ranges. Transitive presence in
+client dev tooling does not establish an exposed customer request path.
+
+### Compatibility and actual checks
+
+Disposable offline fixtures exercise real installed library APIs without network calls:
+
+- Caller-relative `createRequire` resolution from both `shadcn` and `@dotenvx/dotenvx`
+  confirms both resolve to the single deduped `node_modules/undici` instance at 7.29.1;
+- CommonJS and ESM entrypoints both load and export expected symbols;
+- `Client`, `Pool`, `Agent`, `Dispatcher` instantiation and option validation passed;
+- `RetryHandler` instantiation, options parsing, and retry counters passed;
+- `undici.util.parseHeaders` header parsing and content-type normalization passed;
+- Subprocess tests for error class hierarchies and `BalancedPool` upstream management
+  passed with exit 0.
+
+Exact successful fixture output:
+
+```text
+Starting undici 7.29.1 offline semantic compatibility fixtures...
+✓ Caller-relative createRequire resolution verified for shadcn and @dotenvx/dotenvx (both resolve undici 7.29.1)
+✓ CommonJS and ESM entrypoints export expected symbols
+✓ Client, Pool, Agent, Dispatcher instantiations and option validations passed
+✓ RetryHandler instantiation and options validated
+✓ undici.util.parseHeaders validated
+✓ Subprocess tests (error classes, BalancedPool options) completed with exit 0
+
+All undici 7.29.1 offline semantic compatibility fixtures passed successfully!
+```
+
+| Command/check                                  | Exit | Actual result                                                                 |
+| ---------------------------------------------- | ---- | ----------------------------------------------------------------------------- |
+| Targeted lockfile update                       | 0    | single `node_modules/undici` node updated; no manifest or parent changed      |
+| `npm ci --no-audit --no-fund`                  | 0    | `added 1479 packages in 45s`                                                  |
+| Lock diff check (`git diff package-lock.json`) | 0    | only `node_modules/undici` node changed                                       |
+| `npm ls undici --all`                          | 0    | both `shadcn` and `@dotenvx/dotenvx` resolve deduped 7.29.1                   |
+| Offline semantic compatibility fixtures        | 0    | output above                                                                  |
+| `npm run ops:audit-test`                       | 0    | `tests 51`, `pass 51`, `fail 0`                                               |
+| `npm run lint`                                 | 0    | all three workspace ESLint commands completed without diagnostics             |
+| `npm run typecheck`                            | 0    | all three workspaces completed; `Generated Prisma Client (7.9.1)`             |
+| `npm run build`                                | 0    | `Compiled successfully in 2.9s`; static pages `22/22`; server build completed |
+| `git diff --check`                             | 0    | clean whitespace                                                              |
+
+Independent read-only implementation review found no Critical, Important or
+Minor findings. It independently verified lockfile scope, registry metadata,
+parent semver ranges, offline semantic compatibility and quality gates.
+
+All 32 independent offline operations stages completed with exit 0: **26 suite
+invocations, 2857 tests, zero failures**, ending with launch-drill **182/182**.
+The offline runner explicitly omitted only `ops:audit`; scanners and local/synthetic
+tests passed. Output: `All 32 independent offline operations stages passed;
+online audit gate was not run`. This does **not** count as a passing
+`npm run ops:check`.
+
+### Audit limitation, review and remaining work
+
+Online npm audit metadata disclosure to `registry.npmjs.org` remains pending
+explicit user authorization. No unapproved network disclosure was performed,
+and offline checks are not misrepresented as fresh registry audits.
+The baseline lockfile is retained in a disposable temporary directory
+(`/tmp/acres-290/package-lock.baseline.json`) for a subsequent isolated
+audit comparison once authorized.
+
+Phase 12, other dependency advisories, prompt 201 and operator sign-offs remain
+open. No deployment, push, live production acceptance, Node 24 verification,
+real database/server E2E or browser journey occurred. Rollback is a normal
+reviewed revert of this lock repair with exposure reassessment.
+
+Inspect installed version from repository root:
+
+```bash
+npm ls undici --all
+```

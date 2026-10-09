@@ -2433,3 +2433,20 @@ before/after audit reduction, online audit gate or complete `ops:check` pass is
 claimed. `docs/operations.md` Prompt 289 records restrictions, provenance,
 actual results and normal-revert rollback. Other advisories, prompt 201,
 operator sign-offs and Phase 12 exit remain open; no push or live acceptance.
+
+**Prompt 290 — patch undici security release (2026-10-09):** targeted
+lock repair updates single node to **7.29.1** within unchanged `shadcn`
+(`^7.27.2`) and `@dotenvx/dotenvx` (`^7.11.0`) parent ranges. Only version,
+tarball URL and integrity changed; no workspace manifest, override, or
+parent was altered. Registry integrity verified, clean install preserved lock
+consistency, and both parent callers resolve deduped 7.29.1. Offline semantic
+compatibility fixtures verified caller-relative resolution, CJS/ESM entrypoints,
+Client/Pool/Agent/Dispatcher lifecycle, RetryHandler options, header parsing,
+error hierarchies and BalancedPool. Lint, typecheck, production build
+(**22/22** pages), audit-wrapper tests (**51/51**), formatting and diff checks
+passed. Independent read-only review found zero findings. All 32 independent
+offline operations stages passed (**26 suites / 2857 tests**, ending **182/182**);
+online audit gate omitted pending explicit disclosure authorization.
+`docs/operations.md` Prompt 290 records restrictions, provenance, actual
+results and normal-revert rollback. Other advisories, prompt 201, operator
+sign-offs and Phase 12 exit remain open; no push or live acceptance.
