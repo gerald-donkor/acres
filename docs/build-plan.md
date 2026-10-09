@@ -2382,3 +2382,22 @@ and fixture/sandbox limits. Residual dependency findings, prompt 201, operator
 sign-offs and Phase 12 exit remain open. Rollback is a reviewed normal revert of
 the lockfile with exposure reassessed before deployment; no live action or push
 is included.
+
+**Prompt 287 Phase 12K fast-uri security patch (2026-10-09):**
+The root lockfile updates only fast-uri 3.1.5 to **3.1.8**, satisfying all ten
+unchanged AJV v8 parents under `^3.0.1`. No manifest or override changed. Registry
+integrity matched, clean installation preserved the lock hash, and bounded
+semantic fixtures passed ordinary URI handling, encoded host/IDN behavior,
+nested percent escapes, malformed scheme/IPv6 and port rejection, plus external,
+local and escaped schema references on all ten actual AJV branches. The full
+operations aggregate passed **2857 tests** across 26 invocations, ending with
+launch/dossier **182/182**; lint, typecheck, production build (22/22 pages),
+format and diff checks passed. The first sandbox build hit the known TypeScript
+subprocess-output failure; the unchanged permitted rerun passed. Fresh complete
+production audit removes fast-uri only, reducing 29 to **28 findings** (**20
+high, eight moderate, zero critical**); only an unrelated GraphQL fix recommendation
+changed in retained finding metadata. Critical-only policy remains unchanged.
+Independent implementation review found no issues. `docs/operations.md` Prompt
+287 records integrity, actual checks, remaining inventory, sandbox/fixture limits
+and normal-revert rollback. Prompt 201, operator sign-offs, residual findings and
+Phase 12 exit stay open; no push, deployment or live approval occurred.

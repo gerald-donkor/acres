@@ -5643,3 +5643,143 @@ npm run ops:audit
 Initial implementation review found no critical, important or minor findings.
 It independently verified the lock diff, registry integrity, resolution deduplication,
 audit comparison, real PostCSS and Tailwind Node smoke checks, and retained test evidence.
+
+## Prompt 287 — patch the fast-uri security release (2026-10-09)
+
+The root lockfile updates its single `fast-uri` node from **3.1.5 to 3.1.8**.
+The entire dependency diff is its version, registry tarball URL and SHA-512
+integrity. All ten AJV v8 parents remain at their existing versions and admit
+the patch under `^3.0.1`. No manifest, override, application source, public
+contract, production template, audit threshold or launch approval changed.
+
+The user explicitly authorized implementation immediately after writing the
+prompt, so prompt 287 ran without the ordinary approval pause. Execution used
+**Node v26.11.0**, **npm 11.20.0**, on `main` at base
+`276ab82fc5dc246cce2a48a1e421bde2c5f4be1f`.
+
+### Security scope and provenance
+
+The fresh baseline listed six fast-uri advisories:
+
+| Advisory                                                                                           | Severity | Affected v3 range | First repaired v3 |
+| -------------------------------------------------------------------------------------------------- | -------- | ----------------- | ----------------- |
+| [GHSA-5jgf-p345-68v8](https://github.com/fastify/fast-uri/security/advisories/GHSA-5jgf-p345-68v8) | high     | `>=3.1.3 <3.1.6`  | 3.1.6             |
+| [GHSA-f65p-4m7j-42xc](https://github.com/fastify/fast-uri/security/advisories/GHSA-f65p-4m7j-42xc) | high     | `>=3.0.0 <3.1.6`  | 3.1.6             |
+| [GHSA-fph4-wmhf-6fwf](https://github.com/fastify/fast-uri/security/advisories/GHSA-fph4-wmhf-6fwf) | high     | `>=3.1.2 <3.1.6`  | 3.1.6             |
+| [GHSA-jqff-g426-hqxp](https://github.com/fastify/fast-uri/security/advisories/GHSA-jqff-g426-hqxp) | high     | `>=3.0.0 <3.1.6`  | 3.1.6             |
+| [GHSA-qw65-cvwx-89v3](https://github.com/fastify/fast-uri/security/advisories/GHSA-qw65-cvwx-89v3) | high     | `>=3.0.0 <3.1.7`  | 3.1.7             |
+| [GHSA-hrr3-gc8f-f4qj](https://github.com/fastify/fast-uri/security/advisories/GHSA-hrr3-gc8f-f4qj) | moderate | `>=3.0.0 <3.1.8`  | 3.1.8             |
+
+These cover scheme-relative IDN canonicalization, malformed IPv6, repeated
+hostname decoding, encoded scheme normalization, port authority injection and
+encoded host case normalization. The [maintainer v3.1.8 release](https://github.com/fastify/fast-uri/releases/tag/v3.1.8)
+repairs the last of these. Presence in the AJV dependency tree does not prove
+that Acres exposes an SSRF sink or a customer-controlled host-policy bypass.
+
+Registry publication was **2026-09-15T07:36:25.444Z**. The inspected package is
+BSD-3-Clause, CommonJS (`index.js`), with bundled `types/index.d.ts`, no declared
+runtime dependencies and no declared Node engine constraint. Registry and
+lockfile integrity match:
+
+```text
+sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==
+```
+
+`npm update fast-uri --package-lock-only --ignore-scripts --no-audit --no-fund`
+returned `up to date in 791ms` while producing the targeted lock change.
+`npm ci --no-audit --no-fund` exited **0**, ran the shared prepare build and
+reported `added 1479 packages in 30s`. Existing install-script approval warnings
+remained; no new script approval was granted. The clean install preserved lock
+SHA-256 `8d9eb055df7fc8750715d507f27f50392d48e76814eedc5d59cb13cbfc290272`.
+`npm ls fast-uri --all` and `npm explain fast-uri` exited **0** and showed 3.1.8.
+
+### Real semantic compatibility checks
+
+After inspecting installed upstream source and regression tests, a disposable,
+bounded offline fixture exercised real package APIs. `timeout 30 node
+/tmp/acres-287/smoke.cjs` exited **0**. Actual excerpts:
+
+```text
+Lock inventory: only fast-uri changed; registry integrity matches
+Benign URI round-trip, relative resolution, ports and reserved path escapes passed
+Encoded host case, case-sensitive non-host components and IDN canonicalization passed
+Nested hostname escapes, encoded scheme errors and malformed IPv6 fail-closed semantics passed
+Port serialization rejects 12 malformed values and preserves valid values
+All 10 AJV v8 branches passed without network or remote schema loading
+```
+
+Caller-relative imports and schema validation passed on AJV **8.18.0** under
+`@angular-devkit/core` and `@nestjs/schematics`, and AJV **8.20.0** under
+`@modelcontextprotocol/sdk`, `@nestjs/cli`, `@prisma/streams-local`, `ajv-formats`,
+`conf`, `minimizer-webpack-plugin`, `terser-webpack-plugin` and `webpack`.
+Each caller resolved the same root fast-uri module. Each compiled preloaded
+synthetic schemas with `$id`, a relative external `$ref`, local fragment refs,
+escaped JSON Pointer keys and percent-encoded definition names; accepted valid
+data; rejected invalid values; and preserved missing-reference failures. Root
+AJV 6 is a separate branch, not claimed to use fast-uri. No fixture URI was
+fetched, and no remote schema loader or customer data was used.
+
+### Repository verification and limits
+
+| Check                                         | Exit | Real result                                                                                                                          |
+| --------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Offline URI/AJV fixture                       | 0    | all ten AJV branches and bounded URI cases passed                                                                                    |
+| `npm run ops:check`                           | 0    | all 26 test invocations passed, **2857 tests**, zero failures; final launch/dossier suite `tests 182`, `pass 182`, `fail 0`          |
+| Audit wrapper tests within aggregate          | 0    | `tests 51`, `pass 51`, `fail 0`                                                                                                      |
+| `npm audit --omit=dev --audit-level=critical` | 0    | `28 vulnerabilities (8 moderate, 20 high)`                                                                                           |
+| `npm run ops:audit`                           | 0    | `Production dependency security audit passed (0 critical vulnerabilities)`                                                           |
+| `npm run lint`                                | 0    | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"` completed                                       |
+| `npm run typecheck`                           | 0    | shared build and all three workspace typechecks completed; Prisma client 7.9.1 generated                                             |
+| `npm run build` permitted rerun               | 0    | `Compiled successfully in 4.8s`; `Generating static pages using 7 workers (22/22)`; server `prisma generate && nest build` completed |
+| Prettier prompt/lockfile check                | 0    | `All matched files use Prettier code style!`                                                                                         |
+| `git diff --check`                            | 0    | no output                                                                                                                            |
+
+The first restricted build exited **1** with `Error: Could not parse output
+from TypeScript's --showConfig.` The unchanged permitted rerun passed. Initial
+restricted npm requests failed with `getaddrinfo EAI_AGAIN registry.npmjs.org`;
+permitted requests succeeded. A late restricted metadata request overwrote its
+temporary output; a fresh distinct file was retrieved and validated before
+integrity checks. Neither failed metadata nor transport failure was treated as
+a clean audit. No automatic approval rejection occurred.
+
+The operations aggregate exercised existing synthetic/local fixture suites and
+scanner checks, not live production acceptance. No server e2e, browser journey,
+real database drill, Node 24 compatibility run, deployment or production traffic
+was performed for this lock-only change.
+
+### Complete audit comparison and residual work
+
+Fresh complete before/after production audit retrieval both exited **1** for
+noncritical findings. Comparison removes **fast-uri only**, adds no finding,
+and changes totals **29 → 28**, high **21 → 20**, moderate **8 → 8**, with zero
+critical throughout. Every retained finding object was unchanged except
+`@graphql-tools/utils.fixAvailable`, whose registry recommendation changed from
+Apollo Server 5.5.1 to Nest GraphQL 14.0.3; its advisory, range and paths stayed
+identical. The policy gate and wrapper both exited **0**, as did the wrapper
+inside the aggregate.
+
+Residual high packages are `@apollo/server`, `@graphql-tools/merge`,
+`@graphql-tools/schema`, `@graphql-tools/utils`, `@modelcontextprotocol/sdk`,
+`@nestjs/apollo`, `@nestjs/graphql`, `@prisma/config`, `@ts-morph/common`,
+`brace-expansion`, `braces`, `deepmerge-ts`, `fast-glob`, `micromatch`, `mysql2`,
+`prisma`, `shadcn`, `sharp`, `ts-morph` and `undici`. Residual moderate packages
+are `@apollo/server-plugin-landing-page-graphql-playground`, `body-parser`,
+`express`, `hono`, `ip-address`, `postcss-selector-parser`, `qs` and `uuid`.
+Full advisory/path objects, logs and fixtures remain disposable `/tmp` evidence
+outside git. Counts reflect this execution, not future registry state.
+
+Prompt 201, Phase 12 exit and operator sign-offs remain open. Rollback is a
+reviewed normal revert of the lock repair, preserving retained evidence and
+reassessing exposure before deployment. No suppression, push or live action.
+
+Safe inspection from repository root:
+
+```bash
+npm ls fast-uri --all
+npm run ops:audit
+```
+
+Independent implementation review found no critical, important or minor
+issues. The reviewer independently checked the complete lock and audit
+comparisons and reran the semantic fixture with its temporary-file write
+removed. No review-led implementation change was required.
