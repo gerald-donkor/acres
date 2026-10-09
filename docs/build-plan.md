@@ -2450,3 +2450,22 @@ online audit gate omitted pending explicit disclosure authorization.
 `docs/operations.md` Prompt 290 records restrictions, provenance, actual
 results and normal-revert rollback. Other advisories, prompt 201, operator
 sign-offs and Phase 12 exit remain open; no push or live acceptance.
+
+**Prompt 291 — Prisma mysql2 dependency repair (2026-10-09):** scoped root
+`prisma@7.9.1` override repairs its exact mysql2 3.15.3 pin to stable **3.24.5**.
+Only four lock nodes change: mysql2, new sql-escaper 1.5.2, removed seq-queue
+and sqlstring; all other resolutions stay unchanged and satisfy updated ranges.
+Remove the exception when supported Prisma supplies a safe mysql2 itself.
+Registry integrity, clean-install lock hash, real-library SQL/hostile-object/
+IPv6/lazy-pool and sync/async bounded-inflate fixtures passed. Prisma
+version/generate/validate, contracts, lint, typecheck, permitted build (**22/22**
+pages), selected formatting and diff checks passed. Independent review found
+no findings. All **32 independent offline operations stages** passed (**26 suite
+invocations / 2857 tests**, final **182/182**); online npm audit remains omitted
+pending explicit dependency-metadata disclosure authorization. No fresh audit
+reduction or complete `ops:check` pass is claimed. `docs/operations.md` Prompt
+291 records exact outputs, closure, sandbox/fixture limits and rollback;
+`docs/backend.md` records the exception. The user's immediate-execution instruction
+is reflected in the `AGENTS.md` approval exception. PostgreSQL and routes remain
+unchanged. Phase 12, prompt 201, other advisories and operator sign-offs stay
+open; no push, deployment or live acceptance occurred.

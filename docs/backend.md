@@ -2956,3 +2956,25 @@ Nodemailer, leaving **32** findings (23 high, nine moderate, zero critical).
 advisories, integrity, audit comparison, command output, fixture/sandbox limits
 and reviewed-revert rollback. Residual advisories and operator launch gates
 remain open.
+
+### Prisma mysql2 dependency exception — prompt 291 (2026-10-09)
+
+The unchanged Prisma **7.9.1** declares exactly `mysql2 3.15.3`. Root
+`package.json` scopes an override to `prisma@7.9.1`, selecting **3.24.5**.
+The [maintainer changelog](https://github.com/sidorares/node-mysql2/blob/master/Changelog.md)
+records SQL object escaping hardening in 3.17.0 and bounded compressed-protocol
+inflation in 3.23.1; [GHSA-rgwj-5xj2-c3m3](https://github.com/advisories/GHSA-rgwj-5xj2-c3m3)
+affects <=3.23.0 and identifies 3.23.1 as patched. Remove this exception when a
+supported Prisma release supplies a safe mysql2 dependency itself.
+
+Acres continues using PostgreSQL through `@prisma/adapter-pg`; no MySQL
+connection or route was added. Transitive installation does not establish
+customer exposure to the MySQL protocol. The npm-generated lock repair adds
+`sql-escaper 1.5.2` and removes unneeded `seq-queue`/`sqlstring`. Existing
+resolutions satisfy every updated dependency minimum and the Node types peer.
+Clean install preserved the lock hash; Prisma version/generation/validation,
+contracts, typecheck and production build passed. Disposable real-library
+fixtures passed SQL formatting (including hostile object input), IPv6 URI,
+lazy callback/promise pools, and synchronous/asynchronous bounded decompression.
+`docs/operations.md` Prompt 291 records the complete checks and audit limits.
+Rollback reverts the root manifest and lockfile together after exposure review.

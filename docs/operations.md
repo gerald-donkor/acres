@@ -6128,3 +6128,118 @@ Inspect installed version from repository root:
 ```bash
 npm ls undici --all
 ```
+
+## Prompt 291 — repair Prisma's mysql2 dependency (2026-10-09)
+
+Root `package.json` scopes a **mysql2 3.24.5** override to unchanged
+**prisma@7.9.1**, which pins mysql2 exactly at 3.15.3. Remove the exception
+when a supported Prisma version supplies a safe mysql2 itself. The
+[maintainer changelog](https://github.com/sidorares/node-mysql2/blob/master/Changelog.md)
+records SQL object escaping hardening in 3.17.0 and compressed-protocol
+inflation bounds in 3.23.1. [GHSA-rgwj-5xj2-c3m3](https://github.com/advisories/GHSA-rgwj-5xj2-c3m3)
+affects <=3.23.0, with 3.23.1 patched. The selected
+[3.24.5 release](https://github.com/sidorares/node-mysql2/releases/tag/v3.24.5)
+includes these fixes and the subsequent IPv6 URI correction. Acres remains on
+PostgreSQL; the dependency's presence does not prove exposed MySQL traffic.
+
+### Provenance and exact dependency closure
+
+Public npm metadata verified MIT, Node >=8, and `@types/node >=8` peer.
+The tarball is `https://registry.npmjs.org/mysql2/-/mysql2-3.24.5.tgz` with
+registry/lock integrity:
+
+```text
+sha512-X6Ujsr2QSkkLpkQGjxzpKRAPn9nu4axpR63ntBzquFVEvPOArgbUQ1sJjFKI7hnaYtiVZxa17Z7q18KSubW0IQ==
+```
+
+An initial `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`
+left the old node unchanged; `npm ls` correctly rejected its override mismatch.
+Targeted `npm update mysql2 --package-lock-only --ignore-scripts --no-audit
+--no-fund` then regenerated the required closure. Full node comparison found
+exactly four changed entries: mysql2 3.15.3 → 3.24.5, added sql-escaper 1.5.2,
+removed seq-queue 0.0.5 and sqlstring 2.3.3. No other lock node changed.
+Denque remains for ioredis. Already-installed aws-ssl-profiles 1.1.2,
+iconv-lite 0.7.3, long 5.3.2, lru.min 1.1.4, named-placeholders 1.1.6 and
+generate-function 2.3.1 satisfy updated minimums unchanged. Caller-relative
+Node types 20.19.43 satisfies the >=8 peer; no Node runtime change follows.
+
+### Compatibility and actual verification
+
+Toolchain: Node v26.11.0, npm 11.20.0. Clean install printed
+`added 1478 packages in 26s`; SHA-256 verification printed
+`package-lock.json: OK`. Existing install-script approval restrictions remain
+in force. `npm ls mysql2 --all` exited 0 with Prisma 7.9.1 and mysql2 3.24.5
+both labelled `overridden`.
+
+Disposable fixtures used real Prisma-relative mysql2 exports and inspected
+installed compression implementation. Assertions cover escaped quotes,
+identifiers, arrays, ordinary placeholders, hostile objects stringified outside
+SET context, supported SET objects, IPv6 URI and default multiple-statement
+exclusion, and lazy callback/promise pool closure without network connections.
+Four small in-memory compressed-payload cases prove synchronous/asynchronous
+success and rejection above the declared inflate length (`ERR_BUFFER_TOO_LARGE`),
+with a two-second timeout per case. Actual output:
+
+```text
+PASS: Prisma-relative mysql2 3.24.5; CJS/promise; SQL escaping and hostile object handling; IPv6 URI; lazy pools; sync/async bounded compression (4 cases)
+PASS: exactly four lock nodes changed; mysql2 integrity matches registry
+```
+
+A supplemental disposable dependency-range probe initially stopped at `long`
+because it read the UMD directory's nameless package metadata instead of the
+owning package. Corrected traversal requires the matching package name; all
+seven dependency ranges and the Node types peer then passed. No runtime source
+or dependency version changed to address this fixture error.
+
+| Command/check                                            | Exit | Actual result                                                               |
+| -------------------------------------------------------- | ---- | --------------------------------------------------------------------------- |
+| `npm ci --no-audit --no-fund`                            | 0    | `added 1478 packages in 26s`; lock hash unchanged                           |
+| `npm ls mysql2 --all`                                    | 0    | `mysql2@3.24.5 overridden` under Prisma 7.9.1                               |
+| Real-library semantic fixtures                           | 0    | PASS output above                                                           |
+| `npm exec --workspace=@acres/server -- prisma --version` | 0    | `prisma : 7.9.1`, `@prisma/client : 7.9.1`                                  |
+| `npm exec --workspace=@acres/server -- prisma validate`  | 0    | `The schema at prisma/schema.prisma is valid`                               |
+| `npm run lint`                                           | 0    | all three workspace ESLint commands completed without diagnostics           |
+| `npm run typecheck`                                      | 0    | all three workspaces completed; `Generated Prisma Client (7.9.1)`           |
+| `npm run contracts:check`                                | 0    | contract generation/check completed without drift                           |
+| Permitted `npm run build`                                | 0    | `Compiled successfully in 3.9s`; static pages `22/22`; Nest build completed |
+| Selected Prettier check                                  | 0    | `All matched files use Prettier code style!`                                |
+| `git diff --check`                                       | 0    | no whitespace diagnostics                                                   |
+
+The first sandbox build failed with `Could not parse output from TypeScript's
+--showConfig`; the unchanged permitted rerun passed. The first sandbox offline
+operations run stopped in `ops:templates-test` with a test subprocess failure;
+no assertion reason was emitted. The permitted rerun supplies the operations
+results below, without attributing that first subprocess failure to this repair.
+
+Independent read-only review found no Critical, Important or Minor findings.
+It verified the exact override, closure, registry integrity, all parent/peer
+ranges, real compression fixtures, upstream claims and explicit user-authorized
+immediate-execution workflow exception in `AGENTS.md`.
+
+All 32 independent offline operations stages exited **0**, with **26 test-suite
+invocations / 2857 tests / zero failures**. The audit-wrapper group reported
+`tests 51`, `pass 51`, `fail 0`; the final launch/dossier group reported
+`tests 182`, `pass 182`, `fail 0`. The runner printed:
+
+```text
+All 32 independent offline operations stages passed; online audit gate was not run
+```
+
+### Limits, remaining work and rollback
+
+Online npm audit metadata disclosure remains pending explicit user
+authorization. No fresh audit, before/after finding reduction, or complete
+`ops:check` pass is claimed. Baseline manifest/lock and logs remain disposable
+`/tmp/acres-291` evidence. Historical residual advisories, including braces
+whose public latest release remains 3.0.3 at verification time, require separate
+triage; no unverified patched version or fork was substituted.
+
+Phase 12, prompt 201, operator sign-offs and other dependency findings remain
+open. No push, deployment, live SMTP/MySQL/production acceptance, real database
+or browser journey occurred; local Node 26 checks do not prove Node 24 runtime
+acceptance. Rollback is a reviewed normal revert of root manifest and lockfile
+together with exposure reassessed before deployment. Inspect from repository root:
+
+```bash
+npm ls mysql2 --all
+```

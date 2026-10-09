@@ -365,6 +365,9 @@ For every implementation request:
    and state the assumption.
 7. **Write a prompt file in `prompts/`** per the contract in §5. Plan and detail every step, measurement, dependency, and file change thoroughly so implementation and execution are straightforward and unambiguous.
 8. Ask exactly: `I prepared the implementation prompt at prompts/<file-name>.md. Is this good to execute?`
+   If the user explicitly instructs execution immediately after writing the
+   prompt, that instruction supplies approval for the current task; write and
+   re-read the prompt, then execute without asking this question again.
 9. **On approval, re-read the approved prompt file and implement it strictly.**
    A standalone `y` or `Y` executes the prompt identified by the immediately
    preceding approval request, as defined by the phase-control protocol below.
@@ -451,6 +454,9 @@ Committed phase N
 
 `P` is outside prompt execution: `y`/`Y` never chains into a push, and `P`
 never creates, approves, executes, reviews, documents, or commits a prompt.
+
+The explicit immediate-execution exception in §2 step 8 also applies when the
+user follows `i` / `I` with an instruction to implement the prepared prompt.
 
 ### Resolving the next build unit for `i` / `I`
 
