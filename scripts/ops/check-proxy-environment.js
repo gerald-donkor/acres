@@ -14,19 +14,59 @@ const CADDY_KEYS = [
   'ACRES_OBJECT_DIAL_TIMEOUT',
 ];
 
+const CANDIDATE_PLACEHOLDER =
+  /(?:\$(?:\{|\{?\$)[ \t]*|\{[ \t]*\$?[ \t]*)([A-Z][A-Z0-9_]*)\b[^}\r\n]*\}?/g;
+
 function checkProxyEnvironment(compose, caddyfile) {
-  const errors = [];
-  const placeholders = new Set([...caddyfile.matchAll(/\{\$([A-Z][A-Z0-9_]*)\}/g)].map((match) => match[1]));
-  for (const key of CADDY_KEYS) {
-    if (!placeholders.has(key)) errors.push(`Caddyfile missing ${key} placeholder`);
+  if (typeof caddyfile !== 'string') {
+    return ['Caddyfile must be text'];
   }
-  for (const key of placeholders) {
-    if (!CADDY_KEYS.includes(key)) errors.push(`Caddyfile has unexpected ${key} placeholder`);
+  if (!compose || typeof compose !== 'object' || Array.isArray(compose)) {
+    return ['compose must be an object'];
+  }
+
+  const errors = [];
+  const cleanCaddyfile = caddyfile.replace(/^\uFEFF/, '');
+  const canonicalCounts = new Map();
+  const totalCounts = new Map();
+  const ambiguous = new Set();
+  const unexpected = new Set();
+
+  for (const match of cleanCaddyfile.matchAll(CANDIDATE_PLACEHOLDER)) {
+    const token = match[0];
+    const key = match[1];
+    totalCounts.set(key, (totalCounts.get(key) || 0) + 1);
+    if (token === `{$${key}}`) {
+      canonicalCounts.set(key, (canonicalCounts.get(key) || 0) + 1);
+    } else {
+      ambiguous.add(key);
+    }
+    if (!CADDY_KEYS.includes(key)) {
+      unexpected.add(key);
+    }
+  }
+
+  for (const key of CADDY_KEYS) {
+    const total = totalCounts.get(key) || 0;
+    const canonical = canonicalCounts.get(key) || 0;
+    if (canonical === 0) {
+      errors.push(`Caddyfile missing ${key} placeholder`);
+    } else if (canonical > 1 || total > 1) {
+      errors.push(`Caddyfile must define ${key} placeholder exactly once`);
+    }
+  }
+
+  for (const key of ambiguous) {
+    errors.push(`Caddyfile has an ambiguous ${key} placeholder`);
+  }
+
+  for (const key of unexpected) {
+    errors.push(`Caddyfile has unexpected ${key} placeholder`);
   }
 
   for (const name of ['caddy', 'next']) {
     const service = compose?.services?.[name];
-    if (!service || typeof service !== 'object') {
+    if (!service || typeof service !== 'object' || Array.isArray(service)) {
       errors.push(`compose missing ${name} service`);
       continue;
     }
@@ -44,8 +84,11 @@ function checkProxyEnvironment(compose, caddyfile) {
     for (const key of expected) {
       if (!Object.hasOwn(environment, key)) {
         errors.push(`${name} missing environment key ${key}`);
-      } else if (name === 'caddy' && !new RegExp(`^\\$\\{${key}:\\?[^}]+\\}$`).test(environment[key])) {
-        errors.push(`${name} must require ${key} from the matching Compose input`);
+      } else if (name === 'caddy') {
+        const val = environment[key];
+        if (typeof val !== 'string' || !new RegExp(`^\\$\\{${key}:\\?[^}]+\\}$`).test(val)) {
+          errors.push(`${name} must require ${key} from the matching Compose input`);
+        }
       }
     }
     if (name === 'next') {
@@ -55,7 +98,7 @@ function checkProxyEnvironment(compose, caddyfile) {
       }
     }
   }
-  return errors;
+  return [...new Set(errors)];
 }
 
 module.exports = { checkProxyEnvironment };

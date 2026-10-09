@@ -7016,3 +7016,41 @@ Safe inspection from the repository root:
 node --test scripts/ops/check-application-environment.spec.js
 npm run ops:templates
 ```
+
+## Prompt 301 — harden proxy environment and Caddyfile placeholder validation (2026-10-09)
+
+The pure `checkProxyEnvironment` helper in `scripts/ops/check-proxy-environment.js`
+exports one function and returns static, value-free error strings. It validates that `caddyfile`
+is text (`Caddyfile must be text`) and `compose` is an object (`compose must be an object`),
+preventing unhandled runtime TypeErrors. It strips an optional leading UTF-8 Byte Order Mark (`\uFEFF`),
+and scans placeholders with a candidate regex
+(`/(?:\$(?:\{|\{?\$)[ \t]*|\{[ \t]*\$?[ \t]*)([A-Z][A-Z0-9_]*)\b[^}\r\n]*\}?/g`)
+that recognizes canonical Caddy syntax (`{$KEY}`), ambiguous variants (`${KEY}`, `{$ KEY}`,
+`{$KEY }`, `{$KEY:fallback}`, `{$KEY=fallback}`, `{KEY}`, and unclosed braces at line end),
+and unexpected placeholders.
+
+Ambiguous placeholders are recorded and reported as `Caddyfile has an ambiguous ${key} placeholder`
+without reflecting candidate values. The helper tracks both canonical counts and total occurrences
+across all syntax forms: if a required placeholder in `CADDY_KEYS` is defined canonically zero times,
+it reports `Caddyfile missing ${key} placeholder`; if defined canonically more than once or if
+multiple occurrences exist across canonical and ambiguous lines, it enforces
+`Caddyfile must define ${key} placeholder exactly once`. Unexpected placeholders emit
+`Caddyfile has unexpected ${key} placeholder`. Compose service inspection guards against array-typed
+services (`compose missing ${name} service`) and guarantees `typeof val === 'string'` on `caddy`
+environment values before regex testing. All existing Compose topology, service mapping, private API origin,
+and `caddy`/`next` environment checks remain strictly enforced, returning deduplicated diagnostics (`[...new Set(errors)]`).
+
+Verification: `check-proxy-environment.spec.js` expanded from 10 to 25 tests covering type validation,
+BOM stripping, comment retention, duplicate placeholders, ambiguous syntax variants, unexpected placeholders,
+array-typed services, non-string environment values, and value non-reflection. `npm run ops:templates-test`
+passed 383/383 tests; `npm run ops:templates` printed `ops template check passed`; `npm run ops:check` passed
+all 32 independent operations stages (26 suite invocations / 2879 tests / zero failures, final launch/dossier 182/182);
+lint, typecheck, production build (22/22 pages), and diff checks passed cleanly. Category 1 live ingress and
+Phase 12 exit remain open. Rollback is a reviewed normal revert.
+
+Safe inspection from the repository root:
+
+```bash
+node --test scripts/ops/check-proxy-environment.spec.js
+npm run ops:templates
+```

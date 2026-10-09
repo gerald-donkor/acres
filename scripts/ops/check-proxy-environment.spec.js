@@ -71,3 +71,150 @@ test('comments about old injection do not affect parsed assignments', () => {
   const changed = yaml.load(`${composeText}\n# caddy and next once used env_file\n`);
   assert.deepEqual(checkProxyEnvironment(changed, caddyfile), []);
 });
+
+test('non-string caddyfile input returns a fixed diagnostic', () => {
+  for (const invalid of [null, undefined, 42, {}, true]) {
+    assert.deepEqual(checkProxyEnvironment(compose(), invalid), [
+      'Caddyfile must be text',
+    ]);
+  }
+});
+
+test('non-object compose input returns a fixed diagnostic', () => {
+  for (const invalid of [null, undefined, 'compose', [], 123]) {
+    assert.deepEqual(checkProxyEnvironment(invalid, caddyfile), [
+      'compose must be an object',
+    ]);
+  }
+});
+
+test('Caddyfile with leading UTF-8 BOM passes cleanly', () => {
+  assert.deepEqual(checkProxyEnvironment(compose(), '\uFEFF' + caddyfile), []);
+});
+
+test('duplicate canonical placeholder is rejected with exact requirement', () => {
+  const duplicated = `${caddyfile}\n{$ACRES_TLS_CONTACT_EMAIL}\n`;
+  assert.deepEqual(checkProxyEnvironment(compose(), duplicated), [
+    'Caddyfile must define ACRES_TLS_CONTACT_EMAIL placeholder exactly once',
+  ]);
+});
+
+test('ambiguous Bash-style ${KEY} placeholder is rejected with missing and ambiguous errors', () => {
+  const replaced = caddyfile.replace(
+    '{$ACRES_TLS_CONTACT_EMAIL}',
+    '${ACRES_TLS_CONTACT_EMAIL}',
+  );
+  assert.deepEqual(checkProxyEnvironment(compose(), replaced), [
+    'Caddyfile missing ACRES_TLS_CONTACT_EMAIL placeholder',
+    'Caddyfile has an ambiguous ACRES_TLS_CONTACT_EMAIL placeholder',
+  ]);
+});
+
+test('ambiguous placeholder with leading whitespace is rejected', () => {
+  const replaced = caddyfile.replace(
+    '{$ACRES_TLS_CONTACT_EMAIL}',
+    '{$ ACRES_TLS_CONTACT_EMAIL}',
+  );
+  assert.deepEqual(checkProxyEnvironment(compose(), replaced), [
+    'Caddyfile missing ACRES_TLS_CONTACT_EMAIL placeholder',
+    'Caddyfile has an ambiguous ACRES_TLS_CONTACT_EMAIL placeholder',
+  ]);
+});
+
+test('ambiguous placeholder with trailing whitespace is rejected', () => {
+  const replaced = caddyfile.replace(
+    '{$ACRES_TLS_CONTACT_EMAIL}',
+    '{$ACRES_TLS_CONTACT_EMAIL }',
+  );
+  assert.deepEqual(checkProxyEnvironment(compose(), replaced), [
+    'Caddyfile missing ACRES_TLS_CONTACT_EMAIL placeholder',
+    'Caddyfile has an ambiguous ACRES_TLS_CONTACT_EMAIL placeholder',
+  ]);
+});
+
+test('ambiguous placeholder with default colon is rejected without reflecting default value', () => {
+  const sentinel = 'operator-secret-fallback@example.com';
+  const replaced = caddyfile.replace(
+    '{$ACRES_TLS_CONTACT_EMAIL}',
+    `{$ACRES_TLS_CONTACT_EMAIL:${sentinel}}`,
+  );
+  const errors = checkProxyEnvironment(compose(), replaced);
+  assert.deepEqual(errors, [
+    'Caddyfile missing ACRES_TLS_CONTACT_EMAIL placeholder',
+    'Caddyfile has an ambiguous ACRES_TLS_CONTACT_EMAIL placeholder',
+  ]);
+  assert.equal(errors.join(' ').includes(sentinel), false);
+});
+
+test('ambiguous placeholder with default equals is rejected without reflecting default value', () => {
+  const sentinel = 'secret-domain-value.net';
+  const replaced = caddyfile.replace(
+    '{$ACRES_PRODUCTION_DOMAIN}',
+    `{$ACRES_PRODUCTION_DOMAIN=${sentinel}}`,
+  );
+  const errors = checkProxyEnvironment(compose(), replaced);
+  assert.deepEqual(errors, [
+    'Caddyfile missing ACRES_PRODUCTION_DOMAIN placeholder',
+    'Caddyfile has an ambiguous ACRES_PRODUCTION_DOMAIN placeholder',
+  ]);
+  assert.equal(errors.join(' ').includes(sentinel), false);
+});
+
+test('ambiguous placeholder missing dollar sign is rejected', () => {
+  const replaced = caddyfile.replace(
+    '{$ACRES_TLS_CONTACT_EMAIL}',
+    '{ACRES_TLS_CONTACT_EMAIL}',
+  );
+  assert.deepEqual(checkProxyEnvironment(compose(), replaced), [
+    'Caddyfile missing ACRES_TLS_CONTACT_EMAIL placeholder',
+    'Caddyfile has an ambiguous ACRES_TLS_CONTACT_EMAIL placeholder',
+  ]);
+});
+
+test('unclosed placeholder at line end is rejected', () => {
+  const replaced = caddyfile.replace(
+    '{$ACRES_TLS_CONTACT_EMAIL}',
+    '{$ACRES_TLS_CONTACT_EMAIL',
+  );
+  assert.deepEqual(checkProxyEnvironment(compose(), replaced), [
+    'Caddyfile missing ACRES_TLS_CONTACT_EMAIL placeholder',
+    'Caddyfile has an ambiguous ACRES_TLS_CONTACT_EMAIL placeholder',
+  ]);
+});
+
+test('coexisting canonical and ambiguous placeholder triggers duplicate error and ambiguity diagnostic', () => {
+  const duplicated = `${caddyfile}\nemail \${ACRES_TLS_CONTACT_EMAIL}\n`;
+  assert.deepEqual(checkProxyEnvironment(compose(), duplicated), [
+    'Caddyfile must define ACRES_TLS_CONTACT_EMAIL placeholder exactly once',
+    'Caddyfile has an ambiguous ACRES_TLS_CONTACT_EMAIL placeholder',
+  ]);
+});
+
+test('unexpected placeholder is rejected without reflecting private values', () => {
+  const modified = `${caddyfile}\n{$ACRES_CUSTOM_INSPECTION_TOKEN}\n`;
+  assert.deepEqual(checkProxyEnvironment(compose(), modified), [
+    'Caddyfile has unexpected ACRES_CUSTOM_INSPECTION_TOKEN placeholder',
+  ]);
+});
+
+test('array-typed service in Compose is rejected as missing service', () => {
+  const changed = compose();
+  changed.services.caddy = [];
+  assert.deepEqual(checkProxyEnvironment(changed, caddyfile), [
+    'compose missing caddy service',
+  ]);
+});
+
+test('non-string caddy environment values are rejected gracefully', () => {
+  const changedNull = compose();
+  changedNull.services.caddy.environment.ACRES_API_READ_TIMEOUT = null;
+  assert.deepEqual(checkProxyEnvironment(changedNull, caddyfile), [
+    'caddy must require ACRES_API_READ_TIMEOUT from the matching Compose input',
+  ]);
+
+  const changedNum = compose();
+  changedNum.services.caddy.environment.ACRES_API_READ_TIMEOUT = 12345;
+  assert.deepEqual(checkProxyEnvironment(changedNum, caddyfile), [
+    'caddy must require ACRES_API_READ_TIMEOUT from the matching Compose input',
+  ]);
+});

@@ -2639,3 +2639,15 @@ Spec expanded to 34/34 tests; templates **368/368**; `ops:templates`, `ops:check
 offline operations stages / 26 suite invocations / 2879 tests / zero failures**, final launch/dossier
 **182/182**), lint, typecheck, build (**22/22** pages), and diff checks passed. Prompt 201,
 Category 4 live sign-off and Phase 12 exit remain open. Independent read-only review found no issues.
+
+**Prompt 301 — harden proxy environment and Caddyfile placeholder validation (2026-10-09):**
+The Stage 1 pure validator in `scripts/ops/check-proxy-environment.js` now validates inputs
+(`Caddyfile must be text`, `compose must be an object`), strips UTF-8 BOM, detects and rejects
+ambiguous placeholder syntax (`${KEY}`, whitespace inside braces, fallback defaults, missing dollar,
+unclosed braces), requires one canonical placeholder per `CADDY_KEYS` key, rejects duplicates,
+validates Compose service arrays and non-string environment values defensively, and returns value-free
+deduplicated diagnostics. The production reference passes unchanged. Spec expanded to 25/25 tests;
+templates **383/383**; `ops:templates`, `ops:check` (**32 independent offline operations stages / 26
+suite invocations / 2879 tests / zero failures**, final launch/dossier **182/182**), lint, typecheck,
+build (**22/22** pages), and diff checks passed. Prompt 201, Category 1 live ingress sign-off and
+Phase 12 exit remain open. Independent read-only review found no issues.
