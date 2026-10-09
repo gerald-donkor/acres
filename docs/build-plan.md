@@ -2523,3 +2523,22 @@ dependency-metadata disclosure restriction; no fresh audit reduction or complete
 exact outputs, fixture corrections, environment limits and normal-revert rollback.
 Phase 12, prompt 201, other advisories and operator sign-offs remain open;
 no push, deployment, real database/browser or live acceptance occurred.
+
+**Prompt 295 — deepmerge-ts lock synchronization (2026-10-09):** targeted
+npm-generated one-node lock repair **7.1.5 → 8.0.2** makes the installed Prisma
+7.9.1 caller satisfy the existing root ^8.0.0 override. Manifests, overrides,
+Prisma versions and all other nodes remain unchanged. Public metadata, clean
+install hash, valid caller tree, ordinary/custom/Map/Set/into semantics,
+prototype safety, eight bounded recursive cases and actual Prisma config
+normalization/error handling pass. Prisma schema validation, contracts, lint,
+typecheck, permitted build (**22/22** pages), formatting and diff checks pass.
+All **32 independent offline operations stages** pass (**26 suite invocations /
+2857 tests / zero failures**, final **182/182**). Independent read-only review
+found no issues. Sandbox child-test and Next --showConfig failures resolved
+with unchanged permitted runs. Online audit remains omitted under the existing
+metadata-disclosure restriction; no fresh count reduction or complete ops:check
+pass is claimed. `docs/operations.md` Prompt 295 records provenance, exact
+outputs, compatibility, environment limits and rollback; `docs/backend.md`
+records the existing override's synchronization/removal contract. Braces has
+no planning-time published fix. Phase 12, prompt 201, residual advisories and
+operator sign-offs stay open; no push, deployment or live acceptance occurred.

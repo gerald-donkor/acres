@@ -2978,3 +2978,21 @@ fixtures passed SQL formatting (including hostile object input), IPv6 URI,
 lazy callback/promise pools, and synchronous/asynchronous bounded decompression.
 `docs/operations.md` Prompt 291 records the complete checks and audit limits.
 Rollback reverts the root manifest and lockfile together after exposure review.
+
+## deepmerge-ts override synchronization — prompt 295
+
+The existing root `deepmerge-ts: ^8.0.0` override now resolves **8.0.2** in the
+lockfile, replacing invalid/vulnerable 7.1.5. Prisma and @prisma/config stay
+**7.9.1**; the latter still declares exact 7.1.5 upstream. Remove the override
+when supported Prisma resolves a safe release itself, after compatibility review.
+No new override or major-version decision was introduced in prompt 295.
+
+This crosses the upstream declared major: v8 adds cycle handling, changes deep
+Map merging and merge-into input alias mutation, and renames some TypeScript
+utility types. Prisma uses the plain `deepmerge` export as c12's config merger,
+not the renamed custom types or FastUnsafe APIs. Bounded ordinary/custom/Map/Set/
+into and eight recursive fixtures pass, as do actual config loading and errors,
+Prisma validate/generate, contract checks, repository typecheck and build.
+These checks support the exercised config path, not arbitrary external configs
+or production/database acceptance. `docs/operations.md` Prompt 295 owns metadata,
+actual outputs, offline operations results, audit restrictions and rollback.

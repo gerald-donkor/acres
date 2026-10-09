@@ -6543,3 +6543,105 @@ Inspect from the repository root:
 ```bash
 npm ls qs express body-parser --all
 ```
+
+## Prompt 295 — repair deepmerge-ts lock resolution (2026-10-09)
+
+The existing root `deepmerge-ts: ^8.0.0` override was inconsistent with the
+locked and installed **7.1.5** resolution. `npm ls` reported ELSPROBLEMS on
+Prisma 7.9.1 → @prisma/config 7.9.1 → deepmerge-ts. Targeted npm lock generation
+synchronizes that existing decision to **8.0.2**. No manifest, override, Prisma
+version, application source, schema, route or scanner policy changed.
+
+The [maintainer advisory](https://github.com/RebeccaStevens/deepmerge-ts/security/advisories/GHSA-ggr8-5vv4-36mx)
+(CVE-2026-40345) identifies releases before 8.0.0 as vulnerable to stack exhaustion
+when merging recursive object graphs. This repairs an inventory exposure; no
+attacker-controlled Acres configuration path was established. Plain JSON alone
+does not produce recursive graphs. The actual Prisma loader dynamically imports
+`deepmerge` and passes it as c12's merger; application source does not directly
+import the library. See `backend.md` for the override compatibility/removal note.
+
+### Exact closure and reproducibility
+
+Exactly one lock node changes: `node_modules/deepmerge-ts`, **7.1.5 → 8.0.2**.
+Version, tarball URL, integrity, engine (`>=16.9.0`) and added upstream funding
+metadata match public registry metadata. BSD-3-Clause, no runtime dependencies,
+CJS/ESM exports and `devOptional: true` are preserved. Every other lock node,
+top-level lock field and workspace manifest remains unchanged. @prisma/config
+still declares exact 7.1.5 upstream; the existing root override governs resolution.
+
+Verified registry integrity:
+
+```text
+sha512-uqbvqLUMrc6p0MO+WBRtTxY55hmyh94WRwI5a++PZe54X+bfVh59FSN7uWCBCW1CCVjzjnrwzfI8zidE2obMMw==
+```
+
+`npm update deepmerge-ts --package-lock-only --ignore-scripts --no-audit --no-fund`
+printed `up to date in 646ms`. Clean `npm ci --no-audit --no-fund` on Node
+**v26.11.0**, npm **11.20.0** printed `added 1478 packages in 24s`; subsequent
+SHA-256 verification printed `package-lock.json: OK`. Existing deprecation and
+unapproved third-party install-script warnings remain; approvals were unchanged.
+The repaired `npm ls deepmerge-ts --all` exits 0 and shows 8.0.2 beneath Prisma.
+
+### Compatibility and actual checks
+
+The installed changelog identifies v8 changes to circular handling, deep Map
+value merging, merge-into input alias mutation and type names. Disposable
+real-library fixtures check ordinary nested records, arrays, undefined values,
+Sets/Maps, custom array replacement, input preservation, merge-into behavior,
+prototype safety and CJS/ESM export surfaces. Eight timeout-bounded subprocesses
+exercise self and mutual recursion through deepmerge, deepmergeCustom,
+deepmergeInto and deepmergeIntoCustom: all preserve merged fields and cycles
+without stack exhaustion. Prisma's real loadConfigFromFile normalizes a synthetic
+schema/migrations/datasource config and returns errors for missing/malformed
+files. No local secrets, network/database connection or large attack input is used.
+Final fixture output:
+
+```text
+PASS: one-node lock scope; registry metadata; Prisma caller; CJS/ESM; record/array/undefined/Map/Set/custom/into semantics; prototype safety; eight bounded recursive cases; actual Prisma config normalization and error handling
+```
+
+| check | exit | actual output/result |
+| --- | --- | --- |
+| Clean install/hash | 0 | `added 1478 packages in 24s`; `package-lock.json: OK` |
+| Caller tree and semantic/config fixtures | 0 | Valid 8.0.2 resolution and PASS above |
+| `npm run prisma:validate --workspace=@acres/server` | 0 | `The schema at prisma/schema.prisma is valid` |
+| `npm run contracts:check` | 0 | `Generated Prisma Client (7.9.1)`; contract drift check completes |
+| `npm run lint` | 0 | All three workspace ESLint commands complete without diagnostics |
+| `npm run typecheck` | 0 | All three workspace checks complete without diagnostics |
+| Permitted `npm run build` | 0 | `Compiled successfully in 3.4s`; pages `22/22`; Nest build completes |
+| Selected Prettier | 0 | `All matched files use Prettier code style!` |
+| `git diff --check` | 0 | No whitespace diagnostics |
+
+All **32 independent offline operations stages** passed, covering **26 suite
+invocations / 2857 tests / zero failures**, ending launch/dossier **182/182**.
+Runner output: `All 32 independent offline operations stages passed; online
+audit gate was not run`. Only ops:audit was omitted under the existing
+dependency-metadata disclosure restriction. No fresh audit reduction or complete
+ops:check pass is claimed. Gate thresholds and scanner policy are unchanged.
+
+### Review, execution limits and rollback
+
+Independent read-only review found no Critical, Important or Minor findings.
+It reproduced the valid caller tree and lock-scope comparison and inspected the
+fixtures, metadata and check logs. Feedback confirmed the recorded host and audit
+limits; no implementation correction was required.
+
+The initial sandbox operations run reported an opaque child-test failure in
+check-production-templates.spec.js; unchanged permitted execution passed all
+stages. The sandbox production build reported `Could not parse output from
+TypeScript's --showConfig.`; the unchanged permitted build passed. A review-only
+nested execSync scope check hit sandbox EPERM; direct comparison passed. These
+reruns did not alter tracked implementation. Temporary logs/fixtures under
+`/tmp/acres-295` are disposable evidence, not future prerequisites.
+
+Host checks do not establish Node 24, Docker, real database/server E2E, browser
+or production acceptance. Braces 3.0.3 has no published patched version in the
+planning-time public registry lookup; it remains unresolved, as do other
+advisories, prompt 201, operator sign-offs and Phase 12 exit. No push or deployment
+occurred. Rollback is a reviewed normal revert of the lock repair, restoring the
+known vulnerable/invalid resolution; reassess exposure before deployment.
+Inspect from the repository root:
+
+```bash
+npm ls deepmerge-ts --all
+```
