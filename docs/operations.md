@@ -6429,3 +6429,117 @@ deployment. Inspect from the repository root:
 ```bash
 npm ls postcss-selector-parser --all
 ```
+
+## Prompt 294 — patch qs security release (2026-10-09)
+
+The root lockfile repairs **qs 6.15.3 → 6.16.0**, following the
+[maintainer advisory](https://github.com/ljharb/qs/security/advisories/GHSA-4mjr-xmp4-gh2g)
+for CVE-2026-82417. The installed implementation checks callability before
+invoking constructor.isBuffer. This repairs a dependency inventory exposure;
+an exploitable Acres request-to-stringify path was not established. Application
+routes, parser settings, authentication, schemas and production controls are unchanged.
+
+### Exact closure and reproducibility
+
+Exactly three existing lock nodes change; no manifest, override or unrelated
+resolution changes:
+
+| lock node                                              | before | after  | reason                            |
+| ------------------------------------------------------ | ------ | ------ | --------------------------------- |
+| `node_modules/qs`                                      | 6.15.3 | 6.16.0 | Maintainer security repair        |
+| `node_modules/@apollo/server/node_modules/express`     | 4.22.2 | 4.22.3 | Upstream patch accepts qs ~6.16.0 |
+| `node_modules/@apollo/server/node_modules/body-parser` | 1.20.6 | 1.20.8 | Upstream patch accepts qs ~6.16.0 |
+
+The two old parents restricted qs to ~6.15.1. Their new releases avoid an
+override. Express also raises its path-to-regexp declaration from ~0.1.12 to
+~0.1.13; the already locked 0.1.13 node needs no change. All other dependency
+ranges, engines and licenses are preserved. qs remains BSD-3-Clause, the parents
+MIT. Express 5.2.1, body-parser 2.3.0 and superagent 10.3.0 remain unchanged.
+
+Targeted `npm update qs express body-parser --package-lock-only --ignore-scripts
+--no-audit --no-fund` printed `up to date in 793ms`. It updated the parents and
+temporarily added a nested repaired qs while keeping the root copy. A second
+targeted `npm update qs --package-lock-only --ignore-scripts --no-audit --no-fund`
+printed `up to date in 683ms`, updated root qs and removed the temporary duplicate.
+The final diff contains only the three nodes above, with no added/removed nodes.
+
+All three tarball URLs, integrities, dependency maps, engines and licenses match
+public registry release metadata. Verified SHA-512 integrities:
+
+```text
+qs@6.16.0
+sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==
+express@4.22.3
+sha512-Bdcs4+3qlpVlx2NRn6fgX2Ue2/gGRaPeawebgclM0ERSCqDpA+owF1fdPwjJUTAJWMTuAaxjDf+hzb0/4eKvvw==
+body-parser@1.20.8
+sha512-JNcyFQ64OiijEkPzUBTCe+hyPXUD/3LEldGQ6iF5LR1w00mx9o7xtDWHXBY2iItjdCFGoilOLNQbH943ut7pHA==
+```
+
+`npm ci --no-audit --no-fund` on Node **v26.11.0**, npm **11.20.0** printed
+`added 1478 packages in 24s`; hash verification printed `package-lock.json: OK`.
+Existing install-script approvals/restrictions and deprecation warnings remain.
+`npm ls qs express body-parser --all` exits 0, with all five caller edges using
+one qs 6.16.0 node within valid ranges: Express 4/5, body-parser 1/2, superagent.
+
+### Compatibility and actual checks
+
+Disposable real-library fixtures cover ordinary nested/array/Unicode/duplicate
+queries, round trips and Buffer serialization; malformed escapes and prototype
+protection; bounded depth/parameter/array limits; CJS/ESM identity; the advisory's
+small non-callable isBuffer shape under both documented parse options; and
+6.16.0's Date/filter, top-level dot encoding and array cycle changes. Actual
+Express 4/5 with body-parser 1/2 accept extended queries, simple/extended forms
+and supertest/superagent serialization while preserving depth errors and
+parameter/byte-limit errors. No large attack input or timing claim is used.
+Final fixture output:
+
+```text
+PASS: 3-node lock scope; registry integrity; 5 valid qs caller edges; CJS/ESM; ordinary/hostile query round trips; Buffer; prototype/depth/parameter/array/cycle guards; Date/dot fixes; Express 4/5 and body-parser 1/2 middleware; supertest/superagent serialization
+```
+
+| check                                   | exit | actual output/result                                                       |
+| --------------------------------------- | ---- | -------------------------------------------------------------------------- |
+| Clean install and hash                  | 0    | `added 1478 packages in 24s`; `package-lock.json: OK`                      |
+| Tree and bounded semantic/HTTP fixtures | 0    | Valid caller tree and PASS above                                           |
+| `npm run lint`                          | 0    | All three workspace ESLint commands complete without diagnostics           |
+| `npm run typecheck`                     | 0    | All three workspace checks complete; `Generated Prisma Client (7.9.1)`     |
+| Permitted `npm run build`               | 0    | `Compiled successfully in 3.7s`; static pages `22/22`; Nest build complete |
+| Selected Prettier                       | 0    | `All matched files use Prettier code style!`                               |
+| `git diff --check`                      | 0    | No whitespace diagnostics                                                  |
+
+All **32 independent offline operations stages** passed: **26 suite invocations,
+2857 tests, zero failures**, audit-wrapper **51/51**, final launch/dossier
+**182/182**. Final output: `All 32 independent offline operations stages passed;
+online audit gate was not run`.
+
+### Execution limits, review and rollback
+
+Independent read-only review found no Critical, Important or Minor issues.
+It verified baseline identity and changed registry metadata, reproduced the
+valid dependency tree, and inspected the fixtures and repository/operations logs.
+No implementation corrections were required.
+
+An initial disposable fixture used an incorrect metadata filename for the root
+qs path; corrected path selection and caller-relative manifest lookup resolved
+it. The sandbox then rejected temporary HTTP listeners with `listen EPERM`;
+the permitted run exposed a fixture expectation error for superagent's existing
+indices:false behavior on a singleton array. Using two array values produced
+the final passing integration checks without tracked code changes. Planning
+also queried an unverified body-parser 1.20.7 candidate and received E404;
+the implemented 1.20.8 release was verified before prompt creation. Selected
+prompt formatting was corrected before review. None changed application behavior.
+
+Only online `ops:audit` is omitted under the existing dependency-metadata
+disclosure restriction. No fresh audit, before/after vulnerability reduction or
+complete `npm run ops:check` pass is claimed. Scanner policy and gate thresholds
+are unchanged. Logs and fixtures in `/tmp` are disposable, not future prerequisites.
+
+Host fixtures do not establish Node 24, Docker, production, real database/server
+E2E or browser acceptance. Phase 12, prompt 201, other advisories and operator
+sign-offs remain open. No push or deployment occurred. Rollback is a reviewed
+normal revert of the lock repair, reassessing affected exposure before deployment.
+Inspect from the repository root:
+
+```bash
+npm ls qs express body-parser --all
+```

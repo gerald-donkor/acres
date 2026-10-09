@@ -2505,3 +2505,21 @@ restriction; no fresh reduction or complete `ops:check` pass is claimed.
 fixture corrections, environment limits and normal-revert rollback. Phase 12,
 prompt 201, other advisories and operator sign-offs remain open; no push,
 deployment, browser/database or live acceptance occurred.
+
+**Prompt 294 — qs security release (2026-10-09):** targeted npm-generated
+three-node lock repair updates qs **6.15.3 → 6.16.0**, Apollo-transitive Express
+**4.22.2 → 4.22.3** and body-parser **1.20.6 → 1.20.8** to accept the repaired
+qs range without overrides. Express also raises its path-to-regexp declaration;
+the existing 0.1.13 resolution stays unchanged. No manifest or unrelated node
+changes. All changed registry metadata and clean-install lock hash match;
+all five caller edges use one valid qs 6.16.0. Bounded parser/security/serialization
+and Express 4/5 plus body-parser 1/2 HTTP fixtures pass. Lint, typecheck, permitted
+build (**22/22** pages), selected formatting and diff checks pass. All **32
+independent offline operations stages** pass (**26 suite invocations / 2857
+tests / zero failures**, final launch/dossier **182/182**). Independent read-only
+review found no issues. Online npm audit remains omitted under the existing
+dependency-metadata disclosure restriction; no fresh audit reduction or complete
+`ops:check` pass is claimed. `docs/operations.md` Prompt 294 records provenance,
+exact outputs, fixture corrections, environment limits and normal-revert rollback.
+Phase 12, prompt 201, other advisories and operator sign-offs remain open;
+no push, deployment, real database/browser or live acceptance occurred.
