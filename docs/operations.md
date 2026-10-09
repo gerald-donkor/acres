@@ -5783,3 +5783,122 @@ Independent implementation review found no critical, important or minor
 issues. The reviewer independently checked the complete lock and audit
 comparisons and reran the semantic fixture with its temporary-file write
 removed. No review-led implementation change was required.
+
+## Prompt 288 — patch the ip-address security release (2026-10-09)
+
+Implemented the bounded Phase 12K dependency repair from
+`prompts/288-patch-ip-address-security-release.md`, starting at clean `main`
+`6511ba0bff5128b080bf6f043df65cd0f51ca008`. The user authorized immediate
+execution after prompt preparation. Toolchain: Node **v26.11.0**, npm **11.20.0**.
+
+Only the npm-generated `node_modules/ip-address` lock entry changed:
+**10.5.0 → 10.7.3**, tarball URL and SHA-512 integrity. Every other package
+node, all four workspace manifests, parent versions and overrides are unchanged.
+Both `express-rate-limit 8.6.2` (`^10.2.0`) and `socks 2.8.9` (`^10.1.1`)
+resolve the same repaired module. No application source, contract or UI change.
+
+### Provenance and semantic verification
+
+Public npm metadata confirms MIT, Node `>=12`, no runtime dependencies and
+integrity matching the lockfile:
+
+```text
+sha512-A1kdq/tSb5QjvKvAMgIoEvDBIgL7qaqVP/jkvSwYYRZ9iEzvPpopxp2wQfu3SuZRHtpHNxMn8Fs0bS+gf5Xmwg==
+```
+
+The [maintainer releases](https://github.com/beaugunderson/ip-address/releases)
+and tagged source were checked alongside all four baseline advisories:
+[link-local classification](https://github.com/advisories/GHSA-rpw4-54j3-4h4q),
+[local-use NAT64](https://github.com/advisories/GHSA-2vr4-cq9g-pvrc),
+[cross-family comparison](https://github.com/advisories/GHSA-j6r3-76f7-8jcv), and
+[IPv6 diagnostics](https://github.com/advisories/GHSA-h3mg-xc3c-68pw).
+The selected version is outside every baseline affected range. Transitive
+package presence does not establish a customer-facing SSRF exploit path.
+
+A disposable offline fixture uses real library and parent APIs, bounded by
+`timeout 15s node /tmp/acres-288/smoke.cjs`. Exact successful output:
+
+```text
+Only ip-address changed; registry integrity, manifests and both caller resolutions verified
+Benign addresses, byte round-trip, link-local/NAT64 boundaries and cross-family denials passed
+Bounded invalid IPv6 diagnostics and reverse-DNS validation passed
+Actual rate-limit keys and socks integer/byte/IPv6 decode compatibility passed
+```
+
+Checks include fe80::/10 boundaries with and without `/0`, private local-use
+NAT64 and adjacent/well-known-prefix behavior, both subnet methods in both
+family directions, same-family positive/negative membership, bounded 4096-character
+invalid inputs and short diagnostics, valid reverse-DNS case handling and
+invalid overlength names. Parent checks exercise mapped/compatible IPv4,
+IPv6 /56 key aggregation and disabled aggregation, SOCKS IPv4 integer/byte
+conversion and IPv6 byte decoding. No proxy connection, remote fixture request,
+customer data or permanent third-party mirror test was used.
+
+### Repository checks and restrictions
+
+| Command                                              | Exit | Actual output/result                                                                            |
+| ---------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------- |
+| targeted npm lock update                             | 0    | `up to date in 790ms`; only intended node changed                                               |
+| `npm ci --no-audit --no-fund`                        | 0    | `added 1479 packages in 25s`; root prepare/shared build completed                               |
+| lock hash after install/checks                       | 0    | `package-lock.json: OK`                                                                         |
+| `npm ls ip-address --all` / `npm explain ip-address` | 0    | both installed callers resolve 10.7.3                                                           |
+| offline semantic fixture                             | 0    | four output lines above                                                                         |
+| `npm run ops:audit-test` (permitted run)             | 0    | `tests 51`, `pass 51`, `fail 0`                                                                 |
+| `npm audit --omit=dev --audit-level=critical`        | 0    | 27 findings; zero critical                                                                      |
+| `npm run ops:audit`                                  | 0    | `Production dependency security audit passed (0 critical vulnerabilities)`                      |
+| `npm run ops:check`                                  | 0    | 26 suite invocations, 2857 tests, zero failures; full aggregate completed                       |
+| `npm run lint`                                       | 0    | client/shared/server ESLint completed without diagnostics                                       |
+| `npm run typecheck`                                  | 0    | all workspace checks completed; `Generated Prisma Client (7.9.1)`                               |
+| `npm run build`                                      | 0    | `Compiled successfully in 5.0s`; static pages `22/22`; server build/Prisma generation completed |
+| Prettier on prompt/lock/new doc sections             | 0    | `All matched files use Prettier code style!`                                                    |
+| `git diff --check`                                   | 0    | no output                                                                                       |
+
+The initial restricted audit failed `getaddrinfo EAI_AGAIN registry.npmjs.org`.
+Automatic approval review then rejected npm audit because it discloses private
+repository dependency names/versions to the npm registry without explicit
+payload authorization. The user explicitly authorized that disclosure; the
+permitted baseline, post-change and gate calls then succeeded. No rejected
+action was bypassed or treated as evidence. Complete audits exit **1** for
+noncritical findings; the unchanged critical-only policy gates exit **0**.
+
+The restricted smoke fixture failed at its read-only git subprocess with
+`spawnSync git EPERM`. A permitted run then exposed an incorrect temporary
+SOCKS helper import (`../common/helpers.js` from the package build entry);
+correcting it to `./common/helpers.js` produced the final successful run.
+Restricted audit tests reported only one file-level pass; the permitted rerun
+and aggregate each exposed all **51** internal cases. These limitations were
+resolved before review. Clean install retained existing deprecation and
+unapproved third-party install-script warnings; no script approvals changed.
+
+### Complete audit comparison, review and remaining work
+
+Complete before/after audit comparison removes **ip-address only**, adds no
+finding and changes no retained finding object: total **28 → 27**, moderate
+**8 → 7**, high **20 → 20**, critical **0 → 0**. Residual high packages:
+`@apollo/server`, `@graphql-tools/merge`, `@graphql-tools/schema`,
+`@graphql-tools/utils`, `@modelcontextprotocol/sdk`, `@nestjs/apollo`,
+`@nestjs/graphql`, `@prisma/config`, `@ts-morph/common`, `brace-expansion`,
+`braces`, `deepmerge-ts`, `fast-glob`, `micromatch`, `mysql2`, `prisma`,
+`shadcn`, `sharp`, `ts-morph`, `undici`. Residual moderate packages:
+`@apollo/server-plugin-landing-page-graphql-playground`, `body-parser`,
+`express`, `hono`, `postcss-selector-parser`, `qs`, `uuid`.
+Counts reflect this execution, not future registry state.
+
+Independent read-only implementation review found no Critical, Important or
+Minor issues. It independently verified the lock scope, caller versions,
+registry integrity and complete audit comparison; no review-led fixes were
+required. Logs, full audits and fixture remain disposable `/tmp` evidence,
+not prerequisites for future execution.
+
+Operations results exercise existing local/synthetic fixtures and scanner
+checks. No real database/server E2E, browser journey, Node 24 run, live
+production drill, deployment or launch approval was performed. Phase 12,
+prompt 201 and operator sign-offs remain open. Rollback is a reviewed normal
+revert of the lock repair with exposure reassessment. No suppression or push.
+
+Inspect the installed result from repository root:
+
+```bash
+npm ls ip-address --all
+npm run ops:audit
+```

@@ -2401,3 +2401,19 @@ Independent implementation review found no issues. `docs/operations.md` Prompt
 287 records integrity, actual checks, remaining inventory, sandbox/fixture limits
 and normal-revert rollback. Prompt 201, operator sign-offs, residual findings and
 Phase 12 exit stay open; no push, deployment or live approval occurred.
+
+**Prompt 288 — ip-address security release (2026-10-09):** npm-generated
+lock-only repair **10.5.0 → 10.7.3**, within unchanged express-rate-limit and
+socks parent ranges; every other node and manifest is unchanged. Registry
+integrity, both caller resolutions and bounded offline classifier/subnet/
+diagnostic/rate-limit/SOCKS compatibility checks passed. Complete production
+audit removes ip-address only (28 → 27, high20 unchanged, moderate8 → 7,
+critical0); all retained finding objects match. User explicitly authorized npm
+audit metadata disclosure after automatic approval review initially rejected
+it. Clean install, audit-wrapper tests (51/51), critical audit gates, complete
+operations aggregate (26 suites, 2857 tests, zero failures), lint, typecheck,
+build, formatting and diff checks passed. Independent implementation review
+found no findings. `docs/operations.md` Prompt 288 records exact outputs,
+sandbox/temporary-fixture corrections, residual inventory and rollback.
+No real DB/browser/production acceptance, launch approval or push. Phase 12,
+prompt 201 and operator sign-offs remain open.
