@@ -5330,3 +5330,193 @@ npm explain nodemailer
 npm run ops:audit
 npm run test --workspace=@acres/server -- --runInBand --testPathPatterns='mail.service.spec|smtp-mail.adapter.spec|memory-mail.adapter.spec|auth.service.spec|organizations.service.spec'
 ```
+
+## Prompt 285 — patch the js-yaml security releases (2026-10-09)
+
+The root lockfile now resolves js-yaml **3.15.2**, **4.3.2**, and **5.4.3**,
+retaining every parent version and each consumer's existing major. Root
+`package.json` adds only the version-scoped exception
+`"@nestjs/swagger@11.4.7": { "js-yaml": "5.4.3" }`; that parent declares exactly
+5.3.0. Remove this exception when a supported Swagger release resolves a safe
+js-yaml itself. Existing deepmerge-ts/Multer overrides remain unchanged. No
+production source, test, route, parser option, CI gate, audit threshold,
+production image, or operator approval changed.
+
+Execution rechecked all nine entries in the
+[maintainer advisory index](https://github.com/nodeca/js-yaml/security/advisories)
+(no pagination was exposed). The two advisories affecting the old inventory are:
+
+| Advisory                                                                                         | Severity | Affected range                      | Patched releases |
+| ------------------------------------------------------------------------------------------------ | -------- | ----------------------------------- | ---------------- |
+| [GHSA-2883-xcg3-v3hh](https://github.com/nodeca/js-yaml/security/advisories/GHSA-2883-xcg3-v3hh) | high     | `>=3.0.0 <3.15.2`, `>=4.0.0 <4.3.2` | 3.15.2, 4.3.2    |
+| [GHSA-r3ph-w7gj-g6xm](https://github.com/nodeca/js-yaml/security/advisories/GHSA-r3ph-w7gj-g6xm) | moderate | `>=5.0.0 <=5.4.0`                   | 5.4.1            |
+
+The other seven entries (GHSA-5p4m-2wfm-xmqj, GHSA-pm4m-ph32-ghv5,
+GHSA-g796-fgmg-93mv, GHSA-52cp-r559-cp3m, GHSA-724g-mxrg-4qvm,
+GHSA-h67p-54hq-rp68, GHSA-mh29-5h37-fv8m) already exclude the original
+3.15.1/4.3.1/5.3.0 copies and the selected targets. v3 is development-only and
+absent from the production audit; its repair is tooling inventory remediation.
+The installed operations v4 loader is relevant to availability because existing
+alert/container/volume verifiers explicitly use `maxTotalMergeKeys: 10000`.
+Affected inventory does not establish deployed exploitation or customer-input
+reachability. Swagger's inspected YAML route dumps documents; contract generation
+writes JSON/SDL, so contract drift alone cannot validate its YAML path.
+
+The [v3 changelog](https://github.com/nodeca/js-yaml/blob/v3/CHANGELOG.md) and
+[v4 changelog](https://github.com/nodeca/js-yaml/blob/v4/CHANGELOG.md) confirm
+that the fixes charge empty merge mappings to the budget and cap merge sequences
+at 100. The [v5 changelog](https://github.com/nodeca/js-yaml/blob/master/CHANGELOG.md)
+records the same security repair in 5.4.1, scalar/AST/`sortKeys` changes in
+5.4.0, the `forceQuotes` fix in 5.4.2, and blank block-scalar loading fix in
+5.4.3. Oversized merge sequences now intentionally reject; ordinary synthetic
+merges and checked-in operational fixtures remain compatible. Acres does not
+add AST manipulation or alter serializer options.
+
+### Resolution, publication and clean install
+
+Execution used **Node v26.11.0**, **npm 11.20.0**, on `main` with base
+`c37aaac166c156b071249e0818b8d3cd59ec560c`; only this approved prompt was
+initially untracked. The registry published v3/v4 on 2026-08-26 and v5 on
+2026-10-05 UTC (the changelog labels the v5 release 2026-10-06). None declares
+an `engines` constraint. v3 retains `esprima ^4.0.0`/`argparse ^1.0.7`;
+v4/v5 retain `argparse ^2.0.1`. v3 CommonJS loads through `index.js`, v4 exposes
+CommonJS `index.js` and ESM `dist/js-yaml.mjs`, and v5 exposes CommonJS
+`dist/js-yaml.cjs.js`, ESM and bundled declarations. No Node 24 execution was
+performed in this session.
+
+Registry and lockfile SHA-512 integrity values matched exactly:
+
+| Release | Integrity                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------- |
+| 3.15.2  | `sha512-6EuL879VkRA+1Cz578mKMiKvjPNEuk6+r1JaFzoSWejZmtf7xWbIyw1e3KkxlkzTIt9Taw6JBhEppG7utc1P+w==` |
+| 4.3.2   | `sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==` |
+| 5.4.3   | `sha512-yzzNtgczwgoVHNigCyKTXcQJU4Y8t/ikU4UxXW0BvrLfHTGWZhsNcOT2s/a7vn81/4KqVnNmHjaUEPlvWnNwVw==` |
+
+After local npm flag verification,
+`npm update js-yaml --package-lock-only --ignore-scripts --no-audit --no-fund`
+exited **0** with `up to date in 661ms`. Its entire lockfile diff changes only
+version/resolved/integrity fields of the three existing js-yaml nodes.
+`npm ci --no-audit --no-fund` exited **0** with
+`added 1479 packages in 28s` and ran the shared prepare build. Existing
+deprecation and unapproved install-script warnings were retained; no script
+approval policy changed. Lockfile SHA-256 remained
+`ac2d71e024add64391460583278175ad7b46c308704216f87fd415850c02d2f1`.
+
+`npm ls js-yaml --all` and `npm explain js-yaml` exited **0**. Actual
+caller-relative `createRequire` checks resolve every inspected operations caller
+(template/release-image/alert/container/volume/deployment) to root v4 **4.3.2**;
+Swagger 11.4.7 to its nested overridden **5.4.3**; and
+`@istanbuljs/load-nyc-config` 1.1.0 to its nested **3.15.2**. ESLint/cosmiconfig,
+Nest, Swagger, Jest and ts-jest parents are unchanged; no affected copy remains
+in this inspected inventory.
+
+### Compatibility and verification
+
+Disposable offline fixtures in restricted `/tmp/acres-285` assert normal
+mappings, sequences, scalar values, aliases and merges for all three resolved
+packages. v3 uses `safeLoad`; v5 merge tests explicitly select `YAML11_SCHEMA`.
+Three empty merge sources pass with budget three and throw with budget two;
+a 101-source merge sequence throws in every branch. No large CPU payload or
+timing assertion was used. Swagger's actual `serveDefinitions` YAML handler
+uses its installed `skipInvalid: true, noRefs: true` options and passes semantic
+round-trip assertions for synthetic OpenAPI-like strings, booleans, nested
+schemas and whitespace strings. v5 default-schema merge behavior, whitespace-only
+block-scalar loading, and `forceQuotes` scalar types also passed. The initial
+blank-scalar fixture expected a newline; v4 comparison confirmed the empty
+string expectation, which was corrected before the successful smoke run.
+
+Actual output from `node /tmp/acres-285/yaml-smoke.cjs` (exit **0**):
+
+```text
+3.15.2: benign values, aliases, merges, exact empty-source budget and 101-source cap passed
+4.3.2: benign values, aliases, merges, exact empty-source budget and 101-source cap passed
+5.4.3: benign values, aliases, merges, exact empty-source budget and 101-source cap passed
+Swagger actual YAML handler: default schema, semantic round-trip, whitespace strings, forceQuotes and whitespace-only block scalar passed
+```
+
+Jest coverage instruments through Babel but supplies explicit plugin options
+that bypass NYC configuration discovery. A supplemental actual Istanbul YAML
+configuration load and Babel plugin subprocess therefore exercised the v3 path
+with a synthetic `.nycrc.yaml`, followed by instrumented execution and counter
+assertions. `node /tmp/acres-285/instrumentation-smoke.cjs` exited **0**:
+`Actual Istanbul YAML-config loading and Babel instrumented execution: function=2, branch=[1,1] passed`.
+Its initial sandbox subprocess failed with `EPERM`; the permitted unchanged
+retry passed.
+
+| Command                                                     | Actual result                                                                                                                      |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run ops:check`                                         | exit 0 through final launch/dossier suite: `ℹ tests 182`, `ℹ pass 182`, `ℹ fail 0`                                                 |
+| Affected suites included in that aggregate                  | templates 346/346, release images 22/22, deployment 104/104, volume 151/151, container 136/136, alert 112/112, audit wrapper 51/51 |
+| Instrumented contract units (command below)                 | exit 0: `Test Suites: 3 passed, 3 total`; `Tests: 73 passed, 73 total`                                                             |
+| `npm run contracts:check`                                   | exit 0, no generated artifact drift                                                                                                |
+| `npm run test:e2e --workspace=@acres/server -- --runInBand` | permitted run exit 0: `Test Suites: 6 passed, 6 total`; `Tests: 143 passed, 143 total`                                             |
+| `npm run lint`                                              | exit 0 across all three workspaces                                                                                                 |
+| `npm run typecheck`                                         | exit 0 across all three workspaces                                                                                                 |
+| `npm run build`                                             | permitted run exit 0; `✓ Generating static pages using 7 workers (22/22) in 1588ms`, then successful server build                  |
+| Selected Prettier and `git diff --check`                    | exit 0; `All matched files use Prettier code style!`; diff check produced no output                                                |
+
+The instrumented contract command was:
+
+```bash
+npm run test --workspace=@acres/server -- --runInBand --coverage --testPathPatterns='generate-contracts.spec|openapi.spec|shared-predicates.spec'
+```
+
+The approved selection was adjusted to the three existing contract spec files;
+there is no `contracts-runner.spec`. Coverage is scoped execution evidence,
+not a claim of whole-server coverage. The first sandbox server e2e attempt
+reported 127 failed/16 passed due to `listen EPERM`; the unchanged permitted
+retry passed. The first sandbox build failed with
+`Error: Could not parse output from TypeScript's --showConfig.`; its permitted
+retry passed. The e2e suite includes real guarded `acres_test` PostgreSQL/PostGIS
+tests; HTTP-focused suites and storage/queue boundaries use doubles. The recovery
+suite's expected SMTP-timeout log is failure-path coverage, not live mail delivery.
+Operations suites use synthetic fixtures and local tools; none approves a live
+operator launch category.
+
+### Complete audit comparison and remaining limits
+
+The first restricted baseline request failed with `getaddrinfo EAI_AGAIN
+registry.npmjs.org`. The approved metadata-only retry returned valid full audit
+JSON. Fresh before/after production JSON retrieval both exited **1** for
+noncritical findings, not transport failure. Comparison removes only
+`js-yaml` (advisory sources 1193727/GHSA-2883-xcg3-v3hh and
+1239991/GHSA-r3ph-w7gj-g6xm) and its moderate `@nestjs/swagger` propagation.
+No finding was added. Totals fell **32 → 30**, **23 → 22 high**, **9 → 8 moderate**,
+with **zero critical** throughout. All retained finding objects were unchanged
+except an unrelated upstream `@graphql-tools/utils.fixAvailable` recommendation:
+Nest GraphQL 14.0.3 became Apollo Server 5.5.1; its advisory/path data did not change.
+The residual inventory is the Prompt 281 table, excluding Next, proxy-addr,
+Multer/its propagated adapter, Nodemailer, and now js-yaml/Swagger.
+
+`npm audit --omit=dev --audit-level=critical` and `npm run ops:audit` both exited
+**0**, as did the same unchanged policy inside the aggregate. Actual output:
+
+```text
+30 vulnerabilities (8 moderate, 22 high)
+Production dependency security audit passed (0 critical vulnerabilities)
+```
+
+Raw manifests, audit JSON, synthetic smoke scripts and logs remain disposable
+`/tmp` evidence outside git. Repository checks do not establish live production
+capacity, deployment, provenance, Node 24 compatibility testing, SMTP delivery,
+or launch acceptance. Prompt 201, residual dependency findings, operator sign-offs
+and Phase 12 exit remain open. Rollback is a reviewed normal revert of root
+manifest and lockfile together, preserving retained evidence and reassessing
+affected-version exposure before deployment. No push or live action is included.
+
+Safe inspection from repository root:
+
+```bash
+npm ls js-yaml --all
+npm run ops:templates
+npm run ops:audit
+```
+
+Initial implementation review found no critical, important or minor findings.
+It independently passed parser/Swagger smoke checks and verified the lock diff,
+registry integrity, resolution, audit comparison and retained test evidence.
+Its instrumentation rerun encountered the same sandbox subprocess restriction;
+the successful permitted execution remains the relevant result. No review-led
+implementation change was required. Final documentation review identified two
+historical test-command edits from an overbroad formatting replacement; the
+entire historical operations record was restored byte-for-byte from HEAD.

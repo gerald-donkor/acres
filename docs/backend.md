@@ -49,6 +49,19 @@ implementing session (2026-08-21), never recalled. Toolchain: **Node v26.7.0**,
 | `prom-client`                                                  | `^15.1.3`                                 | Prometheus application metrics exposition client (Apache-2.0, pure JS, Node 24 compatible)                                                                                                                              |
 | `jest` `^30` · `ts-jest` `^29.4` · `supertest` `^7`            | from the verified Nest scaffold           |
 
+### Swagger js-yaml dependency exception — prompt 285
+
+The unchanged `@nestjs/swagger` **11.4.7** declares exactly `js-yaml 5.3.0`.
+Root `package.json` scopes an override to `@nestjs/swagger@11.4.7`, selecting
+**5.4.3** to repair the merge-budget advisory and include subsequent scalar
+fixes. Remove this exception when a supported Swagger version resolves a safe
+js-yaml itself; it does not authorize a permanent cross-major override.
+Its actual YAML handler (`skipInvalid: true`, `noRefs: true`) passed synthetic
+semantic round-trip checks. Contract drift passed separately (the generator
+writes JSON/SDL), contract units passed **73/73**, and server e2e **143/143**.
+All parent versions and APIs are unchanged. See `docs/operations.md` Prompt 285
+for integrity, all three branches, complete audit comparison and fixture limits.
+
 ### A skill was installed mid-step
 
 `nestjs-best-practices` was **not** installed when `prompts/10-nestjs-server.md`

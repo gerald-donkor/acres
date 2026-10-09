@@ -2343,3 +2343,23 @@ relevant maintainer advisories, integrity, fixture limits and rollback.
 No live SMTP/TLS deliverability or launch acceptance follows from offline
 composition. Residual dependency repairs, prompt 201, operator sign-offs and
 Phase 12 exit remain open.
+
+**Prompt 285 Phase 12K js-yaml security repair (2026-10-09):**
+The root lockfile patches all three existing js-yaml branches to **3.15.2**,
+**4.3.2**, and **5.4.3**, retaining every parent version. A version-scoped
+Swagger 11.4.7 override repairs its exact 5.3.0 dependency; remove the exception
+when a supported Swagger release resolves a safe version itself. Operations
+callers still resolve v4. Clean install preserved the lock hash; bounded parser,
+actual Swagger YAML-handler and Istanbul YAML-config/instrumentation smoke
+checks passed. Contract units **73/73**, drift check, full server e2e **143/143**,
+lint, typecheck, permitted production build, selected formatting and diff checks
+passed. Full `ops:check` exited **0** through final launch/dossier **182/182**.
+Complete fresh production audit removes js-yaml/Swagger only, falling from
+32 to **30** findings (**22 high, eight moderate, zero critical**); one unrelated
+GraphQL fix recommendation changed upstream. The critical gate is unchanged.
+Independent review found no issues. `docs/operations.md` Prompt 285 records
+integrity, compatibility, actual outputs and sandbox/fixture limits;
+`docs/backend.md` records the scoped exception. Residual findings, prompt 201,
+operator sign-offs and Phase 12 exit remain open. Rollback is a reviewed normal
+revert of manifest and lockfile together with exposure reassessed before
+deployment; no live action or push is included.
