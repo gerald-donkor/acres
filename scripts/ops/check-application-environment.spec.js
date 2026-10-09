@@ -127,3 +127,59 @@ test('scheduler, worker metrics and no-AI constants are fixed', () => {
     'worker must set AI_DRAFT_ENABLED to its fixed value',
   ]);
 });
+
+test('non-string input text returns error', () => {
+  for (const invalid of [null, undefined, 123, {}, []]) {
+    assert.deepEqual(checkApplicationEnvironment(compose(), invalid), [
+      'production.env.example must be text',
+    ]);
+  }
+});
+
+test('non-object compose returns error', () => {
+  for (const invalid of [null, undefined, 123, 'not-an-object', []]) {
+    assert.deepEqual(checkApplicationEnvironment(invalid, input), [
+      'compose must be an object',
+    ]);
+  }
+});
+
+test('initial UTF-8 BOM is accepted without error', () => {
+  assert.deepEqual(check(compose(), `\uFEFF${input}`), []);
+});
+
+test('comment mentioning variable name is ignored', () => {
+  const modified = `${input}\n# DATABASE_URL=postgresql://ignored:password@host:5432/db\n`;
+  assert.deepEqual(check(compose(), modified), []);
+});
+
+test('whitespace after delimiter is ambiguous and value-free', () => {
+  const canary = 'private-canary-secret-value-do-not-leak';
+  const modified = input.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL= ${canary}`);
+  const errors = check(compose(), modified);
+  assert.ok(errors.includes('production.env.example must define DATABASE_URL exactly once'));
+  assert.ok(errors.includes('production.env.example has an ambiguous DATABASE_URL assignment'));
+  assert.doesNotMatch(errors.join(' '), /private-canary/);
+});
+
+for (const key of ['DATABASE_URL', 'SESSION_SECRET', 'VALKEY_URL', 'STORAGE_ACCESS_KEY_ID']) {
+  for (const prefix of [' ', '\t', 'export ', 'export\t']) {
+    test(`${JSON.stringify(prefix)}${key} is ambiguous and value-free`, () => {
+      const canary = 'super-private-canary-payload';
+      const text = `${input}\n${prefix}${key}=${canary}\n`;
+      const errors = check(compose(), text);
+      assert.ok(errors.includes(`production.env.example has an ambiguous ${key} assignment`));
+      assert.ok(errors.includes(`production.env.example must define ${key} exactly once`));
+      assert.doesNotMatch(errors.join(' '), /super-private-canary/);
+    });
+  }
+}
+
+test('space before delimiter is ambiguous', () => {
+  const canary = 'private-space-before-equals';
+  const modified = input.replace(/^SESSION_SECRET=.*$/m, `SESSION_SECRET =${canary}`);
+  const errors = check(compose(), modified);
+  assert.ok(errors.includes('production.env.example must define SESSION_SECRET exactly once'));
+  assert.ok(errors.includes('production.env.example has an ambiguous SESSION_SECRET assignment'));
+  assert.doesNotMatch(errors.join(' '), /private-space/);
+});

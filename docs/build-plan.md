@@ -2628,3 +2628,14 @@ rollback. No direct handlebars import or reachable exploit is established in Acr
 Braces has no published patch; other advisories, prompt 201, operator sign-offs and
 Phase 12 exit stay open. No push, deployment, real database/browser or live acceptance
 occurred. Independent read-only review found no issues.
+
+**Prompt 300 — harden application environment template-key validation (2026-10-09):**
+The Stage 1 pure validator in `scripts/ops/check-application-environment.js` now rejects
+ambiguous watched-key declarations (leading whitespace, `export`, delimiter spacing and
+malformed separators), requires one canonical assignment per required key, detects
+duplicates across all syntax forms, returns fixed value-free errors for non-string text or
+non-object compose inputs, and accepts BOM and comments. The production example passes unchanged.
+Spec expanded to 34/34 tests; templates **368/368**; `ops:templates`, `ops:check` (**32 independent
+offline operations stages / 26 suite invocations / 2879 tests / zero failures**, final launch/dossier
+**182/182**), lint, typecheck, build (**22/22** pages), and diff checks passed. Prompt 201,
+Category 4 live sign-off and Phase 12 exit remain open. Independent read-only review found no issues.

@@ -24,17 +24,43 @@ const FIXED = {
   },
 };
 
+const WATCHED_KEY =
+  /^(?:\s*export\s+)?\s*([A-Z][A-Z0-9_]*)(?=$|[^A-Za-z0-9_])/;
+
 function checkApplicationEnvironment(compose, inputText) {
-  const errors = [];
-  const counts = new Map();
-  for (const line of inputText.split(/\r?\n/)) {
-    const match = line.match(/^([A-Z][A-Z0-9_]*)=/);
-    if (match) counts.set(match[1], (counts.get(match[1]) || 0) + 1);
+  if (typeof inputText !== 'string') {
+    return ['production.env.example must be text'];
   }
+  if (!compose || typeof compose !== 'object' || Array.isArray(compose)) {
+    return ['compose must be an object'];
+  }
+
+  const errors = [];
+  const canonicalCounts = new Map();
+  const totalCounts = new Map();
+  const ambiguous = new Set();
+
+  const cleanText = inputText.replace(/^\uFEFF/, '');
+  const lines = cleanText.split(/\r?\n/);
+
+  for (const line of lines) {
+    if (/^\s*(?:#|$)/.test(line)) continue;
+    const match = line.match(WATCHED_KEY);
+    if (!match) continue;
+    const key = match[1];
+    totalCounts.set(key, (totalCounts.get(key) || 0) + 1);
+    if (line.startsWith(`${key}=`) && !/^\s/.test(line[key.length + 1] || '')) {
+      canonicalCounts.set(key, (canonicalCounts.get(key) || 0) + 1);
+    } else {
+      ambiguous.add(key);
+    }
+  }
+
   const csrfPlaceholder = ['__', 'REQUIRED_SECRET_CSRF_SECRET_32_BYTES_MINIMUM', '__'].join('');
-  if (!inputText.split(/\r?\n/).includes(`CSRF_SECRET=${csrfPlaceholder}`)) {
+  if (!lines.includes(`CSRF_SECRET=${csrfPlaceholder}`)) {
     errors.push('production.env.example must retain the unresolved CSRF_SECRET placeholder');
   }
+
   for (const name of ['api', 'worker']) {
     const service = compose?.services?.[name];
     if (!service || typeof service !== 'object' || Array.isArray(service)) {
@@ -64,10 +90,17 @@ function checkApplicationEnvironment(compose, inputText) {
         if (typeof env[key] !== 'string' || !new RegExp(`^\\$\\{${key}:\\?[^}]+\\}$`).test(env[key])) {
           errors.push(`${name} must require ${key} from the matching Compose input`);
         }
-        if (counts.get(key) !== 1) errors.push(`production.env.example must define ${key} exactly once`);
+        if (canonicalCounts.get(key) !== 1 || (totalCounts.get(key) || 0) > 1) {
+          errors.push(`production.env.example must define ${key} exactly once`);
+        }
       }
     }
   }
+
+  for (const key of ambiguous) {
+    errors.push(`production.env.example has an ambiguous ${key} assignment`);
+  }
+
   return [...new Set(errors)];
 }
 

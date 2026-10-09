@@ -6982,3 +6982,37 @@ The reviewer reproduced the fixtures and caller tree, verified registry/lock sco
 and hash, and independently counted all operations logs. No review-led implementation
 correction was required. Disposable `/tmp/acres-299` fixtures and logs are execution
 evidence, not future prerequisites.
+
+## Prompt 300 — harden application environment template-key validation (2026-10-09)
+
+The pure `checkApplicationEnvironment` helper in `scripts/ops/check-application-environment.js`
+exports one function and returns static, value-free error strings. It validates that `inputText`
+is text (`production.env.example must be text`) and `compose` is an object (`compose must be an object`),
+preventing unhandled runtime TypeErrors. It strips an optional leading UTF-8 Byte Order Mark (`\uFEFF`),
+skips comments (`/^\s*(?:#|$)/`), and scans assignments with a watched-key regex
+(`/^(?:\s*export\s+)?\s*([A-Z][A-Z0-9_]*)(?=$|[^A-Za-z0-9_])/`) that recognizes both canonical column-zero
+declarations (`KEY=val` with no space following `=`) and ambiguous declarations (leading whitespace, `export`
+prefix, or whitespace around `=`).
+
+Ambiguous assignments are recorded and reported as `production.env.example has an ambiguous ${key} assignment`
+without reflecting assignment values. The helper tracks both canonical counts and total occurrences across all
+syntax variants: if a required environment key is defined canonically zero times or more than once, or if
+multiple occurrences exist across canonical and ambiguous lines, it enforces
+`production.env.example must define ${key} exactly once`. This eliminates the blind spot where indented or
+`export`-prefixed definitions evaded duplicate and ambiguity detection. All existing Compose topology, service
+mapping, fixed scheduler/metrics/no-AI constants, and `CSRF_SECRET` placeholder checks remain strictly enforced.
+
+Verification: `check-application-environment.spec.js` expanded from 12 to 34 tests covering type validation,
+BOM stripping, comment tolerance, whitespace prefixes, `export` prefixes, delimiter spacing, duplicates across
+syntaxes, and value non-reflection. `npm run ops:templates-test` passed 368/368 tests; `npm run ops:templates`
+printed `ops template check passed`; `npm run ops:check` passed all 32 independent operations stages (26 suite
+invocations / 2879 tests / zero failures, final launch/dossier 182/182); lint, typecheck, production build,
+and diff checks passed cleanly. Category 4 live secret rotation and key-recovery evidence remain open.
+Rollback is a reviewed normal revert.
+
+Safe inspection from the repository root:
+
+```bash
+node --test scripts/ops/check-application-environment.spec.js
+npm run ops:templates
+```
