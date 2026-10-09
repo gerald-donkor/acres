@@ -6645,3 +6645,103 @@ Inspect from the repository root:
 ```bash
 npm ls deepmerge-ts --all
 ```
+
+## Prompt 296 — MCP SDK security patch (2026-10-09)
+
+The shared transitive `@modelcontextprotocol/sdk` resolution moves **1.30.0 →
+1.32.1** beneath unchanged shadcn **4.18.0** (`^1.26.0`) and @google/genai
+**2.19.0** (`^1.25.2`). Only one lock node changes, and only its version,
+tarball URL and integrity fields change. All manifests, overrides, other lock
+nodes, application source, routes, schemas and scanner policy are unchanged.
+
+The [maintainer advisory](https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-6qxp-vccf-f47h)
+(GHSA-6qxp-vccf-f47h / CVE-2026-104850) describes HTTP OAuth clients sending
+credentials to a server-selected authorization server; 1.31.0 is the first
+patched 1.x release. This is inventory remediation: no direct MCP SDK imports
+or MCP OAuth providers were found in Acres application source. Its Gemini
+adapter uses models.generateContent, while shadcn imports MCP server/stdio APIs.
+No reachable application exploit is established.
+
+The upstream caveats still apply to future OAuth adoption: providers must
+preserve issuer on saved credentials, migrate or clear legacy issuer-less
+credentials, and configure expectedIssuer on bundled providers. Direct
+refreshAuthorization/exchangeAuthorization and new interactive sign-ins are
+outside the advisory's protection. No unused OAuth configuration or credential
+migration was added to Acres; AI remains disabled for production launch.
+
+### Provenance and compatibility
+
+Public npm metadata verifies stable 1.32.1, MIT, Node >=18, unchanged dependency,
+peer and export declarations, and this integrity:
+
+```text
+sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==
+```
+
+Targeted `npm update @modelcontextprotocol/sdk --package-lock-only
+--ignore-scripts --no-audit --no-fund` printed `up to date in 684ms`.
+`npm ci --no-audit --no-fund` on Node **v26.11.0**, npm **11.20.0** printed
+`added 1478 packages in 22s`; lock hash verification printed
+`package-lock.json: OK`. Existing deprecation and unapproved third-party
+install-script warnings remain; approvals were unchanged. The valid caller
+tree deduplicates both parents to 1.32.1.
+
+Disposable timeout-bounded real-SDK fixtures exercise CJS and ESM auth: matching
+issuer refresh, foreign registered-client rejection before token fetch, foreign
+refresh-token withholding even with client registration for the new issuer,
+same-origin/different-path issuer isolation, issuer stamping independent of the
+token response, bundled expectedIssuer enforcement and direct fetchToken guards.
+A real in-memory MCP client/server handshake, listTools and callTool pass;
+Google SDK construction/import passes without API calls. All OAuth fetches are
+injected fake responses using synthetic credentials and example URLs.
+
+```text
+PASS: one-node lock scope; registry integrity; deduplicated callers; CJS/ESM OAuth issuer refresh and credential isolation; token issuer stamping; expectedIssuer provider and fetchToken guards; real MCP handshake/list/call tools; Google SDK construction without API calls
+```
+
+The initial disposable fixture incorrectly expected client_secret_post without
+setting that authentication method on client information. Setting the intended
+method made the fixture pass; no tracked implementation correction was needed.
+The GitHub v1.32.1 release URL returned 404; version provenance uses public
+registry metadata, and patch behavior uses installed source and real fixtures.
+
+### Checks and limits
+
+| check                             | exit | actual output/result                                                       |
+| --------------------------------- | ---- | -------------------------------------------------------------------------- |
+| Clean install/hash                | 0    | `added 1478 packages in 22s`; `package-lock.json: OK`                      |
+| Caller tree and real SDK fixtures | 0    | Valid 1.32.1 caller tree and PASS above                                    |
+| `npm run lint`                    | 0    | Three workspace ESLint commands complete without diagnostics               |
+| `npm run typecheck`               | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
+| `npm run build`                   | 0    | `Compiled successfully in 3.7s`; static pages `22/22`; Nest build complete |
+| Selected Prettier                 | 0    | `All matched files use Prettier code style!`                               |
+| `git diff --check`                | 0    | No whitespace diagnostics                                                  |
+
+All **32 independent offline operations stages** passed: **26 suite
+invocations / 2857 tests / zero failures**, including audit-wrapper **51/51**
+and final launch/dossier **182/182**. Runner output: `All 32 independent offline
+operations stages passed; online audit gate was not run`. Only ops:audit was
+omitted under the existing dependency-metadata disclosure restriction. No fresh
+audit count, vulnerability reduction or complete ops:check pass is claimed.
+
+Public registry lookup still reports braces latest 3.0.3, with no patched
+release. Other advisories, prompt 201, operator sign-offs and Phase 12 exit
+remain open. Host verification does not establish Node 24, Docker, real
+database/server E2E, browser or production acceptance. No push or deployment
+occurred. Rollback is a reviewed normal revert restoring affected inventory;
+reassess exposure before deployment. Inspect from repository root:
+
+```bash
+npm ls @modelcontextprotocol/sdk --all
+```
+
+Independent read-only review found no Critical, Important or Minor findings.
+The reviewer reproduced the fixtures and caller tree, verified registry/lock
+scope and hash, and independently counted all operations logs. No review-led
+implementation correction was required. Disposable `/tmp/acres-296` fixtures
+and logs are execution evidence, not future prerequisites.
+
+Whole-file Prettier checks flag pre-existing formatting in both owning docs;
+the unchanged HEAD versions reproduce those warnings. The appended records,
+prompt and lockfile pass selected formatting. Historical text was preserved
+to avoid unrelated formatting churn.

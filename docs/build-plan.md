@@ -2542,3 +2542,25 @@ outputs, compatibility, environment limits and rollback; `docs/backend.md`
 records the existing override's synchronization/removal contract. Braces has
 no planning-time published fix. Phase 12, prompt 201, residual advisories and
 operator sign-offs stay open; no push, deployment or live acceptance occurred.
+
+**Prompt 296 — MCP SDK security release (2026-10-09):** targeted npm-generated
+one-node lock repair updates @modelcontextprotocol/sdk **1.30.0 → 1.32.1**
+under unchanged shadcn 4.18.0 and @google/genai 2.19.0, within both declared
+ranges. Only version/tarball/integrity change; manifests, exports, dependencies,
+peers, application source and scanner policy remain unchanged. Public metadata,
+clean-install hash and valid deduplicated caller tree pass. Bounded real CJS/ESM
+OAuth fixtures verify issuer isolation, matching refresh, token stamping,
+expectedIssuer and direct fetchToken guards; real in-memory MCP handshake/tool
+calls and Google SDK construction pass without external API requests. Lint,
+typecheck, build (**22/22** pages), selected formatting and diff checks pass.
+All **32 independent offline operations stages** pass (**26 suite invocations /
+2857 tests / zero failures**, final **182/182**). Online audit remains omitted
+under the existing metadata-disclosure restriction; no fresh reduction or full
+ops:check pass is claimed. `docs/operations.md` Prompt 296 records provenance,
+actual outputs, fixture correction, upstream legacy issuer-less/provider
+caveats, environment limits and normal-revert rollback. No direct MCP OAuth
+use or reachable exploit is established in Acres. Braces has no published
+patch; other advisories, prompt 201, operator sign-offs and Phase 12 exit stay
+open. No push, deployment, real database/browser or live acceptance occurred.
+Independent read-only review found no issues and reproduced the fixtures and
+caller tree, verified the one-node lock scope, and counted the check logs.
