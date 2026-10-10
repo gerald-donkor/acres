@@ -137,6 +137,7 @@ require_file scripts/ops/run-capacity-alerting-drill.sh
 require_file scripts/ops/check-release-images.js
 require_file scripts/ops/check-release-images.spec.js
 require_file scripts/ops/verify-postgres-diagnostics.js
+require_file scripts/ops/verify-postgres-diagnostics.spec.js
 require_file scripts/ops/run-launch-drills.sh
 require_file scripts/ops/run-launch-drills.spec.js
 require_file scripts/ops/assemble-launch-dossier.js

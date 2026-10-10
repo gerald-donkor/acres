@@ -57,6 +57,7 @@ const REQUIRED_FILES = [
   "scripts/ops/check-release-images.js",
   "scripts/ops/check-release-images.spec.js",
   "scripts/ops/verify-postgres-diagnostics.js",
+  "scripts/ops/verify-postgres-diagnostics.spec.js",
   "scripts/ops/run-launch-drills.sh",
   "scripts/ops/run-launch-drills.spec.js",
   "scripts/ops/assemble-launch-dossier.js",

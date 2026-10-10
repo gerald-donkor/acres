@@ -7098,3 +7098,42 @@ Safe inspection from the repository root:
 node --test scripts/ops/check-garage-metrics.spec.js
 npm run ops:templates
 ```
+
+## Prompt 303 — harden PostgreSQL diagnostics template validation (2026-10-10)
+
+The pure `verifyPostgresDiagnostics` helper in `scripts/ops/verify-postgres-diagnostics.js`
+exports one function and returns static, value-free error strings. It validates that `scrape`
+is an object (`scrape must be an object`), `dashboard` is an object (`dashboard must be an object`),
+`scrape.metric_relabel_configs` is a list (`scrape metric_relabel_configs must be a list`), and
+`dashboard.panels` is a list (`dashboard panels must be a list`), preventing unhandled runtime
+TypeErrors.
+
+Panel ID collection safely filters valid object panels (`validPanels = panels.filter(isMapping)`)
+before inspecting IDs and detecting duplicate panel IDs (`dashboard panel IDs are reused`).
+Required Grafana panels (IDs 21 and 22) are explicitly verified for existence: missing panels
+emit `dashboard missing panel ${id}` rather than cascading misleading drift errors. Non-list
+panel targets emit `panel ${id} targets must be a list`. Query scope, expressions, and units
+are verified for both required panels against exact expected criteria (`EXPECTED`). Scrape job
+metric retention requires exactly the six approved metrics (`RETAINED_METRICS`). The standalone CLI
+supports `--help`, `-h`, `--cwd <path>`, and `--cwd=<path>` with strict argument validation,
+and `main(argv, io, options)` encapsulates file reading, parsing, and execution.
+
+Verification: `verify-postgres-diagnostics.spec.js` expanded from 7 to 16 tests covering argument
+type validation, list type enforcement, missing panel discrimination, target list validation,
+non-mapping panel tolerance, CLI arguments, and runner execution flows. `npm run ops:postgres-diagnostics`
+printed `postgres diagnostics check passed`; `npm run ops:templates-test` passed 416/416 tests;
+`npm run ops:templates` printed `ops template check passed`; `npm run ops:check` passed all 34 independent
+operations stages (27 suite invocations / 2895 tests / zero failures, final launch/dossier 182/182);
+`npm run lint`, `npm run typecheck`, production build (22/22 pages), and diff checks passed cleanly.
+Independent code review feedback was addressed: lookup re-uses `validPanels`, `main` runner defensively
+guards `scrape_configs` array, and unit tests cover non-array `scrape_configs`. Category 5 telemetry and
+Phase 12 exit remain open. Rollback is a reviewed normal revert.
+
+Safe inspection from the repository root:
+
+```bash
+npm run ops:postgres-diagnostics-test
+npm run ops:postgres-diagnostics
+npm run ops:templates-test
+npm run ops:templates
+```

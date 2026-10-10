@@ -2664,3 +2664,16 @@ returns value-free deduplicated diagnostics. The production reference passes unc
 templates **400/400**; `ops:templates`, `ops:check` (**32 independent offline operations stages / 26 suite invocations /
 2879 tests / zero failures**, final launch/dossier **182/182**), lint, typecheck, build (**22/22** pages), and diff checks
 passed. Prompt 201, Category 5 telemetry sign-off and Phase 12 exit remain open. Independent read-only review found no issues.
+
+**Prompt 303 — harden PostgreSQL diagnostics template validation (2026-10-10):**
+The pure validator in `scripts/ops/verify-postgres-diagnostics.js` now validates inputs
+(`scrape must be an object`, `dashboard must be an object`), enforces list structure
+(`scrape metric_relabel_configs must be a list`, `dashboard panels must be a list`),
+discriminates missing required panels explicitly (`dashboard missing panel ${id}` for panels 21
+and 22), validates target lists (`panel ${id} targets must be a list`), extracts panel IDs
+safely from valid mappings, and provides a standalone CLI runner (`main`, `parseCliArguments`)
+supporting `--help` and `--cwd`. Production manifests pass unchanged. Spec expanded to 16/16 tests;
+templates **416/416**; `ops:postgres-diagnostics` passed; `ops:templates`, `ops:check` (**34 independent
+offline operations stages / 27 suite invocations / 2895 tests / zero failures**, final launch/dossier
+**182/182**), lint, typecheck, build (**22/22** pages), and diff checks passed. Prompt 201, Category 5
+telemetry sign-off and Phase 12 exit remain open. Independent read-only review addressed.
