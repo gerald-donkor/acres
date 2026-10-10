@@ -2651,3 +2651,16 @@ templates **383/383**; `ops:templates`, `ops:check` (**32 independent offline op
 suite invocations / 2879 tests / zero failures**, final launch/dossier **182/182**), lint, typecheck,
 build (**22/22** pages), and diff checks passed. Prompt 201, Category 1 live ingress sign-off and
 Phase 12 exit remain open. Independent read-only review found no issues.
+
+**Prompt 302 — harden Garage metrics template validation (2026-10-10):**
+The Stage 1 pure validator in `scripts/ops/check-garage-metrics.js` now validates inputs
+(`compose must be an object`, `production.env.example must be text`, `garage.production.env.example must be text`,
+`garage.toml must be text`, `prometheus.yml must be an object`, `Caddyfile must be text`), strips UTF-8 BOM
+across all text inputs, detects and rejects ambiguous watched-key assignments (leading whitespace, `export`,
+spacing around `=`), requires single canonical declaration for `ACRES_GARAGE_METRICS_TOKEN_FILE`, prevents evasion
+of forbidden legacy tokens (`GARAGE_METRICS_TOKEN`, `GARAGE_METRICS_TOKEN_FILE`), hardens `garage.toml` against duplicate
+or invalid `[admin]` sections and inline tokens, validates Compose services and Prometheus scrapes defensively, and
+returns value-free deduplicated diagnostics. The production reference passes unchanged. Spec expanded to 47/47 tests;
+templates **400/400**; `ops:templates`, `ops:check` (**32 independent offline operations stages / 26 suite invocations /
+2879 tests / zero failures**, final launch/dossier **182/182**), lint, typecheck, build (**22/22** pages), and diff checks
+passed. Prompt 201, Category 5 telemetry sign-off and Phase 12 exit remain open. Independent read-only review found no issues.

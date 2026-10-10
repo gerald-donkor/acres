@@ -7054,3 +7054,47 @@ Safe inspection from the repository root:
 node --test scripts/ops/check-proxy-environment.spec.js
 npm run ops:templates
 ```
+
+## Prompt 302 — harden Garage metrics template validation (2026-10-10)
+
+The pure `checkGarageMetrics` helper in `scripts/ops/check-garage-metrics.js`
+exports one function and returns static, value-free error strings. It validates
+that `compose` is an object (`compose must be an object`), `productionEnv` is text
+(`production.env.example must be text`), `garageEnv` is text (`garage.production.env.example must be text`),
+`garageToml` is text (`garage.toml must be text`), `prom` is an object (`prometheus.yml must be an object`),
+and `caddyText` is text (`Caddyfile must be text`), preventing unhandled runtime TypeErrors.
+It strips an optional leading UTF-8 Byte Order Mark (`\uFEFF`) across all four text parameters,
+and scans environment assignments with a watched-key regex
+(`WATCHED_KEY = /^(?:\s*export\s+)?\s*([A-Z][A-Z0-9_]*)(?=$|[^A-Za-z0-9_])/`) that recognizes canonical
+assignments (`KEY=val` with no space following `=`), ambiguous variants (leading whitespace, `export`
+prefix, or whitespace around `=`), and comments (`^\s*(?:#|$)`).
+
+Ambiguous assignments for `ACRES_GARAGE_METRICS_TOKEN_FILE` emit
+`production.env.example has an ambiguous ACRES_GARAGE_METRICS_TOKEN_FILE assignment`.
+Total occurrences and canonical declarations are tracked: if `ACRES_GARAGE_METRICS_TOKEN_FILE` is
+defined canonically zero times, more than once, or with competing ambiguous declarations, it enforces
+`production.env.example must assign ACRES_GARAGE_METRICS_TOKEN_FILE once to an unresolved absolute operator path`.
+Forbidden legacy or duplicate keys (`GARAGE_METRICS_TOKEN`, `GARAGE_METRICS_TOKEN_FILE`, and
+`ACRES_GARAGE_METRICS_TOKEN_FILE` in `garageEnv`) are detected across canonical and ambiguous forms,
+enforcing `Garage metrics must have one file source; remove legacy GARAGE_METRICS_TOKEN and duplicate GARAGE_METRICS_TOKEN_FILE assignments`.
+In `garage.toml`, extraction enforces a single `[admin]` section, accepts optional section whitespace
+(`[ admin ]`), and checks the entire configuration for unauthorized inline tokens (`metrics_token` / `metrics_token_file`).
+Compose service mappings, environment maps, volumes, and Prometheus scrape configurations are traversed
+defensively, returning deduplicated diagnostics (`[...new Set(errors)]`) with zero secret reflection.
+
+Verification: `check-garage-metrics.spec.js` expanded from 30 to 47 tests covering argument type validation,
+default argument tolerance, UTF-8 BOM tolerance, ambiguous assignment syntax, forbidden key evasion,
+duplicate tracking across mixed forms, comment tolerance, TOML `[admin]` section duplication, inline tokens,
+and defensive Compose/Prometheus traversal. `npm run ops:templates-test` passed 400/400 tests;
+`npm run ops:templates` printed `ops template check passed`; `npm run ops:check` passed all 32 independent
+operations stages (26 suite invocations / 2879 tests / zero failures, final launch/dossier 182/182);
+`npm run lint`, `npm run typecheck`, production build (22/22 pages), and diff checks passed cleanly.
+Independent code review returned clean approval. Category 5 telemetry and Phase 12 exit remain open.
+Rollback is a reviewed normal revert.
+
+Safe inspection from the repository root:
+
+```bash
+node --test scripts/ops/check-garage-metrics.spec.js
+npm run ops:templates
+```
