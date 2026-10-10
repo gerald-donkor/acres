@@ -2677,3 +2677,19 @@ templates **416/416**; `ops:postgres-diagnostics` passed; `ops:templates`, `ops:
 offline operations stages / 27 suite invocations / 2895 tests / zero failures**, final launch/dossier
 **182/182**), lint, typecheck, build (**22/22** pages), and diff checks passed. Prompt 201, Category 5
 telemetry sign-off and Phase 12 exit remain open. Independent read-only review addressed.
+
+**Prompt 304 — harden release images template validation (2026-10-10):**
+The Stage 1 template verifier in `scripts/ops/check-release-images.js` now validates inputs
+(`compose must be an object`, `compose services must be an object`, `env must be an object`),
+handles Node.js `process.env` safely via `isObjectRecord`, guards service mappings and rejects
+any service declaration containing a `build` property, defaults image reference names safely,
+enforces registry host and port bounds without reflecting untrusted input strings, provides pure
+error collectors (`validateComposeImagesErrors`, `checkReleaseImagesErrors`), exports all public
+symbols, and provides a standalone CLI runner (`main`, `parseCliArguments`) supporting `--help`,
+`-h`, `--cwd <path>`, and `--cwd=<path>` with sanitized error output. Production manifests pass
+unchanged. Spec expanded from 22 to 35 tests; templates **451/451**; `ops:release-images` script added
+and spec wired into `ops:templates-test`; `ops:templates`, `ops:check` (**34 independent offline operations
+stages / 27 suite invocations / 2914 tests / zero failures**, final launch/dossier **182/182**), lint,
+typecheck, build (**22/22** pages), and diff checks passed. Prompt 201, Category 3 deployment sign-off
+and Phase 12 exit remain open. Independent read-only review approved.
+

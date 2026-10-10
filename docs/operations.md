@@ -7137,3 +7137,47 @@ npm run ops:postgres-diagnostics
 npm run ops:templates-test
 npm run ops:templates
 ```
+
+## Prompt 304 — harden release images template validation (2026-10-10)
+
+The release images verifier in `scripts/ops/check-release-images.js` validates that
+the production Compose template (`infra/compose/docker-compose.production.example.yml`)
+binds application services (`next`, `api`, `worker`) and `postgres-exporter` to immutable
+release image variables and pinned digests without build definitions, and verifies
+image references against Docker distribution grammar.
+
+Hardening introduces defensive shape validation (`isMapping`, `isObjectRecord`) preventing
+unhandled runtime TypeErrors on primitives, non-objects, or arrays. Pure error helpers
+(`validateComposeImagesErrors`, `checkReleaseImagesErrors`) return deduplicated string arrays
+of value-free error diagnostics, while existing throwing helpers (`validateComposeImages`,
+`checkReleaseImages`, `validateImageReference`) maintain 100% backward compatibility for
+callers (`check-production-templates.js`, `check-launch-readiness.js`).
+
+`validateImageReference` defaults the name parameter safely, validates string types,
+and enforces hostname and port bounds without reflecting untrusted input values.
+A standalone CLI runner with `ReleaseImagesUsageError` supports `--help`, `-h`,
+`--cwd <path>`, and `--cwd=<path>`, with `main(argv, io, options)` sanitizing error messages
+to prevent arbitrary parser or untrusted content leakage.
+
+`package.json` adds `"ops:release-images": "node scripts/ops/check-release-images.js"` for
+operator use in the release shell and wires `scripts/ops/check-release-images.spec.js` into
+`"ops:templates-test"`.
+
+Verification: `check-release-images.spec.js` expanded from 22 to 35 tests covering non-object
+inputs, missing services, build properties, pure error helpers, CLI arguments, and runner flows.
+`npm run ops:release-images-test` passed 35/35 tests; `npm run ops:templates-test` passed 451/451
+tests; `npm run ops:templates` printed `ops template check passed`; `npm run ops:templates-shell-test`
+passed 34/34 tests; `npm run ops:check` passed all 34 independent operations stages (27 suite
+invocations / 2914 tests / zero failures, final launch/dossier 182/182); `npm run lint`,
+`npm run typecheck`, production build (22/22 pages), and diff checks passed cleanly.
+Independent code review verified and approved. Category 3 deployment and Phase 12 exit remain open.
+Rollback is a reviewed normal revert.
+
+Safe inspection from the repository root:
+
+```bash
+npm run ops:release-images-test
+npm run ops:templates-test
+npm run ops:templates
+```
+
