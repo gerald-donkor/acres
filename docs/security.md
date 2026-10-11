@@ -1115,3 +1115,14 @@ receipts are never rolled back by deletion. This narrowly reinforces existing
 evidence-integrity and diagnostic controls. Hostile same-UID changes, interrupted
 staging orphans, fsync/crash durability and receipt authenticity remain outside
 this preflight. Category 6 live approval, prompt 201 and Phase 12 exit stay open.
+
+**Prompt 307 storage inventory boundary (2026-10-11):** Stage 7's S3 listing
+adapter now rejects ambiguous terminal signals, malformed listed records,
+duplicate keys, missing continuation tokens and token cycles. No partial
+inventory is returned to comparison/publication after later-page failure.
+Validation diagnostics contain no provider payload, key or token; the runner's
+existing fixed listing error remains intact. This reinforces recovery evidence
+integrity and availability against ordinary malformed pagination responses.
+It does not attest object bytes/checksums, prevent all resource exhaustion or
+produce an atomic DB/S3 snapshot. Live authenticity/scope, Prompt 201 and
+Category 6/Phase 12 operator sign-off remain open.

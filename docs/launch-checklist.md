@@ -874,6 +874,14 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 - Drill/verify: `bash scripts/ops/run-restore-drill.sh --dry-run`,
   `node scripts/ops/reconcile-storage-objects.js --dry-run`
 - Evidence: `backups/restore-drill-evidence-<timestamp>.json`, reconciliation report
+- Reconciliation inventory safety (prompt 307): every listing page must carry
+  an explicit truncation flag, valid keys/sizes/optional dates, unique keys and
+  advancing nonempty continuation tokens. Malformed pages or token cycles
+  return nonzero before summary/receipt publication, including failure after
+  earlier valid pages. Investigate the provider response and rerun into a fresh
+  receipt path; do not treat partial inventory as evidence. This preflight does
+  not verify object bytes or establish an atomic DB/S3 snapshot, bound every
+  network/resource failure, or supply live recovery acceptance.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

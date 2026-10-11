@@ -212,6 +212,10 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
 async function listBucketObjects({ s3Client, bucket, prefix }) {
   const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
   const items = [];
+  const seenTokens = new Set();
+  const seenKeys = new Set();
+  const invalidListing = () =>
+    new Error('Object storage listing is invalid or incomplete');
   let continuationToken = undefined;
 
   do {
@@ -222,19 +226,51 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     });
 
     const response = await s3Client.send(command);
-    if (response.Contents) {
+    // Inventory evidence needs an explicit terminal signal, never a guessed EOF.
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      Array.isArray(response) ||
+      typeof response.IsTruncated !== 'boolean' ||
+      (response.Contents !== undefined && !Array.isArray(response.Contents))
+    )
+      throw invalidListing();
+
+    if (response.Contents !== undefined) {
       for (const entry of response.Contents) {
+        if (
+          !entry ||
+          typeof entry !== 'object' ||
+          Array.isArray(entry) ||
+          typeof entry.Key !== 'string' ||
+          entry.Key.length === 0 ||
+          seenKeys.has(entry.Key) ||
+          !Number.isSafeInteger(entry.Size) ||
+          entry.Size < 0 ||
+          (entry.LastModified !== undefined &&
+            (!(entry.LastModified instanceof Date) ||
+              !Number.isFinite(entry.LastModified.getTime())))
+        )
+          throw invalidListing();
+        seenKeys.add(entry.Key);
         items.push({
           key: entry.Key,
           byteCount: entry.Size,
-          lastModified: entry.LastModified ? entry.LastModified.toISOString() : null,
+          lastModified: entry.LastModified
+            ? entry.LastModified.toISOString()
+            : null,
           checksumHex: entry.ChecksumSHA256
             ? Buffer.from(entry.ChecksumSHA256, 'base64').toString('hex')
             : null,
         });
       }
     }
-    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+    if (!response.IsTruncated) break;
+    const next = response.NextContinuationToken;
+    if (typeof next !== 'string' || !next.trim() || seenTokens.has(next))
+      throw invalidListing();
+    seenTokens.add(next);
+    continuationToken = next;
   } while (continuationToken);
 
   return items;

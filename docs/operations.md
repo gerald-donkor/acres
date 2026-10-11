@@ -417,7 +417,8 @@ PostgreSQL and Garage coverage, freshness, and restore under actual load.
    Execute `npm run ops:reconcile-storage` (or `scripts/ops/reconcile-storage-objects.js [options]`). Compares active database records (`StoredObject`, `Upload`, `ExportArtifact`) against bucket storage (Garage / S3):
    - Detects orphaned objects present in storage but absent from database metadata (storage leaks);
    - Detects missing objects referenced by active database records (data loss);
-   - Asserts byte count and SHA-256 checksum alignment;
+   - Compares byte counts and any available checksum metadata; bucket listings
+     alone do not attest SHA-256 content integrity;
    - Excludes pending uploads, soft-deleted objects, and quarantined objects within the retention window;
    - Fails closed with exit code 1 if missing objects or corruption/checksum mismatches are found.
    Approved Category 6 records must also reference a concrete reconciliation
@@ -7326,3 +7327,82 @@ Category 6 live restore/reconciliation, prompt 201 and Phase 12 exit remain
 open. No online audit, deployment, push, real database/storage operation or
 operator sign-off occurred. Rollback is a reviewed normal revert, with the
 known unsafe rename fallback understood before reinstating it.
+
+## Prompt 307 — reject incomplete storage listings (2026-10-11)
+
+The Stage 7 reconciliation listing adapter now requires an explicit boolean
+`IsTruncated` on every S3/Garage page. A truncated page needs a non-whitespace
+string `NextContinuationToken`; same-token and longer cycles fail before
+another repeated request. Tokens remain opaque and are forwarded unchanged.
+Empty intermediate pages remain valid. Only an explicit terminal page completes
+the inventory; a terminal page's unused next token is ignored.
+
+`Contents` may be omitted or an array. Listed records require a nonempty string
+key, nonnegative safe-integer numeric size, and a valid Date when LastModified
+is supplied. Duplicate keys within/across pages fail instead of overwriting
+observations in the comparison map. Zero-byte markers and significant key
+whitespace are preserved. Invalid listing data receives the fixed helper error
+`Object storage listing is invalid or incomplete`; the CLI retains its fixed
+`Error: Object storage connection or listing failed` boundary. Later-page
+failure never returns partial inventory or writes a reconciliation receipt,
+staging artifact, clean summary or success message.
+
+The planning probes were network-free: a truncated empty page without a token
+was accepted as zero objects; the repeated-token probe sent five requests until
+its fixture stopped it. New bounded fake-client regressions reproduce both
+failures without hanging. The red in-process suite reported `tests 100`,
+`pass 62`, `fail 38`; after implementation, the permitted normal runner reports
+`tests 100`, `pass 100`, `fail 0`. All 54 previous tests remain, with 46 added
+pagination, record-validation and runner/receipt regressions. Independent
+read-only review reproduced all 100 tests and found no Critical, Important or
+Minor findings. Feedback required no implementation changes.
+
+### Verification and limits
+
+Actual successful command outputs:
+
+- `npm run ops:reconcile-test`: `tests 100`, `pass 100`, `fail 0`.
+- `npm run ops:templates`: `ops template check passed`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0, no diagnostics.
+- `npm run typecheck`: shared `tsc -p tsconfig.json --noEmit`, client
+  `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`;
+  Prisma Client `7.9.1` generated; exit 0, no TypeScript diagnostics.
+- Permitted `npm run build`: `Compiled successfully in 5.3s`,
+  `Generating static pages using 7 workers (22/22) in 803ms`, then
+  `prisma generate && nest build`; exit 0.
+- Changed-region Prettier verification: both JS files report
+  `changed region formatted`; syntax checks and `git diff --check` exit 0.
+- `node scripts/ops/reconcile-storage-objects.js --help`: exit 0.
+- Readiness example: exit 1 as intended, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+The initial sandbox test wrapper failed opaquely (`test failed`); direct
+in-process execution exposed the expected red assertions. The permitted normal
+runner passed after implementation. The sandbox build failed with
+`Could not parse output from TypeScript's --showConfig.`; its permitted retry
+passed. These are recorded execution limits, not suppressed verification errors.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3081 tests / zero failures**. In particular,
+`ops:readiness-test` reports `tests 649`, `pass 649`, `fail 0`, and the final
+`ops:launch-drill-test` reports `tests 182`, `pass 182`, `fail 0`.
+The separate documentation review also found no issues. Online `ops:audit`
+remains omitted under the standing dependency-metadata disclosure restriction;
+no full `ops:check` pass or fresh vulnerability inventory is claimed.
+
+SDK types model listing fields as optional. This evidence producer deliberately
+rejects absent terminal flags/identity/size instead of guessing completeness.
+Malformed compatible-provider responses therefore fail closed and require
+operator investigation. Existing command arguments, helper signatures,
+comparison policy, receipt JSON/mode, filesystem publication and Stage 7 caller
+stay unchanged. Optional checksum conversion is preserved, but ListObjectsV2
+metadata is not object-content verification. No live DB/S3 drill was run.
+
+Cycle detection does not bound stalled requests, indefinitely many distinct
+tokens, memory consumption or concurrent DB/S3 writes. Listing is not a snapshot
+or an authenticity proof. Operators still own provider compatibility, complete
+backup coverage and separately inspected live recovery evidence. Prompt 201,
+Category 6 live acceptance and Phase 12 exit remain open. Ordinary commit revert
+rolls back the adapter/spec/docs together; it needs no migration and performs no
+storage mutation. No push or deployment occurred.

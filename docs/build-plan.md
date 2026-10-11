@@ -2729,3 +2729,23 @@ rerun are recorded in `docs/operations.md`. Independent read-only review found
 no issues and reproduced **54/54** plus clean diff checks. Online audit remains
 omitted under the existing metadata-disclosure restriction; no full `ops:check`
 pass or fresh vulnerability count is claimed.
+
+**Prompt 307 — reject incomplete storage listings (2026-10-11):** Continued
+Phase 12K's unclosed recovery-evidence gate after committed Prompt 306.
+`listBucketObjects` now requires explicit boolean truncation signals, valid
+listed identities/sizes/optional dates, unique keys and nonempty opaque next
+tokens; repeated tokens and longer cycles reject before repeated requests.
+Malformed later pages never return partial inventory or publish a receipt.
+Public signatures, CLI flags, comparison policy, schema/mode, publication and
+Stage 7 caller remain unchanged. Focused suite **100/100** (54 retained + 46
+new); lint/typecheck/build (**22/22** pages), changed-region formatting,
+syntax and diff checks passed. Permitted normal test/build retries passed
+after sandbox child-process failures. Independent read-only review found no
+findings. `docs/operations.md` Prompt 307 records probes, actual verification,
+provider strictness, capacity/snapshot/checksum limitations and ordinary revert
+rollback. Readiness example remains fail-closed (**0 approved / 11 blocked /
+70 blockers**). All **33 independent offline operations stages** passed
+(**27 suite invocations / 3081 tests / zero failures**, final launch/dossier
+**182/182**). Online audit remains omitted under the standing metadata-disclosure
+restriction; no full `ops:check` pass or fresh audit inventory is claimed.
+Prompt 201, live Category 6 sign-off and Phase 12 exit remain open.
