@@ -8,8 +8,9 @@
  * object storage keys, detecting missing objects (data loss) and orphan objects (storage leaks).
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
 
 const DEFAULT_IGNORE_PATTERNS = [
   /^\.acres-readiness$/,
@@ -316,14 +317,11 @@ function formatReconciliationSummary(report) {
 }
 
 /**
- * Main execution function for CLI invocation.
+ * Custom error class for reconciliation CLI argument validation.
  */
-async function main() {
-  const args = process.argv.slice(2);
+class ReconcileUsageError extends Error {}
 
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(`
-Usage: node scripts/ops/reconcile-storage-objects.js [options]
+const USAGE_TEXT = `Usage: node scripts/ops/reconcile-storage-objects.js [options]
 
 Reconciliation drill: compares database metadata records against object storage keys.
 Local/dry-run receipts are simulation; does not attest live production storage integrity.
@@ -335,79 +333,471 @@ Options:
   --access-key <key>          Storage access key ID
   --secret-key <secret>       Storage secret access key
   --force-path-style          Use path style addressing (default: true)
-  --output <file>             Path to write JSON evidence report (default: reconciliation-report.json)
+  --no-force-path-style       Disable path style addressing
+  --output, -o <file>         Path to write JSON evidence report
+  --cwd <path>                Working directory for relative path resolution
   --prefix <prefix>           Filter reconciliation to a key prefix
   --organization-id <orgId>   Filter reconciliation to an organization ID
   --fail-on-orphans           Exit with status 1 if orphans are detected (default: false)
   --exclude-quarantined       Exclude quarantined items regardless of age (default: false)
   --dry-run                   Report status without side effects
   --help, -h                  Show this help message
-`);
-    process.exit(0);
+`;
+
+/**
+ * Parses and strictly validates CLI arguments for storage reconciliation.
+ *
+ * @param {string[]} [argv=process.argv.slice(2)]
+ * @param {string} [cwd=process.cwd()]
+ * @returns {object} parsed options
+ */
+function parseCliArguments(argv = process.argv.slice(2), cwd = process.cwd()) {
+  if (typeof cwd !== 'string' || !cwd.trim()) {
+    throw new ReconcileUsageError('cwd requires a non-empty path');
+  }
+  if (!Array.isArray(argv) || argv.some((arg) => typeof arg !== 'string')) {
+    throw new ReconcileUsageError('arguments must be an array of strings');
   }
 
-  const getArg = (flag) => {
-    const idx = args.indexOf(flag);
-    return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : null;
-  };
+  let showHelp = false;
+  let customCwd;
+  let outputFile;
+  let bucket;
+  let endpoint;
+  let region;
+  let accessKey;
+  let secretKey;
+  let prefix;
+  let organizationId;
+  let failOnOrphans = false;
+  let excludeQuarantined = false;
+  let noForcePathStyle = false;
+  let forcePathStyle = false;
+  let dryRun = false;
 
-  const bucket = getArg('--bucket') || process.env.STORAGE_BUCKET || 'acres-quarantine';
-  const endpoint = getArg('--endpoint') || process.env.STORAGE_ENDPOINT || 'http://localhost:3900';
-  const region = getArg('--region') || process.env.STORAGE_REGION || 'garage';
-  const accessKeyId = getArg('--access-key') || process.env.STORAGE_ACCESS_KEY_ID || 'acres_garage_dev_key';
-  const secretAccessKey = getArg('--secret-key') || process.env.STORAGE_SECRET_ACCESS_KEY || 'acres_garage_dev_secret';
-  const forcePathStyle = !args.includes('--no-force-path-style');
-  const outputFile = getArg('--output') || 'reconciliation-report.json';
-  const prefix = getArg('--prefix');
-  const organizationId = getArg('--organization-id');
-  const failOnOrphans = args.includes('--fail-on-orphans');
-  const excludeQuarantined = args.includes('--exclude-quarantined');
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
 
-  console.log('Connecting to PostgreSQL and Object Storage...');
+    if (arg === '--help' || arg === '-h') {
+      showHelp = true;
+      continue;
+    }
 
-  // 1. Connect to PostgreSQL
-  const { Client } = require('pg');
-  const pgPassword =
-    process.env.PGPASSWORD ||
-    process.env.POSTGRES_PASSWORD ||
-    process.env.ACRES_MIGRATOR_PASSWORD;
+    if (arg === '--cwd' || arg.startsWith('--cwd=')) {
+      if (customCwd !== undefined) {
+        throw new ReconcileUsageError('cwd may be specified only once');
+      }
+      const val = arg === '--cwd' ? argv[++i] : arg.slice(6);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('cwd requires a non-empty directory path');
+      }
+      customCwd = val;
+      continue;
+    }
 
-  if (!pgPassword) {
-    console.error('Error: PostgreSQL password is required (set PGPASSWORD, POSTGRES_PASSWORD, or ACRES_MIGRATOR_PASSWORD)');
-    process.exit(1);
+    if (arg === '--output' || arg === '-o' || arg.startsWith('--output=') || arg.startsWith('-o=')) {
+      if (outputFile !== undefined) {
+        throw new ReconcileUsageError('output may be specified only once');
+      }
+      const prefixLen = arg.startsWith('--output=') ? 9 : (arg.startsWith('-o=') ? 3 : 0);
+      const val = prefixLen > 0 ? arg.slice(prefixLen) : argv[++i];
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('output requires a non-empty file path');
+      }
+      outputFile = val;
+      continue;
+    }
+
+    if (arg === '--bucket' || arg.startsWith('--bucket=')) {
+      if (bucket !== undefined) {
+        throw new ReconcileUsageError('bucket may be specified only once');
+      }
+      const val = arg === '--bucket' ? argv[++i] : arg.slice(9);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('bucket requires a non-empty bucket name');
+      }
+      bucket = val;
+      continue;
+    }
+
+    if (arg === '--endpoint' || arg.startsWith('--endpoint=')) {
+      if (endpoint !== undefined) {
+        throw new ReconcileUsageError('endpoint may be specified only once');
+      }
+      const val = arg === '--endpoint' ? argv[++i] : arg.slice(11);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('endpoint requires a non-empty endpoint URL');
+      }
+      endpoint = val;
+      continue;
+    }
+
+    if (arg === '--region' || arg.startsWith('--region=')) {
+      if (region !== undefined) {
+        throw new ReconcileUsageError('region may be specified only once');
+      }
+      const val = arg === '--region' ? argv[++i] : arg.slice(9);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('region requires a non-empty region name');
+      }
+      region = val;
+      continue;
+    }
+
+    if (arg === '--access-key' || arg.startsWith('--access-key=')) {
+      if (accessKey !== undefined) {
+        throw new ReconcileUsageError('access-key may be specified only once');
+      }
+      const val = arg === '--access-key' ? argv[++i] : arg.slice(13);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('access-key requires a non-empty key ID');
+      }
+      accessKey = val;
+      continue;
+    }
+
+    if (arg === '--secret-key' || arg.startsWith('--secret-key=')) {
+      if (secretKey !== undefined) {
+        throw new ReconcileUsageError('secret-key may be specified only once');
+      }
+      const val = arg === '--secret-key' ? argv[++i] : arg.slice(13);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('secret-key requires a non-empty secret key');
+      }
+      secretKey = val;
+      continue;
+    }
+
+    if (arg === '--prefix' || arg.startsWith('--prefix=')) {
+      if (prefix !== undefined) {
+        throw new ReconcileUsageError('prefix may be specified only once');
+      }
+      const val = arg === '--prefix' ? argv[++i] : arg.slice(9);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('prefix requires a non-empty key prefix');
+      }
+      prefix = val;
+      continue;
+    }
+
+    if (arg === '--organization-id' || arg.startsWith('--organization-id=')) {
+      if (organizationId !== undefined) {
+        throw new ReconcileUsageError('organization-id may be specified only once');
+      }
+      const val = arg === '--organization-id' ? argv[++i] : arg.slice(18);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('organization-id requires a non-empty organization ID');
+      }
+      organizationId = val;
+      continue;
+    }
+
+    if (arg === '--fail-on-orphans') {
+      if (failOnOrphans) {
+        throw new ReconcileUsageError('fail-on-orphans may be specified only once');
+      }
+      failOnOrphans = true;
+      continue;
+    }
+
+    if (arg === '--exclude-quarantined') {
+      if (excludeQuarantined) {
+        throw new ReconcileUsageError('exclude-quarantined may be specified only once');
+      }
+      excludeQuarantined = true;
+      continue;
+    }
+
+    if (arg === '--no-force-path-style') {
+      if (noForcePathStyle) {
+        throw new ReconcileUsageError('no-force-path-style may be specified only once');
+      }
+      noForcePathStyle = true;
+      continue;
+    }
+
+    if (arg === '--force-path-style') {
+      if (forcePathStyle) {
+        throw new ReconcileUsageError('force-path-style may be specified only once');
+      }
+      forcePathStyle = true;
+      continue;
+    }
+
+    if (arg === '--dry-run') {
+      if (dryRun) {
+        throw new ReconcileUsageError('dry-run may be specified only once');
+      }
+      dryRun = true;
+      continue;
+    }
+
+    throw new ReconcileUsageError('unsupported option or positional argument');
   }
 
-  const pgClient = new Client({
-    host: process.env.PGHOST || 'localhost',
-    port: parseInt(process.env.PGPORT || '5432', 10),
-    user: process.env.PGUSER || 'acres_migrator',
-    password: pgPassword,
-    database: process.env.PGDATABASE || 'acres',
-  });
-
-  try {
-    await pgClient.connect();
-  } catch (err) {
-    console.error(`PostgreSQL connection failed: ${err.message}`);
-    process.exit(1);
+  if (forcePathStyle && noForcePathStyle) {
+    throw new ReconcileUsageError('cannot specify both --force-path-style and --no-force-path-style');
   }
 
-  // 2. Connect to S3 / Garage
-  const { S3Client } = require('@aws-sdk/client-s3');
-  const s3Client = new S3Client({
+  const effectiveCwd = path.resolve(cwd, customCwd === undefined ? '.' : customCwd);
+
+  return {
+    showHelp,
+    cwd: effectiveCwd,
+    output: outputFile !== undefined ? path.resolve(effectiveCwd, outputFile) : null,
+    bucket,
     endpoint,
     region,
-    forcePathStyle,
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
-  });
+    accessKey,
+    secretKey,
+    prefix,
+    organizationId,
+    failOnOrphans,
+    excludeQuarantined,
+    forcePathStyle: !noForcePathStyle,
+    dryRun,
+  };
+}
+
+/**
+ * Atomically publishes reconciliation evidence report to an absent destination.
+ *
+ * @param {string} outputFile
+ * @param {object} report
+ */
+function publishReceipt(outputFile, report) {
+  if (typeof outputFile !== 'string' || !outputFile.trim()) {
+    throw new Error('output file path must be a non-empty string');
+  }
+  if (!report || typeof report !== 'object') {
+    throw new Error('report must be an object');
+  }
+
+  const destination = path.resolve(outputFile);
+  const parentDir = path.dirname(destination);
+
+  // 1. Verify parent directory exists and is a directory
+  let parentStat;
+  try {
+    parentStat = fs.lstatSync(parentDir);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      throw new Error(`parent directory does not exist: ${parentDir}`);
+    }
+    throw err;
+  }
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
+    throw new Error(`parent path is not a directory: ${parentDir}`);
+  }
+
+  // 2. Verify target file does not already exist (or is a symlink)
+  let destStat;
+  try {
+    destStat = fs.lstatSync(destination);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  if (destStat) {
+    throw new Error(`output file already exists: ${destination}`);
+  }
+
+  // 3. Write report JSON to unique temporary sibling file
+  const tempFile = path.join(
+    parentDir,
+    `.reconcile-${path.basename(destination)}-${crypto.randomUUID()}.tmp`
+  );
+
+  const content = JSON.stringify(report, null, 2) + '\n';
+  let fd = null;
+  try {
+    fd = fs.openSync(
+      tempFile,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL,
+      0o600
+    );
+    fs.writeFileSync(fd, content, 'utf8');
+    fs.closeSync(fd);
+    fd = null;
+
+    // 4. Verify written content
+    const verified = fs.readFileSync(tempFile, 'utf8');
+    if (verified !== content) {
+      throw new Error('Receipt content verification failed');
+    }
+
+    // 5. Atomic link or exclusive fallback
+    try {
+      fs.linkSync(tempFile, destination);
+      fs.unlinkSync(tempFile);
+    } catch (linkErr) {
+      if (linkErr.code === 'EEXIST') {
+        throw new Error(`output file already exists: ${destination}`);
+      }
+      if (linkErr.code === 'EXDEV' || linkErr.code === 'ENOSYS' || linkErr.code === 'EPERM') {
+        try {
+          if (fs.lstatSync(destination)) {
+            throw new Error(`output file already exists: ${destination}`);
+          }
+        } catch (sErr) {
+          if (sErr.code !== 'ENOENT') throw sErr;
+        }
+        fs.renameSync(tempFile, destination);
+      } else {
+        throw linkErr;
+      }
+    }
+  } catch (err) {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd);
+      } catch {}
+    }
+    try {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    } catch {}
+    throw err;
+  }
+}
+
+/**
+ * Programmatic and CLI runner for storage reconciliation.
+ *
+ * @param {string[]} [argv=process.argv]
+ * @param {{ log: Function, error: Function }} [io]
+ * @param {object} [options]
+ * @returns {Promise<number>} exit code
+ */
+async function main(
+  argv = process.argv,
+  io = { log: console.log, error: console.error },
+  options = {}
+) {
+  const setExitCode = (code) => {
+    if (require.main === module) {
+      process.exitCode = code;
+    }
+  };
+
+  let parsed;
+  try {
+    parsed = parseCliArguments(argv.slice(2), options.cwd || process.cwd());
+  } catch (error) {
+    if (!(error instanceof ReconcileUsageError)) throw error;
+    io.error(`reconciliation usage error: ${error.message}`);
+    io.log(USAGE_TEXT);
+    setExitCode(1);
+    if (options.exitOnError === true) process.exit(1);
+    return 1;
+  }
+
+  if (parsed.showHelp) {
+    io.log(USAGE_TEXT);
+    return 0;
+  }
+
+  const env = options.env !== undefined ? options.env : process.env;
+
+  const bucket = parsed.bucket || env.STORAGE_BUCKET || 'acres-quarantine';
+  const endpoint = parsed.endpoint || env.STORAGE_ENDPOINT || 'http://localhost:3900';
+  const region = parsed.region || env.STORAGE_REGION || 'garage';
+  const accessKeyId = parsed.accessKey || env.STORAGE_ACCESS_KEY_ID || 'acres_garage_dev_key';
+  const secretAccessKey = parsed.secretKey || env.STORAGE_SECRET_ACCESS_KEY || 'acres_garage_dev_secret';
+  const forcePathStyle = parsed.forcePathStyle;
+  const outputFile = parsed.output;
+  const prefix = parsed.prefix;
+  const organizationId = parsed.organizationId;
+  const failOnOrphans = parsed.failOnOrphans;
+  const excludeQuarantined = parsed.excludeQuarantined;
+  const dryRun = parsed.dryRun;
+
+  io.log('Connecting to PostgreSQL and Object Storage...');
+
+  // Database objects resolution
+  let dbObjects = options.dbObjects;
+  let pgClient = options.pgClient;
+
+  if (!dbObjects) {
+    if (!pgClient) {
+      const pgPassword =
+        env.PGPASSWORD ||
+        env.POSTGRES_PASSWORD ||
+        env.ACRES_MIGRATOR_PASSWORD;
+
+      if (!pgPassword) {
+        io.error('Error: PostgreSQL password is required (set PGPASSWORD, POSTGRES_PASSWORD, or ACRES_MIGRATOR_PASSWORD)');
+        setExitCode(1);
+        if (options.exitOnError === true) process.exit(1);
+        return 1;
+      }
+
+      const { Client } = require('pg');
+      pgClient = new Client({
+        host: env.PGHOST || 'localhost',
+        port: parseInt(env.PGPORT || '5432', 10),
+        user: env.PGUSER || 'acres_migrator',
+        password: pgPassword,
+        database: env.PGDATABASE || 'acres',
+      });
+    }
+
+    try {
+      if (typeof pgClient.connect === 'function') {
+        await pgClient.connect();
+      }
+    } catch (_err) {
+      io.error('Error: PostgreSQL connection failed');
+      setExitCode(1);
+      if (options.exitOnError === true) process.exit(1);
+      return 1;
+    }
+
+    try {
+      dbObjects = await queryDatabaseStoredObjects({ pgClient });
+    } catch (_err) {
+      io.error('Error: Database query failed');
+      if (pgClient && !options.pgClient) {
+        await pgClient.end().catch(() => {});
+      }
+      setExitCode(1);
+      if (options.exitOnError === true) process.exit(1);
+      return 1;
+    }
+  }
+
+  // Storage objects resolution
+  let storageObjects = options.storageObjects;
+  let s3Client = options.s3Client;
+
+  if (!storageObjects) {
+    if (!s3Client) {
+      const { S3Client } = require('@aws-sdk/client-s3');
+      s3Client = new S3Client({
+        endpoint,
+        region,
+        forcePathStyle,
+        credentials: {
+          accessKeyId,
+          secretAccessKey,
+        },
+      });
+    }
+
+    try {
+      storageObjects = await listBucketObjects({ s3Client, bucket, prefix });
+    } catch (_err) {
+      io.error('Error: Object storage connection or listing failed');
+      if (pgClient && !options.pgClient) {
+        await pgClient.end().catch(() => {});
+      }
+      setExitCode(1);
+      if (options.exitOnError === true) process.exit(1);
+      return 1;
+    }
+  }
 
   try {
-    const dbObjects = await queryDatabaseStoredObjects({ pgClient });
-    const storageObjects = await listBucketObjects({ s3Client, bucket, prefix });
-
     const report = reconcileObjects({
       dbObjects,
       storageObjects,
@@ -417,25 +807,53 @@ Options:
         organizationId,
         failOnOrphans,
         excludeQuarantined,
+        execution_mode: dryRun ? 'simulation' : 'live',
       },
     });
 
-    console.log(formatReconciliationSummary(report));
+    io.log(formatReconciliationSummary(report));
 
-    fs.writeFileSync(outputFile, JSON.stringify(report, null, 2), 'utf8');
-    console.log(`\nReconciliation evidence written to ${outputFile}`);
+    if (outputFile) {
+      publishReceipt(outputFile, report);
+      io.log(`\nReconciliation evidence written to ${outputFile}`);
+    }
 
-    await pgClient.end();
-    process.exit(report.summary.exitCode);
+    if (pgClient && !options.pgClient) {
+      await pgClient.end().catch(() => {});
+    }
+
+    const exitCode = report.summary.exitCode;
+    setExitCode(exitCode);
+    if (options.exitOnError === true && exitCode !== 0) {
+      process.exit(exitCode);
+    }
+    return exitCode;
   } catch (err) {
-    console.error(`Reconciliation error: ${err.message}`);
-    await pgClient.end().catch(() => {});
-    process.exit(1);
+    if (pgClient && !options.pgClient) {
+      await pgClient.end().catch(() => {});
+    }
+    const isKnownPublication = err.message && (
+      err.message.includes('output file already exists') ||
+      err.message.includes('parent directory') ||
+      err.message.includes('parent path')
+    );
+    if (isKnownPublication) {
+      io.error(`Error: Reconciliation evidence publication failed: ${err.message}`);
+    } else {
+      io.error('Error: Reconciliation execution failed');
+    }
+    setExitCode(1);
+    if (options.exitOnError === true) process.exit(1);
+    return 1;
   }
 }
 
 if (require.main === module) {
-  main();
+  main().then((code) => {
+    process.exitCode = code;
+  }).catch(() => {
+    process.exitCode = 1;
+  });
 }
 
 module.exports = {
@@ -444,4 +862,8 @@ module.exports = {
   listBucketObjects,
   queryDatabaseStoredObjects,
   DEFAULT_IGNORE_PATTERNS,
+  ReconcileUsageError,
+  parseCliArguments,
+  publishReceipt,
+  main,
 };

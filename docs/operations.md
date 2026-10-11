@@ -7181,3 +7181,45 @@ npm run ops:templates-test
 npm run ops:templates
 ```
 
+## Prompt 305 — harden storage reconciliation invocation and receipt publication (2026-10-11)
+
+The storage reconciliation utility in `scripts/ops/reconcile-storage-objects.js` is invoked by
+Stage 7 (`disaster_recovery`) of the unified launch drill orchestrator (`scripts/ops/run-launch-drills.sh`),
+producing `reconcile-report-receipt.json` ingested by `scripts/ops/assemble-launch-dossier.js` to establish
+the storage reconciliation baseline.
+
+Hardening introduces strict, validated CLI argument parsing via `parseCliArguments(argv, cwd)` and `ReconcileUsageError`.
+Supports space-separated and attached syntax for `--output`, `-o`, `--cwd`, `--bucket`, `--endpoint`, `--region`,
+`--access-key`, `--secret-key`, `--prefix`, `--organization-id`, `--fail-on-orphans`, `--exclude-quarantined`,
+`--no-force-path-style`, `--force-path-style`, `--dry-run`, `--help`, and `-h`. Rejects unknown options, positional arguments,
+duplicate options, empty or dash-prefixed values, and mutually exclusive `--force-path-style` / `--no-force-path-style` flags
+with value-free diagnostics. Relative paths resolve against effective `cwd`.
+
+Receipt publication in `publishReceipt(outputFile, report)` enforces atomic exclusive writes: checks that the
+target path does not exist, rejects pre-existing files and symlinks, validates parent directory existence, writes to a
+sibling temporary file with mode `0o600` (`O_CREAT | O_EXCL`), verifies write integrity, hardlinks or renames atomically,
+and cleans up temporary files on failure.
+
+The programmatic runner `main(argv, io, options)` supports mock dependency injection (`options.dbObjects`,
+`options.storageObjects`, `options.pgClient`, `options.s3Client`), avoids requiring database passwords when `pgClient`
+or `dbObjects` is injected, sanitizes connection and query error diagnostics to prevent database URI, credential, or key
+reflection, and sets `process.exitCode` cleanly without abrupt process exits, ensuring asynchronous stdio streams drain.
+
+All 5 original public exports (`reconcileObjects`, `formatReconciliationSummary`, `listBucketObjects`,
+`queryDatabaseStoredObjects`, `DEFAULT_IGNORE_PATTERNS`) are preserved alongside the 4 new exports (`ReconcileUsageError`,
+`parseCliArguments`, `publishReceipt`, `main`), with complete TypeScript typings re-exported in `reconcile-storage-objects.ts`.
+
+Verification: `scripts/ops/reconcile-storage-objects.spec.js` expanded from 10 to 28 tests (10 original comparison/formatting
+tests + 18 CLI parsing, validation, atomic publication, error sanitization, and runner tests). `npm run ops:reconcile-test`
+passed 28/28 tests; `npm run ops:check` passed all 34 independent operations stages (182/182 final launch/dossier tests);
+`npm run lint`, `npm run typecheck`, production build (22/22 pages), and `git diff --check` passed cleanly.
+Independent two-stage code review verified and approved. Stage 7 disaster recovery verification hardened; live disaster
+recovery rehearsals and Phase 12 exit remain open. Rollback is a reviewed normal revert.
+
+Safe inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+npm run ops:check
+```
+

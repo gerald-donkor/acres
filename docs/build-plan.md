@@ -2693,3 +2693,19 @@ stages / 27 suite invocations / 2914 tests / zero failures**, final launch/dossi
 typecheck, build (**22/22** pages), and diff checks passed. Prompt 201, Category 3 deployment sign-off
 and Phase 12 exit remain open. Independent read-only review approved.
 
+**Prompt 305 — harden storage reconciliation invocation and receipt publication (2026-10-11):**
+The Stage 7 disaster recovery storage reconciliation utility in `scripts/ops/reconcile-storage-objects.js`
+now provides strict CLI argument parsing (`parseCliArguments`, `ReconcileUsageError`) rejecting unknown options,
+unexpected positional arguments, duplicate options, empty or dash-prefixed values, and mutually exclusive
+`--force-path-style` / `--no-force-path-style` flags with value-free diagnostics. Enforces atomic exclusive receipt
+publication (`publishReceipt`) writing to a mode `0o600` temporary sibling file with exclusive creation (`O_CREAT | O_EXCL`)
+and refusing to overwrite pre-existing files or symlinks. The programmatic runner (`main`) supports mock dependency
+injection (`options.dbObjects`, `options.storageObjects`, `options.pgClient`, `options.s3Client`), avoids requiring
+database passwords when clients or objects are injected, sanitizes connection and query error diagnostics to prevent
+credential or URI reflection, and sets `process.exitCode` cleanly without abrupt process exits. TypeScript typings
+re-exported in `reconcile-storage-objects.ts`. Spec expanded from 10 to 28 tests (all 10 original comparison/formatting
+tests preserved); `ops:reconcile-test` (**28/28**), `ops:check` (**34 independent offline operations stages / 27 suite
+invocations / 2914 tests / zero failures**, final launch/dossier **182/182**), lint, typecheck, build (**22/22** pages),
+and diff checks passed cleanly. Independent two-stage code review approved. Category 6 disaster recovery verification
+hardened; live disaster recovery rehearsals and Phase 12 exit remain open.
+

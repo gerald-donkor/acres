@@ -104,3 +104,34 @@ export const formatReconciliationSummary: (report: ReconciliationReport) => stri
   jsModule.formatReconciliationSummary;
 
 export const DEFAULT_IGNORE_PATTERNS: RegExp[] = jsModule.DEFAULT_IGNORE_PATTERNS;
+
+export interface ParsedCliArguments {
+  showHelp: boolean;
+  cwd: string;
+  output: string | null;
+  bucket?: string;
+  endpoint?: string;
+  region?: string;
+  accessKey?: string;
+  secretKey?: string;
+  prefix?: string;
+  organizationId?: string;
+  failOnOrphans: boolean;
+  excludeQuarantined: boolean;
+  forcePathStyle: boolean;
+  dryRun: boolean;
+}
+
+export const ReconcileUsageError: typeof Error = jsModule.ReconcileUsageError;
+
+export const parseCliArguments: (argv?: string[], cwd?: string) => ParsedCliArguments =
+  jsModule.parseCliArguments;
+
+export const publishReceipt: (outputFile: string, report: ReconciliationReport) => void =
+  jsModule.publishReceipt;
+
+export const main: (
+  argv?: string[],
+  io?: { log: (...args: unknown[]) => void; error: (...args: unknown[]) => void },
+  options?: Record<string, unknown>,
+) => Promise<number> = jsModule.main;

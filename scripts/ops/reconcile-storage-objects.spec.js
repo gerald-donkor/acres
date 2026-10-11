@@ -1,10 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
 const {
   reconcileObjects,
   formatReconciliationSummary,
   DEFAULT_IGNORE_PATTERNS,
+  ReconcileUsageError,
+  parseCliArguments,
+  publishReceipt,
+  main,
 } = require('./reconcile-storage-objects');
+
 
 test('reconcileObjects: clean match with exact sizes and checksums', () => {
   const dbObjects = [
@@ -396,4 +404,357 @@ test('formatReconciliationSummary: produces human-readable text without errors',
   assert.ok(formatted.includes('missingKey'));
   assert.ok(formatted.includes('orphanKey'));
   assert.ok(formatted.includes('mismatchKey'));
+});
+
+function createIo() {
+  return {
+    logs: [],
+    errors: [],
+    log(...args) {
+      this.logs.push(args.join(' '));
+    },
+    error(...args) {
+      this.errors.push(args.join(' '));
+    },
+    reset() {
+      this.logs = [];
+      this.errors = [];
+    },
+  };
+}
+
+test('ReconcileUsageError: is instance of Error', () => {
+  const err = new ReconcileUsageError('test error');
+  assert.ok(err instanceof Error);
+  assert.strictEqual(err.message, 'test error');
+});
+
+test('parseCliArguments: accepts valid space-separated and attached options', () => {
+  const parsed = parseCliArguments([
+    '--output', 'out.json',
+    '--bucket', 'custom-bucket',
+    '--endpoint', 'http://storage.internal:9000',
+    '--region', 'us-east-1',
+    '--access-key', 'key123',
+    '--secret-key', 'secret456',
+    '--prefix', 'org-1/',
+    '--organization-id', 'org-1',
+    '--fail-on-orphans',
+    '--exclude-quarantined',
+    '--no-force-path-style',
+    '--dry-run',
+  ], '/test/cwd');
+
+  assert.strictEqual(parsed.showHelp, false);
+  assert.strictEqual(parsed.cwd, '/test/cwd');
+  assert.strictEqual(parsed.output, '/test/cwd/out.json');
+  assert.strictEqual(parsed.bucket, 'custom-bucket');
+  assert.strictEqual(parsed.endpoint, 'http://storage.internal:9000');
+  assert.strictEqual(parsed.region, 'us-east-1');
+  assert.strictEqual(parsed.accessKey, 'key123');
+  assert.strictEqual(parsed.secretKey, 'secret456');
+  assert.strictEqual(parsed.prefix, 'org-1/');
+  assert.strictEqual(parsed.organizationId, 'org-1');
+  assert.strictEqual(parsed.failOnOrphans, true);
+  assert.strictEqual(parsed.excludeQuarantined, true);
+  assert.strictEqual(parsed.forcePathStyle, false);
+  assert.strictEqual(parsed.dryRun, true);
+});
+
+test('parseCliArguments: accepts attached syntax and short options', () => {
+  const parsed = parseCliArguments([
+    '-o=receipt.json',
+    '--bucket=attached-bucket',
+    '--endpoint=http://attached:9000',
+    '--region=attached-region',
+    '--access-key=attached-key',
+    '--secret-key=attached-secret',
+    '--prefix=attached-prefix/',
+    '--organization-id=attached-org',
+    '--cwd=sub/dir',
+  ], '/base/cwd');
+
+  assert.strictEqual(parsed.cwd, '/base/cwd/sub/dir');
+  assert.strictEqual(parsed.output, '/base/cwd/sub/dir/receipt.json');
+  assert.strictEqual(parsed.bucket, 'attached-bucket');
+  assert.strictEqual(parsed.endpoint, 'http://attached:9000');
+  assert.strictEqual(parsed.region, 'attached-region');
+  assert.strictEqual(parsed.accessKey, 'attached-key');
+  assert.strictEqual(parsed.secretKey, 'attached-secret');
+  assert.strictEqual(parsed.prefix, 'attached-prefix/');
+  assert.strictEqual(parsed.organizationId, 'attached-org');
+});
+
+test('parseCliArguments: flags --help and -h return showHelp: true', () => {
+  assert.strictEqual(parseCliArguments(['--help']).showHelp, true);
+  assert.strictEqual(parseCliArguments(['-h']).showHelp, true);
+});
+
+test('parseCliArguments: rejects invalid argv and cwd', () => {
+  assert.throws(() => parseCliArguments('not-an-array'), /arguments must be an array of strings/);
+  assert.throws(() => parseCliArguments([123]), /arguments must be an array of strings/);
+  assert.throws(() => parseCliArguments([], ''), /cwd requires a non-empty path/);
+  assert.throws(() => parseCliArguments([], '   '), /cwd requires a non-empty path/);
+  assert.throws(() => parseCliArguments([], 123), /cwd requires a non-empty path/);
+});
+
+test('parseCliArguments: rejects unknown options and positional arguments', () => {
+  assert.throws(() => parseCliArguments(['--bogus-flag']), /unsupported option or positional argument$/);
+  assert.throws(() => parseCliArguments(['extra-positional']), /unsupported option or positional argument$/);
+});
+
+test('parseCliArguments: rejects missing, empty, or dash-prefixed values', () => {
+  // Trailing flags missing values
+  assert.throws(() => parseCliArguments(['--output']), /output requires a non-empty file path/);
+  assert.throws(() => parseCliArguments(['-o']), /output requires a non-empty file path/);
+  assert.throws(() => parseCliArguments(['--bucket']), /bucket requires a non-empty bucket name/);
+  assert.throws(() => parseCliArguments(['--endpoint']), /endpoint requires a non-empty endpoint URL/);
+  assert.throws(() => parseCliArguments(['--region']), /region requires a non-empty region name/);
+  assert.throws(() => parseCliArguments(['--access-key']), /access-key requires a non-empty key ID/);
+  assert.throws(() => parseCliArguments(['--secret-key']), /secret-key requires a non-empty secret key/);
+  assert.throws(() => parseCliArguments(['--prefix']), /prefix requires a non-empty key prefix/);
+  assert.throws(() => parseCliArguments(['--organization-id']), /organization-id requires a non-empty organization ID/);
+  assert.throws(() => parseCliArguments(['--cwd']), /cwd requires a non-empty directory path/);
+
+  // Dash-prefixed values (space-separated and attached)
+  assert.throws(() => parseCliArguments(['--output', '-b']), /output requires a non-empty file path/);
+  assert.throws(() => parseCliArguments(['--output=-b']), /output requires a non-empty file path/);
+  assert.throws(() => parseCliArguments(['-o=-b']), /output requires a non-empty file path/);
+  assert.throws(() => parseCliArguments(['--bucket', '--endpoint']), /bucket requires a non-empty bucket name/);
+  assert.throws(() => parseCliArguments(['--bucket=-endpoint']), /bucket requires a non-empty bucket name/);
+  assert.throws(() => parseCliArguments(['--cwd', '-x']), /cwd requires a non-empty directory path/);
+  assert.throws(() => parseCliArguments(['--cwd=-x']), /cwd requires a non-empty directory path/);
+
+  // Empty attached values
+  assert.throws(() => parseCliArguments(['--output=']), /output requires a non-empty file path/);
+  assert.throws(() => parseCliArguments(['-o=']), /output requires a non-empty file path/);
+  assert.throws(() => parseCliArguments(['--bucket=   ']), /bucket requires a non-empty bucket name/);
+});
+
+test('parseCliArguments: rejects mutually exclusive force-path-style flags', () => {
+  assert.throws(
+    () => parseCliArguments(['--force-path-style', '--no-force-path-style']),
+    /cannot specify both --force-path-style and --no-force-path-style/
+  );
+});
+
+test('parseCliArguments: rejects repeated options', () => {
+  assert.throws(() => parseCliArguments(['--output', 'a', '--output', 'b']), /output may be specified only once/);
+  assert.throws(() => parseCliArguments(['--bucket', 'a', '--bucket', 'b']), /bucket may be specified only once/);
+  assert.throws(() => parseCliArguments(['--endpoint', 'a', '--endpoint', 'b']), /endpoint may be specified only once/);
+  assert.throws(() => parseCliArguments(['--region', 'a', '--region', 'b']), /region may be specified only once/);
+  assert.throws(() => parseCliArguments(['--access-key', 'a', '--access-key', 'b']), /access-key may be specified only once/);
+  assert.throws(() => parseCliArguments(['--secret-key', 'a', '--secret-key', 'b']), /secret-key may be specified only once/);
+  assert.throws(() => parseCliArguments(['--prefix', 'a', '--prefix', 'b']), /prefix may be specified only once/);
+  assert.throws(() => parseCliArguments(['--organization-id', 'a', '--organization-id', 'b']), /organization-id may be specified only once/);
+  assert.throws(() => parseCliArguments(['--cwd', 'a', '--cwd', 'b']), /cwd may be specified only once/);
+  assert.throws(() => parseCliArguments(['--fail-on-orphans', '--fail-on-orphans']), /fail-on-orphans may be specified only once/);
+  assert.throws(() => parseCliArguments(['--exclude-quarantined', '--exclude-quarantined']), /exclude-quarantined may be specified only once/);
+  assert.throws(() => parseCliArguments(['--no-force-path-style', '--no-force-path-style']), /no-force-path-style may be specified only once/);
+  assert.throws(() => parseCliArguments(['--force-path-style', '--force-path-style']), /force-path-style may be specified only once/);
+  assert.throws(() => parseCliArguments(['--dry-run', '--dry-run']), /dry-run may be specified only once/);
+});
+
+test('publishReceipt: writes report atomically to absent destination and rejects overwrites', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-reconcile-test-'));
+  try {
+    const target = path.join(tmpDir, 'receipt.json');
+    const report = { timestamp: '2026-10-11T00:00:00.000Z', summary: { status: 'clean', exitCode: 0 } };
+
+    // 1. Initial publication succeeds
+    publishReceipt(target, report);
+    assert.ok(fs.existsSync(target));
+    const content = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.deepStrictEqual(content, report);
+
+    const stat = fs.statSync(target);
+    assert.strictEqual(stat.isFile(), true);
+
+    // 2. Refuses to overwrite existing file
+    assert.throws(
+      () => publishReceipt(target, report),
+      /output file already exists/
+    );
+
+    // 3. Refuses when target is a symlink
+    const symlinkTarget = path.join(tmpDir, 'symlink-receipt.json');
+    fs.symlinkSync(target, symlinkTarget);
+    assert.throws(
+      () => publishReceipt(symlinkTarget, report),
+      /output file already exists/
+    );
+
+    // 4. Refuses when parent directory does not exist
+    const nonExistentTarget = path.join(tmpDir, 'absent-subdir', 'receipt.json');
+    assert.throws(
+      () => publishReceipt(nonExistentTarget, report),
+      /parent directory does not exist/
+    );
+
+    // 5. Refuses when parent path is a regular file
+    const fileAsParentTarget = path.join(target, 'nested.json');
+    assert.throws(
+      () => publishReceipt(fileAsParentTarget, report),
+      /parent path is not a directory/
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('publishReceipt: cleans up temporary file on failure', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-reconcile-clean-'));
+  try {
+    const target = path.join(tmpDir, 'fail-receipt.json');
+    const circular = {};
+    circular.self = circular;
+
+    assert.throws(() => publishReceipt(target, circular));
+
+    // Ensure no leftover temporary files in directory
+    const files = fs.readdirSync(tmpDir);
+    const tmpFiles = files.filter((f) => f.startsWith('.reconcile-'));
+    assert.strictEqual(tmpFiles.length, 0);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('main: --help prints usage and exits cleanly with 0', async () => {
+  const io = createIo();
+  const code = await main(['node', 'script.js', '--help'], io, { exitOnError: false });
+  assert.strictEqual(code, 0);
+  assert.ok(io.logs.some((l) => l.includes('Usage: node scripts/ops/reconcile-storage-objects.js')));
+});
+
+test('main: usage error logs message and usage text and returns 1', async () => {
+  const io = createIo();
+  const code = await main(['node', 'script.js', '--invalid-arg'], io, { exitOnError: false });
+  assert.strictEqual(code, 1);
+  assert.ok(io.errors.some((e) => e.includes('reconciliation usage error')));
+  assert.ok(io.logs.some((l) => l.includes('Usage: node scripts/ops/reconcile-storage-objects.js')));
+});
+
+test('main: missing PostgreSQL password logs sanitized error and returns 1', async () => {
+  const io = createIo();
+  const code = await main(['node', 'script.js'], io, {
+    exitOnError: false,
+    env: { PGPASSWORD: '', POSTGRES_PASSWORD: '', ACRES_MIGRATOR_PASSWORD: '' },
+  });
+  assert.strictEqual(code, 1);
+  assert.ok(io.errors.some((e) => e.includes('PostgreSQL password is required')));
+});
+
+test('main: sanitized error when PostgreSQL connection fails', async () => {
+  const io = createIo();
+  const failingPgClient = {
+    connect: async () => {
+      throw new Error('connect ECONNREFUSED postgres://user:secretpassword@internal-host:5432/acres');
+    },
+    end: async () => {},
+  };
+  const code = await main(['node', 'script.js'], io, {
+    exitOnError: false,
+    pgClient: failingPgClient,
+    env: {},
+  });
+  assert.strictEqual(code, 1);
+  assert.ok(io.errors.some((e) => e.includes('PostgreSQL connection failed')));
+  assert.ok(!io.errors.some((e) => e.includes('secretpassword')));
+});
+
+test('main: sanitized error when storage listing fails', async () => {
+  const io = createIo();
+  const failingS3Client = {
+    send: async () => {
+      throw new Error('AccessDenied: secret-credentials invalid for https://garage.secret.net');
+    },
+  };
+  const code = await main(['node', 'script.js'], io, {
+    exitOnError: false,
+    dbObjects: [],
+    s3Client: failingS3Client,
+  });
+  assert.strictEqual(code, 1);
+  assert.ok(io.errors.some((e) => e.includes('Object storage connection or listing failed')));
+  assert.ok(!io.errors.some((e) => e.includes('secret-credentials')));
+});
+
+test('main: clean run with injected mock objects returns 0 and formats summary', async () => {
+  const io = createIo();
+  const dbObjects = [
+    {
+      id: 'so-1',
+      organizationId: 'org-1',
+      bucket: 'acres-quarantine',
+      objectKey: 'file.csv',
+      byteCount: 100,
+      state: 'accepted',
+    },
+  ];
+  const storageObjects = [
+    {
+      key: 'file.csv',
+      byteCount: 100,
+    },
+  ];
+
+  const code = await main(['node', 'script.js'], io, {
+    exitOnError: false,
+    dbObjects,
+    storageObjects,
+  });
+
+  assert.strictEqual(code, 0);
+  assert.ok(io.logs.some((l) => l.includes('Acres Storage Reconciliation Report')));
+  assert.ok(io.logs.some((l) => l.includes('Reconciliation Status:     CLEAN')));
+});
+
+test('main: publishes receipt exclusively when --output is provided', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-main-out-'));
+  try {
+    const target = path.join(tmpDir, 'evidence-receipt.json');
+    const io = createIo();
+    const dbObjects = [
+      {
+        id: 'so-1',
+        organizationId: 'org-1',
+        bucket: 'acres-quarantine',
+        objectKey: 'file.csv',
+        byteCount: 100,
+        state: 'accepted',
+      },
+    ];
+    const storageObjects = [
+      {
+        key: 'file.csv',
+        byteCount: 100,
+      },
+    ];
+
+    const code = await main(['node', 'script.js', '--output', target], io, {
+      exitOnError: false,
+      dbObjects,
+      storageObjects,
+    });
+
+    assert.strictEqual(code, 0);
+    assert.ok(fs.existsSync(target));
+    const receipt = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(receipt.summary.status, 'clean');
+    assert.strictEqual(receipt.summary.matchedObjects, 1);
+    assert.ok(io.logs.some((l) => l.includes(`Reconciliation evidence written to ${target}`)));
+
+    // Second run fails to overwrite existing evidence
+    io.reset();
+    const failCode = await main(['node', 'script.js', '--output', target], io, {
+      exitOnError: false,
+      dbObjects,
+      storageObjects,
+    });
+    assert.strictEqual(failCode, 1);
+    assert.ok(io.errors.some((e) => e.includes('output file already exists')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
