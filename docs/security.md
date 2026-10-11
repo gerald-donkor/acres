@@ -1103,3 +1103,15 @@ narrows TM-01/TM-04/TM-05 exposure. Source symlink support is not confinement;
 hostile same-UID changes, crash orphans and lack of durable recovery remain
 operator limits. Category 1 live DNS/TLS/HTTPS approval, prompt 201 and Phase
 12 sign-off remain open.
+
+**Prompt 306 storage reconciliation publication boundary (2026-10-11):** The
+Stage 7 storage receipt producer removes the unsafe check-then-rename fallback.
+Exclusive hard links protect competing destinations; unsupported link operations
+fail closed. Directory-ancestor identity checks, no-follow staged regular-file
+verification and owned cleanup narrow ordinary substitution/deletion risks.
+Fixed typed publication diagnostics replace substring-trusted raw error messages.
+Cleanup faults remain nonzero even if final evidence was already linked; retained
+receipts are never rolled back by deletion. This narrowly reinforces existing
+evidence-integrity and diagnostic controls. Hostile same-UID changes, interrupted
+staging orphans, fsync/crash durability and receipt authenticity remain outside
+this preflight. Category 6 live approval, prompt 201 and Phase 12 exit stay open.

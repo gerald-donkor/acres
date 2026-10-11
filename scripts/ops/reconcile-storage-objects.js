@@ -559,106 +559,213 @@ function parseCliArguments(argv = process.argv.slice(2), cwd = process.cwd()) {
   };
 }
 
-/**
- * Atomically publishes reconciliation evidence report to an absent destination.
- *
- * @param {string} outputFile
- * @param {object} report
- */
-function publishReceipt(outputFile, report) {
-  if (typeof outputFile !== 'string' || !outputFile.trim()) {
-    throw new Error('output file path must be a non-empty string');
+// Only these fixed messages may cross the runner's publication error boundary.
+class ReceiptPublicationError extends Error {}
+const publicationFailure = (message = 'receipt publication failed') =>
+  new ReceiptPublicationError(message);
+const sameReceiptFile = (a, b) => a.dev === b.dev && a.ino === b.ino;
+
+function receiptStat(file) {
+  try {
+    return fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
   }
-  if (!report || typeof report !== 'object') {
-    throw new Error('report must be an object');
+}
+
+function receiptParents(destination) {
+  const parents = [];
+  let current = path.parse(destination).root;
+  for (const part of [
+    '',
+    ...path
+      .dirname(destination)
+      .slice(current.length)
+      .split(path.sep)
+      .filter(Boolean),
+  ]) {
+    if (part) current = path.join(current, part);
+    const stat = fs.lstatSync(current);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      throw publicationFailure('parent path is not a directory');
+    }
+    parents.push({ file: current, stat });
+  }
+  return parents;
+}
+
+function checkReceiptParents(parents) {
+  for (const { file, stat } of parents) {
+    const actual = fs.lstatSync(file);
+    if (!actual.isDirectory() || !sameReceiptFile(actual, stat)) {
+      throw publicationFailure();
+    }
+  }
+}
+
+/** Publish complete evidence exclusively; hard-link failure has no overwrite fallback. */
+function publishReceipt(outputFile, report) {
+  if (
+    typeof outputFile !== 'string' ||
+    !outputFile.trim() ||
+    /[\x00-\x1f\x7f-\x9f]/.test(outputFile)
+  )
+    throw publicationFailure(
+      'output file path must be non-empty and control-free',
+    );
+  if (!report || typeof report !== 'object' || Array.isArray(report)) {
+    throw publicationFailure('report must be an object');
   }
 
   const destination = path.resolve(outputFile);
-  const parentDir = path.dirname(destination);
-
-  // 1. Verify parent directory exists and is a directory
-  let parentStat;
+  let parents;
   try {
-    parentStat = fs.lstatSync(parentDir);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      throw new Error(`parent directory does not exist: ${parentDir}`);
-    }
-    throw err;
+    parents = receiptParents(destination);
+  } catch (error) {
+    if (error instanceof ReceiptPublicationError) throw error;
+    if (error.code === 'ENOENT')
+      throw publicationFailure('parent directory does not exist');
+    throw publicationFailure('parent directory is unavailable or unsafe');
   }
-  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
-    throw new Error(`parent path is not a directory: ${parentDir}`);
-  }
-
-  // 2. Verify target file does not already exist (or is a symlink)
-  let destStat;
   try {
-    destStat = fs.lstatSync(destination);
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err;
-  }
-  if (destStat) {
-    throw new Error(`output file already exists: ${destination}`);
+    if (receiptStat(destination))
+      throw publicationFailure('output file already exists');
+  } catch (error) {
+    if (error instanceof ReceiptPublicationError) throw error;
+    throw publicationFailure();
   }
 
-  // 3. Write report JSON to unique temporary sibling file
-  const tempFile = path.join(
-    parentDir,
-    `.reconcile-${path.basename(destination)}-${crypto.randomUUID()}.tmp`
+  const temporary = path.join(
+    path.dirname(destination),
+    `.reconcile-${crypto.randomUUID()}.tmp`,
   );
-
-  const content = JSON.stringify(report, null, 2) + '\n';
   let fd = null;
-  try {
-    fd = fs.openSync(
-      tempFile,
-      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL,
-      0o600
-    );
-    fs.writeFileSync(fd, content, 'utf8');
-    fs.closeSync(fd);
-    fd = null;
-
-    // 4. Verify written content
-    const verified = fs.readFileSync(tempFile, 'utf8');
-    if (verified !== content) {
-      throw new Error('Receipt content verification failed');
+  let readFd = null;
+  let owned = null;
+  let failed = null;
+  let cleanupFailed = false;
+  const close = (reading = false) => {
+    const descriptor = reading ? readFd : fd;
+    if (descriptor !== null) {
+      fs.closeSync(descriptor);
+      if (reading) readFd = null;
+      else fd = null;
     }
-
-    // 5. Atomic link or exclusive fallback
-    try {
-      fs.linkSync(tempFile, destination);
-      fs.unlinkSync(tempFile);
-    } catch (linkErr) {
-      if (linkErr.code === 'EEXIST') {
-        throw new Error(`output file already exists: ${destination}`);
-      }
-      if (linkErr.code === 'EXDEV' || linkErr.code === 'ENOSYS' || linkErr.code === 'EPERM') {
-        try {
-          if (fs.lstatSync(destination)) {
-            throw new Error(`output file already exists: ${destination}`);
-          }
-        } catch (sErr) {
-          if (sErr.code !== 'ENOENT') throw sErr;
-        }
-        fs.renameSync(tempFile, destination);
-      } else {
-        throw linkErr;
-      }
-    }
-  } catch (err) {
-    if (fd !== null) {
+  };
+  const clean = () => {
+    // Recover ownership if the first descriptor stat failed; never adopt a path.
+    if (!owned && fd !== null) {
       try {
-        fs.closeSync(fd);
-      } catch {}
-    }
-    try {
-      if (fs.existsSync(tempFile)) {
-        fs.unlinkSync(tempFile);
+        owned = fs.fstatSync(fd);
+      } catch {
+        cleanupFailed = true;
       }
-    } catch {}
-    throw err;
+    }
+    for (const reading of [true, false]) {
+      try {
+        close(reading);
+      } catch {
+        cleanupFailed = true;
+      }
+    }
+    if (owned) {
+      try {
+        checkReceiptParents(parents);
+        const actual = receiptStat(temporary);
+        if (actual && (!actual.isFile() || !sameReceiptFile(actual, owned))) {
+          throw publicationFailure();
+        }
+        if (actual) fs.unlinkSync(temporary);
+        owned = null;
+      } catch {
+        cleanupFailed = true;
+      }
+    }
+  };
+
+  try {
+    const bytes = Buffer.from(JSON.stringify(report, null, 2) + '\n', 'utf8');
+    checkReceiptParents(parents);
+    fd = fs.openSync(
+      temporary,
+      fs.constants.O_WRONLY |
+        fs.constants.O_CREAT |
+        fs.constants.O_EXCL |
+        fs.constants.O_NOFOLLOW,
+      0o600,
+    );
+    owned = fs.fstatSync(fd);
+    if (!owned.isFile()) throw publicationFailure();
+    fs.writeFileSync(fd, bytes);
+    close();
+    checkReceiptParents(parents);
+    const named = fs.lstatSync(temporary);
+    if (
+      !named.isFile() ||
+      !sameReceiptFile(named, owned) ||
+      named.size !== bytes.length
+    ) {
+      throw publicationFailure();
+    }
+    readFd = fs.openSync(
+      temporary,
+      fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
+    );
+    const opened = fs.fstatSync(readFd);
+    if (
+      !opened.isFile() ||
+      !sameReceiptFile(opened, owned) ||
+      opened.size !== bytes.length
+    ) {
+      throw publicationFailure();
+    }
+    const actual = Buffer.alloc(bytes.length + 1);
+    let used = 0;
+    while (used < actual.length) {
+      const n = fs.readSync(readFd, actual, used, actual.length - used, null);
+      if (!Number.isInteger(n) || n < 0 || n > actual.length - used)
+        throw publicationFailure();
+      if (n === 0) break;
+      used += n;
+    }
+    const after = fs.fstatSync(readFd);
+    if (
+      used !== bytes.length ||
+      after.size !== bytes.length ||
+      after.mtimeMs !== opened.mtimeMs ||
+      after.ctimeMs !== opened.ctimeMs ||
+      !actual.subarray(0, used).equals(bytes)
+    )
+      throw publicationFailure();
+    close(true);
+    checkReceiptParents(parents);
+    const final = fs.lstatSync(temporary);
+    if (
+      !final.isFile() ||
+      !sameReceiptFile(final, owned) ||
+      final.size !== bytes.length ||
+      final.mtimeMs !== after.mtimeMs ||
+      final.ctimeMs !== after.ctimeMs
+    )
+      throw publicationFailure();
+    try {
+      fs.linkSync(temporary, destination);
+    } catch (error) {
+      if (error.code === 'EEXIST')
+        throw publicationFailure('output file already exists');
+      throw publicationFailure();
+    }
+  } catch (error) {
+    failed =
+      error instanceof ReceiptPublicationError ? error : publicationFailure();
+  } finally {
+    clean();
+    // A transient fault still fails this invocation; retry only owned cleanup once.
+    if (fd !== null || readFd !== null || owned !== null) clean();
   }
+  if (cleanupFailed) throw publicationFailure('receipt cleanup failed');
+  if (failed) throw failed;
 }
 
 /**
@@ -832,12 +939,7 @@ async function main(
     if (pgClient && !options.pgClient) {
       await pgClient.end().catch(() => {});
     }
-    const isKnownPublication = err.message && (
-      err.message.includes('output file already exists') ||
-      err.message.includes('parent directory') ||
-      err.message.includes('parent path')
-    );
-    if (isKnownPublication) {
+    if (err instanceof ReceiptPublicationError) {
       io.error(`Error: Reconciliation evidence publication failed: ${err.message}`);
     } else {
       io.error('Error: Reconciliation execution failed');

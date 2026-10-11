@@ -2709,3 +2709,23 @@ invocations / 2914 tests / zero failures**, final launch/dossier **182/182**), l
 and diff checks passed cleanly. Independent two-stage code review approved. Category 6 disaster recovery verification
 hardened; live disaster recovery rehearsals and Phase 12 exit remain open.
 
+
+**Prompt 306 — close storage receipt publication races (2026-10-11):**
+Storage reconciliation now publishes with exclusive hard links only; unsupported
+links fail closed, closing prompt 305's check-then-rename overwrite race.
+Directory identity and no-follow staged-file verification protect ordinary
+substitution; cleanup touches only owned staging and remains failed on observed
+faults, preserving final evidence after linking. Fixed typed publication errors
+replace substring-trusted private diagnostics. Public CLI/helper/report contracts
+remain unchanged. The original 28 tests plus 26 new publication regressions pass
+(**54/54**); lint, typecheck and permitted production build (**22/22** pages)
+pass. The sandbox build's Next --showConfig failure is recorded in
+`docs/operations.md`. Category 6 live recovery, prompt 201 and Phase 12 exit stay
+open; no push, deployment, online audit or live acceptance occurred.
+All **33 independent offline operations stages** passed across final successful
+invocations (**27 suite invocations / 3035 tests / zero failures**, final
+launch/dossier **182/182**); the intermediate malformed fixture and corrected
+rerun are recorded in `docs/operations.md`. Independent read-only review found
+no issues and reproduced **54/54** plus clean diff checks. Online audit remains
+omitted under the existing metadata-disclosure restriction; no full `ops:check`
+pass or fresh vulnerability count is claimed.

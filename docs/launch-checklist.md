@@ -933,6 +933,16 @@ created database or archive for an authorized drill. The stubbed
 database. Category 6 still requires the separately authorized live restore,
 Garage reconciliation, and operator sign-off described below.
 
+**Storage receipt publication safety (prompt 306).** Reconciliation output
+requires an absent destination and a filesystem supporting exclusive hard
+links; unsupported links fail without a rename fallback. Directory ancestors
+must not be symlinks. Publication or cleanup failure exits nonzero. A complete
+receipt may remain after post-link cleanup failure: preserve it, inspect any
+retained private `.reconcile-*.tmp` artifacts, and use a fresh destination for
+an authorized retry. Never delete retained evidence just to rerun the command.
+These controls protect simulation preflight output; Category 6 still needs its
+separate live evidence and operator approval.
+
 **Prompt 210 Category 6 intake — 2026-09-26T23:55:37Z UTC.** Reviewed
 `a3c4d9b` on `main`; the only worktree change was this prompt. The
 repository-visible Category 6 material is the unresolved

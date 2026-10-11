@@ -7195,10 +7195,12 @@ Supports space-separated and attached syntax for `--output`, `-o`, `--cwd`, `--b
 duplicate options, empty or dash-prefixed values, and mutually exclusive `--force-path-style` / `--no-force-path-style` flags
 with value-free diagnostics. Relative paths resolve against effective `cwd`.
 
-Receipt publication in `publishReceipt(outputFile, report)` enforces atomic exclusive writes: checks that the
-target path does not exist, rejects pre-existing files and symlinks, validates parent directory existence, writes to a
-sibling temporary file with mode `0o600` (`O_CREAT | O_EXCL`), verifies write integrity, hardlinks or renames atomically,
-and cleans up temporary files on failure.
+The original `publishReceipt(outputFile, report)` attempted exclusive writes:
+it checked for existing destinations, validated the immediate parent, staged
+with mode `0o600` (`O_CREAT | O_EXCL`), verified content and attempted hard-link
+publication with a rename fallback.
+Prompt 306 below corrects the original exclusivity claim: the fallback could overwrite
+a competing destination, and the original cleanup path suppressed failures.
 
 The programmatic runner `main(argv, io, options)` supports mock dependency injection (`options.dbObjects`,
 `options.storageObjects`, `options.pgClient`, `options.s3Client`), avoids requiring database passwords when `pgClient`
@@ -7223,3 +7225,104 @@ npm run ops:reconcile-test
 npm run ops:check
 ```
 
+
+## Prompt 306 — close storage receipt publication races (2026-10-11)
+
+Prompt 305's check-then-rename fallback did not guarantee exclusive publication.
+An isolated planning probe forced hard-link `EPERM` and inserted a competing
+receipt immediately before rename; actual output was:
+
+```text
+Competing evidence preserved: false
+Publisher returned success: true
+```
+
+`publishReceipt` now uses exclusive hard links only, without rename, copy or
+final-path direct writes. Unsupported hard links fail closed. Parent directory
+ancestors must be real directories and retain their device/inode identities
+through verification and cleanup. Staging is exclusively created with mode
+`0600`, read back through a no-follow regular-file descriptor and checked for
+identity, size, exact bytes and timestamp stability before linking. Existing
+files, directories, symlinks and dangling symlinks remain untouched, including
+competitors introduced at link time. No parent is created or chmodded.
+
+The internal `ReceiptPublicationError` carries fixed diagnostics; `main` no
+longer trusts exception message substrings or reflects private filesystem paths
+on failure. Success still names the explicitly selected local output path.
+Cleanup closes owned descriptors and unlinks only the staging inode it created.
+Any observed cleanup failure remains a failed invocation, with one bounded
+retry of owned cleanup. A complete final hard link is retained if cleanup fails;
+never delete that evidence merely to retry the command.
+
+The public helper signatures, TypeScript facade, comparison semantics, CLI
+options, Stage 7 caller and simulation JSON schema stay unchanged. No database,
+S3, product, dependency, CI or launch approval behavior changed.
+
+### Verification and execution limits
+
+Focused suite: **54/54**, retaining all 28 original tests and adding 26
+filesystem collision, substitution, fault, cleanup and diagnostic regressions.
+The initial default sandbox runner failed opaquely (`test failed`); an
+in-process run exposed the expected red unsupported-hardlink regression
+(`Missing expected exception`, 29 passed / 1 failed). Normal permitted runner
+passes after implementation. A new substring-spoof test initially supplied a
+record without `objectKey` and was correctly ignored by reconciliation; adding
+the required fixture key exercised the intended error boundary and passed.
+
+Actual check outputs (each successful command exited 0):
+
+- `npm run ops:reconcile-test`: `tests 54`, `pass 54`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`, with no diagnostics.
+- `npm run typecheck`: client `tsc --noEmit`, server
+  `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client `7.9.1`
+  generated successfully, with no TypeScript diagnostics.
+- Permitted `npm run build`: `Compiled successfully in 3.4s`,
+  `Generating static pages using 7 workers (22/22)`, then
+  `prisma generate && nest build`, exit 0.
+- `node --check` on both changed JS files: exit 0, no output.
+- Selected Prettier regions: `publication helpers: formatted`,
+  `initial regressions: formatted`, `filesystem regressions: formatted`.
+- `git diff --check`: exit 0, no output.
+
+Sandbox production build failed with
+`Could not parse output from TypeScript's --showConfig.`; the unchanged permitted
+run passed. Selected added/changed code regions are formatted without
+reformatting pre-existing unrelated source.
+
+All **33 independent offline operations stages** passed across the final
+successful invocations: **27 suite invocations / 3035 tests / zero failures**.
+`ops:readiness-test` reported `tests 649`, `pass 649`, `fail 0`;
+`ops:launch-drill-test` reported `tests 182`, `pass 182`, `fail 0`.
+The independent stage runner recorded 32 passes and the intermediate malformed
+reconciliation fixture failure; its corrected standalone standard runner then
+passed **54/54**, replacing that stage's failed result without repeating
+unaffected checks. Counts include repeated suite invocations present in the
+actual aggregate script. Only online `ops:audit` was omitted under the existing
+dependency-metadata disclosure restriction; no full `ops:check` pass or fresh
+vulnerability inventory is claimed.
+
+Independent read-only review found **no Critical, Important or Minor issues**
+and returned `Ready to commit: Yes` after verification recording. The reviewer
+independently reproduced `tests 54`, `pass 54`, `fail 0` and a clean diff check.
+Feedback evaluation found no changes required. Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+npm run ops:launch-drill-test
+```
+
+### Operator guidance, limits and rollback
+
+Use an absent destination on a filesystem supporting exclusive hard links.
+A publication failure is never a successful drill. If failure happens after
+linking, preserve the completed receipt and investigate retained private
+`.reconcile-*.tmp` artifacts before selecting a fresh destination. Directory
+identity checks mitigate ordinary substitution; they are not confinement
+against hostile same-UID administration. No fsync/crash durability guarantee,
+cryptographic receipt authentication or live recovery acceptance is implied.
+
+Category 6 live restore/reconciliation, prompt 201 and Phase 12 exit remain
+open. No online audit, deployment, push, real database/storage operation or
+operator sign-off occurred. Rollback is a reviewed normal revert, with the
+known unsafe rename fallback understood before reinstating it.

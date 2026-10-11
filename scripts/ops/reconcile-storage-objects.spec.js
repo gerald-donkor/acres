@@ -13,6 +13,43 @@ const {
   main,
 } = require('./reconcile-storage-objects');
 
+test('publishReceipt: unsupported hard links fail without a rename fallback', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-no-rename-'));
+  const target = path.join(dir, 'receipt.json');
+  try {
+    t.mock.method(fs, 'linkSync', () => {
+      throw Object.assign(new Error('private filesystem diagnostic'), {
+        code: 'EPERM',
+      });
+    });
+    assert.throws(() => publishReceipt(target, { probe: true }));
+    assert.strictEqual(fs.existsSync(target), false);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  } finally {
+    t.mock.restoreAll();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('publishReceipt: post-link cleanup failure preserves receipt and fails', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-cleanup-'));
+  const target = path.join(dir, 'receipt.json');
+  try {
+    t.mock.method(fs, 'unlinkSync', () => {
+      throw Object.assign(new Error('private cleanup diagnostic'), {
+        code: 'EIO',
+      });
+    });
+    assert.throws(() => publishReceipt(target, { probe: true }));
+    assert.strictEqual(
+      fs.readFileSync(target, 'utf8'),
+      '{\n  "probe": true\n}\n',
+    );
+  } finally {
+    t.mock.restoreAll();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('reconcileObjects: clean match with exact sizes and checksums', () => {
   const dbObjects = [
@@ -757,4 +794,314 @@ test('main: publishes receipt exclusively when --output is provided', async () =
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+});
+
+// Fault injection is scoped and synchronous; no global filesystem mock survives a test.
+function publicationFixture(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-receipt-safety-'));
+  t.after(() => {
+    t.mock.restoreAll();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  return {
+    dir,
+    target: path.join(dir, 'receipt.json'),
+    report: { evidence: 'complete' },
+  };
+}
+const privateFsError = (code = 'EIO') =>
+  Object.assign(
+    new Error(
+      'parent directory PRIVATE_PATH postgres://private:PRIVATE_SECRET@host',
+    ),
+    { code },
+  );
+
+test('publishReceipt: fresh receipt is exact, private and leaves no staging file', (t) => {
+  const { dir, target, report } = publicationFixture(t);
+  publishReceipt(target, report);
+  assert.strictEqual(
+    fs.readFileSync(target, 'utf8'),
+    JSON.stringify(report, null, 2) + '\n',
+  );
+  assert.strictEqual(fs.statSync(target).mode & 0o777, 0o600);
+  assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+});
+
+for (const kind of ['file', 'directory', 'symlink', 'dangling symlink']) {
+  test(`publishReceipt: preserves existing ${kind}`, (t) => {
+    const { dir, target, report } = publicationFixture(t);
+    const referent = path.join(dir, 'retained');
+    fs.writeFileSync(referent, 'retained evidence');
+    if (kind === 'file') fs.writeFileSync(target, 'competing evidence');
+    if (kind === 'directory') fs.mkdirSync(target);
+    if (kind === 'symlink') fs.symlinkSync(referent, target);
+    if (kind === 'dangling symlink')
+      fs.symlinkSync(path.join(dir, 'absent'), target);
+    const before = fs.lstatSync(target);
+    assert.throws(
+      () => publishReceipt(target, report),
+      /output file already exists/,
+    );
+    assert.strictEqual(fs.lstatSync(target).ino, before.ino);
+    assert.strictEqual(fs.readFileSync(referent, 'utf8'), 'retained evidence');
+    if (kind === 'file')
+      assert.strictEqual(fs.readFileSync(target, 'utf8'), 'competing evidence');
+  });
+}
+
+for (const kind of ['file', 'symlink']) {
+  test(`publishReceipt: competing ${kind} at link time is never overwritten`, (t) => {
+    const { dir, target, report } = publicationFixture(t);
+    const link = fs.linkSync;
+    const referent = path.join(dir, 'retained');
+    fs.writeFileSync(referent, 'retained evidence');
+    t.mock.method(fs, 'linkSync', (from, to) => {
+      if (kind === 'file')
+        fs.writeFileSync(to, 'competing evidence', { flag: 'wx' });
+      else fs.symlinkSync(referent, to);
+      return link(from, to);
+    });
+    assert.throws(
+      () => publishReceipt(target, report),
+      /output file already exists/,
+    );
+    assert.strictEqual(
+      fs.readFileSync(target, 'utf8'),
+      kind === 'file' ? 'competing evidence' : 'retained evidence',
+    );
+    assert.ok(
+      !fs.readdirSync(dir).some((file) => file.startsWith('.reconcile-')),
+    );
+  });
+}
+
+for (const code of ['EPERM', 'ENOSYS', 'EXDEV', 'EIO']) {
+  test(`publishReceipt: ${code} cannot trigger rename or copy`, (t) => {
+    const { dir, target, report } = publicationFixture(t);
+    const rename = t.mock.method(fs, 'renameSync', () =>
+      assert.fail('unsafe rename'),
+    );
+    const copy = t.mock.method(fs, 'copyFileSync', () =>
+      assert.fail('unsafe copy'),
+    );
+    t.mock.method(fs, 'linkSync', () => {
+      throw privateFsError(code);
+    });
+    assert.throws(() => publishReceipt(target, report), {
+      message: 'receipt publication failed',
+    });
+    assert.strictEqual(rename.mock.callCount(), 0);
+    assert.strictEqual(copy.mock.callCount(), 0);
+    assert.strictEqual(fs.existsSync(target), false);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  });
+}
+
+test('publishReceipt: rejects symlink parents and ancestors', (t) => {
+  const { dir, report } = publicationFixture(t);
+  const real = path.join(dir, 'real');
+  fs.mkdirSync(path.join(real, 'nested'), { recursive: true });
+  fs.symlinkSync(real, path.join(dir, 'alias'));
+  for (const relative of ['alias/receipt.json', 'alias/nested/receipt.json']) {
+    assert.throws(() => publishReceipt(path.join(dir, relative), report));
+  }
+  assert.deepStrictEqual(fs.readdirSync(path.join(real, 'nested')), []);
+});
+
+test('publishReceipt: parent replacement fails without deleting moved staging', (t) => {
+  const { dir, report } = publicationFixture(t);
+  const parent = path.join(dir, 'parent');
+  const moved = path.join(dir, 'moved');
+  fs.mkdirSync(parent);
+  const write = fs.writeFileSync;
+  t.mock.method(fs, 'writeFileSync', (...args) => {
+    write(...args);
+    fs.renameSync(parent, moved);
+    fs.mkdirSync(parent);
+  });
+  assert.throws(
+    () => publishReceipt(path.join(parent, 'receipt.json'), report),
+    /cleanup failed/,
+  );
+  assert.deepStrictEqual(fs.readdirSync(parent), []);
+  assert.strictEqual(fs.readdirSync(moved).length, 1);
+});
+
+test('publishReceipt: staging substitution is not published or unlinked', (t) => {
+  const { dir, target, report } = publicationFixture(t);
+  const close = fs.closeSync;
+  let swapped = false;
+  t.mock.method(fs, 'closeSync', (fd) => {
+    close(fd);
+    if (!swapped) {
+      swapped = true;
+      const staged = path.join(
+        dir,
+        fs.readdirSync(dir).find((f) => f.startsWith('.reconcile-')),
+      );
+      fs.renameSync(staged, path.join(dir, 'original-staging'));
+      fs.writeFileSync(staged, 'foreign evidence');
+    }
+  });
+  assert.throws(() => publishReceipt(target, report), /cleanup failed/);
+  assert.strictEqual(fs.existsSync(target), false);
+  const foreign = fs.readdirSync(dir).find((f) => f.startsWith('.reconcile-'));
+  assert.strictEqual(
+    fs.readFileSync(path.join(dir, foreign), 'utf8'),
+    'foreign evidence',
+  );
+});
+
+for (const operation of ['writeFileSync', 'readSync', 'closeSync']) {
+  test(`publishReceipt: transient ${operation} fault fails and cleans owned resources`, (t) => {
+    const { dir, target, report } = publicationFixture(t);
+    const original = fs[operation];
+    let injected = false;
+    t.mock.method(fs, operation, (...args) => {
+      if (!injected) {
+        injected = true;
+        throw privateFsError();
+      }
+      return original(...args);
+    });
+    assert.throws(() => publishReceipt(target, report), {
+      message: 'receipt publication failed',
+    });
+    assert.strictEqual(fs.existsSync(target), false);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  });
+}
+
+test('publishReceipt: serialization and control-bearing paths fail safely', (t) => {
+  const { dir, target } = publicationFixture(t);
+  const circular = {};
+  circular.self = circular;
+  assert.throws(() => publishReceipt(target, circular), {
+    message: 'receipt publication failed',
+  });
+  for (const invalid of ['', ' ', null, 'private\npath', 'private\0path']) {
+    assert.throws(() => publishReceipt(invalid, {}), /control-free/);
+  }
+  assert.deepStrictEqual(fs.readdirSync(dir), []);
+});
+
+test('publishReceipt: changed staged bytes are rejected', (t) => {
+  const { dir, target, report } = publicationFixture(t);
+  const write = fs.writeFileSync;
+  t.mock.method(fs, 'writeFileSync', (fd, bytes) =>
+    write(fd, Buffer.alloc(bytes.length, 65)),
+  );
+  assert.throws(() => publishReceipt(target, report), {
+    message: 'receipt publication failed',
+  });
+  assert.strictEqual(fs.existsSync(target), false);
+  assert.deepStrictEqual(fs.readdirSync(dir), []);
+});
+
+test('publishReceipt: transient post-link cleanup failure is retried but stays failed', (t) => {
+  const { dir, target, report } = publicationFixture(t);
+  const unlink = fs.unlinkSync;
+  let calls = 0;
+  t.mock.method(fs, 'unlinkSync', (file) => {
+    if (++calls === 1) throw privateFsError();
+    return unlink(file);
+  });
+  assert.throws(() => publishReceipt(target, report), {
+    message: 'receipt cleanup failed',
+  });
+  assert.strictEqual(calls, 2);
+  assert.strictEqual(
+    fs.readFileSync(target, 'utf8'),
+    JSON.stringify(report, null, 2) + '\n',
+  );
+  assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+});
+
+test('main: publication errors never reflect private paths or filesystem diagnostics', async (t) => {
+  const { dir } = publicationFixture(t);
+  const io = createIo();
+  const target = path.join(dir, 'PRIVATE_PATH');
+  fs.writeFileSync(target, 'retained');
+  let code = await main(['node', 'script', '--output', target], io, {
+    dbObjects: [],
+    storageObjects: [],
+  });
+  assert.strictEqual(code, 1);
+  assert.deepStrictEqual(io.errors, [
+    'Error: Reconciliation evidence publication failed: output file already exists',
+  ]);
+  io.reset();
+  t.mock.method(fs, 'linkSync', () => {
+    throw privateFsError();
+  });
+  code = await main(
+    ['node', 'script', '--output', path.join(dir, 'absent')],
+    io,
+    { dbObjects: [], storageObjects: [] },
+  );
+  assert.strictEqual(code, 1);
+  assert.deepStrictEqual(io.errors, [
+    'Error: Reconciliation evidence publication failed: receipt publication failed',
+  ]);
+  assert.ok(!io.errors.join(' ').includes('PRIVATE_'));
+});
+
+test('publishReceipt: exclusive staging open failure does not adopt or delete foreign staging', (t) => {
+  const { dir, target, report } = publicationFixture(t);
+  const open = fs.openSync;
+  t.mock.method(fs, 'openSync', (file, flags, mode) => {
+    if (flags & fs.constants.O_CREAT) {
+      fs.writeFileSync(file, 'foreign staging', { flag: 'wx' });
+      throw privateFsError('EEXIST');
+    }
+    return open(file, flags, mode);
+  });
+  assert.throws(() => publishReceipt(target, report), {
+    message: 'receipt publication failed',
+  });
+  assert.strictEqual(fs.existsSync(target), false);
+  const foreign = fs.readdirSync(dir);
+  assert.strictEqual(foreign.length, 1);
+  assert.strictEqual(
+    fs.readFileSync(path.join(dir, foreign[0]), 'utf8'),
+    'foreign staging',
+  );
+});
+
+test('publishReceipt: first descriptor stat failure recovers owned cleanup', (t) => {
+  const { dir, target, report } = publicationFixture(t);
+  const stat = fs.fstatSync;
+  let first = true;
+  t.mock.method(fs, 'fstatSync', (fd) => {
+    if (first) {
+      first = false;
+      throw privateFsError();
+    }
+    return stat(fd);
+  });
+  assert.throws(() => publishReceipt(target, report), {
+    message: 'receipt publication failed',
+  });
+  assert.deepStrictEqual(fs.readdirSync(dir), []);
+});
+
+test('main: message substring cannot impersonate a controlled publication error', async (t) => {
+  publicationFixture(t);
+  const io = createIo();
+  const dbObjects = [
+    {
+      bucket: 'acres-quarantine',
+      objectKey: 'fixture.csv',
+      get state() {
+        throw privateFsError();
+      },
+    },
+  ];
+  const code = await main(['node', 'script'], io, {
+    dbObjects,
+    storageObjects: [],
+  });
+  assert.strictEqual(code, 1);
+  assert.deepStrictEqual(io.errors, ['Error: Reconciliation execution failed']);
 });
