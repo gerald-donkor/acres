@@ -3921,6 +3921,188 @@ test('main: undefined EncodingType publishes a clean simulation receipt', async 
   }
 });
 
+const definedListingStartAfterMarkers = [
+  ['object key string', 'data/marker.csv'],
+  ['prefixed key string', 'org-1/uploads/file.csv'],
+  ['root key string', 'readme.txt'],
+  ['arbitrary marker string', 'marker'],
+  ['empty string', ''],
+  ['whitespace string', '   '],
+  ['null', null],
+  ['numeric 42', 42],
+  ['numeric zero', 0],
+  ['boolean true', true],
+  ['boolean false', false],
+  ['bigint', 1n],
+  ['symbol', Symbol('startAfter')],
+  ['plain object', {}],
+  ['boxed string', Object.freeze(new String('marker'))],
+  [
+    'coercible object',
+    {
+      valueOf() {
+        throw new Error('private-start-after-coercion-must-not-run');
+      },
+    },
+  ],
+];
+
+for (const [label, StartAfter] of definedListingStartAfterMarkers) {
+  test(`listBucketObjects: rejects ${label} StartAfter without coercion`, async () => {
+    const s3Client = listingClient([
+      Object.freeze({ IsTruncated: false, StartAfter, Contents: [] }),
+    ]);
+    await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+      message: 'Object storage listing is invalid or incomplete',
+    });
+    assert.strictEqual(s3Client.inputs.length, 1);
+  });
+}
+
+const startAfterPageSamples = [
+  ['marker key', 'data/marker.csv'],
+  ['empty string', ''],
+  ['null', null],
+  ['boolean true', true],
+  ['numeric', 42],
+  ['plain object', {}],
+];
+
+for (const [label, StartAfter] of startAfterPageSamples) {
+  for (const later of [false, true]) {
+    test(`listBucketObjects: rejects ${later ? 'later' : 'first'} defined StartAfter (${label}) before pagination`, async () => {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              Contents: [{ Key: 'valid', Size: 1 }],
+              NextContinuationToken: 'token-A',
+            },
+          ]
+        : [];
+      pages.push(
+        Object.freeze({
+          IsTruncated: true,
+          StartAfter,
+          NextContinuationToken: 'token-B',
+        }),
+      );
+      pages.push({ IsTruncated: false });
+      const s3Client = listingClient(pages);
+      await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+        message: 'Object storage listing is invalid or incomplete',
+      });
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+    });
+  }
+}
+
+for (const [label, patch] of [
+  ['omitted', {}],
+  ['undefined', { StartAfter: undefined }],
+]) {
+  for (const Contents of [
+    undefined,
+    Object.freeze([]),
+    Object.freeze([{ Key: 'fixture-key', Size: 10 }]),
+  ]) {
+    test(`listBucketObjects: accepts ${label} StartAfter with ${Contents === undefined ? 'absent' : Contents.length === 0 ? 'empty' : 'populated'} contents`, async () => {
+      const page = Object.freeze({ ...patch, IsTruncated: false, Contents });
+      const result = await listBucketObjects({
+        s3Client: listingClient([page]),
+        bucket: 'fixture',
+      });
+      assert.strictEqual(result.length, Contents ? Contents.length : 0);
+      if (Contents && Contents.length > 0) {
+        assert.strictEqual(result[0].key, 'fixture-key');
+        assert.strictEqual(result[0].byteCount, 10);
+      }
+    });
+  }
+}
+
+for (const later of [false, true]) {
+  test(`main: ${later ? 'later' : 'first'} terminal StartAfter failure publishes no evidence`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-sa-failure-'));
+    try {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              Contents: [{ Key: 'valid', Size: 1 }],
+              NextContinuationToken: 'private-token',
+            },
+          ]
+        : [];
+      pages.push({
+        IsTruncated: false,
+        StartAfter: 'data/marker.csv',
+        Contents: [],
+      });
+      const io = createIo();
+      const s3Client = listingClient(pages);
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        { dbObjects: [], s3Client, env: {} },
+      );
+      assert.strictEqual(code, 1);
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: undefined StartAfter publishes a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-sa-success-'));
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const s3Client = listingClient([
+      {
+        IsTruncated: true,
+        StartAfter: undefined,
+        NextContinuationToken: 'A',
+      },
+      {
+        IsTruncated: false,
+        StartAfter: undefined,
+        Contents: [{ Key: 'fixture-key', Size: 1 }],
+      },
+    ]);
+    assert.strictEqual(
+      await main(['node', 'script', '--dry-run', '--output', target], io, {
+        env: {},
+        dbObjects: [inventoryDbRecord()],
+        s3Client,
+      }),
+      0,
+    );
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.strictEqual(report.summary.totalBucketObjects, 1);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 for (const contents of [undefined, []]) {
   test(`listBucketObjects: terminal empty page (${contents === undefined ? 'omitted' : 'array'})`, async () => {

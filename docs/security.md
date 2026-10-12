@@ -1274,3 +1274,19 @@ checks cannot prove total completeness or authenticity; no object-byte hashing,
 atomic snapshots, resource/network bounds, provider scope attestation or
 hostile in-process object handling was added. Prompt 201, Category 6 live
 operator approval and Phase 12 exit stay open.
+
+**Prompt 318 storage listing start-after boundary (2026-10-12):** The listing
+adapter now rejects any defined `StartAfter` metadata before consuming entries
+or continuation tokens. Flat listings send no start-after marker; any
+start-after returned indicates that preceding keys were skipped or unexpected
+offset metadata was returned, which would cause active storage keys to be
+falsely reported as missing from storage. Later failures reject the whole
+inventory. Fixed listing/runner diagnostics expose no provider start-after
+marker, token or key; failures produce no summary or receipt.
+Omitted/undefined start-after markers remain valid under the installed SDK's
+optional field contract. Focused **721/721** tests and independent review
+verify this consistency boundary. CLI, SQL, comparison, receipt publication and
+Stage 7 are unchanged. Start-after checks cannot prove total completeness or
+authenticity; no object-byte hashing, atomic snapshots, resource/network bounds,
+provider scope attestation or hostile in-process object handling was added.
+Prompt 201, Category 6 live operator approval and Phase 12 exit stay open.

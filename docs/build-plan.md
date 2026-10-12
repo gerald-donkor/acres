@@ -2963,3 +2963,25 @@ approved / 11 blocked / 70 blockers**. Online audit remains omitted under the
 metadata-disclosure restriction; no full aggregate `ops:check` pass or fresh
 inventory is claimed. No live services, deployment or push occurred. Prompt
 201, Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 318 — reject storage listing start-after markers (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 317.
+Supplied S3 `StartAfter` values, when defined, reject immediately. Because
+flat listings scan from bucket origin without a start-after key, any start-after
+marker returned by the provider indicates that preceding keys were skipped,
+which would cause active database `StoredObject` records to be reported as
+missing from storage and compromise inventory completeness.
+Optional omitted/undefined start-after markers, empty pages, per-page
+pagination, caller ownership and existing metadata conversion remain supported.
+Public contracts, CLI/SQL/comparison/publication and Stage 7 remain unchanged.
+All 684 prior tests plus 37 regressions pass (**721/721**); lint/typecheck,
+permitted build (**22/22** pages), changed-region formatting, syntax/help and
+diff checks pass. All **33 offline operations stages** pass (**27 suite
+invocations / 3702 tests / zero failures**, final launch/dossier **182/182**).
+Independent read-only review found no issues and approved merging. Actual
+outputs, synthetic reproduction, SDK semantics, compatibility and ordinary
+revert rollback are in `docs/operations.md` Prompt 318. Readiness stays **0
+approved / 11 blocked / 70 blockers**. Online audit remains omitted under the
+metadata-disclosure restriction; no full aggregate `ops:check` pass or fresh
+inventory is claimed. No live services, deployment or push occurred. Prompt
+201, Category 6 live approval and Phase 12 exit remain open.

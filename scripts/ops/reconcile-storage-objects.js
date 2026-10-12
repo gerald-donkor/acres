@@ -423,6 +423,9 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     // Flat listings request raw keys; any provider encoding-type indicates encoded keys.
     if (response.EncodingType !== undefined) throw invalidListing();
 
+    // Flat listings scan from the beginning; any provider start-after indicates offset listings.
+    if (response.StartAfter !== undefined) throw invalidListing();
+
     if (response.Contents !== undefined) {
       for (const entry of response.Contents) {
         if (

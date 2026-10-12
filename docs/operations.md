@@ -8345,3 +8345,100 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 318 — reject storage listing start-after markers (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 317
+(`407604a`). `listBucketObjects` now validates supplied `StartAfter` immediately
+alongside `EncodingType` validation, before entry processing or continuation
+token pagination. Because the reconciliation utility requests flat,
+unpartitioned listings without a start-after key from bucket origin, any response
+containing a start-after marker indicates that preceding objects in the bucket
+were skipped, which would cause earlier active objects to be reported as missing
+from storage (false positive data loss / exit 1) and conceal earlier orphan leaks.
+Any defined `StartAfter` (`response.StartAfter !== undefined`) rejects immediately.
+Valid S3 key strings (`'data/marker.csv'`, `'prefix/marker'`, `'readme.txt'`),
+arbitrary strings, empty strings `''`, whitespace `'   '`, `null`, numbers,
+booleans, bigints, symbols, objects and boxed strings reject without coercion.
+The existing fixed listing error (`Object storage listing is invalid or incomplete`)
+and sanitized runner error (`Error: Object storage connection or listing failed`)
+remain; later invalid pages reject the entire inventory and publish no summary,
+success message or receipt.
+
+A synthetic planning probe previously accepted
+`{ IsTruncated: false, StartAfter: 'data/file1.csv', Contents: [{ Key: 'data/file2.csv', Size: 10 }] }`
+and returned only `key: 'data/file2.csv'`. Comparison against active DB records
+containing `data/file1.csv` reported false positive missing objects (false
+data loss alert) and missed earlier storage orphans. The same local probe now
+rejects with `Object storage listing is invalid or incomplete`. This is an
+adapter consistency reproduction, not a production incident or proof of lost
+objects. All 684 previous tests remain; 37 added regressions cover defined
+start-after strings, invalid types without coercion, first and later defined
+start-after pages, pagination request halting, valid omitted/undefined
+start-after pages across contents variations, and runner exit code/sanitized
+logging contracts.
+
+### Compatibility, review and limits
+
+Installed `@aws-sdk/client-s3` `ListObjectsV2Output` declares optional
+`StartAfter?: string | undefined`. Flat listings omit start-after; standard
+AWS S3 flat listings omit `StartAfter` (undefined). Omitted and undefined
+`StartAfter` remain accepted without change. Input pages remain caller-owned;
+frozen response structures remain supported. CLI, SQL, facade/public
+signatures, comparison policy, report schema/modes, receipt publication,
+dependencies and Stage 7 remain unchanged.
+
+Independent read-only review found no Critical or Important issues, verified
+blank-line cleanup, and reproduced `tests 721`, `pass 721`, `fail 0` with both
+direct execution and the npm script, plus clean diff checks. Feedback was
+evaluated against the actual guard, runner boundaries, optional field contract
+and installed SDK semantics; no architectural fixes or significant re-review
+were necessary.
+
+Start-after checks cannot establish total inventory completeness, authenticity,
+provider scope, atomic DB/S3 snapshots or object-byte integrity. Start-after
+omission remains an intentional flat-listing origin constraint. No response-echo,
+content hashing, resource/network bounds or hostile getters/proxies were added.
+No live service or operator evidence was inspected. Prompt 201, Category 6 live
+recovery approval and Phase 12 exit remain open. Ordinary commit revert rolls
+back validation/tests/docs together without migration or storage mutation. No
+deployment or push occurred.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 721`, `pass 721`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0.
+- `npm run typecheck`: shared/client TypeScript checks and server
+  `prisma generate && tsc -p tsconfig.json --noEmit`; exit 0.
+- Permitted `npm run build`: `Compiled successfully in 4.0s`,
+  `Generating static pages using 7 workers (22/22) in 976ms`, followed by
+  `prisma generate && nest build`; exit 0.
+- Changed-region Prettier: spec `spec changed-region formatting: true`, source
+  `Source changed-region formatting: true`. Both JS syntax checks, CLI help
+  and `git diff --check` exit 0.
+- Readiness example: expected exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+Online `ops:audit` remains omitted under the standing metadata-disclosure
+restriction; no fresh vulnerability inventory or full aggregate `ops:check`
+success is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3702 tests / zero failures**. Every stage result and suite summary
+was inspected. Final launch/dossier: `tests 182`, `pass 182`, `fail 0`;
+readiness: `tests 649`, `pass 649`, `fail 0`. Nonsuite checks report
+`ops template check passed`, `secret/default scan passed`, `docker runtime
+check passed`, license compliance `PASSED`, `SAST Gate: PASSED (Zero unreviewed
+blockers and zero expired suppressions)`, and `Container Security Gate: PASSED
+(All Dockerfiles and Compose templates verified)`. Offline checks supply
+neither online audit results nor live recovery acceptance.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
