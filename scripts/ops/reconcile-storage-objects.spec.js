@@ -6,6 +6,7 @@ const os = require('node:os');
 const {
   reconcileObjects,
   listBucketObjects,
+  queryDatabaseStoredObjects,
   formatReconciliationSummary,
   DEFAULT_IGNORE_PATTERNS,
   ReconcileUsageError,
@@ -13,6 +14,335 @@ const {
   publishReceipt,
   main,
 } = require('./reconcile-storage-objects');
+
+const inventoryDbRecord = (overrides = {}) => ({
+  id: 'fixture-id',
+  organizationId: 'fixture-org',
+  bucket: 'acres-quarantine',
+  objectKey: 'fixture-key',
+  state: 'accepted',
+  byteCount: 1,
+  ...overrides,
+});
+
+const inventoryError = /^(Database|Storage) inventory is invalid$/;
+
+for (const side of ['dbObjects', 'storageObjects']) {
+  for (const [label, value] of [
+    ['null', null],
+    ['false', false],
+    ['object', {}],
+    ['text', 'private-inventory'],
+    ['hole', new Array(1)],
+    ['null row', [null]],
+    ['array row', [[]]],
+    ['primitive row', ['private-row']],
+    ['empty row', [{}]],
+  ]) {
+    test(`reconcileObjects: rejects ${side} ${label}`, () => {
+      assert.throws(() => reconcileObjects({ [side]: value }), {
+        message: inventoryError,
+      });
+    });
+  }
+  for (const value of [
+    -1,
+    -1n,
+    1.5,
+    NaN,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+    true,
+    '',
+    ' ',
+    '0x10',
+    '1e2',
+    '+1',
+    '-1',
+    '1.0',
+    {},
+    [],
+  ]) {
+    test(`reconcileObjects: rejects ${side} count ${String(value)} (${typeof value})`, () => {
+      const row =
+        side === 'dbObjects'
+          ? inventoryDbRecord({ byteCount: value })
+          : { key: 'fixture-key', byteCount: value };
+      assert.throws(() => reconcileObjects({ [side]: [row] }), {
+        message: inventoryError,
+      });
+    });
+  }
+}
+
+for (const field of ['id', 'organizationId', 'bucket', 'objectKey']) {
+  for (const value of [undefined, null, '', 5]) {
+    test(`reconcileObjects: rejects invalid DB ${field} ${String(value)}`, () => {
+      assert.throws(
+        () =>
+          reconcileObjects({
+            dbObjects: [inventoryDbRecord({ [field]: value })],
+          }),
+        { message: inventoryError },
+      );
+    });
+  }
+}
+
+for (const value of [undefined, null, '', 5]) {
+  test(`reconcileObjects: rejects invalid storage key ${String(value)}`, () => {
+    assert.throws(
+      () => reconcileObjects({ storageObjects: [{ key: value }] }),
+      { message: inventoryError },
+    );
+  });
+}
+
+test('reconcileObjects: duplicate identities reject before exclusions or overwrites', () => {
+  assert.throws(
+    () =>
+      reconcileObjects({
+        dbObjects: [
+          inventoryDbRecord(),
+          inventoryDbRecord({ objectKey: 'different', state: 'deleted' }),
+        ],
+        options: { bucket: 'different-bucket' },
+      }),
+    { message: inventoryError },
+  );
+  for (const byteCount of [1, 99]) {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          dbObjects: [inventoryDbRecord()],
+          storageObjects: [
+            { key: 'fixture-key', byteCount },
+            { key: 'fixture-key', byteCount: 1 },
+          ],
+        }),
+      { message: inventoryError },
+    );
+  }
+  assert.throws(
+    () =>
+      reconcileObjects({
+        storageObjects: [{ key: '.keep' }, { key: '.keep' }],
+      }),
+    { message: inventoryError },
+  );
+});
+
+test('reconcileObjects: malformed data cannot hide behind valid filters', () => {
+  assert.throws(
+    () =>
+      reconcileObjects({
+        dbObjects: [inventoryDbRecord({ bucket: 'other', byteCount: false })],
+        options: { bucket: 'acres-quarantine' },
+      }),
+    { message: inventoryError },
+  );
+  assert.throws(
+    () =>
+      reconcileObjects({
+        storageObjects: [{ key: '.keep', byteCount: 'private-count' }],
+      }),
+    { message: inventoryError },
+  );
+});
+
+test('reconcileObjects: preserves empty defaults, exact counts, opaque keys and inputs', () => {
+  assert.strictEqual(reconcileObjects({}).summary.status, 'clean');
+  for (const byteCount of [
+    undefined,
+    null,
+    0,
+    0n,
+    '0',
+    '0001',
+    '900719925474099312345',
+    900719925474099312345n,
+  ]) {
+    const db = Object.freeze(
+      inventoryDbRecord({ objectKey: ' key with spaces ', byteCount }),
+    );
+    const storage = Object.freeze({ key: db.objectKey, byteCount });
+    const result = reconcileObjects({
+      dbObjects: Object.freeze([db]),
+      storageObjects: Object.freeze([storage]),
+    });
+    assert.strictEqual(result.summary.status, 'clean');
+    assert.strictEqual(result.matched[0].objectKey, db.objectKey);
+    assert.strictEqual(
+      result.matched[0].byteCount,
+      byteCount == null ? null : String(BigInt(byteCount)),
+    );
+  }
+});
+
+for (const result of [
+  null,
+  [],
+  {},
+  { rows: null },
+  { rows: {} },
+  { rows: [null] },
+  { rows: [{}] },
+  { rows: [inventoryDbRecord({ byteCount: true })] },
+]) {
+  test(`queryDatabaseStoredObjects: rejects malformed result ${JSON.stringify(result)}`, async () => {
+    await assert.rejects(
+      queryDatabaseStoredObjects({ pgClient: { query: async () => result } }),
+      { message: inventoryError },
+    );
+  });
+}
+
+test('queryDatabaseStoredObjects: preserves fields and normalizes only defined counts', async () => {
+  const rows = [undefined, null, '0001', '900719925474099312345'].map(
+    (byteCount, i) =>
+      Object.freeze(
+        inventoryDbRecord({ id: `id-${i}`, byteCount, extra: 'preserved' }),
+      ),
+  );
+  const result = await queryDatabaseStoredObjects({
+    pgClient: { query: async () => ({ rows: Object.freeze(rows) }) },
+  });
+  assert.deepStrictEqual(
+    result.map((row) => row.byteCount),
+    [null, null, 1n, 900719925474099312345n],
+  );
+  assert.ok(result.every((row) => row.extra === 'preserved'));
+  assert.deepStrictEqual(
+    rows.map((row) => row.byteCount),
+    [undefined, null, '0001', '900719925474099312345'],
+  );
+});
+
+for (const [label, injected, expectedError] of [
+  [
+    'invalid DB',
+    { dbObjects: [inventoryDbRecord(), {}], storageObjects: [] },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'invalid storage',
+    {
+      dbObjects: [],
+      storageObjects: [{ key: 'private-inventory', byteCount: true }],
+    },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'null DB',
+    { dbObjects: null, storageObjects: [] },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'null DB with other source omitted',
+    { dbObjects: null },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'false storage with other source omitted',
+    { storageObjects: false },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'false storage',
+    { dbObjects: [], storageObjects: false },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'null storage',
+    { dbObjects: [], storageObjects: null },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'malformed pg',
+    {
+      pgClient: { query: async () => ({ rows: [inventoryDbRecord(), {}] }) },
+      storageObjects: [],
+    },
+    'Error: Database query failed',
+  ],
+  [
+    'rejected pg',
+    {
+      pgClient: {
+        query: async () => {
+          throw new Error('private-provider');
+        },
+      },
+      storageObjects: [],
+    },
+    'Error: Database query failed',
+  ],
+]) {
+  test(`main: ${label} never publishes successful inventory evidence`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-invalid-inventory-'),
+    );
+    const io = createIo();
+    try {
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        {
+          env: {},
+          ...injected,
+          s3Client: {
+            send: async () => {
+              throw new Error('private-unexpected-acquisition');
+            },
+          },
+        },
+      );
+      assert.strictEqual(code, 1);
+      assert.deepStrictEqual(io.errors, [expectedError]);
+      assert.ok(!io.logs.join('\n').includes('Reconciliation Report'));
+      assert.ok(!io.logs.join('\n').includes('evidence written'));
+      assert.ok(![...io.logs, ...io.errors].join('\n').includes('private-'));
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: valid pg inventory writes unchanged simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-valid-inventory-'));
+  const io = createIo();
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const code = await main(
+      ['node', 'script', '--dry-run', '--output', target],
+      io,
+      {
+        env: {},
+        pgClient: {
+          query: async () => ({
+            rows: [inventoryDbRecord({ byteCount: '0001' })],
+          }),
+        },
+        storageObjects: [{ key: 'fixture-key', byteCount: 1 }],
+      },
+    );
+    assert.strictEqual(code, 0);
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.matched[0].byteCount, '1');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('publishReceipt: unsupported hard links fail without a rename fallback', (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-no-rename-'));
@@ -1092,6 +1422,8 @@ test('main: message substring cannot impersonate a controlled publication error'
   const io = createIo();
   const dbObjects = [
     {
+      id: 'fixture-id',
+      organizationId: 'fixture-org',
       bucket: 'acres-quarantine',
       objectKey: 'fixture.csv',
       get state() {

@@ -1126,3 +1126,16 @@ integrity and availability against ordinary malformed pagination responses.
 It does not attest object bytes/checksums, prevent all resource exhaustion or
 produce an atomic DB/S3 snapshot. Live authenticity/scope, Prompt 201 and
 Category 6/Phase 12 operator sign-off remain open.
+
+**Prompt 308 reconciliation comparison boundary (2026-10-12):** Stage 7's
+pure comparison and DB adapter now reject malformed inventories, invalid
+identities, repeated DB IDs/storage keys and coercible/unsafe supplied byte
+counts before exclusions or map overwrites can hide them. Injected inventory
+validation runs before service acquisition; malformed query results reject as
+a whole. Fixed value-free helper/runner diagnostics prevent private input or
+query errors from being reflected. Failures publish no summary or receipt.
+This reinforces recovery evidence integrity without changing SQL, tenancy,
+comparison policy or publication. Optional metadata, unvalidated option/state/
+date/checksum policy, snapshot consistency, authenticity and hostile in-process
+objects remain outside scope. Prompt 201, Category 6 live approval and Phase 12
+exit remain open.

@@ -882,6 +882,14 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   receipt path; do not treat partial inventory as evidence. This preflight does
   not verify object bytes or establish an atomic DB/S3 snapshot, bound every
   network/resource failure, or supply live recovery acceptance.
+- Reconciliation comparison safety (prompt 308): invalid inventory arrays,
+  malformed identities, repeated DB IDs/storage keys and invalid supplied byte
+  counts fail before filters or exclusions can hide them. Explicit invalid
+  injected sources never trigger fallback acquisition. Malformed DB query
+  results fail before comparison. Investigate the input and use a fresh receipt
+  path; optional size/checksum metadata still does not establish byte integrity,
+  completeness, authenticity or an atomic DB/S3 snapshot. Category 6 continues
+  to require independent live recovery evidence and operator approval.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

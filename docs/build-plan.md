@@ -2749,3 +2749,25 @@ rollback. Readiness example remains fail-closed (**0 approved / 11 blocked /
 **182/182**). Online audit remains omitted under the standing metadata-disclosure
 restriction; no full `ops:check` pass or fresh audit inventory is claimed.
 Prompt 201, live Category 6 sign-off and Phase 12 exit remain open.
+
+**Prompt 308 — reject malformed reconciliation inventories (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 307.
+The pure comparison and pg adapter now reject invalid arrays/records, missing
+identity fields, repeated DB IDs/storage keys and invalid supplied byte counts
+before filters, exclusions or overwrite can conceal them. Explicit invalid
+injections fail before service acquisition; query-result failures stay sanitized.
+Optional counts, opaque keys, precise bigint/string sizes, comparison policy,
+SQL, signatures, report/mode, Stage 7 caller and publication stay unchanged.
+All 100 previous regressions plus 92 new cases pass (**192/192**); lint,
+typecheck and permitted build (**22/22** pages), selected formatting, syntax
+and diff checks pass. The sandbox child-test and Next --showConfig limitations,
+red fixtures, actual outputs, compatibility limits and ordinary revert rollback
+are recorded in `docs/operations.md`. Readiness remains fail-closed (**0 approved /
+11 blocked / 70 blockers**). No live database/storage operation, deployment or
+push occurred. Prompt 201, Category 6 live approval and Phase 12 exit stay open.
+Independent read-only review found no issues and reproduced **192/192** plus
+clean diff checks.
+All **33 independent offline operations stages** passed (**27 suite
+invocations / 3173 tests / zero failures**, final launch/dossier **182/182**).
+Online audit remains omitted under the metadata-disclosure restriction; no full
+aggregate ops:check pass or fresh vulnerability count is claimed.

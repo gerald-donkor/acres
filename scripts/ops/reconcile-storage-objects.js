@@ -18,6 +18,45 @@ const DEFAULT_IGNORE_PATTERNS = [
   /^\.DS_Store$/,
 ];
 
+const isInventoryRecord = (value) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function validateInventory(objects, database) {
+  const invalid = () =>
+    new Error(`${database ? 'Database' : 'Storage'} inventory is invalid`);
+  if (!Array.isArray(objects)) throw invalid();
+  const seen = new Set();
+  const identities = database
+    ? ['id', 'organizationId', 'bucket', 'objectKey']
+    : ['key'];
+  for (const object of objects) {
+    if (
+      !isInventoryRecord(object) ||
+      identities.some(
+        (field) =>
+          typeof object[field] !== 'string' || object[field].length === 0,
+      )
+    )
+      throw invalid();
+    const identity = database ? object.id : object.key;
+    if (seen.has(identity)) throw invalid();
+    seen.add(identity);
+    const count = object.byteCount;
+    if (
+      count !== undefined &&
+      count !== null &&
+      !(
+        (typeof count === 'bigint' && count >= 0n) ||
+        (typeof count === 'number' &&
+          Number.isSafeInteger(count) &&
+          count >= 0) ||
+        (typeof count === 'string' && /^[0-9]+$/.test(count))
+      )
+    )
+      throw invalid();
+  }
+}
+
 /**
  * Compares database metadata records with object storage keys.
  * Pure deterministic reconciliation function suitable for testing and runtime execution.
@@ -29,6 +68,9 @@ const DEFAULT_IGNORE_PATTERNS = [
  * @returns {object} reconciliation result
  */
 function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} }) {
+  // Validate before policy filters can hide malformed or duplicate evidence.
+  validateInventory(dbObjects, true);
+  validateInventory(storageObjects, false);
   const {
     bucket = null,
     excludeQuarantined = false,
@@ -46,7 +88,6 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
   // Index storage objects by key
   const storageMap = new Map();
   for (const obj of storageObjects) {
-    if (!obj || !obj.key) continue;
     if (ignorePatterns.some((pattern) => pattern.test(obj.key))) continue;
     if (prefix && !obj.key.startsWith(prefix)) continue;
     storageMap.set(obj.key, {
@@ -67,7 +108,6 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
 
   // Process database objects
   for (const dbObj of dbObjects) {
-    if (!dbObj || !dbObj.objectKey) continue;
     if (bucket && dbObj.bucket && dbObj.bucket !== bucket) continue;
     if (organizationId && dbObj.organizationId !== organizationId) continue;
     if (prefix && !dbObj.objectKey.startsWith(prefix)) continue;
@@ -300,9 +340,11 @@ async function queryDatabaseStoredObjects({ pgClient }) {
   `;
 
   const result = await pgClient.query(query);
+  if (!isInventoryRecord(result)) throw new Error('Database inventory is invalid');
+  validateInventory(result.rows, true);
   return result.rows.map((row) => ({
     ...row,
-    byteCount: row.byteCount !== null ? BigInt(row.byteCount) : null,
+    byteCount: row.byteCount != null ? BigInt(row.byteCount) : null,
   }));
 }
 
@@ -840,6 +882,18 @@ async function main(
     return 0;
   }
 
+  try {
+    if (options.dbObjects !== undefined)
+      validateInventory(options.dbObjects, true);
+    if (options.storageObjects !== undefined)
+      validateInventory(options.storageObjects, false);
+  } catch {
+    io.error('Error: Reconciliation execution failed');
+    setExitCode(1);
+    if (options.exitOnError === true) process.exit(1);
+    return 1;
+  }
+
   const env = options.env !== undefined ? options.env : process.env;
 
   const bucket = parsed.bucket || env.STORAGE_BUCKET || 'acres-quarantine';
@@ -861,7 +915,7 @@ async function main(
   let dbObjects = options.dbObjects;
   let pgClient = options.pgClient;
 
-  if (!dbObjects) {
+  if (dbObjects === undefined) {
     if (!pgClient) {
       const pgPassword =
         env.PGPASSWORD ||
@@ -913,7 +967,7 @@ async function main(
   let storageObjects = options.storageObjects;
   let s3Client = options.s3Client;
 
-  if (!storageObjects) {
+  if (storageObjects === undefined) {
     if (!s3Client) {
       const { S3Client } = require('@aws-sdk/client-s3');
       s3Client = new S3Client({

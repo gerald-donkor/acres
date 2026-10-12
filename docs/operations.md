@@ -7406,3 +7406,97 @@ backup coverage and separately inspected live recovery evidence. Prompt 201,
 Category 6 live acceptance and Phase 12 exit remain open. Ordinary commit revert
 rolls back the adapter/spec/docs together; it needs no migration and performs no
 storage mutation. No push or deployment occurred.
+
+## Prompt 308 — reject malformed reconciliation inventories (2026-10-12)
+
+The Phase 12K Stage 7 storage reconciliation comparison now validates complete
+DB/storage inventory arrays before policy filtering. Null, nonarray, sparse or
+malformed records cannot be silently skipped. DB records require nonempty string
+`id`, `organizationId`, `bucket` and `objectKey`; storage records require a
+nonempty string `key`. Opaque identity text remains unchanged. Repeated DB IDs
+or storage keys reject, including duplicates otherwise hidden by exclusions or
+ignored markers. No cross-bucket key uniqueness rule was introduced.
+
+Supplied byte counts must be nonnegative bigints, nonnegative safe-integer
+numbers, or digit-only decimal strings. Leading zeros and arbitrary-precision
+strings are accepted; booleans, coercible objects, empty/whitespace strings,
+hex/exponent/signed/fractional/negative values, nonfinite values and unsafe
+numbers reject. Optional/null counts remain supported, preserving the existing
+metadata-only comparison policy rather than claiming that absent metadata
+verifies content. Inputs are not mutated.
+
+`queryDatabaseStoredObjects` validates the result's rows before bigint
+normalization, preserving fields and query text. Undefined/null row byte counts
+normalize to null. Pure-helper validation errors are the fixed, value-free
+`Database inventory is invalid` / `Storage inventory is invalid` messages.
+The runner validates explicitly injected inventories before service acquisition;
+only undefined means acquire that inventory from a client. Invalid injections
+return `Error: Reconciliation execution failed`; malformed or rejected query
+results return `Error: Database query failed`. Both exit 1 before any summary,
+success message, staging artifact or receipt publication.
+
+Planning probes reproduced `clean` / exit 0 for inventories containing null and
+empty records, for duplicate storage keys where a correct size overwrote an
+incorrect size, and for `main` with `dbObjects: [{}]`. These network-free fixture
+results do not establish a production incident. Initial in-process red tests
+reported `tests 190`, `pass 104`, `fail 86`. The final suite has 192 tests: all
+100 existing regressions plus 92 new inventory, count, query and runner cases.
+The existing private getter-error test received valid required identities so
+it continues exercising the original diagnostic boundary after validation.
+
+### Compatibility and limits
+
+CLI flags, exported signatures, facade, report schema/modes, Stage 7 caller,
+SQL, filters, state exclusions, quarantine retention, checksum/orphan policy
+and exclusive receipt publication stay unchanged. Programmatic callers passing
+malformed or underspecified identities now fail; genuine empty or omitted pure
+inventories remain valid. No dependencies, server/client/shared source or
+runtime configuration changed.
+
+No DB or S3 service was contacted. This boundary does not validate every option,
+state, date or checksum, authenticate inventory completeness, verify object
+bytes, provide an atomic DB/S3 snapshot, cap all resource usage or protect
+against hostile in-process getters/proxies. Independently inspected live
+recovery evidence, Prompt 201, Category 6 approval and Phase 12 exit remain
+open. Ordinary commit revert rolls back code, tests and documentation together,
+with no migration or storage mutation. No push or deployment occurred.
+
+### Verification
+
+Actual successful outputs for this change:
+
+- `npm run ops:reconcile-test` (final independent operations invocation):
+  `tests 192`, `pass 192`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0, no diagnostics.
+- `npm run typecheck`: shared `tsc -p tsconfig.json --noEmit`, client
+  `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`;
+  Prisma Client `7.9.1` generated; exit 0, no TypeScript diagnostics.
+- Permitted `npm run build`: `Compiled successfully in 3.2s`,
+  `Generating static pages using 7 workers (22/22) in 1286ms`, then
+  `prisma generate && nest build`; exit 0.
+- New spec region and validation-helper Prettier comparisons both report
+  `true`; JS syntax checks and `git diff --check` exit 0.
+- `node scripts/ops/reconcile-storage-objects.js --help`: exit 0.
+- `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`:
+  intended exit 1, `Approved Categories: 0`, `Unresolved / Blocked: 11`,
+  `Total Blockers Detected: 70`.
+
+The initial sandbox child-test wrapper failed opaquely (`test failed`);
+in-process execution exposed the red assertions. Normal permitted test
+execution passed. The sandbox production build failed with
+`Could not parse output from TypeScript's --showConfig.`; an unchanged permitted
+retry passed. These are execution-environment limits, not omitted failures.
+Online `ops:audit` remains excluded under the standing dependency-metadata
+disclosure restriction; no full aggregate `ops:check` pass or fresh dependency
+vulnerability inventory is claimed.
+
+Independent read-only review found no Critical, Important or Minor findings,
+reproduced `tests 192`, `pass 192`, `fail 0`, and verified `git diff --check`.
+The feedback was checked against the approved scope and actual diff; no fixes
+or significant follow-up implementation were required.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3173 tests / zero failures**. Final launch/dossier suite:
+`tests 182`, `pass 182`, `fail 0`. Every offline stage completed independently;
+this does not supply the omitted online audit or operator live acceptance.
