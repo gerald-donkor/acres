@@ -4806,3 +4806,204 @@ test('main: complete multi-page listing publishes existing simulation receipt sh
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Prefix echoes bind each page to the requested inventory scope.
+const invalidPrefixEchoes = [
+  ['null', null],
+  ['number', 1],
+  ['false', false],
+  ['true', true],
+  ['bigint', 1n],
+  ['symbol', Symbol('private-prefix')],
+  ['array', []],
+  ['object', {}],
+  ['boxed string', new String('scope/')],
+  [
+    'coercible object',
+    {
+      toString() {
+        throw new Error('private-prefix');
+      },
+    },
+  ],
+  ['other scope', 'private-other/'],
+  ['whitespace', ' scope/'],
+  ['case mismatch', 'Scope/'],
+];
+for (const prefix of [undefined, 'scope/']) {
+  for (const [label, Prefix] of invalidPrefixEchoes) {
+    test(`listBucketObjects: rejects ${label} prefix echo for ${prefix === undefined ? 'bucket' : 'scoped'} listing`, async () => {
+      const s3Client = listingClient([
+        Object.freeze({ IsTruncated: false, Prefix, Contents: [] }),
+      ]);
+      await assert.rejects(
+        listBucketObjects({ s3Client, bucket: 'fixture', prefix }),
+        { message: 'Object storage listing is invalid or incomplete' },
+      );
+      assert.strictEqual(s3Client.inputs.length, 1);
+    });
+  }
+  test(`listBucketObjects: rejects later prefix echo mismatch for ${prefix === undefined ? 'bucket' : 'scoped'} listing`, async () => {
+    const s3Client = listingClient([
+      Object.freeze({
+        IsTruncated: true,
+        Prefix: prefix || '',
+        NextContinuationToken: 'A',
+        Contents: [{ Key: 'scope/first', Size: 1 }],
+      }),
+      Object.freeze({
+        IsTruncated: true,
+        Prefix: 'private-other/',
+        NextContinuationToken: 'B',
+        Contents: [],
+      }),
+      { IsTruncated: false },
+    ]);
+    await assert.rejects(
+      listBucketObjects({ s3Client, bucket: 'fixture', prefix }),
+      { message: 'Object storage listing is invalid or incomplete' },
+    );
+    assert.strictEqual(s3Client.inputs.length, 2);
+  });
+}
+
+for (const prefix of [undefined, '', 'scope/', ' space/é%2F/']) {
+  for (const echo of [{}, { Prefix: undefined }, { Prefix: prefix || '' }]) {
+    for (const populated of [false, true]) {
+      test(`listBucketObjects: accepts compatible prefix echo ${JSON.stringify(echo)} for ${JSON.stringify(prefix)} (${populated})`, async () => {
+        const key = `${prefix || ''}file`;
+        const s3Client = listingClient([
+          Object.freeze({
+            IsTruncated: true,
+            ...echo,
+            NextContinuationToken: 'A',
+          }),
+          Object.freeze({
+            IsTruncated: false,
+            ...echo,
+            Contents: Object.freeze(
+              populated ? [Object.freeze({ Key: key, Size: 1 })] : [],
+            ),
+          }),
+        ]);
+        const result = await listBucketObjects({
+          s3Client,
+          bucket: 'fixture',
+          prefix,
+        });
+        assert.deepStrictEqual(
+          result,
+          populated
+            ? [{ key, byteCount: 1, lastModified: null, checksumHex: null }]
+            : [],
+        );
+        assert.deepStrictEqual(
+          s3Client.inputs.map(input => input.Prefix),
+          [prefix || undefined, prefix || undefined],
+        );
+        assert.deepStrictEqual(
+          s3Client.inputs.map(input => input.ContinuationToken),
+          [undefined, 'A'],
+        );
+      });
+    }
+  }
+}
+
+test('listBucketObjects: rejects empty prefix echo for scoped request', async () => {
+  await assert.rejects(
+    listBucketObjects({
+      bucket: 'fixture',
+      prefix: 'scope/',
+      s3Client: listingClient([{ IsTruncated: false, Prefix: '' }]),
+    }),
+    { message: 'Object storage listing is invalid or incomplete' },
+  );
+});
+
+for (const later of [false, true]) {
+  test(`main: ${later ? 'later' : 'first'} prefix echo mismatch publishes no evidence`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-prefix-failure-'));
+    try {
+      const io = createIo();
+      const s3Client = listingClient([
+        ...(later
+          ? [
+              {
+                IsTruncated: true,
+                Prefix: 'scope/',
+                NextContinuationToken: 'A',
+              },
+            ]
+          : []),
+        { IsTruncated: false, Prefix: 'private-other/', Contents: [] },
+      ]);
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--prefix',
+            'scope/',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          { dbObjects: [], s3Client, env: {} },
+        ),
+        1,
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: matching scoped prefix echoes publish clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-prefix-success-'));
+  try {
+    const io = createIo();
+    const target = path.join(dir, 'receipt.json');
+    const s3Client = listingClient([
+      { IsTruncated: true, Prefix: 'fixture-', NextContinuationToken: 'A' },
+      {
+        IsTruncated: false,
+        Prefix: 'fixture-',
+        Contents: [{ Key: 'fixture-key', Size: 1 }],
+      },
+    ]);
+    assert.strictEqual(
+      await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--prefix',
+          'fixture-',
+          '--output',
+          target,
+        ],
+        io,
+        { dbObjects: [inventoryDbRecord()], s3Client, env: {} },
+      ),
+      0,
+    );
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

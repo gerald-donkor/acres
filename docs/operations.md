@@ -8650,3 +8650,59 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 321 — validate storage listing prefix echoes (2026-10-12)
+
+Continued Phase 12K after committed Prompt 320 (`7e3441d`). A synthetic
+bucket-wide listing with `Prefix: 'unexpected/'` previously returned `[]`.
+The adapter now rejects a defined Prefix unless it is a primitive string
+exactly equal to `prefix || ''`, before entries or further pagination. Empty
+bucket-wide echoes remain valid; omitted/undefined echoes remain optional.
+Explicit prefixes preserve whitespace, case, Unicode and percent characters.
+Frozen pages are supported. Initial and later failures reject whole inventories
+with fixed diagnostics; the runner emits no summary or receipt.
+
+All 781 prior tests plus 56 new regressions pass. Direct red execution reported
+`tests 837`, `pass 806`, `fail 31`; green direct and permitted npm execution
+reported `tests 837`, `pass 837`, `fail 0`. Tests cover invalid types without
+coercion, scope contradictions, request halting, compatible optional echoes,
+opaque prefixes, frozen pages and sanitized runner failure/receipt publication.
+CLI, SQL, public signatures/facade, comparison, report schema, publication and
+Stage 7 remain unchanged. Installed SDK `ListObjectsV2Output` declares optional
+`Prefix?: string | undefined`. This is declared-scope consistency, not provider
+authentication, total completeness, returned-key prefix enforcement, object-byte
+integrity or atomic snapshot evidence. No live operation or operator approval ran.
+Prompt 201, Category 6 live approval and Phase 12 exit remain open.
+Rollback is an ordinary commit revert; no migration or data mutation is involved.
+
+Verification: both JS syntax checks, CLI `--help`, changed-region Prettier and
+`git diff --check` exited 0. Lint completed all three workspaces; typecheck
+completed shared/client/server including Prisma Client 7.9.1. Permitted build
+reported `Compiled successfully in 3.4s` and `Generating static pages using 7
+workers (22/22) in 909ms`, then `prisma generate && nest build`; exit 0.
+The sandbox npm test wrapper failed opaquely with `test failed`; direct testing
+provided the actual red results. The sandbox build failed with `Could not parse
+output from TypeScript's --showConfig.`; the unchanged permitted checks passed.
+Readiness remains expected exit 1: `Approved Categories: 0`, `Unresolved /
+Blocked: 11`, `Total Blockers Detected: 70`.
+
+Online `ops:audit` remains omitted under the recorded metadata-disclosure
+restriction; no full aggregate `ops:check` pass or fresh vulnerability inventory
+is claimed. No deployment or push occurred.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
+
+All **33 independent offline operations stages** exited 0: **27 suite invocations /
+3818 tests / 3818 passed / zero failures / zero skipped**. Final launch/dossier
+reported `tests 182`, `pass 182`, `fail 0`. Each stage and suite summary was
+inspected. Non-suite template, secret/default, Docker-runtime, license, SAST and
+container-security gates passed. Independent high-effort read-only review found
+no Critical, Important or Minor issues, reproduced **837/837** and clean diff
+checks, and approved merging after documentation. Feedback was verified against
+the guard, error/publication boundaries and optional SDK field contract; no
+implementation fixes or architectural re-review were needed.

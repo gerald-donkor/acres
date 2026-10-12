@@ -871,6 +871,15 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Prefix echo consistency (prompt 321): supplied `Prefix` must exactly match
+  the requested scope as a primitive string; empty echoes are valid for
+  bucket-wide requests and absent/undefined echoes remain supported. First or
+  later contradictions reject whole inventories without summary or receipt.
+  Investigate provider scope and rerun into a fresh receipt path. Focused
+  **837/837**, high-effort independent review, repository checks and all **33
+  offline stages / 3818 tests** passed. Echo consistency does not prove total
+  completeness, provider honesty, byte integrity or live recovery approval.
+
 - Drill/verify: `bash scripts/ops/run-restore-drill.sh --dry-run`,
   `node scripts/ops/reconcile-storage-objects.js --dry-run`
 - Evidence: `backups/restore-drill-evidence-<timestamp>.json`, reconciliation report

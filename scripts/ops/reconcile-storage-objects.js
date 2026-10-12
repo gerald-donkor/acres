@@ -409,6 +409,13 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     )
       throw invalidListing();
 
+    // Supplied prefix echoes must preserve the requested inventory scope.
+    if (
+      response.Prefix !== undefined &&
+      (typeof response.Prefix !== 'string' || response.Prefix !== (prefix || ''))
+    )
+      throw invalidListing();
+
     // Flat listings require unpartitioned keys; grouped prefixes reject.
     if (
       response.CommonPrefixes !== undefined &&

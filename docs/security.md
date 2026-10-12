@@ -1324,3 +1324,14 @@ unchanged. Terminal next continuation token checks cannot prove total completene
 authenticity; no object-byte hashing, atomic snapshots, resource/network bounds,
 provider scope attestation or hostile in-process object handling was added. Prompt 201,
 Category 6 live operator approval and Phase 12 exit stay open.
+
+
+**Prompt 321 storage listing prefix echo boundary (2026-10-12):**
+Supplied `Prefix` metadata must be a primitive string exactly matching the
+effective requested prefix. Omitted/undefined echoes and empty bucket-wide
+strings remain valid. Contradictions reject before entries or pagination,
+including later pages, with fixed listing/runner diagnostics and no summary or
+receipt. Focused **837/837** and high-effort independent review verify this
+consistency check. This is not provider authentication, completeness, returned-key
+prefix enforcement, byte integrity or an atomic snapshot. No live service or
+operator approval occurred; Prompt 201, Category 6 and Phase 12 exit stay open.

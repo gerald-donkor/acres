@@ -3029,3 +3029,20 @@ Online audit remains omitted under the metadata-disclosure restriction; no full
 aggregate `ops:check` pass or fresh inventory is claimed. No live services,
 deployment or push occurred. Prompt 201, Category 6 live approval and Phase 12 exit
 remain open.
+
+
+**Prompt 321 — validate storage listing prefix echoes (2026-10-12):**
+Continued Phase 12K after committed Prompt 320. Defined prefix echoes now must
+be primitive strings equal to the effective request prefix before entries or
+pagination; omitted/undefined echoes and bucket-wide empty echoes remain valid.
+Later contradictions reject whole inventories with fixed diagnostics and no
+summary/receipt. Opaque prefixes and frozen ownership remain supported; public
+contracts, comparison, publication and Stage 7 are unchanged. Focused **837/837**,
+lint/typecheck, permitted build (**22/22** pages), formatting/syntax/diff and all
+**33 offline stages / 27 suite invocations / 3818 tests / zero failures** passed.
+High-effort independent review found no issues and reproduced **837/837**.
+Full probes, actual outputs, sandbox limits and ordinary revert rollback are in
+`docs/operations.md` Prompt 321. Readiness remains **0 approved / 11 blocked /
+70 blockers**. Online audit remains omitted; no aggregate ops:check or fresh
+inventory claim, live operation, deployment or push occurred. Prompt 201,
+Category 6 live approval and Phase 12 exit stay open.
