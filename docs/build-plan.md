@@ -3097,3 +3097,18 @@ probes, compatibility limits and ordinary revert rollback are recorded in
 70 blockers**. Online audit remains omitted; no aggregate ops:check or fresh
 vulnerability inventory is claimed. No live services, deployment or push.
 Prompt 201, Category 6 live approval and Phase 12 exit stay open.
+
+**Prompt 325 — validate storage listing bucket-name metadata (2026-10-12):**
+Continued Phase 12K after committed Prompt 324. Defined provider Name must be a
+primitive nonblank string before entries/pagination; absent/undefined names,
+opaque strings and alias/ARN request identifiers remain supported. Invalid
+first/later pages reject whole inventories with fixed diagnostics and no
+summary/receipt. Focused **1003/1003**, lint/typecheck, permitted build (**22/22**
+pages), formatting/syntax/diff and all **33 offline stages / 27 suite invocations /
+3984 tests / zero failures** passed. Independent read-only review found no issues
+and reproduced **1003/1003**. Actual red/green results, compatibility and ordinary
+revert rollback are in `docs/operations.md` Prompt 325. Readiness remains
+**0 approved / 11 blocked / 70 blockers**. Online audit remains omitted; no full
+ops:check, fresh vulnerability inventory, live service, deployment or push claim.
+Cross-page name continuity is the next bounded candidate. Prompt 201, Category 6
+live approval and Phase 12 exit stay open.

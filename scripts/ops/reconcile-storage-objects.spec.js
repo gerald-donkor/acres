@@ -5730,3 +5730,190 @@ test('main: valid configured request scope publishes a clean simulation receipt'
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+const invalidListingNames = [
+  ['null', null],
+  ['false', false],
+  ['true', true],
+  ['zero', 0],
+  ['NaN', NaN],
+  ['bigint', 1n],
+  ['symbol', Symbol('private-name')],
+  ['array', ['private-name']],
+  ['object', { private: 'name-sentinel' }],
+  ['boxed string', new String('private-name')],
+  ['empty', ''],
+  ['blank', ' \t\n '],
+  [
+    'coercion trap',
+    {
+      toString() {
+        throw new Error('private-name-toString');
+      },
+      valueOf() {
+        throw new Error('private-name-valueOf');
+      },
+      [Symbol.toPrimitive]() {
+        throw new Error('private-name-toPrimitive');
+      },
+    },
+  ],
+];
+
+for (const later of [false, true]) {
+  for (const [label, Name] of invalidListingNames) {
+    test(`listBucketObjects: rejects ${later ? 'later' : 'first'} ${label} bucket-name metadata`, async () => {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              Name: 'fixture',
+              Contents: [{ Key: 'first', Size: 1 }],
+              NextContinuationToken: 'A',
+            },
+          ]
+        : [];
+      pages.push(
+        Object.freeze({
+          Name,
+          IsTruncated: true,
+          NextContinuationToken: 'B',
+          Contents: Object.freeze([Object.freeze({ Key: 'second', Size: 1 })]),
+        }),
+        { IsTruncated: false },
+      );
+      const s3Client = listingClient(pages);
+      await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+        message: 'Object storage listing is invalid or incomplete',
+      });
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+    });
+  }
+}
+
+for (const [label, fields] of [
+  ['omitted', {}],
+  ['undefined', { Name: undefined }],
+  ['plain', { Name: 'fixture' }],
+  ['opaque', { Name: 'é/%2F/../[x]' }],
+  ['surrounded whitespace', { Name: ' fixture ' }],
+]) {
+  test(`listBucketObjects: accepts ${label} bucket-name metadata without rewriting`, async () => {
+    const page = Object.freeze({
+      ...fields,
+      IsTruncated: false,
+      Contents: Object.freeze([Object.freeze({ Key: 'scope/key', Size: 1 })]),
+    });
+    const s3Client = listingClient([
+      { ...fields, IsTruncated: true, NextContinuationToken: 'A' },
+      page,
+    ]);
+    const bucket = 'arn:aws:s3:us-east-1:123456789012:accesspoint/fixture';
+    const result = await listBucketObjects(
+      Object.freeze({ s3Client, bucket, prefix: 'scope/' }),
+    );
+    assert.deepStrictEqual(result, [
+      { key: 'scope/key', byteCount: 1, lastModified: null, checksumHex: null },
+    ]);
+    assert.deepStrictEqual(
+      s3Client.inputs,
+      [undefined, 'A'].map(ContinuationToken => ({
+        Bucket: bucket,
+        Prefix: 'scope/',
+        ContinuationToken,
+      })),
+    );
+    assert.strictEqual(page.Name, fields.Name);
+  });
+}
+
+for (const later of [false, true]) {
+  test(`main: invalid ${later ? 'later' : 'first'} bucket name publishes no evidence`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-name-failure-'));
+    try {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              Name: 'fixture',
+              NextContinuationToken: 'A',
+              Contents: [{ Key: 'first', Size: 1 }],
+            },
+          ]
+        : [];
+      pages.push(
+        {
+          IsTruncated: true,
+          Name: { private: 'name-sentinel' },
+          NextContinuationToken: 'B',
+        },
+        { IsTruncated: false },
+      );
+      const s3Client = listingClient(pages);
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--bucket',
+            'fixture',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          { env: {}, dbObjects: [], s3Client },
+        ),
+        1,
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: named pages with alias request publish a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-name-success-'));
+  try {
+    const bucket = 'fixture-alias-s3alias';
+    const target = path.join(dir, 'receipt.json');
+    const s3Client = listingClient([
+      { IsTruncated: true, Name: 'actual-bucket', NextContinuationToken: 'A' },
+      {
+        IsTruncated: false,
+        Name: 'actual-bucket',
+        Contents: [{ Key: 'key', Size: 1 }],
+      },
+    ]);
+    const io = createIo();
+    assert.strictEqual(
+      await main(
+        ['node', 'script', '--dry-run', '--bucket', bucket, '--output', target],
+        io,
+        {
+          env: {},
+          dbObjects: [inventoryDbRecord({ bucket, objectKey: 'key' })],
+          s3Client,
+        },
+      ),
+      0,
+    );
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.deepStrictEqual(io.errors, []);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -407,6 +407,13 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     )
       throw invalidListing();
 
+    // Supplied bucket names must be usable metadata, without SDK coercion.
+    if (
+      response.Name !== undefined &&
+      (typeof response.Name !== 'string' || !response.Name.trim())
+    )
+      throw invalidListing();
+
     // Requests use flat listings without a delimiter; counts are per page.
     if (
       response.KeyCount !== undefined &&

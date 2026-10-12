@@ -1374,3 +1374,13 @@ Name-echo policy, DNS restrictions, parameter-container/client validation, endpo
 validation, authorization proof, real bucket identity/existence verification,
 completeness, authenticity, byte integrity, atomic snapshots or live approval
 were added. Prompt 201, Category 6 live operator approval and Phase 12 exit stay open.
+
+**Prompt 325 storage listing bucket-name metadata (2026-10-12):**
+Defined Name values must be primitive nonblank strings before entry/pagination
+processing; malformed first/later pages reject whole inventories with fixed
+errors and no summary/receipt. Omitted/undefined names and literal opaque names
+remain supported; no coercion, request-name equality or provider grammar is
+introduced. Focused **1003/1003** and independent review verify this existing
+boundary. Cross-page continuity, real bucket identity, completeness,
+authenticity, atomic snapshots and live approval remain unproven. Prompt 201,
+Category 6 live operator approval and Phase 12 exit stay open.

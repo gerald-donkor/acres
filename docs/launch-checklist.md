@@ -1274,6 +1274,16 @@ reconciliation when the category is approved:
   first, followed by `validRecoveryDossier`, emitting category-specific invalid/failed blockers and
   explicitly terminating inspection with `continue;` to prevent fall-through.
 
+**Prompt 325 bucket-name metadata validation (2026-10-12).** Defined storage
+listing Name must be a primitive nonblank string; absent/undefined names remain
+optional and alias/ARN requests are preserved. Invalid first/later pages reject
+whole inventories with fixed diagnostics and no summary/receipt. Focused
+1003/1003 and all 33 offline stages (3984/3984 tests) passed, with independent
+review finding no issues. This does not establish bucket identity, cross-page
+continuity or live recovery approval. Readiness remains 0 approved / 11 blocked /
+70 blockers; Prompt 201 and Category 6 live sign-off remain open. Actual outputs
+and rollback are in docs/operations.md Prompt 325.
+
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table

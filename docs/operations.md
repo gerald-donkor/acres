@@ -8945,3 +8945,79 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 325 — validate storage listing bucket-name metadata (2026-10-12)
+
+Continued Phase 12K after committed Prompt 324 (`920435a`). The user authorized
+immediate implementation and one subsequent prompt. A bounded pre-change probe
+accepted object-valued provider `Name` after one request. Defined names now must
+be primitive nonblank strings, checked immediately after response shape and
+before entries/pagination. Absent/undefined names stay optional; opaque strings,
+leading/trailing whitespace and alias/ARN request identifiers are preserved.
+The installed S3 SDK declares optional string `Name` as the bucket name; no
+name equality with alias/ARN requests or provider grammar was invented.
+
+Malformed first/later names reject whole inventories with fixed adapter and
+runner diagnostics, bounded requests and no summary/receipt/temp file. Tests
+prove coercion hooks are not evaluated, frozen ownership is preserved and valid
+named pages publish simulation receipts. This intentionally rejects previously
+accepted malformed/blank metadata; CLI/env defaults, public types, comparison,
+SQL, receipt schema/publication and Stage 7 are unchanged. Cross-page name
+continuity remains a separate follow-on; name validity does not establish real
+bucket identity, authorization, completeness, authenticity or atomic snapshots.
+
+All 969 previous cases plus 34 regressions pass. Actual direct red output:
+`tests 1003`, `pass 975`, `fail 28`. Direct green and permitted npm focused output:
+
+```text
+ℹ tests 1003
+ℹ pass 1003
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| `npm run ops:reconcile-test` (permitted processes) | 0 | `tests 1003`, `pass 1003`, `fail 0` |
+| source/spec `node -c`, CLI `--help` | 0 | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| changed-region Prettier | 0 | `{"specFormatting":true,"guardFormatting":true}` |
+| `npm run lint` | 0 | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"` |
+| `npm run typecheck` | 0 | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1 |
+| permitted `npm run build` | 0 | `✓ Compiled successfully in 5.1s`; `✓ Generating static pages using 7 workers (22/22) in 976ms`; `prisma generate && nest build` |
+| `git diff --check` | 0 | silent |
+
+The restricted npm test initially reported only one worker-wrapper result;
+that output was not treated as individual-suite evidence. Direct and permitted
+process runs independently reported every test. No assertions were weakened.
+All 33 independent offline stages resolved from current `ops:check` passed:
+27 suite invocations / **3984 tests, 3984 passed, zero failures or skipped**.
+Final launch/dossier suite: `tests 182`, `pass 182`, `fail 0`. Every stage exit
+and summary was inspected. Online `ops:audit` remains omitted under the recorded
+registry metadata-disclosure restriction; no full aggregate ops:check pass or
+fresh vulnerability inventory is claimed.
+
+Launch-readiness retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Independent read-only review found no Critical, Important or Minor issues,
+reproduced **1003/1003** with no skipped cases and approved after documentation.
+Feedback was verified against guard placement, SDK alias/ARN semantics and
+runner failure/publication assertions; no fixes or re-review were necessary.
+No live service, operator approval, deployment or push occurred. Prompt 201,
+Category 6 live approval and Phase 12 exit remain open. Ordinary commit revert
+rolls this change back without migration or storage mutation.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
