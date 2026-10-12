@@ -585,7 +585,8 @@ async function queryDatabaseStoredObjects({ pgClient }) {
   `;
 
   const result = await pgClient.query(query);
-  if (!isInventoryRecord(result)) throw new Error('Database inventory is invalid');
+  if (!isInventoryRecord(result))
+    throw new Error('Database inventory is invalid');
   validateInventory(result.rows, true);
   // Even empty SELECTs describe this fixed projection; never accept another one.
   const fields = result.fields;
@@ -602,8 +603,16 @@ async function queryDatabaseStoredObjects({ pgClient }) {
         !isInventoryRecord(field) ||
         field.name !== name ||
         (field.format !== undefined && field.format !== 'text') ||
-        // The explicit byteCount::text cast must select PostgreSQL TEXT (25).
-        (name === 'byteCount' &&
+        // Native text columns and the byteCount::text cast select TEXT (25).
+        ([
+          'id',
+          'organizationId',
+          'bucket',
+          'objectKey',
+          'byteCount',
+          'checksumAlgorithm',
+          'checksumHex',
+        ].includes(name) &&
           field.dataTypeID !== undefined &&
           field.dataTypeID !== 25) ||
         // The storage migration defines all three projected dates as timestamptz.

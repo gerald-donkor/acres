@@ -871,6 +871,20 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Database inventory text type consistency (prompt 336): defined dataTypeID for
+  id, organizationId, bucket, objectKey, checksumAlgorithm and checksumHex must
+  equal primitive numeric 25, matching the committed storage migration.
+  Wrong/malformed descriptors reject even empty inventories or plausible string
+  rows before S3 requests/publication with fixed diagnostics. Optional metadata
+  and custom enum OIDs remain supported. Investigate the descriptor against the
+  committed column type; rerun into a fresh receipt path. Focused **1677/1677**,
+  lint/typecheck/build, independent review and **33 offline stages / 4658 tests**
+  passed. Actual outputs and
+  ordinary-revert rollback are in docs/operations.md Prompt 336. Consistency
+  cannot prove authenticity, completeness, bytes or atomic snapshots. Prompt
+  201, Category 6 live approval and Phase 12 exit remain open; readiness stays
+  **0 approved / 11 blocked / 70 blockers**.
+
 - Database inventory timestamp type consistency (prompt 335): defined dataTypeID
   for deletedAt, createdAt and uploadExpiresAt must equal primitive numeric 1184,
   matching the committed timestamptz columns. Wrong/malformed types reject even

@@ -3290,3 +3290,25 @@ aggregate ops:check pass or fresh vulnerability inventory is claimed.
 Consistency cannot authenticate responses, prove complete inventories, verify
 bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6 live
 approval and Phase 12 exit remain open. No live services, deployment or push.
+
+
+**Prompt 336 — database inventory text types (2026-10-12):**
+Continued Phase 12K after committed Prompt 335. Defined dataTypeID for the six
+native text columns (id, organizationId, bucket, objectKey, checksumAlgorithm,
+checksumHex) must equal primitive numeric 25, matching the committed storage
+migration. Wrong/malformed descriptors, including empty inventories or plausible
+string rows, reject with fixed private errors before S3 requests/publication.
+Optional metadata, custom enum IDs, prior guards, ownership, SQL and receipt
+schema stay compatible. Two synthetic fixtures now preserve native text types;
+no assertions were removed. Focused **1677/1677**, lint/typecheck/build
+(**22/22** pages), formatting/syntax/help/diff checks passed. Independent
+read-only review found no issues; its restricted wrapper did not independently
+reproduce case totals. Actual red/green/check results, compatibility, limits
+and ordinary-revert rollback are in docs/operations.md Prompt 336.
+All **33 offline stages / 27 suite invocations / 4658 tests / zero failures or
+skipped** passed.
+Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit is
+omitted; no aggregate ops:check pass or fresh vulnerability inventory is claimed.
+Consistency cannot authenticate responses, prove completeness, verify bytes or
+establish atomic snapshots/live recovery. Prompt 201, Category 6 live approval
+and Phase 12 exit remain open. No live services, deployment or push occurred.

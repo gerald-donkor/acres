@@ -10088,3 +10088,111 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+
+## Prompt 336 — database inventory text types (2026-10-12)
+
+Continued Phase 12K after committed Prompt 335 on clean main at
+e36f14ae6289c2534d38997427cab45a08bd1b5e. Defined dataTypeID for id,
+organizationId, bucket, objectKey, checksumAlgorithm and checksumHex now must
+be exact primitive numeric 25, alongside the existing byteCount::text check.
+The committed storage migration declares those six columns as text, including
+id despite its uuidv7() default; installed pg-types identifies TEXT as OID 25.
+Wrong descriptors previously passed even for empty inventories or plausible
+strings. Whole-result rejection now precedes conversion, S3 requests and
+publication with fixed private errors and no coercion.
+
+Omitted/undefined metadata, opaque state/uploadState enum OIDs, nullable
+checksums, frozen caller objects, ordered bigint conversion and all previous
+metadata guards remain compatible. SQL, schema, lifecycle rules, storage,
+client ownership, comparison, receipt contract and Stage 7 are unchanged.
+Two synthetic optional byteCount/date fixtures now reserve arbitrary type IDs
+for the custom enums; no previous assertions were removed. Added 55 cases for
+all six text columns with empty/populated wrong VARCHAR descriptors,
+representative malformed values/coercion traps, frozen optional compatibility,
+independent earlier guards, installed pg parsing and runner suppression of
+storage, publication and injected-client cleanup. Installed pg returns plausible
+strings for both TEXT and VARCHAR; wrong metadata still rejects. Existing
+empty/populated simulation-publication cases remain green. These are offline
+fixtures, not a live PostgreSQL or recovery drill.
+
+The initial restricted invocation returned a file-level worker failure only.
+Permitted test-first execution returned exit 1:
+
+```text
+ℹ tests 1677
+ℹ pass 1638
+ℹ fail 39
+ℹ skipped 0
+```
+
+After the compact strict guard, direct node --test and final formatted
+npm run ops:reconcile-test both returned exit 0:
+
+```text
+ℹ tests 1677
+ℹ pass 1677
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual repository verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier on new spec and adapter function | 0 | addedSpecFormatting: true; guardFormatting: true |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| initial restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
+| permitted npm run build | 0 | Compiled successfully in 3.3s; Generating static pages using 7 workers (22/22) in 1219ms; prisma generate && nest build |
+| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| git diff --check | 0 | silent |
+
+All 33 independent offline stages resolved from package.json ops:check passed:
+**27 suite invocations / 4658 tests / 4658 passed / zero failures or skipped**.
+Every stage exit/count was inspected. Production templates, secret/default scan,
+Docker runtime, offline SBOM licence validation, SAST and container-template
+checks passed. The final synthetic launch-orchestrator/dossier suite returned:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+Independent read-only review inspected the actual working diff, prompt,
+committed migration, installed driver and coordinator check logs. It found no
+Critical, Important or Minor issues or material deviations. Its restricted
+invocation returned only a successful file-level wrapper result (1 test), so
+it did not independently reproduce case totals. Feedback was evaluated against
+the schema TEXT declarations, strict optional comparisons, preserved enum
+opacity/guards, ownership and downstream-effect assertions. No fixes or
+re-review were needed. Review required completing these result records,
+inspecting every offline-stage result and reviewing the staged diff before commit.
+
+The readiness example retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online ops:audit remains omitted under the recorded registry metadata-disclosure
+restriction. No aggregate ops:check pass or fresh vulnerability inventory is
+claimed. Metadata consistency cannot authenticate responses, prove completeness,
+verify object bytes or establish atomic snapshots/live recovery. Mandatory
+metadata, generic/custom enum OID validation and hostile in-process objects
+remain out of scope. Prompt 201, Category 6 live approval and Phase 12 exit
+remain open. No live services, operator approval, deployment or push occurred.
+Ordinary commit revert restores previous behavior without DB/storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
