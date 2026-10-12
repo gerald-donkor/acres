@@ -3271,3 +3271,22 @@ All **33 offline stages / 27 suite invocations / 4551 tests / zero failures or
 skipped** passed; independent review found no issues. Readiness stays
 **0 approved / 11 blocked / 70 blockers**. Online audit remains omitted; no
 aggregate ops:check pass or fresh vulnerability inventory is claimed.
+
+**Prompt 335 — database inventory timestamp types (2026-10-12):**
+Continued Phase 12K after committed Prompt 334. Defined dataTypeID for the
+three projected dates must equal primitive numeric 1184, matching the committed
+storage migration's timestamptz columns. Wrong/malformed types, including empty
+results, reject with fixed errors before S3 requests or publication. Optional
+metadata, opaque unrelated IDs, existing guards, SQL and receipt schema stay
+compatible. Corrected two synthetic descriptor fixtures without removing prior
+assertions. Focused **1622/1622**, lint/typecheck/build (**22/22** pages),
+formatting/syntax/help/diff and **33 offline stages / 27 suite invocations /
+4603 tests / zero failures or skipped** passed. Independent read-only review
+found no issues; it inspected coordinator logs without independently reproducing
+case totals. Actual red/green/check evidence, compatibility, limits and ordinary
+revert rollback are in docs/operations.md Prompt 335. Readiness remains
+**0 approved / 11 blocked / 70 blockers**. Online audit remains omitted; no
+aggregate ops:check pass or fresh vulnerability inventory is claimed.
+Consistency cannot authenticate responses, prove complete inventories, verify
+bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6 live
+approval and Phase 12 exit remain open. No live services, deployment or push.

@@ -7454,7 +7454,13 @@ function databaseInventoryFields() {
     'createdAt',
     'uploadState',
     'uploadExpiresAt',
-  ].map((name) => ({ name, dataTypeID: 25, format: 'text' }));
+  ].map((name) => ({
+    name,
+    dataTypeID: ['deletedAt', 'createdAt', 'uploadExpiresAt'].includes(name)
+      ? 1184
+      : 25,
+    format: 'text',
+  }));
 }
 
 const invalidDatabaseFields = [
@@ -8095,7 +8101,15 @@ for (const [label, patch] of [
           Object.freeze(
             field.name === 'byteCount'
               ? { name: field.name, format: 'text', ...patch }
-              : { ...field, dataTypeID: 99999, opaque: 'kept' },
+              : {
+                  ...field,
+                  dataTypeID: ['deletedAt', 'createdAt', 'uploadExpiresAt'].includes(
+                    field.name,
+                  )
+                    ? 1184
+                    : 99999,
+                  opaque: 'kept',
+                },
           ),
         ),
       );
@@ -8302,6 +8316,304 @@ for (const dataTypeID of [25, 701]) {
         if (count) assert.strictEqual(result.rows[0].byteCount, '0001');
       } else {
         if (count) assert.strictEqual(result.rows[0].byteCount, 1);
+        await assert.rejects(
+          queryDatabaseStoredObjects({
+            pgClient: { query: async () => result },
+          }),
+          { message: 'Database inventory is invalid' },
+        );
+      }
+    });
+  }
+}
+
+// These three projected columns are timestamptz in the committed storage migration.
+const inventoryTimestampColumns = ['deletedAt', 'createdAt', 'uploadExpiresAt'];
+for (const name of inventoryTimestampColumns) {
+  for (const dataTypeID of [25, 1082, 1114]) {
+    for (const count of [0, 1]) {
+      test(`queryDatabaseStoredObjects: rejects ${name} type ${dataTypeID} with ${count} rows`, async () => {
+        const fields = Object.freeze(
+          databaseInventoryFields().map((field) =>
+            Object.freeze(
+              field.name === name ? { ...field, dataTypeID } : field,
+            ),
+          ),
+        );
+        const rows = Object.freeze(
+          count
+            ? [
+                Object.freeze(
+                  inventoryDbRecord({
+                    [name]: '2026-01-02T03:04:05Z',
+                    byteCount: '1',
+                  }),
+                ),
+              ]
+            : [],
+        );
+        const result = Object.freeze({
+          fields,
+          rows,
+          command: 'SELECT',
+          rowCount: count,
+        });
+        await assert.rejects(
+          queryDatabaseStoredObjects({
+            pgClient: { query: async () => result },
+          }),
+          { message: 'Database inventory is invalid' },
+        );
+        assert.strictEqual(result.rows, rows);
+        assert.strictEqual(result.fields, fields);
+        if (count) assert.strictEqual(rows[0][name], '2026-01-02T03:04:05Z');
+      });
+    }
+  }
+}
+
+for (const [i, [label, dataTypeID]] of [
+  ['null', null],
+  ['string', '1184'],
+  ['boolean', true],
+  ['zero', 0],
+  ['negative', -1184],
+  ['fraction', 1184.1],
+  ['NaN', NaN],
+  ['infinity', Infinity],
+  ['array', [1184]],
+  ['object', {}],
+  ['boxed', new Number(1184)],
+  ['bigint', 1184n],
+  ['symbol', Symbol('private-timestamp')],
+  [
+    'coercion trap',
+    {
+      [Symbol.toPrimitive]() {
+        throw new Error('private-timestamp');
+      },
+    },
+  ],
+].entries()) {
+  const name = inventoryTimestampColumns[i % inventoryTimestampColumns.length];
+  test(`queryDatabaseStoredObjects: rejects timestamp ${label} without coercion`, async () => {
+    const fields = databaseInventoryFields().map((field) =>
+      field.name === name ? { ...field, dataTypeID } : field,
+    );
+    await assert.rejects(
+      queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () => ({
+            fields,
+            rows: i % 2 ? [inventoryDbRecord()] : [],
+          }),
+        },
+      }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const [label, patch] of [
+  ['omitted', {}],
+  ['undefined', { dataTypeID: undefined }],
+  ['timestamptz', { dataTypeID: 1184 }],
+]) {
+  for (const count of [0, 2]) {
+    test(`queryDatabaseStoredObjects: accepts ${label} timestamp types with ${count} rows`, async () => {
+      const fields = Object.freeze(
+        databaseInventoryFields().map((field) =>
+          Object.freeze(
+            inventoryTimestampColumns.includes(field.name)
+              ? { name: field.name, format: 'text', ...patch }
+              : field.name === 'byteCount'
+                ? field
+                : { ...field, dataTypeID: 99999 },
+          ),
+        ),
+      );
+      const rows = Object.freeze(
+        Array.from({ length: count }, (_, i) =>
+          Object.freeze(
+            inventoryDbRecord({
+              id: `id-${i}`,
+              objectKey: `key-${i}`,
+              byteCount: '0001',
+              deletedAt: null,
+              createdAt: new Date('2026-01-02T03:04:05Z'),
+              uploadExpiresAt: null,
+            }),
+          ),
+        ),
+      );
+      const result = Object.freeze({
+        fields,
+        rows,
+        command: 'SELECT',
+        rowCount: count,
+        rowAsArray: false,
+      });
+      assert.deepStrictEqual(
+        await queryDatabaseStoredObjects({
+          pgClient: { query: async () => result },
+        }),
+        rows.map((row) => ({ ...row, byteCount: 1n })),
+      );
+      assert.ok(rows.every((row) => row.byteCount === '0001'));
+    });
+  }
+}
+
+for (const [i, name] of inventoryTimestampColumns.entries()) {
+  test(`main: invalid ${name} type suppresses storage and publication`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-db-timestamp-failure-'),
+    );
+    try {
+      let queries = 0,
+        ended = 0,
+        destroyed = 0;
+      const fields = databaseInventoryFields().map((field) =>
+        field.name === name
+          ? { ...field, dataTypeID: i === 1 ? 'private-timestamp' : 25 }
+          : field,
+      );
+      const rows =
+        i === 0 ? [] : [inventoryDbRecord({ [name]: '2026-01-02T03:04:05Z' })];
+      const s3Client = listingClient([{ IsTruncated: false }]);
+      s3Client.destroy = () => destroyed++;
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          {
+            env: {},
+            s3Client,
+            pgClient: {
+              query: async () => {
+                queries++;
+                return {
+                  fields,
+                  rows,
+                  command: 'SELECT',
+                  rowCount: rows.length,
+                };
+              },
+              end: async () => {
+                ended++;
+              },
+            },
+          },
+        ),
+        1,
+      );
+      assert.strictEqual(queries, 1);
+      assert.strictEqual(s3Client.inputs.length, 0);
+      assert.strictEqual(ended, 0);
+      assert.strictEqual(destroyed, 0);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const [label, overrides] of [
+  ['invalid row', { rows: [{}] }],
+  ['wrong count', { rowCount: 0 }],
+  ['wrong command', { command: 'DELETE' }],
+  ['array mode', { rowAsArray: true }],
+  ['wrong names', { fields: databaseInventoryFields().reverse() }],
+  [
+    'wrong format',
+    {
+      fields: databaseInventoryFields().map((field) => ({
+        ...field,
+        format: 'binary',
+      })),
+    },
+  ],
+  [
+    'wrong byteCount type',
+    {
+      fields: databaseInventoryFields().map((field) =>
+        field.name === 'byteCount' ? { ...field, dataTypeID: 701 } : field,
+      ),
+    },
+  ],
+]) {
+  test(`queryDatabaseStoredObjects: valid timestamp types cannot excuse ${label}`, async () => {
+    await assert.rejects(
+      queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () => ({
+            fields: databaseInventoryFields(),
+            rows: [inventoryDbRecord()],
+            ...overrides,
+          }),
+        },
+      }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const dataTypeID of [1184, 25]) {
+  for (const count of [0, 1]) {
+    test(`queryDatabaseStoredObjects: installed pg timestamp type ${dataTypeID} with ${count} rows`, async () => {
+      const Result = require('pg/lib/result');
+      const result = new Result();
+      result.addFields(
+        databaseInventoryFields().map((field) =>
+          inventoryTimestampColumns.includes(field.name)
+            ? { ...field, dataTypeID }
+            : field,
+        ),
+      );
+      if (count)
+        result.addRow(
+          result.parseRow([
+            'fixture-id',
+            'fixture-org',
+            'acres-quarantine',
+            'fixture-key',
+            '0001',
+            null,
+            null,
+            'accepted',
+            null,
+            '2026-01-02 03:04:05+00',
+            null,
+            null,
+          ]),
+        );
+      result.addCommandComplete({ text: `SELECT ${count}` });
+      if (dataTypeID === 1184) {
+        assert.deepStrictEqual(
+          await queryDatabaseStoredObjects({
+            pgClient: { query: async () => result },
+          }),
+          result.rows.map((row) => ({ ...row, byteCount: 1n })),
+        );
+        if (count)
+          assert.strictEqual(
+            result.rows[0].createdAt.toISOString(),
+            '2026-01-02T03:04:05.000Z',
+          );
+      } else {
+        if (count)
+          assert.strictEqual(typeof result.rows[0].createdAt, 'string');
         await assert.rejects(
           queryDatabaseStoredObjects({
             pgClient: { query: async () => result },

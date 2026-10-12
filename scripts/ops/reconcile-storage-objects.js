@@ -605,7 +605,11 @@ async function queryDatabaseStoredObjects({ pgClient }) {
         // The explicit byteCount::text cast must select PostgreSQL TEXT (25).
         (name === 'byteCount' &&
           field.dataTypeID !== undefined &&
-          field.dataTypeID !== 25)
+          field.dataTypeID !== 25) ||
+        // The storage migration defines all three projected dates as timestamptz.
+        (['deletedAt', 'createdAt', 'uploadExpiresAt'].includes(name) &&
+          field.dataTypeID !== undefined &&
+          field.dataTypeID !== 1184)
       )
         throw new Error('Database inventory is invalid');
     }

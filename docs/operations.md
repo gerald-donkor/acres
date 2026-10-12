@@ -9979,3 +9979,112 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 335 — database inventory timestamp types (2026-10-12)
+
+Continued Phase 12K after committed Prompt 334 on clean main at
+10b06909114e3181f717ae944b43e3c3b72c3ee0. The three projected date descriptors
+(deletedAt, createdAt, uploadExpiresAt) now require any defined dataTypeID to
+be exact primitive numeric 1184. The committed storage migration defines
+StoredObject.deletedAt/createdAt and Upload.expiresAt as timestamptz; installed
+pg-types builtins identifies TIMESTAMPTZ as 1184 and its text parser produces
+Date values. These are not the unrelated earlier tables' timestamp(3) columns.
+Wrong metadata previously passed even for an empty inventory or plausible date
+strings. Whole-result rejection now precedes conversion, S3 requests and
+publication, using fixed private errors without coercion.
+
+Omitted/undefined fields and type metadata remain compatible. Other descriptor
+IDs remain opaque except the existing byteCount text check. SQL, date parsing,
+lifecycle rules, count/command/mode/name/format guards, bigint conversion,
+ordering, caller ownership, storage listing, receipt contract and Stage 7 stay
+unchanged. Corrected two synthetic fixture sites to match committed date types;
+no prior assertions were removed. Added 52 cases covering wrong OIDs in each
+column with empty/populated results, malformed values and coercion traps,
+frozen compatibility/nullable dates/ordered bytes, independent guards, installed
+pg Date parsing, and runner suppression of storage and artifacts. Existing
+empty/populated simulation-publication tests use the corrected descriptors.
+Installed-driver fixtures are offline evidence, not a live PostgreSQL drill.
+
+Initial restricted test invocation returned a file-level worker failure only.
+Permitted test-first execution returned exit 1:
+
+```text
+ℹ tests 1622
+ℹ pass 1585
+ℹ fail 37
+ℹ skipped 0
+```
+
+After the compact strict predicate, direct node --test and final formatted
+npm run ops:reconcile-test both returned exit 0:
+
+```text
+ℹ tests 1622
+ℹ pass 1622
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual repository verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier on added spec, changed guard and helper | 0 | addedSpecFormatting: true; guardFormatting: true; helperFormatting: true |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| initial restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
+| permitted npm run build | 0 | Compiled successfully in 3.9s; Generating static pages using 7 workers (22/22) in 923ms; prisma generate && nest build |
+| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| git diff --check | 0 | silent |
+
+All 33 independent offline stages resolved from package.json ops:check passed:
+**27 suite invocations / 4603 tests / 4603 passed / zero failures or skipped**.
+Every stage exit/count was inspected. Production templates, secret/default scan,
+Docker runtime, offline SBOM licence validation, SAST and container-template
+gates passed. The last synthetic launch-orchestrator/dossier suite returned:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+Online ops:audit remains omitted under the recorded registry metadata-disclosure
+restriction. No aggregate ops:check pass or fresh vulnerability inventory is
+claimed. No live launch drill was run.
+
+Independent read-only review inspected the actual diff, prompt, committed
+migration, installed driver and existing simulation-publication success tests.
+It found no Critical, Important or Minor issues, implementation deviations or
+material plan issues. Its restricted invocation only returned a file-level
+wrapper result, so it did not independently reproduce case totals; it inspected
+coordinator direct/npm green logs. Feedback was evaluated against migration
+OID 1184, strict optional comparisons, preserved opaque IDs/guards, ownership
+and downstream-effect assertions. No fixes or re-review were needed. Review
+required completion of this results record and final staged-diff inspection.
+The outstanding offline stage subsequently completed successfully as above.
+
+Readiness example validation retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Metadata consistency cannot authenticate responses, prove completeness, verify
+object bytes or establish atomic snapshots/live recovery. Mandatory metadata,
+generic OID validation and hostile in-process objects remain out of scope.
+Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live
+services, operator approval, deployment or push occurred. Ordinary commit revert
+restores previous behavior without migrations or DB/storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
