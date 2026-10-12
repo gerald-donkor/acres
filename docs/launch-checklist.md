@@ -871,6 +871,18 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Database inventory row projection consistency (prompt 337): with supplied
+  descriptors, each row must own every fixed selected property. Missing or
+  inherited-only fields reject before conversion/S3/publication; preserve SQL
+  NULL keys when fixing the adapter and rerun into a fresh receipt path.
+  Optional descriptors and existing value rules remain compatible. Focused
+  **1714/1714**, lint/typecheck/build, independent review and **33 offline stages /
+  4695 tests** passed. Actual outputs and ordinary-revert rollback are in
+  docs/operations.md Prompt 337. This cannot prove authenticity, completeness,
+  bytes or atomic snapshots/live recovery. Prompt 201, Category 6 live approval
+  and Phase 12 exit remain open; readiness stays **0 approved / 11 blocked /
+  70 blockers**. Online audit omitted; no full ops:check or fresh audit claimed.
+
 - Database inventory text type consistency (prompt 336): defined dataTypeID for
   id, organizationId, bucket, objectKey, checksumAlgorithm and checksumHex must
   equal primitive numeric 25, matching the committed storage migration.

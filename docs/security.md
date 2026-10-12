@@ -1543,3 +1543,23 @@ omitted; no aggregate ops:check pass or fresh vulnerability inventory is claimed
 Consistency cannot authenticate responses, prove completeness, verify bytes or
 establish atomic snapshots/live recovery. Prompt 201, Category 6 live approval
 and Phase 12 exit remain open. No live services, deployment or push occurred.
+
+
+**Prompt 337 — database inventory projected row fields (2026-10-12):**
+Continued Phase 12K after committed Prompt 336. With supplied descriptors,
+every row must own all twelve fixed projection properties; missing/inherited-only
+keys reject whole inventories before bigint conversion, S3 requests or
+publication, with fixed private errors. Optional descriptors, NULL/own undefined
+values, extra keys, frozen ownership and previous guards remain compatible.
+Dedicated complete fixtures preserve prior assertions and the original legacy
+helper. Focused **1714/1714**, lint/typecheck/build (**22/22** pages), formatting/
+syntax/help/diff and **33 offline stages / 27 suite invocations / 4695 tests /
+zero failures or skipped** passed. Independent read-only review found no defects
+or plan deviations; its restricted file-level wrapper did not independently
+reproduce case totals. Actual red/green outputs, compatibility, limits and
+ordinary-revert rollback are in docs/operations.md Prompt 337. Readiness remains
+**0 approved / 11 blocked / 70 blockers**. Online audit remains omitted; no
+aggregate ops:check pass or fresh audit is claimed. Consistency cannot prove
+authenticity, completeness, bytes or atomic snapshots/live recovery. Prompt 201,
+Category 6 live approval and Phase 12 exit remain open. No live services,
+operator approval, deployment or push occurred.

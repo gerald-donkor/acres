@@ -10196,3 +10196,118 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+
+## Prompt 337 — Database inventory projected row fields (2026-10-12)
+
+Continued Phase 12K after committed Prompt 336 on clean main at
+f93413763e45609325f5771191692aad027bcd64. The user's `i` and subsequent
+“implement plan when finished” authorized preparation and execution of this
+single prompt. No follow-on prompt or push was performed.
+
+When result.fields is defined and valid, every returned row must now own all
+12 fixed projection properties. Missing properties, including inherited-only
+optional keys, reject the entire inventory before bigint conversion, S3 sends
+or publication. Installed pg Result.addFields initializes each named property
+to null and parseRow copies that complete shape; SQL NULL is a present property.
+The eight-line guard checks every row without mutation and uses the existing
+fixed Database inventory is invalid error. Runner failures return 1, execute
+one query and zero S3 requests, leave injected clients open and emit only the
+connecting log plus Error: Database query failed, without summary/receipt/temp
+artifacts.
+
+Omitted/undefined descriptors preserve legacy partial-row compatibility.
+Complete rows retain NULL/own undefined optional values, extra keys, arbitrary
+key insertion order, frozen ownership and ordered bigint conversion. Existing
+count/command/mode/name/format/type checks remain independent. SQL, schema,
+lifecycle policy, storage listing, comparison, receipt contract and Stage 7
+are unchanged. The original inventoryDbRecord helper remains unchanged; a
+separate projectedInventoryRow helper makes descriptor-bearing synthetic rows
+complete, including one older manually populated pg Result fixture. Prior
+assertions remain intact. Added 37 behavioral cases cover each missing column
+in first/later rows, inherited nullable fields, runner effects, complete frozen
+rows, optional descriptor compatibility and installed pg NULL materialization.
+These are offline driver fixtures, not live PostgreSQL or recovery evidence.
+
+Initial restricted test execution produced only a file-level worker failure.
+Permitted test-first execution returned exit 1:
+
+```text
+ℹ tests 1714
+ℹ pass 1691
+ℹ fail 23
+ℹ skipped 0
+```
+
+The first guarded run exposed one older manually populated partial pg fixture;
+correcting that fixture preserved its original completion assertions. Direct
+node --test and final npm run ops:reconcile-test returned exit 0:
+
+```text
+ℹ tests 1714
+ℹ pass 1714
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual verification results:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier on new tests/adapter function | 0 | guardFormatting: true; addedSpecFormatting: true |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
+| permitted npm run build | 0 | Compiled successfully in 3.9s; Generating static pages using 7 workers (22/22) in 1170ms; prisma generate && nest build |
+| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| git diff --check | 0 | silent |
+
+All 33 independent offline stages resolved from package.json ops:check passed:
+**27 suite invocations / 4695 tests / 4695 passed / zero failures or skipped**.
+Every stage exit/count was inspected. Production templates, secret/default
+scan, Docker runtime, offline SBOM licence verification, SAST and container
+security template checks passed. Final launch-orchestrator/dossier suite:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+Independent read-only review inspected the actual diff, approved prompt,
+installed driver and coordinator check logs. It found no defects or plan
+deviations. Its restricted node --test invocation returned exit 0 with only
+one file-level wrapper, so it did not independently reproduce case totals.
+Feedback was verified against installed addFields/parseRow, optional descriptor
+compatibility, guard placement and regression assertions. No code fixes or
+follow-up review were required. Required result records were completed after
+review, with final staged diff inspection before commit.
+
+The readiness example returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online ops:audit remains omitted under the recorded registry metadata-disclosure
+restriction; no aggregate ops:check pass or fresh vulnerability audit is claimed.
+Consistency cannot authenticate responses, prove inventory completeness,
+verify bytes or establish atomic snapshots/live recovery. Mandatory descriptors,
+new row value restrictions and hostile in-process objects are out of scope.
+Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live
+services, operator approval, migrations, deployment or push occurred.
+Ordinary commit revert restores earlier acceptance without DB/storage mutation.
+If this guard rejects a result, inspect the adapter's projection/row construction
+privately, preserve SQL NULL keys and rerun into a fresh receipt path.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

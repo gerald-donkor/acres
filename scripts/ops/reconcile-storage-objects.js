@@ -623,6 +623,14 @@ async function queryDatabaseStoredObjects({ pgClient }) {
         throw new Error('Database inventory is invalid');
     }
   }
+  // pg materializes every described property, including SQL NULLs.
+  if (
+    fields !== undefined &&
+    result.rows.some((row) =>
+      DATABASE_INVENTORY_COLUMNS.some((name) => !Object.hasOwn(row, name)),
+    )
+  )
+    throw new Error('Database inventory is invalid');
   // Named-field inventory rows cannot come from array-mode results, even empty ones.
   if (result.rowAsArray !== undefined && result.rowAsArray !== false)
     throw new Error('Database inventory is invalid');

@@ -7025,7 +7025,7 @@ for (const count of [0, 1]) {
     const Result = require('pg/lib/result');
     const result = new Result();
     result.addFields(databaseInventoryFields());
-    if (count) result.addRow(inventoryDbRecord({ byteCount: '1' }));
+    if (count) result.addRow(projectedInventoryRow({ byteCount: '1' }));
     result.addCommandComplete({ text: `SELECT ${count}` });
     assert.strictEqual(result.command, 'SELECT');
     assert.strictEqual(result.rowCount, count);
@@ -7463,6 +7463,18 @@ function databaseInventoryFields() {
   }));
 }
 
+// Descriptor-bearing fixtures model pg's complete named projection.
+const projectedInventoryRow = (overrides = {}) =>
+  inventoryDbRecord({
+    checksumAlgorithm: 'sha256',
+    checksumHex: null,
+    deletedAt: null,
+    createdAt: null,
+    uploadState: null,
+    uploadExpiresAt: null,
+    ...overrides,
+  });
+
 const invalidDatabaseFields = [
   ['null', null],
   ['boolean', false],
@@ -7527,7 +7539,7 @@ for (const [label, fields] of invalidDatabaseFields) {
   for (const populated of [false, true]) {
     test(`queryDatabaseStoredObjects: rejects ${label} columns with populated=${populated}`, async () => {
       const rows = Object.freeze(
-        populated ? [Object.freeze(inventoryDbRecord())] : [],
+        populated ? [Object.freeze(projectedInventoryRow())] : [],
       );
       if (Array.isArray(fields)) Object.freeze(fields);
       const result = Object.freeze({
@@ -7551,7 +7563,7 @@ for (const [label, fields] of invalidDatabaseFields) {
       );
       assert.strictEqual(queries, 1);
       assert.strictEqual(result.fields, fields);
-      assert.deepStrictEqual(rows, populated ? [inventoryDbRecord()] : []);
+      assert.deepStrictEqual(rows, populated ? [projectedInventoryRow()] : []);
     });
   }
   test(`main: ${label} columns suppress requests and publication`, async () => {
@@ -7618,7 +7630,7 @@ for (const [label, metadata] of projectionVariants) {
       const rows = Object.freeze(
         Array.from({ length: count }, (_, i) =>
           Object.freeze(
-            inventoryDbRecord({
+            projectedInventoryRow({
               id: `id-${i}`,
               objectKey: `key-${i}`,
               byteCount: '0001',
@@ -7649,7 +7661,7 @@ for (const [label, metadata] of projectionVariants) {
       );
       try {
         const rows = Array.from({ length: count }, (_, i) =>
-          inventoryDbRecord({ id: `id-${i}`, objectKey: `key-${i}` }),
+          projectedInventoryRow({ id: `id-${i}`, objectKey: `key-${i}` }),
         );
         const s3Client = listingClient([
           {
@@ -7697,8 +7709,8 @@ for (const [label, metadata] of projectionVariants) {
 for (const [label, overrides] of [
   ['invalid row', { rows: [{}] }],
   ['sparse rows', { rows: new Array(1) }],
-  ['duplicate rows', { rows: [inventoryDbRecord(), inventoryDbRecord()] }],
-  ['invalid bytes', { rows: [inventoryDbRecord({ byteCount: true })] }],
+  ['duplicate rows', { rows: [projectedInventoryRow(), projectedInventoryRow()] }],
+  ['invalid bytes', { rows: [projectedInventoryRow({ byteCount: true })] }],
   ['wrong count', { rowCount: 0 }],
   ['wrong command', { command: 'DELETE' }],
   ['array mode', { rowAsArray: true }],
@@ -7709,7 +7721,7 @@ for (const [label, overrides] of [
         pgClient: {
           query: async () => ({
             fields: databaseInventoryFields(),
-            rows: [inventoryDbRecord()],
+            rows: [projectedInventoryRow()],
             ...overrides,
           }),
         },
@@ -7799,7 +7811,7 @@ for (const [index, [label, format]] of invalidDatabaseFormats.entries()) {
       ),
     );
     const rows = Object.freeze(
-      index % 2 ? [Object.freeze(inventoryDbRecord())] : [],
+      index % 2 ? [Object.freeze(projectedInventoryRow())] : [],
     );
     const result = Object.freeze({
       fields,
@@ -7822,7 +7834,7 @@ for (const [index, [label, format]] of invalidDatabaseFormats.entries()) {
     );
     assert.strictEqual(queries, 1);
     assert.strictEqual(result.fields, fields);
-    assert.deepStrictEqual(rows, index % 2 ? [inventoryDbRecord()] : []);
+    assert.deepStrictEqual(rows, index % 2 ? [projectedInventoryRow()] : []);
   });
 }
 
@@ -7912,7 +7924,7 @@ for (const [label, describe] of compatibleDatabaseFormats) {
       const rows = Object.freeze(
         Array.from({ length: count }, (_, i) =>
           Object.freeze(
-            inventoryDbRecord({
+            projectedInventoryRow({
               id: `id-${i}`,
               objectKey: `key-${i}`,
               byteCount: '0001',
@@ -7947,7 +7959,7 @@ for (const count of [0, 2]) {
     );
     try {
       const rows = Array.from({ length: count }, (_, i) =>
-        inventoryDbRecord({ id: `id-${i}`, objectKey: `key-${i}` }),
+        projectedInventoryRow({ id: `id-${i}`, objectKey: `key-${i}` }),
       );
       const fields = databaseInventoryFields().map(
         compatibleDatabaseFormats[3][1],
@@ -8007,7 +8019,7 @@ for (const [label, overrides] of [
         pgClient: {
           query: async () => ({
             fields: databaseInventoryFields(),
-            rows: [inventoryDbRecord()],
+            rows: [projectedInventoryRow()],
             ...overrides,
           }),
         },
@@ -8071,7 +8083,7 @@ for (const [i, [label, dataTypeID]] of invalidByteCountTypes.entries()) {
       ),
     );
     const rows = Object.freeze(
-      i % 2 ? [Object.freeze(inventoryDbRecord({ byteCount: '1' }))] : [],
+      i % 2 ? [Object.freeze(projectedInventoryRow({ byteCount: '1' }))] : [],
     );
     const result = Object.freeze({
       fields,
@@ -8114,7 +8126,7 @@ for (const [label, patch] of [
       const rows = Object.freeze(
         Array.from({ length: count }, (_, i) =>
           Object.freeze(
-            inventoryDbRecord({
+            projectedInventoryRow({
               id: `id-${i}`,
               objectKey: `key-${i}`,
               byteCount: '0001',
@@ -8206,7 +8218,7 @@ for (const count of [0, 2]) {
     );
     try {
       const rows = Array.from({ length: count }, (_, i) =>
-        inventoryDbRecord({ id: `id-${i}`, objectKey: `key-${i}` }),
+        projectedInventoryRow({ id: `id-${i}`, objectKey: `key-${i}` }),
       );
       const s3Client = listingClient([
         {
@@ -8266,7 +8278,7 @@ for (const [label, overrides] of [
         pgClient: {
           query: async () => ({
             fields: databaseInventoryFields(),
-            rows: [inventoryDbRecord()],
+            rows: [projectedInventoryRow()],
             ...overrides,
           }),
         },
@@ -8342,7 +8354,7 @@ for (const name of inventoryTimestampColumns) {
           count
             ? [
                 Object.freeze(
-                  inventoryDbRecord({
+                  projectedInventoryRow({
                     [name]: '2026-01-02T03:04:05Z',
                     byteCount: '1',
                   }),
@@ -8403,7 +8415,7 @@ for (const [i, [label, dataTypeID]] of [
         pgClient: {
           query: async () => ({
             fields,
-            rows: i % 2 ? [inventoryDbRecord()] : [],
+            rows: i % 2 ? [projectedInventoryRow()] : [],
           }),
         },
       }),
@@ -8433,7 +8445,7 @@ for (const [label, patch] of [
       const rows = Object.freeze(
         Array.from({ length: count }, (_, i) =>
           Object.freeze(
-            inventoryDbRecord({
+            projectedInventoryRow({
               id: `id-${i}`,
               objectKey: `key-${i}`,
               byteCount: '0001',
@@ -8477,7 +8489,7 @@ for (const [i, name] of inventoryTimestampColumns.entries()) {
           : field,
       );
       const rows =
-        i === 0 ? [] : [inventoryDbRecord({ [name]: '2026-01-02T03:04:05Z' })];
+        i === 0 ? [] : [projectedInventoryRow({ [name]: '2026-01-02T03:04:05Z' })];
       const s3Client = listingClient([{ IsTruncated: false }]);
       s3Client.destroy = () => destroyed++;
       const io = createIo();
@@ -8557,7 +8569,7 @@ for (const [label, overrides] of [
         pgClient: {
           query: async () => ({
             fields: databaseInventoryFields(),
-            rows: [inventoryDbRecord()],
+            rows: [projectedInventoryRow()],
             ...overrides,
           }),
         },
@@ -8644,7 +8656,7 @@ for (const name of inventoryTextColumns) {
           pgClient: {
             query: async () => ({
               fields,
-              rows: count ? [inventoryDbRecord()] : [],
+              rows: count ? [projectedInventoryRow()] : [],
             }),
           },
         }),
@@ -8688,7 +8700,7 @@ for (const [i, dataTypeID] of [
             fields: databaseInventoryFields().map((field) =>
               field.name === name ? { ...field, dataTypeID } : field,
             ),
-            rows: i % 2 ? [inventoryDbRecord()] : [],
+            rows: i % 2 ? [projectedInventoryRow()] : [],
           }),
         },
       }),
@@ -8718,7 +8730,7 @@ for (const [label, patch] of [
       const rows = Object.freeze(
         Array.from({ length: count }, (_, i) =>
           Object.freeze(
-            inventoryDbRecord({
+            projectedInventoryRow({
               id: `id-${i}`,
               objectKey: `key-${i}`,
               byteCount: '0001',
@@ -8785,7 +8797,7 @@ for (const [label, overrides] of [
       queryDatabaseStoredObjects({
         pgClient: {
           query: async () => ({
-            rows: [inventoryDbRecord()],
+            rows: [projectedInventoryRow()],
             fields: databaseInventoryFields(),
             command: 'SELECT',
             rowCount: 1,
@@ -8857,7 +8869,7 @@ for (const [i, name] of inventoryTextColumns.entries()) {
       let queries = 0,
         ended = 0,
         destroyed = 0;
-      const rows = i % 2 ? [inventoryDbRecord()] : [];
+      const rows = i % 2 ? [projectedInventoryRow()] : [];
       const fields = databaseInventoryFields().map((field) =>
         field.name === name
           ? { ...field, dataTypeID: i === 1 ? 'private-text-type' : 1043 }
@@ -8911,3 +8923,207 @@ for (const [i, name] of inventoryTextColumns.entries()) {
     }
   });
 }
+
+for (const { name } of databaseInventoryFields()) {
+  for (const later of [false, true]) {
+    test(`queryDatabaseStoredObjects: rejects missing projected ${name} in ${later ? 'later' : 'first'} row`, async () => {
+      const row = projectedInventoryRow({
+        id: 'incomplete',
+        objectKey: 'incomplete',
+      });
+      delete row[name];
+      Object.freeze(row);
+      const rows = Object.freeze(
+        later ? [Object.freeze(projectedInventoryRow()), row] : [row],
+      );
+      const result = Object.freeze({
+        rows,
+        fields: Object.freeze(databaseInventoryFields()),
+      });
+      await assert.rejects(
+        queryDatabaseStoredObjects({ pgClient: { query: async () => result } }),
+        { message: 'Database inventory is invalid' },
+      );
+      assert.strictEqual(Object.hasOwn(row, name), false);
+      assert.strictEqual(result.rows, rows);
+    });
+  }
+}
+
+for (const name of [
+  'checksumHex',
+  'deletedAt',
+  'uploadState',
+  'uploadExpiresAt',
+]) {
+  test(`queryDatabaseStoredObjects: rejects inherited-only projected ${name}`, async () => {
+    const complete = projectedInventoryRow();
+    const row = Object.assign(
+      Object.create({ [name]: complete[name] }),
+      complete,
+    );
+    delete row[name];
+    Object.freeze(row);
+    await assert.rejects(
+      queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () => ({
+            rows: [row],
+            fields: databaseInventoryFields(),
+          }),
+        },
+      }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+
+  test(`main: missing projected ${name} suppresses storage and publication`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-db-projection-failure-'),
+    );
+    try {
+      const row = projectedInventoryRow();
+      delete row[name];
+      let queries = 0,
+        ended = 0,
+        destroyed = 0;
+      const s3Client = listingClient([{ IsTruncated: false }]);
+      s3Client.destroy = () => destroyed++;
+      const io = createIo();
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        {
+          env: {},
+          s3Client,
+          pgClient: {
+            query: async () => {
+              queries++;
+              return {
+                rows: [row],
+                fields: databaseInventoryFields(),
+                command: 'SELECT',
+                rowCount: 1,
+              };
+            },
+            end: async () => {
+              ended++;
+            },
+          },
+        },
+      );
+      assert.strictEqual(code, 1);
+      assert.strictEqual(queries, 1);
+      assert.strictEqual(s3Client.inputs.length, 0);
+      assert.strictEqual(ended, 0);
+      assert.strictEqual(destroyed, 0);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const value of [null, undefined]) {
+  test(`queryDatabaseStoredObjects: preserves complete frozen nullable/undefined projection (${value})`, async () => {
+    const rows = Object.freeze(
+      [0, 1].map((i) =>
+        Object.freeze(
+          Object.fromEntries(
+            Object.entries(
+              projectedInventoryRow({
+                id: `id-${i}`,
+                objectKey: `key-${i}`,
+                byteCount: i ? '9007199254740993' : '0001',
+                checksumAlgorithm: value,
+                checksumHex: value,
+                deletedAt: value,
+                createdAt: value,
+                uploadState: value,
+                uploadExpiresAt: value,
+                extra: 'preserved',
+              }),
+            ).reverse(),
+          ),
+        ),
+      ),
+    );
+    const result = Object.freeze({
+      rows,
+      fields: Object.freeze(databaseInventoryFields()),
+    });
+    const actual = await queryDatabaseStoredObjects({
+      pgClient: { query: async () => result },
+    });
+    assert.deepStrictEqual(
+      actual,
+      rows.map((row) => ({ ...row, byteCount: BigInt(row.byteCount) })),
+    );
+    assert.strictEqual(rows[0].byteCount, '0001');
+    assert.strictEqual(rows[1].byteCount, '9007199254740993');
+    assert.notStrictEqual(actual[0], rows[0]);
+  });
+}
+
+for (const patch of [{}, { fields: undefined }]) {
+  test(`queryDatabaseStoredObjects: partial legacy rows remain supported with ${Object.hasOwn(patch, 'fields') ? 'undefined' : 'omitted'} descriptors`, async () => {
+    const row = Object.freeze(inventoryDbRecord());
+    assert.strictEqual(Object.hasOwn(row, 'deletedAt'), false);
+    assert.deepStrictEqual(
+      await queryDatabaseStoredObjects({
+        pgClient: { query: async () => ({ rows: [row], ...patch }) },
+      }),
+      [{ ...row, byteCount: 1n }],
+    );
+  });
+}
+
+test('queryDatabaseStoredObjects: installed pg owns NULL projection keys and rejects copied omission', async () => {
+  const Result = require('pg/lib/result');
+  const result = new Result();
+  result.addFields(databaseInventoryFields());
+  result.addRow(
+    result.parseRow([
+      'fixture-id',
+      'fixture-org',
+      'acres-quarantine',
+      'fixture-key',
+      '1',
+      'sha256',
+      null,
+      'accepted',
+      null,
+      null,
+      null,
+      null,
+    ]),
+  );
+  result.addCommandComplete({ text: 'SELECT 1' });
+  for (const { name } of databaseInventoryFields())
+    assert.ok(Object.hasOwn(result.rows[0], name));
+  assert.strictEqual(result.rows[0].deletedAt, null);
+  assert.deepStrictEqual(
+    await queryDatabaseStoredObjects({
+      pgClient: { query: async () => result },
+    }),
+    [{ ...result.rows[0], byteCount: 1n }],
+  );
+  const incomplete = { ...result.rows[0] };
+  delete incomplete.deletedAt;
+  await assert.rejects(
+    queryDatabaseStoredObjects({
+      pgClient: { query: async () => ({ ...result, rows: [incomplete] }) },
+    }),
+    { message: 'Database inventory is invalid' },
+  );
+});
