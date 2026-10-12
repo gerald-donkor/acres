@@ -871,6 +871,18 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Database inventory row-mode consistency (prompt 331): defined rowAsArray
+  must be exact primitive false; contradictory/malformed values, including
+  empty array-mode SELECTs, reject whole results with fixed diagnostics, zero
+  S3 requests and no summary/receipt. Omitted/undefined metadata remains
+  supported; false cannot excuse invalid rows/counts/commands. Investigate
+  query-result row mode and rerun into a fresh receipt path. Focused
+  **1401/1401**, independent review, repository checks and **33 offline stages /
+  4382 tests** passed. Row-mode consistency does not authenticate metadata,
+  prove completeness or verify object bytes. Prompt 201 and Category 6 live
+  recovery approval remain open. Actual outputs and rollback are recorded in
+  docs/operations.md Prompt 331.
+
 - Database inventory command consistency (prompt 330): any defined command
   from the completed inventory SELECT must be exact primitive SELECT.
   Other/malformed tags reject whole results with fixed diagnostics, zero S3

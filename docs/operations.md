@@ -9526,3 +9526,121 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 331 — validate database inventory row mode (2026-10-12)
+
+Continued Phase 12K after committed Prompt 330 (`cb3ee0f`), following the
+user's approval of prompts/331-validate-database-inventory-row-mode.md.
+The installed pg/lib/result.js constructor sets rowAsArray to the primitive
+boolean result of rowMode === 'array'. Default parsing returns named-field
+objects; array mode selects _parseRowAsArray. This inventory adapter issues
+a plain SQL string and consumes named fields. A synthetic installed-driver
+empty array-mode SELECT previously returned:
+
+```text
+{"rowAsArray":true,"command":"SELECT","rowCount":0,"accepted":0}
+{"defaultRowAsArray":false}
+```
+
+After existing result/row validation and before conversion, any defined
+rowAsArray must now be exactly primitive false. True/null/malformed values
+reject whole results without coercion, using the existing fixed error. The
+same synthetic array-mode probe now returns:
+
+```text
+{"rejected":true,"error":"Database inventory is invalid"}
+```
+
+Omitted/undefined metadata remains compatible with injected adapters. Valid
+false preserves empty/populated inventories, optional/exact count metadata,
+frozen caller ownership, row order, opaque fields and bigint conversion.
+False cannot excuse malformed/sparse/duplicate rows, bad command metadata or
+contradictory counts. Installed-driver empty default-mode SELECT remains
+accepted. SQL, S3 listing, comparison, CLI/env behavior, TypeScript facade,
+receipt schema/publication and Stage 7 are unchanged.
+
+All 1299 prior tests remain byte-for-byte unchanged; 102 appended direct and
+runner cases cover invalid categories, compatibility and driver semantics.
+Runner failures verify one query, zero S3 sends, no injected-client end/destroy,
+only the connecting log, fixed Error: Database query failed, exit 1, and no
+summary, final receipt or temporary file. Supported empty/populated results
+still publish clean simulation receipts. Actual permitted red output:
+
+```text
+ℹ tests 1401
+ℹ pass 1324
+ℹ fail 77
+ℹ skipped 0
+```
+
+Actual permitted direct and npm focused green output:
+
+```text
+ℹ tests 1401
+ℹ pass 1401
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual repository verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| permitted direct spec and npm run ops:reconcile-test | 0 | tests 1401, pass 1401, fail 0, skipped 0 |
+| source/spec node -c and CLI --help | 0 | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| changed-region installed Prettier | 0 | {"specFormatting":true}; {"guardFormatting":true} (guard dedented for comparison) |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| final sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| permitted npm run build | 0 | Compiled successfully in 3.4s; Generating static pages using 7 workers (22/22) in 929ms; prisma generate && nest build |
+| git diff --check | 0 | silent |
+
+The restricted direct test attempt reported one failed worker wrapper rather
+than suite results. The restricted build failed with Could not parse output
+from TypeScript's --showConfig. A typecheck started alongside that build failed
+with TS6053 missing generated .next/types files; rerunning sequentially after
+the successful permitted build passed. Ordinary child-process reruns produced
+complete red/green/build evidence without weakening checks. A supplemental
+unchanged-spec probe initially used an invalid Node execFileSync options
+argument; the corrected Python byte comparison confirmed the previous spec
+is an unchanged prefix of the current file.
+
+All 33 independent offline stages resolved from current package.json ops:check
+passed: **27 suite invocations / 4382 tests / 4382 passed / zero failures or
+skipped**. Every stage exit and final suite count was inspected; the final
+launch/dossier suite reported tests 182, pass 182, fail 0. While that final
+suite ran, a read-only process inspection confirmed it was executing isolated
+synthetic fixtures. No live launch drill was run. Online ops:audit remains
+omitted under the registry metadata-disclosure restriction; no full aggregate
+ops:check pass or fresh vulnerability inventory is claimed.
+
+Deterministic example readiness validation retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Independent read-only review found no Critical, Important or Minor issues and
+no implementation deviations. Its restricted invocation reported only one
+file-level test despite exit 0 and does not independently corroborate 1401
+cases; coordinator permitted runs supply that evidence. Feedback was verified
+against strict optional metadata handling, guard placement, installed driver
+semantics, caller ownership and publication suppression. No fixes or
+significant re-review were needed.
+
+Row-mode consistency cannot authenticate metadata, establish complete
+inventories, verify object bytes or provide an atomic DB/S3 snapshot.
+Mandatory metadata, field/OID validation, SQL selection changes, resource
+bounds and hostile in-process objects remain out of scope. No live services,
+operator approval, deployment or push occurred. Prompt 201, Category 6 live
+recovery approval and Phase 12 exit remain open. Ordinary commit revert
+restores prior behavior without migration or data/storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

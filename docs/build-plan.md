@@ -3198,3 +3198,22 @@ Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit remain
 omitted; no aggregate ops:check or fresh vulnerability inventory is claimed. No
 live services, operator approval, deployment or push occurred. Prompt 201,
 Category 6 live recovery approval and Phase 12 exit remain open.
+
+**Prompt 331 — validate database inventory row mode (2026-10-12):**
+Continued Phase 12K after committed Prompt 330. Defined rowAsArray must be
+exact primitive false before conversion; empty array-mode SELECTs now reject.
+Malformed/contradictory metadata rejects whole results with fixed diagnostics,
+zero S3 requests and no summary/receipt. Omitted/undefined metadata, frozen
+ownership and existing object-row conversion remain compatible. SQL, storage,
+comparison, publication and Stage 7 are unchanged. Focused **1401/1401**,
+lint, sequential typecheck, permitted build (**22/22** pages), formatting/
+syntax/help/diff and **33 offline stages / 27 suite invocations / 4382 tests /
+zero failures or skipped** passed. Independent read-only review found no
+issues or implementation deviations; its restricted file-level test did not
+corroborate full case totals. Actual red/green outputs, driver semantics,
+initial restricted/concurrent check failures and ordinary-revert rollback are
+in docs/operations.md Prompt 331. Readiness remains **0 approved / 11 blocked /
+70 blockers**. Online audit remains omitted; no aggregate ops:check or fresh
+vulnerability inventory is claimed. No live services, operator approval,
+deployment or push occurred. Prompt 201, Category 6 live recovery approval
+and Phase 12 exit remain open.

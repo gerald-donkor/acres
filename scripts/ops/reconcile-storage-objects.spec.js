@@ -7155,3 +7155,284 @@ for (const [label, fields] of [
     });
   }
 }
+
+const invalidDatabaseRowModes = [
+  ['true', true],
+  ['null', null],
+  ['zero', 0],
+  ['negative zero', -0],
+  ['one', 1],
+  ['NaN', NaN],
+  ['infinity', Infinity],
+  ['negative infinity', -Infinity],
+  ['bigint', 0n],
+  ['symbol', Symbol('private-mode')],
+  ['empty string', ''],
+  ['blank string', ' '],
+  ['false string', 'false'],
+  ['true string', 'true'],
+  ['boxed false', new Boolean(false)],
+  ['boxed true', new Boolean(true)],
+  ['array', []],
+  ['object', {}],
+  [
+    'throwing coercion',
+    {
+      [Symbol.toPrimitive]() {
+        throw new Error('private-value');
+      },
+    },
+  ],
+];
+
+for (const [label, rowAsArray] of invalidDatabaseRowModes) {
+  for (const populated of [false, true]) {
+    test(`queryDatabaseStoredObjects: rejects ${label} rowAsArray with ${populated ? 'populated' : 'empty'} rows`, async () => {
+      const rows = Object.freeze(
+        populated ? [Object.freeze(inventoryDbRecord())] : [],
+      );
+      const result = Object.freeze({
+        rows,
+        rowCount: rows.length,
+        command: 'SELECT',
+        rowAsArray,
+      });
+      let queries = 0;
+      await assert.rejects(
+        queryDatabaseStoredObjects({
+          pgClient: {
+            async query() {
+              queries++;
+              return result;
+            },
+          },
+        }),
+        { message: 'Database inventory is invalid' },
+      );
+      assert.strictEqual(queries, 1);
+      assert.strictEqual(result.rowAsArray, rowAsArray);
+      assert.deepStrictEqual(rows, populated ? [inventoryDbRecord()] : []);
+    });
+  }
+}
+
+for (const [label, fields] of [
+  ['omitted', {}],
+  ['undefined', { rowAsArray: undefined }],
+  ['false', { rowAsArray: false }],
+]) {
+  for (const count of [0, 2]) {
+    for (const includeCount of [false, true]) {
+      test(`queryDatabaseStoredObjects: preserves ${label} rowAsArray, ${count} rows, count ${includeCount}`, async () => {
+        const rows = Object.freeze(
+          Array.from({ length: count }, (_, i) =>
+            Object.freeze(
+              inventoryDbRecord({
+                id: `id-${i}`,
+                objectKey: `opaque/${i}`,
+                byteCount: '0001',
+                extra: 'preserved',
+              }),
+            ),
+          ),
+        );
+        const result = Object.freeze({
+          rows,
+          ...fields,
+          ...(includeCount ? { rowCount: count } : {}),
+        });
+        let queries = 0;
+        const converted = await queryDatabaseStoredObjects({
+          pgClient: {
+            async query() {
+              queries++;
+              return result;
+            },
+          },
+        });
+        assert.strictEqual(queries, 1);
+        assert.deepStrictEqual(
+          converted,
+          rows.map((row) => ({ ...row, byteCount: 1n })),
+        );
+        assert.notStrictEqual(converted, rows);
+        assert.ok(rows.every((row) => row.byteCount === '0001'));
+      });
+    }
+  }
+}
+
+for (const [label, rows, rowCount] of [
+  ['malformed', [{}], 1],
+  ['sparse', new Array(1), 1],
+  ['duplicate', [inventoryDbRecord(), inventoryDbRecord()], 2],
+  ['invalid bytes', [inventoryDbRecord({ byteCount: true })], 1],
+  ['wrong count', [inventoryDbRecord()], 0],
+]) {
+  test(`queryDatabaseStoredObjects: false cannot excuse ${label} inventory`, async () => {
+    await assert.rejects(
+      queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () => ({ rows, rowCount, rowAsArray: false }),
+        },
+      }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const mode of [undefined, 'array']) {
+  test(`queryDatabaseStoredObjects: installed pg empty ${mode || 'default'} row mode`, async () => {
+    const Result = require('pg/lib/result');
+    const result = new Result(mode);
+    result.addCommandComplete({ text: 'SELECT 0' });
+    assert.strictEqual(result.rowAsArray, mode === 'array');
+    const query = queryDatabaseStoredObjects({
+      pgClient: { query: async () => result },
+    });
+    if (mode === 'array') {
+      await assert.rejects(query, { message: 'Database inventory is invalid' });
+    } else {
+      assert.deepStrictEqual(await query, []);
+    }
+  });
+}
+
+test('queryDatabaseStoredObjects: false row mode cannot excuse invalid command', async () => {
+  await assert.rejects(
+    queryDatabaseStoredObjects({
+      pgClient: {
+        query: async () => ({
+          rows: [],
+          rowCount: 0,
+          command: 'DELETE',
+          rowAsArray: false,
+        }),
+      },
+    }),
+    { message: 'Database inventory is invalid' },
+  );
+});
+
+for (const [label, rowAsArray] of invalidDatabaseRowModes) {
+  for (const populated of [false, true]) {
+    test(`main: ${label} rowAsArray with ${populated ? 'populated' : 'empty'} rows prevents storage and publication`, async () => {
+      const dir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'acres-db-row-mode-failure-'),
+      );
+      try {
+        let queries = 0;
+        let ended = 0;
+        let destroyed = 0;
+        const rows = Object.freeze(
+          populated ? [Object.freeze(inventoryDbRecord())] : [],
+        );
+        const result = Object.freeze({
+          rows,
+          rowCount: rows.length,
+          command: 'SELECT',
+          rowAsArray,
+        });
+        const s3Client = listingClient([{ IsTruncated: false }]);
+        s3Client.destroy = () => destroyed++;
+        const io = createIo();
+        assert.strictEqual(
+          await main(
+            [
+              'node',
+              'script',
+              '--dry-run',
+              '--output',
+              path.join(dir, 'receipt.json'),
+            ],
+            io,
+            {
+              env: {},
+              pgClient: {
+                async query() {
+                  queries++;
+                  return result;
+                },
+                async end() {
+                  ended++;
+                },
+              },
+              s3Client,
+            },
+          ),
+          1,
+        );
+        assert.strictEqual(queries, 1);
+        assert.strictEqual(s3Client.inputs.length, 0);
+        assert.strictEqual(ended, 0);
+        assert.strictEqual(destroyed, 0);
+        assert.deepStrictEqual(io.logs, [
+          'Connecting to PostgreSQL and Object Storage...',
+        ]);
+        assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+        assert.deepStrictEqual(fs.readdirSync(dir), []);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+}
+
+for (const [label, fields] of [
+  ['false', { rowAsArray: false }],
+  ['omitted', {}],
+  ['undefined', { rowAsArray: undefined }],
+]) {
+  for (const populated of [false, true]) {
+    test(`main: ${label} rowAsArray with ${populated ? 'populated' : 'empty'} rows publishes simulation evidence`, async () => {
+      const dir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'acres-db-row-mode-success-'),
+      );
+      try {
+        const target = path.join(dir, 'receipt.json');
+        const rows = Object.freeze(
+          populated
+            ? [Object.freeze(inventoryDbRecord({ byteCount: '1' }))]
+            : [],
+        );
+        const result = Object.freeze({
+          rows,
+          rowCount: rows.length,
+          ...fields,
+        });
+        let queries = 0;
+        const s3Client = listingClient([
+          {
+            IsTruncated: false,
+            Contents: populated ? [{ Key: 'fixture-key', Size: 1 }] : [],
+          },
+        ]);
+        const io = createIo();
+        assert.strictEqual(
+          await main(['node', 'script', '--dry-run', '--output', target], io, {
+            env: {},
+            pgClient: {
+              async query() {
+                queries++;
+                return result;
+              },
+            },
+            s3Client,
+          }),
+          0,
+        );
+        const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+        assert.strictEqual(queries, 1);
+        assert.strictEqual(s3Client.inputs.length, 1);
+        assert.strictEqual(report.execution_mode, 'simulation');
+        assert.strictEqual(report.summary.status, 'clean');
+        assert.strictEqual(report.summary.matchedObjects, populated ? 1 : 0);
+        assert.deepStrictEqual(io.errors, []);
+        assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+        assert.ok(rows.every((row) => row.byteCount === '1'));
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+}

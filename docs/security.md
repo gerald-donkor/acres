@@ -1446,3 +1446,14 @@ independent read-only review verify this existing adapter boundary. SQL and
 receipt schema are unchanged. Command consistency cannot authenticate metadata,
 prove inventory completeness, verify object bytes or establish atomic snapshots
 or live recovery. Prompt 201, Category 6 live approval and Phase 12 exit stay open.
+
+**Prompt 331 database inventory row-mode consistency (2026-10-12):**
+Defined rowAsArray must be exactly primitive false; contradictory/malformed
+metadata, including empty array-mode SELECTs, rejects the whole inventory
+before conversion, S3 requests or publication with fixed errors and no
+coercion. Omitted/undefined metadata remains supported; false cannot excuse
+invalid rows, counts or commands. Focused **1401/1401** and independent
+read-only review verify this existing adapter boundary. SQL and receipt schema
+are unchanged. Row-mode consistency cannot authenticate metadata, prove
+complete inventories, verify object bytes or establish atomic snapshots or
+live recovery. Prompt 201, Category 6 live approval and Phase 12 exit stay open.
