@@ -871,6 +871,17 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Checksum extension type consistency (prompt 327): when a non-null SHA256
+  digest extension is supplied, defined `ChecksumType` must be exactly
+  `FULL_OBJECT`. Composite or malformed supplied types reject the whole scan
+  with fixed errors and no summary/receipt. Omitted/undefined types retain
+  legacy compatibility; ordinary listings with type hints but no digest retain
+  metadata-only matching. Investigate provider checksum semantics and rerun
+  into a fresh receipt path. Focused **1060/1060**, independent review,
+  repository checks and **33 offline stages / 4041 tests** passed. This
+  consistency check does not verify object bytes, authenticate metadata or
+  supply live recovery approval; Prompt 201 and Category 6 remain open.
+
 - Request-scope precondition (prompt 324): primitive nonblank bucket strings
   and omitted/undefined/string prefixes are required before any command/send.
   Malformed scopes reject without coercion or storage requests; invalid truthy

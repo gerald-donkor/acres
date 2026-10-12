@@ -3128,3 +3128,20 @@ are in docs/operations.md Prompt 326. Readiness stays **0 approved / 11 blocked 
 70 blockers**. Online audit remains omitted; no full ops:check, fresh
 vulnerability inventory, live service, deployment or push claim. Prompt 201,
 Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 327 — validate storage checksum extension types (2026-10-12):**
+Continued Phase 12K after committed Prompt 326. A supplied non-null SHA256
+listing digest extension requires any defined ChecksumType to be exact
+FULL_OBJECT; composite/malformed types reject whole inventories before
+publication, with fixed diagnostics and bounded requests. Optional type
+omission and ordinary digestless type hints retain legacy and metadata-only
+compatibility. All **1060/1060** focused tests, lint/typecheck, permitted build
+(**22/22** pages), formatting/syntax/help/diff and **33 offline stages / 27 suite
+invocations / 4041 tests / zero failures or skipped** passed. Independent
+read-only review found no issues and reproduced **1060/1060**. Actual red/green
+results, SDK semantics, compatibility, sandbox limits and ordinary revert
+rollback are in `docs/operations.md` Prompt 327. Readiness remains **0 approved /
+11 blocked / 70 blockers**. Online audit remains omitted; no aggregate
+ops:check or fresh vulnerability inventory is claimed. No live services,
+operator approval, deployment or push occurred. Prompt 201, Category 6 live
+approval and Phase 12 exit stay open.

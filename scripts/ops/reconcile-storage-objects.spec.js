@@ -6140,3 +6140,252 @@ test('main: stable bucket names across optional gap publish a clean simulation r
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+const incompatibleChecksumTypes = [
+  ['composite', 'COMPOSITE'],
+  ['null', null],
+  ['empty', ''],
+  ['case variant', 'full_object'],
+  ['space variant', ' FULL_OBJECT '],
+  ['number', 1],
+  ['boolean', false],
+  ['array', ['FULL_OBJECT']],
+  ['boxed string', new String('FULL_OBJECT')],
+  [
+    'coercible object',
+    {
+      [Symbol.toPrimitive]() {
+        throw new Error('private-checksum-type-coercion');
+      },
+    },
+  ],
+];
+
+for (const later of [false, true]) {
+  for (const [label, ChecksumType] of incompatibleChecksumTypes) {
+    test(`listBucketObjects: rejects ${label} digest type on ${later ? 'later' : 'first'} page`, async () => {
+      const pages = bucketContinuityPages([
+        ...(later ? [{}] : []),
+        {
+          Contents: Object.freeze([
+            Object.freeze({
+              Key: 'scope/conflict',
+              Size: 1,
+              ChecksumSHA256: canonicalSha256,
+              ChecksumType,
+            }),
+          ]),
+        },
+        {},
+      ]);
+      const s3Client = listingClient(pages);
+      await assert.rejects(
+        listBucketObjects({ s3Client, bucket: 'fixture', prefix: 'scope/' }),
+        { message: 'Object storage listing is invalid or incomplete' },
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.strictEqual(
+        pages[later ? 1 : 0].Contents[0].ChecksumType,
+        ChecksumType,
+      );
+    });
+  }
+}
+
+for (const [label, fields] of [
+  ['omitted', {}],
+  ['undefined', { ChecksumType: undefined }],
+  ['full object', { ChecksumType: 'FULL_OBJECT' }],
+]) {
+  test(`listBucketObjects: preserves ${label} digest type and frozen paginated metadata`, async () => {
+    const pages = bucketContinuityPages([{}, {}]).map(page =>
+      Object.freeze({
+        ...page,
+        Contents: Object.freeze(
+          page.Contents.map(entry => Object.freeze({ ...entry, ...fields })),
+        ),
+      }),
+    );
+    const s3Client = listingClient(pages);
+    const result = await listBucketObjects(
+      Object.freeze({ s3Client, bucket: 'fixture', prefix: 'scope/' }),
+    );
+    assert.deepStrictEqual(
+      result,
+      [0, 1].map(index => ({
+        key: `scope/${index}`,
+        byteCount: index + 1,
+        lastModified: '2026-01-01T00:00:00.000Z',
+        checksumHex: Buffer.alloc(32, 1).toString('hex'),
+      })),
+    );
+    assert.deepStrictEqual(s3Client.inputs, [
+      { Bucket: 'fixture', Prefix: 'scope/', ContinuationToken: undefined },
+      { Bucket: 'fixture', Prefix: 'scope/', ContinuationToken: '1' },
+    ]);
+    assert.strictEqual(pages[0].Contents[0].ChecksumType, fields.ChecksumType);
+  });
+}
+
+for (const [label, digestFields] of [
+  ['absent', {}],
+  ['undefined', { ChecksumSHA256: undefined }],
+  ['null', { ChecksumSHA256: null }],
+]) {
+  for (const [hint, ChecksumType] of [
+    ['composite', 'COMPOSITE'],
+    ['null', null],
+    ['malformed', incompatibleChecksumTypes.at(-1)[1]],
+  ]) {
+    test(`listBucketObjects: ignores ${hint} type hint with ${label} digest`, async () => {
+      const entry = Object.freeze({
+        Key: 'scope/key',
+        Size: 1,
+        ChecksumAlgorithm: Object.freeze(['SHA256']),
+        ChecksumType,
+        ...digestFields,
+      });
+      const s3Client = listingClient([
+        Object.freeze({ IsTruncated: false, Contents: Object.freeze([entry]) }),
+      ]);
+      assert.deepStrictEqual(
+        await listBucketObjects({
+          s3Client,
+          bucket: 'fixture',
+          prefix: 'scope/',
+        }),
+        [
+          {
+            key: 'scope/key',
+            byteCount: 1,
+            lastModified: null,
+            checksumHex: null,
+          },
+        ],
+      );
+      assert.strictEqual(s3Client.inputs.length, 1);
+      assert.strictEqual(entry.ChecksumType, ChecksumType);
+    });
+  }
+}
+
+for (const later of [false, true]) {
+  test(`main: ${later ? 'later' : 'first'} composite digest publishes no evidence`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-digest-type-failure-'),
+    );
+    try {
+      const s3Client = listingClient(
+        bucketContinuityPages([
+          ...(later ? [{}] : []),
+          {
+            Contents: [
+              {
+                Key: 'scope/conflict',
+                Size: 1,
+                ChecksumSHA256: canonicalSha256,
+                ChecksumType: 'COMPOSITE',
+              },
+            ],
+          },
+          {},
+        ]),
+      );
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--bucket',
+            'fixture',
+            '--prefix',
+            'scope/',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          { env: {}, dbObjects: [], s3Client },
+        ),
+        1,
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const [label, fields] of [
+  [
+    'full-object digest',
+    { ChecksumSHA256: canonicalSha256, ChecksumType: 'FULL_OBJECT' },
+  ],
+  ['legacy digest', { ChecksumSHA256: canonicalSha256 }],
+  [
+    'composite hint without digest',
+    { ChecksumType: 'COMPOSITE', ChecksumAlgorithm: ['SHA256'] },
+  ],
+]) {
+  test(`main: ${label} publishes a clean simulation receipt`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-digest-type-success-'),
+    );
+    try {
+      const bucket = 'fixture';
+      const target = path.join(dir, 'receipt.json');
+      const s3Client = listingClient([
+        {
+          IsTruncated: false,
+          Contents: [{ Key: 'scope/key', Size: 1, ...fields }],
+        },
+      ]);
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--bucket',
+            bucket,
+            '--output',
+            target,
+          ],
+          io,
+          {
+            env: {},
+            dbObjects: [
+              inventoryDbRecord({
+                bucket,
+                objectKey: 'scope/key',
+                checksumAlgorithm: 'sha256',
+                checksumHex: Buffer.from(canonicalSha256, 'base64').toString(
+                  'hex',
+                ),
+              }),
+            ],
+            s3Client,
+          },
+        ),
+        0,
+      );
+      const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+      assert.strictEqual(report.execution_mode, 'simulation');
+      assert.strictEqual(report.summary.status, 'clean');
+      assert.strictEqual(report.summary.matchedObjects, 1);
+      assert.deepStrictEqual(io.errors, []);
+      assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}

@@ -494,6 +494,12 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
         // existing optional extension without inferring a digest from ETag.
         let checksumHex = null;
         if (entry.ChecksumSHA256 !== undefined && entry.ChecksumSHA256 !== null) {
+          // A supplied composite type cannot attest to a whole-object digest.
+          if (
+            entry.ChecksumType !== undefined &&
+            entry.ChecksumType !== 'FULL_OBJECT'
+          )
+            throw invalidListing();
           const checksum = entry.ChecksumSHA256;
           if (
             typeof checksum !== 'string' ||

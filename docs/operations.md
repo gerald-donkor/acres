@@ -9099,3 +9099,110 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 327 — validate storage checksum extension types (2026-10-12)
+
+Continued Phase 12K after committed Prompt 326 (`3d3762c`), with the user's
+instruction to implement the prepared plan. A fresh synthetic probe supplied a
+canonical SHA256 digest marked `COMPOSITE`; the adapter accepted it and the
+comparison against the same hex DB digest reported:
+
+```text
+{"accepted":1,"status":"clean","matched":1}
+```
+
+The existing non-null/defined `ChecksumSHA256` extension branch now requires
+any defined `ChecksumType` to be exactly primitive `FULL_OBJECT`. Composite,
+null and malformed types reject before decoding or inventory inclusion, with
+no coercion. First/later failures reject the whole scan before another send;
+runner failures expose fixed diagnostics and publish no summary, receipt or
+temporary file. The same synthetic probe after the correction returned:
+
+```text
+{"rejected":true,"error":"Object storage listing is invalid or incomplete"}
+```
+
+Installed SDK `_Object` and `ChecksumType` declarations distinguish
+`FULL_OBJECT` and `COMPOSITE`, and describe checksum-type calculation semantics.
+Standard ListObjectsV2 entries carry type/algorithm metadata but no digest
+value. This correction concerns the utility's existing optional digest
+extension, not standard listing digest acquisition. The whole-byte DB digest
+contract is also evidenced by `uploads.service.ts` hashing received bytes with
+SHA256 before accepting completion.
+
+Omitted/undefined types retain legacy extension compatibility. If the digest
+is absent/undefined/null, type and algorithm hints remain unused and
+checksumHex stays null, including ordinary COMPOSITE listings. Exact
+FULL_OBJECT extensions preserve canonical base64 validation, decoded hex,
+size/date conversion, literal keys, pagination and frozen caller ownership.
+Successful FULL_OBJECT/legacy extensions and type-only metadata listings still
+publish clean simulation receipts. Defined incompatible types with supplied
+digests intentionally become errors; CLI/env defaults, SQL, comparison policy,
+public signatures/TS facade, publication, receipt schema and Stage 7 are unchanged.
+
+All 1023 previous cases and 37 regressions pass. Direct red output before the
+source change was `tests 1060`, `pass 1038`, `fail 22`, `skipped 0`. Direct
+green and permitted npm focused verification returned:
+
+```text
+ℹ tests 1060
+ℹ pass 1060
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| permitted `npm run ops:reconcile-test` | 0 | `tests 1060`, `pass 1060`, `fail 0`, `skipped 0` |
+| source/spec `node -c`; CLI `--help` | 0 | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| changed-region Prettier | 0 | `{"guardFormatting":true,"specFormatting":true}`; guard width accounts for its existing indentation |
+| `npm run lint` | 0 | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"` |
+| `npm run typecheck` | 0 | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1 |
+| permitted `npm run build` | 0 | `✓ Compiled successfully in 2.4s`; `✓ Generating static pages using 7 workers (22/22) in 702ms`; `prisma generate && nest build` |
+| `git diff --check` | 0 | silent |
+
+The restricted npm test reported only a single worker-wrapper result, not
+individual-suite evidence. Restricted build failed with `Could not parse
+output from TypeScript's --showConfig.` Restricted launch-readiness failed in
+its test worker. Ordinary permitted child-process reruns supplied the complete
+passing focused/build results and the expected readiness rejection. Assertions
+were unchanged. All 33 independent offline stages resolved from current
+`ops:check` passed: **27 suite invocations / 4041 tests / 4041 passed / zero
+failed or skipped**. Every stage status and summary was inspected; final
+launch/dossier output was `tests 182`, `pass 182`, `fail 0`. Online `ops:audit`
+remains omitted under the recorded registry metadata-disclosure restriction;
+no aggregate ops:check pass or fresh vulnerability inventory is claimed.
+
+Permitted launch-readiness retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Independent read-only review found no Critical, Important or Minor issues,
+reproduced **1060/1060** with zero skipped, and approved completion after docs.
+The feedback was verified against guard placement, exact primitive comparison,
+digestless compatibility and runner publication suppression. Its documentation
+recommendation is recorded here: checksum metadata consistency is not object
+byte verification. No fixes or significant re-review were needed.
+
+Legacy digests and metadata-only clean matches do not prove checksum
+calculation, authenticity, actual byte integrity, inventory completeness or
+an atomic DB/S3 snapshot. Algorithm pairing, mandatory digest acquisition,
+HEAD/GET, multipart reconstruction, network/resource bounds and hostile
+in-process getters/proxies remain out of scope. No live services, operator
+approval, deployment or push occurred. Prompt 201, Category 6 live approval
+and Phase 12 exit remain open. Ordinary commit revert restores the prior
+validation behavior without migration or storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

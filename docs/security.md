@@ -1395,3 +1395,17 @@ Focused **1023/1023** and independent review verify this existing boundary.
 Optional echo consistency cannot prove real bucket identity, authorization,
 completeness, authenticity, byte integrity or atomic snapshots. Prompt 201,
 Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 327 storage checksum extension type consistency (2026-10-12):**
+When a non-null SHA256 digest extension is supplied, defined ChecksumType must
+be exactly primitive FULL_OBJECT. Composite/null/malformed types reject before
+decoding, inventory inclusion or another request, with fixed diagnostics and
+no runner summary/receipt. Omitted/undefined types preserve legacy extension
+compatibility; absent/undefined/null digests still ignore type/algorithm hints
+and retain metadata-only matching. Focused **1060/1060** and independent
+read-only review verify this existing adapter boundary. Standard SDK listings
+omit digest values; no mandatory checksums, algorithm pairing, object hashing,
+HEAD/GET or multipart reconstruction were introduced. Optional metadata and
+clean comparisons do not establish calculation method, authenticity, object
+byte integrity, inventory completeness, atomic snapshots or live recovery
+approval. Prompt 201, Category 6 live approval and Phase 12 exit remain open.
