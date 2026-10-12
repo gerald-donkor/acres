@@ -1243,3 +1243,18 @@ total completeness or authenticity; no object-byte hashing, atomic snapshots,
 resource/network bounds, provider scope attestation or hostile in-process
 object handling was added. Prompt 201, Category 6 live operator approval and
 Phase 12 exit stay open.
+
+**Prompt 316 storage listing delimiter boundary (2026-10-12):** The
+listing adapter now rejects any defined `Delimiter` metadata before consuming
+entries or continuation tokens. Flat listings send no delimiter; any delimiter
+returned indicates hierarchical partitioning or unexpected provider behavior
+that could partition keys into prefixes or omit subpaths. Later failures reject
+the whole inventory. Fixed listing/runner diagnostics expose no provider
+delimiter, token or key; failures produce no summary or receipt.
+Omitted/undefined delimiters remain valid under the installed SDK's optional
+field contract. Focused **647/647** tests and independent review verify this
+consistency boundary. CLI, SQL, comparison, receipt publication and Stage 7 are
+unchanged. Delimiter checks cannot prove total completeness or authenticity; no
+object-byte hashing, atomic snapshots, resource/network bounds, provider scope
+attestation or hostile in-process object handling was added. Prompt 201, Category
+6 live operator approval and Phase 12 exit stay open.

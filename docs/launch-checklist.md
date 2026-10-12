@@ -959,6 +959,16 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   and independent review passed. This consistency check adds no byte-integrity,
   authenticity, total-completeness or snapshot claim. Prompt 201, Category 6 live
   approval and Phase 12 exit remain open.
+- Reconciliation delimiter safety (prompt 316): supplied `Delimiter`, when
+  defined, rejects immediately. In flat listings, any delimiter indicates
+  hierarchical partitioning or unexpected provider behavior; invalid
+  first/later pages reject the complete listing with fixed diagnostics and no
+  summary/receipt. Correct the provider response and rerun into a fresh
+  receipt path; omitted/undefined delimiters remain supported. Focused
+  **647/647**, all **33 offline stages / 3628 tests**, lint/typecheck/build and
+  independent review passed. This consistency check adds no byte-integrity,
+  authenticity, total-completeness or snapshot claim. Prompt 201, Category 6 live
+  approval and Phase 12 exit remain open.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

@@ -417,6 +417,9 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     )
       throw invalidListing();
 
+    // Flat listings omit delimiter; any provider delimiter indicates partitioning.
+    if (response.Delimiter !== undefined) throw invalidListing();
+
     if (response.Contents !== undefined) {
       for (const entry of response.Contents) {
         if (
