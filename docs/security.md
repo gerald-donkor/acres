@@ -1360,3 +1360,17 @@ Stage 7 contract changed. Request-input validation, provider authentication,
 total completeness, byte integrity, atomic snapshots and resource bounds remain
 outside this check. No live service or approval occurred; Prompt 201, Category 6
 live operator approval and Phase 12 exit stay open.
+
+**Prompt 324 storage listing request-scope precondition (2026-10-12):**
+Before command construction/send, bucket must be a primitive nonblank string
+and prefix omitted/undefined or a primitive string. Invalid falsy prefixes can
+no longer broaden direct adapter requests to bucket-wide scans; malformed bucket
+values cannot reach the client. No input coercion occurs. Runner failures from
+invalid truthy configured buckets retain fixed diagnostics and no summary or
+receipt. Valid literal identifiers/prefixes, empty-prefix normalization and
+CLI/env precedence remain unchanged. Focused **969/969** and independent
+high-effort review verify this existing acquisition boundary. No provider
+Name-echo policy, DNS restrictions, parameter-container/client validation, endpoint
+validation, authorization proof, real bucket identity/existence verification,
+completeness, authenticity, byte integrity, atomic snapshots or live approval
+were added. Prompt 201, Category 6 live operator approval and Phase 12 exit stay open.

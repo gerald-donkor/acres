@@ -8854,3 +8854,94 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 324 — validate storage listing request scope (2026-10-12)
+
+Continued Phase 12K after committed Prompt 323 (`872695f`), as the one additional
+prompt explicitly authorized by the user. Bounded pre-change probes accepted
+`prefix: false`, a missing bucket and an object-valued bucket after one client
+request each. The false prefix became an omitted prefix. The listing adapter
+now requires a primitive nonblank bucket string and an omitted/undefined or
+primitive string prefix before constructing or sending a command. All three
+original probes now reject with zero sends and fixed
+`Object storage listing is invalid or incomplete`.
+
+Validation does not coerce boxed strings or arbitrary objects, including custom
+toString/valueOf/Symbol.toPrimitive hooks. Defined null/falsy non-string prefixes
+reject instead of broadening the request. Valid bucket strings and prefixes
+remain unchanged; empty prefixes retain the existing undefined request value.
+Whitespace prefixes, opaque percent/Unicode/path-looking prefixes and nonblank
+bucket identifiers retain literal semantics. Alias/ARN-shaped string cases
+verify transport preservation only, not live AWS routing or bucket existence.
+Installed SDK ListObjectsV2Request declarations verify string contracts and
+support aliases/ARNs, so no DNS-name regex or Name-echo equality was invented.
+
+The intentional compatibility change affects invalid direct JavaScript scope
+inputs that previously reached the client or became bucket-wide scans. Public
+signatures, CLI parsing/defaults/env precedence (including falsy env fallback),
+parameter-container/client validation, endpoint/region handling, response/key
+checks, SQL, comparison, receipt publication/format and Stage 7 are unchanged.
+Malformed truthy runner bucket values reject with sanitized listing errors,
+no summary/receipt and no storage requests. Caller-owned frozen inputs, ordering,
+pagination and normal configured-bucket simulation receipts remain supported.
+
+All 928 existing cases and 41 new regressions pass. Direct red output was
+`tests 969`, `pass 937`, `fail 32`; direct green and permitted npm output was:
+
+```text
+ℹ tests 969
+ℹ pass 969
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual verification commands and representative output:
+
+| command | exit | actual output / result |
+| --- | --- | --- |
+| `npm run ops:reconcile-test` | 0 | `ℹ tests 969`, `ℹ pass 969`, `ℹ fail 0` |
+| source/spec `node -c` | 0 | no output |
+| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| changed-region Prettier | 0 | `{"specFormatting":true,"guardFormatting":true}` |
+| `npm run lint` | 0 | `> eslint`, `> eslint "src/**/*.ts"`, `> eslint "{src,test}/**/*.ts"` |
+| `npm run typecheck` | 0 | `> tsc --noEmit`, `> prisma generate && tsc -p tsconfig.json --noEmit`; generated Prisma Client 7.9.1 in 733ms |
+| permitted `npm run build` | 0 | `✓ Compiled successfully in 7.7s`; `✓ Generating static pages using 7 workers (22/22) in 1332ms`; `> prisma generate && nest build` |
+| `git diff --check` | 0 | no output |
+
+The same permitted child-process mode that resolved Prompt 323's recorded
+sandbox runner/build limitations was used without altering assertions or code
+for the environment. Independent offline stages were batched, and exact coverage
+was checked against current package.json: **33 stages all exit 0, 27 suite
+invocations, 3950 tests / 3950 passed / zero failures / zero skipped**. Final
+launch/dossier reported `tests 182`, `pass 182`, `fail 0`. Every stage exit and
+suite summary was inspected. Template, secret/default, Docker runtime, license,
+SAST and container gates passed. Online `ops:audit` remains omitted under the
+recorded metadata-disclosure restriction; no complete aggregate ops:check pass
+or fresh vulnerability inventory is claimed.
+
+Permitted `npm run ops:launch-readiness` retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Independent high-effort read-only review found no Critical, Important or Minor
+issues, reproduced 969/969 with zero skipped and clean diff checks, and approved
+merging after owner documentation. Feedback was evaluated against actual guard
+placement, non-coercing checks, SDK string semantics, literal input preservation
+and runner publication behavior; no fixes or significant re-review were needed.
+Scope shape validation cannot establish authorization, real bucket identity or
+existence, total completeness, authenticity, byte integrity or atomic snapshots.
+No live service, operator approval, deployment or push occurred. Prompt 201,
+Category 6 live recovery approval and Phase 12 exit remain open. Ordinary commit
+revert rolls back source/tests/docs without migration or storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

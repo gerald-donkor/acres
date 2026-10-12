@@ -871,6 +871,16 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Request-scope precondition (prompt 324): primitive nonblank bucket strings
+  and omitted/undefined/string prefixes are required before any command/send.
+  Malformed scopes reject without coercion or storage requests; invalid truthy
+  runner bucket configuration produces fixed errors and no summary/receipt.
+  Correct caller configuration and rerun into a fresh receipt path. Literal
+  valid scope, empty-prefix normalization and existing CLI/env defaults remain
+  unchanged. Focused **969/969**, high-effort independent review, repository
+  checks and **33 offline stages / 3950 tests** passed. Input shape checks do
+  not prove authorization, actual bucket identity or live recovery approval.
+
 - Returned-key scope consistency (prompt 323): every key must begin with the
   effective requested prefix, even with a matching or absent response echo.
   First/later contradictions reject whole inventories with fixed errors and no

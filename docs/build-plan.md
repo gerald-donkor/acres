@@ -3080,3 +3080,20 @@ are recorded in `docs/operations.md` Prompt 323. Readiness remains **0 approved 
 11 blocked / 70 blockers**. Online audit remains omitted; no aggregate ops:check,
 fresh vulnerability inventory, live service, deployment or push claim. Prompt
 201, Category 6 live approval and Phase 12 exit stay open.
+
+**Prompt 324 — validate storage listing request scope (2026-10-12):**
+Continued Phase 12K after committed Prompt 323 as the user's one authorized
+follow-on. Before any listing command/send, bucket must be a primitive nonblank
+string and prefix omitted/undefined or a primitive string. Invalid direct scope
+inputs reject without coercion or requests; malformed truthy configured runner
+buckets fail with fixed errors and no summary/receipt. Valid literal scope,
+empty-prefix normalization, alias/ARN-shaped strings and existing CLI/env
+precedence remain unchanged. Focused **969/969**, lint/typecheck, permitted
+build (**22/22** pages), formatting/syntax/diff and all **33 offline stages /
+27 suite invocations / 3950 tests / zero failures** passed. High-effort independent
+review found no issues and reproduced **969/969**. Actual outputs, red/green
+probes, compatibility limits and ordinary revert rollback are recorded in
+`docs/operations.md` Prompt 324. Readiness remains **0 approved / 11 blocked /
+70 blockers**. Online audit remains omitted; no aggregate ops:check or fresh
+vulnerability inventory is claimed. No live services, deployment or push.
+Prompt 201, Category 6 live approval and Phase 12 exit stay open.

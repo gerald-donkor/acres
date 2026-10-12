@@ -380,6 +380,13 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
   const seenKeys = new Set();
   const invalidListing = () =>
     new Error('Object storage listing is invalid or incomplete');
+  // Reject malformed scope before truthiness or SDK coercion can broaden a scan.
+  if (
+    typeof bucket !== 'string' ||
+    !bucket.trim() ||
+    (prefix !== undefined && typeof prefix !== 'string')
+  )
+    throw invalidListing();
   let continuationToken = undefined;
 
   do {

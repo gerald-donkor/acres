@@ -5525,3 +5525,208 @@ test('main: compatible MaxKeys publish a clean simulation receipt', async () => 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+const invalidRequestScopeValues = [
+  ['null', null],
+  ['true', true],
+  ['false', false],
+  ['zero', 0],
+  ['NaN', NaN],
+  ['bigint', 0n],
+  ['symbol', Symbol('private-scope')],
+  ['array', []],
+  ['object', {}],
+  ['boxed string', new String('private-scope')],
+  ['function', () => 'private-scope'],
+  [
+    'coercion trap',
+    Object.freeze({
+      toString() {
+        throw new Error('private-scope-coercion');
+      },
+      valueOf() {
+        throw new Error('private-scope-coercion');
+      },
+      [Symbol.toPrimitive]() {
+        throw new Error('private-scope-coercion');
+      },
+    }),
+  ],
+];
+
+for (const field of ['bucket', 'prefix']) {
+  for (const [label, value] of invalidRequestScopeValues) {
+    test(`listBucketObjects: rejects ${label} request ${field} before acquisition`, async () => {
+      const s3Client = listingClient([{ IsTruncated: false }]);
+      await assert.rejects(
+        listBucketObjects(
+          Object.freeze({ s3Client, bucket: 'fixture', [field]: value }),
+        ),
+        {
+          message: 'Object storage listing is invalid or incomplete',
+        },
+      );
+      assert.deepStrictEqual(s3Client.inputs, []);
+    });
+  }
+}
+
+for (const [label, fields] of [
+  ['missing', {}],
+  ['undefined', { bucket: undefined }],
+  ['empty', { bucket: '' }],
+  ['space', { bucket: ' ' }],
+  ['mixed whitespace', { bucket: '\t\n ' }],
+]) {
+  test(`listBucketObjects: rejects ${label} request bucket before acquisition`, async () => {
+    const s3Client = listingClient([{ IsTruncated: false }]);
+    await assert.rejects(listBucketObjects({ s3Client, ...fields }), {
+      message: 'Object storage listing is invalid or incomplete',
+    });
+    assert.deepStrictEqual(s3Client.inputs, []);
+  });
+}
+
+for (const [label, fields] of [
+  ['omitted prefix', { bucket: 'fixture' }],
+  ['undefined prefix', { bucket: 'fixture', prefix: undefined }],
+  ['empty prefix', { bucket: 'fixture', prefix: '' }],
+  ['whitespace prefix', { bucket: 'fixture', prefix: ' \t' }],
+  ['opaque prefix', { bucket: 'fixture', prefix: 'é/%2F/../[x]/' }],
+  ['bucket whitespace preserved', { bucket: ' fixture ', prefix: 'scope/' }],
+  ['bucket alias', { bucket: 'fixture-alias-s3alias', prefix: 'scope/' }],
+  [
+    'bucket ARN',
+    {
+      bucket: 'arn:aws:s3:us-east-1:123456789012:accesspoint/fixture',
+      prefix: 'scope/',
+    },
+  ],
+]) {
+  test(`listBucketObjects: preserves valid request scope (${label})`, async () => {
+    const key = `${fields.prefix || ''}key`;
+    const s3Client = listingClient([
+      Object.freeze({
+        IsTruncated: false,
+        Contents: Object.freeze([Object.freeze({ Key: key, Size: 1 })]),
+      }),
+    ]);
+    const request = Object.freeze({ s3Client, ...fields });
+    const result = await listBucketObjects(request);
+    assert.deepStrictEqual(s3Client.inputs, [
+      {
+        Bucket: fields.bucket,
+        Prefix: fields.prefix || undefined,
+        ContinuationToken: undefined,
+      },
+    ]);
+    assert.deepStrictEqual(result, [
+      { key, byteCount: 1, lastModified: null, checksumHex: null },
+    ]);
+    assert.strictEqual(request.bucket, fields.bucket);
+    assert.strictEqual(request.prefix, fields.prefix);
+  });
+}
+
+for (const [label, bucket] of [
+  ['object', { private: 'bucket-sentinel' }],
+  ['boxed string', new String('private-bucket')],
+  ['blank string', ' \t '],
+]) {
+  test(`main: ${label} configured bucket rejects before storage acquisition`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-request-scope-failure-'),
+    );
+    try {
+      const s3Client = listingClient([{ IsTruncated: false }]);
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--prefix',
+            'scope/',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          {
+            env: { STORAGE_BUCKET: bucket },
+            dbObjects: [],
+            s3Client,
+          },
+        ),
+        1,
+      );
+      assert.deepStrictEqual(s3Client.inputs, []);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: valid configured request scope publishes a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'acres-request-scope-success-'),
+  );
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const bucket = 'configured-fixture';
+    const s3Client = listingClient([
+      { IsTruncated: true, Contents: [], NextContinuationToken: 'A' },
+      {
+        IsTruncated: false,
+        Prefix: 'scope/',
+        Contents: [{ Key: 'scope/key', Size: 1 }],
+      },
+    ]);
+    const io = createIo();
+    assert.strictEqual(
+      await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--prefix',
+          'scope/',
+          '--output',
+          target,
+        ],
+        io,
+        {
+          env: { STORAGE_BUCKET: bucket },
+          dbObjects: [inventoryDbRecord({ bucket, objectKey: 'scope/key' })],
+          s3Client,
+        },
+      ),
+      0,
+    );
+    assert.deepStrictEqual(
+      s3Client.inputs,
+      [undefined, 'A'].map(ContinuationToken => ({
+        Bucket: bucket,
+        Prefix: 'scope/',
+        ContinuationToken,
+      })),
+    );
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.strictEqual(report.summary.totalBucketObjects, 1);
+    assert.strictEqual(report.matched[0].objectKey, 'scope/key');
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
