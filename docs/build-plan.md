@@ -2941,3 +2941,25 @@ approved / 11 blocked / 70 blockers**. Online audit remains omitted under the
 metadata-disclosure restriction; no full aggregate `ops:check` pass or fresh
 inventory is claimed. No live services, deployment or push occurred. Prompt
 201, Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 317 — reject storage listing encoding types (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 316.
+Supplied S3 `EncodingType` values, when defined, reject immediately. Because
+flat listings omit encoding types, any encoding type returned by the provider
+indicates that keys are URL-encoded or unexpected encoding metadata was
+returned, which would cause object keys to mismatch against raw database
+`StoredObject.objectKey` records and compromise inventory completeness.
+Optional omitted/undefined encoding types, empty pages, per-page pagination,
+caller ownership and existing metadata conversion remain supported. Public
+contracts, CLI/SQL/comparison/publication and Stage 7 remain unchanged.
+All 647 prior tests plus 37 regressions pass (**684/684**); lint/typecheck,
+permitted build (**22/22** pages), changed-region formatting, syntax/help and
+diff checks pass. All **33 offline operations stages** pass (**27 suite
+invocations / 3665 tests / zero failures**, final launch/dossier **182/182**).
+Independent read-only review found no issues and approved merging. Actual
+outputs, synthetic reproduction, SDK semantics, compatibility and ordinary
+revert rollback are in `docs/operations.md` Prompt 317. Readiness stays **0
+approved / 11 blocked / 70 blockers**. Online audit remains omitted under the
+metadata-disclosure restriction; no full aggregate `ops:check` pass or fresh
+inventory is claimed. No live services, deployment or push occurred. Prompt
+201, Category 6 live approval and Phase 12 exit remain open.

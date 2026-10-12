@@ -8250,3 +8250,98 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 317 — reject storage listing encoding types (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 316
+(`e5aad51`). `listBucketObjects` now validates supplied `EncodingType`
+immediately alongside `Delimiter` validation, before entry processing or
+continuation token pagination. Because the reconciliation utility requests flat
+listings without an encoding type, any response containing an encoding type
+indicates that object keys in `Contents` were URL-encoded by the provider, which
+would cause keys to mismatch against raw `StoredObject.objectKey` records in
+PostgreSQL and compromise inventory completeness. Any defined `EncodingType`
+(`response.EncodingType !== undefined`) rejects immediately. Valid S3 encoding
+strings (`'url'`, `'URL'`), arbitrary strings (`'gzip'`, `'base64'`), empty
+strings `''`, whitespace `'   '`, `null`, numbers, booleans, bigints, symbols,
+objects and boxed strings reject without coercion. The existing fixed listing
+error (`Object storage listing is invalid or incomplete`) and sanitized runner
+error (`Error: Object storage connection or listing failed`) remain; later
+invalid pages reject the entire inventory and publish no summary, success
+message or receipt.
+
+A synthetic planning probe previously accepted
+`{ IsTruncated: false, EncodingType: 'url', Contents: [{ Key: 'data/file%201.csv', Size: 10 }] }`
+and returned `key: 'data/file%201.csv'`. Comparison against active DB records
+containing `data/file 1.csv` reported false positive missing objects (false
+data loss alert) and false positive orphans. The same local probe now rejects
+with `Object storage listing is invalid or incomplete`. This is an adapter
+consistency reproduction, not a production incident or proof of lost objects.
+All 647 previous tests remain; 37 added regressions cover defined encoding
+type strings, invalid types without coercion, first and later defined encoding
+type pages, pagination request halting, valid omitted/undefined encoding type
+pages across contents variations, and runner exit code/sanitized logging contracts.
+
+### Compatibility, review and limits
+
+Installed `@aws-sdk/client-s3` `ListObjectsV2Output` declares optional
+`EncodingType?: EncodingType | undefined`. Flat listings omit encoding type;
+standard AWS S3 flat listings omit `EncodingType` (undefined). Omitted and
+undefined `EncodingType` remain accepted without change. Input pages remain
+caller-owned; frozen response structures remain supported. CLI, SQL, facade/public
+signatures, comparison policy, report schema/modes, receipt publication,
+dependencies and Stage 7 remain unchanged.
+
+Independent read-only review found no Critical, Important or Minor issues and
+reproduced `tests 684`, `pass 684`, `fail 0` with both direct execution and the
+npm script, plus clean diff checks. Feedback was evaluated against the actual
+guard, runner boundaries, optional field contract and installed SDK semantics;
+no fixes or significant re-review were necessary.
+
+Encoding type checks cannot establish total inventory completeness, authenticity,
+provider scope, atomic DB/S3 snapshots or object-byte integrity. Encoding type
+omission remains an intentional flat-listing constraint. No response-echo,
+content hashing, resource/network bounds or hostile getters/proxies were added.
+No live service or operator evidence was inspected. Prompt 201, Category 6 live
+recovery approval and Phase 12 exit remain open. Ordinary commit revert rolls
+back validation/tests/docs together without migration or storage mutation. No
+deployment or push occurred.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 684`, `pass 684`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0.
+- `npm run typecheck`: shared/client TypeScript checks and server
+  `prisma generate && tsc -p tsconfig.json --noEmit`; exit 0.
+- Permitted `npm run build`: `Compiled successfully in 2.3s`,
+  `Generating static pages using 7 workers (22/22) in 602ms`, followed by
+  `prisma generate && nest build`; exit 0.
+- Changed-region Prettier: spec `spec changed-region formatting: true`, source
+  `Source changed-region formatting: true`. Both JS syntax checks, CLI help
+  and `git diff --check` exit 0.
+- Readiness example: expected exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+Online `ops:audit` remains omitted under the standing metadata-disclosure
+restriction; no fresh vulnerability inventory or full aggregate `ops:check`
+success is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3665 tests / zero failures**. Every stage result and suite summary
+was inspected. Final launch/dossier: `tests 182`, `pass 182`, `fail 0`;
+readiness: `tests 649`, `pass 649`, `fail 0`. Nonsuite checks report
+`ops template check passed`, `secret/default scan passed`, `docker runtime
+check passed`, license compliance `PASSED`, `SAST Gate: PASSED (Zero unreviewed
+blockers and zero expired suppressions)`, and `Container Security Gate: PASSED
+(All Dockerfiles and Compose templates verified)`. Offline checks supply
+neither online audit results nor live recovery acceptance.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

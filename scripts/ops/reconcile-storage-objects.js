@@ -420,6 +420,9 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     // Flat listings omit delimiter; any provider delimiter indicates partitioning.
     if (response.Delimiter !== undefined) throw invalidListing();
 
+    // Flat listings request raw keys; any provider encoding-type indicates encoded keys.
+    if (response.EncodingType !== undefined) throw invalidListing();
+
     if (response.Contents !== undefined) {
       for (const entry of response.Contents) {
         if (
