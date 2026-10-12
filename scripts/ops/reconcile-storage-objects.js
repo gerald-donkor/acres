@@ -409,6 +409,15 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     )
       throw invalidListing();
 
+    // Flat page contents cannot exceed a supplied nonnegative safe maximum.
+    if (
+      response.MaxKeys !== undefined &&
+      (!Number.isSafeInteger(response.MaxKeys) ||
+        response.MaxKeys < 0 ||
+        response.MaxKeys < (response.Contents?.length ?? 0))
+    )
+      throw invalidListing();
+
     // Supplied prefix echoes must preserve the requested inventory scope.
     if (
       response.Prefix !== undefined &&

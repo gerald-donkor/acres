@@ -871,6 +871,15 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Page capacity consistency (prompt 322): supplied `MaxKeys` must be a
+  nonnegative safe integer at least the flat page count. Contradictions reject
+  whole inventories before entry processing or pagination and publish no
+  summary/receipt. Optional maxima, empty zero/-0 pages and per-page variation
+  remain valid; never infer EOF from the maximum. Investigate provider metadata
+  and rerun into a fresh receipt path. Focused **903/903**, high-effort independent
+  review, repository checks and **33 offline stages / 3884 tests** passed.
+  Declared capacity does not prove completeness, authenticity or live recovery.
+
 - Prefix echo consistency (prompt 321): supplied `Prefix` must exactly match
   the requested scope as a primitive string; empty echoes are valid for
   bucket-wide requests and absent/undefined echoes remain supported. First or

@@ -3046,3 +3046,21 @@ Full probes, actual outputs, sandbox limits and ordinary revert rollback are in
 70 blockers**. Online audit remains omitted; no aggregate ops:check or fresh
 inventory claim, live operation, deployment or push occurred. Prompt 201,
 Category 6 live approval and Phase 12 exit stay open.
+
+
+**Prompt 322 — validate storage listing maximum key counts (2026-10-12):**
+Continued Phase 12K after committed Prompt 321. Supplied MaxKeys must be
+nonnegative safe integers no smaller than the flat page contents count.
+Contradictions reject before entries/pagination, including later pages, with
+fixed diagnostics and no summary/receipt. Optional maxima, empty zero/-0 pages,
+large safe values, per-page variation and explicit EOF rules remain supported;
+requests, public contracts, comparison, publication and Stage 7 are unchanged.
+All **903/903** focused tests, lint/typecheck, permitted build (**22/22** pages),
+formatting/syntax/diff and **33 offline stages / 27 suite invocations / 3884 tests /
+zero failures** passed. High-effort independent review found no issues and
+reproduced **903/903**. Full probes, actual outputs, compatibility, sandbox
+limits and ordinary revert rollback are in `docs/operations.md` Prompt 322.
+Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit remains
+omitted; no aggregate ops:check or fresh vulnerability inventory is claimed.
+No live services, deployment or push occurred. Prompt 201, Category 6 live
+approval and Phase 12 exit stay open.

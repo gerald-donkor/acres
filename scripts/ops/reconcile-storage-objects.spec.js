@@ -5007,3 +5007,247 @@ test('main: matching scoped prefix echoes publish clean simulation receipt', asy
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Declared page maxima cannot contradict the flat inventory count.
+const invalidListingMaxima = [
+  ['null', null],
+  ['negative', -1],
+  ['fraction', 0.5],
+  ['unsafe', Number.MAX_SAFE_INTEGER + 1],
+  ['NaN', NaN],
+  ['infinity', Infinity],
+  ['negative infinity', -Infinity],
+  ['numeric string', '1'],
+  ['boolean false', false],
+  ['boolean true', true],
+  ['bigint', 1n],
+  ['symbol', Symbol('private-maximum')],
+  ['array', []],
+  ['object', {}],
+  ['boxed number', new Number(1)],
+  [
+    'coercible object',
+    {
+      valueOf() {
+        throw new Error('private-maximum');
+      },
+    },
+  ],
+];
+for (const later of [false, true]) {
+  for (const [label, MaxKeys] of invalidListingMaxima) {
+    test(`listBucketObjects: rejects ${later ? 'later' : 'first'} ${label} MaxKeys without coercion`, async () => {
+      const s3Client = listingClient([
+        ...(later
+          ? [
+              Object.freeze({
+                IsTruncated: true,
+                MaxKeys: 1,
+                NextContinuationToken: 'A',
+                Contents: [{ Key: 'first', Size: 1 }],
+              }),
+            ]
+          : []),
+        Object.freeze({
+          IsTruncated: true,
+          MaxKeys,
+          NextContinuationToken: 'B',
+          Contents: [],
+        }),
+        { IsTruncated: false },
+      ]);
+      await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+        message: 'Object storage listing is invalid or incomplete',
+      });
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+    });
+  }
+  for (const MaxKeys of [0, 1]) {
+    for (const withCount of [false, true]) {
+      test(`listBucketObjects: rejects ${later ? 'later' : 'first'} MaxKeys ${MaxKeys} below contents (${withCount})`, async () => {
+        const Contents = Array.from({ length: MaxKeys + 1 }, (_, i) =>
+          Object.freeze({ Key: `next-${i}`, Size: i }),
+        );
+        const s3Client = listingClient([
+          ...(later
+            ? [
+                {
+                  IsTruncated: true,
+                  NextContinuationToken: 'A',
+                  Contents: [{ Key: 'first', Size: 1 }],
+                },
+              ]
+            : []),
+          Object.freeze({
+            IsTruncated: true,
+            MaxKeys,
+            ...(withCount ? { KeyCount: Contents.length } : {}),
+            NextContinuationToken: 'B',
+            Contents: Object.freeze(Contents),
+          }),
+          { IsTruncated: false },
+        ]);
+        await assert.rejects(
+          listBucketObjects({ s3Client, bucket: 'fixture' }),
+          { message: 'Object storage listing is invalid or incomplete' },
+        );
+        assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      });
+    }
+  }
+}
+
+for (const [label, fields] of [
+  ['omitted', {}],
+  ['undefined', { MaxKeys: undefined }],
+  ['zero', { MaxKeys: 0 }],
+  ['negative zero', { MaxKeys: -0 }],
+  ['one', { MaxKeys: 1 }],
+  ['greater', { MaxKeys: 2 }],
+  ['over default', { MaxKeys: 2000 }],
+  ['largest safe', { MaxKeys: Number.MAX_SAFE_INTEGER }],
+]) {
+  for (const Contents of [undefined, [], [{ Key: 'fixture-key', Size: 1 }]]) {
+    if (fields.MaxKeys === 0 && Contents?.length) continue;
+    test(`listBucketObjects: accepts ${label} MaxKeys with ${Contents === undefined ? 'omitted' : Contents.length ? 'populated' : 'empty'} contents`, async () => {
+      const page = Object.freeze({
+        IsTruncated: false,
+        ...fields,
+        KeyCount: Contents?.length ?? 0,
+        Contents: Contents && Object.freeze(Contents),
+      });
+      const s3Client = listingClient([page]);
+      assert.deepStrictEqual(
+        await listBucketObjects({ s3Client, bucket: 'fixture' }),
+        Contents?.length
+          ? [
+              {
+                key: 'fixture-key',
+                byteCount: 1,
+                lastModified: null,
+                checksumHex: null,
+              },
+            ]
+          : [],
+      );
+      assert.strictEqual(Object.hasOwn(s3Client.inputs[0], 'MaxKeys'), false);
+    });
+  }
+}
+
+test('listBucketObjects: validates varying per-page MaxKeys without guessing EOF', async () => {
+  const s3Client = listingClient([
+    Object.freeze({
+      IsTruncated: true,
+      MaxKeys: 0,
+      KeyCount: 0,
+      NextContinuationToken: 'A',
+    }),
+    Object.freeze({
+      IsTruncated: true,
+      MaxKeys: 2,
+      KeyCount: 1,
+      NextContinuationToken: 'B',
+      Contents: [{ Key: 'one', Size: 1 }],
+    }),
+    Object.freeze({
+      IsTruncated: false,
+      MaxKeys: 1,
+      KeyCount: 1,
+      Contents: [{ Key: 'two', Size: 2 }],
+    }),
+  ]);
+  const result = await listBucketObjects({ s3Client, bucket: 'fixture' });
+  assert.deepStrictEqual(
+    result.map(item => item.key),
+    ['one', 'two'],
+  );
+  assert.deepStrictEqual(
+    s3Client.inputs.map(input => input.ContinuationToken),
+    [undefined, 'A', 'B'],
+  );
+  assert.ok(s3Client.inputs.every(input => !Object.hasOwn(input, 'MaxKeys')));
+});
+
+for (const later of [false, true]) {
+  test(`main: ${later ? 'later' : 'first'} contradictory MaxKeys publishes no evidence`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-maxkeys-failure-'),
+    );
+    try {
+      const io = createIo();
+      const s3Client = listingClient([
+        ...(later
+          ? [{ IsTruncated: true, MaxKeys: 0, NextContinuationToken: 'A' }]
+          : []),
+        {
+          IsTruncated: false,
+          MaxKeys: 0,
+          Contents: [{ Key: 'private-key', Size: 1 }],
+        },
+      ]);
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          { dbObjects: [], s3Client, env: {} },
+        ),
+        1,
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: compatible MaxKeys publish a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-maxkeys-success-'));
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const s3Client = listingClient([
+      {
+        IsTruncated: true,
+        MaxKeys: 0,
+        KeyCount: 0,
+        NextContinuationToken: 'A',
+      },
+      {
+        IsTruncated: false,
+        MaxKeys: 2,
+        KeyCount: 1,
+        Contents: [{ Key: 'fixture-key', Size: 1 }],
+      },
+    ]);
+    assert.strictEqual(
+      await main(['node', 'script', '--dry-run', '--output', target], io, {
+        dbObjects: [inventoryDbRecord()],
+        s3Client,
+        env: {},
+      }),
+      0,
+    );
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

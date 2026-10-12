@@ -1335,3 +1335,15 @@ receipt. Focused **837/837** and high-effort independent review verify this
 consistency check. This is not provider authentication, completeness, returned-key
 prefix enforcement, byte integrity or an atomic snapshot. No live service or
 operator approval occurred; Prompt 201, Category 6 and Phase 12 exit stay open.
+
+
+**Prompt 322 storage listing page capacity boundary (2026-10-12):**
+Supplied `MaxKeys` must be a nonnegative safe integer at least the flat Contents
+length before entries/pagination. Existing optional KeyCount equality ensures
+consistent counts. First/later invalid pages reject whole inventories with fixed
+diagnostics and no summary/receipt. Optional metadata, empty zero/-0 pages,
+large safe maxima and per-page variation remain supported; no request or EOF
+policy changed. Focused **903/903** and high-effort independent review verify
+this declared-capacity check. It cannot establish completeness, authenticity,
+byte integrity or atomic snapshots. No live operation or operator approval
+occurred; Prompt 201, Category 6 and Phase 12 exit stay open.

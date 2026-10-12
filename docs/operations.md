@@ -8706,3 +8706,68 @@ no Critical, Important or Minor issues, reproduced **837/837** and clean diff
 checks, and approved merging after documentation. Feedback was verified against
 the guard, error/publication boundaries and optional SDK field contract; no
 implementation fixes or architectural re-review were needed.
+
+## Prompt 322 — validate storage listing maximum key counts (2026-10-12)
+
+Continued Phase 12K after committed Prompt 321 (`75efc96`) under the user's
+explicit follow-on execution and high-effort instruction. A synthetic probe
+previously accepted one object from a page declaring `MaxKeys: 0`. The listing
+adapter now checks supplied maxima before entry conversion or pagination:
+nonnegative safe integers must be at least the flat Contents length (zero when
+Contents is absent). Existing optional KeyCount equality also ensures its
+consistency with the maximum. No coercion or response mutation occurs.
+
+Omitted/undefined maxima remain valid. Empty pages support zero/-0; equal or
+larger maxima, including >1000 and Number.MAX_SAFE_INTEGER, remain supported.
+Different pages can declare different maxima; counts never substitute for
+explicit terminal signals. Empty intermediate pages still advance using valid
+continuation tokens. The request does not acquire a new MaxKeys parameter.
+Invalid first/later responses reject the whole inventory with fixed diagnostics;
+runner failures print no summary and publish no receipt.
+
+All 837 previous tests plus 66 new behavioral regressions pass. Direct red
+execution reported `tests 903`, `pass 861`, `fail 42`; direct green and permitted
+normal npm execution reported `tests 903`, `pass 903`, `fail 0`. Tests exercise
+invalid types/numbers, first/later count contradictions, request halting,
+KeyCount presence/absence, optional metadata, frozen pages, valid maxima,
+per-page variation, explicit EOF and sanitized runner/publication behavior.
+Installed SDK ListObjectsV2Output documents optional MaxKeys and a result count
+no greater than that maximum. No provider-specific upper cap was invented.
+
+CLI, SQL, public signatures/facade, comparison, report schema, publication and
+Stage 7 remain unchanged. This validates declared page capacity, not total
+completeness, authenticity, atomic snapshots or object-byte integrity. No live
+services, operator approval, deployment or push occurred. Prompt 201, Category 6
+live recovery approval and Phase 12 exit stay open. Ordinary commit revert
+rolls back the source/tests/docs without migration or storage mutation.
+
+Both JS syntax checks, CLI --help, changed-region Prettier and git diff --check
+exited 0. Permitted root lint/typecheck/build exited 0 across all three
+workspaces, including shared TypeScript and Prisma Client 7.9.1 / Nest builds.
+Readiness retained expected exit 1: `Approved Categories: 0`, `Unresolved /
+Blocked: 11`, `Total Blockers Detected: 70`. The permitted process mode avoided
+the known sandbox child-test/Next --showConfig limitations documented in Prompt
+321. Online ops:audit remains omitted under the recorded metadata-disclosure
+restriction; no aggregate ops:check pass or fresh vulnerability count is claimed.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
+
+Production build reported `Compiled successfully in 3.1s`, `Generating static
+pages using 7 workers (22/22) in 884ms`, followed by `prisma generate && nest
+build`; exit 0. All **33 independent offline operations stages** exited 0:
+**27 suite invocations / 3884 tests / 3884 passed / zero failures / zero skipped**.
+Every stage and suite summary was inspected; final launch/dossier reported
+`tests 182`, `pass 182`, `fail 0`. Template, secret/default, Docker-runtime,
+license, SAST and container-security gates passed.
+
+Independent high-effort read-only review found no Critical, Important or Minor
+issues, reproduced **903/903**, both JS syntax checks and clean diff checks,
+and approved merging after canonical documentation. Feedback was evaluated
+against SDK semantics, guard placement, non-coercing validation, per-page
+compatibility and runner publication boundaries. No implementation fixes or
+architectural re-review were needed.
