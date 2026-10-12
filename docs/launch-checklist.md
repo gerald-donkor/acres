@@ -871,6 +871,22 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 338 (2026-10-12):** Defined lifecycle descriptor type IDs on database
+  inventory state/uploadState now require primitive numeric uint32 shape,
+  matching installed pg-protocol. Malformed types/bounds reject even empty
+  inventories with fixed private errors before S3 requests or publication.
+  Optional metadata and opaque numeric IDs (including zero/high bits) remain
+  compatible; catalog identity is not proven. Focused **1808/1808**, root
+  lint/typecheck/build, formatting/syntax/help/diff and **33 offline stages /
+  27 suites / 4789 tests / zero failures or skipped** passed. Independent review
+  reproduced focused results and found no issues. Actual red/green, sandbox
+  limits and ordinary-revert rollback are in docs/operations.md Prompt 338.
+  Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit
+  stays omitted; no aggregate ops:check/fresh audit claim. Shape cannot prove
+  authenticity, completeness, bytes or atomic snapshots/live recovery.
+  Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live
+  services, operator approval, migrations, deployment or push occurred.
+
 - Database inventory row projection consistency (prompt 337): with supplied
   descriptors, each row must own every fixed selected property. Missing or
   inherited-only fields reject before conversion/S3/publication; preserve SQL

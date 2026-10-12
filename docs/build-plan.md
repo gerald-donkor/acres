@@ -3332,3 +3332,21 @@ aggregate ops:check pass or fresh audit is claimed. Consistency cannot prove
 authenticity, completeness, bytes or atomic snapshots/live recovery. Prompt 201,
 Category 6 live approval and Phase 12 exit remain open. No live services,
 operator approval, deployment or push occurred.
+
+**Prompt 338 — database inventory lifecycle type shape (2026-10-12):**
+Continued Phase 12K after committed Prompt 337. Defined dataTypeID on state/
+uploadState must match installed pg-protocol's primitive numeric uint32 shape.
+Malformed types/bounds reject entire inventories, including empty results,
+before S3 requests/publication with fixed private errors. Optional metadata,
+opaque numeric IDs (including zero/high bits), prior guards, SQL and receipt
+schema remain compatible. This does not establish catalog enum identity.
+Focused **1808/1808**, lint/typecheck/build (**22/22** pages), formatting/syntax/
+help/diff and **33 offline stages / 27 suite invocations / 4789 tests / zero
+failures or skipped** passed. Independent read-only review reproduced 1808/1808
+and found no issues. Red/green outputs, sandbox limitations, compatibility and
+ordinary-revert rollback are recorded in docs/operations.md Prompt 338.
+Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit is
+omitted; no aggregate ops:check pass or fresh audit is claimed. Shape cannot
+prove authenticity, completeness, bytes or atomic snapshots/live recovery.
+Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live
+services, operator approval, migration, deployment or push occurred.

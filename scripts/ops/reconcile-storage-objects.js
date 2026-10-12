@@ -618,7 +618,13 @@ async function queryDatabaseStoredObjects({ pgClient }) {
         // The storage migration defines all three projected dates as timestamptz.
         (['deletedAt', 'createdAt', 'uploadExpiresAt'].includes(name) &&
           field.dataTypeID !== undefined &&
-          field.dataTypeID !== 1184)
+          field.dataTypeID !== 1184) ||
+        // Dynamic lifecycle type IDs are opaque, but pg reads them as uint32.
+        (['state', 'uploadState'].includes(name) &&
+          field.dataTypeID !== undefined &&
+          (!Number.isInteger(field.dataTypeID) ||
+            field.dataTypeID < 0 ||
+            field.dataTypeID > 0xffffffff))
       )
         throw new Error('Database inventory is invalid');
     }

@@ -10311,3 +10311,116 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 338 — Database inventory lifecycle type shape (2026-10-12)
+
+Continued Phase 12K after committed Prompt 337 (add37bd). A pre-change
+read-only adapter probe accepted empty inventory with string dataTypeID values
+on state/uploadState, returning {"accepted":0,"malformedEnumTypes":true}.
+Installed pg-protocol parseField reads these IDs using reader.uint32(); the
+storage migration assigns dynamic StoredObjectState/UploadState enum types.
+The adapter now requires each defined lifecycle descriptor ID to be a primitive
+integer number in 0..4294967295. It rejects malformed types, fractions,
+negative/overflow values and coercion traps before inventory conversion,
+S3 requests or evidence publication, including when rows are empty.
+
+This is representation validation only. Numeric IDs remain opaque, including
+zero/-0, high-bit IDs and the upper uint32 boundary; no catalog lookup, enum
+identity claim or cross-column equality restriction is introduced. Omitted/
+undefined descriptors and IDs retain compatibility. Fixed text/date type
+checks, complete own projection keys, lifecycle values, NULL handling, extra
+keys, frozen caller ownership, row order and bigint conversion are preserved.
+SQL, schema, public contracts, comparison, receipt publication and Stage 7
+remain unchanged.
+
+Added 94 behavioral cases without changing the previous 1714 tests. Direct
+cases cover both columns and empty/populated inventories, invalid types/bounds,
+non-coercion and frozen ownership. Positive cases cover optional metadata and
+uint32 boundaries with empty/multiple rows. Runner failures confirm exactly
+one query, zero S3 sends, no client close/destroy and no summary/receipt/temp
+files, with only the connecting log and Error: Database query failed. A runner
+success publishes a clean simulation receipt with opaque IDs. Installed
+pg.Result offline parsing verifies high-bit IDs preserve lifecycle strings;
+these are driver fixtures, not live PostgreSQL or restore evidence.
+
+The initial restricted test run returned only a file-level worker failure.
+Permitted test-first execution returned exit 1:
+
+```text
+ℹ tests 1808
+ℹ pass 1732
+ℹ fail 76
+ℹ skipped 0
+```
+
+After the compact guard, direct node --test and final formatted npm run
+ops:reconcile-test returned exit 0:
+
+```text
+ℹ tests 1808
+ℹ pass 1808
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual checks:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier, changed function/new tests | 0 | both regions: true |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
+| permitted npm run build | 0 | Compiled successfully in 5.6s; Generating static pages using 7 workers (22/22) in 1411ms; prisma generate && nest build |
+| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| git diff --check | 0 | silent |
+
+All 33 independent offline stages resolved from package.json ops:check passed:
+**27 suite invocations / 4789 tests / 4789 passed / zero failures or skipped**.
+Every exit and suite count was inspected. Production templates, secret/default
+scan, Docker runtime, offline SBOM license verification, SAST and container
+security template checks passed. Final launch-orchestrator/dossier suite:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+Independent read-only review inspected the actual diff, prompt and installed
+driver. It independently ran 1808/1808 direct tests and git diff --check and
+reported no Critical, Important or Minor issues. Feedback was verified against
+uint32 parsing, optional metadata, guard placement and regression assertions;
+no code fixes or follow-up review were needed. Review began while the final
+offline dossier suite was pending; that suite subsequently passed, and its
+result was sent to the reviewer before completion. Result records were added
+after review; final staged diff inspection precedes the local commit.
+
+The readiness example returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online ops:audit remains omitted under the recorded registry metadata-disclosure
+restriction; no aggregate ops:check pass or fresh vulnerability audit is claimed.
+Metadata shape cannot authenticate responses, establish catalog identity, prove
+inventory completeness, verify bytes or establish atomic snapshots/live recovery.
+Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live
+services, credentials, migrations, operator approval, deployment or push.
+Ordinary commit revert restores previous acceptance without DB/storage mutation.
+If rejected, privately inspect adapter lifecycle descriptors and their source;
+do not coerce malformed identifiers or reinterpret a synthetic receipt as
+recovery approval. Rerun into a fresh receipt path after correcting the adapter.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

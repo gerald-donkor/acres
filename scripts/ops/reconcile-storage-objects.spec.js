@@ -9127,3 +9127,261 @@ test('queryDatabaseStoredObjects: installed pg owns NULL projection keys and rej
     { message: 'Database inventory is invalid' },
   );
 });
+
+const invalidLifecycleTypeIds = [
+  ['null', null],
+  ['string', '99999'],
+  ['boxed', new Number(99999)],
+  ['boolean', true],
+  ['bigint', 99999n],
+  ['symbol', Symbol('private-type')],
+  ['array', [99999]],
+  ['object', {}],
+  ['NaN', NaN],
+  ['positive infinity', Infinity],
+  ['negative infinity', -Infinity],
+  ['negative', -1],
+  ['fraction', 1.5],
+  ['overflow', 0x100000000],
+  ['unsafe', Number.MAX_SAFE_INTEGER + 1],
+  [
+    'coercion trap',
+    {
+      [Symbol.toPrimitive]() {
+        throw new Error('private-type-coercion');
+      },
+      valueOf() {
+        throw new Error('private-type-coercion');
+      },
+      toString() {
+        throw new Error('private-type-coercion');
+      },
+    },
+  ],
+];
+
+for (const name of ['state', 'uploadState']) {
+  for (const [label, dataTypeID] of invalidLifecycleTypeIds) {
+    for (const populated of [false, true]) {
+      test(`queryDatabaseStoredObjects: rejects ${name} ${label} type ID populated=${populated}`, async () => {
+        const fields = Object.freeze(
+          databaseInventoryFields().map((field) =>
+            Object.freeze(
+              field.name === name ? { ...field, dataTypeID } : field,
+            ),
+          ),
+        );
+        const rows = Object.freeze(
+          populated ? [Object.freeze(projectedInventoryRow())] : [],
+        );
+        const result = Object.freeze({ fields, rows });
+        let queries = 0;
+        await assert.rejects(
+          queryDatabaseStoredObjects({
+            pgClient: {
+              query: async () => {
+                queries++;
+                return result;
+              },
+            },
+          }),
+          { message: 'Database inventory is invalid' },
+        );
+        assert.strictEqual(queries, 1);
+        assert.strictEqual(
+          fields.find((field) => field.name === name).dataTypeID,
+          dataTypeID,
+        );
+      });
+    }
+  }
+}
+
+for (const [label, patch] of [
+  ['omitted', {}],
+  ['undefined', { dataTypeID: undefined }],
+  ...[0, -0, 1, 99999, 0x80000000, 0xffffffff].map((dataTypeID) => [
+    String(dataTypeID),
+    { dataTypeID },
+  ]),
+]) {
+  for (const count of [0, 2]) {
+    test(`queryDatabaseStoredObjects: preserves lifecycle type ${label} with ${count} rows`, async () => {
+      const fields = Object.freeze(
+        databaseInventoryFields().map((field) =>
+          Object.freeze(
+            ['state', 'uploadState'].includes(field.name)
+              ? { name: field.name, format: 'text', ...patch }
+              : field,
+          ),
+        ),
+      );
+      const rows = Object.freeze(
+        Array.from({ length: count }, (_, i) =>
+          Object.freeze(
+            projectedInventoryRow({
+              id: `id-${i}`,
+              objectKey: `key-${i}`,
+              byteCount: i ? '9007199254740993' : '0001',
+              extra: 'preserved',
+            }),
+          ),
+        ),
+      );
+      const result = Object.freeze({
+        fields,
+        rows,
+        rowCount: count,
+        command: 'SELECT',
+        rowAsArray: false,
+      });
+      const actual = await queryDatabaseStoredObjects({
+        pgClient: { query: async () => result },
+      });
+      assert.deepStrictEqual(
+        actual,
+        rows.map((row) => ({ ...row, byteCount: BigInt(row.byteCount) })),
+      );
+      if (count) {
+        assert.strictEqual(rows[0].byteCount, '0001');
+        assert.strictEqual(rows[1].byteCount, '9007199254740993');
+        assert.notStrictEqual(actual[0], rows[0]);
+      }
+    });
+  }
+}
+
+for (const name of ['state', 'uploadState']) {
+  for (const dataTypeID of ['private-invalid-type', -1, 0x100000000]) {
+    for (const populated of [false, true]) {
+      test(`main: malformed ${name} type ${dataTypeID} populated=${populated} suppresses evidence`, async () => {
+        const dir = fs.mkdtempSync(
+          path.join(os.tmpdir(), 'acres-lifecycle-type-'),
+        );
+        try {
+          let queries = 0,
+            ended = 0,
+            destroyed = 0;
+          const s3Client = listingClient([{ IsTruncated: false }]);
+          s3Client.destroy = () => destroyed++;
+          const io = createIo();
+          const code = await main(
+            [
+              'node',
+              'script',
+              '--dry-run',
+              '--output',
+              path.join(dir, 'receipt.json'),
+            ],
+            io,
+            {
+              env: {},
+              s3Client,
+              pgClient: {
+                query: async () => {
+                  queries++;
+                  return {
+                    fields: databaseInventoryFields().map((field) =>
+                      field.name === name ? { ...field, dataTypeID } : field,
+                    ),
+                    rows: populated ? [projectedInventoryRow()] : [],
+                  };
+                },
+                end: async () => {
+                  ended++;
+                },
+              },
+            },
+          );
+          assert.strictEqual(code, 1);
+          assert.strictEqual(queries, 1);
+          assert.strictEqual(s3Client.inputs.length, 0);
+          assert.strictEqual(ended, 0);
+          assert.strictEqual(destroyed, 0);
+          assert.deepStrictEqual(io.logs, [
+            'Connecting to PostgreSQL and Object Storage...',
+          ]);
+          assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+          assert.deepStrictEqual(fs.readdirSync(dir), []);
+        } finally {
+          fs.rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+}
+
+test('main: opaque lifecycle type IDs publish a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-lifecycle-valid-'));
+  try {
+    const output = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const s3Client = listingClient([
+      { IsTruncated: false, Contents: [{ Key: 'fixture-key', Size: 1 }] },
+    ]);
+    const code = await main(
+      ['node', 'script', '--dry-run', '--output', output],
+      io,
+      {
+        env: {},
+        s3Client,
+        pgClient: {
+          query: async () => ({
+            rows: [projectedInventoryRow()],
+            fields: databaseInventoryFields().map((field) =>
+              ['state', 'uploadState'].includes(field.name)
+                ? { ...field, dataTypeID: 0xffffffff }
+                : field,
+            ),
+          }),
+        },
+      },
+    );
+    assert.strictEqual(code, 0);
+    assert.deepStrictEqual(io.errors, []);
+    assert.strictEqual(s3Client.inputs.length, 1);
+    const receipt = JSON.parse(fs.readFileSync(output, 'utf8'));
+    assert.strictEqual(receipt.execution_mode, 'simulation');
+    assert.strictEqual(receipt.summary.status, 'clean');
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('queryDatabaseStoredObjects: installed pg preserves high-bit lifecycle IDs with string values', async () => {
+  const Result = require('pg/lib/result');
+  const result = new Result();
+  result.addFields(
+    databaseInventoryFields().map((field) =>
+      ['state', 'uploadState'].includes(field.name)
+        ? { ...field, dataTypeID: 0x80000000 }
+        : field,
+    ),
+  );
+  result.addRow(
+    result.parseRow([
+      'fixture-id',
+      'fixture-org',
+      'acres-quarantine',
+      'fixture-key',
+      '0001',
+      'sha256',
+      null,
+      'accepted',
+      null,
+      null,
+      'accepted',
+      null,
+    ]),
+  );
+  result.addCommandComplete({ text: 'SELECT 1' });
+  assert.strictEqual(result.rows[0].state, 'accepted');
+  assert.strictEqual(result.rows[0].uploadState, 'accepted');
+  assert.deepStrictEqual(
+    await queryDatabaseStoredObjects({
+      pgClient: { query: async () => result },
+    }),
+    [{ ...result.rows[0], byteCount: 1n }],
+  );
+});

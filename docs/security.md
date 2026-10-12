@@ -1563,3 +1563,20 @@ aggregate ops:check pass or fresh audit is claimed. Consistency cannot prove
 authenticity, completeness, bytes or atomic snapshots/live recovery. Prompt 201,
 Category 6 live approval and Phase 12 exit remain open. No live services,
 operator approval, deployment or push occurred.
+
+**Prompt 338 — database inventory lifecycle type shape (2026-10-12):**
+The existing recovery adapter now rejects defined state/uploadState descriptor
+IDs that cannot be represented by installed pg-protocol's numeric uint32
+format, including empty inventories. Whole-result rejection uses fixed private
+errors before S3 access or evidence publication; callers retain injected
+clients. Optional metadata and opaque numeric IDs, including zero/high bits,
+remain compatible. This validates representation, not catalog identity or
+authenticity; completeness, bytes and atomic recovery remain unproven.
+Focused **1808/1808**, root lint/typecheck/build, formatting/syntax/help/diff,
+and **33 offline stages / 27 suites / 4789 tests / zero failures or skipped**
+passed; independent review reproduced focused results and found no issues.
+Actual evidence and sandbox limits are in docs/operations.md Prompt 338.
+Readiness stays **0 approved / 11 blocked / 70 blockers**; Prompt 201, Category 6
+live approval and Phase 12 exit remain open. Online audit is omitted, with no
+aggregate ops:check/fresh audit claim. No live services, secrets, schema/SQL,
+new trust boundary, deployment or push; ordinary revert restores acceptance.
