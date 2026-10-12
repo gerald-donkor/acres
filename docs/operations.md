@@ -8544,3 +8544,109 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 320 — reject storage listing terminal next continuation tokens (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 319
+(`28ad91c`). `listBucketObjects` now validates supplied `NextContinuationToken`
+on terminal pages immediately alongside `ContinuationToken` validation, before
+entry processing. In the Amazon S3 specification (`ListObjectsV2Output`),
+`NextContinuationToken?: string | undefined` is sent when `isTruncated` is true,
+indicating that more keys remain in the bucket. When `isTruncated` is false,
+all results have been returned, the listing is terminal, and Amazon S3 does not
+return `NextContinuationToken`.
+
+Previously, `listBucketObjects` stopped pagination unconditionally on
+`!response.IsTruncated` without inspecting `response.NextContinuationToken`.
+A local synthetic probe confirmed that an initial or later terminal response
+declaring `{ IsTruncated: false, NextContinuationToken: 'rogue-token', Contents: [...] }`
+was accepted as complete. If a provider, proxy, gateway or test double returned
+`IsTruncated: false` by mistake while supplying a continuation token pointing to
+remaining bucket keys, the listing was truncated prematurely: subsequent objects
+were omitted from the storage map, causing active database `StoredObject` records
+to be reported as missing from storage (false positive data loss / exit code 1) and
+masking unreferenced orphan files.
+
+`listBucketObjects` now validates:
+```javascript
+// Terminal pages have no remaining keys; any provider next continuation token is contradictory.
+if (!response.IsTruncated && response.NextContinuationToken !== undefined)
+  throw invalidListing();
+```
+On terminal pages (`IsTruncated: false`), any defined `NextContinuationToken`
+(`response.NextContinuationToken !== undefined`) rejects immediately. Valid token
+strings, arbitrary strings, empty strings `''`, whitespace `'   '`, `null`, numbers,
+booleans, bigints, symbols, plain objects, boxed strings and coercible objects reject
+without coercion. The existing fixed listing error (`Object storage listing is invalid or incomplete`)
+and sanitized runner error (`Error: Object storage connection or listing failed`)
+remain; later invalid pages reject the entire listing and publish no summary,
+success message or receipt.
+
+All 751 previous tests remain (with the pre-existing multi-page fixture updated to omit
+an unused token on its terminal page); 30 added regressions cover initial terminal defined
+tokens across 14 types, later terminal defined tokens, pagination request halting,
+clean terminal continuation tokens on multi-page sequences, valid omitted/undefined
+terminal tokens across contents permutations, and runner exit code/sanitized logging contracts.
+
+### Compatibility, review and limits
+
+Installed `@aws-sdk/client-s3` `ListObjectsV2Output` declares optional
+`NextContinuationToken?: string | undefined`. Flat listings omit next continuation
+tokens on terminal pages; standard AWS S3 flat listings omit `NextContinuationToken`
+(undefined) when `IsTruncated: false`. Omitted and undefined `NextContinuationToken`
+on terminal pages remain accepted without change. Input pages remain caller-owned;
+frozen response structures remain supported. CLI, SQL, facade/public signatures,
+comparison policy, report schema/modes, receipt publication, dependencies and Stage 7
+remain unchanged.
+
+Independent read-only review found no Critical, Important, or Minor issues, verified
+single-guard implementation elegance and type coercion immunity, and reproduced
+`tests 781`, `pass 781`, `fail 0` with both direct execution and the npm script,
+plus clean diff checks. Feedback was evaluated against the actual guard, runner
+boundaries, optional field contract and installed SDK semantics; no architectural
+fixes or significant re-review were necessary.
+
+Terminal next continuation token checks eliminate contradictory EOF pagination metadata;
+they cannot establish total inventory completeness, authenticity, provider scope,
+atomic DB/S3 snapshots or object-byte integrity. No response-echo, content hashing,
+resource/network bounds or hostile getters/proxies were added. No live service or
+operator evidence was inspected. Prompt 201, Category 6 live recovery approval and
+Phase 12 exit remain open. Ordinary commit revert rolls back validation/tests/docs
+together without migration or storage mutation. No deployment or push occurred.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 781`, `pass 781`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0.
+- `npm run typecheck`: shared/client TypeScript checks and server
+  `prisma generate && tsc -p tsconfig.json --noEmit`; exit 0.
+- Permitted `npm run build`: `Compiled successfully in 2.6s`,
+  `Generating static pages using 7 workers (22/22) in 1036ms`, followed by
+  `prisma generate && nest build`; exit 0.
+- Both JS syntax checks, CLI help and `git diff --check` exit 0.
+- Readiness example: expected exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+Online `ops:audit` remains omitted under the standing metadata-disclosure
+restriction; no fresh vulnerability inventory or full aggregate `ops:check`
+success is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3762 tests / zero failures** (3726 passed, 36 skipped). Every
+stage result and suite summary was inspected. Final launch/dossier: `tests 182`,
+`pass 182`, `fail 0`; readiness: `tests 649`, `pass 649`, `fail 0`. Nonsuite
+checks report `ops template check passed`, `secret/default scan passed`,
+`docker runtime check passed`, license compliance `PASSED`, `SAST Gate: PASSED
+(Zero unreviewed blockers and zero expired suppressions)`, and `Container
+Security Gate: PASSED (All Dockerfiles and Compose templates verified)`. Offline
+checks supply neither online audit results nor live recovery acceptance.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

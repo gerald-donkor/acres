@@ -4328,6 +4328,233 @@ test('main: matching ContinuationToken publishes a clean simulation receipt', as
   }
 });
 
+const definedTerminalNextContinuationTokens = [
+  ['token string', 'token-1'],
+  ['arbitrary token string', 'page-2-token'],
+  ['empty string', ''],
+  ['whitespace string', '   '],
+  ['null', null],
+  ['numeric 42', 42],
+  ['numeric zero', 0],
+  ['boolean true', true],
+  ['boolean false', false],
+  ['bigint', 1n],
+  ['symbol', Symbol('token')],
+  ['plain object', {}],
+  ['boxed string', new String('token')],
+  [
+    'coercible object',
+    {
+      valueOf() {
+        throw new Error('private-token-valueOf-error');
+      },
+    },
+  ],
+];
+
+for (const [label, NextContinuationToken] of definedTerminalNextContinuationTokens) {
+  test(`listBucketObjects: rejects ${label} terminal NextContinuationToken without coercion`, async () => {
+    const s3Client = listingClient([
+      Object.freeze({ IsTruncated: false, NextContinuationToken, Contents: [] }),
+    ]);
+    await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+      message: 'Object storage listing is invalid or incomplete',
+    });
+    assert.strictEqual(s3Client.inputs.length, 1);
+  });
+}
+
+const definedLaterTerminalNextContinuationTokenSamples = [
+  ['token string', 'token-B'],
+  ['empty string', ''],
+  ['null', null],
+  ['boolean true', true],
+  ['numeric', 42],
+  ['plain object', {}],
+];
+
+for (const [label, NextContinuationToken] of definedLaterTerminalNextContinuationTokenSamples) {
+  test(`listBucketObjects: rejects later terminal NextContinuationToken (${label}) before pagination`, async () => {
+    const pages = [
+      {
+        IsTruncated: true,
+        Contents: [{ Key: 'valid', Size: 1 }],
+        NextContinuationToken: 'token-A',
+      },
+      Object.freeze({
+        IsTruncated: false,
+        ContinuationToken: 'token-A',
+        NextContinuationToken,
+        Contents: [{ Key: 'second', Size: 2 }],
+      }),
+      { IsTruncated: false },
+    ];
+    const s3Client = listingClient(pages);
+    await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+      message: 'Object storage listing is invalid or incomplete',
+    });
+    assert.strictEqual(s3Client.inputs.length, 2);
+  });
+}
+
+test('listBucketObjects: accepts multi-page listing with clean terminal NextContinuationToken', async () => {
+  const s3Client = listingClient([
+    {
+      IsTruncated: true,
+      Contents: [{ Key: 'first', Size: 1 }],
+      NextContinuationToken: 'token-A',
+    },
+    {
+      IsTruncated: false,
+      ContinuationToken: 'token-A',
+      Contents: [{ Key: 'second', Size: 2 }],
+    },
+  ]);
+  const result = await listBucketObjects({ s3Client, bucket: 'fixture' });
+  assert.strictEqual(result.length, 2);
+  assert.strictEqual(s3Client.inputs.length, 2);
+  assert.strictEqual(s3Client.inputs[1].ContinuationToken, 'token-A');
+});
+
+for (const [label, patch] of [
+  ['omitted', {}],
+  ['undefined', { NextContinuationToken: undefined }],
+]) {
+  for (const Contents of [
+    undefined,
+    Object.freeze([]),
+    Object.freeze([{ Key: 'fixture-key', Size: 10 }]),
+  ]) {
+    test(`listBucketObjects: accepts ${label} terminal NextContinuationToken with ${Contents === undefined ? 'absent' : Contents.length === 0 ? 'empty' : 'populated'} contents`, async () => {
+      const page = Object.freeze({ ...patch, IsTruncated: false, Contents });
+      const result = await listBucketObjects({
+        s3Client: listingClient([page]),
+        bucket: 'fixture',
+      });
+      assert.strictEqual(
+        result.length,
+        Contents && Contents.length ? Contents.length : 0,
+      );
+    });
+  }
+}
+
+test('main: initial terminal defined NextContinuationToken failure publishes no evidence', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-nct-init-failure-'));
+  try {
+    const io = createIo();
+    const s3Client = listingClient([
+      {
+        IsTruncated: false,
+        NextContinuationToken: 'rogue-token',
+        Contents: [],
+      },
+    ]);
+    const code = await main(
+      [
+        'node',
+        'script',
+        '--dry-run',
+        '--output',
+        path.join(dir, 'receipt.json'),
+      ],
+      io,
+      { dbObjects: [], s3Client, env: {} },
+    );
+    assert.strictEqual(code, 1);
+    assert.strictEqual(s3Client.inputs.length, 1);
+    assert.deepStrictEqual(io.errors, [
+      'Error: Object storage connection or listing failed',
+    ]);
+    assert.deepStrictEqual(io.logs, [
+      'Connecting to PostgreSQL and Object Storage...',
+    ]);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main: later terminal defined NextContinuationToken failure publishes no evidence', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-nct-later-failure-'));
+  try {
+    const io = createIo();
+    const s3Client = listingClient([
+      {
+        IsTruncated: true,
+        Contents: [{ Key: 'valid', Size: 1 }],
+        NextContinuationToken: 'token-A',
+      },
+      {
+        IsTruncated: false,
+        ContinuationToken: 'token-A',
+        NextContinuationToken: 'rogue-token-B',
+        Contents: [],
+      },
+    ]);
+    const code = await main(
+      [
+        'node',
+        'script',
+        '--dry-run',
+        '--output',
+        path.join(dir, 'receipt.json'),
+      ],
+      io,
+      { dbObjects: [], s3Client, env: {} },
+    );
+    assert.strictEqual(code, 1);
+    assert.strictEqual(s3Client.inputs.length, 2);
+    assert.deepStrictEqual(io.errors, [
+      'Error: Object storage connection or listing failed',
+    ]);
+    assert.deepStrictEqual(io.logs, [
+      'Connecting to PostgreSQL and Object Storage...',
+    ]);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main: clean terminal NextContinuationToken publishes a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-nct-success-'));
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const s3Client = listingClient([
+      {
+        IsTruncated: true,
+        ContinuationToken: undefined,
+        NextContinuationToken: 'A',
+      },
+      {
+        IsTruncated: false,
+        ContinuationToken: 'A',
+        NextContinuationToken: undefined,
+        Contents: [{ Key: 'fixture-key', Size: 1 }],
+      },
+    ]);
+    assert.strictEqual(
+      await main(['node', 'script', '--dry-run', '--output', target], io, {
+        env: {},
+        dbObjects: [inventoryDbRecord()],
+        s3Client,
+      }),
+      0,
+    );
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.strictEqual(report.summary.totalBucketObjects, 1);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 for (const contents of [undefined, []]) {
   test(`listBucketObjects: terminal empty page (${contents === undefined ? 'omitted' : 'array'})`, async () => {
     const s3Client = listingClient([
@@ -4352,7 +4579,6 @@ test('listBucketObjects: aggregates pages and preserves opaque tokens, keys and 
     { IsTruncated: true, NextContinuationToken: 'token-B' },
     {
       IsTruncated: false,
-      NextContinuationToken: 'unused',
       Contents: [{ Key: 'file', Size: 42 }],
     },
   ]);

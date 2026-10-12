@@ -3006,3 +3006,26 @@ Online audit remains omitted under the metadata-disclosure restriction; no full
 aggregate `ops:check` pass or fresh inventory is claimed. No live services,
 deployment or push occurred. Prompt 201, Category 6 live approval and Phase 12 exit
 remain open.
+
+**Prompt 320 — reject storage listing terminal next continuation tokens (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 319.
+Supplied S3 `NextContinuationToken` values on terminal pages (`IsTruncated: false`),
+when defined, reject immediately. Because non-truncated terminal pages have no
+remaining objects to list, any next continuation token returned by the provider
+indicates contradictory pagination metadata or masked truncation, which could cause
+active database `StoredObject` records on subsequent unlisted pages to be reported
+as missing from storage or conceal unreferenced orphan objects.
+Optional omitted/undefined next continuation tokens on terminal pages, empty
+pages, per-page pagination, caller ownership and existing metadata conversion
+remain supported. Public contracts, CLI/SQL/comparison/publication and Stage 7
+remain unchanged. All 751 prior tests plus 30 regressions pass (**781/781**);
+lint/typecheck, permitted build (**22/22** pages), syntax/help and diff checks pass.
+All **33 offline operations stages** pass (**27 suite invocations / 3762 tests /
+zero failures**, final launch/dossier **182/182**). Independent read-only review
+found no issues and approved merging. Actual outputs, synthetic reproduction,
+SDK semantics, compatibility and ordinary revert rollback are in
+`docs/operations.md` Prompt 320. Readiness stays **0 approved / 11 blocked / 70 blockers**.
+Online audit remains omitted under the metadata-disclosure restriction; no full
+aggregate `ops:check` pass or fresh inventory is claimed. No live services,
+deployment or push occurred. Prompt 201, Category 6 live approval and Phase 12 exit
+remain open.
