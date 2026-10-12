@@ -871,6 +871,16 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Database inventory projection consistency (prompt 332): defined fields must
+  describe the fixed twelve-column SELECT in order with dense records and exact
+  primitive names. Malformed/contradictory projections, including empty results,
+  reject with fixed errors, zero S3 requests and no summary/receipt. Missing
+  metadata remains supported. Investigate the query projection and rerun into
+  a fresh receipt path. Focused **1501/1501**, independent review and all
+  **33 offline stages / 4482 tests** passed; actual checks and rollback are recorded in docs/operations.md Prompt 332.
+  Column consistency proves neither authenticity, completeness nor byte
+  integrity. Prompt 201 and Category 6 live approval remain open.
+
 - Database inventory row-mode consistency (prompt 331): defined rowAsArray
   must be exact primitive false; contradictory/malformed values, including
   empty array-mode SELECTs, reject whole results with fixed diagnostics, zero

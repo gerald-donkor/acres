@@ -1457,3 +1457,18 @@ read-only review verify this existing adapter boundary. SQL and receipt schema
 are unchanged. Row-mode consistency cannot authenticate metadata, prove
 complete inventories, verify object bytes or establish atomic snapshots or
 live recovery. Prompt 201, Category 6 live approval and Phase 12 exit stay open.
+
+**Prompt 332 — validate database inventory column names (2026-10-12):**
+Continued Phase 12K after committed Prompt 331. Defined result.fields must
+match the fixed twelve-column SELECT in order, using dense field records and
+exact primitive names. Invalid or contradictory projections reject whole
+inventories, including empty results, with fixed diagnostics, zero S3 requests
+and no summary/receipt. Omitted/undefined metadata remains supported; opaque
+descriptor attributes and existing row/count/command/mode checks are preserved.
+Focused **1501/1501** and independent read-only review verify this existing
+adapter boundary. Two synthetic pg fixture sites gained row descriptions;
+prior assertions remain intact. Actual checks, limitations and rollback are
+recorded in docs/operations.md Prompt 332. SQL and receipt schema are unchanged.
+Projection consistency cannot authenticate metadata, prove completeness, verify
+object bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6
+live approval and Phase 12 exit remain open.

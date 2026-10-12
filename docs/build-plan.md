@@ -3217,3 +3217,22 @@ in docs/operations.md Prompt 331. Readiness remains **0 approved / 11 blocked /
 vulnerability inventory is claimed. No live services, operator approval,
 deployment or push occurred. Prompt 201, Category 6 live recovery approval
 and Phase 12 exit remain open.
+
+**Prompt 332 — validate database inventory column names (2026-10-12):**
+Continued Phase 12K after committed Prompt 331. Defined result.fields must
+match the fixed twelve-column SELECT in order, using dense field records and
+exact primitive names. Invalid or contradictory projections reject whole
+inventories, including empty results, with fixed diagnostics, zero S3 requests
+and no summary/receipt. Omitted/undefined metadata remains supported; opaque
+descriptor attributes and existing row/count/command/mode checks are preserved.
+Focused **1501/1501** and independent read-only review verify this existing
+adapter boundary. Two synthetic pg fixture sites gained row descriptions;
+prior assertions remain intact. Actual checks, limitations and rollback are
+recorded in docs/operations.md Prompt 332. SQL and receipt schema are unchanged.
+All **33 offline stages / 4482 tests** passed; readiness retained expected
+**0 approved / 11 blocked / 70 blockers**. Online ops:audit was omitted under
+the recorded disclosure restriction; no full ops:check pass or fresh audit is
+claimed.
+Projection consistency cannot authenticate metadata, prove completeness, verify
+object bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6
+live approval and Phase 12 exit remain open.

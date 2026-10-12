@@ -545,6 +545,22 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
   return items;
 }
 
+// Keep names and order aligned with the adapter's fixed SELECT projection.
+const DATABASE_INVENTORY_COLUMNS = [
+  'id',
+  'organizationId',
+  'bucket',
+  'objectKey',
+  'byteCount',
+  'checksumAlgorithm',
+  'checksumHex',
+  'state',
+  'deletedAt',
+  'createdAt',
+  'uploadState',
+  'uploadExpiresAt',
+];
+
 /**
  * Queries StoredObject rows from PostgreSQL.
  */
@@ -571,6 +587,24 @@ async function queryDatabaseStoredObjects({ pgClient }) {
   const result = await pgClient.query(query);
   if (!isInventoryRecord(result)) throw new Error('Database inventory is invalid');
   validateInventory(result.rows, true);
+  // Even empty SELECTs describe this fixed projection; never accept another one.
+  const fields = result.fields;
+  if (fields !== undefined) {
+    if (
+      !Array.isArray(fields) ||
+      fields.length !== DATABASE_INVENTORY_COLUMNS.length
+    )
+      throw new Error('Database inventory is invalid');
+    for (const [index, name] of DATABASE_INVENTORY_COLUMNS.entries()) {
+      const field = fields[index];
+      if (
+        !Object.hasOwn(fields, index) ||
+        !isInventoryRecord(field) ||
+        field.name !== name
+      )
+        throw new Error('Database inventory is invalid');
+    }
+  }
   // Named-field inventory rows cannot come from array-mode results, even empty ones.
   if (result.rowAsArray !== undefined && result.rowAsArray !== false)
     throw new Error('Database inventory is invalid');
