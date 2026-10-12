@@ -1472,3 +1472,16 @@ recorded in docs/operations.md Prompt 332. SQL and receipt schema are unchanged.
 Projection consistency cannot authenticate metadata, prove completeness, verify
 object bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6
 live approval and Phase 12 exit remain open.
+
+**Prompt 333 — database inventory format consistency (2026-10-12):**
+Defined descriptor formats must be exact primitive text for the adapter's plain
+SELECT. Binary/malformed values reject whole inventories, including empty
+results, with fixed private diagnostics before conversion, S3 requests or
+publication. Omitted/undefined fields/formats remain compatible; other guards
+and caller ownership are preserved. Focused **1533/1533**, independent read-only
+review and **33 offline stages / 4514 tests** verify the existing boundary.
+Actual checks and ordinary-revert rollback are in docs/operations.md Prompt 333.
+SQL and receipt schema are unchanged. Consistency cannot authenticate metadata,
+prove completeness, verify object bytes or establish atomic snapshots/live
+recovery. No online audit, live services, deployment or push occurred; Prompt
+201, Category 6 live approval and Phase 12 exit remain open.

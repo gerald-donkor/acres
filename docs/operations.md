@@ -9761,3 +9761,112 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 333 — Database inventory column formats (2026-10-12)
+
+Continued Phase 12K after committed Prompt 332. The fixed inventory SELECT is
+sent as ordinary query text; each supplied descriptor format must now be exact
+primitive `text` when defined. Binary or malformed formats reject whole
+inventories, including empty results, through the existing fixed error before
+conversion, S3 requests or publication. Omitted/undefined fields and formats
+remain compatible with injected adapters. Names/order/density, row/count/
+command/mode checks, frozen ownership, opaque additional attributes and bigint
+conversion are preserved. SQL, receipt schema, storage listing and Stage 7
+are unchanged.
+
+Installed pg Result.addFields selects parsers by format; parseRow handles binary
+values differently. Query.submit's simple path sends the query text, and
+pg-protocol's parseField maps the wire format to text/binary. These installed
+sources provide offline driver evidence, not a live PostgreSQL recovery test.
+The original all-binary empty-result probe now prints:
+
+```text
+{"rejected":true,"error":"Database inventory is invalid"}
+```
+
+Added 32 focused cases while retaining all 1501 previous assertions: invalid
+format families and descriptor positions, empty/populated/frozen compatibility,
+no coercion, runner failure/publication behavior, other guard independence and
+installed-driver empty results. Existing installed-driver populated-text parsing
+coverage remains intact. Invalid runners verify one query, zero S3 sends,
+caller-owned clients, fixed diagnostics and no summary, receipt or temporary
+file. Valid mixed omission/text formats publish clean simulation evidence.
+
+Actual permitted test-first red output (exit 1):
+
+```text
+ℹ tests 1533
+ℹ pass 1517
+ℹ fail 16
+ℹ skipped 0
+```
+
+Actual direct and npm run ops:reconcile-test green output (exit 0 each):
+
+```text
+ℹ tests 1533
+ℹ pass 1533
+ℹ fail 0
+ℹ skipped 0
+```
+
+The initial restricted red invocation reported only a failed worker wrapper;
+permitted execution supplied the complete totals above. No assertions were
+weakened. Actual repository verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier on changed regions | 0 | specFormatting: true; guardFormatting: true |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| npm run build | 0 | Compiled successfully in 5.4s; Generating static pages using 7 workers (22/22) in 1239ms; prisma generate && nest build |
+| npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| git diff --check | 0 | silent |
+
+An initial isolated formatting probe used incorrectly indented wrapper text and
+reported guardFormatting: false; comparison of the actual guard with installed
+Prettier's full-source output reported true without changing source formatting.
+Next generated types were complete before typecheck started; no generated-type
+race occurred.
+
+All 33 independent offline stages resolved from current package.json ops:check
+passed: **27 suite invocations / 4514 tests / 4514 passed / zero failures or
+skipped**. Every stage exit and count was inspected. The final synthetic
+launch-orchestrator/dossier suite reported tests 182, pass 182, fail 0, skipped 0.
+Template, secret/default scan, Docker runtime, offline SBOM licence, SAST and
+container-template checks passed. Online ops:audit remains omitted under the
+recorded registry metadata-disclosure restriction; no full aggregate ops:check
+pass or fresh vulnerability inventory is claimed.
+
+Readiness example validation retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Independent read-only review found no Critical, Important or Minor issues, no
+meaningful test gaps and no plan deviations. Its own restricted test invocation
+reported a passing file-level wrapper and does not independently reproduce
+case totals; it inspected the coordinator's complete green and offline logs.
+Review feedback was evaluated against the actual guard, installed driver,
+preserved compatibility and downstream-effect tests. No corrections or
+significant re-review were required.
+
+Format consistency cannot authenticate metadata, prove completeness, verify
+object bytes or establish atomic snapshots/live recovery. Mandatory metadata,
+OID/type validation, protocol changes and hostile in-process objects remain
+out of scope. Prompt 201, Category 6 live approval and Phase 12 exit remain
+open. No live services, operator approval, deployment or push occurred.
+Ordinary commit revert restores previous behavior without migrations or
+DB/storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

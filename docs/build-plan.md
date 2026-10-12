@@ -3236,3 +3236,21 @@ claimed.
 Projection consistency cannot authenticate metadata, prove completeness, verify
 object bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6
 live approval and Phase 12 exit remain open.
+
+**Prompt 333 — validate database inventory column formats (2026-10-12):**
+Continued Phase 12K after committed Prompt 332. Defined descriptor formats
+must be exact primitive text for the fixed plain-query SELECT; binary/malformed
+formats reject whole inventories, including empty results, with fixed errors,
+zero S3 requests and no summary/receipt. Omitted/undefined metadata remains
+compatible; other guards, ownership and conversion are preserved. Focused
+**1533/1533**, lint/typecheck/build (**22/22** pages), syntax/format/help/diff and
+**33 offline stages / 27 suite invocations / 4514 tests / zero failures or
+skipped** passed. Independent read-only review found no issues or deviations;
+its file-level wrapper did not independently reproduce case totals. Actual
+red/green evidence, checks, limitations and ordinary-revert rollback are in
+docs/operations.md Prompt 333. Readiness stays **0 approved / 11 blocked / 70
+blockers**. Online ops:audit remains omitted; no full ops:check or fresh audit
+is claimed. SQL and receipt schema are unchanged. Metadata consistency cannot
+prove authenticity, completeness, bytes or atomic snapshots. No live services,
+operator approval, deployment or push. Prompt 201, Category 6 live approval
+and Phase 12 exit remain open.

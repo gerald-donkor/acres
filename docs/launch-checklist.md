@@ -871,6 +871,16 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Database inventory format consistency (prompt 333): defined descriptor formats
+  must be exact primitive text for the plain SELECT. Binary/malformed formats,
+  including empty results, reject with fixed errors, zero S3 requests and no
+  summary/receipt. Omitted/undefined metadata remains supported. Investigate
+  result-column formats and rerun into a fresh receipt path. Focused
+  **1533/1533**, independent review and **33 offline stages / 4514 tests** passed;
+  actual checks and ordinary-revert rollback are in docs/operations.md Prompt 333.
+  Consistency proves neither authenticity, completeness nor byte integrity.
+  Prompt 201, Category 6 live approval and Phase 12 exit remain open.
+
 - Database inventory projection consistency (prompt 332): defined fields must
   describe the fixed twelve-column SELECT in order with dense records and exact
   primitive names. Malformed/contradictory projections, including empty results,

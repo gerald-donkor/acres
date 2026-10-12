@@ -600,7 +600,8 @@ async function queryDatabaseStoredObjects({ pgClient }) {
       if (
         !Object.hasOwn(fields, index) ||
         !isInventoryRecord(field) ||
-        field.name !== name
+        field.name !== name ||
+        (field.format !== undefined && field.format !== 'text')
       )
         throw new Error('Database inventory is invalid');
     }
