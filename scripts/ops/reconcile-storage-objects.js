@@ -461,6 +461,8 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
           Array.isArray(entry) ||
           typeof entry.Key !== 'string' ||
           entry.Key.length === 0 ||
+          // A valid echo cannot excuse keys outside the requested literal scope.
+          (prefix && !entry.Key.startsWith(prefix)) ||
           seenKeys.has(entry.Key) ||
           !Number.isSafeInteger(entry.Size) ||
           entry.Size < 0 ||

@@ -3064,3 +3064,19 @@ Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit remain
 omitted; no aggregate ops:check or fresh vulnerability inventory is claimed.
 No live services, deployment or push occurred. Prompt 201, Category 6 live
 approval and Phase 12 exit stay open.
+
+**Prompt 323 — enforce storage listing key prefixes (2026-10-12):**
+Continued Phase 12K after committed Prompt 322. Returned keys must begin with
+any effective requested prefix, independently of response echoes; contradictory
+first/later pages reject whole inventories with fixed errors and no summary or
+receipt. Literal opaque prefixes, bucket-wide requests, frozen data, metadata
+conversion and pagination remain supported. Added 25 cases and corrected an
+older success fixture's scope without weakening assertions. Focused **928/928**,
+lint/typecheck, permitted build (**22/22** pages), formatting/syntax/diff and all
+**33 offline stages / 27 suite invocations / 3909 tests / zero failures** passed.
+High-effort independent review found no issues and reproduced **928/928**.
+Actual outputs, red/green evidence, sandbox limits and ordinary revert rollback
+are recorded in `docs/operations.md` Prompt 323. Readiness remains **0 approved /
+11 blocked / 70 blockers**. Online audit remains omitted; no aggregate ops:check,
+fresh vulnerability inventory, live service, deployment or push claim. Prompt
+201, Category 6 live approval and Phase 12 exit stay open.

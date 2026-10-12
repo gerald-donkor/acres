@@ -8771,3 +8771,86 @@ and approved merging after canonical documentation. Feedback was evaluated
 against SDK semantics, guard placement, non-coercing validation, per-page
 compatibility and runner publication boundaries. No implementation fixes or
 architectural re-review were needed.
+
+## Prompt 323 — enforce storage listing key prefixes (2026-10-12)
+
+Continued Phase 12K after committed Prompt 322 (`06134e9`). A bounded synthetic
+probe requested `scope/`, received a matching prefix echo but an `outside/` key,
+and returned `{"acceptedObjects":1,"status":"clean","totalBucketObjects":0,"exitCode":0}`:
+comparison filtering concealed the contradictory provider entry. The listing
+adapter now rejects every returned key outside the effective requested prefix
+before checksum conversion or inventory inclusion. First/later failures reject
+whole inventories before another page, summary or receipt can be produced.
+Fixed diagnostics expose no provider keys, prefixes or tokens.
+
+Prefix matching remains literal: no trimming, decoding, case folding, path or
+Unicode normalization, regex interpretation or directory-boundary requirement.
+Keys equal to the prefix and nondirectory prefixes remain valid. Omitted,
+undefined and empty request prefixes retain bucket-wide behavior; absent or
+matching response echoes do not bypass returned-key checks. Frozen ownership,
+ordering, date/checksum conversion and empty intermediate pages remain supported.
+Installed SDK ListObjectsV2 request/output declarations verify the prefix
+semantics. CLI, public signatures, SQL, comparison filters, injected inventories,
+receipt publication/format and Stage 7 are unchanged. Request-input validation
+and bucket Name echoes remain outside this prompt's scope.
+
+Added 25 regressions while retaining all 903 prior cases. The older opaque-key
+success fixture had out-of-prefix keys; its source and expected keys now include
+`scope/`, preserving whitespace, metadata and pagination assertions. After fixture
+corrections, direct red execution reported `tests 928`, `pass 915`, `fail 13`;
+direct green and permitted npm execution reported:
+
+```text
+ℹ tests 928
+ℹ pass 928
+ℹ fail 0
+ℹ skipped 0
+```
+
+Both `node -c` checks, CLI `--help`, changed-region Prettier and `git diff --check`
+exited 0. Root `npm run lint` exited 0 across all three workspaces; root
+`npm run typecheck` exited 0, including `tsc --noEmit` and Prisma Client 7.9.1
+code generation. The ordinary sandbox npm test printed only its wrapper-file
+count (`tests 1`); direct and permitted child-process execution exposed all 928
+cases. Sandbox build exited 1 with `Could not parse output from TypeScript's
+--showConfig.`; the identical permitted `npm run build` exited 0:
+
+```text
+✓ Compiled successfully in 4.9s
+✓ Generating static pages using 7 workers (22/22) in 927ms
+> prisma generate && nest build
+```
+
+Every independent offline stage currently in `ops:check` exited 0: **33 stages,
+27 suite invocations, 3909 tests / 3909 passed / zero failures / zero skipped**.
+Final launch/dossier output was `tests 182`, `pass 182`, `fail 0`. Each stage's
+exit and suite summary was inspected; template, secret/default, Docker runtime,
+license, SAST and container gates passed. Online `ops:audit` remains omitted
+under the recorded metadata-disclosure restriction; no aggregate ops:check pass
+or fresh vulnerability inventory is claimed.
+
+Permitted `npm run ops:launch-readiness` retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Independent high-effort read-only review found no Critical, Important or Minor
+issues, reproduced 928/928 and clean diff checks, and approved merging after
+owner documentation. Feedback was checked against guard placement, literal SDK
+semantics, fixture correction and publication ordering; no fixes or significant
+re-review were necessary. Literal scope consistency cannot prove total
+completeness, authenticity, object bytes or atomic DB/storage snapshots. No live
+service, operator approval, deployment or push occurred; Prompt 201, Category 6
+live recovery approval and Phase 12 exit stay open. Ordinary commit revert rolls
+back source/tests/docs without migration or storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

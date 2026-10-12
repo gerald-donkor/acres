@@ -27,6 +27,280 @@ const inventoryDbRecord = (overrides = {}) => ({
 
 const inventoryError = /^(Database|Storage) inventory is invalid$/;
 
+for (const later of [false, true]) {
+  for (const [label, fields] of [
+    ['omitted echo', {}],
+    ['undefined echo', { Prefix: undefined }],
+    ['matching echo', { Prefix: 'scope/' }],
+  ]) {
+    test(`listBucketObjects: rejects ${later ? 'later' : 'first'} out-of-prefix key with ${label}`, async () => {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              Contents: [{ Key: 'scope/first', Size: 1 }],
+              NextContinuationToken: 'A',
+            },
+          ]
+        : [];
+      pages.push(
+        Object.freeze({
+          ...fields,
+          IsTruncated: true,
+          NextContinuationToken: 'B',
+          Contents: Object.freeze([
+            Object.freeze({ Key: 'scope/valid', Size: 1 }),
+            Object.freeze({ Key: 'private-outside/key', Size: 1 }),
+          ]),
+        }),
+        { IsTruncated: false },
+      );
+      const s3Client = listingClient(pages);
+      await assert.rejects(
+        listBucketObjects({ s3Client, bucket: 'fixture', prefix: 'scope/' }),
+        {
+          message: 'Object storage listing is invalid or incomplete',
+        },
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+    });
+  }
+}
+
+for (const [prefix, key] of [
+  ['scope/', 'Scope/key'],
+  ['scope/', 'scope'],
+  ['scope/', 'other/scope/key'],
+  ['scope/', 'scope%2Fkey'],
+  ['é/', 'e\u0301/key'],
+]) {
+  test(`listBucketObjects: rejects literal prefix mismatch ${JSON.stringify([prefix, key])}`, async () => {
+    await assert.rejects(
+      listBucketObjects({
+        s3Client: listingClient([
+          { IsTruncated: false, Contents: [{ Key: key, Size: 1 }] },
+        ]),
+        bucket: 'fixture',
+        prefix,
+      }),
+      { message: 'Object storage listing is invalid or incomplete' },
+    );
+  });
+}
+
+for (const [prefix, key] of [
+  [undefined, 'any/key'],
+  ['', 'any/key'],
+  ['scope/', 'scope/'],
+  ['scope', 'scoped'],
+  [' scope/', ' scope/key'],
+  ['scope%2F', 'scope%2Fkey'],
+  ['scope/../', 'scope/../key'],
+  ['[scope].*/', '[scope].*/key'],
+  ['e\u0301/', 'e\u0301/key'],
+]) {
+  test(`listBucketObjects: preserves literal prefix semantics ${JSON.stringify([prefix, key])}`, async () => {
+    const lastModified = new Date('2026-01-01T00:00:00Z');
+    const digest = Buffer.alloc(32, 1);
+    const page = Object.freeze({
+      IsTruncated: false,
+      Contents: Object.freeze([
+        Object.freeze({
+          Key: key,
+          Size: 2,
+          LastModified: lastModified,
+          ChecksumSHA256: digest.toString('base64'),
+        }),
+      ]),
+    });
+    const s3Client = listingClient([page]);
+    assert.deepStrictEqual(
+      await listBucketObjects({ s3Client, bucket: 'fixture', prefix }),
+      [
+        {
+          key,
+          byteCount: 2,
+          lastModified: lastModified.toISOString(),
+          checksumHex: digest.toString('hex'),
+        },
+      ],
+    );
+    assert.deepStrictEqual(s3Client.inputs, [
+      {
+        Bucket: 'fixture',
+        Prefix: prefix || undefined,
+        ContinuationToken: undefined,
+      },
+    ]);
+    assert.strictEqual(page.Contents[0].Key, key);
+  });
+}
+
+test('listBucketObjects: omitted prefix preserves bucket-wide listing', async () => {
+  const result = await listBucketObjects({
+    bucket: 'fixture',
+    s3Client: listingClient([
+      { IsTruncated: false, Contents: [{ Key: 'any/key', Size: 1 }] },
+    ]),
+  });
+  assert.strictEqual(result[0].key, 'any/key');
+});
+
+test('listBucketObjects: scoped keys preserve order through empty intermediate page', async () => {
+  const s3Client = listingClient([
+    {
+      IsTruncated: true,
+      Prefix: 'scope/',
+      Contents: [{ Key: 'scope/first', Size: 1 }],
+      NextContinuationToken: 'A',
+    },
+    {
+      IsTruncated: true,
+      Prefix: 'scope/',
+      Contents: [],
+      NextContinuationToken: 'B',
+    },
+    {
+      IsTruncated: false,
+      Prefix: 'scope/',
+      Contents: [{ Key: 'scope/last', Size: 2 }],
+    },
+  ]);
+  const result = await listBucketObjects({
+    s3Client,
+    bucket: 'fixture',
+    prefix: 'scope/',
+  });
+  assert.deepStrictEqual(
+    result.map(item => item.key),
+    ['scope/first', 'scope/last'],
+  );
+  assert.deepStrictEqual(
+    s3Client.inputs,
+    [undefined, 'A', 'B'].map(ContinuationToken => ({
+      Bucket: 'fixture',
+      Prefix: 'scope/',
+      ContinuationToken,
+    })),
+  );
+});
+
+for (const later of [false, true]) {
+  test(`main: ${later ? 'later' : 'first'} out-of-prefix key publishes no evidence`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-key-scope-failure-'),
+    );
+    try {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              Contents: [{ Key: 'scope/valid', Size: 1 }],
+              NextContinuationToken: 'A',
+            },
+          ]
+        : [];
+      pages.push(
+        {
+          IsTruncated: true,
+          Prefix: 'scope/',
+          Contents: [{ Key: '.keep', Size: 1 }],
+          NextContinuationToken: 'B',
+        },
+        { IsTruncated: false },
+      );
+      const s3Client = listingClient(pages);
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--prefix',
+            'scope/',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          {
+            env: {},
+            dbObjects: later
+              ? [inventoryDbRecord({ objectKey: 'scope/valid' })]
+              : [],
+            s3Client,
+          },
+        ),
+        1,
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: valid scoped keys publish a clean multi-page simulation receipt', async () => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'acres-key-scope-success-'),
+  );
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const s3Client = listingClient([
+      {
+        IsTruncated: true,
+        Contents: [{ Key: 'scope/first', Size: 1 }],
+        NextContinuationToken: 'A',
+      },
+      { IsTruncated: true, Contents: [], NextContinuationToken: 'B' },
+      { IsTruncated: false, Contents: [{ Key: 'scope/last', Size: 1 }] },
+    ]);
+    assert.strictEqual(
+      await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--prefix',
+          'scope/',
+          '--output',
+          target,
+        ],
+        io,
+        {
+          env: {},
+          s3Client,
+          dbObjects: ['first', 'last'].map(id =>
+            inventoryDbRecord({ id, objectKey: `scope/${id}` }),
+          ),
+        },
+      ),
+      0,
+    );
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.deepStrictEqual(io.errors, []);
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.totalBucketObjects, 2);
+    assert.strictEqual(report.summary.matchedObjects, 2);
+    assert.deepStrictEqual(
+      report.matched.map(item => item.objectKey),
+      ['scope/first', 'scope/last'],
+    );
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 const invalidChecksumAlgorithms = [
   ['unsupported', 'md5'],
   ['private value', 'private-algorithm-sentinel'],
@@ -4574,24 +4848,24 @@ test('listBucketObjects: aggregates pages and preserves opaque tokens, keys and 
     {
       IsTruncated: true,
       NextContinuationToken: ' token A ',
-      Contents: [{ Key: ' folder/ ', Size: 0, LastModified: date }],
+      Contents: [{ Key: 'scope/ folder/ ', Size: 0, LastModified: date }],
     },
     { IsTruncated: true, NextContinuationToken: 'token-B' },
     {
       IsTruncated: false,
-      Contents: [{ Key: 'file', Size: 42 }],
+      Contents: [{ Key: 'scope/file', Size: 42 }],
     },
   ]);
   assert.deepStrictEqual(
     await listBucketObjects({ s3Client, bucket: 'fixture', prefix: 'scope/' }),
     [
       {
-        key: ' folder/ ',
+        key: 'scope/ folder/ ',
         byteCount: 0,
         lastModified: date.toISOString(),
         checksumHex: null,
       },
-      { key: 'file', byteCount: 42, lastModified: null, checksumHex: null },
+      { key: 'scope/file', byteCount: 42, lastModified: null, checksumHex: null },
     ],
   );
   assert.deepStrictEqual(

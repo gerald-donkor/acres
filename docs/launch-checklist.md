@@ -871,6 +871,16 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Returned-key scope consistency (prompt 323): every key must begin with the
+  effective requested prefix, even with a matching or absent response echo.
+  First/later contradictions reject whole inventories with fixed errors and no
+  summary/receipt. Investigate provider scope and rerun into a fresh receipt
+  path; comparison filters cannot excuse contradictory listings. Literal
+  prefixes and bucket-wide requests remain supported. Focused **928/928**,
+  high-effort independent review, repository checks and **33 offline stages /
+  3909 tests** passed. Scope consistency does not establish completeness,
+  authenticity, byte integrity or live recovery approval.
+
 - Page capacity consistency (prompt 322): supplied `MaxKeys` must be a
   nonnegative safe integer at least the flat page count. Contradictions reject
   whole inventories before entry processing or pagination and publish no

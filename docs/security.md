@@ -1347,3 +1347,16 @@ policy changed. Focused **903/903** and high-effort independent review verify
 this declared-capacity check. It cannot establish completeness, authenticity,
 byte integrity or atomic snapshots. No live operation or operator approval
 occurred; Prompt 201, Category 6 and Phase 12 exit stay open.
+
+**Prompt 323 storage listing returned-key scope boundary (2026-10-12):**
+Every listed key must begin with the effective requested prefix, even when a
+provider echoes the correct prefix or omits the echo. Contradictions reject
+before checksum conversion/inventory inclusion and further pagination; earlier
+valid keys never become partial evidence. Runner errors remain fixed, with no
+summary or receipt. Literal opaque prefix semantics and bucket-wide listings
+remain supported. Focused **928/928** and independent high-effort review verify
+this existing acquisition boundary. No public/CLI/SQL/comparison/publication or
+Stage 7 contract changed. Request-input validation, provider authentication,
+total completeness, byte integrity, atomic snapshots and resource bounds remain
+outside this check. No live service or approval occurred; Prompt 201, Category 6
+live operator approval and Phase 12 exit stay open.
