@@ -871,6 +871,17 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Database inventory row-count consistency (prompt 329): any defined rowCount
+  from the completed inventory SELECT must be a nonnegative safe integer
+  exactly equal to buffered rows.length. Invalid/contradictory counts reject
+  whole results with fixed diagnostics, zero S3 requests and no summary/receipt.
+  Omitted/undefined counts retain adapter compatibility; exact counts and empty
+  inventories remain supported. Investigate query-result consistency and rerun
+  into a fresh receipt path. Focused **1186/1186**, independent review,
+  repository checks and **33 offline stages / 4167 tests** passed. Count
+  agreement does not authenticate metadata, prove inventory completeness or
+  verify object bytes. Prompt 201 and Category 6 live approval remain open.
+
 - Checksum algorithm pairing (prompt 328): a non-null SHA256 listing digest
   extension requires any defined `ChecksumAlgorithm` to be an array containing
   exact primitive `SHA256`, with primitive nonblank strings in every slot.

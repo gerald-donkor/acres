@@ -1423,3 +1423,15 @@ do not prove checksum calculation, authenticity, object bytes, completeness,
 atomic snapshots or live recovery. No mandatory acquisition, HEAD/GET or byte
 hashing was introduced. Prompt 201, Category 6 live approval and Phase 12 exit
 remain open.
+
+**Prompt 329 database inventory row-count consistency (2026-10-12):**
+Defined rowCount from the completed inventory SELECT must be a nonnegative
+safe integer exactly equal to buffered rows.length before conversion. Invalid
+or contradictory counts reject the whole result with fixed diagnostics, no
+S3 requests and no runner summary/receipt. Omitted/undefined metadata retains
+adapter compatibility; matching counts cannot excuse malformed rows. Focused
+**1186/1186** and independent read-only review verify this existing adapter
+boundary. No SQL, checksum rules or receipt schema changed. Count consistency
+and clean comparisons do not establish authenticity, complete inventories,
+object byte integrity, atomic snapshots or live recovery. Prompt 201, Category 6
+live approval and Phase 12 exit remain open.

@@ -9312,3 +9312,109 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 329 — validate database inventory row counts (2026-10-12)
+
+Continued Phase 12K after committed Prompt 328 (`60a6b22`), under the user's
+instruction to implement the prepared plan. The fresh pre-change synthetic
+PostgreSQL result supplied rowCount 2 with one valid row and returned:
+
+```text
+{"reported":2,"accepted":1}
+```
+
+After existing result/row validation and before bigint conversion,
+queryDatabaseStoredObjects now requires any defined rowCount to be a
+nonnegative safe integer exactly equal to rows.length. Invalid or contradictory
+counts reject the whole result with the fixed Database inventory is invalid
+error, without coercion. The same probe now returns:
+
+```text
+{"rejected":true,"error":"Database inventory is invalid"}
+```
+
+Installed pg/lib/result.js initializes rowCount to null and replaces it from
+numeric command-completion tags. This adapter executes one completed SELECT
+with buffered rows, so null is rejected here; this is not a rule for unrelated
+PostgreSQL commands that lack row counts. Omitted/undefined metadata remains
+compatible with injected adapters. Exact positive counts and zero/-0 empty
+results preserve row order, frozen ownership, extra fields and bigint
+conversion. Matching counts cannot conceal invalid, sparse or duplicate rows.
+SQL, storage listing, pure comparison, CLI/env behavior, TS facade, receipt
+schema/publication and Stage 7 are unchanged.
+
+Runner regressions verify fixed Database query failed diagnostics, exit 1,
+one query, zero S3 sends, no caller-client end/destroy and no output or temporary
+files on rejection. Matching and optional counts still publish clean simulation
+receipts, including empty inventories. The 1132 prior tests remain intact;
+54 new cases cover invalid counts, compatibility and runner publication.
+Actual permitted pre-change red output was:
+
+```text
+ℹ tests 1186
+ℹ pass 1148
+ℹ fail 38
+ℹ skipped 0
+```
+
+Direct and npm focused green runs returned:
+
+```text
+ℹ tests 1186
+ℹ pass 1186
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual repository verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| permitted direct spec and npm run ops:reconcile-test | 0 | tests 1186, pass 1186, fail 0, skipped 0 |
+| source/spec node -c and CLI --help | 0 | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| changed-region installed Prettier | 0 | {"specFormatting":true}, {"guardFormatting":true} |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| permitted npm run build | 0 | Compiled successfully in 6.0s; Generating static pages using 7 workers (22/22) in 1596ms; prisma generate && nest build |
+| git diff --check | 0 | silent |
+
+The restricted test attempt returned only one failing worker wrapper, not an
+individual-suite result. Restricted build failed with Could not parse output
+from TypeScript's --showConfig. Permitted ordinary child-process reruns supplied
+complete red/green and build evidence without weakening checks. Launch
+readiness retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+All 33 independent offline stages resolved from current package.json ops:check
+passed: **27 suite invocations / 4167 tests / 4167 passed / zero failed or
+skipped**. Every stage exit and suite total was inspected; final launch/dossier
+output was tests 182, pass 182, fail 0. Online ops:audit remains omitted under
+the recorded registry metadata-disclosure restriction. No full aggregate
+ops:check pass or fresh vulnerability inventory is claimed.
+
+Independent read-only review found no Critical, Important or Minor issues,
+reproduced 1186/1186 with zero skipped, and found no plan deviations. Feedback
+was verified against driver semantics, guard placement, optional metadata,
+fixed runner diagnostics and suppression of requests/publication. No fixes
+or significant re-review were needed.
+
+Count consistency alone does not establish inventory completeness, authenticity,
+object byte integrity or an atomic DB/S3 snapshot. Mandatory metadata, command
+or field validation, SQL/upload selection changes, live calls, resource bounds
+and hostile in-process objects remain out of scope. No live services, operator
+approval, deployment or push occurred. Prompt 201, Category 6 live recovery
+approval and Phase 12 exit remain open. Ordinary commit revert restores prior
+behavior without migration or data/storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

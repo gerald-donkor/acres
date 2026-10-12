@@ -3162,3 +3162,21 @@ Prompt 328. Readiness remains **0 approved / 11 blocked / 70 blockers**.
 Online audit remains omitted; no aggregate ops:check or fresh vulnerability
 inventory is claimed. No live services, operator approval, deployment or push.
 Prompt 201, Category 6 live approval and Phase 12 exit stay open.
+
+**Prompt 329 — validate database inventory row counts (2026-10-12):**
+Continued Phase 12K after committed Prompt 328. Defined rowCount from the
+completed inventory SELECT must be a nonnegative safe integer exactly equal
+to buffered rows.length before conversion. Invalid or contradictory counts
+reject whole results with fixed diagnostics, zero S3 requests and no runner
+summary/receipt. Omitted/undefined metadata, exact counts, empty zero/-0
+results and frozen ownership remain compatible. SQL, storage, comparison,
+publication and Stage 7 are unchanged. Focused **1186/1186**, lint/typecheck,
+permitted build (**22/22** pages), formatting/syntax/help/diff and **33 offline
+stages / 27 suite invocations / 4167 tests / zero failures or skipped** passed.
+Independent read-only review found no issues and reproduced **1186/1186**.
+Actual red/green outputs, driver semantics, limits and ordinary revert rollback
+are in docs/operations.md Prompt 329. Readiness remains **0 approved / 11
+blocked / 70 blockers**. Online audit remains omitted; no aggregate ops:check
+or fresh vulnerability inventory is claimed. No live services, operator
+approval, deployment or push occurred. Prompt 201, Category 6 live recovery
+approval and Phase 12 exit stay open.
