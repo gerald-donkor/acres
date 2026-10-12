@@ -2812,3 +2812,27 @@ failures**, final launch/dossier **182/182**). Online audit remains omitted unde
 the metadata-disclosure restriction; no fresh inventory or aggregate
 `ops:check` pass is claimed. No live services, deployment or push occurred.
 Prompt 201, Category 6 live operator approval and Phase 12 exit remain open.
+
+**Prompt 311 — validate reconciliation checksum metadata (2026-10-12):**
+Continued Phase 12K after committed Prompt 310. Shared inventory validation now
+rejects malformed supplied generic hex checksums before filters/exclusions, pg
+mapping or injected client acquisition. The listing adapter validates its
+existing optional SHA256 extension as canonical 32-byte standard base64 before
+decoding. Later malformed queries/listings reject whole inventories; fixed
+diagnostics and runner failures publish no summary or receipt. Optional metadata,
+variable whole-byte hex lengths, case-insensitive comparison, missing-evidence
+case, SQL/CLI/signatures/facade/report/publication/Stage 7 remain supported.
+The installed SDK exposes no digest value on standard listing entries; no
+checksum acquisition/content hashing was added. All 377 prior tests plus 98 new
+regressions pass (**475/475**); lint/typecheck, permitted build (**22/22** pages),
+changed-region formatting, syntax and diff checks pass. Independent read-only
+review found no issues and reproduced **475/475**. Actual outputs, red fixtures,
+sandbox limits, compatibility, SDK limits and ordinary revert rollback are in
+`docs/operations.md` Prompt 311. Readiness stays **0 approved / 11 blocked /
+70 blockers**. Online audit remains omitted under the metadata-disclosure
+restriction; no fresh inventory or full aggregate `ops:check` pass is claimed.
+No live database/storage services, deployment or push occurred. Prompt 201,
+Category 6 live operator approval and Phase 12 exit stay open.
+
+All **33 independent offline operations stages** passed (**27 suite
+invocations / 3456 tests / zero failures**, final launch/dossier **182/182**).

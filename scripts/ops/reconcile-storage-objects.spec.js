@@ -27,6 +27,374 @@ const inventoryDbRecord = (overrides = {}) => ({
 
 const inventoryError = /^(Database|Storage) inventory is invalid$/;
 
+const invalidChecksumValues = [
+  ['empty', ''],
+  ['whitespace', ' \t '],
+  ['nonhex', 'private-checksum-sentinel'],
+  ['odd hex', 'abc'],
+  ['leading space', ' abcd'],
+  ['trailing newline', 'abcd\n'],
+  ['trailing CRLF', 'abcd\r\n'],
+  ['hex prefix', '0xabcd'],
+  ['number', 42],
+  ['zero', 0],
+  ['bigint', 42n],
+  ['true', true],
+  ['false', false],
+  ['array', ['abcd']],
+  ['object', {}],
+  ['boxed string', new String('abcd')],
+  ['buffer', Buffer.from('abcd', 'hex')],
+];
+
+for (const side of ['dbObjects', 'storageObjects']) {
+  for (const [label, checksumHex] of invalidChecksumValues) {
+    test(`reconcileObjects: rejects ${side} checksum ${label} before clean report`, () => {
+      const dbObjects = [inventoryDbRecord()];
+      const storageObjects = [{ key: 'fixture-key', byteCount: 1 }];
+      (side === 'dbObjects' ? dbObjects : storageObjects)[0].checksumHex =
+        checksumHex;
+      assert.throws(() => reconcileObjects({ dbObjects, storageObjects }), {
+        message:
+          side === 'dbObjects'
+            ? 'Database inventory is invalid'
+            : 'Storage inventory is invalid',
+      });
+    });
+  }
+  test(`reconcileObjects: never coerces ${side} checksum objects`, () => {
+    let coerced = false;
+    const checksumHex = {
+      toString() {
+        coerced = true;
+        return 'abcd';
+      },
+    };
+    const row =
+      side === 'dbObjects'
+        ? inventoryDbRecord({ checksumHex })
+        : { key: 'fixture-key', checksumHex };
+    assert.throws(() => reconcileObjects({ [side]: [row] }), {
+      message: inventoryError,
+    });
+    assert.strictEqual(coerced, false);
+  });
+}
+
+for (const checksumHex of [false, 42, {}, ['abcd'], 'not-a-digest']) {
+  test(`reconcileObjects: identical malformed ${typeof checksumHex} checksums cannot match`, () => {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          dbObjects: [inventoryDbRecord({ checksumHex })],
+          storageObjects: [{ key: 'fixture-key', checksumHex }],
+        }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const [label, patch, options] of [
+  ['bucket', { bucket: 'other' }, { bucket: 'acres-quarantine' }],
+  [
+    'organization',
+    { organizationId: 'other' },
+    { organizationId: 'fixture-org' },
+  ],
+  ['prefix', {}, { prefix: 'other/' }],
+  ['ignore', { objectKey: '.keep' }, {}],
+  ['pending', { state: 'pending_upload' }, {}],
+  ['deleted', { state: 'deleted' }, {}],
+  ['expired', { uploadState: 'expired' }, {}],
+  ['quarantine', { state: 'quarantined' }, { excludeQuarantined: true }],
+]) {
+  test(`reconcileObjects: invalid checksum cannot hide behind ${label}`, () => {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          dbObjects: [inventoryDbRecord({ ...patch, checksumHex: false })],
+          options,
+        }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+for (const options of [{}, { prefix: 'other/' }]) {
+  test(`reconcileObjects: ignored/filtered storage checksum still rejects (${Object.keys(options).length})`, () => {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          storageObjects: [{ key: '.keep', checksumHex: false }],
+          options,
+        }),
+      { message: 'Storage inventory is invalid' },
+    );
+  });
+}
+
+for (const checksumHex of [
+  '00',
+  'aB',
+  'aaaabbbbcccc',
+  'Ab'.repeat(32),
+  'aF'.repeat(64),
+]) {
+  test(`reconcileObjects: complete ${checksumHex.length}-character hex compares without mutating input`, () => {
+    const dbObjects = Object.freeze([
+      Object.freeze(inventoryDbRecord({ checksumHex })),
+    ]);
+    const storageObjects = Object.freeze([
+      Object.freeze({
+        key: 'fixture-key',
+        byteCount: 1,
+        checksumHex: checksumHex.toLowerCase(),
+      }),
+    ]);
+    const report = reconcileObjects({ dbObjects, storageObjects });
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.strictEqual(dbObjects[0].checksumHex, checksumHex);
+    assert.strictEqual(
+      storageObjects[0].checksumHex,
+      checksumHex.toLowerCase(),
+    );
+  });
+}
+for (const dbChecksum of [undefined, null, 'aB']) {
+  for (const storageChecksum of [undefined, null, 'Ab']) {
+    test(`reconcileObjects: nullable checksums keep metadata-only matching (${dbChecksum}/${storageChecksum})`, () => {
+      const report = reconcileObjects({
+        dbObjects: [inventoryDbRecord({ checksumHex: dbChecksum })],
+        storageObjects: [
+          { key: 'fixture-key', byteCount: 1, checksumHex: storageChecksum },
+        ],
+      });
+      assert.strictEqual(report.summary.status, 'clean');
+      assert.strictEqual(report.summary.matchedObjects, 1);
+    });
+  }
+}
+test('reconcileObjects: valid checksums preserve missing case and detect mismatches', () => {
+  const missing = reconcileObjects({
+    dbObjects: [inventoryDbRecord({ checksumHex: 'aBcD' })],
+  });
+  assert.strictEqual(missing.missing[0].expectedChecksumHex, 'aBcD');
+  const mismatch = reconcileObjects({
+    dbObjects: [inventoryDbRecord({ checksumHex: 'aB' })],
+    storageObjects: [{ key: 'fixture-key', checksumHex: 'Cd' }],
+  });
+  assert.strictEqual(mismatch.summary.status, 'error');
+  assert.deepStrictEqual(mismatch.mismatches[0].issues, [
+    'checksum_mismatch (db: ab, storage: cd)',
+  ]);
+  const orphan = reconcileObjects({
+    storageObjects: [{ key: 'orphan', byteCount: 1, checksumHex: 'aB' }],
+  });
+  assert.strictEqual(orphan.summary.status, 'warning');
+  assert.strictEqual(orphan.orphans[0].key, 'orphan');
+});
+
+for (const checksumHex of [false, 'private-checksum-sentinel']) {
+  test(`queryDatabaseStoredObjects: rejects entire result with later ${typeof checksumHex} checksum`, async () => {
+    await assert.rejects(
+      queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () => ({
+            rows: [
+              inventoryDbRecord(),
+              inventoryDbRecord({ id: 'second', checksumHex }),
+            ],
+          }),
+        },
+      }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+const canonicalSha256 = Buffer.alloc(32, 255).toString('base64');
+const invalidListedChecksums = [
+  ['empty', ''],
+  ['whitespace', ' '],
+  ['invalid alphabet', '!'.repeat(43) + '='],
+  ['one byte', 'YQ=='],
+  ['31 bytes', Buffer.alloc(31).toString('base64')],
+  ['33 bytes', Buffer.alloc(33).toString('base64')],
+  ['missing padding', canonicalSha256.slice(0, -1)],
+  ['extra padding', canonicalSha256 + '='],
+  ['leading whitespace', ' ' + canonicalSha256],
+  ['trailing newline', canonicalSha256 + '\n'],
+  ['URL-safe', canonicalSha256.replaceAll('/', '_')],
+  ['noncanonical pad bits', canonicalSha256.slice(0, -2) + '9='],
+  ['composite suffix', canonicalSha256 + '-2'],
+  ['number', 42],
+  ['zero', 0],
+  ['true', true],
+  ['false', false],
+  ['array', [canonicalSha256]],
+  ['object', {}],
+  ['boxed string', new String(canonicalSha256)],
+  ['buffer', Buffer.alloc(32)],
+];
+for (const [label, ChecksumSHA256] of invalidListedChecksums) {
+  test(`listBucketObjects: rejects ${label} checksum extension`, async () => {
+    await assert.rejects(
+      listBucketObjects({
+        s3Client: listingClient([
+          {
+            IsTruncated: false,
+            Contents: [{ Key: 'fixture-key', Size: 1, ChecksumSHA256 }],
+          },
+        ]),
+        bucket: 'fixture',
+      }),
+      { message: 'Object storage listing is invalid or incomplete' },
+    );
+  });
+}
+for (const ChecksumSHA256 of [
+  undefined,
+  null,
+  canonicalSha256,
+  Buffer.alloc(32).toString('base64'),
+]) {
+  test(`listBucketObjects: preserves optional canonical SHA256 extension (${ChecksumSHA256})`, async () => {
+    const result = await listBucketObjects({
+      s3Client: listingClient([
+        {
+          IsTruncated: false,
+          Contents: [
+            {
+              Key: 'fixture-key',
+              Size: 1,
+              ChecksumSHA256,
+              ChecksumAlgorithm: ['SHA256'],
+              ChecksumType: 'FULL_OBJECT',
+              ETag: 'untrusted-etag',
+            },
+          ],
+        },
+      ]),
+      bucket: 'fixture',
+    });
+    assert.deepStrictEqual(result, [
+      {
+        key: 'fixture-key',
+        byteCount: 1,
+        lastModified: null,
+        checksumHex:
+          ChecksumSHA256 == null
+            ? null
+            : Buffer.from(ChecksumSHA256, 'base64').toString('hex'),
+      },
+    ]);
+  });
+}
+test('listBucketObjects: invalid later checksum rejects the whole inventory', async () => {
+  const s3Client = listingClient([
+    {
+      IsTruncated: true,
+      NextContinuationToken: 'A',
+      Contents: [{ Key: 'first', Size: 1, ChecksumSHA256: canonicalSha256 }],
+    },
+    {
+      IsTruncated: false,
+      Contents: [
+        { Key: 'second', Size: 1, ChecksumSHA256: 'private-checksum-sentinel' },
+      ],
+    },
+  ]);
+  await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+    message: 'Object storage listing is invalid or incomplete',
+  });
+  assert.strictEqual(s3Client.inputs.length, 2);
+});
+
+for (const source of ['dbObjects', 'storageObjects', 'query', 'listing']) {
+  test(`main: malformed ${source} checksum fails without summary or receipt`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-checksum-failure-'),
+    );
+    try {
+      const io = createIo();
+      const options = { env: {}, dbObjects: [], storageObjects: [] };
+      let touched = false;
+      if (source === 'query') {
+        delete options.dbObjects;
+        options.pgClient = {
+          query: async () => ({
+            rows: [
+              inventoryDbRecord({ checksumHex: 'private-checksum-sentinel' }),
+            ],
+          }),
+        };
+      } else if (source === 'listing') {
+        delete options.storageObjects;
+        options.s3Client = listingClient([
+          {
+            IsTruncated: false,
+            Contents: [
+              {
+                Key: 'fixture-key',
+                Size: 1,
+                ChecksumSHA256: 'private-checksum-sentinel',
+              },
+            ],
+          },
+        ]);
+      } else {
+        options[source] = [
+          source === 'dbObjects'
+            ? inventoryDbRecord({ checksumHex: false })
+            : { key: 'fixture-key', checksumHex: false },
+        ];
+        delete options[source === 'dbObjects' ? 'storageObjects' : 'dbObjects'];
+        options.pgClient = {
+          connect() {
+            touched = true;
+            throw new Error('private-client');
+          },
+        };
+        options.s3Client = {
+          send() {
+            touched = true;
+            throw new Error('private-client');
+          },
+        };
+      }
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        options,
+      );
+      assert.strictEqual(code, 1);
+      assert.strictEqual(touched, false);
+      assert.deepStrictEqual(io.errors, [
+        source === 'query'
+          ? 'Error: Database query failed'
+          : source === 'listing'
+            ? 'Error: Object storage connection or listing failed'
+            : 'Error: Reconciliation execution failed',
+      ]);
+      assert.deepStrictEqual(
+        io.logs,
+        source === 'query' || source === 'listing'
+          ? ['Connecting to PostgreSQL and Object Storage...']
+          : [],
+      );
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
 const invalidLifecycleStates = [
   ['undefined', undefined],
   ['null', null],

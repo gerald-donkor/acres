@@ -82,6 +82,16 @@ function validateInventory(objects, database) {
       )
     )
       throw invalid();
+    const checksum = object.checksumHex;
+    if (
+      checksum !== undefined &&
+      checksum !== null &&
+      (typeof checksum !== 'string' ||
+        checksum.length === 0 ||
+        checksum.length % 2 !== 0 ||
+        /[^0-9a-fA-F]/.test(checksum))
+    )
+      throw invalid();
     // Validate before filters or lifecycle exclusions can conceal bad evidence.
     if (
       database &&
@@ -392,6 +402,22 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
               !Number.isFinite(entry.LastModified.getTime())))
         )
           throw invalidListing();
+        // Standard ListObjectsV2 entries omit digest values. Validate the
+        // existing optional extension without inferring a digest from ETag.
+        let checksumHex = null;
+        if (entry.ChecksumSHA256 !== undefined && entry.ChecksumSHA256 !== null) {
+          const checksum = entry.ChecksumSHA256;
+          if (
+            typeof checksum !== 'string' ||
+            checksum.length !== 44 ||
+            !/^[A-Za-z0-9+/]{43}=$/.test(checksum)
+          )
+            throw invalidListing();
+          const bytes = Buffer.from(checksum, 'base64');
+          if (bytes.length !== 32 || bytes.toString('base64') !== checksum)
+            throw invalidListing();
+          checksumHex = bytes.toString('hex');
+        }
         seenKeys.add(entry.Key);
         items.push({
           key: entry.Key,
@@ -399,9 +425,7 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
           lastModified: entry.LastModified
             ? entry.LastModified.toISOString()
             : null,
-          checksumHex: entry.ChecksumSHA256
-            ? Buffer.from(entry.ChecksumSHA256, 'base64').toString('hex')
-            : null,
+          checksumHex,
         });
       }
     }

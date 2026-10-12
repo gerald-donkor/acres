@@ -908,6 +908,17 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   byte integrity, inventory completeness, atomic snapshots or live acceptance.
   Focused **377/377**, all **33 offline stages / 3358 tests**, lint/typecheck/
   build and independent review passed; operator sign-off remains open.
+- Reconciliation checksum safety (prompt 311): malformed supplied hex values
+  reject before filtering/exclusion or pg/injected acquisition; optional listed
+  SHA256 extensions require canonical base64 of exactly 32 bytes. Query/listing
+  failures reject whole inventories with sanitized errors and no summary or
+  receipt. Correct source metadata and rerun into a fresh receipt path. Generic
+  whole-byte hex lengths, case-insensitive comparison and absent checksums remain
+  supported. Standard SDK listings expose no digest value; these checks add no
+  byte hashing or content verification. Focused **475/475**, all **33 offline
+  stages / 3456 tests**, lint/typecheck/build and independent review passed.
+  Prompt 201, Category 6 independently inspected live recovery approval and
+  Phase 12 exit remain open.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

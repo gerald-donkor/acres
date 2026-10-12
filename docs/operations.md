@@ -7693,3 +7693,100 @@ invocations / 3358 tests / zero failures**. Final launch/dossier suite:
 and `Container Security Gate: PASSED (All Dockerfiles and Compose templates verified)`.
 These local checks do not supply the omitted online audit or operator live
 acceptance.
+
+## Prompt 311 — validate reconciliation checksum metadata (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 310
+(`b638958`). The shared inventory boundary accepts optional `checksumHex` only
+as undefined/null or a primitive nonempty string of complete hexadecimal bytes.
+Odd-length hex, nonhex, whitespace, numbers, booleans, bigints, boxed strings,
+arrays, buffers and ordinary objects reject without coercion. Validation runs
+before filters/exclusions, pg row mapping or injected client acquisition, using
+the fixed `Database inventory is invalid` / `Storage inventory is invalid`
+errors. Malformed query/injected inventories retain sanitized runner errors.
+
+The listing adapter also validates its existing optional `ChecksumSHA256`
+extension before decoding. Supplied values must be canonical standard base64
+encoding exactly 32 bytes: 43 alphabet characters followed by `=`, decoded
+length 32 and an exact base64 round-trip. Invalid alphabet/padding, whitespace,
+noncanonical pad bits, URL-safe spelling, composite suffixes, wrong lengths
+and nonstring values reject with `Object storage listing is invalid or
+incomplete`. Null/omitted values remain absent. Malformed later pages reject
+the whole inventory; runner failures publish no summary, success message,
+staging artifact or receipt.
+
+Offline planning probes returned `clean` for matching boolean, number, object,
+array and nonhex checksum values. The adapter decoded `!!!` to an empty digest
+and `YQ==` to the one-byte hex `61`. These synthetic results demonstrate the
+input gap, not a production incident. All 377 prior tests remain; 98 new cases
+cover malformed checksums, rejection before exclusions, pg/listing/runner
+failures, private diagnostics, canonical encoding and valid compatibility.
+
+### Compatibility, review and limits
+
+Generic hex metadata remains variable-length, preserving the existing 6-byte
+fixtures as well as SHA256-sized and longer digests. Comparison is still case
+insensitive; missing-object evidence preserves original case. Nullable/omitted
+checksums on either side retain metadata-only matching. Frozen caller records
+and arrays work without mutation. CLI, SQL, exported signatures, TypeScript
+facade, report schema/modes, publication, dependencies and Stage 7 stay unchanged.
+Rejecting malformed supplied checksums is an intentional stricter runtime contract.
+
+Installed SDK `_Object` in
+`node_modules/@aws-sdk/client-s3/dist-types/models/models_0.d.ts` exposes checksum
+algorithm/type but **no digest value** for standard ListObjectsV2 entries.
+The optional extension handling is not evidence that normal listings supply a
+SHA256 digest. Algorithm/type-only entries retain null checksum values; ETag is
+not used as a digest. No Head/Get requests or object-byte hashing were added.
+Absent checksum metadata can still give a clean metadata comparison.
+
+Algorithm semantics/pairing/length, mandatory checksum acquisition, inventory
+authenticity/completeness, correct operator scope, atomic DB/S3 snapshots, actual
+byte integrity, resource/network bounds and hostile in-process getters/proxies
+remain outside this boundary. No live database/storage service or operator
+evidence was inspected. Prompt 201, Category 6 live recovery approval and Phase
+12 exit remain open. Ordinary commit revert rolls back validation/tests/docs
+together without migration or storage mutation. No push or deployment occurred.
+
+Independent read-only review found no Critical, Important or Minor findings or
+plan defects. It reproduced `tests 475`, `pass 475`, `fail 0` and clean diff
+checks. Feedback was evaluated against the actual diff and prompt; no source
+fixes or significant follow-up review were needed.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 475`, `pass 475`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0, no diagnostics.
+- `npm run typecheck`: shared `tsc -p tsconfig.json --noEmit`, client
+  `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`;
+  Prisma Client `7.9.1` generated; exit 0, no TypeScript diagnostics.
+- Permitted `npm run build`: `Compiled successfully in 3.1s`,
+  `Generating static pages using 7 workers (22/22) in 1088ms`, then
+  `prisma generate && nest build`; exit 0.
+- Changed-region Prettier comparisons report `true` for the new test block,
+  shared checksum validation and listing extension block. Both JS syntax
+  checks and `git diff --check` exit 0. The help command exits 0.
+- Readiness example: intended exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+The initial sandbox child-test wrapper failed opaquely with `test failed`.
+Direct red execution reported `tests 475`, `pass 396`, `fail 79`; after the
+fix, direct and permitted normal execution both passed all 475 tests. The
+sandbox build failed with `Could not parse output from TypeScript's
+--showConfig.`; an unchanged permitted build passed. Online `ops:audit` remains
+omitted under the standing metadata-disclosure restriction; no fresh audit
+inventory or full aggregate `ops:check` pass is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3456 tests / zero failures**. Final launch/dossier suite:
+`tests 182`, `pass 182`, `fail 0`; readiness suite: `tests 649`, `pass 649`,
+`fail 0`. Every stage's result was inspected. Nonsuite checks report
+`ops template check passed`, `secret/default scan passed`,
+`docker runtime check passed`, license compliance `PASSED`,
+`SAST Gate: PASSED (Zero unreviewed blockers and zero expired suppressions)`,
+and `Container Security Gate: PASSED (All Dockerfiles and Compose templates verified)`.
+These local checks do not supply the omitted online audit or operator live
+acceptance.

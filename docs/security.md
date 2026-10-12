@@ -1168,3 +1168,19 @@ State-transition/cross-field consistency, canonical date grammar, checksum
 validity, operator scope, completeness/authenticity, snapshots, byte integrity,
 resource bounds and hostile in-process objects remain outside scope. Prompt
 201, Category 6 live approval and Phase 12 exit stay open.
+
+**Prompt 311 reconciliation checksum boundary (2026-10-12):** The shared
+inventory validator rejects malformed supplied hex checksums before filters,
+exclusions, pg mapping or injected service acquisition. Optional checksum values
+cannot coerce from objects/primitives or disappear through falsy handling. The
+listing adapter validates its existing optional SHA256 extension as canonical
+base64 of exactly 32 bytes before decoding; malformed later pages reject the
+whole inventory. Fixed helper/listing and sanitized runner errors expose no
+private metadata; failures publish no summary or receipt. Focused **475/475**
+tests and independent review verify this local boundary. Generic whole-byte hex
+lengths, case-insensitive comparison and absent checksum metadata remain valid.
+The installed SDK's standard listing entries expose no digest value; this change
+adds no acquisition or byte-integrity verification. Algorithm semantics,
+completeness/authenticity, snapshots, operator scope, resource limits and hostile
+in-process objects remain outside scope. Prompt 201, Category 6 live operator
+approval and Phase 12 exit stay open.
