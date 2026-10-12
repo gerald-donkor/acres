@@ -930,6 +930,16 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   do not establish authenticity, completeness, byte integrity, atomic snapshots
   or live recovery approval. Prompt 201, Category 6 operator acceptance and
   Phase 12 exit remain open.
+- Reconciliation algorithm safety (prompt 313): supplied non-null DB algorithms
+  require exact primitive `sha256`. Unknown/invalid values cannot hide behind
+  filters/exclusions or missing digests; query/injected inventories fail with
+  sanitized diagnostics and no summary/receipt. Correct source metadata and
+  rerun into a fresh receipt path. Omitted/undefined/null algorithms and existing
+  hex comparison remain supported. Focused **536/536**, all **33 offline stages /
+  3517 tests**, lint/typecheck/build and independent review passed. This validates
+  supplied metadata and adds no byte hashing, authenticity, completeness or
+  atomic-snapshot claim. Prompt 201,
+  Category 6 live recovery approval and Phase 12 exit remain open.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

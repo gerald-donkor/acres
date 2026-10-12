@@ -88,6 +88,14 @@ function validateInventory(objects, database) {
       )
     )
       throw invalid();
+    // Supplied DB algorithms must match the persisted sha256-only contract.
+    if (
+      database &&
+      object.checksumAlgorithm !== undefined &&
+      object.checksumAlgorithm !== null &&
+      object.checksumAlgorithm !== 'sha256'
+    )
+      throw invalid();
     const checksum = object.checksumHex;
     if (
       checksum !== undefined &&

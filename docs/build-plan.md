@@ -2857,3 +2857,25 @@ ordinary revert rollback are in `docs/operations.md` Prompt 312. Readiness stays
 the metadata-disclosure restriction; no full aggregate `ops:check` pass or
 fresh inventory is claimed. No live services, deployment or push occurred.
 Prompt 201, Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 313 — validate reconciliation checksum algorithms (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 312.
+Supplied non-null DB algorithms must be exact primitive `sha256`, reflecting
+the existing migration constraint. Unsupported metadata rejects before filters,
+exclusions, pg normalization or injected clients, with sanitized failures and
+no summary/receipt. Optional omitted/undefined/null algorithms, existing digest
+semantics and frozen ownership remain supported. SQL, CLI, facade, reports,
+listing, publication and Stage 7 stay unchanged. All 497 prior tests plus 39
+regressions pass (**536/536**); lint/typecheck, permitted build (**22/22** pages),
+selected-region formatting, syntax/help and diff checks pass. Independent
+read-only review found no issues and reproduced **536/536**. Full evidence,
+sandbox limits and ordinary revert rollback are in `docs/operations.md`
+Prompt 313. Readiness stays **0 approved / 11 blocked / 70 blockers**; online
+audit remains omitted under the metadata-disclosure restriction, without a
+fresh inventory or aggregate `ops:check` claim. No live service, deployment,
+push or operator approval occurred. Prompt 201, Category 6 live approval and
+Phase 12 exit remain open.
+
+All **33 independent offline operations stages** pass (**27 suite invocations /
+3517 tests / zero failures**, final launch/dossier **182/182**). This does not
+replace the omitted online audit or independently inspected live evidence.

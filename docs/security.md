@@ -1199,3 +1199,17 @@ No SQL/schema, tenancy or publication change occurred. Completeness/authenticity
 byte integrity, snapshots, operator scope, resource bounds and hostile in-process
 objects remain outside scope. Prompt 201, Category 6 live operator approval and
 Phase 12 exit stay open.
+
+**Prompt 313 reconciliation algorithm boundary (2026-10-12):** The shared DB
+inventory validator now requires exact primitive `sha256` for supplied non-null
+algorithm metadata, reflecting the existing migration constraint. Unsupported
+spellings/types reject without coercion before filters/exclusions, pg mapping
+or injected clients, including records without digests. Fixed helper and
+sanitized query/runner diagnostics expose no private algorithm or identity;
+failure publishes no summary/receipt. Optional omitted/undefined/null values,
+existing generic hex lengths/comparison and frozen ownership remain supported.
+Focused **536/536** tests and independent review verify this local boundary.
+No SQL/schema, tenancy, listing or publication change occurred. No content
+hashing was added; byte integrity, completeness/authenticity, snapshots,
+operator scope, resource bounds and hostile in-process objects remain outside
+scope. Prompt 201, Category 6 live operator approval and Phase 12 exit stay open.

@@ -27,6 +27,304 @@ const inventoryDbRecord = (overrides = {}) => ({
 
 const inventoryError = /^(Database|Storage) inventory is invalid$/;
 
+const invalidChecksumAlgorithms = [
+  ['unsupported', 'md5'],
+  ['private value', 'private-algorithm-sentinel'],
+  ['case variant', 'SHA256'],
+  ['whitespace variant', ' sha256 '],
+  ['empty', ''],
+  ['boolean', false],
+  ['number', 0],
+  ['bigint', 0n],
+  ['array', ['sha256']],
+  ['object', {}],
+  ['boxed string', new String('sha256')],
+  ['symbol', Symbol('private-algorithm')],
+  [
+    'coercible object',
+    {
+      toString() {
+        throw new Error('private-coercion-must-not-run');
+      },
+    },
+  ],
+];
+
+for (const [label, checksumAlgorithm] of invalidChecksumAlgorithms) {
+  test(`reconcileObjects: rejects ${label} checksum algorithm before a clean match`, () => {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          dbObjects: [
+            inventoryDbRecord({ checksumAlgorithm, checksumHex: 'aBcD' }),
+          ],
+          storageObjects: [
+            { key: 'fixture-key', byteCount: 1, checksumHex: 'abcd' },
+          ],
+        }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const [label, patch, options] of [
+  ['bucket', { bucket: 'private-other' }, { bucket: 'acres-quarantine' }],
+  [
+    'organization',
+    { organizationId: 'private-other' },
+    { organizationId: 'fixture-org' },
+  ],
+  ['prefix', {}, { prefix: 'other/' }],
+  ['ignore', {}, { ignorePatterns: [/^fixture-/] }],
+  ['pending', { state: 'pending_upload' }, {}],
+  ['deleted', { deletedAt: '2026-01-01' }, {}],
+  ['expired', { uploadState: 'expired' }, {}],
+  ['quarantine', { state: 'quarantined' }, { excludeQuarantined: true }],
+]) {
+  test(`reconcileObjects: invalid checksum algorithm cannot hide behind ${label} without a digest`, () => {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          dbObjects: [
+            inventoryDbRecord({
+              id: 'first',
+              objectKey: 'first',
+              checksumAlgorithm: 'sha256',
+            }),
+            inventoryDbRecord({
+              ...patch,
+              checksumAlgorithm: 'private-algorithm-sentinel',
+            }),
+          ],
+          options,
+        }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const [label, algorithmPatch] of [
+  ['omitted', {}],
+  ['undefined', { checksumAlgorithm: undefined }],
+  ['null', { checksumAlgorithm: null }],
+  ['sha256', { checksumAlgorithm: 'sha256' }],
+]) {
+  for (const digestPatch of [
+    {},
+    { checksumHex: null },
+    { checksumHex: 'aBcD' },
+  ]) {
+    test(`reconcileObjects: optional algorithm ${label} accepts digest ${String(digestPatch.checksumHex)}`, () => {
+      const dbObjects = Object.freeze([
+        Object.freeze(inventoryDbRecord({ ...algorithmPatch, ...digestPatch })),
+      ]);
+      const storageObjects = Object.freeze([
+        Object.freeze({
+          key: 'fixture-key',
+          byteCount: 1,
+          checksumHex: 'abcd',
+        }),
+      ]);
+      const report = reconcileObjects({ dbObjects, storageObjects });
+      assert.strictEqual(report.summary.status, 'clean');
+      assert.strictEqual(report.summary.matchedObjects, 1);
+      assert.deepStrictEqual(
+        dbObjects[0],
+        inventoryDbRecord({ ...algorithmPatch, ...digestPatch }),
+      );
+      assert.deepStrictEqual(storageObjects[0], {
+        key: 'fixture-key',
+        byteCount: 1,
+        checksumHex: 'abcd',
+      });
+    });
+  }
+}
+
+test('queryDatabaseStoredObjects: invalid later checksum algorithm rejects whole result', async () => {
+  let queries = 0;
+  await assert.rejects(
+    queryDatabaseStoredObjects({
+      pgClient: {
+        async query() {
+          queries++;
+          return {
+            rows: [
+              inventoryDbRecord({
+                id: 'first',
+                objectKey: 'first',
+                checksumAlgorithm: 'sha256',
+              }),
+              inventoryDbRecord({
+                checksumAlgorithm: 'private-algorithm-sentinel',
+              }),
+            ],
+          };
+        },
+      },
+    }),
+    { message: 'Database inventory is invalid' },
+  );
+  assert.strictEqual(queries, 1);
+});
+
+test('queryDatabaseStoredObjects: preserves optional algorithms and valid digest spelling', async () => {
+  const rows = Object.freeze(
+    [{}, { checksumAlgorithm: null }, { checksumAlgorithm: 'sha256' }].map(
+      (patch, i) =>
+        Object.freeze(
+          inventoryDbRecord({
+            id: `row-${i}`,
+            objectKey: `key-${i}`,
+            byteCount: '1',
+            checksumHex: 'aBcD',
+            ...patch,
+          }),
+        ),
+    ),
+  );
+  const result = await queryDatabaseStoredObjects({
+    pgClient: { query: async () => ({ rows }) },
+  });
+  assert.deepStrictEqual(
+    result,
+    rows.map((row) => ({ ...row, byteCount: 1n })),
+  );
+  assert.ok(
+    rows.every((row) => row.byteCount === '1' && row.checksumHex === 'aBcD'),
+  );
+});
+
+for (const injectedStorage of [true, false]) {
+  test(`main: invalid injected checksum algorithm rejects before clients (storage injected: ${injectedStorage})`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-algorithm-'));
+    try {
+      let touched = false;
+      const touch = async () => {
+        touched = true;
+        throw new Error('private-client');
+      };
+      const io = createIo();
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        {
+          env: {},
+          dbObjects: [
+            inventoryDbRecord({
+              checksumAlgorithm: 'private-algorithm-sentinel',
+            }),
+          ],
+          ...(injectedStorage ? { storageObjects: [] } : {}),
+          pgClient: { connect: touch, query: touch },
+          s3Client: { send: touch },
+        },
+      );
+      assert.strictEqual(code, 1);
+      assert.strictEqual(touched, false);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Reconciliation execution failed',
+      ]);
+      assert.deepStrictEqual(io.logs, []);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: queried invalid checksum algorithm rejects before storage and publication', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-algorithm-query-'));
+  try {
+    const io = createIo();
+    let queries = 0;
+    let storageTouched = false;
+    const code = await main(
+      [
+        'node',
+        'script',
+        '--dry-run',
+        '--output',
+        path.join(dir, 'receipt.json'),
+      ],
+      io,
+      {
+        env: {},
+        pgClient: {
+          async query() {
+            queries++;
+            return {
+              rows: [
+                inventoryDbRecord({
+                  checksumAlgorithm: 'private-algorithm-sentinel',
+                }),
+              ],
+            };
+          },
+        },
+        s3Client: {
+          async send() {
+            storageTouched = true;
+            throw new Error('private-storage');
+          },
+        },
+      },
+    );
+    assert.strictEqual(code, 1);
+    assert.strictEqual(queries, 1);
+    assert.strictEqual(storageTouched, false);
+    assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+    assert.deepStrictEqual(io.logs, [
+      'Connecting to PostgreSQL and Object Storage...',
+    ]);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main: explicit sha256 metadata publishes existing simulation receipt', async () => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'acres-algorithm-success-'),
+  );
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const code = await main(
+      ['node', 'script', '--dry-run', '--output', target],
+      io,
+      {
+        env: {},
+        dbObjects: [
+          inventoryDbRecord({
+            checksumAlgorithm: 'sha256',
+            checksumHex: 'aBcD',
+          }),
+        ],
+        storageObjects: [
+          { key: 'fixture-key', byteCount: 1, checksumHex: 'abcd' },
+        ],
+      },
+    );
+    assert.strictEqual(code, 0);
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.drill_type, 'storage_reconciliation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // StoredObject.objectKey is globally unique, including across buckets/tenants.
 const duplicateKeyRows = (patch = {}) => [
   inventoryDbRecord({

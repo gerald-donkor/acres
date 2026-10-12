@@ -7882,3 +7882,89 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 313 — validate reconciliation checksum algorithms (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 312
+(`f5a131c`). Shared DB inventory validation now accepts only exact primitive
+`sha256` when `checksumAlgorithm` is supplied and non-null. This reflects the
+existing migration's `StoredObject_checksumAlgorithm_check`; no SQL or schema
+change was needed. Unsupported algorithms, case/whitespace variants, empty
+strings and nonstring/coercible values reject without conversion, even without
+a digest. Validation precedes filtering, lifecycle exclusions, pg normalization
+and injected client acquisition. Existing value-free helper and sanitized
+query/runner errors produce no summary, success message or receipt on failure.
+
+The synthetic planning probe previously returned `status: 'clean'`,
+`matchedObjects: 1`, `exitCode: 0` for matching metadata declaring `md5`; the
+query adapter accepted that row too. This demonstrates local contradictory
+input acceptance, not a production incident or a PostgreSQL constraint failure.
+All 497 prior tests remain; 39 regressions cover invalid types/spellings,
+exclusion bypass attempts, whole-query rejection, untouched clients and no
+publication, valid frozen inputs and successful simulation evidence.
+
+### Compatibility, review and limits
+
+Omitted, undefined and null algorithms retain the utility's optional-field
+contract. Exact `sha256` works with absent/null digests and existing generic
+whole-byte hex lengths and case-insensitive comparison. Valid query mapping
+preserves algorithm/hex spelling and converts counts to bigint without mutating
+frozen caller inventories. Storage records have no algorithm field in the public
+contract. CLI, SQL, facade/signatures, report schema/modes, listing, publication,
+dependencies and Stage 7 remain unchanged. No digest acquisition or hashing was
+added; supplied algorithm validation does not attest object-byte integrity.
+
+Independent read-only review found no Critical, Important or Minor issues or
+plan defects and reproduced `tests 536`, `pass 536`, `fail 0` and clean diff
+checks. Feedback was evaluated against the actual validator, optional facade
+contract and migration; no fixes or significant re-review were necessary.
+Operator scope, authenticity/completeness, atomic DB/S3 snapshots, byte
+integrity, resource/network bounds and hostile in-process objects remain outside
+this boundary. No live database/storage service or operator evidence was
+inspected. Prompt 201, Category 6 live recovery approval and Phase 12 exit remain
+open. Ordinary commit revert rolls back validation/tests/docs together without
+migration or storage mutation. No deployment or push occurred.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 536`, `pass 536`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0.
+- `npm run typecheck`: shared/client TypeScript checks and server
+  `prisma generate && tsc -p tsconfig.json --noEmit`; exit 0.
+- Permitted `npm run build`: `Compiled successfully in 6.8s`,
+  `Generating static pages using 7 workers (22/22) in 1743ms`, followed by
+  `prisma generate && nest build`; exit 0.
+- Selected-region Prettier: `New regression block formatting: true`,
+  `Shared validator formatting: true`. Both JS syntax checks, CLI help and
+  `git diff --check` exit 0.
+- Readiness example: intended exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+The sandbox npm test wrapper failed opaquely with `test failed`; direct red
+execution reported `tests 536`, `pass 511`, `fail 25`. After the validator
+change, direct and permitted normal execution passed all 536 tests. Final direct
+execution also passed after making omitted/undefined test labels distinct.
+The sandbox build failed with `Could not parse output from TypeScript's
+--showConfig.`; the unchanged permitted build passed. Online `ops:audit` remains
+omitted under the standing metadata-disclosure restriction; no fresh
+vulnerability inventory or aggregate `ops:check` success is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3517 tests / zero failures**. Every stage result was inspected.
+The final launch/dossier suite reports `tests 182`, `pass 182`, `fail 0`;
+readiness reports `tests 649`, `pass 649`, `fail 0`. Nonsuite checks report
+`ops template check passed`, `secret/default scan passed`, `docker runtime
+check passed`, license compliance `PASSED`, `SAST Gate: PASSED (Zero unreviewed
+blockers and zero expired suppressions)`, and `Container Security Gate: PASSED
+(All Dockerfiles and Compose templates verified)`. These checks do not supply
+online audit results or live operator acceptance.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
