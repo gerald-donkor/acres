@@ -2791,3 +2791,24 @@ aggregate `ops:check` pass or fresh vulnerability count is claimed. Prompt 201,
 Category 6 live approval and Phase 12 exit remain open.
 All **33 independent offline operations stages** passed (**27 suite
 invocations / 3262 tests / zero failures**, final launch/dossier **182/182**).
+
+**Prompt 310 — validate reconciliation lifecycle metadata (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 309.
+The shared inventory boundary now validates required DB states, optional upload
+states and optional DB/storage dates before filters/exclusions can conceal bad
+evidence. Ordinary objects and primitives cannot coerce into lifecycle metadata;
+helper/runner errors remain value-free, with no summary or receipt on failure.
+Valid optional metadata, Date/string forms, epoch zero, retention boundaries,
+future-date policy and caller ownership remain supported. SQL, signatures,
+facade, CLI, report/mode, checksum policy, publication and Stage 7 caller stay
+unchanged. All 281 prior tests plus 96 regressions pass (**377/377**); lint,
+typecheck, permitted build (**22/22** pages), changed-region formatting, syntax
+and diff checks pass. Independent read-only review found no issues and
+reproduced **377/377**. Fixtures, compatibility, actual outputs, sandbox limits
+and ordinary revert rollback are in `docs/operations.md` Prompt 310.
+Readiness remains **0 approved / 11 blocked / 70 blockers**. All **33 independent
+offline operations stages** passed (**27 suite invocations / 3358 tests / zero
+failures**, final launch/dossier **182/182**). Online audit remains omitted under
+the metadata-disclosure restriction; no fresh inventory or aggregate
+`ops:check` pass is claimed. No live services, deployment or push occurred.
+Prompt 201, Category 6 live operator approval and Phase 12 exit remain open.

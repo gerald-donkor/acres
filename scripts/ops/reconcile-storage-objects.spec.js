@@ -27,6 +27,343 @@ const inventoryDbRecord = (overrides = {}) => ({
 
 const inventoryError = /^(Database|Storage) inventory is invalid$/;
 
+const invalidLifecycleStates = [
+  ['undefined', undefined],
+  ['null', null],
+  ['empty', ''],
+  ['whitespace', ' '],
+  ['unknown', 'private-state-sentinel'],
+  ['case', 'Accepted'],
+  ['number', 0],
+  ['boolean', false],
+  ['array', ['accepted']],
+  ['object', {}],
+  ['boxed string', new String('accepted')],
+];
+
+for (const field of ['state', 'uploadState']) {
+  for (const [label, value] of invalidLifecycleStates) {
+    if (field === 'uploadState' && value == null) continue;
+    test(`reconcileObjects: rejects lifecycle ${field} ${label} in matching inventory`, () => {
+      assert.throws(
+        () =>
+          reconcileObjects({
+            dbObjects: [inventoryDbRecord({ [field]: value })],
+            storageObjects: [{ key: 'fixture-key', byteCount: 1 }],
+          }),
+        { message: 'Database inventory is invalid' },
+      );
+    });
+  }
+}
+
+const lifecycleDateFields = [
+  ['dbObjects', 'createdAt'],
+  ['dbObjects', 'deletedAt'],
+  ['dbObjects', 'uploadExpiresAt'],
+  ['storageObjects', 'lastModified'],
+];
+const invalidLifecycleDates = [
+  ['empty', ''],
+  ['whitespace', ' '],
+  ['unknown', 'private-date-sentinel'],
+  ['invalid Date', new Date(NaN)],
+  ['zero number', 0],
+  ['epoch number', 1791763200000],
+  ['true', true],
+  ['false', false],
+  ['array', ['2026-10-12T00:00:00Z']],
+  ['object', {}],
+  ['boxed string', new String('2026-10-12T00:00:00Z')],
+];
+
+for (const [side, field] of lifecycleDateFields) {
+  for (const [label, value] of invalidLifecycleDates) {
+    test(`reconcileObjects: rejects lifecycle ${field} ${label} before clean report`, () => {
+      const dbObjects = [inventoryDbRecord()];
+      const storageObjects = [{ key: 'fixture-key', byteCount: 1 }];
+      (side === 'dbObjects' ? dbObjects : storageObjects)[0][field] = value;
+      assert.throws(() => reconcileObjects({ dbObjects, storageObjects }), {
+        message:
+          side === 'dbObjects'
+            ? 'Database inventory is invalid'
+            : 'Storage inventory is invalid',
+      });
+    });
+  }
+  test(`reconcileObjects: does not coerce lifecycle ${field} objects`, () => {
+    let coerced = false;
+    const value = {
+      toString() {
+        coerced = true;
+        return '2026-10-12T00:00:00Z';
+      },
+    };
+    const row =
+      side === 'dbObjects'
+        ? inventoryDbRecord({ [field]: value })
+        : { key: 'fixture-key', [field]: value };
+    assert.throws(() => reconcileObjects({ [side]: [row] }), {
+      message: inventoryError,
+    });
+    assert.strictEqual(coerced, false);
+  });
+}
+
+for (const deletedAt of [true, 'private-deletion-sentinel']) {
+  test(`reconcileObjects: malformed deletion ${typeof deletedAt} cannot conceal a missing object`, () => {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          dbObjects: [inventoryDbRecord({ deletedAt })],
+          storageObjects: [],
+        }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const [label, patch, options] of [
+  ['bucket', { bucket: 'other' }, { bucket: 'acres-quarantine' }],
+  [
+    'organization',
+    { organizationId: 'other' },
+    { organizationId: 'fixture-org' },
+  ],
+  ['prefix', {}, { prefix: 'other/' }],
+  ['ignore', { objectKey: '.keep' }, {}],
+  ['pending', { state: 'pending_upload' }, {}],
+  ['deleted', { state: 'deleted' }, {}],
+  ['expired', { uploadState: 'expired' }, {}],
+  ['quarantine', { state: 'quarantined' }, { excludeQuarantined: true }],
+]) {
+  test(`reconcileObjects: malformed lifecycle cannot hide behind ${label}`, () => {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          dbObjects: [inventoryDbRecord({ ...patch, createdAt: true })],
+          options,
+        }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const options of [{}, { prefix: 'other/' }]) {
+  test(`reconcileObjects: ignored or filtered storage lifecycle still rejects (${Object.keys(options).length})`, () => {
+    assert.throws(
+      () =>
+        reconcileObjects({
+          storageObjects: [{ key: '.keep', lastModified: false }],
+          options,
+        }),
+      { message: 'Storage inventory is invalid' },
+    );
+  });
+}
+
+for (const [side, field] of lifecycleDateFields) {
+  test(`reconcileObjects: preserves optional and valid lifecycle ${field} without mutation`, () => {
+    const epoch = Object.freeze(new Date(0));
+    for (const value of [
+      undefined,
+      null,
+      epoch,
+      Object.freeze(new Date('2026-10-12T00:00:00Z')),
+      '1970-01-01T00:00:00Z',
+      '2026-10-12T01:00:00+01:00',
+      'October 12, 2026 00:00:00 GMT',
+    ]) {
+      const row = Object.freeze(
+        side === 'dbObjects'
+          ? inventoryDbRecord({ [field]: value, extension: 'ignored' })
+          : { key: 'fixture-key', byteCount: 1, [field]: value },
+      );
+      const records = Object.freeze([row]);
+      const report = reconcileObjects({
+        dbObjects: side === 'dbObjects' ? records : [inventoryDbRecord()],
+        storageObjects:
+          side === 'storageObjects'
+            ? records
+            : [{ key: 'fixture-key', byteCount: 1 }],
+      });
+      assert.strictEqual(report.summary.status, 'clean');
+      assert.strictEqual(
+        report.summary.pendingOrDeletedExcluded,
+        field === 'deletedAt' && value != null ? 1 : 0,
+      );
+      assert.strictEqual(row[field], value);
+      if (side === 'storageObjects') {
+        const orphan = reconcileObjects({ storageObjects: records }).orphans[0];
+        assert.strictEqual(orphan.lastModified, value ?? null);
+      }
+    }
+    assert.strictEqual(epoch.getTime(), 0);
+  });
+}
+
+test('reconcileObjects: preserves every valid StoredObjectState', () => {
+  for (const state of [
+    'pending_upload',
+    'quarantined',
+    'accepted',
+    'rejected',
+    'deleted',
+  ]) {
+    const report = reconcileObjects({
+      dbObjects: [inventoryDbRecord({ state })],
+      storageObjects: [{ key: 'fixture-key', byteCount: 1 }],
+    });
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(
+      report.summary.pendingOrDeletedExcluded,
+      ['pending_upload', 'deleted'].includes(state) ? 1 : 0,
+    );
+  }
+});
+
+test('reconcileObjects: preserves every optional and valid UploadState', () => {
+  for (const uploadState of [
+    undefined,
+    null,
+    'pending_upload',
+    'completed',
+    'scanning',
+    'accepted',
+    'rejected',
+    'cancelled',
+    'expired',
+  ]) {
+    const report = reconcileObjects({
+      dbObjects: [inventoryDbRecord({ state: 'pending_upload', uploadState })],
+      storageObjects: [{ key: 'fixture-key', byteCount: 1 }],
+    });
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(
+      report.summary.pendingOrDeletedExcluded,
+      uploadState == null ||
+        ['pending_upload', 'cancelled', 'expired'].includes(uploadState)
+        ? 1
+        : 0,
+    );
+  }
+});
+
+test('reconcileObjects: preserves quarantine boundary and future-date policy', () => {
+  for (const [createdAt, excluded] of [
+    ['2026-10-05T23:59:59.999Z', 0],
+    ['2026-10-06T00:00:00Z', 1],
+    ['2026-10-12T00:00:00Z', 1],
+    ['2026-10-14T00:00:00Z', 1],
+  ]) {
+    for (const value of [createdAt, new Date(createdAt)]) {
+      const report = reconcileObjects({
+        dbObjects: [
+          inventoryDbRecord({ state: 'quarantined', createdAt: value }),
+        ],
+        storageObjects: [],
+        options: { now: '2026-10-13T00:00:00Z' },
+      });
+      assert.strictEqual(report.summary.pendingOrDeletedExcluded, excluded);
+      assert.strictEqual(report.summary.missingObjects, 1 - excluded);
+    }
+  }
+});
+
+for (const patch of [
+  { state: undefined },
+  { state: 'private-state-sentinel' },
+  { uploadState: ['expired'] },
+  { createdAt: new Date(NaN) },
+  { deletedAt: true },
+  { uploadExpiresAt: 'private-date-sentinel' },
+]) {
+  test(`queryDatabaseStoredObjects: rejects later malformed lifecycle ${Object.keys(patch)[0]}`, async () => {
+    await assert.rejects(
+      queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () => ({
+            rows: [
+              inventoryDbRecord(),
+              inventoryDbRecord({ id: 'later', ...patch }),
+            ],
+          }),
+        },
+      }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const [label, injected, expectedError] of [
+  [
+    'injected DB',
+    { dbObjects: [inventoryDbRecord({ deletedAt: 'private-date-sentinel' })] },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'injected storage',
+    { storageObjects: [{ key: 'fixture-key', lastModified: false }] },
+    'Error: Reconciliation execution failed',
+  ],
+  [
+    'query DB',
+    {
+      pgClient: {
+        query: async () => ({
+          rows: [inventoryDbRecord({ state: 'private-state-sentinel' })],
+        }),
+      },
+    },
+    'Error: Database query failed',
+  ],
+]) {
+  test(`main: invalid lifecycle ${label} fails without acquisition or publication`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-lifecycle-'));
+    const io = createIo();
+    let acquisitions = 0;
+    try {
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        {
+          env: {},
+          pgClient: {
+            connect: async () => {
+              acquisitions++;
+            },
+          },
+          s3Client: {
+            send: async () => {
+              acquisitions++;
+            },
+          },
+          ...injected,
+        },
+      );
+      assert.strictEqual(code, 1);
+      assert.strictEqual(acquisitions, 0);
+      assert.deepStrictEqual(io.errors, [expectedError]);
+      assert.deepStrictEqual(
+        io.logs,
+        label === 'query DB'
+          ? ['Connecting to PostgreSQL and Object Storage...']
+          : [],
+      );
+      assert.ok(![...io.logs, ...io.errors].join('\n').includes('private-'));
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
 const invalidComparisonOptions = [
   ['null options', null],
   ['array options', []],

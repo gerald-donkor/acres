@@ -1153,3 +1153,18 @@ inventory contracts unchanged. Inventory state/date/checksum validation,
 operator scope, completeness, byte integrity, snapshots, regex/resource limits
 and hostile in-process objects remain outside this boundary. Prompt 201,
 Category 6 live approval and Phase 12 exit stay open.
+
+**Prompt 310 reconciliation lifecycle boundary (2026-10-12):** The shared
+inventory validator now rejects malformed required DB states, optional upload
+states and optional lifecycle dates before filtering/exclusion, pg row mapping
+or injected service acquisition. Truthy invalid deletion markers cannot hide
+missing objects. Date parsing admits only valid Date objects or nonempty
+parsable strings; ordinary objects and primitives are not coerced. Fixed
+value-free helper and sanitized runner/query errors avoid reflecting private
+metadata; failures publish no summary or receipt. Valid nullable/omitted dates,
+enum values, retention/future-date policy and caller ownership remain supported.
+The focused **377/377** tests and independent review verify this local boundary.
+State-transition/cross-field consistency, canonical date grammar, checksum
+validity, operator scope, completeness/authenticity, snapshots, byte integrity,
+resource bounds and hostile in-process objects remain outside scope. Prompt
+201, Category 6 live approval and Phase 12 exit stay open.

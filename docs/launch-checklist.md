@@ -897,6 +897,17 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   invalid policy and rerun into a fresh receipt path; valid filters/exclusions
   still require operator scope review. These offline tests do not supply live
   recovery approval, authenticity, snapshot consistency or byte integrity.
+- Reconciliation lifecycle safety (prompt 310): required DB states, optional
+  upload states and optional DB/storage dates validate before filters or
+  exclusions. Malformed deletion markers cannot conceal missing objects;
+  arbitrary objects/primitives do not coerce into dates. Invalid query/injected
+  inventories fail with sanitized diagnostics and no summary or receipt.
+  Investigate the source metadata and use a fresh receipt path after correction.
+  Optional dates, valid Date/string forms and valid exclusion policy remain
+  supported. This does not establish state-transition consistency, checksum or
+  byte integrity, inventory completeness, atomic snapshots or live acceptance.
+  Focused **377/377**, all **33 offline stages / 3358 tests**, lint/typecheck/
+  build and independent review passed; operator sign-off remains open.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

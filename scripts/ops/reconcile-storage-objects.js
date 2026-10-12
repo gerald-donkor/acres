@@ -21,6 +21,34 @@ const DEFAULT_IGNORE_PATTERNS = [
 const isInventoryRecord = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
+// Keep these lifecycle values aligned with the Prisma inventory enums.
+const STORED_OBJECT_STATES = [
+  'pending_upload',
+  'quarantined',
+  'accepted',
+  'rejected',
+  'deleted',
+];
+const UPLOAD_STATES = [
+  'pending_upload',
+  'completed',
+  'scanning',
+  'accepted',
+  'rejected',
+  'cancelled',
+  'expired',
+];
+
+function isOptionalInventoryDate(value) {
+  if (value === undefined || value === null) return true;
+  if (value instanceof Date) return Number.isFinite(value.getTime());
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    Number.isFinite(new Date(value).getTime())
+  );
+}
+
 function validateInventory(objects, database) {
   const invalid = () =>
     new Error(`${database ? 'Database' : 'Storage'} inventory is invalid`);
@@ -53,6 +81,20 @@ function validateInventory(objects, database) {
         (typeof count === 'string' && /^[0-9]+$/.test(count))
       )
     )
+      throw invalid();
+    // Validate before filters or lifecycle exclusions can conceal bad evidence.
+    if (
+      database &&
+      (!STORED_OBJECT_STATES.includes(object.state) ||
+        (object.uploadState !== undefined &&
+          object.uploadState !== null &&
+          !UPLOAD_STATES.includes(object.uploadState)))
+    )
+      throw invalid();
+    const dateFields = database
+      ? ['createdAt', 'deletedAt', 'uploadExpiresAt']
+      : ['lastModified'];
+    if (dateFields.some((field) => !isOptionalInventoryDate(object[field])))
       throw invalid();
   }
 }

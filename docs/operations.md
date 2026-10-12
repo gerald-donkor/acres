@@ -7600,3 +7600,96 @@ reports `tests 182`, `pass 182`, `fail 0`; the readiness suite reports
 and `Container Security Gate: PASSED (All Dockerfiles and Compose templates verified)`.
 Every offline stage ran separately with its output inspected; the omitted
 online audit and operator acceptance remain outstanding.
+
+## Prompt 310 — validate reconciliation lifecycle metadata (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 309
+(`f79fe5c`). The shared reconciliation inventory boundary now requires the
+database's five exact `StoredObjectState` values and validates optional
+`uploadState` against the seven `UploadState` values in the Prisma schema.
+Database `createdAt`, `deletedAt`, `uploadExpiresAt` and storage `lastModified`
+accept absent/null metadata, valid Date objects or nonempty parsable date
+strings with finite epoch milliseconds. Invalid Dates, unknown states, empty
+strings, boxed strings, numbers, booleans, arrays and ordinary objects reject
+without coercion. Errors remain fixed and value-free: `Database inventory is
+invalid` / `Storage inventory is invalid`.
+
+Validation runs before filtering or lifecycle exclusions, through the same
+boundary already used by the pure comparison, pg row adapter and injected
+runner. Later invalid query rows reject the entire result; invalid injected
+inventories fail before service acquisition. Runner/query failure diagnostics
+remain sanitized and failures publish no summary, success log, staging artifact
+or receipt.
+
+Offline planning probes returned `clean` with one excluded missing accepted
+object for both `deletedAt: true` and an unparseable deletion-date string.
+Unknown states, array upload states and invalid creation dates reached
+comparison instead of rejecting. These fixtures demonstrate the validation gap;
+they are not production-incident evidence.
+
+### Compatibility, review and limits
+
+All 281 prior regressions remain; 96 new tests cover malformed lifecycle inputs,
+rejection before filters/exclusions, later malformed query rows, runner failure,
+valid enum values, optional metadata, Date/string representations, epoch zero,
+quarantine retention boundaries, future dates and frozen caller objects. Broad
+Date string parsing remains supported; timestamps and caller records are not
+normalized or mutated. Unknown extension fields remain ignored. The stricter
+runtime rejection of malformed lifecycle inputs is intentional.
+
+Valid pending/deleted/expired/cancelled/quarantine exclusions retain their
+existing behavior. Missing creation dates are still optional; future quarantine
+creation dates still fall within the existing retention policy. No SQL,
+signatures, TypeScript facade, CLI flags, report schema/modes, checksum policy,
+receipt publication, Stage 7 caller, dependencies or application modules changed.
+
+Independent read-only review found no Critical, Important or Minor findings and
+reproduced `377 passed, 0 failed` plus clean diff checks. Feedback was verified
+against the approved prompt and actual diff; no fixes or re-review were needed.
+
+This boundary does not enforce state transitions or cross-field consistency,
+canonical timestamp grammar, checksum metadata validity, inventory authenticity
+or completeness, correct operator scope, byte integrity, atomic DB/S3 snapshots,
+network/resource bounds or hostile in-process overrides/getters/proxies and
+cross-realm objects. No live service or operator evidence was inspected. Prompt
+201, Category 6 live approval and Phase 12 exit remain open. Ordinary commit
+revert restores prior validation without migration or storage mutation. No push
+or deployment occurred.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 377`, `pass 377`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0, no diagnostics.
+- `npm run typecheck`: shared `tsc -p tsconfig.json --noEmit`, client
+  `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`;
+  Prisma Client `7.9.1` generated; exit 0, no TypeScript diagnostics.
+- Permitted `npm run build`: `Compiled successfully in 4.1s`,
+  `Generating static pages using 7 workers (22/22) in 1081ms`, then
+  `prisma generate && nest build`; exit 0.
+- Changed-region Prettier comparisons report `true` for the new test block,
+  JS helpers/constants and validation block. Both JS syntax checks and
+  `git diff --check` exit 0. The help command exits 0.
+- Readiness example: intended exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+The sandbox child-test wrapper failed with `test failed`. Direct execution
+exposed the intended red assertions (`tests 377`, `pass 288`, `fail 89`), then
+passed after the fix; the normal permitted test wrapper also passed. The
+sandbox build failed with `Could not parse output from TypeScript's
+--showConfig.`; an unchanged permitted build passed. Online `ops:audit` remains
+omitted under the standing metadata-disclosure restriction. No fresh audit
+inventory or aggregate `ops:check` pass is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3358 tests / zero failures**. Final launch/dossier suite:
+`tests 182`, `pass 182`, `fail 0`; readiness suite: `tests 649`, `pass 649`,
+`fail 0`. Every stage's output was inspected. Nonsuite checks report
+`ops template check passed`, `secret/default scan passed`,
+`docker runtime check passed`, license compliance `PASSED`,
+`SAST Gate: PASSED (Zero unreviewed blockers and zero expired suppressions)`,
+and `Container Security Gate: PASSED (All Dockerfiles and Compose templates verified)`.
+These local checks do not supply the omitted online audit or operator live
+acceptance.
