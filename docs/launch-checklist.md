@@ -871,6 +871,17 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Database inventory command consistency (prompt 330): any defined command
+  from the completed inventory SELECT must be exact primitive SELECT.
+  Other/malformed tags reject whole results with fixed diagnostics, zero S3
+  requests and no summary/receipt. Omitted/undefined tags retain adapter
+  compatibility; SELECT cannot excuse invalid rows or contradictory counts.
+  Investigate query-result consistency and rerun into a fresh receipt path.
+  Focused **1299/1299**, independent review, repository checks and **33 offline
+  stages / 4280 tests** passed. Command consistency cannot authenticate metadata,
+  prove completeness or verify object bytes. Prompt 201 and Category 6 live
+  recovery approval remain open.
+
 - Database inventory row-count consistency (prompt 329): any defined rowCount
   from the completed inventory SELECT must be a nonnegative safe integer
   exactly equal to buffered rows.length. Invalid/contradictory counts reject

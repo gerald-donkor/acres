@@ -571,6 +571,9 @@ async function queryDatabaseStoredObjects({ pgClient }) {
   const result = await pgClient.query(query);
   if (!isInventoryRecord(result)) throw new Error('Database inventory is invalid');
   validateInventory(result.rows, true);
+  // This adapter's inventory comes from one completed SELECT.
+  if (result.command !== undefined && result.command !== 'SELECT')
+    throw new Error('Database inventory is invalid');
   // A completed SELECT count must agree with the buffered inventory rows.
   if (
     result.rowCount !== undefined &&

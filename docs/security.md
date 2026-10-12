@@ -1435,3 +1435,14 @@ boundary. No SQL, checksum rules or receipt schema changed. Count consistency
 and clean comparisons do not establish authenticity, complete inventories,
 object byte integrity, atomic snapshots or live recovery. Prompt 201, Category 6
 live approval and Phase 12 exit remain open.
+
+**Prompt 330 database inventory command consistency (2026-10-12):**
+Defined command metadata from the completed inventory SELECT must be exact
+primitive SELECT. Other/malformed tags reject whole results before conversion,
+S3 requests or publication, without coercion and with fixed diagnostics.
+Omitted/undefined metadata retains adapter compatibility; matching SELECT
+cannot excuse invalid rows or contradictory counts. Focused **1299/1299** and
+independent read-only review verify this existing adapter boundary. SQL and
+receipt schema are unchanged. Command consistency cannot authenticate metadata,
+prove inventory completeness, verify object bytes or establish atomic snapshots
+or live recovery. Prompt 201, Category 6 live approval and Phase 12 exit stay open.

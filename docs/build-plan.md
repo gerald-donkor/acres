@@ -3180,3 +3180,21 @@ blocked / 70 blockers**. Online audit remains omitted; no aggregate ops:check
 or fresh vulnerability inventory is claimed. No live services, operator
 approval, deployment or push occurred. Prompt 201, Category 6 live recovery
 approval and Phase 12 exit stay open.
+
+**Prompt 330 — validate database inventory command tags (2026-10-12):**
+Continued Phase 12K after committed Prompt 329. Defined command metadata from
+the completed inventory SELECT must be exact primitive SELECT. Other/malformed
+tags reject whole results before conversion, S3 requests or publication, with
+fixed diagnostics and no coercion. Omitted/undefined metadata preserves adapter
+compatibility; valid SELECT cannot excuse invalid rows or contradictory counts.
+SQL, storage, comparison, receipt schema and Stage 7 remain unchanged. Focused
+**1299/1299**, lint/typecheck, permitted build (**22/22** pages), formatting/
+syntax/help/diff and **33 offline stages / 27 suite invocations / 4280 tests /
+zero failures or skipped** passed. Independent read-only review found no issues
+or implementation deviations; its restricted file-level test did not independently
+reproduce case totals. Actual red/green evidence, driver semantics, compatibility,
+sandbox limits and ordinary revert rollback are in docs/operations.md Prompt 330.
+Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit remains
+omitted; no aggregate ops:check or fresh vulnerability inventory is claimed. No
+live services, operator approval, deployment or push occurred. Prompt 201,
+Category 6 live recovery approval and Phase 12 exit remain open.

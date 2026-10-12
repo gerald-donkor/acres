@@ -9418,3 +9418,111 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 330 — validate database inventory command tags (2026-10-12)
+
+Continued Phase 12K after committed Prompt 329 (`b3ac3d6`), under the user's
+instruction to implement the prepared plan. The fresh synthetic pre-change
+probe returned:
+
+```text
+{"command":"DELETE","accepted":0}
+```
+
+After existing result/row validation and before conversion,
+queryDatabaseStoredObjects now requires any defined command to be exact
+primitive SELECT. Other commands, null, malformed strings and nonstrings
+reject whole inventories without coercion, using the existing fixed error.
+The same probe now returns:
+
+```text
+{"rejected":true,"error":"Database inventory is invalid"}
+```
+
+Installed pg/lib/result.js initializes command to null and fills it from the
+command-completion tag. This adapter executes one completed SELECT; null or
+another tag contradicts that result, even when rowCount matches an empty
+inventory. Synthetic installed-driver SELECT 0/SELECT 1 completions pass.
+Omitted/undefined tags remain compatible with injected adapters. Exact SELECT
+preserves empty/populated inventories, optional/exact counts, frozen caller
+ownership, row order, extra fields and bigint conversion. It cannot excuse
+invalid rows or contradictory row counts. SQL, storage listing, comparison,
+CLI/env behavior, TS facade, receipt schema/publication and Stage 7 are unchanged.
+
+All 1186 prior tests remain intact. The 113 added direct/runner cases cover
+malformed tags, no coercion, valid compatibility and driver completions.
+Runner failures verify one query, zero S3 sends, no injected-client end/destroy,
+only the connecting log, fixed Error: Database query failed, exit 1, and no
+summary, receipt or temporary file. Supported results publish clean simulation
+receipts, including empty inventories. Actual permitted red output:
+
+```text
+ℹ tests 1299
+ℹ pass 1211
+ℹ fail 88
+ℹ skipped 0
+```
+
+Direct and npm focused green output:
+
+```text
+ℹ tests 1299
+ℹ pass 1299
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual repository verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| permitted direct spec and npm run ops:reconcile-test | 0 | tests 1299, pass 1299, fail 0, skipped 0 |
+| source/spec node -c and CLI --help | 0 | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| changed-region installed Prettier | 0 | {"specFormatting":true}, {"guardFormatting":true} (source guard dedented for comparison) |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| permitted npm run build | 0 | Compiled successfully in 3.5s; Generating static pages using 7 workers (22/22) in 1323ms; prisma generate && nest build |
+| git diff --check | 0 | silent |
+
+Restricted direct tests reported one failing worker wrapper rather than suite
+results. Restricted build failed with Could not parse output from TypeScript's
+--showConfig. Permitted normal child-process reruns produced complete red/green
+and build evidence without weakening checks. Deterministic example readiness
+validation retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+All 33 independent offline stages resolved from current package.json ops:check
+passed: **27 suite invocations / 4280 tests / 4280 passed / zero failed or
+skipped**. Every stage exit and suite total was inspected; final launch/dossier
+output was tests 182, pass 182, fail 0. Online ops:audit remains omitted under
+the recorded registry metadata-disclosure restriction. No full aggregate
+ops:check pass or fresh vulnerability inventory is claimed.
+
+Independent read-only review found no Critical, Important or Minor issues and
+no implementation plan deviations. Its restricted test invocation reported
+only a file-level test and does not independently corroborate 1299 case totals;
+the coordinator's permitted direct/npm runs supply those results. Feedback
+was verified against strict comparison, guard placement, installed driver
+semantics, optional metadata and runner publication suppression. No fixes or
+significant re-review were needed.
+
+Command consistency does not authenticate metadata, establish inventory
+completeness, verify object bytes or provide an atomic DB/S3 snapshot. Mandatory
+metadata, other driver fields, live calls, query selection changes, resource
+bounds and hostile in-process objects remain out of scope. No live services,
+operator approval, deployment or push occurred. Prompt 201, Category 6 live
+recovery approval and Phase 12 exit remain open. Ordinary commit revert restores
+prior behavior without migration or data/storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
