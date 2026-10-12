@@ -2985,3 +2985,24 @@ approved / 11 blocked / 70 blockers**. Online audit remains omitted under the
 metadata-disclosure restriction; no full aggregate `ops:check` pass or fresh
 inventory is claimed. No live services, deployment or push occurred. Prompt
 201, Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 319 — validate storage listing continuation tokens (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 318.
+Supplied S3 `ContinuationToken` values on the initial page, when defined, reject
+immediately, preventing offset listings that skip earlier objects in the bucket.
+On subsequent pages, any defined `ContinuationToken` must strictly match the
+requested `continuationToken`, preventing out-of-order or desynchronized pagination.
+Optional omitted/undefined continuation tokens on initial and later pages, empty
+pages, per-page pagination, caller ownership and existing metadata conversion
+remain supported. Public contracts, CLI/SQL/comparison/publication and Stage 7
+remain unchanged. All 721 prior tests plus 30 regressions pass (**751/751**);
+lint/typecheck, permitted build (**22/22** pages), syntax/help and diff checks pass.
+All **33 offline operations stages** pass (**27 suite invocations / 3732 tests /
+zero failures**, final launch/dossier **182/182**). Independent read-only review
+found no issues and approved merging. Actual outputs, synthetic reproduction,
+SDK semantics, compatibility and ordinary revert rollback are in
+`docs/operations.md` Prompt 319. Readiness stays **0 approved / 11 blocked / 70 blockers**.
+Online audit remains omitted under the metadata-disclosure restriction; no full
+aggregate `ops:check` pass or fresh inventory is claimed. No live services,
+deployment or push occurred. Prompt 201, Category 6 live approval and Phase 12 exit
+remain open.

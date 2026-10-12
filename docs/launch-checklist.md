@@ -989,6 +989,18 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   independent review passed. This consistency check adds no byte-integrity,
   authenticity, total-completeness or snapshot claim. Prompt 201, Category 6 live
   approval and Phase 12 exit remain open.
+- Reconciliation continuation-token safety (prompt 319): supplied
+  `ContinuationToken` on initial pages, when defined, rejects immediately; on
+  subsequent pages, any defined `ContinuationToken` must strictly match the
+  requested token. Initial tokens or mismatched later tokens indicate skipped
+  keys, out-of-order responses, or desynchronized pagination; invalid pages
+  reject the complete listing with fixed diagnostics and no summary/receipt.
+  Correct the provider response and rerun into a fresh receipt path;
+  omitted/undefined continuation token values remain supported. Focused
+  **751/751**, all **33 offline stages / 3732 tests**, lint/typecheck/build and
+  independent review passed. This consistency check adds no byte-integrity,
+  authenticity, total-completeness or snapshot claim. Prompt 201, Category 6 live
+  approval and Phase 12 exit remain open.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

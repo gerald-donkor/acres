@@ -426,6 +426,13 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     // Flat listings scan from the beginning; any provider start-after indicates offset listings.
     if (response.StartAfter !== undefined) throw invalidListing();
 
+    // Listings scan from bucket origin; any provider continuation-token must match requested token.
+    if (
+      response.ContinuationToken !== undefined &&
+      response.ContinuationToken !== continuationToken
+    )
+      throw invalidListing();
+
     if (response.Contents !== undefined) {
       for (const entry of response.Contents) {
         if (
