@@ -5917,3 +5917,226 @@ test('main: named pages with alias request publish a clean simulation receipt', 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+function bucketContinuityPages(fields) {
+  return fields.map((extra, index) =>
+    Object.freeze({
+      IsTruncated: index < fields.length - 1,
+      ...(index < fields.length - 1
+        ? { NextContinuationToken: String(index + 1) }
+        : {}),
+      Contents: Object.freeze([
+        Object.freeze({
+          Key: `scope/${index}`,
+          Size: index + 1,
+          LastModified: new Date('2026-01-01T00:00:00Z'),
+          ChecksumSHA256: Buffer.alloc(32, 1).toString('base64'),
+        }),
+      ]),
+      ...extra,
+    }),
+  );
+}
+
+for (const [label, fields] of [
+  ['direct', [{ Name: 'one' }, { Name: 'two' }]],
+  ['absent gap', [{ Name: 'one' }, {}, { Name: 'two' }]],
+  ['undefined gap', [{ Name: 'one' }, { Name: undefined }, { Name: 'two' }]],
+  ['late first name', [{}, { Name: 'one' }, { Name: 'two' }]],
+  ['case difference', [{ Name: 'one' }, { Name: 'One' }]],
+  ['space difference', [{ Name: 'one' }, { Name: ' one ' }]],
+  ['Unicode difference', [{ Name: 'é' }, { Name: 'e\u0301' }]],
+]) {
+  test(`listBucketObjects: rejects ${label} bucket-name contradiction before next request`, async () => {
+    const pages = bucketContinuityPages([...fields, {}]);
+    const s3Client = listingClient(pages);
+    await assert.rejects(
+      listBucketObjects({
+        s3Client,
+        bucket: 'fixture-alias-s3alias',
+        prefix: 'scope/',
+      }),
+      {
+        message: 'Object storage listing is invalid or incomplete',
+      },
+    );
+    assert.strictEqual(s3Client.inputs.length, fields.length);
+    assert.strictEqual(pages.at(-2).Name, fields.at(-1).Name);
+  });
+}
+
+test('listBucketObjects: rejects contradictory terminal bucket name', async () => {
+  const s3Client = listingClient(
+    bucketContinuityPages([{ Name: 'one' }, { Name: 'two' }]),
+  );
+  await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+    message: 'Object storage listing is invalid or incomplete',
+  });
+  assert.strictEqual(s3Client.inputs.length, 2);
+});
+
+for (const [label, fields] of [
+  ['unnamed pages', [{}, { Name: undefined }, {}]],
+  ['late first name', [{}, { Name: 'actual' }, { Name: 'actual' }]],
+  ['terminal first name', [{}, { Name: undefined }, { Name: 'actual' }]],
+  ['first name only', [{ Name: 'actual' }, {}, { Name: undefined }]],
+  [
+    'stable with gaps',
+    [{ Name: 'actual' }, {}, { Name: undefined }, { Name: 'actual' }],
+  ],
+  [
+    'empty intermediate page',
+    [{ Name: 'actual' }, { Contents: Object.freeze([]) }, { Name: 'actual' }],
+  ],
+  ['literal opaque name', [{ Name: 'é/%2F/../[x]' }, { Name: 'é/%2F/../[x]' }]],
+  ['literal spaces', [{ Name: ' actual ' }, { Name: ' actual ' }]],
+]) {
+  test(`listBucketObjects: preserves ${label} bucket-name continuity`, async () => {
+    const pages = bucketContinuityPages(fields);
+    const s3Client = listingClient(pages);
+    const bucket = 'arn:aws:s3:us-east-1:123456789012:accesspoint/fixture';
+    const result = await listBucketObjects(
+      Object.freeze({ s3Client, bucket, prefix: 'scope/' }),
+    );
+    assert.deepStrictEqual(
+      result,
+      pages.flatMap(page =>
+        page.Contents.map(entry => ({
+          key: entry.Key,
+          byteCount: entry.Size,
+          lastModified: '2026-01-01T00:00:00.000Z',
+          checksumHex: Buffer.alloc(32, 1).toString('hex'),
+        })),
+      ),
+    );
+    assert.deepStrictEqual(
+      s3Client.inputs,
+      fields.map((_, index) => ({
+        Bucket: bucket,
+        Prefix: 'scope/',
+        ContinuationToken: index ? String(index) : undefined,
+      })),
+    );
+    assert.deepStrictEqual(
+      pages.map(page => page.Name),
+      fields.map(extra => extra.Name),
+    );
+  });
+}
+
+test('listBucketObjects: reused client does not carry bucket-name state across invocations', async () => {
+  const s3Client = listingClient([
+    { IsTruncated: false, Name: 'one' },
+    { IsTruncated: false, Name: 'two' },
+  ]);
+  assert.deepStrictEqual(
+    await listBucketObjects({ s3Client, bucket: 'first-alias' }),
+    [],
+  );
+  assert.deepStrictEqual(
+    await listBucketObjects({ s3Client, bucket: 'second-alias' }),
+    [],
+  );
+  assert.deepStrictEqual(
+    s3Client.inputs.map(input => input.Bucket),
+    ['first-alias', 'second-alias'],
+  );
+});
+
+for (const gap of [false, true]) {
+  test(`main: contradictory bucket names ${gap ? 'across gap' : 'directly'} publish no evidence`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-name-continuity-failure-'),
+    );
+    try {
+      const fields = [
+        { Name: 'private-one' },
+        ...(gap ? [{}, { Name: undefined }] : []),
+        { Name: 'private-two' },
+      ];
+      const s3Client = listingClient(bucketContinuityPages([...fields, {}]));
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--bucket',
+            'fixture',
+            '--prefix',
+            'scope/',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          { env: {}, dbObjects: [], s3Client },
+        ),
+        1,
+      );
+      assert.strictEqual(s3Client.inputs.length, fields.length);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: stable bucket names across optional gap publish a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'acres-name-continuity-success-'),
+  );
+  try {
+    const bucket = 'fixture-alias-s3alias';
+    const fields = [
+      { Name: 'actual' },
+      {},
+      { Name: undefined },
+      { Name: 'actual' },
+    ];
+    const pages = bucketContinuityPages(fields);
+    const s3Client = listingClient(pages);
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const dbObjects = pages.map((page, index) =>
+      inventoryDbRecord({
+        id: `fixture-${index}`,
+        bucket,
+        objectKey: page.Contents[0].Key,
+        byteCount: page.Contents[0].Size,
+      }),
+    );
+    assert.strictEqual(
+      await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--bucket',
+          bucket,
+          '--prefix',
+          'scope/',
+          '--output',
+          target,
+        ],
+        io,
+        { env: {}, dbObjects, s3Client },
+      ),
+      0,
+    );
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, fields.length);
+    assert.deepStrictEqual(io.errors, []);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

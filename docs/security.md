@@ -1384,3 +1384,14 @@ introduced. Focused **1003/1003** and independent review verify this existing
 boundary. Cross-page continuity, real bucket identity, completeness,
 authenticity, atomic snapshots and live approval remain unproven. Prompt 201,
 Category 6 live operator approval and Phase 12 exit stay open.
+
+**Prompt 326 storage listing bucket-name continuity (2026-10-12):**
+The adapter retains the first defined valid Name per invocation and rejects
+later unequal names before entries/pagination, including across omitted or
+undefined gaps. Exact strings are compared without normalization or coercion;
+request aliases/ARNs may differ from stable response names. Contradictions
+reject whole inventories with fixed diagnostics and no summary/receipt.
+Focused **1023/1023** and independent review verify this existing boundary.
+Optional echo consistency cannot prove real bucket identity, authorization,
+completeness, authenticity, byte integrity or atomic snapshots. Prompt 201,
+Category 6 live approval and Phase 12 exit remain open.

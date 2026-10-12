@@ -388,6 +388,7 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
   )
     throw invalidListing();
   let continuationToken = undefined;
+  let listedBucketName = undefined;
 
   do {
     const command = new ListObjectsV2Command({
@@ -407,12 +408,16 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     )
       throw invalidListing();
 
-    // Supplied bucket names must be usable metadata, without SDK coercion.
-    if (
-      response.Name !== undefined &&
-      (typeof response.Name !== 'string' || !response.Name.trim())
-    )
-      throw invalidListing();
+    // Supplied names must remain usable and consistent across this scan.
+    if (response.Name !== undefined) {
+      if (
+        typeof response.Name !== 'string' ||
+        !response.Name.trim() ||
+        (listedBucketName !== undefined && response.Name !== listedBucketName)
+      )
+        throw invalidListing();
+      listedBucketName = response.Name;
+    }
 
     // Requests use flat listings without a delimiter; counts are per page.
     if (

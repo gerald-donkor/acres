@@ -3112,3 +3112,19 @@ revert rollback are in `docs/operations.md` Prompt 325. Readiness remains
 ops:check, fresh vulnerability inventory, live service, deployment or push claim.
 Cross-page name continuity is the next bounded candidate. Prompt 201, Category 6
 live approval and Phase 12 exit stay open.
+
+**Prompt 326 — enforce storage listing bucket-name continuity (2026-10-12):**
+Continued Phase 12K after committed Prompt 325 as the user's one authorized
+follow-on. Later defined Name values must exactly match the first supplied
+valid name within each scan; absent/undefined gaps preserve the anchor and
+separate invocations retain separate state. Contradictions reject before entries
+or further requests with fixed diagnostics and no summary/receipt. Optional
+metadata and alias/ARN identifiers remain supported. Focused **1023/1023**,
+lint/typecheck, permitted build (**22/22** pages), formatting/syntax/diff and all
+**33 offline stages / 27 suite invocations / 4004 tests / zero failures** passed.
+Independent read-only review found no issues and reproduced **1023/1023**.
+Actual red/green evidence, compatibility, limits and ordinary revert rollback
+are in docs/operations.md Prompt 326. Readiness stays **0 approved / 11 blocked /
+70 blockers**. Online audit remains omitted; no full ops:check, fresh
+vulnerability inventory, live service, deployment or push claim. Prompt 201,
+Category 6 live approval and Phase 12 exit remain open.

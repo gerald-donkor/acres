@@ -9021,3 +9021,81 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 326 — enforce storage listing bucket-name continuity (2026-10-12)
+
+Continued Phase 12K after committed Prompt 325 (`9ec4e50`), as the one additional
+prompt authorized by the user. A fresh bounded probe accepted keys from pages
+naming two different buckets. The adapter now remembers the first defined
+valid Name within each invocation; later defined names must match it exactly.
+Absent/undefined names remain optional and cannot clear the anchor. The first
+name may occur on a later or terminal page. State is invocation-local, including
+when the same client is reused. No case, whitespace or Unicode normalization
+occurs, and alias/ARN request identifiers may differ from the stable echo.
+
+Contradictions reject before entries or another send, returning no partial
+inventory; runner failures publish no summary/receipt/temp file and expose only
+fixed diagnostics. Valid scans retain object order, date/checksum conversion,
+frozen ownership, request scope, token order and clean simulation receipts.
+This intentionally rejects previously accepted contradictory supplied names;
+Prompt 325 shape validation, public types, CLI/env precedence, comparison/SQL,
+receipt schema/publication and Stage 7 are unchanged. Stable optional echoes do
+not prove authorization, real bucket identity, completeness, authenticity,
+byte integrity, atomic snapshots or live operator approval.
+
+All 1003 previous tests plus 20 regressions pass. Actual direct red output:
+`tests 1023`, `pass 1013`, `fail 10`. Direct green and permitted npm output:
+
+```text
+ℹ tests 1023
+ℹ pass 1023
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual checks:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| permitted `npm run ops:reconcile-test` | 0 | `tests 1023`, `pass 1023`, `fail 0` |
+| source/spec `node -c`, CLI `--help` | 0 | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| changed-region Prettier | 0 | `{"specFormatting":true,"guardFormatting":true}` |
+| `npm run lint` | 0 | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"` |
+| `npm run typecheck` | 0 | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1 |
+| permitted `npm run build` | 0 | `✓ Compiled successfully in 10.4s`; `✓ Generating static pages using 7 workers (22/22) in 1742ms`; `prisma generate && nest build` |
+| `git diff --check` | 0 | silent |
+
+Normal permitted worker processes were used for npm tests/build and offline
+operations under the previously established sandbox limits, without changing
+assertions. All 33 independent offline stages resolved from current ops:check
+passed: **27 suite invocations / 4004 tests / 4004 passed / zero failed or
+skipped**. Final launch/dossier: `tests 182`, `pass 182`, `fail 0`. Every stage
+exit and summary was inspected. Online ops:audit remains omitted under the
+recorded registry metadata-disclosure restriction; no complete aggregate
+ops:check pass or fresh vulnerability inventory is claimed.
+
+Launch-readiness retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Independent read-only review found no Critical, Important or Minor issues,
+reproduced **1023/1023** with zero skipped and approved after documentation.
+Feedback was checked against invocation-local state, optional gaps, exact
+comparison, SDK alias/ARN semantics and runner publication suppression; no
+fixes or significant re-review were needed. No live service, operator approval,
+deployment or push occurred. Prompt 201, Category 6 live approval and Phase 12
+exit stay open. Ordinary commit revert restores prior behavior without any
+migration or storage mutation. Both authorized prompts are complete after this
+local commit; no additional prompt is prepared.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

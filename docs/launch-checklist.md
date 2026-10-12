@@ -1284,6 +1284,16 @@ continuity or live recovery approval. Readiness remains 0 approved / 11 blocked 
 70 blockers; Prompt 201 and Category 6 live sign-off remain open. Actual outputs
 and rollback are in docs/operations.md Prompt 325.
 
+**Prompt 326 bucket-name continuity (2026-10-12).** Supplied names must
+remain exactly equal within each scan; omitted/undefined gaps retain the first
+name and separate invocations keep separate state. Contradictions reject before
+entries/requests with fixed diagnostics and no summary/receipt. Optional metadata
+and alias/ARN identifiers remain supported. Focused 1023/1023 and all 33 offline
+stages (4004/4004 tests) passed; independent review found no issues. Consistent
+echoes do not prove bucket identity/authenticity or live recovery. Readiness
+remains 0 approved / 11 blocked / 70 blockers; Prompt 201 and Category 6 live
+sign-off stay open. Actual outputs/rollback are in docs/operations.md Prompt 326.
+
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table
