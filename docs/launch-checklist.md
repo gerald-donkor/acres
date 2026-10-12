@@ -890,6 +890,13 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   path; optional size/checksum metadata still does not establish byte integrity,
   completeness, authenticity or an atomic DB/S3 snapshot. Category 6 continues
   to require independent live recovery evidence and operator approval.
+- Reconciliation policy safety (prompt 309): malformed comparison options now
+  reject before filtering/report generation. Filters, boolean flags, retention,
+  clocks, regex lists and modes validate without coercion. Global/sticky ignore
+  regexes match each key from zero without changing caller state. Investigate
+  invalid policy and rerun into a fresh receipt path; valid filters/exclusions
+  still require operator scope review. These offline tests do not supply live
+  recovery approval, authenticity, snapshot consistency or byte integrity.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

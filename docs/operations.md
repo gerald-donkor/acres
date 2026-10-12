@@ -7500,3 +7500,103 @@ All **33 independent offline operations stages** exited 0: **27 suite
 invocations / 3173 tests / zero failures**. Final launch/dossier suite:
 `tests 182`, `pass 182`, `fail 0`. Every offline stage completed independently;
 this does not supply the omitted online audit or operator live acceptance.
+
+## Prompt 309 — validate reconciliation comparison options (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 308.
+`reconcileObjects` now validates its comparison options before filtering or
+returning a report. Invalid containers and malformed known fields throw the
+fixed, value-free `Reconciliation options are invalid` error. Filters accept
+only strings/null; boolean policy flags require booleans; retention requires a
+finite nonnegative number with a millisecond duration no greater than
+`Number.MAX_SAFE_INTEGER`. The clock requires a valid Date or nonempty parsable
+date string. Ignore lists require dense arrays of RegExp instances. Report
+mode accepts only `simulation` or `live`.
+
+Defaults and explicit undefined values remain supported. Null/empty-string
+filters retain their existing no-filter meaning; opaque strings are preserved.
+Zero retention disables age-window exclusion, fractional days remain valid,
+and the existing inclusive retention boundary is unchanged. Unknown option
+fields remain ignored. Mode validation does not authenticate live evidence.
+
+Ignore patterns are cloned with their source and flags, and internal matching
+starts at index zero for every storage and DB key. Global/sticky regexes now
+give repeatable results regardless of caller `lastIndex`, inventory ordering or
+prior calls. Caller regex/options/Date objects and inventories remain untouched;
+frozen input objects work. Empty lists disable ignores, while default marker
+patterns remain intact.
+
+Offline planning probes returned `clean` for a missing quarantined object when
+`excludeQuarantined` was the string `"false"`, the bucket was numeric, or
+retention was infinite. An unsupported mode reached the report. A global regex
+excluded the storage key but treated the same DB key as missing. These fixture
+results demonstrate coercion/state bugs, not a production incident. The runner
+regression uses an invalid bucket in an injected environment and validates exit
+1 with `Error: Reconciliation execution failed`, without summary, success log,
+staging artifact, receipt or private sentinel disclosure.
+
+### Compatibility, review and limits
+
+All 192 existing regressions remain; 89 new tests cover invalid policy, valid
+defaults/filters, quarantine/orphan behavior, clock/retention boundaries,
+regex determinism and runner publication. Direct red execution reported
+`tests 281`, `pass 213`, `fail 68`; final normal focused execution reported
+`tests 281`, `pass 281`, `fail 0`.
+
+Independent read-only review found no Critical, Important or Minor issues and
+reproduced `281 passed, 0 failed`. Feedback was evaluated against the prompt
+and diff; no fixes or significant follow-up changes were needed.
+
+CLI flags, exported signatures, TypeScript facade, SQL, inventory/listing
+validation, exclusion/checksum policy, report schema, Stage 7 caller and
+exclusive receipt publication remain unchanged. Invalid programmatic options
+are intentionally stricter; valid boolean policies still intentionally exclude
+quarantined objects or fail on orphans. No dependencies, server/client/shared
+source or deployment configuration changed.
+
+This boundary does not infer correct operator scope, validate inventory state/
+date/checksum fields, authenticate completeness, verify object bytes, create an
+atomic DB/S3 snapshot, cap regex/network/resource costs or defend against hostile
+in-process getters/proxies/overrides or cross-realm objects. No live service was
+contacted for this change. Prompt 201, Category 6 independently inspected live
+recovery approval and Phase 12 exit remain open. Ordinary commit revert rolls
+back code/tests/docs without migration or storage mutation. No push or
+deployment occurred.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 281`, `pass 281`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0, no diagnostics.
+- `npm run typecheck`: shared `tsc -p tsconfig.json --noEmit`, client
+  `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`;
+  Prisma Client `7.9.1` generated; exit 0, no TypeScript diagnostics.
+- Permitted `npm run build`: `Compiled successfully in 4.0s`,
+  `Generating static pages using 7 workers (22/22) in 873ms`, then
+  `prisma generate && nest build`; exit 0.
+- Changed-region Prettier comparisons report `true` for both JS files; syntax
+  checks and `git diff --check` exit 0.
+- `node scripts/ops/reconcile-storage-objects.js --help`: exit 0.
+- Readiness example: intended exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+The sandbox child-test wrapper failed opaquely (`test failed`); direct
+in-process execution exposed the expected red assertions. Normal permitted
+execution passed. The sandbox build failed with
+`Could not parse output from TypeScript's --showConfig.`; an unchanged
+permitted rerun passed. Online `ops:audit` remains omitted under the standing
+dependency-metadata disclosure restriction; no full aggregate `ops:check` pass
+or fresh vulnerability inventory is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3262 tests / zero failures**. The final launch/dossier suite
+reports `tests 182`, `pass 182`, `fail 0`; the readiness suite reports
+`tests 649`, `pass 649`, `fail 0`. Nonsuite checks report
+`ops template check passed`, `secret/default scan passed`,
+`docker runtime check passed`, license compliance `PASSED`,
+`SAST Gate: PASSED (Zero unreviewed blockers and zero expired suppressions)`,
+and `Container Security Gate: PASSED (All Dockerfiles and Compose templates verified)`.
+Every offline stage ran separately with its output inspected; the omitted
+online audit and operator acceptance remain outstanding.

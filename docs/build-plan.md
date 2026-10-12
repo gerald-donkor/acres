@@ -2771,3 +2771,23 @@ All **33 independent offline operations stages** passed (**27 suite
 invocations / 3173 tests / zero failures**, final launch/dossier **182/182**).
 Online audit remains omitted under the metadata-disclosure restriction; no full
 aggregate ops:check pass or fresh vulnerability count is claimed.
+
+**Prompt 309 — validate reconciliation comparison options (2026-10-12):**
+Continued Phase 12K after committed Prompt 308. Known comparison options now
+validate without coercion before filters or report generation, using fixed
+value-free errors. Global/sticky regex filters are cloned and matched from zero
+per key without caller mutation. Defaults, nullable/empty filters, fractional
+retention, Date/string clocks, valid modes and unknown extension fields retain
+their specified behavior. CLI, SQL, signatures, facade, inventory validation,
+exclusion/checksum policy, receipt publication and Stage 7 caller stay unchanged.
+All 192 prior tests plus 89 regressions pass (**281/281**); lint/typecheck,
+permitted production build (**22/22** pages), changed-region formatting, syntax
+and diff checks pass. Independent read-only review found no issues and
+reproduced **281/281**. Planning fixtures, actual outputs, sandbox limitations,
+compatibility and ordinary revert rollback are in `docs/operations.md` Prompt
+309. Readiness remains **0 approved / 11 blocked / 70 blockers**. No live
+services, deployment or push occurred. Online audit remains omitted; no full
+aggregate `ops:check` pass or fresh vulnerability count is claimed. Prompt 201,
+Category 6 live approval and Phase 12 exit remain open.
+All **33 independent offline operations stages** passed (**27 suite
+invocations / 3262 tests / zero failures**, final launch/dossier **182/182**).

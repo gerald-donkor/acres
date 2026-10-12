@@ -27,6 +27,356 @@ const inventoryDbRecord = (overrides = {}) => ({
 
 const inventoryError = /^(Database|Storage) inventory is invalid$/;
 
+const invalidComparisonOptions = [
+  ['null options', null],
+  ['array options', []],
+  ['text options', 'private-option'],
+  ['boolean options', false],
+  ['numeric options', 42],
+];
+for (const field of ['bucket', 'organizationId', 'prefix']) {
+  for (const value of [false, 42, {}, []]) {
+    invalidComparisonOptions.push([
+      `${field} ${typeof value}`,
+      { [field]: value },
+    ]);
+  }
+}
+for (const field of ['excludeQuarantined', 'failOnOrphans']) {
+  for (const value of [null, 'false', 0, 1, {}, []]) {
+    invalidComparisonOptions.push([
+      `${field} ${String(value)}`,
+      { [field]: value },
+    ]);
+  }
+}
+for (const value of [
+  null,
+  -1,
+  NaN,
+  Infinity,
+  -Infinity,
+  '7',
+  true,
+  {},
+  Number.MAX_VALUE,
+  Number.MAX_SAFE_INTEGER,
+]) {
+  invalidComparisonOptions.push([
+    `retention ${String(value)}`,
+    { quarantineRetentionDays: value },
+  ]);
+}
+for (const value of [
+  null,
+  0,
+  false,
+  {},
+  '',
+  ' ',
+  'private-invalid-clock',
+  new Date(NaN),
+]) {
+  invalidComparisonOptions.push([`clock ${String(value)}`, { now: value }]);
+}
+for (const value of [
+  null,
+  {},
+  'private-pattern',
+  new Array(1),
+  [null],
+  ['object'],
+  [{ test: () => true }],
+  [/valid/, false],
+]) {
+  invalidComparisonOptions.push([
+    `patterns ${String(value)}`,
+    { ignorePatterns: value },
+  ]);
+}
+for (const value of [null, '', 'private-mode', false, 0, {}]) {
+  invalidComparisonOptions.push([
+    `mode ${String(value)}`,
+    { execution_mode: value },
+  ]);
+}
+
+for (const [label, options] of invalidComparisonOptions) {
+  test(`reconcileObjects: invalid policy ${label} rejects even empty inventory`, () => {
+    assert.throws(() => reconcileObjects({ options }), {
+      message: 'Reconciliation options are invalid',
+    });
+  });
+}
+
+test('reconcileObjects: malformed policy cannot hide a missing quarantine object', () => {
+  const dbObjects = [
+    inventoryDbRecord({
+      state: 'quarantined',
+      createdAt: '2020-01-01T00:00:00Z',
+    }),
+  ];
+  for (const options of [
+    { excludeQuarantined: 'false' },
+    { bucket: 42 },
+    { quarantineRetentionDays: Infinity },
+  ]) {
+    assert.throws(() => reconcileObjects({ dbObjects, options }), {
+      message: 'Reconciliation options are invalid',
+    });
+  }
+});
+
+test('reconcileObjects: undefined defaults, null-prototype records and unknown fields work', () => {
+  const options = Object.assign(Object.create(null), {
+    bucket: undefined,
+    organizationId: undefined,
+    prefix: undefined,
+    failOnOrphans: undefined,
+    excludeQuarantined: undefined,
+    quarantineRetentionDays: undefined,
+    now: undefined,
+    ignorePatterns: undefined,
+    execution_mode: undefined,
+    futureExtension: 'ignored',
+  });
+  const report = reconcileObjects({ options: Object.freeze(options) });
+  assert.strictEqual(report.summary.status, 'clean');
+  assert.strictEqual(report.execution_mode, 'simulation');
+});
+
+for (const value of [null, '', undefined]) {
+  test(`reconcileObjects: nullable/empty filters ${String(value)} preserve matching`, () => {
+    const report = reconcileObjects({
+      dbObjects: [inventoryDbRecord()],
+      storageObjects: [{ key: 'fixture-key' }],
+      options: { bucket: value, organizationId: value, prefix: value },
+    });
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.strictEqual(report.summary.status, 'clean');
+  });
+}
+
+test('reconcileObjects: opaque filter strings keep significant whitespace', () => {
+  const report = reconcileObjects({
+    dbObjects: [
+      inventoryDbRecord({
+        bucket: ' bucket ',
+        organizationId: ' org ',
+        objectKey: ' key ',
+      }),
+    ],
+    storageObjects: [{ key: ' key ' }],
+    options: { bucket: ' bucket ', organizationId: ' org ', prefix: ' key' },
+  });
+  assert.strictEqual(report.summary.matchedObjects, 1);
+  assert.strictEqual(report.matched[0].objectKey, ' key ');
+});
+
+for (const failOnOrphans of [false, true]) {
+  test(`reconcileObjects: boolean orphan policy ${failOnOrphans} remains intentional`, () => {
+    const report = reconcileObjects({
+      storageObjects: [{ key: 'orphan' }],
+      options: { failOnOrphans },
+    });
+    assert.strictEqual(report.summary.status, 'warning');
+    assert.strictEqual(report.summary.exitCode, failOnOrphans ? 1 : 0);
+  });
+}
+for (const excludeQuarantined of [false, true]) {
+  test(`reconcileObjects: boolean quarantine policy ${excludeQuarantined} remains intentional`, () => {
+    const report = reconcileObjects({
+      dbObjects: [
+        inventoryDbRecord({
+          state: 'quarantined',
+          createdAt: '2020-01-01T00:00:00Z',
+        }),
+      ],
+      options: { excludeQuarantined },
+    });
+    assert.strictEqual(
+      report.summary.missingObjects,
+      excludeQuarantined ? 0 : 1,
+    );
+    assert.strictEqual(
+      report.summary.pendingOrDeletedExcluded,
+      excludeQuarantined ? 1 : 0,
+    );
+  });
+}
+
+for (const now of [
+  '2026-10-12T12:00:00Z',
+  Object.freeze(new Date('2026-10-12T12:00:00Z')),
+]) {
+  for (const [days, excluded] of [
+    [0, 0],
+    [0.5, 1],
+    [7, 2],
+  ]) {
+    test(`reconcileObjects: ${typeof now} clock and ${days} day retention honor boundary`, () => {
+      const records = [
+        '2026-10-12T00:00:00Z',
+        '2026-10-11T23:59:59.999Z',
+        '2026-10-05T11:59:59.999Z',
+      ];
+      const dbObjects = Object.freeze(
+        records.map((createdAt, i) =>
+          Object.freeze(
+            inventoryDbRecord({
+              id: `quarantine-${i}`,
+              objectKey: `key-${i}`,
+              state: 'quarantined',
+              createdAt,
+            }),
+          ),
+        ),
+      );
+      const report = reconcileObjects({
+        dbObjects,
+        options: Object.freeze({ now, quarantineRetentionDays: days }),
+      });
+      assert.strictEqual(report.summary.pendingOrDeletedExcluded, excluded);
+      assert.strictEqual(report.summary.missingObjects, 3 - excluded);
+    });
+  }
+}
+
+test('reconcileObjects: exact seven-day retention boundary is included', () => {
+  const report = reconcileObjects({
+    dbObjects: [
+      inventoryDbRecord({
+        state: 'quarantined',
+        createdAt: '2026-10-05T12:00:00Z',
+      }),
+    ],
+    options: { now: '2026-10-12T12:00:00Z', quarantineRetentionDays: 7 },
+  });
+  assert.strictEqual(report.summary.pendingOrDeletedExcluded, 1);
+});
+
+test('reconcileObjects: finite representable retention duration remains supported', () => {
+  const report = reconcileObjects({
+    options: { quarantineRetentionDays: Number.MAX_SAFE_INTEGER / 86400000 },
+  });
+  assert.strictEqual(report.summary.status, 'clean');
+});
+
+for (const execution_mode of ['simulation', 'live']) {
+  test(`reconcileObjects: supported ${execution_mode} mode remains unchanged`, () => {
+    assert.strictEqual(
+      reconcileObjects({ options: { execution_mode } }).execution_mode,
+      execution_mode,
+    );
+  });
+}
+
+test('reconcileObjects: empty regex list includes default markers', () => {
+  const storageObjects = [
+    { key: '.keep' },
+    { key: '.acres-readiness' },
+    { key: '.DS_Store' },
+  ];
+  assert.strictEqual(
+    reconcileObjects({ storageObjects }).summary.totalBucketObjects,
+    0,
+  );
+  const report = reconcileObjects({
+    storageObjects,
+    options: { ignorePatterns: [] },
+  });
+  assert.strictEqual(report.summary.orphanObjects, 3);
+});
+
+for (const flags of ['', 'g', 'y', 'gy', 'gi']) {
+  test(`reconcileObjects: regex ${flags || 'plain'} ignores repeatably without caller mutation`, () => {
+    const pattern = /^ignored-/;
+    const regex = new RegExp(pattern.source, flags);
+    regex.lastIndex = 3;
+    Object.freeze(regex);
+    const ignorePatterns = Object.freeze([regex, /^other-marker$/]);
+    const options = Object.freeze({ ignorePatterns });
+    const dbObjects = ['ignored-a', 'ignored-b', 'kept'].map((key, i) =>
+      Object.freeze(inventoryDbRecord({ id: `id-${i}`, objectKey: key })),
+    );
+    const storageObjects = [
+      'ignored-a',
+      'ignored-b',
+      'kept',
+      'other-marker',
+    ].map((key) => Object.freeze({ key }));
+    for (const reverse of [false, true, false]) {
+      const report = reconcileObjects({
+        dbObjects: Object.freeze(
+          reverse ? [...dbObjects].reverse() : [...dbObjects],
+        ),
+        storageObjects: Object.freeze(
+          reverse ? [...storageObjects].reverse() : [...storageObjects],
+        ),
+        options,
+      });
+      assert.strictEqual(report.summary.status, 'clean');
+      assert.strictEqual(report.summary.totalBucketObjects, 1);
+      assert.strictEqual(report.summary.activeDatabaseObjects, 1);
+      assert.deepStrictEqual(
+        report.matched.map((row) => row.objectKey),
+        ['kept'],
+      );
+      assert.strictEqual(regex.lastIndex, 3);
+    }
+  });
+}
+
+test('reconcileObjects: sticky regex keeps anchored-at-zero matching semantics', () => {
+  const pattern = /ignored/y;
+  pattern.lastIndex = 2;
+  const report = reconcileObjects({
+    storageObjects: [{ key: 'ignored' }, { key: 'x-ignored' }],
+    options: { ignorePatterns: [pattern] },
+  });
+  assert.deepStrictEqual(
+    report.orphans.map((row) => row.key),
+    ['x-ignored'],
+  );
+  assert.strictEqual(pattern.lastIndex, 2);
+});
+
+test('main: malformed effective policy fails without receipt or private diagnostics', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-invalid-policy-'));
+  const io = createIo();
+  try {
+    const code = await main(
+      [
+        'node',
+        'script',
+        '--dry-run',
+        '--output',
+        path.join(dir, 'receipt.json'),
+      ],
+      io,
+      {
+        env: { STORAGE_BUCKET: { private: 'private-option-sentinel' } },
+        dbObjects: [],
+        storageObjects: [],
+      },
+    );
+    assert.strictEqual(code, 1);
+    assert.deepStrictEqual(io.errors, [
+      'Error: Reconciliation execution failed',
+    ]);
+    assert.ok(!io.logs.join('\n').includes('Reconciliation Report'));
+    assert.ok(!io.logs.join('\n').includes('evidence written'));
+    assert.ok(
+      ![...io.logs, ...io.errors]
+        .join('\n')
+        .includes('private-option-sentinel'),
+    );
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 for (const side of ['dbObjects', 'storageObjects']) {
   for (const [label, value] of [
     ['null', null],

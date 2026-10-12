@@ -57,6 +57,65 @@ function validateInventory(objects, database) {
   }
 }
 
+function normalizeComparisonOptions(options) {
+  const invalid = () => new Error('Reconciliation options are invalid');
+  if (!isInventoryRecord(options)) throw invalid();
+  const {
+    bucket = null,
+    excludeQuarantined = false,
+    quarantineRetentionDays = 7,
+    ignorePatterns = DEFAULT_IGNORE_PATTERNS,
+    failOnOrphans = false,
+    organizationId = null,
+    prefix = null,
+    now = new Date(),
+    execution_mode = 'simulation',
+  } = options;
+  if (
+    [bucket, organizationId, prefix].some(
+      (filter) => filter !== null && typeof filter !== 'string',
+    ) ||
+    typeof excludeQuarantined !== 'boolean' ||
+    typeof failOnOrphans !== 'boolean' ||
+    typeof quarantineRetentionDays !== 'number' ||
+    !Number.isFinite(quarantineRetentionDays) ||
+    quarantineRetentionDays < 0 ||
+    quarantineRetentionDays * 86400000 > Number.MAX_SAFE_INTEGER ||
+    !(now instanceof Date || (typeof now === 'string' && now.trim())) ||
+    !Array.isArray(ignorePatterns) ||
+    !['simulation', 'live'].includes(execution_mode)
+  )
+    throw invalid();
+  const currentTime =
+    now instanceof Date ? now.getTime() : new Date(now).getTime();
+  if (!Number.isFinite(currentTime)) throw invalid();
+  const patterns = [];
+  for (const pattern of ignorePatterns) {
+    if (!(pattern instanceof RegExp)) throw invalid();
+    patterns.push(new RegExp(pattern.source, pattern.flags));
+  }
+  return {
+    bucket,
+    excludeQuarantined,
+    quarantineRetentionDays,
+    quarantineRetentionMs: quarantineRetentionDays * 86400000,
+    ignorePatterns: patterns,
+    failOnOrphans,
+    organizationId,
+    prefix,
+    currentTime,
+    execution_mode,
+  };
+}
+
+// Each key starts matching at zero; clones keep caller regex state untouched.
+function matchesIgnorePattern(patterns, key) {
+  return patterns.some((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(key);
+  });
+}
+
 /**
  * Compares database metadata records with object storage keys.
  * Pure deterministic reconciliation function suitable for testing and runtime execution.
@@ -72,23 +131,22 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
   validateInventory(dbObjects, true);
   validateInventory(storageObjects, false);
   const {
-    bucket = null,
-    excludeQuarantined = false,
-    quarantineRetentionDays = 7,
-    ignorePatterns = DEFAULT_IGNORE_PATTERNS,
-    failOnOrphans = false,
-    organizationId = null,
-    prefix = null,
-    now = new Date(),
-  } = options;
-
-  const currentTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
-  const quarantineRetentionMs = quarantineRetentionDays * 24 * 60 * 60 * 1000;
+    bucket,
+    excludeQuarantined,
+    quarantineRetentionDays,
+    quarantineRetentionMs,
+    ignorePatterns,
+    failOnOrphans,
+    organizationId,
+    prefix,
+    currentTime,
+    execution_mode,
+  } = normalizeComparisonOptions(options);
 
   // Index storage objects by key
   const storageMap = new Map();
   for (const obj of storageObjects) {
-    if (ignorePatterns.some((pattern) => pattern.test(obj.key))) continue;
+    if (matchesIgnorePattern(ignorePatterns, obj.key)) continue;
     if (prefix && !obj.key.startsWith(prefix)) continue;
     storageMap.set(obj.key, {
       key: obj.key,
@@ -111,7 +169,7 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
     if (bucket && dbObj.bucket && dbObj.bucket !== bucket) continue;
     if (organizationId && dbObj.organizationId !== organizationId) continue;
     if (prefix && !dbObj.objectKey.startsWith(prefix)) continue;
-    if (ignorePatterns.some((pattern) => pattern.test(dbObj.objectKey))) continue;
+    if (matchesIgnorePattern(ignorePatterns, dbObj.objectKey)) continue;
 
     const isDeleted = Boolean(dbObj.deletedAt || dbObj.state === 'deleted');
     const isPending = dbObj.state === 'pending_upload' && (!dbObj.uploadState || dbObj.uploadState === 'pending_upload');
@@ -224,7 +282,7 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
   }
 
   return {
-    execution_mode: options.execution_mode || 'simulation',
+    execution_mode,
     drill_type: 'storage_reconciliation',
     timestamp: new Date().toISOString(),
     summary: {

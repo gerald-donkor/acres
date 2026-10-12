@@ -1139,3 +1139,17 @@ comparison policy or publication. Optional metadata, unvalidated option/state/
 date/checksum policy, snapshot consistency, authenticity and hostile in-process
 objects remain outside scope. Prompt 201, Category 6 live approval and Phase 12
 exit remain open.
+
+**Prompt 309 reconciliation policy boundary (2026-10-12):** The comparison
+helper now rejects malformed filters, boolean flags, retention, clocks, regex
+lists and report modes before policy can hide inventory evidence. Fixed
+value-free errors avoid reflecting private options. Cloned regexes match each
+key from zero, eliminating global/sticky state inconsistencies without changing
+caller objects. The runner regression verifies nonzero failure with no summary
+or receipt for an invalid effective bucket. Valid explicit exclusions/filters
+remain operator choices; supported `live` mode is not authentication. This
+reinforces existing recovery evidence integrity, with CLI/SQL/publication and
+inventory contracts unchanged. Inventory state/date/checksum validation,
+operator scope, completeness, byte integrity, snapshots, regex/resource limits
+and hostile in-process objects remain outside this boundary. Prompt 201,
+Category 6 live approval and Phase 12 exit stay open.
