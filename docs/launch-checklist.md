@@ -871,6 +871,18 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Database inventory byte-count type consistency (prompt 334): the explicit
+  byteCount::text cast requires any defined descriptor dataTypeID to equal
+  primitive numeric 25. Wrong/malformed types, including empty results, reject
+  before S3 requests or receipt publication with fixed private diagnostics.
+  Omitted/undefined metadata and opaque other-column IDs remain supported.
+  Investigate the result descriptor and cast; rerun into a fresh receipt path.
+  Focused **1570/1570**, independent review and **33 offline stages / 4551
+  tests** passed. Actual checks and ordinary-revert rollback are in
+  docs/operations.md Prompt 334. Metadata consistency cannot authenticate
+  responses, prove completeness, verify bytes or establish atomic snapshots.
+  Prompt 201, Category 6 live approval and Phase 12 exit remain open.
+
 - Database inventory format consistency (prompt 333): defined descriptor formats
   must be exact primitive text for the plain SELECT. Binary/malformed formats,
   including empty results, reject with fixed errors, zero S3 requests and no

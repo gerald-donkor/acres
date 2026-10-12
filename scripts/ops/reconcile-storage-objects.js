@@ -601,7 +601,11 @@ async function queryDatabaseStoredObjects({ pgClient }) {
         !Object.hasOwn(fields, index) ||
         !isInventoryRecord(field) ||
         field.name !== name ||
-        (field.format !== undefined && field.format !== 'text')
+        (field.format !== undefined && field.format !== 'text') ||
+        // The explicit byteCount::text cast must select PostgreSQL TEXT (25).
+        (name === 'byteCount' &&
+          field.dataTypeID !== undefined &&
+          field.dataTypeID !== 25)
       )
         throw new Error('Database inventory is invalid');
     }

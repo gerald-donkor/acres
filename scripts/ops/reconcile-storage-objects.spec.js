@@ -8027,3 +8027,288 @@ for (const format of ['text', 'binary']) {
       await assert.rejects(query, { message: 'Database inventory is invalid' });
   });
 }
+
+// The SELECT casts byteCount to text regardless of the underlying column type.
+const invalidByteCountTypes = [
+  ['float OID', 701],
+  ['int8 OID', 20],
+  ['varchar OID', 1043],
+  ['zero', 0],
+  ['negative', -25],
+  ['fraction', 25.1],
+  ['NaN', NaN],
+  ['infinity', Infinity],
+  ['null', null],
+  ['string', '25'],
+  ['boolean', false],
+  ['array', [25]],
+  ['object', {}],
+  ['boxed', new Number(25)],
+  ['bigint', 25n],
+  ['symbol', Symbol('private-type')],
+  [
+    'coercion trap',
+    {
+      [Symbol.toPrimitive]() {
+        throw new Error('private-type');
+      },
+    },
+  ],
+];
+for (const [i, [label, dataTypeID]] of invalidByteCountTypes.entries()) {
+  test(`queryDatabaseStoredObjects: rejects byteCount ${label}`, async () => {
+    const fields = Object.freeze(
+      databaseInventoryFields().map((field) =>
+        Object.freeze(
+          field.name === 'byteCount' ? { ...field, dataTypeID } : field,
+        ),
+      ),
+    );
+    const rows = Object.freeze(
+      i % 2 ? [Object.freeze(inventoryDbRecord({ byteCount: '1' }))] : [],
+    );
+    const result = Object.freeze({
+      fields,
+      rows,
+      command: 'SELECT',
+      rowCount: rows.length,
+    });
+    await assert.rejects(
+      queryDatabaseStoredObjects({ pgClient: { query: async () => result } }),
+      { message: 'Database inventory is invalid' },
+    );
+    assert.strictEqual(result.fields, fields);
+    assert.strictEqual(result.rows, rows);
+    if (rows.length) assert.strictEqual(rows[0].byteCount, '1');
+  });
+}
+
+for (const [label, patch] of [
+  ['omitted', {}],
+  ['undefined', { dataTypeID: undefined }],
+  ['text OID', { dataTypeID: 25 }],
+]) {
+  for (const count of [0, 2]) {
+    test(`queryDatabaseStoredObjects: accepts byteCount ${label} with ${count} rows`, async () => {
+      const fields = Object.freeze(
+        databaseInventoryFields().map((field) =>
+          Object.freeze(
+            field.name === 'byteCount'
+              ? { name: field.name, format: 'text', ...patch }
+              : { ...field, dataTypeID: 99999, opaque: 'kept' },
+          ),
+        ),
+      );
+      const rows = Object.freeze(
+        Array.from({ length: count }, (_, i) =>
+          Object.freeze(
+            inventoryDbRecord({
+              id: `id-${i}`,
+              objectKey: `key-${i}`,
+              byteCount: '0001',
+            }),
+          ),
+        ),
+      );
+      const result = Object.freeze({
+        fields,
+        rows,
+        command: 'SELECT',
+        rowCount: count,
+        rowAsArray: false,
+      });
+      assert.deepStrictEqual(
+        await queryDatabaseStoredObjects({
+          pgClient: { query: async () => result },
+        }),
+        rows.map((row) => ({ ...row, byteCount: 1n })),
+      );
+      assert.ok(rows.every((row) => row.byteCount === '0001'));
+    });
+  }
+}
+
+for (const [label, dataTypeID] of [
+  ['float', 701],
+  ['malformed', 'private-type'],
+]) {
+  test(`main: byteCount ${label} type suppresses storage and publication`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-db-type-failure-'),
+    );
+    try {
+      let queries = 0,
+        ended = 0,
+        destroyed = 0;
+      const fields = databaseInventoryFields().map((field) =>
+        field.name === 'byteCount' ? { ...field, dataTypeID } : field,
+      );
+      const s3Client = listingClient([{ IsTruncated: false }]);
+      s3Client.destroy = () => destroyed++;
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          {
+            env: {},
+            s3Client,
+            pgClient: {
+              query: async () => {
+                queries++;
+                return { fields, rows: [], command: 'SELECT', rowCount: 0 };
+              },
+              end: async () => {
+                ended++;
+              },
+            },
+          },
+        ),
+        1,
+      );
+      assert.strictEqual(queries, 1);
+      assert.strictEqual(s3Client.inputs.length, 0);
+      assert.strictEqual(ended, 0);
+      assert.strictEqual(destroyed, 0);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const count of [0, 2]) {
+  test(`main: text byteCount type publishes ${count} simulation matches`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-db-type-success-'),
+    );
+    try {
+      const rows = Array.from({ length: count }, (_, i) =>
+        inventoryDbRecord({ id: `id-${i}`, objectKey: `key-${i}` }),
+      );
+      const s3Client = listingClient([
+        {
+          IsTruncated: false,
+          Contents: rows.map((row) => ({ Key: row.objectKey, Size: 1 })),
+        },
+      ]);
+      const io = createIo();
+      const target = path.join(dir, 'receipt.json');
+      assert.strictEqual(
+        await main(['node', 'script', '--dry-run', '--output', target], io, {
+          env: {},
+          s3Client,
+          pgClient: {
+            query: async () => ({
+              rows,
+              fields: databaseInventoryFields(),
+              command: 'SELECT',
+              rowCount: count,
+            }),
+          },
+        }),
+        0,
+      );
+      const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+      assert.strictEqual(report.execution_mode, 'simulation');
+      assert.strictEqual(report.summary.status, 'clean');
+      assert.strictEqual(report.summary.matchedObjects, count);
+      assert.strictEqual(s3Client.inputs.length, 1);
+      assert.deepStrictEqual(io.errors, []);
+      assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const [label, overrides] of [
+  ['invalid row', { rows: [{}] }],
+  ['wrong names', { fields: databaseInventoryFields().reverse() }],
+  [
+    'wrong format',
+    {
+      fields: databaseInventoryFields().map((field) => ({
+        ...field,
+        format: 'binary',
+      })),
+    },
+  ],
+  ['wrong count', { rowCount: 0 }],
+  ['wrong command', { command: 'DELETE' }],
+  ['array mode', { rowAsArray: true }],
+]) {
+  test(`queryDatabaseStoredObjects: text byteCount type cannot excuse ${label}`, async () => {
+    await assert.rejects(
+      queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () => ({
+            fields: databaseInventoryFields(),
+            rows: [inventoryDbRecord()],
+            ...overrides,
+          }),
+        },
+      }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const dataTypeID of [25, 701]) {
+  for (const count of [0, 1]) {
+    test(`queryDatabaseStoredObjects: installed pg byteCount type ${dataTypeID} with ${count} rows`, async () => {
+      const Result = require('pg/lib/result');
+      const result = new Result();
+      result.addFields(
+        databaseInventoryFields().map((field) =>
+          field.name === 'byteCount' ? { ...field, dataTypeID } : field,
+        ),
+      );
+      if (count)
+        result.addRow(
+          result.parseRow([
+            'fixture-id',
+            'fixture-org',
+            'acres-quarantine',
+            'fixture-key',
+            '0001',
+            null,
+            null,
+            'accepted',
+            null,
+            null,
+            null,
+            null,
+          ]),
+        );
+      result.addCommandComplete({ text: `SELECT ${count}` });
+      if (dataTypeID === 25) {
+        assert.deepStrictEqual(
+          await queryDatabaseStoredObjects({
+            pgClient: { query: async () => result },
+          }),
+          result.rows.map((row) => ({ ...row, byteCount: 1n })),
+        );
+        if (count) assert.strictEqual(result.rows[0].byteCount, '0001');
+      } else {
+        if (count) assert.strictEqual(result.rows[0].byteCount, 1);
+        await assert.rejects(
+          queryDatabaseStoredObjects({
+            pgClient: { query: async () => result },
+          }),
+          { message: 'Database inventory is invalid' },
+        );
+      }
+    });
+  }
+}

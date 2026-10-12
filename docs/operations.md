@@ -9870,3 +9870,112 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 334 — Database inventory byte-count type (2026-10-12)
+
+Continued Phase 12K after committed Prompt 333. The inventory SELECT explicitly
+casts byteCount to text. A defined dataTypeID on that descriptor must now equal
+primitive numeric 25 (PostgreSQL TEXT). Contradictory/malformed metadata rejects
+whole results, including empty inventories, before conversion, S3 requests or
+receipt publication. Missing/undefined fields/types remain compatible. Type IDs
+on other columns remain opaque, including installation-specific enum IDs.
+SQL, receipt schema, storage listing and Stage 7 are unchanged; all existing
+row/name/format/count/command/mode checks remain active.
+
+Installed pg Result.addFields selects parsers by dataTypeID and format;
+pg-types/lib/builtins.js defines TEXT as 25 and textParsers.js registers 701 as
+parseFloat. Offline installed-driver fixtures demonstrate string preservation
+with 25 and numeric conversion with 701, including rejection of empty wrong-type
+results. This is driver evidence, not a live PostgreSQL recovery test. Before
+the fix, a correct-name/text-format empty result with byteCount type 701 printed
+`{"accepted":0,"byteCountType":701}`.
+
+Added 37 cases without removing prior assertions: invalid primitive/reference
+types, coercion trap, empty/populated frozen compatibility, ordered bigint
+conversion, opaque other-column IDs, guard independence, installed-driver
+parsing, valid simulation publication and runner failure suppression. Invalid
+runners verify one query, zero sends, caller-owned clients, fixed diagnostics
+and no summary, receipt or temporary file.
+
+Initial permitted test-first red execution (exit 1):
+
+```text
+ℹ tests 1570
+ℹ pass 1549
+ℹ fail 21
+ℹ skipped 0
+```
+
+The initial restricted invocation reported only a failed worker wrapper, not
+case totals. The first implementation rerun reported 1562 pass / 8 fail:
+eight new ownership assertions expected a string while inventoryDbRecord
+defaulted to a number. Supplying an explicit string byteCount in those fixtures
+corrected the assertion setup without weakening behavior. Final direct and
+npm run ops:reconcile-test executions both returned exit 0:
+
+```text
+ℹ tests 1570
+ℹ pass 1570
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual repository verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier on added spec/changed guard | 0 | specFormatting: true; guardFormatting: true |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| permitted npm run build | 0 | Compiled successfully in 4.5s; Generating static pages using 7 workers (22/22) in 1544ms; prisma generate && nest build |
+| npm run typecheck after build | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| git diff --check | 0 | silent |
+
+All 33 independent offline stages resolved from package.json ops:check passed:
+**27 suite invocations / 4551 tests / 4551 passed / zero failures or skipped**.
+Every stage exit/count was inspected; template, secret/default scan, Docker
+runtime, offline SBOM licence, SAST and container-template gates passed. The
+final synthetic launch-orchestrator/dossier suite returned exit 0:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+Online ops:audit remains omitted under the recorded registry metadata-disclosure
+restriction. No aggregate ops:check pass or fresh vulnerability inventory is
+claimed. No live launch drill was run.
+
+Independent read-only review found no Critical, Important or Minor issues,
+implementation deviations or material test gaps. It inspected the actual diff,
+installed driver authority and coordinator direct/npm green logs, without
+claiming an independent reproduction. Its assessment required completion of
+this results/review record before commit. Feedback was evaluated against the
+explicit SQL cast, optional strict comparison, opaque other-column IDs,
+caller ownership and downstream-effect coverage; no fixes or re-review needed.
+
+Readiness example validation retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Metadata consistency cannot authenticate responses, prove completeness, verify
+object bytes or establish atomic snapshots/live recovery. Mandatory metadata,
+generic OID validation and hostile in-process objects remain out of scope.
+Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live
+services, operator approval, deployment or push occurred. Ordinary commit revert
+restores previous behavior without migrations or DB/storage mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

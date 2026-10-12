@@ -1485,3 +1485,20 @@ SQL and receipt schema are unchanged. Consistency cannot authenticate metadata,
 prove completeness, verify object bytes or establish atomic snapshots/live
 recovery. No online audit, live services, deployment or push occurred; Prompt
 201, Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 334 — database inventory byte-count type (2026-10-12):**
+The explicit byteCount::text projection requires a defined descriptor dataTypeID
+to equal primitive numeric 25. Wrong/malformed types, including empty results,
+reject whole inventories with fixed errors, zero S3 requests and no summary or
+receipt. Omitted/undefined metadata and opaque other-column IDs stay compatible;
+SQL and receipt schema are unchanged. Focused **1570/1570**, lint/typecheck/build
+(**22/22** pages), formatting/syntax/help/diff checks passed. Full actual outputs,
+independent review, compatibility and ordinary-revert rollback are in
+docs/operations.md Prompt 334.
+Consistency cannot authenticate metadata, prove completeness, verify bytes or
+establish atomic snapshots/live recovery. Prompt 201, Category 6 live approval
+and Phase 12 exit remain open. No live services, deployment or push occurred.
+All **33 offline stages / 27 suite invocations / 4551 tests / zero failures or
+skipped** passed; independent review found no issues. Readiness stays
+**0 approved / 11 blocked / 70 blockers**. Online audit remains omitted; no
+aggregate ops:check pass or fresh vulnerability inventory is claimed.
