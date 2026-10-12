@@ -919,6 +919,17 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   stages / 3456 tests**, lint/typecheck/build and independent review passed.
   Prompt 201, Category 6 independently inspected live recovery approval and
   Phase 12 exit remain open.
+- Reconciliation key uniqueness safety (prompt 312): repeated exact DB object
+  keys reject across IDs, organizations and buckets, matching the existing
+  global database constraint. Filters/exclusions cannot conceal duplicates;
+  malformed query/injected inventories fail with sanitized errors and no
+  summary or receipt. Investigate the source inventory and rerun into a fresh
+  receipt path after correction. Distinct opaque keys and valid exclusions
+  retain existing behavior. Focused **497/497**, all **33 offline stages /
+  3478 tests**, lint/typecheck/build and independent review passed. These checks
+  do not establish authenticity, completeness, byte integrity, atomic snapshots
+  or live recovery approval. Prompt 201, Category 6 operator acceptance and
+  Phase 12 exit remain open.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

@@ -2836,3 +2836,24 @@ Category 6 live operator approval and Phase 12 exit stay open.
 
 All **33 independent offline operations stages** passed (**27 suite
 invocations / 3456 tests / zero failures**, final launch/dossier **182/182**).
+
+**Prompt 312 — reject duplicate database object keys (2026-10-12):**
+Continued Phase 12K after committed Prompt 311. Shared database inventory
+validation now rejects repeated exact object keys independently of IDs,
+organizations or buckets, matching the existing global database uniqueness
+constraint. Rejection precedes filters/exclusions, pg normalization and injected
+client acquisition; fixed diagnostics and query/runner failures publish no
+summary or receipt. Exact opaque key semantics, frozen ownership, empty
+inventories, valid exclusions, CLI/SQL/facade/report/publication and Stage 7
+remain supported. All 475 prior tests plus 22 regressions pass (**497/497**);
+one old count fixture uses unique keys without changing assertions. Lint,
+typecheck, permitted build (**22/22** pages), selected formatting, syntax and
+diff checks pass. All **33 offline operations stages** pass (**27 suite
+invocations / 3478 tests / zero failures**, final launch/dossier **182/182**).
+Independent read-only review found no issues and reproduced **497/497**.
+Actual outputs, synthetic reproduction, fixture correction, sandbox limits and
+ordinary revert rollback are in `docs/operations.md` Prompt 312. Readiness stays
+**0 approved / 11 blocked / 70 blockers**. Online audit remains omitted under
+the metadata-disclosure restriction; no full aggregate `ops:check` pass or
+fresh inventory is claimed. No live services, deployment or push occurred.
+Prompt 201, Category 6 live approval and Phase 12 exit remain open.

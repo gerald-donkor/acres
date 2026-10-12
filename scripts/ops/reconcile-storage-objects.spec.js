@@ -27,6 +27,323 @@ const inventoryDbRecord = (overrides = {}) => ({
 
 const inventoryError = /^(Database|Storage) inventory is invalid$/;
 
+// StoredObject.objectKey is globally unique, including across buckets/tenants.
+const duplicateKeyRows = (patch = {}) => [
+  inventoryDbRecord({
+    id: 'private-first-id',
+    objectKey: 'private-duplicate-key',
+  }),
+  inventoryDbRecord({
+    id: 'private-second-id',
+    objectKey: 'private-duplicate-key',
+    ...patch,
+  }),
+];
+
+for (const [label, patch] of [
+  ['identical metadata', {}],
+  ['different organization', { organizationId: 'private-other-org' }],
+  ['different bucket', { bucket: 'private-other-bucket' }],
+  ['conflicting size', { byteCount: 2 }],
+  ['conflicting checksum', { checksumHex: 'abcd' }],
+]) {
+  test(`reconcileObjects: rejects duplicate DB object keys with ${label}`, () => {
+    const dbObjects = duplicateKeyRows(patch);
+    dbObjects[0].checksumHex = '1234';
+    assert.throws(
+      () =>
+        reconcileObjects({
+          dbObjects,
+          storageObjects: [
+            { key: 'private-duplicate-key', byteCount: 1, checksumHex: '1234' },
+          ],
+        }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+for (const [label, patch, options] of [
+  [
+    'bucket',
+    { bucket: 'private-other-bucket' },
+    { bucket: 'acres-quarantine' },
+  ],
+  [
+    'organization',
+    { organizationId: 'private-other-org' },
+    { organizationId: 'fixture-org' },
+  ],
+  ['prefix', {}, { prefix: 'other/' }],
+  ['ignore', {}, { ignorePatterns: [/^private-/] }],
+  ['pending', { state: 'pending_upload' }, {}],
+  ['deleted', { state: 'deleted' }, {}],
+  ['expired', { uploadState: 'expired' }, {}],
+  ['quarantine', { state: 'quarantined' }, { excludeQuarantined: true }],
+]) {
+  test(`reconcileObjects: duplicate DB object keys cannot hide behind ${label}`, () => {
+    assert.throws(
+      () => reconcileObjects({ dbObjects: duplicateKeyRows(patch), options }),
+      { message: 'Database inventory is invalid' },
+    );
+  });
+}
+
+test('reconcileObjects: rejects nonadjacent duplicate DB object keys without mutation', () => {
+  const [first, duplicate] = duplicateKeyRows();
+  const dbObjects = Object.freeze(
+    [
+      first,
+      inventoryDbRecord({ id: 'middle', objectKey: 'unique' }),
+      duplicate,
+    ].map(Object.freeze),
+  );
+  assert.throws(() => reconcileObjects({ dbObjects }), {
+    message: 'Database inventory is invalid',
+  });
+  assert.deepStrictEqual(
+    dbObjects.map((row) => row.id),
+    ['private-first-id', 'middle', 'private-second-id'],
+  );
+});
+
+const opaqueUniqueKeys = [
+  'Key',
+  'key',
+  ' key',
+  'key ',
+  'path/key',
+  'path//key',
+  'path/./key',
+  '\u00e9',
+  'e\u0301',
+  '__proto__',
+  'constructor',
+  'toString',
+];
+
+test('reconcileObjects: preserves unique opaque keys and frozen caller inventories', () => {
+  const dbObjects = Object.freeze(
+    opaqueUniqueKeys.map((objectKey, i) =>
+      Object.freeze(inventoryDbRecord({ id: `unique-${i}`, objectKey })),
+    ),
+  );
+  const storageObjects = Object.freeze(
+    opaqueUniqueKeys.map((key) => Object.freeze({ key, byteCount: 1 })),
+  );
+  const report = reconcileObjects({ dbObjects, storageObjects });
+  assert.strictEqual(report.summary.status, 'clean');
+  assert.strictEqual(report.summary.matchedObjects, opaqueUniqueKeys.length);
+  assert.strictEqual(
+    report.summary.totalBucketObjects,
+    opaqueUniqueKeys.length,
+  );
+  assert.deepStrictEqual(
+    report.matched.map((row) => row.objectKey),
+    opaqueUniqueKeys,
+  );
+  assert.deepStrictEqual(
+    dbObjects.map((row) => row.objectKey),
+    opaqueUniqueKeys,
+  );
+  assert.deepStrictEqual(
+    storageObjects.map((row) => row.key),
+    opaqueUniqueKeys,
+  );
+});
+
+test('reconcileObjects: unique keys preserve empty inventories and lifecycle counts', () => {
+  const empty = reconcileObjects({});
+  assert.strictEqual(empty.summary.status, 'clean');
+  assert.strictEqual(empty.summary.totalDatabaseObjects, 0);
+  const dbObjects = [
+    inventoryDbRecord({ id: 'active', objectKey: 'active' }),
+    inventoryDbRecord({
+      id: 'pending',
+      objectKey: 'pending',
+      state: 'pending_upload',
+    }),
+    inventoryDbRecord({
+      id: 'deleted',
+      objectKey: 'deleted',
+      state: 'deleted',
+    }),
+  ];
+  const report = reconcileObjects({
+    dbObjects,
+    storageObjects: dbObjects.map((row) => ({
+      key: row.objectKey,
+      byteCount: 1,
+    })),
+  });
+  assert.strictEqual(report.summary.status, 'clean');
+  assert.strictEqual(report.summary.activeDatabaseObjects, 1);
+  assert.strictEqual(report.summary.pendingOrDeletedExcluded, 2);
+  assert.strictEqual(report.summary.matchedObjects, 1);
+  assert.strictEqual(report.summary.orphanObjects, 0);
+});
+
+test('queryDatabaseStoredObjects: rejects whole result on later duplicate key', async () => {
+  const [first, duplicate] = duplicateKeyRows({
+    bucket: 'private-other-bucket',
+  });
+  let queries = 0;
+  await assert.rejects(
+    queryDatabaseStoredObjects({
+      pgClient: {
+        async query() {
+          queries++;
+          return {
+            rows: [
+              first,
+              inventoryDbRecord({ id: 'middle', objectKey: 'unique' }),
+              duplicate,
+            ],
+          };
+        },
+      },
+    }),
+    { message: 'Database inventory is invalid' },
+  );
+  assert.strictEqual(queries, 1);
+});
+
+test('queryDatabaseStoredObjects: unique opaque keys retain bigint conversion', async () => {
+  const rows = Object.freeze(
+    opaqueUniqueKeys.map((objectKey, i) =>
+      Object.freeze(
+        inventoryDbRecord({ id: `unique-${i}`, objectKey, byteCount: '1' }),
+      ),
+    ),
+  );
+  const result = await queryDatabaseStoredObjects({
+    pgClient: { query: async () => ({ rows }) },
+  });
+  assert.deepStrictEqual(
+    result.map((row) => row.objectKey),
+    opaqueUniqueKeys,
+  );
+  assert.ok(result.every((row) => row.byteCount === 1n));
+  assert.ok(rows.every((row) => row.byteCount === '1'));
+});
+
+for (const injectedStorage of [true, false]) {
+  test(`main: duplicate injected DB keys reject before clients (storage injected: ${injectedStorage})`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-duplicate-keys-'));
+    try {
+      let touched = false;
+      const touch = async () => {
+        touched = true;
+        throw new Error('private-client');
+      };
+      const io = createIo();
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        {
+          env: {},
+          dbObjects: duplicateKeyRows(),
+          ...(injectedStorage ? { storageObjects: [] } : {}),
+          pgClient: { connect: touch, query: touch },
+          s3Client: { send: touch },
+        },
+      );
+      assert.strictEqual(code, 1);
+      assert.strictEqual(touched, false);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Reconciliation execution failed',
+      ]);
+      assert.deepStrictEqual(io.logs, []);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: queried duplicate keys reject before storage and receipt publication', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-duplicate-query-'));
+  try {
+    const io = createIo();
+    let queries = 0;
+    let storageTouched = false;
+    const code = await main(
+      [
+        'node',
+        'script',
+        '--dry-run',
+        '--output',
+        path.join(dir, 'receipt.json'),
+      ],
+      io,
+      {
+        env: {},
+        pgClient: {
+          async query() {
+            queries++;
+            return { rows: duplicateKeyRows() };
+          },
+        },
+        s3Client: {
+          async send() {
+            storageTouched = true;
+            throw new Error('private-storage');
+          },
+        },
+      },
+    );
+    assert.strictEqual(code, 1);
+    assert.strictEqual(queries, 1);
+    assert.strictEqual(storageTouched, false);
+    assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+    assert.deepStrictEqual(io.logs, [
+      'Connecting to PostgreSQL and Object Storage...',
+    ]);
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('main: unique opaque keys publish unchanged simulation evidence', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-unique-keys-'));
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const code = await main(
+      ['node', 'script', '--dry-run', '--output', target],
+      io,
+      {
+        env: {},
+        dbObjects: opaqueUniqueKeys.map((objectKey, i) =>
+          inventoryDbRecord({ id: `unique-${i}`, objectKey }),
+        ),
+        storageObjects: opaqueUniqueKeys.map((key) => ({ key, byteCount: 1 })),
+      },
+    );
+    assert.strictEqual(code, 0);
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.drill_type, 'storage_reconciliation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, opaqueUniqueKeys.length);
+    assert.deepStrictEqual(
+      report.matched.map((row) => row.objectKey),
+      opaqueUniqueKeys,
+    );
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 const invalidChecksumValues = [
   ['empty', ''],
   ['whitespace', ' \t '],
@@ -1256,7 +1573,12 @@ test('queryDatabaseStoredObjects: preserves fields and normalizes only defined c
   const rows = [undefined, null, '0001', '900719925474099312345'].map(
     (byteCount, i) =>
       Object.freeze(
-        inventoryDbRecord({ id: `id-${i}`, byteCount, extra: 'preserved' }),
+        inventoryDbRecord({
+          id: `id-${i}`,
+          objectKey: `key-${i}`,
+          byteCount,
+          extra: 'preserved',
+        }),
       ),
   );
   const result = await queryDatabaseStoredObjects({

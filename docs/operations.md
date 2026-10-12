@@ -7790,3 +7790,95 @@ invocations / 3456 tests / zero failures**. Final launch/dossier suite:
 and `Container Security Gate: PASSED (All Dockerfiles and Compose templates verified)`.
 These local checks do not supply the omitted online audit or operator live
 acceptance.
+
+## Prompt 312 — reject duplicate database object keys (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 311
+(`9e70d45`). The shared database inventory validator now rejects repeated exact
+`objectKey` strings independently of ID, organization, bucket or lifecycle.
+This matches the existing global `StoredObject.objectKey @unique` constraint
+and the committed migration's `"objectKey" text NOT NULL UNIQUE`; no schema or
+SQL change was needed. A database-only Set checks keys after required identity
+validation, before filtering/exclusion, pg row normalization or injected client
+acquisition. Existing repeated-ID and storage-key rejection remains intact.
+
+A synthetic planning probe previously returned `status: "clean"`,
+`matchedObjects: 2`, `totalBucketObjects: 1`, `exitCode: 0` for different IDs
+sharing one key; the query adapter accepted both rows. These local fixtures
+demonstrate contradictory input acceptance, not a production incident or a
+failure of PostgreSQL's uniqueness constraint. Invalid injected inventories
+now reject before either client is touched; invalid query results reject as a
+whole before storage acquisition. Existing value-free helper and sanitized
+runner errors produce no formatted summary, success message, staging or receipt.
+
+### Compatibility, review and limits
+
+Validation uses exact string identity without trimming, case folding, path or
+Unicode normalization, coercion or composite bucket/tenant identities. Distinct
+opaque keys retain the helper's existing semantics, including case, whitespace,
+path spelling, Unicode representation and prototype-like names. This does not
+implement every database key-format constraint. Frozen caller records/arrays,
+empty inventories, valid exclusions/counts, bigint conversion and successful
+simulation receipt publication remain supported. All 475 previous tests remain;
+22 new cases cover rejection and compatibility. One older count-conversion
+fixture now gives its four distinct IDs distinct keys; its assertions are
+unchanged. CLI, SQL, facade/signatures, report schema/modes, listing, publication,
+dependencies and Stage 7 remain unchanged. Repeated database keys are the
+intentional stricter runtime contract.
+
+Independent read-only review found no Critical, Important or Minor issues and
+no plan defects. It reproduced `tests 497`, `pass 497`, `fail 0`, both JavaScript
+syntax checks and clean diff checks. Feedback was evaluated against the actual
+diff and schema contract; no source fixes or significant re-review were needed.
+
+Operator scope, inventory authenticity/completeness, atomic DB/S3 snapshots,
+object-byte integrity, resource/network bounds and hostile in-process objects
+remain outside this boundary. No live database/storage service or operator
+evidence was inspected. Prompt 201, Category 6 live recovery approval and Phase
+12 exit remain open. Ordinary commit revert rolls back validation/tests/docs
+together without migration or storage mutation. No deployment or push occurred.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 497`, `pass 497`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0, no ESLint diagnostics.
+- `npm run typecheck`: shared `tsc -p tsconfig.json --noEmit`, client
+  `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`;
+  Prisma Client `7.9.1` generated; exit 0, no TypeScript diagnostics.
+- Permitted `npm run build`: `Compiled successfully in 4.3s`,
+  `Generating static pages using 7 workers (22/22) in 910ms`, followed by
+  `prisma generate && nest build`; exit 0.
+- Selected-region Prettier comparisons: `New regression block formatting: true`,
+  `Shared validator formatting: true`, `Existing fixture block formatting: true`.
+  Both JS syntax checks, help and `git diff --check` exit 0.
+- Readiness example: intended exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+The initial sandbox npm test wrapper failed opaquely with `test failed`.
+Direct red execution reported `tests 497`, `pass 479`, `fail 18`. The first
+green run exposed the old count fixture's repeated key (`pass 496`, `fail 1`);
+after correcting its identities, direct and permitted normal execution passed
+all 497 tests. The sandbox build failed with `Could not parse output from
+TypeScript's --showConfig.`; the unchanged permitted build passed. Online
+`ops:audit` remains omitted under the standing metadata-disclosure restriction;
+no fresh vulnerability inventory or full aggregate `ops:check` pass is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3478 tests / zero failures**. Every stage result was inspected.
+Final launch/dossier suite: `tests 182`, `pass 182`, `fail 0`; readiness suite:
+`tests 649`, `pass 649`, `fail 0`. Nonsuite checks report `ops template check
+passed`, `secret/default scan passed`, `docker runtime check passed`, license
+compliance `PASSED`, `SAST Gate: PASSED (Zero unreviewed blockers and zero expired
+suppressions)`, and `Container Security Gate: PASSED (All Dockerfiles and Compose
+templates verified)`. These local checks do not supply online audit or live
+operator acceptance.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

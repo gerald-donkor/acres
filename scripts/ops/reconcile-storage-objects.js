@@ -54,6 +54,7 @@ function validateInventory(objects, database) {
     new Error(`${database ? 'Database' : 'Storage'} inventory is invalid`);
   if (!Array.isArray(objects)) throw invalid();
   const seen = new Set();
+  const databaseKeys = database ? new Set() : null;
   const identities = database
     ? ['id', 'organizationId', 'bucket', 'objectKey']
     : ['key'];
@@ -69,6 +70,11 @@ function validateInventory(objects, database) {
     const identity = database ? object.id : object.key;
     if (seen.has(identity)) throw invalid();
     seen.add(identity);
+    // StoredObject.objectKey is globally unique, regardless of bucket/tenant.
+    if (databaseKeys) {
+      if (databaseKeys.has(object.objectKey)) throw invalid();
+      databaseKeys.add(object.objectKey);
+    }
     const count = object.byteCount;
     if (
       count !== undefined &&

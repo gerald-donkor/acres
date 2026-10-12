@@ -1184,3 +1184,18 @@ adds no acquisition or byte-integrity verification. Algorithm semantics,
 completeness/authenticity, snapshots, operator scope, resource limits and hostile
 in-process objects remain outside scope. Prompt 201, Category 6 live operator
 approval and Phase 12 exit stay open.
+
+**Prompt 312 reconciliation key uniqueness boundary (2026-10-12):** Shared
+database inventory validation now rejects repeated exact object keys across
+IDs, organizations and buckets, matching the existing global database uniqueness
+constraint. One storage entry cannot satisfy several contradictory database
+records. Validation precedes filters/exclusions, pg normalization and injected
+client acquisition; malformed query/injected inventories reject with fixed,
+value-free diagnostics and no summary or receipt. Exact opaque key semantics,
+frozen ownership and prior ID/storage-key checks remain supported. Focused
+**497/497** tests and independent review verify this local boundary; fixtures
+are synthetic and do not demonstrate a production database constraint failure.
+No SQL/schema, tenancy or publication change occurred. Completeness/authenticity,
+byte integrity, snapshots, operator scope, resource bounds and hostile in-process
+objects remain outside scope. Prompt 201, Category 6 live operator approval and
+Phase 12 exit stay open.
