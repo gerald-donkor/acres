@@ -2879,3 +2879,23 @@ Phase 12 exit remain open.
 All **33 independent offline operations stages** pass (**27 suite invocations /
 3517 tests / zero failures**, final launch/dossier **182/182**). This does not
 replace the omitted online audit or independently inspected live evidence.
+
+**Prompt 314 — validate storage listing key counts (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 313.
+Supplied S3 page `KeyCount` values must be nonnegative safe integers equal to
+that page's flat contents count. Contradictory or malformed counts reject
+before entry processing or pagination; later failures return no partial
+inventory, summary or receipt. Optional omitted/undefined counts, empty pages,
+per-page pagination and existing metadata conversion remain supported. Public
+contracts, CLI/SQL/comparison/publication and Stage 7 remain unchanged. All 536
+prior tests plus 38 regressions pass (**574/574**); lint/typecheck, permitted
+build (**22/22** pages), changed-region formatting, syntax/help and diff checks
+pass. All **33 offline operations stages** pass (**27 suite invocations /
+3555 tests / zero failures**, final launch/dossier **182/182**). Independent
+read-only review found no issues and reproduced **574/574**. Actual outputs,
+synthetic reproduction, sandbox limits, SDK semantics, compatibility and
+ordinary revert rollback are in `docs/operations.md` Prompt 314. Readiness stays
+**0 approved / 11 blocked / 70 blockers**. Online audit remains omitted under
+the metadata-disclosure restriction; no full aggregate `ops:check` pass or fresh
+inventory is claimed. No live services, deployment or push occurred. Prompt
+201, Category 6 live approval and Phase 12 exit remain open.

@@ -940,6 +940,15 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   supplied metadata and adds no byte hashing, authenticity, completeness or
   atomic-snapshot claim. Prompt 201,
   Category 6 live recovery approval and Phase 12 exit remain open.
+- Reconciliation page-count safety (prompt 314): supplied `KeyCount` must be a
+  nonnegative safe integer equal to that page's flat contents count. Invalid
+  first/later pages reject the complete listing with fixed diagnostics and no
+  summary/receipt. Correct the provider response and rerun into a fresh receipt
+  path; omitted/undefined counts remain supported. Focused **574/574**, all
+  **33 offline stages / 3555 tests**, lint/typecheck/build and independent
+  review passed. This consistency check adds no byte-integrity, authenticity,
+  total-completeness or snapshot claim. Prompt 201, Category 6 live approval
+  and Phase 12 exit remain open.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

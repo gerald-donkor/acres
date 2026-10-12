@@ -400,6 +400,15 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     )
       throw invalidListing();
 
+    // Requests use flat listings without a delimiter; counts are per page.
+    if (
+      response.KeyCount !== undefined &&
+      (!Number.isSafeInteger(response.KeyCount) ||
+        response.KeyCount < 0 ||
+        response.KeyCount !== (response.Contents?.length ?? 0))
+    )
+      throw invalidListing();
+
     if (response.Contents !== undefined) {
       for (const entry of response.Contents) {
         if (

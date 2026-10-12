@@ -3130,6 +3130,252 @@ function listingClient(pages) {
   };
 }
 
+const invalidListingCounts = [
+  ['null', null],
+  ['negative', -1],
+  ['fraction', 0.5],
+  ['unsafe integer', Number.MAX_SAFE_INTEGER + 1],
+  ['NaN', NaN],
+  ['infinity', Infinity],
+  ['negative infinity', -Infinity],
+  ['numeric text', '0'],
+  ['private text', 'private-count-sentinel'],
+  ['boolean', false],
+  ['bigint', 0n],
+  ['array', []],
+  ['object', {}],
+  ['boxed number', new Number(0)],
+  ['symbol', Symbol('private-count-sentinel')],
+  [
+    'coercible object',
+    {
+      valueOf() {
+        throw new Error('private-count-coercion-must-not-run');
+      },
+    },
+  ],
+];
+
+for (const [label, KeyCount] of invalidListingCounts) {
+  test(`listBucketObjects: rejects ${label} key count without coercion`, async () => {
+    const s3Client = listingClient([
+      Object.freeze({ IsTruncated: false, KeyCount, Contents: [] }),
+    ]);
+    await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+      message: 'Object storage listing is invalid or incomplete',
+    });
+    assert.strictEqual(s3Client.inputs.length, 1);
+  });
+}
+
+const contradictoryCountPages = [
+  ['missing contents', { KeyCount: 1 }],
+  ['empty contents', { KeyCount: 1, Contents: [] }],
+  [
+    'zero with objects',
+    { KeyCount: 0, Contents: [{ Key: 'private-key', Size: 1 }] },
+  ],
+  [
+    'short contents',
+    { KeyCount: 2, Contents: [{ Key: 'private-key', Size: 1 }] },
+  ],
+  [
+    'excess contents',
+    {
+      KeyCount: 1,
+      Contents: [
+        { Key: 'private-a', Size: 1 },
+        { Key: 'private-b', Size: 2 },
+      ],
+    },
+  ],
+];
+
+for (const [label, patch] of contradictoryCountPages) {
+  for (const later of [false, true]) {
+    test(`listBucketObjects: rejects ${later ? 'later' : 'first'} contradictory count (${label}) before pagination`, async () => {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              KeyCount: 1,
+              Contents: [{ Key: 'valid', Size: 1 }],
+              NextContinuationToken: 'private-A',
+            },
+          ]
+        : [];
+      pages.push(
+        Object.freeze({
+          ...patch,
+          IsTruncated: true,
+          NextContinuationToken: 'private-B',
+        }),
+      );
+      pages.push({ IsTruncated: false, KeyCount: 0 });
+      const s3Client = listingClient(pages);
+      await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+        message: 'Object storage listing is invalid or incomplete',
+      });
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+    });
+  }
+}
+
+for (const [label, patch] of [
+  ['omitted', {}],
+  ['undefined', { KeyCount: undefined }],
+  ['zero', { KeyCount: 0 }],
+  ['negative zero', { KeyCount: -0 }],
+]) {
+  for (const Contents of [undefined, Object.freeze([])]) {
+    test(`listBucketObjects: accepts ${label} count with ${Contents ? 'empty' : 'absent'} contents`, async () => {
+      const page = Object.freeze({ ...patch, IsTruncated: false, Contents });
+      assert.deepStrictEqual(
+        await listBucketObjects({
+          s3Client: listingClient([page]),
+          bucket: 'fixture',
+        }),
+        [],
+      );
+    });
+  }
+}
+
+test('listBucketObjects: counted and uncounted frozen pages preserve metadata and per-page counts', async () => {
+  const date = new Date('2026-10-01T12:00:00Z');
+  const checksum = Buffer.alloc(32, 0xab);
+  const entry = Object.freeze({
+    Key: 'scope/one',
+    Size: 4,
+    LastModified: date,
+    ChecksumSHA256: checksum.toString('base64'),
+  });
+  const pages = Object.freeze([
+    Object.freeze({
+      IsTruncated: true,
+      KeyCount: 1,
+      Contents: Object.freeze([entry]),
+      NextContinuationToken: ' token A ',
+    }),
+    Object.freeze({
+      IsTruncated: true,
+      KeyCount: 0,
+      NextContinuationToken: 'B',
+    }),
+    Object.freeze({
+      IsTruncated: true,
+      Contents: Object.freeze([{ Key: 'scope/two', Size: 0 }]),
+      NextContinuationToken: 'C',
+    }),
+    Object.freeze({
+      IsTruncated: false,
+      KeyCount: 1,
+      Contents: Object.freeze([{ Key: 'scope/three', Size: 7 }]),
+    }),
+  ]);
+  const s3Client = listingClient(pages);
+  assert.deepStrictEqual(
+    await listBucketObjects({ s3Client, bucket: 'fixture', prefix: 'scope/' }),
+    [
+      {
+        key: 'scope/one',
+        byteCount: 4,
+        lastModified: date.toISOString(),
+        checksumHex: checksum.toString('hex'),
+      },
+      { key: 'scope/two', byteCount: 0, lastModified: null, checksumHex: null },
+      {
+        key: 'scope/three',
+        byteCount: 7,
+        lastModified: null,
+        checksumHex: null,
+      },
+    ],
+  );
+  assert.deepStrictEqual(
+    s3Client.inputs.map((input) => input.ContinuationToken),
+    [undefined, ' token A ', 'B', 'C'],
+  );
+  assert.strictEqual(pages[0].Contents[0], entry);
+  assert.strictEqual(entry.LastModified, date);
+});
+
+for (const later of [false, true]) {
+  test(`main: ${later ? 'later' : 'first'} terminal count contradiction publishes no evidence`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-count-failure-'));
+    try {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              KeyCount: 1,
+              Contents: [{ Key: 'valid', Size: 1 }],
+              NextContinuationToken: 'private-token',
+            },
+          ]
+        : [];
+      pages.push({ IsTruncated: false, KeyCount: 1, Contents: [] });
+      const io = createIo();
+      const s3Client = listingClient(pages);
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        { dbObjects: [], s3Client, env: {} },
+      );
+      assert.strictEqual(code, 1);
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: accurate per-page key counts publish a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-count-success-'));
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const s3Client = listingClient([
+      { IsTruncated: true, KeyCount: 0, NextContinuationToken: 'A' },
+      {
+        IsTruncated: false,
+        KeyCount: 1,
+        Contents: [{ Key: 'fixture-key', Size: 1 }],
+      },
+    ]);
+    assert.strictEqual(
+      await main(['node', 'script', '--dry-run', '--output', target], io, {
+        env: {},
+        dbObjects: [inventoryDbRecord()],
+        s3Client,
+      }),
+      0,
+    );
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.strictEqual(report.summary.totalBucketObjects, 1);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 for (const contents of [undefined, []]) {
   test(`listBucketObjects: terminal empty page (${contents === undefined ? 'omitted' : 'array'})`, async () => {
     const s3Client = listingClient([

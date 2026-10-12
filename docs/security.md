@@ -1213,3 +1213,18 @@ No SQL/schema, tenancy, listing or publication change occurred. No content
 hashing was added; byte integrity, completeness/authenticity, snapshots,
 operator scope, resource bounds and hostile in-process objects remain outside
 scope. Prompt 201, Category 6 live operator approval and Phase 12 exit stay open.
+
+**Prompt 314 storage listing count boundary (2026-10-12):** The listing
+adapter now rejects malformed or contradictory supplied `KeyCount` metadata
+before consuming entries or continuation tokens. Flat listings send no
+delimiter; each supplied count must equal that page's contents length, with
+absent contents counted as zero. Later failures reject the whole inventory.
+Fixed listing/runner diagnostics expose no provider count, token or key;
+failures produce no summary or receipt. Omitted/undefined counts remain valid
+under the installed SDK's optional field contract. Focused **574/574** tests
+and independent review verify this consistency boundary. CLI, SQL, comparison,
+receipt publication and Stage 7 are unchanged. Optional counts cannot prove
+total completeness or authenticity; no object-byte hashing, atomic snapshots,
+resource/network bounds, provider scope attestation or hostile in-process
+object handling was added. Prompt 201, Category 6 live operator approval and
+Phase 12 exit stay open.

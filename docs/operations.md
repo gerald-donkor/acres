@@ -7968,3 +7968,96 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 314 — validate storage listing key counts (2026-10-12)
+
+Continued Phase 12K's recovery-evidence gate after committed Prompt 313
+(`7401daf`). `listBucketObjects` now validates supplied `KeyCount` immediately
+after page/contents structure checks, before entries or pagination. A supplied
+value must be a primitive nonnegative safe integer equal to that page's
+`Contents.length`, or zero when contents are absent. Nulls, strings, fractions,
+unsafe/nonfinite numbers, negatives, bigints, booleans and ordinary/boxed/
+coercible objects reject without conversion. The existing fixed listing error
+and sanitized runner error remain; later invalid pages reject the entire
+inventory and publish no summary, success message or receipt.
+
+A synthetic planning probe previously accepted
+`{ IsTruncated: false, KeyCount: 1, Contents: [] }`; comparison against an empty
+DB inventory returned `status: 'clean'`, `exitCode: 0`. The same local probe now
+rejects with `Object storage listing is invalid or incomplete`. This is an
+adapter consistency reproduction, not a production incident or proof of lost
+objects. All 536 previous tests remain; 38 added regressions cover invalid
+count classes, first/later page contradictions and request termination,
+optional counts/empty pages, per-page counted/uncounted pagination, frozen
+ownership, size/date/checksum mapping and runner failure/success receipts.
+
+### Compatibility, review and limits
+
+Installed `@aws-sdk/client-s3` `ListObjectsV2Output` declares optional numeric
+`KeyCount` as the keys returned by that request; `CommonPrefixes` require a
+delimiter. This utility requests flat listings without a delimiter. Validation
+uses page counts, never the cumulative inventory length. Omitted/undefined
+counts remain accepted; zero (including numeric negative zero), absent/empty
+contents and accurate positive counts preserve existing behavior. Input pages
+remain caller-owned. CLI, SQL, facade/public signatures, comparison policy,
+report schema/modes, publication, dependencies and Stage 7 remain unchanged.
+
+Independent read-only review found no Critical, Important or Minor issues and
+reproduced `tests 574`, `pass 574`, `fail 0` with both direct execution and the
+npm script, plus clean diff checks. Feedback was evaluated against the actual
+guard, runner boundaries, optional field contract and installed SDK semantics;
+no fixes or significant re-review were necessary.
+
+Count consistency cannot establish total inventory completeness, authenticity,
+provider scope, atomic DB/S3 snapshots or object-byte integrity. Optional count
+omission remains an intentional compatibility limit. No response-echo/MaxKeys
+checks, content hashing, resource/network bounds or hostile getters/proxies
+were added. No live service or operator evidence was inspected. Prompt 201,
+Category 6 live recovery approval and Phase 12 exit remain open. Ordinary
+commit revert rolls back validation/tests/docs together without migration or
+storage mutation. No deployment or push occurred.
+
+### Verification
+
+Actual successful outputs:
+
+- `npm run ops:reconcile-test`: `tests 574`, `pass 574`, `fail 0`.
+- `npm run lint`: client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`; exit 0.
+- `npm run typecheck`: shared/client TypeScript checks and server
+  `prisma generate && tsc -p tsconfig.json --noEmit`; exit 0.
+- Permitted `npm run build`: `Compiled successfully in 3.3s`,
+  `Generating static pages using 7 workers (22/22) in 1123ms`, followed by
+  `prisma generate && nest build`; exit 0.
+- Changed-region Prettier: spec `changed-region formatting true`, source
+  `Source changed-region formatting: true`. Both JS syntax checks, CLI help
+  and `git diff --check` exit 0.
+- Readiness example: expected exit 1, `Approved Categories: 0`,
+  `Unresolved / Blocked: 11`, `Total Blockers Detected: 70`.
+
+The sandbox npm test wrapper failed opaquely with `test failed`; direct red
+execution reported `tests 574`, `pass 546`, `fail 28`. After the guard change,
+direct and permitted normal execution passed all 574. The sandbox build failed
+with `Could not parse output from TypeScript's --showConfig.`; the unchanged
+permitted build passed. Initial isolated source-format checks omitted the
+surrounding loop indentation; correcting the check wrapper passed without
+source changes. Online `ops:audit` remains omitted under the standing
+metadata-disclosure restriction; no fresh vulnerability inventory or full
+aggregate `ops:check` success is claimed.
+
+All **33 independent offline operations stages** exited 0: **27 suite
+invocations / 3555 tests / zero failures**. Every stage result and suite summary
+was inspected. Final launch/dossier: `tests 182`, `pass 182`, `fail 0`;
+readiness: `tests 649`, `pass 649`, `fail 0`. Nonsuite checks report
+`ops template check passed`, `secret/default scan passed`, `docker runtime
+check passed`, license compliance `PASSED`, `SAST Gate: PASSED (Zero unreviewed
+blockers and zero expired suppressions)`, and `Container Security Gate: PASSED
+(All Dockerfiles and Compose templates verified)`. Offline checks supply
+neither online audit results nor live recovery acceptance.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
