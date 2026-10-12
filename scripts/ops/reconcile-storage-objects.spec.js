@@ -3376,6 +3376,185 @@ test('main: accurate per-page key counts publish a clean simulation receipt', as
   }
 });
 
+const invalidListingCommonPrefixes = [
+  ['null', null],
+  ['string', 'prefix/'],
+  ['empty string', ''],
+  ['numeric', 42],
+  ['boolean true', true],
+  ['boolean false', false],
+  ['bigint', 1n],
+  ['symbol', Symbol('prefix')],
+  ['plain object', {}],
+  ['boxed string', Object.freeze(new String('prefix/'))],
+  [
+    'coercible object',
+    {
+      valueOf() {
+        throw new Error('private-prefix-coercion-must-not-run');
+      },
+    },
+  ],
+];
+
+for (const [label, CommonPrefixes] of invalidListingCommonPrefixes) {
+  test(`listBucketObjects: rejects ${label} CommonPrefixes without coercion`, async () => {
+    const s3Client = listingClient([
+      Object.freeze({ IsTruncated: false, CommonPrefixes, Contents: [] }),
+    ]);
+    await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+      message: 'Object storage listing is invalid or incomplete',
+    });
+    assert.strictEqual(s3Client.inputs.length, 1);
+  });
+}
+
+const nonEmptyCommonPrefixPages = [
+  ['single prefix', [{ Prefix: 'sub/' }]],
+  ['multiple prefixes', [{ Prefix: 'a/' }, { Prefix: 'b/' }]],
+  ['empty prefix string', [{ Prefix: '' }]],
+  ['plain string entry', ['sub/']],
+  ['empty entry object', [{}]],
+];
+
+for (const [label, CommonPrefixes] of nonEmptyCommonPrefixPages) {
+  for (const later of [false, true]) {
+    test(`listBucketObjects: rejects ${later ? 'later' : 'first'} non-empty CommonPrefixes (${label}) before pagination`, async () => {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              Contents: [{ Key: 'valid', Size: 1 }],
+              NextContinuationToken: 'token-A',
+            },
+          ]
+        : [];
+      pages.push(
+        Object.freeze({
+          IsTruncated: true,
+          CommonPrefixes: Object.freeze(CommonPrefixes),
+          NextContinuationToken: 'token-B',
+        }),
+      );
+      pages.push({ IsTruncated: false });
+      const s3Client = listingClient(pages);
+      await assert.rejects(listBucketObjects({ s3Client, bucket: 'fixture' }), {
+        message: 'Object storage listing is invalid or incomplete',
+      });
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+    });
+  }
+}
+
+for (const [label, patch] of [
+  ['omitted', {}],
+  ['undefined', { CommonPrefixes: undefined }],
+  ['empty array', { CommonPrefixes: [] }],
+  ['frozen empty array', { CommonPrefixes: Object.freeze([]) }],
+]) {
+  for (const Contents of [
+    undefined,
+    Object.freeze([]),
+    Object.freeze([{ Key: 'fixture-key', Size: 10 }]),
+  ]) {
+    test(`listBucketObjects: accepts ${label} CommonPrefixes with ${Contents === undefined ? 'absent' : Contents.length === 0 ? 'empty' : 'populated'} contents`, async () => {
+      const page = Object.freeze({ ...patch, IsTruncated: false, Contents });
+      const result = await listBucketObjects({
+        s3Client: listingClient([page]),
+        bucket: 'fixture',
+      });
+      assert.strictEqual(result.length, Contents ? Contents.length : 0);
+      if (Contents && Contents.length > 0) {
+        assert.strictEqual(result[0].key, 'fixture-key');
+        assert.strictEqual(result[0].byteCount, 10);
+      }
+    });
+  }
+}
+
+for (const later of [false, true]) {
+  test(`main: ${later ? 'later' : 'first'} terminal CommonPrefixes failure publishes no evidence`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-prefix-failure-'));
+    try {
+      const pages = later
+        ? [
+            {
+              IsTruncated: true,
+              Contents: [{ Key: 'valid', Size: 1 }],
+              NextContinuationToken: 'private-token',
+            },
+          ]
+        : [];
+      pages.push({
+        IsTruncated: false,
+        CommonPrefixes: [{ Prefix: 'sub/' }],
+        Contents: [],
+      });
+      const io = createIo();
+      const s3Client = listingClient(pages);
+      const code = await main(
+        [
+          'node',
+          'script',
+          '--dry-run',
+          '--output',
+          path.join(dir, 'receipt.json'),
+        ],
+        io,
+        { dbObjects: [], s3Client, env: {} },
+      );
+      assert.strictEqual(code, 1);
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('main: empty CommonPrefixes array publishes a clean simulation receipt', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-prefix-success-'));
+  try {
+    const target = path.join(dir, 'receipt.json');
+    const io = createIo();
+    const s3Client = listingClient([
+      {
+        IsTruncated: true,
+        CommonPrefixes: [],
+        NextContinuationToken: 'A',
+      },
+      {
+        IsTruncated: false,
+        CommonPrefixes: Object.freeze([]),
+        Contents: [{ Key: 'fixture-key', Size: 1 }],
+      },
+    ]);
+    assert.strictEqual(
+      await main(['node', 'script', '--dry-run', '--output', target], io, {
+        env: {},
+        dbObjects: [inventoryDbRecord()],
+        s3Client,
+      }),
+      0,
+    );
+    assert.deepStrictEqual(io.errors, []);
+    const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.strictEqual(report.execution_mode, 'simulation');
+    assert.strictEqual(report.summary.status, 'clean');
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.strictEqual(report.summary.totalBucketObjects, 1);
+    assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 for (const contents of [undefined, []]) {
   test(`listBucketObjects: terminal empty page (${contents === undefined ? 'omitted' : 'array'})`, async () => {
     const s3Client = listingClient([

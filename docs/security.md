@@ -1228,3 +1228,18 @@ total completeness or authenticity; no object-byte hashing, atomic snapshots,
 resource/network bounds, provider scope attestation or hostile in-process
 object handling was added. Prompt 201, Category 6 live operator approval and
 Phase 12 exit stay open.
+
+**Prompt 315 storage listing common prefixes boundary (2026-10-12):** The
+listing adapter now rejects non-array or non-empty `CommonPrefixes` metadata
+before consuming entries or continuation tokens. Flat listings send no
+delimiter; non-empty prefix groups indicate rolled-up keys omitted from
+contents. Later failures reject the whole inventory. Fixed listing/runner
+diagnostics expose no provider prefix, token or key; failures produce no
+summary or receipt. Omitted/undefined prefixes and empty arrays remain valid
+under the installed SDK's optional field contract. Focused **610/610** tests
+and independent review verify this consistency boundary. CLI, SQL, comparison,
+receipt publication and Stage 7 are unchanged. Partition checks cannot prove
+total completeness or authenticity; no object-byte hashing, atomic snapshots,
+resource/network bounds, provider scope attestation or hostile in-process
+object handling was added. Prompt 201, Category 6 live operator approval and
+Phase 12 exit stay open.

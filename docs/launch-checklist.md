@@ -949,6 +949,16 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   review passed. This consistency check adds no byte-integrity, authenticity,
   total-completeness or snapshot claim. Prompt 201, Category 6 live approval
   and Phase 12 exit remain open.
+- Reconciliation common-prefixes safety (prompt 315): supplied `CommonPrefixes`,
+  when defined, must be an array with length zero. In flat listings without
+  delimiters, non-empty prefixes indicate rolled-up keys omitted from contents;
+  invalid first/later pages reject the complete listing with fixed diagnostics
+  and no summary/receipt. Correct the provider response and rerun into a fresh
+  receipt path; omitted/undefined prefixes and empty arrays remain supported.
+  Focused **610/610**, all **33 offline stages / 3591 tests**, lint/typecheck/build
+  and independent review passed. This consistency check adds no byte-integrity,
+  authenticity, total-completeness or snapshot claim. Prompt 201, Category 6 live
+  approval and Phase 12 exit remain open.
 - Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
   destination, cron schedule, `restore_drill_completed: true` with drill date,
   `db_object_reconciliation_tested: true`

@@ -409,6 +409,14 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     )
       throw invalidListing();
 
+    // Flat listings require unpartitioned keys; grouped prefixes reject.
+    if (
+      response.CommonPrefixes !== undefined &&
+      (!Array.isArray(response.CommonPrefixes) ||
+        response.CommonPrefixes.length > 0)
+    )
+      throw invalidListing();
+
     if (response.Contents !== undefined) {
       for (const entry of response.Contents) {
         if (

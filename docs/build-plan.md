@@ -2899,3 +2899,24 @@ ordinary revert rollback are in `docs/operations.md` Prompt 314. Readiness stays
 the metadata-disclosure restriction; no full aggregate `ops:check` pass or fresh
 inventory is claimed. No live services, deployment or push occurred. Prompt
 201, Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 315 — reject storage listing common prefixes (2026-10-12):**
+Continued Phase 12K's recovery-evidence gate after committed Prompt 314.
+Supplied S3 `CommonPrefixes` values, when defined, must be an array with
+`length === 0`. Because flat listings omit delimiters, partitioned prefix
+groups indicate omitted object keys and reject immediately before entry
+processing or pagination; later failures return no partial inventory,
+summary or receipt. Optional omitted/undefined prefixes, empty pages,
+per-page pagination, caller ownership and existing metadata conversion remain
+supported. Public contracts, CLI/SQL/comparison/publication and Stage 7 remain
+unchanged. All 574 prior tests plus 36 regressions pass (**610/610**);
+lint/typecheck, permitted build (**22/22** pages), changed-region formatting,
+syntax/help and diff checks pass. All **33 offline operations stages** pass
+(**27 suite invocations / 3591 tests / zero failures**, final launch/dossier
+**182/182**). Independent read-only review found no issues and approved merging.
+Actual outputs, synthetic reproduction, SDK semantics, compatibility and
+ordinary revert rollback are in `docs/operations.md` Prompt 315. Readiness stays
+**0 approved / 11 blocked / 70 blockers**. Online audit remains omitted under
+the metadata-disclosure restriction; no full aggregate `ops:check` pass or fresh
+inventory is claimed. No live services, deployment or push occurred. Prompt
+201, Category 6 live approval and Phase 12 exit remain open.
