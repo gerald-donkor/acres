@@ -3145,3 +3145,20 @@ rollback are in `docs/operations.md` Prompt 327. Readiness remains **0 approved 
 ops:check or fresh vulnerability inventory is claimed. No live services,
 operator approval, deployment or push occurred. Prompt 201, Category 6 live
 approval and Phase 12 exit stay open.
+
+**Prompt 328 — validate storage checksum algorithm pairing (2026-10-12):**
+Continued Phase 12K after committed Prompt 327. Supplied algorithm metadata
+accompanying a non-null SHA256 listing extension must be an array containing
+exact primitive SHA256, with nonblank primitive strings in every slot.
+Contradictory/malformed/sparse arrays reject whole scans before conversion or
+further requests, with fixed diagnostics and no summary/receipt. Omitted hints,
+multi-algorithm lists and digestless metadata retain compatibility. All
+**1132/1132** focused tests, lint/typecheck, permitted build (**22/22** pages),
+formatting/syntax/help/diff and **33 offline stages / 27 suite invocations /
+4113 tests / zero failures or skipped** passed. Independent read-only review
+found no issues and reproduced **1132/1132**. Actual red/green outputs, SDK
+semantics, limits and ordinary revert rollback are in docs/operations.md
+Prompt 328. Readiness remains **0 approved / 11 blocked / 70 blockers**.
+Online audit remains omitted; no aggregate ops:check or fresh vulnerability
+inventory is claimed. No live services, operator approval, deployment or push.
+Prompt 201, Category 6 live approval and Phase 12 exit stay open.

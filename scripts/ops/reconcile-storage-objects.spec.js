@@ -6389,3 +6389,287 @@ for (const [label, fields] of [
     }
   });
 }
+
+const incompatibleChecksumAlgorithms = [
+  ['CRC32 only', ['CRC32']],
+  ['empty array', []],
+  ['null', null],
+  ['scalar', 'SHA256'],
+  ['boxed scalar', new String('SHA256')],
+  ['number', 1],
+  ['boolean', false],
+  ['object', {}],
+  ['wrong case', ['sha256']],
+  ['padded name', [' SHA256 ']],
+  ['empty member', ['SHA256', '']],
+  ['blank member', ['SHA256', ' \t']],
+  ['null member', ['SHA256', null]],
+  ['undefined member', ['SHA256', undefined]],
+  ['numeric member', ['SHA256', 1]],
+  ['boolean member', ['SHA256', false]],
+  ['nested member', ['SHA256', ['CRC32']]],
+  ['boxed member', ['SHA256', new String('CRC32')]],
+  ['sparse array', new Array(2)],
+  ['leading hole', [, 'SHA256']],
+  ['trailing hole', ['SHA256', ,]],
+  [
+    'coercible member',
+    [
+      'SHA256',
+      {
+        [Symbol.toPrimitive]() {
+          throw new Error('private-algorithm-coercion');
+        },
+      },
+    ],
+  ],
+];
+
+for (const later of [false, true]) {
+  for (const [label, algorithms] of incompatibleChecksumAlgorithms) {
+    if (Array.isArray(algorithms)) Object.freeze(algorithms);
+    test(`listBucketObjects: rejects ${label} digest algorithms on ${later ? 'later' : 'first'} page`, async () => {
+      const entry = Object.freeze({
+        Key: 'scope/conflict',
+        Size: 1,
+        ChecksumSHA256: canonicalSha256,
+        ChecksumType: 'FULL_OBJECT',
+        ChecksumAlgorithm: algorithms,
+      });
+      const pages = bucketContinuityPages([
+        ...(later ? [{}] : []),
+        { Contents: Object.freeze([entry]) },
+        {},
+      ]);
+      const s3Client = listingClient(pages);
+      await assert.rejects(
+        listBucketObjects({ s3Client, bucket: 'fixture', prefix: 'scope/' }),
+        { message: 'Object storage listing is invalid or incomplete' },
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.strictEqual(entry.ChecksumAlgorithm, algorithms);
+    });
+  }
+}
+
+for (const [label, fields] of [
+  ['omitted', {}],
+  ['undefined', { ChecksumAlgorithm: undefined }],
+  ['SHA256', { ChecksumAlgorithm: ['SHA256'] }],
+  ['SHA256 first', { ChecksumAlgorithm: ['SHA256', 'CRC32'] }],
+  ['SHA256 last', { ChecksumAlgorithm: ['CRC32', 'SHA256'] }],
+  ['repeated SHA256', { ChecksumAlgorithm: ['SHA256', 'SHA256'] }],
+  ['future algorithm', { ChecksumAlgorithm: ['FUTURE_ALGORITHM', 'SHA256'] }],
+]) {
+  if (Array.isArray(fields.ChecksumAlgorithm))
+    Object.freeze(fields.ChecksumAlgorithm);
+  test(`listBucketObjects: preserves ${label} digest algorithms across frozen pages`, async () => {
+    const pages = bucketContinuityPages([{}, {}]).map(page =>
+      Object.freeze({
+        ...page,
+        Contents: Object.freeze(
+          page.Contents.map(entry =>
+            Object.freeze({
+              ...entry,
+              ...fields,
+              ChecksumType: 'FULL_OBJECT',
+            }),
+          ),
+        ),
+      }),
+    );
+    const s3Client = listingClient(pages);
+    assert.deepStrictEqual(
+      await listBucketObjects(
+        Object.freeze({ s3Client, bucket: 'fixture', prefix: 'scope/' }),
+      ),
+      [0, 1].map(index => ({
+        key: `scope/${index}`,
+        byteCount: index + 1,
+        lastModified: '2026-01-01T00:00:00.000Z',
+        checksumHex: Buffer.alloc(32, 1).toString('hex'),
+      })),
+    );
+    assert.deepStrictEqual(s3Client.inputs, [
+      { Bucket: 'fixture', Prefix: 'scope/', ContinuationToken: undefined },
+      { Bucket: 'fixture', Prefix: 'scope/', ContinuationToken: '1' },
+    ]);
+    assert.strictEqual(
+      pages[0].Contents[0].ChecksumAlgorithm,
+      fields.ChecksumAlgorithm,
+    );
+  });
+}
+
+for (const [label, digestFields] of [
+  ['absent', {}],
+  ['undefined', { ChecksumSHA256: undefined }],
+  ['null', { ChecksumSHA256: null }],
+]) {
+  for (const [hint, algorithms] of [
+    ['CRC32 only', ['CRC32']],
+    ['null', null],
+    ['scalar', 'SHA256'],
+    ['sparse', ['SHA256', ,]],
+    ['coercible', incompatibleChecksumAlgorithms.at(-1)[1]],
+  ]) {
+    test(`listBucketObjects: ignores ${hint} algorithms with ${label} digest`, async () => {
+      const entry = Object.freeze({
+        Key: 'scope/key',
+        Size: 1,
+        ChecksumAlgorithm: algorithms,
+        ChecksumType: 'COMPOSITE',
+        ...digestFields,
+      });
+      const s3Client = listingClient([
+        Object.freeze({ IsTruncated: false, Contents: Object.freeze([entry]) }),
+      ]);
+      assert.deepStrictEqual(
+        await listBucketObjects({
+          s3Client,
+          bucket: 'fixture',
+          prefix: 'scope/',
+        }),
+        [
+          {
+            key: 'scope/key',
+            byteCount: 1,
+            lastModified: null,
+            checksumHex: null,
+          },
+        ],
+      );
+      assert.strictEqual(s3Client.inputs.length, 1);
+      assert.strictEqual(entry.ChecksumAlgorithm, algorithms);
+    });
+  }
+}
+
+for (const later of [false, true]) {
+  test(`main: ${later ? 'later' : 'first'} contradictory digest algorithms publish no evidence`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-digest-algorithm-failure-'),
+    );
+    try {
+      const s3Client = listingClient(
+        bucketContinuityPages([
+          ...(later ? [{}] : []),
+          {
+            Contents: [
+              {
+                Key: 'scope/private-conflict',
+                Size: 1,
+                ChecksumSHA256: canonicalSha256,
+                ChecksumType: 'FULL_OBJECT',
+                ChecksumAlgorithm: ['CRC32'],
+              },
+            ],
+          },
+          {},
+        ]),
+      );
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--bucket',
+            'fixture',
+            '--prefix',
+            'scope/',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          { env: {}, dbObjects: [], s3Client },
+        ),
+        1,
+      );
+      assert.strictEqual(s3Client.inputs.length, later ? 2 : 1);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, [
+        'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const [label, fields] of [
+  [
+    'typed SHA256',
+    {
+      ChecksumSHA256: canonicalSha256,
+      ChecksumType: 'FULL_OBJECT',
+      ChecksumAlgorithm: ['SHA256'],
+    },
+  ],
+  [
+    'multiple algorithms',
+    { ChecksumSHA256: canonicalSha256, ChecksumAlgorithm: ['CRC32', 'SHA256'] },
+  ],
+  ['legacy digest', { ChecksumSHA256: canonicalSha256 }],
+  [
+    'CRC32 hint without digest',
+    { ChecksumAlgorithm: ['CRC32'], ChecksumType: 'COMPOSITE' },
+  ],
+]) {
+  test(`main: ${label} retains clean simulation receipt publication`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-digest-algorithm-success-'),
+    );
+    try {
+      const target = path.join(dir, 'receipt.json');
+      const s3Client = listingClient([
+        {
+          IsTruncated: false,
+          Contents: [{ Key: 'scope/key', Size: 1, ...fields }],
+        },
+      ]);
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--bucket',
+            'fixture',
+            '--output',
+            target,
+          ],
+          io,
+          {
+            env: {},
+            s3Client,
+            dbObjects: [
+              inventoryDbRecord({
+                bucket: 'fixture',
+                objectKey: 'scope/key',
+                checksumAlgorithm: 'sha256',
+                checksumHex: Buffer.from(canonicalSha256, 'base64').toString(
+                  'hex',
+                ),
+              }),
+            ],
+          },
+        ),
+        0,
+      );
+      const report = JSON.parse(fs.readFileSync(target, 'utf8'));
+      assert.strictEqual(report.execution_mode, 'simulation');
+      assert.strictEqual(report.summary.status, 'clean');
+      assert.strictEqual(report.summary.matchedObjects, 1);
+      assert.deepStrictEqual(io.errors, []);
+      assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}

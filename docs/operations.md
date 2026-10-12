@@ -9206,3 +9206,109 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 328 — validate storage checksum algorithm pairing (2026-10-12)
+
+Continued Phase 12K after committed Prompt 327 (`e4f22c9`), with the user's
+instruction to execute the prepared plan. A fresh offline probe supplied a
+canonical SHA256 listing extension, FULL_OBJECT type and CRC32-only algorithm
+metadata. Before the change it reported:
+
+```text
+{"accepted":1,"status":"clean","matched":1}
+```
+
+Inside the existing non-null/defined ChecksumSHA256 branch, any defined
+ChecksumAlgorithm must now be an array containing exact primitive SHA256.
+Every slot must contain a primitive nonblank string; for-of iteration rejects
+sparse slots as well as malformed members without coercion. Invalid first or
+later pages reject the complete scan before conversion, inventory inclusion or
+another send. Runner failures preserve fixed diagnostics and publish no
+summary, receipt or temporary file. The same contradiction now reports:
+
+```text
+{"rejected":true,"error":"Object storage listing is invalid or incomplete"}
+```
+
+Omitted/undefined algorithms preserve legacy digest extensions. SHA256 can
+appear with other nonblank names, in any order or with duplicates, without a
+provider enum allowlist. Absent/undefined/null digests continue ignoring unused
+algorithm/type hints, including CRC32-only metadata. FULL_OBJECT validation,
+canonical base64 decoding, literal keys, pagination, sizes/dates and frozen
+ownership remain unchanged. Typed, multiple-algorithm, legacy and digestless
+fixtures still publish clean simulation receipts. CLI/env defaults, comparison,
+SQL, TS facade, receipt schema/publication and Stage 7 were not changed.
+
+Installed S3 `_Object` declarations describe ChecksumAlgorithm as an optional
+array of algorithms used to create the checksum. Standard ListObjectsV2 entries
+carry hints without digest values; ChecksumSHA256 remains the utility's existing
+optional provider extension. This check rejects contradictory supplied evidence;
+it does not acquire or verify object bytes.
+
+All 1060 prior cases and 72 new cases pass. The actual pre-change direct test
+run returned `tests 1132`, `pass 1086`, `fail 46`, `skipped 0`. Green direct and
+npm focused runs returned:
+
+```text
+ℹ tests 1132
+ℹ pass 1132
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual verification:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| permitted `node --test scripts/ops/reconcile-storage-objects.spec.js` and `npm run ops:reconcile-test` | 0 | `tests 1132`, `pass 1132`, `fail 0`, `skipped 0` |
+| source/spec `node -c`; CLI `--help` | 0 | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| changed-region Prettier | 0 | `{"specFormatting":true}` and `{"guardFormatting":true}`; guard width accounts for existing indentation |
+| `npm run lint` | 0 | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"` |
+| `npm run typecheck` | 0 | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1 |
+| permitted `npm run build` | 0 | `✓ Compiled successfully in 2.5s`; `✓ Generating static pages using 7 workers (22/22) in 574ms`; `prisma generate && nest build` |
+| `git diff --check` | 0 | silent |
+
+The restricted Node test initially reported only a single failing worker wrapper;
+that result was not counted as individual-suite evidence. Restricted build
+failed with `Could not parse output from TypeScript's --showConfig.` Normal
+permitted child-process reruns supplied complete red/green and build evidence
+without weakening assertions. Launch-readiness ran with ordinary permitted
+child processes and retained expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+All 33 independent offline stages resolved from current ops:check passed:
+**27 suite invocations / 4113 tests / 4113 passed / zero failed or skipped**.
+Every stage exit and individual suite total was inspected, including template,
+secret/default, runtime, SBOM/license, SAST and container gates. Final launch/
+dossier output was `tests 182`, `pass 182`, `fail 0`. Online ops:audit remains
+omitted under the recorded registry metadata-disclosure restriction; no full
+aggregate ops:check pass or fresh vulnerability inventory is claimed.
+
+Independent read-only review found no Critical, Important or Minor issues,
+reproduced **1132/1132** with zero skipped, and found no plan deviations.
+Feedback was evaluated against the guard's placement, sparse-slot iteration,
+legacy/digestless compatibility, fixed runner errors and publication sequencing.
+Its recommendation to distinguish metadata consistency from byte verification
+is recorded here. No fixes or significant re-review were needed.
+
+Optional metadata and clean comparisons do not establish checksum calculation,
+authenticity, actual byte integrity, inventory completeness or an atomic DB/S3
+snapshot. Mandatory digest acquisition, HEAD/GET, hashing, multipart
+reconstruction, hostile in-process objects and network/resource bounds remain
+out of scope. No live services, operator approval, deployment or push occurred.
+Prompt 201, Category 6 live recovery approval and Phase 12 exit remain open.
+Ordinary commit revert restores prior behavior without migration or storage
+mutation.
+
+Safe local inspection from the repository root:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

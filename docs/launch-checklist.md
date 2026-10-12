@@ -871,6 +871,17 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- Checksum algorithm pairing (prompt 328): a non-null SHA256 listing digest
+  extension requires any defined `ChecksumAlgorithm` to be an array containing
+  exact primitive `SHA256`, with primitive nonblank strings in every slot.
+  Contradictory/malformed/sparse arrays reject whole scans with fixed errors
+  and no summary/receipt. Omitted hints, multiple algorithms and digestless
+  metadata retain compatibility. Investigate provider metadata and rerun into
+  a fresh receipt path. Focused **1132/1132**, independent review, repository
+  checks and **33 offline stages / 4113 tests** passed. This check does not
+  verify object bytes, authenticate metadata or supply live recovery approval;
+  Prompt 201 and Category 6 remain open.
+
 - Checksum extension type consistency (prompt 327): when a non-null SHA256
   digest extension is supplied, defined `ChecksumType` must be exactly
   `FULL_OBJECT`. Composite or malformed supplied types reject the whole scan

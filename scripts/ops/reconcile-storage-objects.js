@@ -500,6 +500,17 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
             entry.ChecksumType !== 'FULL_OBJECT'
           )
             throw invalidListing();
+          // Supplied algorithm hints must agree with this SHA256 extension.
+          const algorithms = entry.ChecksumAlgorithm;
+          if (algorithms !== undefined) {
+            if (!Array.isArray(algorithms) || !algorithms.includes('SHA256'))
+              throw invalidListing();
+            // Iteration visits sparse slots too; every() would skip holes.
+            for (const algorithm of algorithms) {
+              if (typeof algorithm !== 'string' || !algorithm.trim())
+                throw invalidListing();
+            }
+          }
           const checksum = entry.ChecksumSHA256;
           if (
             typeof checksum !== 'string' ||

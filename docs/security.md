@@ -1409,3 +1409,17 @@ HEAD/GET or multipart reconstruction were introduced. Optional metadata and
 clean comparisons do not establish calculation method, authenticity, object
 byte integrity, inventory completeness, atomic snapshots or live recovery
 approval. Prompt 201, Category 6 live approval and Phase 12 exit remain open.
+
+**Prompt 328 storage checksum algorithm pairing (2026-10-12):**
+For non-null SHA256 listing digest extensions, defined ChecksumAlgorithm must
+be an array containing exact primitive SHA256 with primitive nonblank strings
+in every slot. Contradictory, malformed and sparse arrays reject before digest
+conversion, inventory inclusion or further requests; runners emit fixed errors
+and publish no summary/receipt. Omitted/undefined hints, multiple algorithms
+and digestless metadata preserve compatibility. Focused **1132/1132** and
+independent read-only review verify this existing adapter boundary. Standard
+SDK listings still omit digest values; metadata consistency and clean matches
+do not prove checksum calculation, authenticity, object bytes, completeness,
+atomic snapshots or live recovery. No mandatory acquisition, HEAD/GET or byte
+hashing was introduced. Prompt 201, Category 6 live approval and Phase 12 exit
+remain open.
