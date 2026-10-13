@@ -776,8 +776,14 @@ function parseCliArguments(argv = process.argv.slice(2), cwd = process.cwd()) {
   if (typeof cwd !== 'string' || !cwd.trim()) {
     throw new ReconcileUsageError('cwd requires a non-empty path');
   }
-  if (!Array.isArray(argv) || argv.some((arg) => typeof arg !== 'string')) {
+  if (!Array.isArray(argv)) {
     throw new ReconcileUsageError('arguments must be an array of strings');
+  }
+  // Iteration visits empty slots too; Array.some would skip malformed holes.
+  for (const arg of argv) {
+    if (typeof arg !== 'string') {
+      throw new ReconcileUsageError('arguments must be an array of strings');
+    }
   }
 
   let showHelp = false;

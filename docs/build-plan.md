@@ -3545,3 +3545,16 @@ remains **0 approved / 11 blocked / 70 blockers**. Clock consistency supplies
 no authenticated/live recovery evidence; Prompt 201, Category 6 live sign-off
 and Phase 12 exit stay open. No live services, deployment or push. Unrelated
 full ops suites and online audit not rerun; no aggregate ops:check pass claimed.
+
+**Prompt 352 — reconciliation sparse argument validation (2026-10-13):**
+Continued Phase 12K after committed Prompt 351. Parser validation now visits
+empty argument slots, routing malformed programmatic arrays through the fixed
+usage error before dependency access or receipt creation. Dense CLI behavior
+is preserved. Added 14 cases; focused **14/14**, full **2112/2112**,
+lint/typecheck/build (**22/22** pages), syntax/help/format/diff passed.
+Independent review found no issues and separately passed all 14 focused cases.
+Actual red/green output, sandbox limits, compatibility and ordinary-revert
+rollback are in [operations.md](operations.md) Prompt 352. Readiness stays
+**0 approved / 11 blocked / 70 blockers**. Prompt 201, Category 6 live approval
+and Phase 12 exit remain open. No live services, deployment or push; unrelated
+ops suites/online audit not rerun; no aggregate ops:check pass claimed.

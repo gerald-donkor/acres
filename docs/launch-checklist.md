@@ -871,6 +871,18 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 352 — reconciliation sparse argument validation (2026-10-13):**
+  Empty programmatic argument slots now produce the fixed usage failure before
+  service access or receipt creation. Dense CLI behavior is preserved. Added
+  14 cases; **2112/2112**, lint/typecheck/build (**22/22** pages), syntax/help/
+  format/diff checks passed. Independent review found no issues and separately
+  passed all 14 focused cases. Actual outputs, sandbox limits and ordinary
+  revert are in [operations.md](operations.md) Prompt 352. Example readiness
+  stays **0 approved / 11 blocked / 70 blockers**. No live recovery evidence
+  is supplied; Prompt 201, Category 6 approval and Phase 12 exit remain open.
+  No live services, deployment or push; unrelated ops suites/online audit not
+  rerun; no aggregate ops:check pass claimed.
+
 - **Prompt 351 — reconciliation report clock consistency (2026-10-13):**
   Report timestamps now reuse the validated retention comparison instant;
   explicit clocks produce repeatable complete evidence. Added 17 cases;

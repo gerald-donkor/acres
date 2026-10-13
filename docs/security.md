@@ -1782,3 +1782,18 @@ rollback are in [operations.md](operations.md) Prompt 351. Example readiness
 stays **0 approved / 11 blocked / 70 blockers**; Prompt 201, Category 6 live
 sign-off and Phase 12 exit remain open. No live credentials, operator approval
 or push; no full ops:check or fresh audit claim.
+
+**Prompt 352 — reconciliation sparse arguments (2026-10-13):**
+The exported parser now validates empty argument slots before parsing;
+malformed programmatic arrays produce the fixed usage error and runner return
+code 1 before dependency access/publication. Dense CLI behavior is preserved;
+no new trust boundary, service, credential, SQL/schema or deployment changes.
+Added 14 offline cases; **2112/2112**, lint/typecheck/build (**22/22** pages)
+and syntax/help/format/diff checks passed. Independent read-only review found
+no issues and separately passed all 14 focused cases. Actual outputs, sandbox
+limits and ordinary-revert rollback are in [operations.md](operations.md)
+Prompt 352. This does not authenticate evidence, prove completeness/object
+bytes or establish live recovery. Readiness stays **0 approved / 11 blocked /
+70 blockers**; Prompt 201, Category 6 and Phase 12 exit remain open. No live
+services, operator approval or push. Unrelated ops suites/online audit not
+rerun; no aggregate ops:check or fresh audit claim.

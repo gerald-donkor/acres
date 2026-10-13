@@ -12107,3 +12107,132 @@ test("report clock consistency: formatter and simulation receipt retain comparis
   assert.strictEqual(JSON.stringify(report), before);
   assert.deepStrictEqual(fs.readdirSync(dir), ["receipt.json"]);
 });
+
+// Programmatic argv arrays must be validated before any option is interpreted.
+for (const [label, args] of [
+  ["all holes", new Array(2)],
+  ["leading hole", [, "--help"]],
+  ["middle hole", ["--dry-run", , "--help"]],
+  ["trailing hole after help", ["--help", ,]],
+  ["value hole", ["--bucket", , "--help"]],
+  ["explicit undefined", [undefined, "--help"]],
+]) {
+  Object.freeze(args);
+  test(`sparse argument validation: parser rejects ${label} without mutation`, () => {
+    const before = Object.getOwnPropertyDescriptors(args);
+    assert.throws(
+      () => parseCliArguments(args),
+      (error) => {
+        assert.ok(error instanceof ReconcileUsageError);
+        assert.strictEqual(
+          error.message,
+          "arguments must be an array of strings",
+        );
+        return true;
+      },
+    );
+    assert.deepStrictEqual(Object.getOwnPropertyDescriptors(args), before);
+  });
+
+  test(`sparse argument validation: runner rejects ${label} before side effects`, async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-sparse-argv-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const destination = path.join(dir, "receipt.json");
+    // concat retains holes, unlike spreading the malformed array.
+    const argv = Object.freeze(
+      ["node", "reconcile"].concat(args, ["--output", destination]),
+    );
+    const before = Object.getOwnPropertyDescriptors(argv);
+    const options = {};
+    for (const field of [
+      "env",
+      "dbObjects",
+      "storageObjects",
+      "pgClient",
+      "s3Client",
+    ]) {
+      Object.defineProperty(options, field, {
+        get() {
+          assert.fail(`unexpected dependency access: ${field}`);
+        },
+      });
+    }
+    const logs = [];
+    const errors = [];
+    assert.strictEqual(
+      await main(
+        argv,
+        { log: (text) => logs.push(text), error: (text) => errors.push(text) },
+        options,
+      ),
+      1,
+    );
+    assert.deepStrictEqual(errors, [
+      "reconciliation usage error: arguments must be an array of strings",
+    ]);
+    assert.strictEqual(logs.length, 1);
+    assert.ok(
+      logs[0].startsWith(
+        "Usage: node scripts/ops/reconcile-storage-objects.js",
+      ),
+    );
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+    assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), before);
+  });
+}
+
+test("sparse argument validation: dense empty and help arrays retain parser behavior", async () => {
+  const empty = Object.freeze([]);
+  assert.strictEqual(parseCliArguments(empty).showHelp, false);
+  for (const flag of ["--help", "-h"]) {
+    const args = Object.freeze([flag]);
+    assert.strictEqual(parseCliArguments(args).showHelp, true);
+    const logs = [];
+    assert.strictEqual(
+      await main(Object.freeze(["node", "reconcile", flag]), {
+        log: (text) => logs.push(text),
+        error: () => assert.fail("help should not fail"),
+      }),
+      0,
+    );
+    assert.strictEqual(logs.length, 1);
+  }
+  assert.throws(() => parseCliArguments(Object.freeze(["--bucket"])), {
+    message: "bucket requires a non-empty bucket name",
+  });
+});
+
+test("sparse argument validation: dense dry-run still publishes simulation receipt", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-dense-argv-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const destination = path.join(dir, "receipt.json");
+  const argv = Object.freeze([
+    "node",
+    "reconcile",
+    "--dry-run",
+    "--output",
+    destination,
+  ]);
+  const logs = [];
+  assert.strictEqual(
+    await main(
+      argv,
+      {
+        log: (text) => logs.push(text),
+        error: () => assert.fail("dense dry-run should not fail"),
+      },
+      {
+        env: Object.freeze({}),
+        dbObjects: Object.freeze([]),
+        storageObjects: Object.freeze([]),
+      },
+    ),
+    0,
+  );
+  const receipt = JSON.parse(fs.readFileSync(destination, "utf8"));
+  assert.strictEqual(receipt.execution_mode, "simulation");
+  assert.strictEqual(receipt.summary.status, "clean");
+  assert.strictEqual(receipt.summary.exitCode, 0);
+  assert.deepStrictEqual(fs.readdirSync(dir), ["receipt.json"]);
+  assert.strictEqual(logs.length, 3);
+});

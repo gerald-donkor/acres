@@ -11386,3 +11386,93 @@ prior timestamp behavior without database/storage mutation. Inspect with:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 352 — Reconciliation sparse argument validation (2026-10-13)
+
+Continued Phase 12K after `0204acd` (Prompt 351). Exported
+`parseCliArguments` previously used `Array.some`, which skips empty slots.
+A sparse array could throw `TypeError: Cannot read properties of undefined
+(reading 'startsWith')`, escaping the runner's usage boundary. The parser now
+checks array shape and iterates every argument with `for…of` before parsing.
+Holes and explicit non-strings throw `ReconcileUsageError` with the existing
+`arguments must be an array of strings` message; `main` returns 1 with help
+before inventory/environment/client access or receipt creation. Dense CLI
+behavior, cwd validation order, missing-value diagnostics, report schema,
+resource ownership and publication semantics are unchanged. This affects
+programmatic malformed arrays; ordinary process.argv is dense. Custom
+iterators/getters/proxies and inherited-array property policy are outside this
+bounded correction. No routes, UI, dependencies, SQL or schema changed.
+
+Added 14 offline behavioral cases: leading/middle/trailing/all-hole arrays,
+help/value positions, explicit undefined, immutable fixtures, pre-acquisition
+runner rejection, empty/help dense controls and a real temporary simulation
+receipt. Permitted pre-change focused output:
+
+```text
+ℹ tests 14
+ℹ pass 4
+ℹ fail 10
+```
+
+Post-change focused output was `tests 14`, `pass 14`, `fail 0`.
+Complete permitted `npm run ops:reconcile-test` output:
+
+```text
+ℹ tests 2112
+ℹ pass 2112
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 1590.783362
+```
+
+Restricted focused execution initially exposed only a file-wrapper failure
+(`test failed`); permitted subprocess execution supplied the actual red/green
+results above. Source/spec `node -c` passed silently; CLI help returned
+`Usage: node scripts/ops/reconcile-storage-objects.js [options]`. Installed
+Prettier reported `Added test block Prettier check passed`; only the appended
+test block was formatted. Root lint exited 0 with client `eslint`, shared
+`eslint "src/**/*.ts"` and server `eslint "{src,test}/**/*.ts"`, no diagnostics.
+Restricted build exited 1 with `Error: Could not parse output from TypeScript's
+--showConfig.` Permitted root build exited 0:
+
+```text
+✓ Compiled successfully in 2.3s
+  Finished TypeScript in 1840ms ...
+✓ Generating static pages using 7 workers (22/22) in 556ms
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 303ms
+```
+
+The server `nest build` completed. Subsequent sequential root typecheck exited
+0, running shared/client/server `tsc` checks and generating Prisma Client
+7.9.1 in `337ms`. `git diff --check` passed silently. Logs are under
+`/tmp/acres-352-*.log` (session-local, not retained launch evidence).
+
+Independent read-only review found no Critical, Important or Minor findings
+and no scope deviations. It separately passed all 14 focused tests and
+`git diff --check`, and inspected the 2112/2112 full-suite log without rerunning
+broader checks. Feedback was evaluated against the guard/iteration and runner
+usage catch; no fixes were required.
+
+Read-only example readiness validation exited 1 as expected:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Unrelated ops suites and online audit were not rerun; no aggregate ops:check
+pass or fresh vulnerability inventory is claimed. Argument validation cannot
+authenticate recovery evidence, prove inventory completeness/object bytes or
+establish atomic/live recovery. Prompt 201, Category 6 live approval and Phase
+12 exit remain open. No live services, credentials, operator approval,
+deployment or push occurred. Ordinary commit revert restores prior malformed
+argument handling without data mutation. Inspect with:
+
+```bash
+node --test --test-name-pattern='sparse argument validation:' scripts/ops/reconcile-storage-objects.spec.js
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
