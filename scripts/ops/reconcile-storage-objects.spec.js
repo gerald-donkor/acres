@@ -11938,3 +11938,172 @@ test("direction mark display: ordinary multilingual text remains readable", () =
   );
   assert.strictEqual(report.orphans[0].key, key);
 });
+
+// Evidence timestamps describe the same instant used for retention policy.
+for (const [label, now, expected] of [
+  [
+    "Date",
+    Object.freeze(new Date("2020-02-03T04:05:06.789Z")),
+    "2020-02-03T04:05:06.789Z",
+  ],
+  ["UTC string", "2020-02-03T04:05:06.789Z", "2020-02-03T04:05:06.789Z"],
+  [
+    "offset string",
+    "2020-02-03T06:35:06.789+02:30",
+    "2020-02-03T04:05:06.789Z",
+  ],
+  ["date-only string", "2020-02-03", "2020-02-03T00:00:00.000Z"],
+  ["epoch zero", Object.freeze(new Date(0)), "1970-01-01T00:00:00.000Z"],
+  [
+    "minimum Date",
+    Object.freeze(new Date(-8640000000000000)),
+    "-271821-04-20T00:00:00.000Z",
+  ],
+  [
+    "maximum Date",
+    Object.freeze(new Date(8640000000000000)),
+    "+275760-09-13T00:00:00.000Z",
+  ],
+]) {
+  test(`report clock consistency: ${label} normalizes and repeats exactly`, () => {
+    const options = Object.freeze({ now });
+    const inputs = Object.freeze({
+      dbObjects: Object.freeze([Object.freeze(inventoryDbRecord())]),
+      storageObjects: Object.freeze([
+        Object.freeze({ key: "fixture-key", byteCount: 1 }),
+      ]),
+      options,
+    });
+    const before = JSON.stringify(inputs);
+    const report = reconcileObjects(inputs);
+    assert.strictEqual(report.timestamp, expected);
+    assert.deepStrictEqual(reconcileObjects(inputs), report);
+    assert.strictEqual(report.summary.status, "clean");
+    assert.strictEqual(report.summary.matchedObjects, 1);
+    assert.strictEqual(JSON.stringify(inputs), before);
+  });
+}
+
+for (const execution_mode of ["simulation", "live"]) {
+  test(`report clock consistency: ${execution_mode} retention boundary and findings share clock`, () => {
+    const now = "2020-02-10T04:05:06.789Z";
+    const dbObjects = Object.freeze([
+      Object.freeze(
+        inventoryDbRecord({
+          id: "boundary",
+          objectKey: "boundary",
+          state: "quarantined",
+          createdAt: "2020-02-03T04:05:06.789Z",
+        }),
+      ),
+      Object.freeze(
+        inventoryDbRecord({
+          id: "older",
+          objectKey: "older",
+          state: "quarantined",
+          createdAt: "2020-02-03T04:05:06.788Z",
+        }),
+      ),
+      Object.freeze(
+        inventoryDbRecord({ id: "mismatch", objectKey: "mismatch" }),
+      ),
+    ]);
+    const storageObjects = Object.freeze([
+      Object.freeze({ key: "mismatch", byteCount: 2 }),
+      Object.freeze({ key: "orphan", byteCount: 1 }),
+    ]);
+    const inputs = Object.freeze({
+      dbObjects,
+      storageObjects,
+      options: Object.freeze({ now, execution_mode }),
+    });
+    const before = JSON.stringify(inputs);
+    const report = reconcileObjects(inputs);
+    assert.strictEqual(report.timestamp, now);
+    assert.strictEqual(report.execution_mode, execution_mode);
+    assert.deepStrictEqual(report.summary, {
+      totalDatabaseObjects: 3,
+      activeDatabaseObjects: 2,
+      pendingOrDeletedExcluded: 1,
+      totalBucketObjects: 2,
+      matchedObjects: 0,
+      missingObjects: 1,
+      orphanObjects: 1,
+      mismatchedObjects: 1,
+      status: "error",
+      exitCode: 1,
+    });
+    assert.deepStrictEqual(
+      report.missing.map((row) => row.id),
+      ["older"],
+    );
+    assert.deepStrictEqual(reconcileObjects(inputs), report);
+    assert.strictEqual(JSON.stringify(inputs), before);
+  });
+}
+
+for (const failOnOrphans of [false, true]) {
+  test(`report clock consistency: orphan policy ${failOnOrphans} preserves warning and exit`, () => {
+    const inputs = Object.freeze({
+      storageObjects: Object.freeze([
+        Object.freeze({ key: "orphan", byteCount: 0 }),
+      ]),
+      options: Object.freeze({
+        now: "2020-02-03T04:05:06.789Z",
+        failOnOrphans,
+      }),
+    });
+    const report = reconcileObjects(inputs);
+    assert.strictEqual(report.timestamp, inputs.options.now);
+    assert.strictEqual(report.summary.status, "warning");
+    assert.strictEqual(report.summary.exitCode, failOnOrphans ? 1 : 0);
+    assert.strictEqual(report.summary.orphanObjects, 1);
+    assert.deepStrictEqual(reconcileObjects(inputs), report);
+  });
+}
+
+for (const options of [{}, { now: undefined }]) {
+  test(`report clock consistency: ${Object.hasOwn(options, "now") ? "undefined" : "default"} clock stays current`, () => {
+    const before = Date.now();
+    const report = reconcileObjects({ options: Object.freeze(options) });
+    const after = Date.now();
+    const instant = Date.parse(report.timestamp);
+    assert.ok(instant >= before && instant <= after);
+    assert.strictEqual(report.summary.status, "clean");
+    assert.strictEqual(report.summary.exitCode, 0);
+  });
+}
+
+for (const now of [null, "invalid-clock", new Date(NaN)]) {
+  test(`report clock consistency: invalid ${String(now)} remains rejected`, () => {
+    assert.throws(() => reconcileObjects({ options: Object.freeze({ now }) }), {
+      message: "Reconciliation options are invalid",
+    });
+  });
+}
+
+test("report clock consistency: formatter and simulation receipt retain comparison instant", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-report-clock-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const destination = path.join(dir, "receipt.json");
+  const expected = "2020-02-03T04:05:06.789Z";
+  const report = reconcileObjects({
+    dbObjects: [inventoryDbRecord()],
+    options: { now: expected, execution_mode: "simulation" },
+  });
+  const before = JSON.stringify(report);
+  assert.ok(
+    formatReconciliationSummary(report).includes(
+      `Timestamp:                 ${expected}`,
+    ),
+  );
+  publishReceipt(destination, report);
+  const receipt = JSON.parse(fs.readFileSync(destination, "utf8"));
+  assert.strictEqual(receipt.timestamp, expected);
+  assert.strictEqual(receipt.execution_mode, "simulation");
+  assert.strictEqual(receipt.summary.status, "error");
+  assert.strictEqual(receipt.summary.exitCode, 1);
+  assert.deepStrictEqual(receipt, report);
+  assert.strictEqual(JSON.stringify(report), before);
+  assert.deepStrictEqual(fs.readdirSync(dir), ["receipt.json"]);
+});

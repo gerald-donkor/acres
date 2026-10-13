@@ -11301,3 +11301,88 @@ or storage mutation. Inspect with:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 351 — Reconciliation report clock consistency (2026-10-13)
+
+Continued Phase 12K after `8f0856c` (Prompt 350). The comparator now constructs
+its report timestamp from the validated `currentTime` already used for
+quarantine retention. Explicit `options.now` inputs produce repeatable complete
+reports, including their timestamps. Default execution captures the comparison
+instant, rather than a separate later wall-clock read. This timestamp describes
+policy evaluation, not receipt publication completion or an authenticated clock.
+The existing timestamp field/schema, retention policy, status/exit behavior,
+resource ownership and exclusive publication are unchanged. No routes, UI,
+services, dependencies, SQL or schema changed.
+
+Added 17 offline behavioral cases covering Date/string/offset/date-only clocks,
+milliseconds, epoch zero, minimum/maximum Dates, full report repeatability,
+unchanged caller inputs, seven-day quarantine boundaries one millisecond apart,
+both execution modes, clean/error/orphan outcomes, orphan exit policy,
+default/undefined clocks, invalid clocks, terminal formatting and real temporary
+simulation receipt publication. Pre-change focused output:
+
+```text
+ℹ tests 17
+ℹ pass 5
+ℹ fail 12
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+After the one-line source change, the focused run reported `tests 17`, `pass 17`,
+`fail 0`, `cancelled 0`, `skipped 0`. Complete permitted
+`npm run ops:reconcile-test` exited 0:
+
+```text
+ℹ tests 2098
+ℹ pass 2098
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 3466.676919
+```
+
+Source/spec `node -c` exited 0 silently; CLI help exited 0 with
+`Usage: node scripts/ops/reconcile-storage-objects.js [options]`.
+Installed Prettier reported `added-region Prettier check: true`.
+Root `npm run lint` exited 0: client `eslint`, shared `eslint "src/**/*.ts"`,
+server `eslint "{src,test}/**/*.ts"`; no diagnostics.
+Restricted build failed with `Error: Could not parse output from TypeScript's
+--showConfig.` Permitted `npm run build` exited 0: `Compiled successfully in
+4.1s`, `Finished TypeScript in 2.6s`, `Generating static pages using 7 workers
+(22/22) in 1159ms`; Prisma Client `7.9.1` generated in `340ms`, and `nest build`
+completed. Restricted reconciliation execution exposed only the file-wrapper
+failure (`pass 0`, `fail 1`); permitted execution supplied the full totals above.
+Focused red/green used `--test-isolation=none`. Logs: `/tmp/acres-351-*.log`.
+Subsequent sequential `npm run typecheck` exited 0: shared/client/server `tsc`
+checks, Prisma Client `7.9.1` generated in `375ms`; no diagnostics.
+`git diff --check` exited 0 silently.
+
+Independent read-only review found no Critical, Important or Minor findings
+and no plan deviations. The reviewer independently passed all 17 focused cases
+and `git diff --check`, and inspected the supplied full-suite log without
+rerunning full-suite/lint/build/typecheck checks. Feedback was verified against
+normalization's validated `currentTime`, the one-line timestamp construction,
+retention assertions and exact receipt output; no fixes were needed.
+
+Read-only example readiness exited 1 as expected:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Unrelated full ops suites and online audit were not rerun; no aggregate
+`ops:check` pass or fresh vulnerability inventory is claimed. Clock consistency
+cannot authenticate evidence/clock sources, prove inventory completeness or
+object-byte integrity, or establish atomic/live recovery. Prompt 201, Category
+6 live sign-off and Phase 12 exit remain open. No live services, credentials,
+operator approval, deployment or push occurred. Ordinary commit revert restores
+prior timestamp behavior without database/storage mutation. Inspect with:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

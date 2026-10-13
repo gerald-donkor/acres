@@ -350,7 +350,7 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
   return {
     execution_mode,
     drill_type: 'storage_reconciliation',
-    timestamp: new Date().toISOString(),
+    timestamp: new Date(currentTime).toISOString(),
     summary: {
       totalDatabaseObjects: dbObjects.length,
       activeDatabaseObjects,

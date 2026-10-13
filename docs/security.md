@@ -1769,3 +1769,16 @@ revert are in [operations.md](operations.md) Prompt 350. Readiness remains
 exit stay open. No new trust boundary, services, credentials, SQL/schema,
 deployment, operator approval or push. Full ops suites/online audit not rerun;
 no aggregate ops:check or fresh audit claim.
+
+**Prompt 351 — reconciliation comparison clock (2026-10-13):**
+Evidence timestamps now use the validated instant used for retention decisions,
+so explicit clocks produce repeatable complete reports. This consistency does
+not authenticate a supplied clock or evidence, prove completeness/object bytes,
+or establish atomic/live recovery. No new trust boundary, validation, ownership,
+service, schema or deployment change. Added 17 behavioral tests; **2098/2098**
+reconciliation cases passed. Independent review found no issues or deviations and passed all 17 focused
+cases. Actual checks, sandbox limits and ordinary-revert
+rollback are in [operations.md](operations.md) Prompt 351. Example readiness
+stays **0 approved / 11 blocked / 70 blockers**; Prompt 201, Category 6 live
+sign-off and Phase 12 exit remain open. No live credentials, operator approval
+or push; no full ops:check or fresh audit claim.

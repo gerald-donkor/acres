@@ -3532,3 +3532,16 @@ limits, compatibility and ordinary-revert rollback are in
 11 blocked / 70 blockers**. Prompt 201, Category 6 live sign-off and Phase 12
 exit remain open. No live services, deployment or push occurred. Unrelated full
 ops suites/online audit not rerun; no aggregate ops:check pass claimed.
+
+**Prompt 351 — reconciliation report clock consistency (2026-10-13):**
+Continued Phase 12K after committed Prompt 350. Report timestamps now reuse the
+validated instant used for retention decisions; explicit clocks make complete
+reports repeatable. Added 17 offline cases; focused **17/17**, full
+**2098/2098**, lint/typecheck/build (**22/22** pages), syntax/help/format checks passed.
+Independent review found no issues or deviations and passed all 17 focused
+cases. Actual red/green, sandbox limitations, compatibility and ordinary-revert
+rollback are in [operations.md](operations.md) Prompt 351. Example readiness
+remains **0 approved / 11 blocked / 70 blockers**. Clock consistency supplies
+no authenticated/live recovery evidence; Prompt 201, Category 6 live sign-off
+and Phase 12 exit stay open. No live services, deployment or push. Unrelated
+full ops suites and online audit not rerun; no aggregate ops:check pass claimed.
