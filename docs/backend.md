@@ -243,7 +243,7 @@ validation or CSRF rule configured only in `main.ts` is a rule no test can see.
 | `GET` | `/regions` | public | region summaries with their metrics, one query |
 | `GET` | `/regions/:slug` | public | one summary, or 404 `NOT_FOUND` |
 | `POST` | `/forms/contact` | public + CSRF | 201, stores the submission, returns `{ id, receivedAt }` only — echoing the message back would make the endpoint a reflector |
-| `GET` | `/jobs/runs` | session + organization (`jobs.read`) | the 50 most recent runs; owner/admin of the active org, 403 otherwise, 404 without an active-organization header |
+| `GET` | `/jobs/runs` | session + organization (`jobs.read`) | deprecated and denied to every tenant role (403); 401 without session, 404 without accessible active organization |
 
 ### Envelopes
 
@@ -266,15 +266,17 @@ frequency, completing automatically when terminal states are reached.
 Setup errors (404, 403) thrown before stream initiation are formatted through `ApiExceptionFilter`
 as standard JSON error envelopes.
 
-`/jobs/runs` requires session plus the active-organization `jobs.read`
-permission (prompt 78): owner/admin of the selected organization read the 50
-most recent runs; analysts and viewers receive `FORBIDDEN`, and callers
-without an active-organization header (or membership) receive the standard
-organization-context `NOT_FOUND`. `JobRun` rows remain global scheduled-
-maintenance telemetry (no `organization_id`, no RLS); gating is at the
-controller via the caller's active-organization role. Operator scripts that
-polled this endpoint session-only must now send `x-acres-organization-id`
-for an org where the account is owner/admin.
+`/jobs/runs` retains session, active-organization and `jobs.read` guards,
+but Prompt 360 denies global maintenance history to **every tenant role**.
+Owners/admins now also receive HTTP 403 / `FORBIDDEN`; analysts/viewers remain
+403, missing sessions remain 401 and missing/inaccessible organization context
+remains 404. The handler has no persistence dependency and never queries
+`JobRun`. These rows are global telemetry without `organization_id` or RLS;
+organization administration is not operator authority. The route is deprecated
+and has no documented success response. Existing pollers must stop using it;
+there is no tenant-accessible replacement for global maintenance telemetry.
+Internal scheduler bookkeeping and metrics remain intact. Tenant-scoped
+ingestion/export progress and organization audit history are separate surfaces.
 
 ---
 
@@ -1765,7 +1767,7 @@ No output.
 | `@acres/shared` in `client/`                                                         | nothing consumes it yet                                                                                                                                                    |
 | any landing-page form UI                                                             | the endpoint exists; the form is a later prompt                                                                                                                            |
 | login / register screens                                                             | same                                                                                                                                                                       |
-| product authorization beyond organizations                                           | `/jobs/runs` requires `jobs.read` (owner/admin of the active org) since prompt 78; tenant routes use the organization policy in §14                                        |
+| product authorization beyond organizations                                           | `/jobs/runs` denies all tenant roles since Prompt 360; tenant product routes use the organization policy in §14                                        |
 | email delivery                                                                       | which is why registration returns a generic failure; §4                                                                                                                    |
 | Terraform / IaC, an actual registry + push, choosing a host to run the container     | §10.1 built the Dockerfile and CI; no hosting provider has been chosen                                                                                                     |
 | OAuth / social login, analytics, billing, CMS, admin                                 | out of scope for step 8                                                                                                                                                    |
@@ -3027,3 +3029,66 @@ Full command outputs, sandbox retries, independent review and limits are in
 `docs/authenticated-app.md`, Prompt 358. No schema, query ordering, permissions
 or SQL policy changed. Reverting the codec restores the defect; it does not
 require a cursor/data migration.
+
+## Prompt 360 — global maintenance history boundary (2026-10-13)
+
+Baseline `ea97525`. The deprecated `GET /api/v1/jobs/runs` now fails closed
+for every tenant role. Existing session/organization/permission guards retain
+their ordering. Owners/admins receive fixed HTTP 403 / `FORBIDDEN` rather than
+unscoped scheduled-maintenance rows, aggregate purge counts and failure state.
+The controller has no `JobRunsService` dependency. Scheduler producers,
+`start`/`finish`/internal `listRecent`, schema and metrics are unchanged.
+Tenant ingestion/export progress and organization audit history are separate.
+
+This intentionally breaks successful owner/admin polling: stop polling this
+route. No tenant replacement, operator role, console or authentication was
+added. Generated OpenAPI marks the operation deprecated, removes 200 and
+records 401/403/404 plus rate-limit 429 and disabled-tenancy 503 preconditions.
+The generated REST matrix matches; GraphQL SDL is unchanged. Ordinary revert
+restores the previous disclosure and is not a recommended access workaround.
+
+Verification, run from the repository root:
+
+```text
+npm run test --workspace=@acres/server -- --runInBand --testPathPatterns='contracts/generate-contracts.spec.ts|jobs/.*spec.ts'
+Test Suites: 5 passed, 5 total
+Tests:       65 passed, 65 total
+
+npm run test:e2e --workspace=@acres/server -- --runInBand --testPathPatterns=api.e2e-spec.ts
+Test Suites: 1 passed, 1 total
+Tests:       78 passed, 78 total
+
+npm run build
+✓ Compiled successfully in 4.4s
+✓ Generating static pages using 7 workers (23/23) in 916ms
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+```
+
+The API suite uses the existing mocked Prisma fixture with real local HTTP,
+not a PostgreSQL/RLS or live-production test. Owner/admin cases seed nonempty
+global telemetry and prove no read/no row disclosure. Analyst/viewer,
+anonymous, missing context and absent active membership retain their denials.
+The two absent-membership labels represent the same mocked null lookup; they
+do not prove actual database revocation. Scheduler failure logs are expected
+fixture behavior. The committed-contract test checks deprecation and response
+statuses; generation/drift verification separately binds it to route metadata.
+
+Root `npm run lint`, `npm run typecheck`, `npm run contracts:generate` and
+`npm run contracts:check` exited 0. Scoped TS Prettier check reported
+`All matched files use Prettier code style!`; `git diff --check` exited 0
+without output. Initial lint found one unsafe nested Jest matcher assignment;
+using the repository's existing `as unknown` assertion pattern fixed it.
+The initial restricted API run failed 78/78 with `listen EPERM: operation not
+permitted 0.0.0.0`; its permitted rerun passed above. Restricted build failed
+`Could not parse output from TypeScript's --showConfig.`; its permitted rerun
+passed above. Final Swagger-only 429/503 documentation was recompiled by
+contract generation/check and covered by the repeated 65/65 unit command.
+No fresh browser, real-database, full-operations, online-audit or production
+acceptance is claimed. Phase 12 launch evidence and sign-offs remain open.
+
+To inspect locally: `git show --stat HEAD`. Run `npm run dev:server`, authenticate
+with an existing local owner/admin session and request `/api/v1/jobs/runs`
+with `x-acres-organization-id` set to that account's active organization.
+Expect HTTP 403 with fixed denial and no `data`. Unauthenticated requests
+remain 401. No production or remote service operation is needed.

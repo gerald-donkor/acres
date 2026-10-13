@@ -65,12 +65,15 @@ currently verified. Historical test results remain historical.
    adds direct post-context session/access/outage/retry simulations with real local setup
    and recovery (20/20 combined cases; 18/18 concurrent repeated fault cases).
    These simulations do not prove live revocation or infrastructure recovery.
-   `server/src/jobs/jobs.controller.ts` still exposes global
-   scheduled-run metadata through the owner/admin endpoint, so a job-history
-   interface requires a bounded scope/safe-presentation decision before exposing
-   it to tenants. Ingestion/export progress already exists; do not rebuild it.
-   A unified job console beyond V1 needs a separate scope decision. This follow-up
-   does not recalculate the dated completion estimate or approve launch.
+   Prompt 360 closes the global scheduled-run disclosure:
+   `/api/v1/jobs/runs` denies every tenant role before reading global telemetry.
+   Ingestion/export progress and audit history now provide the implemented
+   surfaces for journey 3.9; this does not prove whole-release acceptance.
+   Global maintenance telemetry belongs to operators, not organization admins;
+   no tenant replacement or unified job console is promised. A future operator
+   interface requires separate scope and authentication decisions. This
+   follow-up does not recalculate the dated estimate or approve launch.
+
 2. **Prove the real end-to-end data journey on the release candidate.** Use a
    licensed, reviewed geography selection and representative accepted source
    files; run upload → actual scanner/storage/queue → mapping → immutable

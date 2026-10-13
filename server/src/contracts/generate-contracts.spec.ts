@@ -119,6 +119,30 @@ describe('generate-contracts', () => {
     });
   });
 
+  it('documents disabled maintenance history without a success response', async () => {
+    const document = JSON.parse(
+      await readFile(join(genModule.CONTRACT_DIR, 'openapi.json'), 'utf8'),
+    ) as {
+      paths: Record<
+        string,
+        { get: { deprecated: boolean; responses: Record<string, unknown> } }
+      >;
+    };
+    const operation = document.paths['/api/v1/jobs/runs'].get;
+
+    expect(operation.deprecated).toBe(true);
+    expect(Object.keys(operation.responses).sort()).toEqual([
+      '401',
+      '403',
+      '404',
+      '429',
+      '503',
+    ]);
+    expect(contractsMarkdown()).toContain(
+      'global maintenance history denied (403) to every tenant role',
+    );
+  });
+
   describe('assertNoDrift', () => {
     it('resolves without error when temp directory files match CONTRACT_DIR', async () => {
       await expect(

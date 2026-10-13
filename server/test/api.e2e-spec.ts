@@ -1668,9 +1668,18 @@ describe('Acres API', () => {
     });
 
     it.each(['owner', 'admin'] as const)(
-      'admits %s members to GET /jobs/runs with an organization header',
+      'denies %s members global maintenance history without reading runs',
       async (role) => {
-        prisma.jobRun.findMany.mockResolvedValue([]);
+        prisma.jobRun.findMany.mockResolvedValue([
+          {
+            id: 'global-run-sentinel',
+            jobName: 'sessions.purge-expired',
+            status: 'succeeded',
+            startedAt: new Date(),
+            finishedAt: new Date(),
+            message: 'purged 987654 session(s)',
+          },
+        ]);
         prisma.membership.findFirst.mockResolvedValue({
           ...ORG_CONTEXT,
           role,
@@ -1680,10 +1689,20 @@ describe('Acres API', () => {
         const response = await agent
           .get('/api/v1/jobs/runs')
           .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
-          .expect(200);
+          .expect(403);
 
-        expect(response.body).toMatchObject({ ok: true, data: [] });
-        expect(prisma.jobRun.findMany).toHaveBeenCalled();
+        expect(response.body).toMatchObject({
+          ok: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Global maintenance history is not available.',
+          },
+        });
+        expect(response.body).not.toHaveProperty('data');
+        expect(JSON.stringify(response.body)).not.toMatch(
+          /global-run-sentinel|sessions.purge-expired|987654/,
+        );
+        expect(prisma.jobRun.findMany).not.toHaveBeenCalled();
       },
     );
 
@@ -1724,6 +1743,34 @@ describe('Acres API', () => {
       });
       expect(prisma.jobRun.findMany).not.toHaveBeenCalled();
     });
+
+    it.each(['foreign', 'revoked'])(
+      'rejects GET /jobs/runs for %s organization membership',
+      async () => {
+        const { agent } = await signedInAgent();
+        prisma.membership.findFirst.mockResolvedValue(null);
+
+        const response = await agent
+          .get('/api/v1/jobs/runs')
+          .set('x-acres-organization-id', ORG_CONTEXT.organizationId)
+          .expect(404);
+
+        expect(response.body).toMatchObject({
+          ok: false,
+          error: { code: 'NOT_FOUND' },
+        });
+        expect(response.body).not.toHaveProperty('data');
+        expect(prisma.jobRun.findMany).not.toHaveBeenCalled();
+        expect(prisma.membership.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              organizationId: ORG_CONTEXT.organizationId,
+              revokedAt: null,
+            }) as unknown,
+          }),
+        );
+      },
+    );
 
     it('revokes the session and clears the cookie on logout', async () => {
       prisma.session.updateMany.mockResolvedValue({ count: 1 });

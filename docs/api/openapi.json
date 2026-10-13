@@ -19364,157 +19364,11 @@
     },
     "/api/v1/jobs/runs": {
       "get": {
+        "deprecated": true,
+        "description": "Global scheduled maintenance runs are not available to organization members. No tenant role grants operator access.",
         "operationId": "JobsController_listRuns_v1",
         "parameters": [],
         "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "data": {
-                      "items": {
-                        "properties": {
-                          "finishedAt": {
-                            "oneOf": [
-                              {
-                                "format": "date-time",
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "id": {
-                            "type": "string"
-                          },
-                          "jobName": {
-                            "type": "string"
-                          },
-                          "message": {
-                            "oneOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "startedAt": {
-                            "format": "date-time",
-                            "type": "string"
-                          },
-                          "status": {
-                            "enum": [
-                              "running",
-                              "succeeded",
-                              "failed"
-                            ],
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "jobName",
-                          "status",
-                          "startedAt",
-                          "finishedAt",
-                          "message"
-                        ],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "ok": {
-                      "enum": [
-                        true
-                      ],
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "ok",
-                    "data"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Returns the most recent scheduled job runs."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "error": {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "VALIDATION_FAILED",
-                            "INVALID_CREDENTIALS",
-                            "UNAUTHENTICATED",
-                            "FORBIDDEN",
-                            "CONFLICT",
-                            "NOT_FOUND",
-                            "CSRF_INVALID",
-                            "RATE_LIMITED",
-                            "QUERY_LIMIT_EXCEEDED",
-                            "CURSOR_INVALID",
-                            "IDEMPOTENCY_KEY_REQUIRED",
-                            "IDEMPOTENCY_CONFLICT",
-                            "NOT_READY",
-                            "INTERNAL_ERROR",
-                            "INVALID_TOKEN",
-                            "TOKEN_EXPIRED",
-                            "AI_DISABLED",
-                            "AI_UNAVAILABLE",
-                            "AI_TIMEOUT",
-                            "AI_RATE_LIMITED",
-                            "AI_OUTPUT_INVALID",
-                            "AI_GROUNDING_REJECTED"
-                          ],
-                          "type": "string"
-                        },
-                        "details": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "requestId": {
-                          "format": "uuid",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ],
-                      "type": "object"
-                    },
-                    "ok": {
-                      "enum": [
-                        false
-                      ],
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "ok",
-                    "error"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Validation, CSRF, idempotency or query-limit failure."
-          },
           "401": {
             "content": {
               "application/json": {
@@ -19655,7 +19509,7 @@
                 }
               }
             },
-            "description": "Authenticated account lacks the required permission."
+            "description": "Global maintenance history is unavailable to every tenant role."
           },
           "404": {
             "content": {
@@ -19726,78 +19580,7 @@
                 }
               }
             },
-            "description": "The requested resource was not found in this scope."
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "error": {
-                      "properties": {
-                        "code": {
-                          "enum": [
-                            "VALIDATION_FAILED",
-                            "INVALID_CREDENTIALS",
-                            "UNAUTHENTICATED",
-                            "FORBIDDEN",
-                            "CONFLICT",
-                            "NOT_FOUND",
-                            "CSRF_INVALID",
-                            "RATE_LIMITED",
-                            "QUERY_LIMIT_EXCEEDED",
-                            "CURSOR_INVALID",
-                            "IDEMPOTENCY_KEY_REQUIRED",
-                            "IDEMPOTENCY_CONFLICT",
-                            "NOT_READY",
-                            "INTERNAL_ERROR",
-                            "INVALID_TOKEN",
-                            "TOKEN_EXPIRED",
-                            "AI_DISABLED",
-                            "AI_UNAVAILABLE",
-                            "AI_TIMEOUT",
-                            "AI_RATE_LIMITED",
-                            "AI_OUTPUT_INVALID",
-                            "AI_GROUNDING_REJECTED"
-                          ],
-                          "type": "string"
-                        },
-                        "details": {
-                          "items": {
-                            "type": "string"
-                          },
-                          "type": "array"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "requestId": {
-                          "format": "uuid",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ],
-                      "type": "object"
-                    },
-                    "ok": {
-                      "enum": [
-                        false
-                      ],
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "ok",
-                    "error"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Conflict, including idempotency key/body mismatch."
+            "description": "Missing or inaccessible active organization."
           },
           "429": {
             "content": {
@@ -19868,7 +19651,78 @@
                 }
               }
             },
-            "description": "Rate limit exceeded."
+            "description": "Request rate limit exceeded."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "INVALID_CREDENTIALS",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "CONFLICT",
+                            "NOT_FOUND",
+                            "CSRF_INVALID",
+                            "RATE_LIMITED",
+                            "QUERY_LIMIT_EXCEEDED",
+                            "CURSOR_INVALID",
+                            "IDEMPOTENCY_KEY_REQUIRED",
+                            "IDEMPOTENCY_CONFLICT",
+                            "NOT_READY",
+                            "INTERNAL_ERROR",
+                            "INVALID_TOKEN",
+                            "TOKEN_EXPIRED",
+                            "AI_DISABLED",
+                            "AI_UNAVAILABLE",
+                            "AI_TIMEOUT",
+                            "AI_RATE_LIMITED",
+                            "AI_OUTPUT_INVALID",
+                            "AI_GROUNDING_REJECTED"
+                          ],
+                          "type": "string"
+                        },
+                        "details": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "format": "uuid",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    "ok": {
+                      "enum": [
+                        false
+                      ],
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Organization tenancy is not enabled."
           }
         },
         "security": [
@@ -19876,7 +19730,7 @@
             "acres_session": []
           }
         ],
-        "summary": "List recent job runs",
+        "summary": "Disabled global maintenance history",
         "tags": [
           "jobs"
         ]

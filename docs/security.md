@@ -21,6 +21,19 @@ to an existing immediate parent in the same checksummed manifest, and an
 existing-parent conflict aborts the complete transaction. This is integrity
 evidence only, not a political or legal authority determination.
 
+## Global maintenance telemetry boundary — Prompt 360
+
+`JobRun` contains global scheduled-maintenance counts, names and outcomes;
+it is not tenant-owned data. The former owner/admin read route confused
+organization authority with operator authority. `/api/v1/jobs/runs` now retains
+its existing session/organization/permission guards but denies every tenant
+role with 403 without reading runs. Missing session remains 401; inaccessible
+organization remains 404. OpenAPI marks the route deprecated with no success
+response. Scheduler persistence/metrics remain internal; no operator role or
+new authentication mechanism was introduced. A future operator console needs
+separate authorization design. This correction does not establish production
+isolation or launch acceptance.
+
 ## 1. Executive summary
 
 Acres' highest-risk property is organization isolation: one authenticated

@@ -1,40 +1,57 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import type { JobRunSummary } from '@acres/shared';
+import { Controller, ForbiddenException, Get, UseGuards } from '@nestjs/common';
 import {
-  ApiEnvelope,
-  ApiSessionAuth,
-  arraySchema,
-  jobRunSchema,
-} from '../contracts/openapi';
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiTags,
+  ApiTooManyRequestsResponse,
+  ApiServiceUnavailableResponse,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import { ApiSessionAuth, errorEnvelope } from '../contracts/openapi';
 import { SessionGuard } from '../sessions/session.guard';
 import { OrganizationContextGuard } from '../organizations/organization-context.guard';
 import { PermissionGuard } from '../organizations/permission.guard';
 import { RequiresOrganizationPermission } from '../organizations/permissions';
-import { JobRunsService } from './job-runs.service';
 
-/**
- * Job names and failure messages describe internals, so listing recent runs
- * requires the `jobs.read` permission: owner or admin of the active
- * organization. Analysts and viewers are denied, and callers without an
- * active-organization header (or membership) receive the standard
- * organization-context 404 rather than the runs.
- */
+/** Global maintenance telemetry is not authorized by any tenant role. */
 @Controller({ path: 'jobs', version: '1' })
 @UseGuards(SessionGuard, OrganizationContextGuard, PermissionGuard)
 @RequiresOrganizationPermission('jobs.read')
 @ApiTags('jobs')
 @ApiSessionAuth()
 export class JobsController {
-  constructor(private readonly runs: JobRunsService) {}
-
   @Get('runs')
-  @ApiEnvelope({
-    summary: 'List recent job runs',
-    description: 'Returns the most recent scheduled job runs.',
-    data: arraySchema(jobRunSchema),
+  @ApiOperation({
+    summary: 'Disabled global maintenance history',
+    description:
+      'Global scheduled maintenance runs are not available to organization members. No tenant role grants operator access.',
+    deprecated: true,
   })
-  listRuns(): Promise<JobRunSummary[]> {
-    return this.runs.listRecent();
+  @ApiUnauthorizedResponse({
+    description: 'Missing or invalid authenticated session.',
+    schema: errorEnvelope(),
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Global maintenance history is unavailable to every tenant role.',
+    schema: errorEnvelope(),
+  })
+  @ApiNotFoundResponse({
+    description: 'Missing or inaccessible active organization.',
+    schema: errorEnvelope(),
+  })
+  @ApiTooManyRequestsResponse({
+    description: 'Request rate limit exceeded.',
+    schema: errorEnvelope(),
+  })
+  @ApiServiceUnavailableResponse({
+    description: 'Organization tenancy is not enabled.',
+    schema: errorEnvelope(),
+  })
+  listRuns(): never {
+    throw new ForbiddenException(
+      'Global maintenance history is not available.',
+    );
   }
 }

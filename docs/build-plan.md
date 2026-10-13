@@ -3673,3 +3673,18 @@ opt-in reproduction and ordinary-revert rollback are in
 simulated failure coverage only; live revocation/outage/recovery and whole-release
 acceptance remain unproven. Scheduled job history needs separate tenant scoping;
 Prompt 201 and Phase 12 launch sign-offs remain open. No deploy or push.
+
+**Prompt 360 — global maintenance history boundary (2026-10-13):**
+Closes the Phase 4 authorization prerequisite exposed during Phase 5 history
+work: tenant owner/admin authority no longer reads global scheduled `JobRun`
+telemetry. The deprecated route denies all tenant roles before any telemetry
+query; existing session/organization guards, internal scheduler bookkeeping,
+and tenant ingestion/export progress remain intact. Contracts document denial
+without a success response. Focused controller/scheduler/contract units pass
+**65/65**, API acceptance **78/78**, lint/typecheck/permitted production build
+(**23/23** pages), contract drift, scoped formatting and diff checks pass.
+`docs/backend.md` records actual output, sandbox failures, compatibility and
+rollback implications. These are mocked-persistence HTTP tests, not live RLS,
+revocation, release or production evidence. Journey 3.9 has its implemented
+progress/audit surfaces; a global operator console requires a separate decision.
+Prompt 201 and Phase 12 launch sign-offs remain open. No deploy or push.
