@@ -3588,3 +3588,17 @@ rollback are in [operations.md](operations.md) Prompt 354. Example readiness
 stays **0 approved / 11 blocked / 70 blockers**. Prompt 201, Category 6 live
 sign-off and Phase 12 exit remain open. No live services, operator approval,
 deployment or push; no aggregate ops:check or fresh audit claim.
+
+**Prompt 355 — reconciliation runner cwd validation (2026-10-13):**
+Continued Phase 12K after committed Prompt 354. Main now forwards explicit cwd
+values unchanged to the parser, rejecting falsy invalid bases instead of
+silently resolving against the process directory. Omitted/undefined and valid
+absolute/relative cwd behavior stays compatible. Added 26 offline cases;
+focused **26/26**, full permitted **2441/2441**, lint/typecheck/build (**22/22**
+pages), syntax/help/new-block format/diff passed. Independent review found no
+issues or deviations and separately passed all 26 cases. Actual red/green,
+sandbox limits, compatibility and ordinary-revert rollback are in
+[operations.md](operations.md) Prompt 355. Readiness stays **0 approved /
+11 blocked / 70 blockers**. Prompt 201, Category 6 live approval and Phase 12
+exit remain open. No live services, operator approval, deployment or push;
+unrelated ops suites/online audit not rerun; no aggregate ops:check claim.

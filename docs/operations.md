@@ -11663,3 +11663,94 @@ node --test --test-name-pattern='output path preflight:' scripts/ops/reconcile-s
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 355 — Reconciliation runner cwd validation (2026-10-13)
+
+Continued Phase 12K after `6a5da9a` (Prompt 354). The runner used
+`options.cwd || process.cwd()`, bypassing existing parser validation for
+explicit falsy invalid directories. A local --help reproduction returned 0
+for empty string, null, false, zero and NaN. Main now forwards options.cwd
+unchanged: the parser's existing default parameter handles omitted/undefined
+values, and its existing validation rejects non-string/blank values with
+`reconciliation usage error: cwd requires a non-empty path`, help and return 1
+before environment, inventory or client acquisition. Explicit null no longer
+means use the process directory. Valid absolute/relative paths stay compatible.
+
+Added 26 offline cases covering invalid values with help/relative output,
+throwing dependency getters, frozen input descriptors, empty output directories,
+and actual clean simulation publication with omitted/undefined/absolute/relative
+cwd. Valid explicit paths include a spaced Unicode directory. Tests use unique
+local directories and clean up without process.chdir. No new cwd control policy,
+filesystem preflight, dependencies, routes, UI, SQL/schema or report contract.
+
+Focused pre-change result: `tests 26`, `pass 14`, `fail 12`. Post-change
+`node --test --test-isolation=none --test-name-pattern='runner cwd validation:' scripts/ops/reconcile-storage-objects.spec.js`:
+
+```text
+ℹ tests 26
+ℹ pass 26
+ℹ fail 0
+```
+
+Restricted full-suite execution returned the existing file-wrapper `test failed`.
+Permitted `npm run ops:reconcile-test` exited 0:
+
+```text
+ℹ tests 2441
+ℹ pass 2441
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 1883.460643
+```
+
+Source/spec `node -c` and `git diff --check` passed silently. CLI help returned
+`Usage: node scripts/ops/reconcile-storage-objects.js [options]`.
+Installed Prettier reported `Added test block Prettier check: true`; only the
+new test block was formatted. Initial formatter lookup under client/node_modules
+failed MODULE_NOT_FOUND; the installed root `prettier` resolved and passed.
+Root lint exited 0 with client `eslint`, shared `eslint "src/**/*.ts"` and
+server `eslint "{src,test}/**/*.ts"`, without diagnostics. Restricted build
+failed with `Error: Could not parse output from TypeScript's --showConfig.`
+Permitted root production build exited 0:
+
+```text
+✓ Compiled successfully in 2.8s
+✓ Generating static pages using 7 workers (22/22) in 788ms
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 452ms
+```
+
+Server `nest build` completed. Sequential root typecheck exited 0 with shared,
+client and server `tsc` checks, and Prisma Client 7.9.1 generated in `393ms`.
+Logs `/tmp/acres-355-*.log` are session-local checks, not retained launch evidence.
+
+Independent read-only review found no Critical, Important or Minor issues or
+plan deviations, independently passed all 26 focused cases, and passed source/
+spec syntax and diff whitespace checks. It inspected the working diff, prompt,
+parser/path resolution and acquisition ordering; it did not independently repeat
+the full suite, lint, build, typecheck or readiness. Feedback was evaluated
+against parser defaulting/validation and acquisition order; no fixes or follow-up
+review were necessary.
+
+Read-only example readiness remained fail-closed:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+This input validation does not establish evidence authenticity/completeness,
+object-byte integrity, atomic snapshots or live recovery. Prompt 201, Category 6
+live sign-off and Phase 12 exit remain open. No live services, credentials,
+operator approval, deployment or push. Unrelated ops suites and online audit
+were not rerun; no aggregate ops:check pass or fresh audit claim. Ordinary
+commit revert restores the prior falsy fallback without DB/storage mutation.
+Inspect from the repository root:
+
+```bash
+node --test --test-isolation=none --test-name-pattern='runner cwd validation:' scripts/ops/reconcile-storage-objects.spec.js
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

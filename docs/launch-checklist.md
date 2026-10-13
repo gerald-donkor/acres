@@ -871,6 +871,19 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 355 — reconciliation runner cwd validation (2026-10-13):**
+  Explicit invalid programmatic cwd values now reach existing parser validation
+  before acquisition instead of falling back to the process directory. Omitted/
+  undefined and valid absolute/relative bases retain help and publication.
+  Added 26 cases; **2441/2441** full permitted suite, lint/typecheck/build
+  (**22/22** pages), syntax/help/new-block format/diff passed. Independent
+  review found no issues and separately passed all 26 new cases. Actual
+  outputs, limits and ordinary revert are in [operations.md](operations.md)
+  Prompt 355. Readiness stays **0 approved / 11 blocked / 70 blockers**.
+  Prompt 201, Category 6 live sign-off and Phase 12 exit remain open. No live
+  services, operator approval, deployment or push; no aggregate ops:check/audit
+  claim. Input validation cannot establish live recovery or evidence integrity.
+
 - **Prompt 354 — reconciliation output path preflight (2026-10-13):**
   Already-forbidden C0/DEL/C1 controls in raw output operands and final
   resolved destinations now fail as usage before dependency acquisition.

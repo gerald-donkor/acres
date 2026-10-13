@@ -1827,3 +1827,17 @@ Prompt 354. No authenticity, completeness, byte-integrity, atomic snapshot or
 live recovery proof. Readiness stays **0 approved / 11 blocked / 70 blockers**;
 Prompt 201, Category 6 and Phase 12 exit stay open. No live services, operator
 approval or push; no full ops:check or fresh audit claim.
+
+**Prompt 355 — reconciliation runner cwd validation (2026-10-13):**
+The runner no longer replaces explicitly invalid falsy cwd values with the
+process directory. Existing parser validation produces fixed usage failure
+before dependency acquisition; only omitted/undefined bases default. Valid
+paths and publication stay compatible, with no new trust boundary, credential,
+SQL/schema, service or deployment change. Added 26 cases; full permitted
+**2441/2441** and repository checks passed. Independent review found no issues
+and passed all 26 focused cases. Actual results, limits and ordinary revert
+are in [operations.md](operations.md) Prompt 355. Input validation supplies no
+authenticity, completeness, byte-integrity, atomic snapshot or live recovery
+proof. Readiness stays **0 approved / 11 blocked / 70 blockers**; Prompt 201,
+Category 6 and Phase 12 exit remain open. No live services, operator approval
+or push; no aggregate ops:check or fresh audit claim.

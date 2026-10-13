@@ -12522,3 +12522,139 @@ test("output path preflight: publishes exact spaced Unicode simulation destinati
   assert.deepStrictEqual(fs.readdirSync(dir), [filename]);
   assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), before);
 });
+
+// Runner base directories must obey the same contract as direct parser calls.
+for (const [label, cwd] of [
+  ["empty string", ""],
+  ["whitespace", " \t "],
+  ["null", null],
+  ["false", false],
+  ["true", true],
+  ["zero", 0],
+  ["NaN", NaN],
+  ["number", 123],
+  ["bigint", 0n],
+  ["array", Object.freeze([])],
+  ["object", Object.freeze({})],
+]) {
+  for (const help of [false, true]) {
+    test(`runner cwd validation: rejects ${label}${help ? " with help" : ""} before acquisition`, async (t) => {
+      const dir = fs.mkdtempSync(
+        path.join(process.cwd(), ".acres-cwd-invalid-"),
+      );
+      t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+      const output = path.relative(
+        process.cwd(),
+        path.join(dir, "receipt.json"),
+      );
+      const argv = Object.freeze([
+        "node",
+        "reconcile",
+        ...(help ? ["--help"] : []),
+        "--output",
+        output,
+      ]);
+      const options = { cwd };
+      for (const field of [
+        "env",
+        "dbObjects",
+        "storageObjects",
+        "pgClient",
+        "s3Client",
+      ]) {
+        Object.defineProperty(options, field, {
+          get() {
+            assert.fail(`unexpected dependency access: ${field}`);
+          },
+        });
+      }
+      Object.freeze(options);
+      const argvBefore = Object.getOwnPropertyDescriptors(argv);
+      const optionsBefore = Object.getOwnPropertyDescriptors(options);
+      const io = createIo();
+      assert.strictEqual(await main(argv, io, options), 1);
+      assert.deepStrictEqual(io.errors, [
+        "reconciliation usage error: cwd requires a non-empty path",
+      ]);
+      assert.strictEqual(io.logs.length, 1);
+      assert.ok(
+        io.logs[0].startsWith(
+          "Usage: node scripts/ops/reconcile-storage-objects.js",
+        ),
+      );
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+      assert.deepStrictEqual(
+        Object.getOwnPropertyDescriptors(argv),
+        argvBefore,
+      );
+      assert.deepStrictEqual(
+        Object.getOwnPropertyDescriptors(options),
+        optionsBefore,
+      );
+    });
+  }
+}
+
+for (const mode of ["omitted", "undefined", "absolute", "relative"]) {
+  test(`runner cwd validation: preserves ${mode} cwd help and publication`, async (t) => {
+    const dir = fs.mkdtempSync(
+      path.join(process.cwd(), ".acres-cwd-évidence "),
+    );
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const options = {
+      env: Object.freeze({}),
+      dbObjects: Object.freeze([]),
+      storageObjects: Object.freeze([]),
+    };
+    if (mode !== "omitted") {
+      options.cwd =
+        mode === "undefined"
+          ? undefined
+          : mode === "absolute"
+            ? dir
+            : path.relative(process.cwd(), dir);
+    }
+    Object.freeze(options);
+    const optionsBefore = Object.getOwnPropertyDescriptors(options);
+    const helpArgv = Object.freeze(["node", "reconcile", "--help"]);
+    const helpBefore = Object.getOwnPropertyDescriptors(helpArgv);
+    const helpIo = createIo();
+    assert.strictEqual(await main(helpArgv, helpIo, options), 0);
+    assert.deepStrictEqual(helpIo.errors, []);
+    assert.strictEqual(helpIo.logs.length, 1);
+    assert.ok(
+      helpIo.logs[0].startsWith(
+        "Usage: node scripts/ops/reconcile-storage-objects.js",
+      ),
+    );
+    const destination = path.join(dir, "receipt.json");
+    const output = ["omitted", "undefined"].includes(mode)
+      ? path.relative(process.cwd(), destination)
+      : "receipt.json";
+    const argv = Object.freeze([
+      "node",
+      "reconcile",
+      "--dry-run",
+      "--output",
+      output,
+    ]);
+    const argvBefore = Object.getOwnPropertyDescriptors(argv);
+    const io = createIo();
+    assert.strictEqual(await main(argv, io, options), 0);
+    assert.deepStrictEqual(io.errors, []);
+    const receipt = JSON.parse(fs.readFileSync(destination, "utf8"));
+    assert.strictEqual(receipt.execution_mode, "simulation");
+    assert.strictEqual(receipt.summary.status, "clean");
+    assert.strictEqual(receipt.summary.exitCode, 0);
+    assert.deepStrictEqual(fs.readdirSync(dir), ["receipt.json"]);
+    assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), argvBefore);
+    assert.deepStrictEqual(
+      Object.getOwnPropertyDescriptors(helpArgv),
+      helpBefore,
+    );
+    assert.deepStrictEqual(
+      Object.getOwnPropertyDescriptors(options),
+      optionsBefore,
+    );
+  });
+}

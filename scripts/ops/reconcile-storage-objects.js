@@ -1227,7 +1227,7 @@ async function main(
     if (!Array.isArray(argv)) {
       throw new ReconcileUsageError('arguments must be an array of strings');
     }
-    parsed = parseCliArguments(argv.slice(2), options.cwd || process.cwd());
+    parsed = parseCliArguments(argv.slice(2), options.cwd);
   } catch (error) {
     if (!(error instanceof ReconcileUsageError)) throw error;
     io.error(`reconciliation usage error: ${error.message}`);
