@@ -3,8 +3,12 @@
 Status: ordered target implementation plan approved 2026-08-23. Phase 1 is
 implemented by the commit that first adds this document; git history remains
 the proof. Phase 2 is implemented through `prompts/18-database-infrastructure.md`
-and `prompts/19-node-24-lts.md`. Phases 3–12 are not implemented merely
-because they appear here.
+and `prompts/19-node-24-lts.md`. Phases 3–10 have committed application
+implementations; Phase 11A is an optional, disabled preview. Phase 12 tooling
+is implemented, but its production evidence and operator sign-off exit remains
+open. This is not a declaration that all phase acceptance criteria pass. See
+[`project-status.md`](project-status.md) for the dated whole-project assessment;
+code, git history and the phase evidence below remain the implementation proof.
 
 ## 1. How every phase runs
 
@@ -3618,3 +3622,20 @@ sandbox limits and ordinary-revert rollback are in
 evidence authenticity/completeness, bytes or atomic/live recovery. Prompt 201,
 Category 6 live sign-off and Phase 12 exit remain open. No live services,
 operator approval, deployment or push; no aggregate ops:check or fresh audit claim.
+
+**Prompt 357 — whole-project completion audit and launch handoff (2026-10-13):**
+Added [project-status.md](project-status.md), reconciling committed V1 features,
+missing administrative history UI, mocked versus real-pipeline acceptance,
+and eleven operator-owned launch categories. Explicit planning estimate:
+**85% overall (80–90% range)**; application rubric **69/75 = 92%**. These
+judgments do not approve launch or close phase exits. Corrected stale
+reports/AI residual notes and current plan status; historical evidence stays
+intact. Independent read-only review found no issues or deviations. Lint,
+permitted build (**22/22** pages), subsequent typecheck, new-file formatting,
+local links/commit references and diff checks passed. Restricted build hit
+Next's `--showConfig` subprocess limitation before the successful rerun.
+Actual output and probe limitations are in [operations.md](operations.md)
+Prompt 357. Example readiness still exits 1: **0 approved / 11 unresolved /
+70 blockers**. No new runtime behavior, fresh browser/database/full-ops/audit
+pass, production evidence, live operations or push. Prompt 201 and Phase 12
+sign-off remain open. Ordinary revert restores the prior documentation.

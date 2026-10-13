@@ -11851,3 +11851,77 @@ node --test --test-isolation=none --test-name-pattern='main database port valida
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 357 — whole-project completion audit and launch handoff (2026-10-13)
+
+At baseline `4e9d6eb`, reconciled the approved V1 against code, routes, schema,
+CI, test fixtures, canonical product/build records and committed history.
+[project-status.md](project-status.md) records a judgment-based **85% overall
+estimate (80–90% range)**, with the application rows **69/75 = 92%**. The
+weights total 100 and estimated earned points total 85. This is neither a
+measured effort forecast nor launch acceptance. Added one AGENTS index row;
+corrected stale reports/AI residual claims and the build-plan status header.
+No runtime, route, dependency, schema or control changed.
+
+The handoff identifies administrative audit/job history UI as a V1 gap, credits
+existing GraphQL audit/REST job reads and ingestion/export progress, and
+separates fresh real-pipeline/release verification from operator-owned
+production setup, policies, live drills and eleven sign-offs. Mock/intercepted
+product browser fixtures do not prove the complete real scanner/queue/data
+journey. Deferred extensions and production AI are outside the launch estimate.
+
+Actual checks:
+
+- `npm run lint`: exit 0; client `eslint`, shared `eslint "src/**/*.ts"`, server
+  `eslint "{src,test}/**/*.ts"`, no diagnostics.
+- Restricted `npm run build`: exit 1 with
+  `Error: Could not parse output from TypeScript's --showConfig.`
+  The supported subprocess-access rerun exited 0:
+
+```text
+✓ Compiled successfully in 2.6s
+✓ Generating static pages using 7 workers (22/22) in 972ms
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 348ms
+```
+
+Server `nest build` completed. Subsequent root `npm run typecheck` exited 0
+with shared/client/server TypeScript checks; Prisma Client 7.9.1 generated in
+`410ms`. Installed Prettier on the new status/prompt files reported:
+
+```text
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+New prose blocks are formatted without rewriting historical records or the
+existing AGENTS table. `git diff --check` passed silently; the 20 new-document
+local Markdown links resolved, and all 31 referenced short commit identities
+resolved to commits. A preliminary Node child-process identity probe hit
+`spawnSync git EPERM`; direct shell git checks succeeded. An initial arithmetic
+probe accidentally included the second table; restricting it to the rubric
+confirmed `85/100; application: 69/75 = 92%`. Neither probe failure was an
+application/test failure. Logs `/tmp/acres-357-*.log` are session-local checks,
+not retained production evidence.
+
+Independent read-only review found no Critical, Important or Minor findings
+and no plan deviations; it verified arithmetic, route/API gaps, fixture limits
+and launch contracts against actual sources. Feedback was evaluated against
+those sources and the V1/no-AI boundary; no fixes or re-review were needed.
+The reviewer did not independently rerun costly repository checks.
+
+Read-only example readiness exited 1, intentionally:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+This says nothing about an operator's private evidence store. Prompt 201 and
+the Phase 12 exit remain open. No fresh browser, real-database, full operations,
+online audit, live drill or deployment verification is claimed. No credentials,
+production mutations, approvals or push occurred. Ordinary commit revert
+restores prior documentation. To inspect the result, open
+`docs/project-status.md`; reproduce the repository-visible gate with
+`node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`.

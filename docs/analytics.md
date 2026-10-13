@@ -305,8 +305,10 @@ npm run build
 
 ## Residual Gaps
 
-- Reports, exports, dashboard sharing, collaboration, and AI remain future work;
-  the saved-view dashboard surface is recorded in [`dashboards.md`](dashboards.md).
+- Reports and exports are implemented in [`reports.md`](reports.md); the
+  optional disabled AI preview is recorded in [`ai.md`](ai.md) and is excluded
+  from production launch. Saved dashboards are recorded in
+  [`dashboards.md`](dashboards.md). Sharing and collaboration remain deferred.
 - Aggregation currently rebuilds per-dataset-version aggregates only for rows
   emitted by the just-published version; cross-version rollups are future work.
 - Quality semantics are intentionally small: missing and invalid values are

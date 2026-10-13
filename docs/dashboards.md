@@ -218,7 +218,9 @@ missing `_prisma_migrations` privileges.
 
 ## Residual gaps
 
-- Dashboard sharing, publishing, collaboration, and AI remain future phases.
+- Dashboard sharing, publishing, and collaboration remain deferred. The optional
+  AI report-draft preview is implemented in [`ai.md`](ai.md), disabled by default
+  and excluded from production launch; it is not a dashboard AI feature.
 - Saved views carry an explicit `schemaVersion` (prompt 68) with fail-closed
   reads, so future presentation shapes have a durable marker. Versioned
   *migration logic* for a hypothetical v2 shape does not exist yet — no v2
