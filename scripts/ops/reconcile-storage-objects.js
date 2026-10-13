@@ -588,6 +588,14 @@ async function queryDatabaseStoredObjects({ pgClient }) {
   if (!isInventoryRecord(result))
     throw new Error('Database inventory is invalid');
   validateInventory(result.rows, true);
+  // The fixed projection casts a nonnegative SQL bigint column to text.
+  if (
+    result.rows.some(
+      (row) =>
+        row.byteCount != null && BigInt(row.byteCount) > 9223372036854775807n,
+    )
+  )
+    throw new Error('Database inventory is invalid');
   // Even empty SELECTs describe this fixed projection; never accept another one.
   const fields = result.fields;
   if (fields !== undefined) {

@@ -10495,3 +10495,73 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 340 — Database inventory byte-count range (2026-10-13)
+
+Continued Phase 12K after committed Prompt 339 (`e17d8f3f313800a720e51aea852b55ce284982e9`). A read-only offline probe supplied byteCount `9223372036854775808` (2^63) to `queryDatabaseStoredObjects`, then compared against a synthetic storage entry without size metadata. It returned `{"acceptedByteCount":"9223372036854775808","status":"clean"}`. This demonstrates impossible SQL column evidence being accepted by an injected adapter, not that PostgreSQL can persist this value or that live recovery was inspected.
+
+The adapter now rejects supplied non-null counts above the inclusive SQL bigint maximum `9223372036854775807n`, using exact BigInt arithmetic after existing inventory validation. All rows are checked before returning inventory, storage access or receipt publication. The SQL projection remains unchanged: StoredObject.byteCount is a nullable nonnegative bigint cast to text. Out-of-range results throw fixed `Database inventory is invalid`; the runner returns 1 with fixed `Error: Database query failed`, no S3 requests and no receipt/temp output, retaining caller-owned clients.
+
+The restriction is confined to database acquisition. Generic comparison and already-injected inventories retain arbitrary nonnegative bigint compatibility. In-range strings (including leading zeroes), bigint, safe numbers, NULL/undefined/missing compatibility, hidden own projection properties, metadata-present/absent behavior, row order and frozen input ownership are preserved. It adds no storage size policy, SQL/schema change, new trust boundary or public contract change.
+
+Added 35 behavioral tests, retaining all prior assertions. One legacy adapter success fixture used `900719925474099312345`, which cannot fit the SQL column; its input and expected conversion/immutability values now use `9007199254740993123`, still above JavaScript's safe precision and within SQL bigint. Generic comparison's larger fixture remains intact. New cases cover overflow as decimal/padded decimal/bigint, first/later invalid rows, omitted/undefined/described metadata, hidden own counts, exact valid boundary values and NULLs, missing counts, empty results, installed pg.Result maximum text conversion, lifecycle-excluded overflow, private runner diagnostics, caller ownership and absence of publication. Temporary directories are removed in finally blocks.
+
+The initial restricted node --test invocation returned exit 1 with one file-level `test failed`, not case-level evidence. Identical permitted execution before the source change returned exit 1:
+
+```text
+ℹ tests 1874
+ℹ pass 1846
+ℹ fail 28
+ℹ skipped 0
+```
+
+The first green attempt found the incompatible legacy adapter fixture (1873 passed, 1 failed). After correcting its values without removing assertions, `npm run ops:reconcile-test` returned exit 0:
+
+```text
+ℹ tests 1874
+ℹ pass 1874
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual checks:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier changed source function/new test region | 0 | {"sourceFunction":true,"newTestRegion":true} |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
+| permitted npm run build | 0 | Compiled successfully in 3.6s; Generating static pages using 7 workers (22/22) in 1499ms; prisma generate && nest build |
+| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1) |
+| git diff --check | 0 | silent |
+
+Every independent offline stage resolved from package.json ops:check passed: **33 stages / 27 suite invocations / 4855 tests / 4855 passed / zero failures or skipped**. Every stage exit and suite count was inspected. This includes templates, secret/default scan, Docker runtime, offline SBOM license verification, SAST and container security checks. Final dossier suite:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+Independent read-only review inspected the actual implementation, test diff, prompt and check evidence. It found no Critical, Important or Minor issues and assessed the change ready to merge. Feedback was evaluated against guard placement, precision, adapter-only scope, metadata compatibility, immutable inputs and fixed runner errors; no fixes or follow-up review were needed. Completion records were added after review; final staged diff inspection precedes the local commit.
+
+`node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json` returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online ops:audit remains omitted under the recorded dependency-metadata disclosure restriction; no aggregate ops:check pass or fresh vulnerability audit is claimed. Range validation cannot authenticate responses, prove inventory completeness, verify bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live services, credentials, migrations, operator approval, deployment or push. Ordinary commit revert restores prior adapter acceptance without DB/storage mutation. If rejected, privately inspect and correct the adapter result source; never truncate/coerce the value or reuse old receipts as recovery evidence.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

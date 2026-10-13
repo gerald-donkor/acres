@@ -2142,7 +2142,7 @@ for (const result of [
 }
 
 test('queryDatabaseStoredObjects: preserves fields and normalizes only defined counts', async () => {
-  const rows = [undefined, null, '0001', '900719925474099312345'].map(
+  const rows = [undefined, null, '0001', '9007199254740993123'].map(
     (byteCount, i) =>
       Object.freeze(
         inventoryDbRecord({
@@ -2158,12 +2158,12 @@ test('queryDatabaseStoredObjects: preserves fields and normalizes only defined c
   });
   assert.deepStrictEqual(
     result.map((row) => row.byteCount),
-    [null, null, 1n, 900719925474099312345n],
+    [null, null, 1n, 9007199254740993123n],
   );
   assert.ok(result.every((row) => row.extra === 'preserved'));
   assert.deepStrictEqual(
     rows.map((row) => row.byteCount),
-    [undefined, null, '0001', '900719925474099312345'],
+    [undefined, null, '0001', '9007199254740993123'],
   );
 });
 
@@ -9652,3 +9652,239 @@ for (const matching of [false, true]) {
     }
   });
 }
+
+// SQL bigint limits belong to acquisition, not generic comparison policy.
+for (const [metadata, patch] of [
+  ['absent', {}],
+  ['undefined', { fields: undefined }],
+  [
+    'described',
+    { fields: Object.freeze(databaseInventoryFields().map(Object.freeze)) },
+  ],
+]) {
+  for (const [label, byteCount] of [
+    ['max plus one', '9223372036854775808'],
+    ['larger decimal', '18446744073709551616'],
+    ['padded overflow', '0009223372036854775808'],
+    ['bigint overflow', 9223372036854775808n],
+  ]) {
+    for (const later of [false, true]) {
+      test(`SQL byte range: rejects ${label} ${metadata} later=${later}`, async () => {
+        const row = hideInventoryValues(projectedInventoryRow({ byteCount }), [
+          'byteCount',
+        ]);
+        const rows = Object.freeze(
+          later
+            ? [
+                Object.freeze(
+                  projectedInventoryRow({ id: 'first', objectKey: 'first' }),
+                ),
+                row,
+              ]
+            : [row],
+        );
+        const result = Object.freeze({ rows, ...patch });
+        let queries = 0;
+        await assert.rejects(
+          queryDatabaseStoredObjects({
+            pgClient: {
+              async query() {
+                queries++;
+                return result;
+              },
+            },
+          }),
+          { message: 'Database inventory is invalid' },
+        );
+        assert.strictEqual(queries, 1);
+        assert.strictEqual(row.byteCount, byteCount);
+        assert.strictEqual(
+          Object.getOwnPropertyDescriptor(row, 'byteCount').enumerable,
+          false,
+        );
+        assert.strictEqual(result.rows, rows);
+      });
+    }
+  }
+
+  test(`SQL byte range: inclusive exact values and nullable compatibility ${metadata}`, async () => {
+    const values = [
+      0,
+      '0',
+      1n,
+      Number.MAX_SAFE_INTEGER,
+      '9007199254740993',
+      '9223372036854775806',
+      '9223372036854775807',
+      '0009223372036854775807',
+      9223372036854775807n,
+      null,
+      undefined,
+    ];
+    const rows = Object.freeze(
+      values.map((byteCount, i) =>
+        hideInventoryValues(
+          projectedInventoryRow({
+            id: `id-${i}`,
+            objectKey: `key-${i}`,
+            byteCount,
+          }),
+          ['byteCount'],
+        ),
+      ),
+    );
+    const converted = await queryDatabaseStoredObjects({
+      pgClient: {
+        query: async () => Object.freeze({ rows, ...patch }),
+      },
+    });
+    assert.deepStrictEqual(
+      converted.map((row) => row.byteCount),
+      values.map((value) => (value == null ? null : BigInt(value))),
+    );
+    for (const [i, row] of converted.entries()) {
+      assert.notStrictEqual(row, rows[i]);
+      assert.strictEqual(row.id, `id-${i}`);
+      assert.strictEqual(rows[i].byteCount, values[i]);
+      assert.ok(Object.hasOwn(row, 'byteCount'));
+    }
+    assert.deepStrictEqual(
+      await queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () =>
+            Object.freeze({ rows: Object.freeze([]), ...patch }),
+        },
+      }),
+      [],
+    );
+  });
+}
+
+for (const patch of [{}, { fields: undefined }]) {
+  test(`SQL byte range: absent byteCount stays absent fieldsOwn=${Object.hasOwn(patch, 'fields')}`, async () => {
+    const row = projectedInventoryRow();
+    delete row.byteCount;
+    Object.freeze(row);
+    const [converted] = await queryDatabaseStoredObjects({
+      pgClient: {
+        query: async () => ({ rows: Object.freeze([row]), ...patch }),
+      },
+    });
+    assert.ok(!Object.hasOwn(converted, 'byteCount'));
+    assert.ok(!Object.hasOwn(row, 'byteCount'));
+  });
+}
+
+for (const state of ['accepted', 'deleted', 'pending_upload', 'quarantined']) {
+  test(`SQL byte range: runner rejects ${state} overflow before listing or publication`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-db-range-'));
+    try {
+      const row = Object.freeze(
+        projectedInventoryRow({ state, byteCount: '9223372036854775808' }),
+      );
+      const result = Object.freeze({
+        rows: Object.freeze([row]),
+        fields: Object.freeze(databaseInventoryFields().map(Object.freeze)),
+      });
+      let queries = 0;
+      let ended = 0;
+      let destroyed = 0;
+      const s3Client = listingClient([{ IsTruncated: false }]);
+      s3Client.destroy = () => destroyed++;
+      const io = createIo();
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--exclude-quarantined',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          {
+            env: {},
+            pgClient: {
+              async query() {
+                queries++;
+                return result;
+              },
+              async end() {
+                ended++;
+              },
+            },
+            s3Client,
+          },
+        ),
+        1,
+      );
+      assert.strictEqual(queries, 1);
+      assert.strictEqual(ended, 0);
+      assert.strictEqual(destroyed, 0);
+      assert.strictEqual(s3Client.inputs.length, 0);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+      assert.strictEqual(row.byteCount, '9223372036854775808');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('SQL byte range: installed pg preserves maximum text projection exactly', async () => {
+  const Result = require('pg/lib/result');
+  const result = new Result();
+  result.addFields(databaseInventoryFields());
+  result.addRow(
+    result.parseRow([
+      'fixture-id',
+      'fixture-org',
+      'acres-quarantine',
+      'fixture-key',
+      '9223372036854775807',
+      'sha256',
+      null,
+      'accepted',
+      null,
+      null,
+      null,
+      null,
+    ]),
+  );
+  result.addCommandComplete({ text: 'SELECT 1' });
+  const [converted] = await queryDatabaseStoredObjects({
+    pgClient: { query: async () => result },
+  });
+  assert.strictEqual(converted.byteCount, 9223372036854775807n);
+  assert.strictEqual(result.rows[0].byteCount, '9223372036854775807');
+});
+
+test('SQL byte range: generic and injected comparison retain arbitrary bigint compatibility', async () => {
+  const byteCount = 18446744073709551616n;
+  const dbObjects = Object.freeze([
+    Object.freeze(inventoryDbRecord({ byteCount })),
+  ]);
+  const storageObjects = Object.freeze([
+    Object.freeze({ key: 'fixture-key', byteCount }),
+  ]);
+  assert.strictEqual(
+    reconcileObjects({ dbObjects, storageObjects }).summary.status,
+    'clean',
+  );
+  const io = createIo();
+  assert.strictEqual(
+    await main(['node', 'script', '--dry-run'], io, {
+      env: {},
+      dbObjects,
+      storageObjects,
+    }),
+    0,
+  );
+  assert.deepStrictEqual(io.errors, []);
+  assert.strictEqual(dbObjects[0].byteCount, byteCount);
+  assert.strictEqual(storageObjects[0].byteCount, byteCount);
+});

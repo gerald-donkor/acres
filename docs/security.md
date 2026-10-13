@@ -1583,3 +1583,20 @@ new trust boundary, deployment or push; ordinary revert restores acceptance.
 
 **Prompt 339 — preserve database inventory projected values (2026-10-13):**
 The recovery adapter in `queryDatabaseStoredObjects` now preserves all own properties in `DATABASE_INVENTORY_COLUMNS` regardless of enumerability across described, undefined, and absent metadata. Fixes accepted own non-enumerable checksumHex values being dropped by object spread, ensuring conflicting storage digests remain visible to reconciliation and produce checksum mismatch evidence rather than false clean reports. Missing/undefined properties, SQL NULLs, Date objects, row order, and extra keys are preserved; inherited properties remain uncopied. Focused **1839/1839**, root lint/typecheck/build, formatting/syntax/help/diff, and **33 offline stages / 27 suites / 4820 tests / zero failures or skipped** passed; independent review reported no issues. Actual evidence, review evaluation, and ordinary-revert rollback are recorded in docs/operations.md Prompt 339. Readiness stays **0 approved / 11 blocked / 70 blockers**; Prompt 201, Category 6 live approval, and Phase 12 exit remain open. Online audit is omitted, with no aggregate ops:check/fresh audit claim. Preserving accepted projection values cannot prove authenticity, completeness, bytes, or atomic snapshots/live recovery. No live services, secrets, schema/SQL, new trust boundary, deployment, or push; ordinary revert restores previous row-copying without DB/storage mutation.
+
+**Prompt 340 — database inventory byte-count range (2026-10-13):**
+Database acquisition rejects supplied non-null byteCount above the SQL bigint
+maximum using exact BigInt arithmetic after existing validation. Whole-inventory
+rejection uses fixed private errors before S3 access/publication, even when the
+invalid row would be excluded by lifecycle policy. Generic/injected comparison
+retains arbitrary bigint compatibility; exact boundaries, nullable/optional
+fields, metadata and immutable ownership remain compatible. Focused
+**1874/1874**, root lint/typecheck/build, formatting/syntax/help/diff and
+**33 offline stages / 27 suites / 4855 tests / zero failures or skipped** passed;
+independent review found no issues. Actual probe, red/green, fixture correction,
+sandbox limitations and ordinary-revert rollback are in docs/operations.md
+Prompt 340. Readiness remains **0 approved / 11 blocked / 70 blockers**; Prompt
+201, Category 6 live approval and Phase 12 exit remain open. Online audit omitted;
+no aggregate ops:check/fresh audit claim. Range validation cannot authenticate
+responses, prove completeness, verify bytes or establish atomic/live recovery.
+No live services, secrets, SQL/schema, new trust boundary, deployment or push.

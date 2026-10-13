@@ -871,6 +871,22 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 340 (2026-10-13):** Database acquisition rejects byteCount above
+  SQL bigint maximum 9223372036854775807 with exact BigInt arithmetic and
+  fixed private errors before returning inventory, S3 access or publication.
+  Generic/injected comparison retains arbitrary bigint compatibility; valid
+  exact boundaries, nullable/optional fields, metadata and frozen ownership
+  remain compatible. Focused **1874/1874**, root lint/typecheck/build,
+  formatting/syntax/help/diff and **33 offline stages / 27 suites / 4855 tests /
+  zero failures or skipped** passed. Independent review found no issues. Actual
+  probe, red/green, fixture correction, sandbox limits and ordinary-revert
+  rollback are in docs/operations.md Prompt 340. Readiness stays **0 approved /
+  11 blocked / 70 blockers**. Online audit omitted; no aggregate ops:check/fresh
+  audit claim. Range validation cannot prove authenticity, completeness, bytes
+  or atomic/live recovery. Prompt 201, Category 6 live approval and Phase 12
+  exit remain open. No live services, operator approval, SQL/schema/migrations,
+  deployment or push occurred.
+
 - **Prompt 339 (2026-10-13):** Database adapter row conversion in
   `queryDatabaseStoredObjects` now preserves all own properties in
   `DATABASE_INVENTORY_COLUMNS` regardless of enumerability across described,

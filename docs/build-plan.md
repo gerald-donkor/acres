@@ -3353,3 +3353,21 @@ services, operator approval, migration, deployment or push occurred.
 
 **Prompt 339 — preserve database inventory projected values (2026-10-13):**
 Continued Phase 12K after committed Prompt 338. Database adapter row conversion in `queryDatabaseStoredObjects` now preserves all own properties in `DATABASE_INVENTORY_COLUMNS` regardless of enumerability across described, undefined, and absent metadata. Fixes accepted own non-enumerable checksumHex values being dropped by object spread, ensuring conflicting storage digests remain detectable as checksum mismatches rather than falsely reporting clean. Missing/undefined properties, SQL NULLs, Date objects, order, and extra keys are preserved; inherited properties remain uncopied. Focused **1839/1839**, lint/typecheck/build (**22/22** pages), formatting/syntax/help/diff, and **33 offline stages / 27 suite invocations / 4820 tests / zero failures or skipped** passed. Independent read-only review reported no issues. Red/green outputs, review evaluation, compatibility, and ordinary-revert rollback are recorded in docs/operations.md Prompt 339. Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit is omitted; no aggregate ops:check pass or fresh audit is claimed. Preserving accepted projection values cannot prove authenticity, completeness, bytes, or atomic snapshots/live recovery. Prompt 201, Category 6 live approval, and Phase 12 exit remain open. No live services, operator approval, migration, deployment, or push occurred.
+
+**Prompt 340 — database inventory byte-count range (2026-10-13):**
+Continued Phase 12K after committed Prompt 339. The database acquisition adapter
+rejects byteCount above SQL bigint maximum 9223372036854775807 using exact
+BigInt arithmetic before returning inventory, S3 access or publication, with
+fixed private errors. Generic/injected comparison retains arbitrary bigint
+compatibility; nullable/optional fields, exact boundary values, leading zeroes,
+metadata and immutable inputs stay compatible. Added 35 cases and corrected
+one impossible adapter success fixture while preserving precision assertions.
+Focused **1874/1874**, root lint/typecheck/build (**22/22** pages), formatting,
+syntax/help/diff and **33 offline stages / 27 suites / 4855 tests / zero failures
+or skipped** passed. Independent review found no issues. Probe, red/green,
+sandbox limitations and ordinary-revert rollback are in docs/operations.md
+Prompt 340. Readiness stays **0 approved / 11 blocked / 70 blockers**. Online
+audit omitted; no aggregate ops:check pass or fresh audit claim. Range checking
+cannot prove authenticity, completeness, bytes or atomic recovery. Prompt 201,
+Category 6 live approval and Phase 12 exit remain open. No live services,
+operator approval, SQL/schema/migrations, deployment or push occurred.
