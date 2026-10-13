@@ -10843,3 +10843,237 @@ for (const scenario of ['query', 'listing', 'missing', 'publication']) {
     assert.strictEqual(result.stderr, errors[scenario]);
   });
 }
+
+function storageSetupFailureFixture(
+  t,
+  end = () => Promise.resolve(),
+  overrides = {},
+) {
+  const sdk = require('@aws-sdk/client-s3');
+  const { Client } = require('pg');
+  const events = [];
+  const receivers = {};
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-storage-setup-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const output = path.join(dir, 'receipt.json');
+  const replace = (object, key, value) => {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    Object.defineProperty(object, key, {
+      configurable: true,
+      writable: true,
+      value,
+    });
+    t.after(() => Object.defineProperty(object, key, descriptor));
+  };
+  replace(
+    sdk,
+    'S3Client',
+    class {
+      constructor() {
+        events.push('construct');
+        throw new Error('private-storage-setup-sentinel');
+      }
+      send() {
+        events.push('send');
+      }
+      destroy() {
+        events.push('destroy');
+      }
+    },
+  );
+  const methods = {
+    async connect() {
+      receivers.connect = this;
+      events.push('connect');
+    },
+    async query() {
+      events.push('query');
+      return { rows: [] };
+    },
+    end() {
+      receivers.end = this;
+      events.push('end');
+      return end();
+    },
+  };
+  for (const [name, method] of Object.entries(methods))
+    replace(Client.prototype, name, method);
+  const io = createIo();
+  return {
+    events,
+    receivers,
+    io,
+    output,
+    Client,
+    run() {
+      return main(['node', 'script', '--dry-run', '--output', output], io, {
+        env: { PGPASSWORD: 'synthetic-test-only' },
+        ...(overrides.callerOwned ? { pgClient: methods } : {}),
+        ...overrides.options,
+      });
+    },
+  };
+}
+
+for (const callerOwned of [false, true]) {
+  for (const cleanup of ['resolve', 'reject', 'throw']) {
+    test(
+      `main storage setup failure: callerOwned=${callerOwned}, end=${cleanup}`,
+      { concurrency: false },
+      async (t) => {
+        const fixture = storageSetupFailureFixture(
+          t,
+          () => {
+            if (cleanup === 'throw') throw new Error('private-end-sentinel');
+            return cleanup === 'reject'
+              ? Promise.reject(new Error('private-end-sentinel'))
+              : Promise.resolve();
+          },
+          { callerOwned },
+        );
+        assert.strictEqual(await fixture.run(), 1);
+        assert.deepStrictEqual(fixture.events, [
+          'connect',
+          'query',
+          'construct',
+          ...(callerOwned ? [] : ['end']),
+        ]);
+        if (!callerOwned) {
+          assert.ok(fixture.receivers.connect instanceof fixture.Client);
+          assert.strictEqual(fixture.receivers.end, fixture.receivers.connect);
+        }
+        assert.deepStrictEqual(fixture.io.errors, [
+          'Error: Object storage connection or listing failed',
+        ]);
+        assert.deepStrictEqual(fixture.io.logs, [
+          'Connecting to PostgreSQL and Object Storage...',
+        ]);
+        assert.strictEqual(fs.existsSync(fixture.output), false);
+      },
+    );
+  }
+}
+
+test(
+  'main storage setup failure: awaits owned database end',
+  { concurrency: false },
+  async (t) => {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const fixture = storageSetupFailureFixture(t, () => pending);
+    let settled = false;
+    const running = fixture.run().then((code) => {
+      settled = true;
+      return code;
+    });
+    // Attach rejection handling immediately so the pre-fix red case is controlled.
+    const observed = running.then(
+      (code) => ({ code }),
+      (error) => ({ error }),
+    );
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.deepStrictEqual(fixture.events, [
+        'connect',
+        'query',
+        'construct',
+        'end',
+      ]);
+      assert.strictEqual(settled, false);
+    } finally {
+      release();
+      const outcome = await observed;
+      assert.ifError(outcome.error);
+      assert.strictEqual(outcome.code, 1);
+    }
+    assert.strictEqual(settled, true);
+    assert.strictEqual(fs.existsSync(fixture.output), false);
+  },
+);
+
+test(
+  'main storage setup failure: injected database inventory has no client to end',
+  { concurrency: false },
+  async (t) => {
+    const fixture = storageSetupFailureFixture(t, undefined, {
+      options: { dbObjects: [] },
+    });
+    assert.strictEqual(await fixture.run(), 1);
+    assert.deepStrictEqual(fixture.events, ['construct']);
+    assert.deepStrictEqual(fixture.io.errors, [
+      'Error: Object storage connection or listing failed',
+    ]);
+    assert.strictEqual(fs.existsSync(fixture.output), false);
+  },
+);
+
+for (const bypass of ['client', 'inventory']) {
+  test(
+    `main storage setup failure: injected storage ${bypass} bypasses constructor`,
+    { concurrency: false },
+    async (t) => {
+      const clientEvents = [];
+      const fixture = storageSetupFailureFixture(t, undefined, {
+        options:
+          bypass === 'inventory'
+            ? { storageObjects: [] }
+            : {
+                s3Client: {
+                  async send() {
+                    clientEvents.push('send');
+                    return { IsTruncated: false, Contents: [] };
+                  },
+                  destroy() {
+                    clientEvents.push('destroy');
+                  },
+                },
+              },
+      });
+      assert.strictEqual(await fixture.run(), 0);
+      assert.deepStrictEqual(fixture.events, ['connect', 'query', 'end']);
+      assert.deepStrictEqual(clientEvents, bypass === 'client' ? ['send'] : []);
+      assert.deepStrictEqual(fixture.io.errors, []);
+      assert.strictEqual(
+        JSON.parse(fs.readFileSync(fixture.output, 'utf8')).summary.status,
+        'clean',
+      );
+    },
+  );
+}
+
+test('main storage setup failure: awaited cleanup precedes immediate exit', () => {
+  const { spawnSync } = require('node:child_process');
+  const result = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `
+    const { Client } = require('pg');
+    const sdk = require('@aws-sdk/client-s3');
+    const { main } = require('./scripts/ops/reconcile-storage-objects');
+    Client.prototype.connect = async () => {};
+    Client.prototype.query = async () => ({ rows: [] });
+    Client.prototype.end = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      process.stdout.write('ended\\n');
+    };
+    sdk.S3Client = class { constructor() { throw new Error('private-setup-sentinel'); } };
+    main(['node', 'script', '--dry-run'], {
+      log() {}, error(message) { process.stderr.write(message + '\\n'); },
+    }, { env: { PGPASSWORD: 'synthetic-test-only' }, exitOnError: true })
+      .catch(() => process.exit(9));
+  `,
+    ],
+    { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8', timeout: 10000 },
+  );
+  assert.ifError(result.error);
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.signal, null);
+  assert.strictEqual(result.stdout, 'ended\n');
+  assert.strictEqual(
+    result.stderr,
+    'Error: Object storage connection or listing failed\n',
+  );
+});

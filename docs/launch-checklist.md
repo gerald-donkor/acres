@@ -871,6 +871,25 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 345 — reconciliation storage setup failure cleanup (2026-10-13):**
+  Continued Phase 12K after committed Prompt 344. SDK loading and S3 construction
+  now share the listing failure catch: fixed private diagnostic, awaited guarded
+  owned PostgreSQL cleanup, return/exit 1 and no receipt. Unreturned storage
+  clients are not destroyed; caller/inventory ownership and prior paths remain
+  compatible. Added 11 synthetic offline cases; focused **1999/1999**, lint,
+  sequential typecheck, build (**22/22** pages), syntax/help/format/diff passed.
+  Independent read-only review found no issues or plan deviations; it inspected
+  coordinator logs without rerunning tests. Actual red/green evidence, driver
+  contracts, sandbox limits and ordinary-revert rollback are recorded in
+  [operations.md](operations.md) Prompt 345. Readiness remains **0 approved /
+  11 blocked / 70 blockers**. Online audit omitted; no aggregate ops:check or
+  fresh audit claim. Cleanup cannot prove authenticity, completeness, bytes or
+  atomic/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit
+  remain open. No live services, SQL/schema changes, operator approval,
+  deployment or push occurred.
+
+  Completed offline checks: **33 stages / 27 suites / 4980 tests / zero failures or skipped** passed.
+
 - **Prompt 344 — reconciliation database cleanup error isolation (2026-10-13):**
   Continued Phase 12K after committed Prompt 343. Four later owned PostgreSQL
   cleanup paths now use guarded await, preserving query/listing/report/publication

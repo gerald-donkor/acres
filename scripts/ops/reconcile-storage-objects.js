@@ -1311,21 +1311,20 @@ async function main(
   let s3Client = options.s3Client;
 
   if (storageObjects === undefined) {
-    if (!s3Client) {
-      const { S3Client } = require('@aws-sdk/client-s3');
-      s3Client = new S3Client({
-        endpoint,
-        region,
-        forcePathStyle,
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-      });
-    }
-
     let listingFailed = false;
     try {
+      if (!s3Client) {
+        const { S3Client } = require('@aws-sdk/client-s3');
+        s3Client = new S3Client({
+          endpoint,
+          region,
+          forcePathStyle,
+          credentials: {
+            accessKeyId,
+            secretAccessKey,
+          },
+        });
+      }
       storageObjects = await listBucketObjects({ s3Client, bucket, prefix });
     } catch (_err) {
       listingFailed = true;
@@ -1338,7 +1337,7 @@ async function main(
         }
       }
     } finally {
-      if (!options.s3Client) {
+      if (s3Client && !options.s3Client) {
         try {
           s3Client.destroy();
         } catch {

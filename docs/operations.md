@@ -10824,3 +10824,66 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 345 — Reconciliation storage setup failure cleanup (2026-10-13)
+
+Continued Phase 12K after committed Prompt 344 (`c670f0a999395aa2049d4c15e6851fc924853bd5`). Storage SDK loading and S3Client construction previously occurred outside main's acquisition catch, after PostgreSQL connection/query. A synthetic constructor exception reproduced rejection without owned database cleanup or the intended fixed diagnostic/exit. Read-only SDK probes with malformed string regions/endpoints did not throw at construction; this is failure-injection evidence, not a claim about a demonstrated live provider fault or leaked socket. Installed `node_modules/@aws-sdk/client-s3/dist-cjs/index.js` verifies synchronous construction and destroy; `node_modules/pg/lib/client.js` verifies end's Promise contract and synchronous failure possibility.
+
+SDK loading/construction now runs inside the existing storage acquisition try. Setup exceptions follow the listing failure path: one guarded awaited owned PostgreSQL end attempt, fixed `Error: Object storage connection or listing failed`, exit/return 1 and no summary/receipt. Finally destroys storage only when a client was actually returned and is owned by the runner. Caller-owned clients, injected inventories, successful/listing-failure cleanup, configuration, SQL, comparison, receipt schema and publication are unchanged. Constructor internals that throw before returning cannot be torn down by this caller. Cleanup may fail or stall; no new timeout/retry guarantee is introduced.
+
+Added **11 serial offline behavioral tests** using restored SDK export/pg prototype descriptors, synthetic configuration and isolated temporary receipts. Six cases cross owned/caller database clients with resolving/rejecting/throwing end. Further cases prove awaited deferred end, setup failure with injected DB inventory, caller S3 and injected storage inventory bypasses, and awaited teardown before real child-process immediate exit. Tests assert receiver/ownership, exact events and diagnostics, no report/receipt/private sentinel disclosure, and zero send/destroy calls for unreturned clients. Existing tests remain intact.
+
+The restricted focused test failed at the file wrapper (`tests 1 / pass 0 / fail 1`, `test failed`), providing no behavioral evidence. Permitted pre-fix focused regression returned exit 1:
+
+```text
+ℹ tests 11
+ℹ pass 2
+ℹ fail 9
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+The two bypass cases passed before the fix; nine setup-failure cases reproduced the gap. After the source fix, permitted `npm run ops:reconcile-test` returned exit 0:
+
+```text
+ℹ tests 1999
+ℹ pass 1999
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+Actual self-verification:
+
+| Command | Exit | Real output / observation |
+| --- | --- | --- |
+| source/spec `node -c` | 0 each | silent |
+| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| installed Prettier appended-region check | 0 | `Added test region format check: true` |
+| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
+| permitted `npm run build` | 0 | `Compiled successfully in 9.2s`; `Finished TypeScript in 6.6s`; `Generating static pages using 7 workers (22/22) in 1658ms`; Prisma Client `7.9.1` generated and server `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0 | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
+| `git diff --check` | 0 | silent |
+
+Independent read-only review inspected the complete source/test diff, prompt, surrounding lifecycle, installed driver contracts and coordinator verification logs. It reported no Critical, Important or Minor issues and no plan deviations, assessing the work ready after remaining records and verification. Its review of the coordinator green log confirmed the reported 1999/1999; it did not rerun tests. Feedback was evaluated against the actual try/finally placement, existence/ownership guard, awaited end, fixed errors, bypasses and receipt suppression; no fixes or re-review were necessary.
+
+The example `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json` returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online `ops:audit` remains omitted under the recorded dependency-metadata disclosure restriction; no aggregate `ops:check` pass or fresh vulnerability inventory is claimed. Resource cleanup cannot authenticate evidence, prove inventory completeness, verify object bytes or establish atomic/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live services, credential access, SQL/schema/migrations, operator approval, deployment or push occurred. Ordinary commit revert restores previous handling without DB/storage mutation.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
+
+All **33 independent offline stages / 27 suite invocations / 4980 tests / 4980 passed / zero failures, cancellations or skipped** resolved from package.json `ops:check` completed with exit 0. Each stage exit and suite count was inspected, including templates, secret/default scanning, Docker runtime, offline SBOM licences, SAST and container checks. Final `ops:launch-drill-test` returned `tests 182 / pass 182 / fail 0 / cancelled 0 / skipped 0`, duration `229372.696308ms`. These are independent offline checks, excluding online `ops:audit`; no aggregate `ops:check` pass is claimed.
