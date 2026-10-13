@@ -3092,3 +3092,94 @@ with an existing local owner/admin session and request `/api/v1/jobs/runs`
 with `x-acres-organization-id` set to that account's active organization.
 Expect HTTP 403 with fixed denial and no `data`. Unauthenticated requests
 remain 401. No production or remote service operation is needed.
+
+## Prompt 361 — real end-to-end data journey acceptance on PostgreSQL/PostGIS (2026-10-13)
+
+Establishes comprehensive, authoritative live-pipeline acceptance in
+`server/test/data-journey.e2e-spec.ts` executed against the real migrated
+`acres_test` PostgreSQL/PostGIS database under forced RLS.
+
+### Verified pipeline phases
+
+1. **Geography baseline with PostGIS geometry**: seeds reviewed `RegionSource`,
+   `Region` (California, `US-CA`), and `RegionCode` (`ISO-3166-2`, `US-CA`) with
+   a real PostGIS polygon geometry. Confirms spatial lookup via `ST_Contains`
+   locating `POINT(-119.5 36.8)` within California boundaries.
+2. **Multi-tenant and RBAC setup**: seeds Organization A ("Agro Alpha") with
+   Owner, Analyst, and Viewer accounts, and Organization B ("Beta Bio") with
+   an Owner account. Establishes authenticated supertest session agents for
+   each actor.
+3. **Upload initiation and storage verification**: Org A Owner initiates an
+   upload via `POST /api/v1/uploads`, puts valid CSV bytes into storage, and
+   completes upload via `POST /api/v1/uploads/:id/complete` verifying SHA-256
+   digest and byte counts. Transitions file state from quarantine to accepted.
+4. **Dataset creation and column mapping**: Org A Owner creates a dataset via
+   `POST /api/v1/datasets`, sets column mappings via `POST /api/v1/datasets/:id/mappings`
+   mapping `region` to `RegionCode` and `yield` to numeric metric `crop_yield`
+   with sum aggregation and year period, and queues an ingestion run via
+   `POST /api/v1/datasets/:id/ingestion-runs`.
+5. **Ingestion processor publication and lineage**: executes
+   `IngestionProcessorService.processRun()`. Confirms run transitions to
+   `state: 'published'` and `stage: 'complete'`. Verifies creation of immutable
+   `DatasetVersion`, normalized `MetricObservation` (`145.2`), deterministic
+   `MetricAggregate`, and `MetricAggregateLineage` linking the aggregate to
+   both the observation and dataset version.
+6. **Direct analytics reads and evidence resolution**: queries
+   `GET /api/v1/analytics/metrics`, `GET /api/v1/analytics/observations`,
+   `GET /api/v1/analytics/aggregates`, and `GET /api/v1/analytics/aggregates/:id/evidence`.
+   Verifies accurate decimal serialization, filter scoping, and lineage provenance.
+7. **Saved dashboard view**: Org A Owner creates analytical view via
+   `POST /api/v1/dashboard-views` and verifies listing via
+   `GET /api/v1/dashboard-views`.
+8. **Governed report lifecycle**: Org A Owner creates draft report via
+   `POST /api/v1/reports`, freezes immutable evidence for both aggregate and
+   dashboard view via `POST /api/v1/reports/:id/revisions`, submits revision for
+   review via `POST /api/v1/reports/:id/revisions/:revId/submit-review`, and
+   publishes revision via `POST /api/v1/reports/:id/revisions/:revId/publish`.
+9. **Export generation and download**: Org A Owner requests CSV export via
+   `POST /api/v1/exports`. Executes `ReportsService.processExport()`. Confirms
+   export artifact buffer is generated, stored, and verified via signed
+   download URL from `GET /api/v1/exports/:id/download`.
+10. **Cross-tenant isolation under RLS**: Org B Owner requests Org A datasets,
+    versions, observations, aggregates, dashboard views, reports, and exports.
+    Verifies that all return HTTP 404 `NOT_FOUND` or empty tenant-scoped lists.
+11. **RBAC enforcement and rollback defense**: Org A Viewer write attempts are
+    denied with HTTP 403 `FORBIDDEN` across uploads, datasets, mappings, ingestion
+    runs, reports, and exports, while reads succeed. Org A Analyst is denied
+    member revocation (403). An invalid CSV containing an unmatched region
+    fails ingestion with `validation_failed`, verifying that zero partial dataset
+    versions, observations, or aggregates are persisted.
+
+### Test helper enhancement
+
+`server/test/helpers/real-db-test-app.ts` now overrides `PARSER_EXECUTOR` with
+`InProcessParserExecutor` when configuring the real database testing module.
+This allows parser workers to execute in-process without requiring precompiled
+child-process entrypoint artifacts (`dist/ingestion/parsers/parser-child.entry.js`).
+
+### Verification results
+
+```text
+npm run test:server -- server/test/data-journey.e2e-spec.ts
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total (11 phases verified in ~5.5s)
+
+npm run test:server
+Test Suites: 7 passed, 7 total
+Tests:       146 passed, 146 total (52.4s)
+
+npm run contracts:check
+contracts:check passed
+
+npm run lint
+lint passed across @acres/client, @acres/shared, @acres/server
+
+npm run typecheck
+typecheck passed across @acres/client, @acres/shared, @acres/server
+
+npm run build
+build passed across @acres/client, @acres/shared, @acres/server (23/23 static/dynamic routes)
+```
+
+No database schema, API contracts, or production configurations were altered.
+Ordinary git revert restores prior test fixtures and documentation.

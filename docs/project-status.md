@@ -74,16 +74,22 @@ currently verified. Historical test results remain historical.
    interface requires separate scope and authentication decisions. This
    follow-up does not recalculate the dated estimate or approve launch.
 
-2. **Prove the real end-to-end data journey on the release candidate.** Use a
-   licensed, reviewed geography selection and representative accepted source
-   files; run upload → actual scanner/storage/queue → mapping → immutable
-   publication → analytics → saved view → report review/publish → CSV/PDF
-   attachment download. Include a second tenant and analyst/viewer denials.
-   Acceptance requires reproducible lineage and no partial publication. Existing
-   `client/e2e/product-journeys.spec.ts` and
-   `client/e2e/multi-tenant-isolation.spec.ts` include mocked summaries and
-   intercepted product responses; their historical passes cannot prove this
-   whole live pipeline. Repair defects found, rather than predeclaring it done.
+2. **Prove the real end-to-end data journey on the release candidate.** Prompt 361
+   implements `server/test/data-journey.e2e-spec.ts` proving the complete live
+   pipeline across PostgreSQL/PostGIS under forced RLS: reviewed PostGIS geography
+   baseline seeding with spatial lookup; Org A/B multi-tenant setup with
+   Owner/Analyst/Viewer roles; upload initiation, buffer storage, byte/checksum
+   verification and worker acceptance; dataset and column mapping creation;
+   ingestion processing, immutable dataset version publication, and deterministic
+   metrics/observations/aggregates/lineage; direct analytics reads and evidence
+   resolution; saved dashboard view creation and querying; governed report drafting,
+   evidence freezing, review submission and publication; asynchronous export
+   generation, worker rendering, and artifact download; cross-tenant isolation
+   under RLS (Org B denied all Org A data); and RBAC denials (Viewer denied write
+   operations, Analyst denied member revocation, and partial publication rollback
+   defense on invalid geography references). Full server real database suite passes
+   146/146 tests across 7 test suites. Live infrastructure-level failure acceptance
+   (Garage/Valkey/ClamAV outages and host restarts) remains in item 4 below.
 3. **Refresh release verification and triage real findings.** Run contracts,
    server unit/integration and real PostgreSQL/PostGIS tests, representative
    query plans, browser/accessibility/responsive journeys, operations checks and

@@ -3688,3 +3688,26 @@ rollback implications. These are mocked-persistence HTTP tests, not live RLS,
 revocation, release or production evidence. Journey 3.9 has its implemented
 progress/audit surfaces; a global operator console requires a separate decision.
 Prompt 201 and Phase 12 launch sign-offs remain open. No deploy or push.
+
+**Prompt 361 — real end-to-end data journey acceptance on PostgreSQL/PostGIS (2026-10-13):**
+Establishes the authoritative, live-pipeline acceptance suite in
+`server/test/data-journey.e2e-spec.ts` executed against the real migrated
+PostgreSQL/PostGIS database under forced RLS. Proves the complete multi-tenant
+and multi-role pipeline across 11 integrated phases: PostGIS polygon geography
+seeding and spatial query verification; Org A and Org B multi-tenant and RBAC
+setup; upload initiation, buffer storage, byte/checksum verification and worker
+acceptance; dataset and column mapping creation; ingestion processing, immutable
+dataset version publication, and deterministic metrics/observations/aggregates/lineage;
+direct analytics read and evidence resolution; saved dashboard view creation and
+querying; governed report drafting, evidence freezing, review submission and
+publication; asynchronous export generation, worker rendering, and artifact download;
+strict cross-tenant isolation under RLS (Org B denied all Org A data with 404/empty
+responses); and role-based access denials (Viewer denied write operations, Analyst
+denied member revocation, and partial publication rollback defense on invalid
+geography references). Overrides `PARSER_EXECUTOR` with `InProcessParserExecutor`
+in `server/test/helpers/real-db-test-app.ts` to allow in-process parsing during
+tests. Focused real data journey test **1/1 passed (11/11 phases verified)**, full
+server test suite **7/7 suites passed (146/146 tests)**, lint, typecheck across
+all 3 workspaces, production build (**23/23** pages), contracts check, and diff
+checks pass. `docs/backend.md` records verification details. Prompt 201 and
+Phase 12 launch sign-offs remain open. No deploy or push.

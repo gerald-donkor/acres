@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { PARSER_EXECUTOR } from '../../src/ingestion/parsers/parser-executor.port';
+import { InProcessParserExecutor } from '../../src/ingestion/parsers/in-process-parser.executor';
 import { WORK_QUEUE } from '../../src/queue/work-queue.port';
 import { OBJECT_STORAGE } from '../../src/storage/storage.port';
 
@@ -37,6 +39,8 @@ export async function createRealDbTestApp(): Promise<{
         readiness: jest.fn().mockResolvedValue(true),
         close: jest.fn().mockResolvedValue(undefined),
       })
+      .overrideProvider(PARSER_EXECUTOR)
+      .useClass(InProcessParserExecutor)
       .compile();
 
     app = moduleRef.createNestApplication({ bodyParser: false });
@@ -54,6 +58,6 @@ export async function createRealDbTestApp(): Promise<{
 
 export async function truncateAll(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "ExportArtifact","ExportRequest","ReportEvidence","ReportInsight","ReportRevision","Report","MetricAggregateLineage","MetricAggregate","ObservationQuality","MetricObservation","MetricDefinition","ValidationIssue","StagedSourceSummary","IngestionRun","DatasetVersion","ColumnMapping","Dataset","RegionGeometry","RegionAlias","RegionCode","RegionSource","AuditEvent","Invitation","Membership","Organization","IdempotencyRecord","AccountToken","Session","Account","RegionalMetric","InsightReport","Region","ContactSubmission","JobRun","StoredObject","Upload","OutboxEvent","DurableJob","JobProgressEvent","JobDeadLetter" RESTART IDENTITY CASCADE;',
+    'TRUNCATE TABLE "DashboardView","AiGeneration","ExportArtifact","ExportRequest","ReportEvidence","ReportInsight","ReportRevision","Report","MetricAggregateLineage","MetricAggregate","ObservationQuality","MetricObservation","MetricDefinition","ValidationIssue","StagedSourceSummary","IngestionRun","DatasetVersion","ColumnMapping","Dataset","RegionGeometry","RegionAlias","RegionCode","RegionSource","AuditEvent","Invitation","Membership","Organization","IdempotencyRecord","AccountToken","Session","Account","RegionalMetric","InsightReport","Region","ContactSubmission","JobRun","StoredObject","Upload","OutboxEvent","DurableJob","JobProgressEvent","JobDeadLetter" RESTART IDENTITY CASCADE;',
   );
 }
