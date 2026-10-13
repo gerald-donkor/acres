@@ -31,7 +31,8 @@ export interface RouteErrorBoundaryProps {
   backLabel?: string;
   showSignOut?: boolean;
   mode?: "workspace" | "standalone" | "auth" | "inline";
-  activeSection?: "workspace" | "datasets" | "dashboards" | "reports" | "members";
+  activeSection?:
+    "workspace" | "datasets" | "dashboards" | "reports" | "members" | "audit";
   className?: string;
 }
 
@@ -88,8 +89,7 @@ export function RouteErrorBoundary({
   }, [error]);
 
   const apiErrorCopy = isApiClientError(error) ? getApiErrorCopy(error) : null;
-  const title =
-    customTitle ?? apiErrorCopy?.title ?? "Something went wrong";
+  const title = customTitle ?? apiErrorCopy?.title ?? "Something went wrong";
   const description =
     customDescription ??
     apiErrorCopy?.message ??
@@ -160,7 +160,11 @@ export function RouteErrorBoundary({
           onClick={() => reset()}
           className="h-12 min-h-12 w-full px-6 sm:w-auto"
         >
-          <RotateCcwIcon className="size-4" data-icon="inline-start" aria-hidden="true" />
+          <RotateCcwIcon
+            className="size-4"
+            data-icon="inline-start"
+            aria-hidden="true"
+          />
           Try Again
         </Button>
 

@@ -3639,3 +3639,19 @@ Prompt 357. Example readiness still exits 1: **0 approved / 11 unresolved /
 70 blockers**. No new runtime behavior, fresh browser/database/full-ops/audit
 pass, production evidence, live operations or push. Prompt 201 and Phase 12
 sign-off remain open. Ordinary revert restores the prior documentation.
+
+**Prompt 358 — Phase 5 organization audit history (2026-10-13):**
+Adds owner/admin `/app/audit` over the existing tenant-scoped GraphQL connection,
+metadata-only server rendering, safe errors/loading, bounded URL pagination and
+both-direction organization-switch reset. Real browser pagination exposed and
+required repairing the cursor decoder's first-period delimiter bug for ISO
+fractional timestamps; fixed-length MAC parsing preserves the wire format and
+security checks. Final browser/helper acceptance passes 11/11, focused server
+cursor/pagination/resolver units 90/90 and selected GraphQL API regression
+10/10 (66 unrelated cases skipped). Format/lint/typecheck/build/contracts/diff
+checks pass; independent review found no Critical/Important issues. Direct
+post-context session/access/outage/retry simulations remain a nonblocking test
+opportunity. `docs/authenticated-app.md` and `docs/backend.md` own details.
+Scheduled job history remains separately scoped because the existing endpoint
+returns global scheduled runs; this closes only the audit-history portion of
+journey 3.9 and does not approve launch or a full Phase 5/12 exit.

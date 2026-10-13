@@ -13,9 +13,11 @@ import {
 export function OrganizationSwitcher({
   organizations,
   activeOrganizationId,
+  resetHref,
 }: {
   organizations: OrganizationSummary[];
   activeOrganizationId: string;
+  resetHref?: "/app/audit";
 }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState(activeOrganizationId);
@@ -27,6 +29,7 @@ export function OrganizationSwitcher({
     setSelectedId(nextId);
     persistActiveOrganization(nextId);
     startTransition(() => {
+      if (resetHref) router.replace(resetHref);
       router.refresh();
     });
   }

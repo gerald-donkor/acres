@@ -456,3 +456,149 @@ Prompt 60 implements Phase 5E: accessible route error boundaries, streaming load
 - **Server-Side Test Harness**: `client/lib/api/test-harness-store.ts`, route handler `client/app/api/test-harness/mock`, and `client/lib/api/server.ts` provide session-scoped SSR mock resolution when `ENABLE_TEST_HARNESS=true` is enabled during Playwright runs. Strictly excluded in production without the explicit flag.
 - **Client E2E Suite Baseline**: 74/74 tests passing across all 11 suites including `multi-tenant-isolation.spec.ts`, `product-journeys.spec.ts`, `accessibility-responsive.spec.ts`, and `members-management.spec.ts`.
 - **Phase 5 Production Ingress Verified (Phase 12G)**: Production Caddy same-origin routing is fully verified via automated route evaluator (`scripts/ops/verify-caddy-routing.js`), unit tests (`verify-caddy-routing.spec.js`, 10/10 passing), and deployment promotion drill (`scripts/ops/run-deployment-drill.sh`). Confirms `@api path /api/* /graphql /health /health/ready` proxies to `api:3001` with `X-Forwarded-Host` and `X-Forwarded-Proto`, `@objects path /acres-quarantine/*` proxies to `garage:3900` with `header_up Host {host}` preserving S3 SigV4 signatures, Next fallback proxies to `next:3000`, and edge security headers are enforced. Local/dev browser traffic continues using the Next Route Handler bridge (`client/app/api/v1/[...path]/route.ts`).
+
+## Organization audit history — Prompt 358, 2026-10-13
+
+`/app/audit` adds the audit portion of product journey 3.9. Owners and admins
+can open **Audit history** from the application navigation. Analysts/viewers
+receive an explicit access boundary on direct navigation; the existing API
+still enforces `audit.read`, active membership and forced RLS. Accounts without
+an organization retain the existing creation flow. No mutation, new transport
+endpoint, schema, dependency or production configuration was added.
+
+The Server Component page and `audit-workspace.tsx` render newest-first records
+from the existing `organizationAuditEvents` connection. The query selects only
+event/action/target/actor identifiers and timestamps, never raw details JSON,
+emails, invitation tokens or job failure text. Times use `Intl.DateTimeFormat`
+in UTC. Action labels tolerate future actions; identifiers wrap and remain
+selectable. Shared event types remain authoritative.
+
+`audit-history.ts` owns the query and local connection type, safe local
+pagination hrefs, labels and URL validation. The API supplies its default page
+size (20 capped by `GRAPHQL_MAX_FIRST`). Pagination carries `organization` and
+`after`; the server only applies a cursor for the selected organization.
+Duplicate/missing/empty/overlong parameters produce a restart state. The
+2048-character cursor bound is a defensive **UI judgment**, not an existing
+backend per-cursor maximum. `OrganizationSwitcher` receives an optional,
+strictly typed `/app/audit` reset href only on this section; switching away and
+back clears pagination. Back navigation and reload preserve ordinary pages.
+
+The server API client uses the existing authenticated, CSRF-protected,
+`no-store` GraphQL POST and explicitly sends `OrganizationAuditHistory` as the
+operation name (required outside development). `graphql-response.ts` preserves
+recognized shared error codes/request IDs and masks upstream text. The new
+state loader redirects expired sessions and supplies safe denied,
+organization-unavailable, invalid-page and temporary-error copy. Loading uses
+the existing reduced-motion-aware skeleton; unexpected failures use the
+shared error boundary with the installed Next `retry` prop. Only the new error
+boundary needs a client directive; records, pagination and initial reads remain
+server rendered.
+
+### Visual and interaction evidence
+
+The PDF button region at x=0/y=1700, 1260×680 at 72 dpi was inspected. There is
+no authenticated audit comp: the record layout is a product design judgment
+using existing tokens and chrome, with no marketing-layout change. Screenshots
+were captured under `output/playwright/audit-history-{375,800,1280}.png` and all
+three inspected; the final artifacts were moved to `/tmp/acres-358-browser/`
+to keep generated screenshots out of the source commit. At 375 the records
+stack; at 800/1280 metadata uses two columns inside the existing persistent
+shell. Real-browser assertions prove no horizontal overflow at those widths
+(and a reduced 640×450 viewport) and pagination targets at least 44×44.
+Keyboard Enter activates the focused pagination link. No manual screen-reader,
+actual browser zoom or complete WCAG conformance claim is made.
+
+### Verification
+
+All commands below ran from the repository root against the final code.
+Selected actual output (unrelated output omitted):
+
+```text
+$ npx --no-install prettier --check <Prompt 358 changed code and prompt paths>
+Checking formatting...
+All matched files use Prettier code style!
+
+$ git diff --check
+(no output)
+
+$ npm run lint
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+
+$ npm run typecheck
+> @acres/shared@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+> @acres/client@0.1.0 typecheck
+> tsc --noEmit
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma
+
+$ npm run build
+▲ Next.js 16.3.8 (webpack)
+✓ Compiled successfully in 6.9s
+✓ Generating static pages using 7 workers (23/23) in 1345ms
+├ ƒ /app/audit
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma
+
+$ npm run contracts:check
+> prisma generate && nest build && node dist/contracts/generate-contracts.js --check
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma
+
+$ PLAYWRIGHT_CLIENT_PORT=3380 PLAYWRIGHT_API_PORT=3381 npm run test:e2e --workspace=@acres/client -- e2e/audit-history.spec.ts tests/audit-history.spec.ts --workers=1
+11 passed (19.6s)
+
+$ npm run test --workspace=@acres/server -- --runInBand --testPathPatterns='cursor-codec.spec.ts|pagination.spec.ts|acres.resolver.spec.ts'
+Test Suites: 3 passed, 3 total
+Tests:       90 passed, 90 total
+
+$ npm run test:e2e --workspace=@acres/server -- --runInBand --testPathPatterns=api.e2e-spec.ts --testNamePattern=GraphQL
+Test Suites: 1 passed, 1 total
+Tests:       66 skipped, 10 passed, 76 total
+```
+
+Each final command exited 0. The build initially hit the documented sandbox
+`Could not parse output from TypeScript's --showConfig` failure; subprocess
+escalation passed. The selected API regression initially failed with socket
+`listen EPERM`; the identical command passed with local socket access. The
+shadcn CLI initially hit sandbox DNS `EAI_AGAIN`; escalation returned the
+official component documentation links, which were fetched. Tailwind's
+uninitialized local snapshot remains a documented limitation; the existing
+skill fallback and repository utilities were used, with no license acceptance
+or dependency install.
+
+The first browser run was 1 passed/5 failed: it exposed the real timestamp
+cursor defect recorded in `backend.md` and registration/logout test races.
+After repair, 5 passed/1 failed identified an immediate read before a reloaded
+page finished streaming. Explicit UI waits fixed those test races. The final
+11-case run uses real local API/PostgreSQL audit data, no intercepted audit
+responses or SSR mocks. It proves >20 real events, distinct pages, reload/back,
+both-direction tenant switching, foreign signed cursor rejection, admin access,
+analyst/viewer GraphQL denial, anonymous/no-org states and token non-rendering.
+No whole-release/database-suite/production acceptance is implied.
+
+The independent read-only reviewer found no Critical/Important issues and
+approved completion. One nonblocking coverage opportunity remains: direct
+simulation of session expiry, post-context permission revocation, organization
+disappearance, query outage and unexpected-boundary retry. Parser code tests
+and live role/cursor cases do not substitute for those race/failure cases.
+
+### Remaining scope and local inspection
+
+Scheduled job history remains a separate slice: `/jobs/runs` currently exposes
+global scheduled-run metadata and needs a scope/safe-presentation decision
+before a tenant UI exposes it. Existing ingestion/export progress is unchanged.
+This prompt does not close Phase 12 production evidence or launch approval.
+
+With the existing local database/environment configured, run
+`npm run dev:server` and `npm run dev:client` in separate terminals. Sign in as
+an organization owner/admin, select the organization and open
+`http://localhost:3000/app/audit`. Use More events/Latest events to inspect
+pagination. Revert this prompt's client files and codec repair together to roll
+back; the cursor wire format and existing schema/contracts remain compatible.

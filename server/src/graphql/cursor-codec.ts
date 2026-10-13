@@ -40,8 +40,10 @@ export class CursorCodec {
     if (!cursor) return null;
     try {
       const raw = Buffer.from(cursor, 'base64url');
-      const split = raw.indexOf('.');
-      if (split < 1) throw new Error('missing mac');
+      // SHA-256 appends exactly 32 binary bytes. Both JSON strings (including
+      // ISO fractional seconds) and the MAC itself can contain periods.
+      const split = raw.length - 33;
+      if (split < 1 || raw[split] !== 0x2e) throw new Error('missing mac');
       const body = raw.subarray(0, split);
       const mac = raw.subarray(split + 1);
       const expectedMac = this.mac(body);

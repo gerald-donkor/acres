@@ -274,6 +274,29 @@ describe('CursorCodec and cursor utilities', () => {
         }
       });
 
+      it('roundtrips periods in JSON and in the binary SHA-256 MAC', () => {
+        let exercisedMacPeriod = false;
+        for (let n = 0; n < 512; n++) {
+          const input = {
+            kind: 'organizationAuditEvents' as const,
+            organizationId: 'org.audit',
+            sort: ['2026-10-13T12:34:56.789Z', `event.${n}`] as const,
+          };
+          const cursor = codec.encode(input);
+          expect(
+            codec.decode(cursor, {
+              kind: input.kind,
+              organizationId: input.organizationId,
+            }),
+          ).toEqual({ v: 1, ...input });
+          if (Buffer.from(cursor, 'base64url').subarray(-32).includes(0x2e)) {
+            exercisedMacPeriod = true;
+            break;
+          }
+        }
+        expect(exercisedMacPeriod).toBe(true);
+      });
+
       it('returns null if cursor is undefined, null, or empty string', () => {
         const expected = {
           kind: 'regions' as const,

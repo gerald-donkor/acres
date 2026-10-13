@@ -9,6 +9,7 @@ import type {
 } from "@acres/shared";
 import type { ReactNode } from "react";
 import {
+  HistoryIcon,
   BarChart3Icon,
   BriefcaseBusinessIcon,
   ClipboardListIcon,
@@ -31,7 +32,8 @@ type AppShellProps = {
   account: AccountProfile;
   organizations: OrganizationSummary[];
   activeOrganization: OrganizationSummary | null;
-  activeSection?: "workspace" | "datasets" | "dashboards" | "reports" | "members";
+  activeSection?:
+    "workspace" | "datasets" | "dashboards" | "reports" | "members" | "audit";
   children?: ReactNode;
 };
 
@@ -84,6 +86,13 @@ const navItems: Array<{
     icon: ShieldCheckIcon,
     roles: ["owner", "admin"],
   },
+  {
+    label: "Audit history",
+    status: "Active",
+    href: "/app/audit",
+    icon: HistoryIcon,
+    roles: ["owner", "admin"],
+  },
 ];
 
 function Ledger({
@@ -108,7 +117,9 @@ function Ledger({
       <div className="min-w-0">
         <dt>Role</dt>
         <dd className="text-ink">
-          {activeOrganization ? roleLabel[activeOrganization.membership.role] : "None"}
+          {activeOrganization
+            ? roleLabel[activeOrganization.membership.role]
+            : "None"}
         </dd>
       </div>
     </dl>
@@ -120,9 +131,12 @@ function WorkNavigation({
   activeSection,
 }: {
   role: OrganizationRole | null;
-  activeSection?: "workspace" | "datasets" | "dashboards" | "reports" | "members";
+  activeSection?:
+    "workspace" | "datasets" | "dashboards" | "reports" | "members" | "audit";
 }) {
-  const visible = navItems.filter((item) => role === null || item.roles.includes(role));
+  const visible = navItems.filter((item) =>
+    role === null ? item.href !== "/app/audit" : item.roles.includes(role),
+  );
   return (
     <nav aria-label="Application" className="grid gap-2">
       {visible.map((item) => {
@@ -132,7 +146,8 @@ function WorkNavigation({
           (activeSection === "datasets" && item.href === "/app/datasets") ||
           (activeSection === "dashboards" && item.href === "/app/dashboards") ||
           (activeSection === "reports" && item.href === "/app/reports") ||
-          (activeSection === "members" && item.href === "/app/members");
+          (activeSection === "members" && item.href === "/app/members") ||
+          (activeSection === "audit" && item.href === "/app/audit");
         const enabled = item.status === "Active" && item.href !== null;
         const href = item.href;
         const content = (
@@ -151,7 +166,10 @@ function WorkNavigation({
             key={item.label}
             href={href}
             className={cn(
-              buttonVariants({ variant: active ? "secondary" : "ghost", size: "lg" }),
+              buttonVariants({
+                variant: active ? "secondary" : "ghost",
+                size: "lg",
+              }),
               "h-target justify-between gap-3",
             )}
             aria-current={active ? "page" : undefined}
@@ -197,7 +215,10 @@ function WorkspaceOverview({
         <p className="font-mono text-label uppercase text-brand lg:text-label-lg">
           Workspace
         </p>
-        <h1 id="workspace-title" className="mt-2 font-serif text-title text-ink">
+        <h1
+          id="workspace-title"
+          className="mt-2 font-serif text-title text-ink"
+        >
           Organization shell is ready.
         </h1>
         <p className="mt-3 max-w-2xl text-body text-ink-muted">
@@ -254,9 +275,7 @@ function WorkspaceOverview({
               </Link>
               <Badge variant="secondary">Active</Badge>
             </div>
-            <p className="mt-3 text-body text-ink-muted">
-              {item.description}
-            </p>
+            <p className="mt-3 text-body text-ink-muted">{item.description}</p>
           </div>
         ))}
       </div>
@@ -302,6 +321,7 @@ export function AppShell({
             <OrganizationSwitcher
               organizations={organizations}
               activeOrganizationId={activeOrganization.id}
+              resetHref={activeSection === "audit" ? "/app/audit" : undefined}
             />
           )}
           <details className="group md:hidden" open>
@@ -321,12 +341,12 @@ export function AppShell({
         </aside>
         <div className="min-w-0">
           {activeOrganization ? (
-            children ?? (
+            (children ?? (
               <WorkspaceOverview
                 account={account}
                 activeOrganization={activeOrganization}
               />
-            )
+            ))
           ) : (
             <CreateOrganizationForm />
           )}

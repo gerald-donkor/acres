@@ -58,18 +58,17 @@ currently verified. Historical test results remain historical.
 
 ## Remaining engineering and acceptance work
 
-1. **Complete administrative history access.** Product journey 3.9 requires
-   administrators to inspect audit history. Audit persistence and the permissioned
-   `organizationAuditEvents` GraphQL query exist in
-   `server/src/organizations/audit.service.ts` and
-   `server/src/graphql/acres.resolver.ts`. `server/src/jobs/jobs.controller.ts`
-   exposes owner/admin job runs. The current app navigation and route inventory
-   provide workspace, datasets, dashboards, reports and members, with no dedicated
-   audit/job history interface or matching API-client helpers. Ingestion/export
-   progress already exists; do not rebuild it. Plan a scoped admin history
-   surface with tenant/permission checks, pagination, safe details, accessible
-   states and browser acceptance. A unified job console beyond V1 needs a
-   separate scope decision.
+1. **Finish the remaining administrative history scope.** Prompt 358 adds
+   owner/admin `/app/audit` with real tenant-scoped GraphQL metadata, pagination,
+   safe states and browser acceptance; see [authenticated-app.md](authenticated-app.md).
+   The audit persistence/query and new client surface are implemented. Direct
+   post-context session/access/outage/retry simulations remain a nonblocking
+   test opportunity. `server/src/jobs/jobs.controller.ts` still exposes global
+   scheduled-run metadata through the owner/admin endpoint, so a job-history
+   interface requires a bounded scope/safe-presentation decision before exposing
+   it to tenants. Ingestion/export progress already exists; do not rebuild it.
+   A unified job console beyond V1 needs a separate scope decision. This follow-up
+   does not recalculate the dated completion estimate or approve launch.
 2. **Prove the real end-to-end data journey on the release candidate.** Use a
    licensed, reviewed geography selection and representative accepted source
    files; run upload → actual scanner/storage/queue → mapping → immutable

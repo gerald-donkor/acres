@@ -23,6 +23,11 @@ import type {
 } from "@acres/shared";
 
 import { parseApiResponse } from "@/lib/api/envelope";
+import { parseGraphqlResponse } from "@/lib/api/graphql-response";
+import {
+  AUDIT_HISTORY_QUERY,
+  type AuditEventConnection,
+} from "@/lib/api/audit-history";
 
 const API_ORIGIN =
   process.env.ACRES_API_ORIGIN?.trim() || "http://localhost:3001";
@@ -76,9 +81,12 @@ export function getOrganization(id: string): Promise<OrganizationSummary> {
 export function listMembers(
   organizationId: string,
 ): Promise<OrganizationMember[]> {
-  return apiGet<OrganizationMember[]>(`/organizations/${organizationId}/members`, {
-    organizationId,
-  });
+  return apiGet<OrganizationMember[]>(
+    `/organizations/${organizationId}/members`,
+    {
+      organizationId,
+    },
+  );
 }
 
 export function listInvitations(
@@ -90,20 +98,13 @@ export function listInvitations(
   );
 }
 
-type GraphqlResponse<TData> = {
-  data?: TData;
-  errors?: Array<{
-    message: string;
-    extensions?: { code?: string; requestId?: string };
-  }>;
-};
-
 type CsrfToken = CsrfTokenReceipt;
 
 export async function graphqlPost<TData>(
   query: string,
   variables: Record<string, unknown>,
   organizationId: string,
+  operationName?: string,
 ): Promise<TData> {
   const headers = new Headers(await authenticatedHeaders(organizationId));
   const csrf = await csrfTokenForServer(headers);
@@ -112,20 +113,25 @@ export async function graphqlPost<TData>(
   const response = await fetch(new URL("/graphql", API_ORIGIN), {
     method: "POST",
     headers,
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query, variables, operationName }),
     cache: "no-store",
   });
-  const payload = (await response.json()) as GraphqlResponse<TData>;
-  if (!response.ok || payload.errors?.length) {
-    const first = payload.errors?.[0];
-    throw new Error(
-      first?.message ?? `GraphQL request failed: ${response.status}`,
-    );
-  }
-  if (payload.data === undefined) {
-    throw new Error("GraphQL response did not include data.");
-  }
-  return payload.data;
+  return parseGraphqlResponse<TData>(response);
+}
+
+export async function listOrganizationAuditEvents(
+  organizationId: string,
+  after?: string,
+): Promise<AuditEventConnection> {
+  const data = await graphqlPost<{
+    organizationAuditEvents: AuditEventConnection;
+  }>(
+    AUDIT_HISTORY_QUERY,
+    { after },
+    organizationId,
+    "OrganizationAuditHistory",
+  );
+  return data.organizationAuditEvents;
 }
 
 async function csrfTokenForServer(headers: Headers): Promise<CsrfToken> {
@@ -143,7 +149,10 @@ async function csrfTokenForServer(headers: Headers): Promise<CsrfToken> {
     [responseHeaders.get("set-cookie")].filter((value) => value !== null);
   const csrfCookies = setCookies.map(cookiePairFromSetCookie).filter(Boolean);
   if (csrfCookies.length > 0) {
-    headers.set("cookie", mergeCookieHeader(headers.get("cookie"), csrfCookies));
+    headers.set(
+      "cookie",
+      mergeCookieHeader(headers.get("cookie"), csrfCookies),
+    );
   }
   return token;
 }
@@ -271,7 +280,9 @@ async function getTestHarnessState(): Promise<{
       cookies(),
     ]);
     const mockDashboardHeader = headerStore.get("x-playwright-mock-dashboard");
-    const mockDashboardCookie = cookieStore.get("x-playwright-mock-dashboard")?.value;
+    const mockDashboardCookie = cookieStore.get(
+      "x-playwright-mock-dashboard",
+    )?.value;
     const mockDashboard =
       mockDashboardHeader === "true" ||
       mockDashboardHeader === "populated" ||
@@ -339,7 +350,10 @@ export async function getReport(
 ): Promise<Report> {
   const harness = await getTestHarnessState();
   if (harness.enabled) {
-    if (harness.mocks?.report && (harness.mocks.report.id === reportId || !reportId)) {
+    if (
+      harness.mocks?.report &&
+      (harness.mocks.report.id === reportId || !reportId)
+    ) {
       return harness.mocks.report;
     }
     if (harness.mocks?.reports) {
@@ -376,7 +390,10 @@ export async function getDataset(
 ): Promise<DatasetSummary> {
   const harness = await getTestHarnessState();
   if (harness.enabled) {
-    if (harness.mocks?.dataset && (harness.mocks.dataset.id === datasetId || !datasetId)) {
+    if (
+      harness.mocks?.dataset &&
+      (harness.mocks.dataset.id === datasetId || !datasetId)
+    ) {
       return harness.mocks.dataset;
     }
     if (harness.mocks?.datasets) {

@@ -2996,3 +2996,34 @@ Prisma validate/generate, contract checks, repository typecheck and build.
 These checks support the exercised config path, not arbitrary external configs
 or production/database acceptance. `docs/operations.md` Prompt 295 owns metadata,
 actual outputs, offline operations results, audit restrictions and rollback.
+
+## Timestamp cursor decoding repair — Prompt 358
+
+The first real audit-history browser pagination run found that `CursorCodec`
+used the first period as the separator in JSON + `.` + binary SHA-256 MAC.
+Actual `createdAt.toISOString()` values contain fractional-second periods;
+therefore otherwise correctly signed audit/member/invitation cursors could
+fail decoding. Binary MAC bytes may also contain a period, making a
+last-period search incorrect too.
+
+`server/src/graphql/cursor-codec.ts` now locates the separator exactly 33 bytes
+from the end, validates it, and authenticates the preceding body with the same
+HMAC/domain/key and kind/organization checks. The wire format does not change.
+The added regression roundtrips fractional timestamps, periods in string values
+and a deterministic real digest containing a period. Existing malformed-MAC,
+missing-delimiter, wrong-kind and wrong-tenant tests remain passing.
+
+Actual final output:
+
+```text
+$ npm run test --workspace=@acres/server -- --runInBand --testPathPatterns='cursor-codec.spec.ts|pagination.spec.ts|acres.resolver.spec.ts'
+Test Suites: 3 passed, 3 total
+Tests:       90 passed, 90 total
+```
+
+Root lint/typecheck/build and contracts pass. Real local PostgreSQL browser
+acceptance now traverses audit pages and rejects a foreign signed tenant cursor.
+Full command outputs, sandbox retries, independent review and limits are in
+`docs/authenticated-app.md`, Prompt 358. No schema, query ordering, permissions
+or SQL policy changed. Reverting the codec restores the defect; it does not
+require a cursor/data migration.
