@@ -10557,3 +10557,289 @@ test('main failed database cleanup: asynchronous end completes before immediate 
   assert.strictEqual(result.stdout, 'ended\n');
   assert.strictEqual(result.stderr, '');
 });
+
+// Successful connection fixtures exercise the later owned-client cleanup paths.
+function laterDatabaseCleanupFixture(t, scenario, end, callerOwned = false) {
+  const { Client } = require('pg');
+  const { S3Client } = require('@aws-sdk/client-s3');
+  const events = [];
+  const receivers = {};
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-later-pg-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const output = path.join(dir, 'receipt.json');
+  if (scenario === 'publication') fs.writeFileSync(output, 'retained');
+  const methods = {
+    async connect() {
+      receivers.connect = this;
+      events.push('connect');
+    },
+    async query() {
+      events.push('query');
+      if (scenario === 'query') throw new Error('private-query-sentinel');
+      return { rows: scenario === 'missing' ? [inventoryDbRecord()] : [] };
+    },
+    end() {
+      receivers.end = this;
+      events.push('end');
+      return end();
+    },
+  };
+  const replace = (prototype, name, value) => {
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, name);
+    Object.defineProperty(prototype, name, {
+      configurable: true,
+      writable: true,
+      value,
+    });
+    t.after(() => {
+      if (descriptor) Object.defineProperty(prototype, name, descriptor);
+      else delete prototype[name];
+    });
+  };
+  if (!callerOwned) {
+    for (const [name, method] of Object.entries(methods))
+      replace(Client.prototype, name, method);
+  }
+  replace(S3Client.prototype, 'send', async function () {
+    receivers.send = this;
+    events.push('send');
+    if (scenario === 'listing') throw new Error('private-listing-sentinel');
+    return { IsTruncated: false, Contents: [] };
+  });
+  replace(S3Client.prototype, 'destroy', function () {
+    receivers.destroy = this;
+    events.push('destroy');
+  });
+  const io = createIo();
+  const log = io.log.bind(io);
+  io.log = (message) => {
+    if (message.includes('Acres Storage Reconciliation Report')) {
+      events.push('report');
+      if (scenario === 'report') throw new Error('private-report-sentinel');
+    }
+    log(message);
+  };
+  return {
+    events,
+    receivers,
+    io,
+    dir,
+    output,
+    Client,
+    S3Client,
+    run() {
+      return main(['node', 'script', '--dry-run', '--output', output], io, {
+        env: { PGPASSWORD: 'synthetic-test-only' },
+        ...(callerOwned ? { pgClient: methods } : {}),
+      });
+    },
+  };
+}
+
+for (const scenario of [
+  'query',
+  'listing',
+  'clean',
+  'missing',
+  'publication',
+  'report',
+]) {
+  for (const cleanup of ['resolve', 'reject', 'throw']) {
+    test(
+      `main later database cleanup: ${scenario}, end=${cleanup}`,
+      { concurrency: false },
+      async (t) => {
+        const fixture = laterDatabaseCleanupFixture(t, scenario, () => {
+          if (cleanup === 'throw') throw new Error('private-end-sentinel');
+          return cleanup === 'reject'
+            ? Promise.reject(new Error('private-end-sentinel'))
+            : Promise.resolve();
+        });
+        const expectedCode = scenario === 'clean' ? 0 : 1;
+        assert.strictEqual(await fixture.run(), expectedCode);
+        assert.strictEqual(
+          fixture.events.filter((event) => event === 'end').length,
+          1,
+        );
+        assert.ok(fixture.receivers.connect instanceof fixture.Client);
+        assert.strictEqual(fixture.receivers.end, fixture.receivers.connect);
+        if (scenario === 'query') {
+          assert.deepStrictEqual(fixture.events, ['connect', 'query', 'end']);
+        } else {
+          assert.strictEqual(
+            fixture.events.filter((event) => event === 'send').length,
+            1,
+          );
+          assert.ok(fixture.receivers.send instanceof fixture.S3Client);
+          assert.strictEqual(fixture.receivers.destroy, fixture.receivers.send);
+          assert.strictEqual(
+            fixture.events.filter((event) => event === 'destroy').length,
+            1,
+          );
+          if (scenario === 'listing') {
+            assert.deepStrictEqual(fixture.events, [
+              'connect',
+              'query',
+              'send',
+              'end',
+              'destroy',
+            ]);
+          } else {
+            assert.deepStrictEqual(fixture.events, [
+              'connect',
+              'query',
+              'send',
+              'destroy',
+              'report',
+              'end',
+            ]);
+          }
+        }
+        const errors = {
+          query: ['Error: Database query failed'],
+          listing: ['Error: Object storage connection or listing failed'],
+          publication: [
+            'Error: Reconciliation evidence publication failed: output file already exists',
+          ],
+          report: ['Error: Reconciliation execution failed'],
+        };
+        assert.deepStrictEqual(fixture.io.errors, errors[scenario] || []);
+        if (scenario === 'clean' || scenario === 'missing') {
+          const receipt = JSON.parse(fs.readFileSync(fixture.output, 'utf8'));
+          assert.strictEqual(receipt.summary.exitCode, expectedCode);
+          assert.strictEqual(
+            receipt.summary.missingObjects,
+            scenario === 'missing' ? 1 : 0,
+          );
+          assert.strictEqual(receipt.execution_mode, 'simulation');
+          assert.deepStrictEqual(fs.readdirSync(fixture.dir), ['receipt.json']);
+        } else if (scenario === 'publication') {
+          assert.strictEqual(
+            fs.readFileSync(fixture.output, 'utf8'),
+            'retained',
+          );
+          assert.deepStrictEqual(fs.readdirSync(fixture.dir), ['receipt.json']);
+        } else {
+          assert.deepStrictEqual(fs.readdirSync(fixture.dir), []);
+          assert.deepStrictEqual(fixture.io.logs, [
+            'Connecting to PostgreSQL and Object Storage...',
+          ]);
+        }
+        assert.ok(!JSON.stringify(fixture.io).includes('sentinel'));
+      },
+    );
+  }
+}
+
+for (const scenario of ['query', 'listing', 'clean', 'publication']) {
+  test(
+    `main later database cleanup: awaits end for ${scenario}`,
+    { concurrency: false },
+    async (t) => {
+      let release;
+      const pending = new Promise((resolve) => {
+        release = resolve;
+      });
+      const fixture = laterDatabaseCleanupFixture(t, scenario, () => pending);
+      let settled = false;
+      const running = fixture.run().then((code) => {
+        settled = true;
+        return code;
+      });
+      try {
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.strictEqual(
+          fixture.events.filter((event) => event === 'end').length,
+          1,
+        );
+        assert.strictEqual(settled, false);
+      } finally {
+        release();
+        assert.strictEqual(await running, scenario === 'clean' ? 0 : 1);
+      }
+      assert.strictEqual(settled, true);
+    },
+  );
+
+  test(
+    `main later database cleanup: caller retains client for ${scenario}`,
+    { concurrency: false },
+    async (t) => {
+      const fixture = laterDatabaseCleanupFixture(
+        t,
+        scenario,
+        () => {
+          throw new Error('unexpected caller cleanup');
+        },
+        true,
+      );
+      assert.strictEqual(await fixture.run(), scenario === 'clean' ? 0 : 1);
+      assert.ok(!fixture.events.includes('end'));
+    },
+  );
+}
+
+for (const scenario of ['query', 'listing', 'missing', 'publication']) {
+  test(`main later database cleanup: ${scenario} immediate exit preserves cleanup outcome`, () => {
+    const { spawnSync } = require('node:child_process');
+    const result = spawnSync(
+      process.execPath,
+      [
+        '-e',
+        `
+      const { Client } = require('pg');
+      const { S3Client } = require('@aws-sdk/client-s3');
+      const { main } = require('./scripts/ops/reconcile-storage-objects');
+      const scenario = ${JSON.stringify(scenario)};
+      Client.prototype.connect = async () => {};
+      Client.prototype.query = async () => {
+        if (scenario === 'query') throw new Error('private-query');
+        return { rows: scenario === 'missing' ? [{
+          id: 'fixture-id', organizationId: 'fixture-org', bucket: 'acres-quarantine',
+          objectKey: 'fixture-key', state: 'accepted', byteCount: 1,
+        }] : [] };
+      };
+      Client.prototype.end = () => {
+        process.stdout.write('ended\\n');
+        throw new Error('private-end');
+      };
+      S3Client.prototype.send = async () => {
+        if (scenario === 'listing') throw new Error('private-listing');
+        return { IsTruncated: false, Contents: [] };
+      };
+      S3Client.prototype.destroy = () => process.stdout.write('destroyed\\n');
+      const args = ['node', 'script', '--dry-run'];
+      // This existing directory fails exclusive receipt publication without mutation.
+      if (scenario === 'publication') args.push('--output', '.');
+      main(args, { log() {}, error(message) { process.stderr.write(message + '\\n'); } }, {
+        env: { PGPASSWORD: 'synthetic-test-only' }, exitOnError: true,
+      }).catch(() => process.exit(9));
+    `,
+      ],
+      {
+        cwd: path.resolve(__dirname, '../..'),
+        encoding: 'utf8',
+        timeout: 10000,
+      },
+    );
+    assert.ifError(result.error);
+    assert.strictEqual(result.status, 1);
+    assert.strictEqual(result.signal, null);
+    assert.strictEqual(
+      result.stdout,
+      scenario === 'query'
+        ? 'ended\n'
+        : scenario === 'listing'
+          ? 'ended\ndestroyed\n'
+          : 'destroyed\nended\n',
+    );
+    const errors = {
+      query: 'Error: Database query failed\n',
+      listing: 'Error: Object storage connection or listing failed\n',
+      missing: '',
+      publication:
+        'Error: Reconciliation evidence publication failed: output file already exists\n',
+    };
+    assert.strictEqual(result.stderr, errors[scenario]);
+  });
+}

@@ -3426,3 +3426,19 @@ no aggregate ops:check or fresh audit claim. Cleanup cannot prove authenticity,
 completeness, bytes or atomic/live recovery. Prompt 201, Category 6 live approval
 and Phase 12 exit stay open. No live services, SQL/schema changes, operator
 approval, deployment or push occurred.
+
+**Prompt 344 — reconciliation database cleanup error isolation (2026-10-13):**
+Continued Phase 12K after committed Prompt 343. Four later owned PostgreSQL
+cleanup paths now use guarded await, preserving query/listing/report/publication
+outcomes on synchronous throws as well as rejected Promises. One end attempt,
+caller ownership, S3 finally and exclusive receipts are preserved. Added 30
+offline cases; focused **1988/1988**, lint/typecheck/build (**22/22** pages),
+syntax/help/format/diff checks passed. Independent read-only review found no
+issues or deviations; its restricted wrapper supplied no independent totals.
+Actual red/green, installed driver authority, checks, limits and ordinary-revert
+rollback are in [operations.md](operations.md) Prompt 344. Online audit omitted;
+no aggregate ops:check or fresh audit claim. Cleanup cannot prove authenticity,
+completeness, bytes or atomic/live recovery. Prompt 201, Category 6 live approval
+and Phase 12 exit remain open. No live services, SQL/schema changes, operator
+approval, deployment or push occurred.
+Completed offline results: **33 stages / 27 suites / 4969 tests / zero failures or skipped** passed; the final suite passed on direct rerun after the temporary harness timeout. Readiness stays **0 approved / 11 blocked / 70 blockers**.

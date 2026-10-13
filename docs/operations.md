@@ -10752,3 +10752,75 @@ Safe inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 344 — Reconciliation database cleanup error isolation (2026-10-13)
+
+Continued Phase 12K after committed Prompt 343 (`d7dcf782cb786986f0fd2d842eb6b56d0184f5eb`). Inspection found four later owned PostgreSQL cleanup paths used `await pgClient.end().catch(...)`: this handles rejected Promises but cannot catch exceptions thrown before a Promise is returned. Installed `node_modules/pg/lib/client.js:781` performs synchronous connection/stream closure before constructing the completion Promise. This verifies the error-handling gap; no leaked live socket measurement is claimed.
+
+Database-query failure, storage-listing failure, completed report/publication and report/publication catch now each guard `await pgClient.end()` with try/catch. Synchronous throws and rejected cleanup Promises preserve the primary outcome and fixed private diagnostic. Successful receipt publication cannot turn into a second end attempt solely because cleanup throws. Caller-owned clients stay open; the already-fixed connection-failure branch, S3 finally, existing ordering, SQL, acquisition validation, receipt schema and exit behavior remain unchanged. Cleanup is one best-effort attempt, not proof of successful teardown; stalled cleanup and new timeout/cancellation policy remain outside scope.
+
+Added **30 offline behavioral cases**: six query/listing/report/publication outcomes crossed with resolving/rejecting/throwing end, four deferred-end settlement cases, four caller-ownership cases, and four bounded child processes with real immediate exit and synchronous cleanup failure. The fixture uses actual pg/S3 constructors and restored prototype stubs, synthetic configuration and private temporary receipts. It verifies same receivers, one owned end, awaited settlement, S3 destruction after listing failure, retained exclusive receipts, unchanged summary/receipt results and no private sentinel disclosure. A throwing summary logger exercises the report catch without changing report computation. No live database/storage transport or credential access occurred.
+
+The initial restricted focused run failed at the file wrapper (`tests 1 / pass 0 / fail 1`, `test failed`), without behavioral evidence. The first permitted red run exposed an incorrect fixture assertion (`summary.missing`); it was corrected to the existing `summary.missingObjects` before the final red run. Final permitted red returned exit 1:
+
+```text
+ℹ tests 30
+ℹ pass 20
+ℹ fail 10
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+All ten failures concerned synchronous cleanup exceptions: six matrix outcomes and four real child exits. After the compact source fix, permitted `npm run ops:reconcile-test` returned exit 0:
+
+```text
+ℹ tests 1988
+ℹ pass 1988
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+Actual self-verification:
+
+| Command | Exit | Real output / observation |
+| --- | --- | --- |
+| source/spec `node -c` | 0 each | silent |
+| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| installed Prettier added-region check | 0 | `Added test region format check: true` |
+| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
+| permitted `npm run build` | 0 | `Compiled successfully in 6.3s`; `Finished TypeScript in 6.0s`; `Generating static pages using 7 workers (22/22) in 1899ms`; Prisma Client `7.9.1` generated and `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0 | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
+| `git diff --check` | 0 | silent |
+
+Independent read-only review found no Critical, Important or Minor issues and no implementation deviations, assessing the change ready after remaining offline checks and documentation. Feedback was evaluated against all four guarded-await paths, ownership, single end attempts, primary-error preservation, S3 finally and tests; no changes or re-review were needed. The reviewer inspected the coordinator green log but its own restricted focused test failed at the file wrapper (`tests 1`, `test failed`), supplying no independent behavioral totals.
+
+Completed results from all **33 independent offline stages / 27 suite invocations / 4969 tests / 4969 passed / zero failures, cancellations or skipped** resolved from package.json `ops:check` passed. Every stage exit and suite count was inspected, including production templates, secret/default scanning, Docker runtime, offline SBOM licences, SAST and container checks. The temporary sequential harness imposed a 180-second per-stage timeout: its first final `ops:launch-drill-test` invocation was interrupted with `spawnSync /bin/sh ETIMEDOUT` and no completed suite totals. This is a harness limitation, not a passing aggregate run. The final suite was rerun directly without that limit and returned exit 0:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 219825.909771
+```
+
+The example command `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json` returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online `ops:audit` remains omitted under the documented dependency-metadata disclosure restriction; no aggregate `ops:check` pass or fresh vulnerability audit is claimed. The initial sandbox could not write `.git/index.lock`; permitted staging/commit access was used for this authorized local change. Cleanup cannot authenticate evidence, establish completeness, verify object bytes or prove atomic/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live services, credential access, SQL/schema/migrations, operator approval, deployment or push occurred. Ordinary commit revert restores previous error handling without DB/storage mutation.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

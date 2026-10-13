@@ -1294,7 +1294,11 @@ async function main(
     } catch (_err) {
       io.error('Error: Database query failed');
       if (pgClient && !options.pgClient) {
-        await pgClient.end().catch(() => {});
+        try {
+          await pgClient.end();
+        } catch {
+          // Best-effort owned cleanup must preserve the primary outcome.
+        }
       }
       setExitCode(1);
       if (options.exitOnError === true) process.exit(1);
@@ -1327,7 +1331,11 @@ async function main(
       listingFailed = true;
       io.error('Error: Object storage connection or listing failed');
       if (pgClient && !options.pgClient) {
-        await pgClient.end().catch(() => {});
+        try {
+          await pgClient.end();
+        } catch {
+          // Best-effort owned cleanup must preserve the primary outcome.
+        }
       }
     } finally {
       if (!options.s3Client) {
@@ -1367,7 +1375,11 @@ async function main(
     }
 
     if (pgClient && !options.pgClient) {
-      await pgClient.end().catch(() => {});
+      try {
+        await pgClient.end();
+      } catch {
+        // Best-effort owned cleanup must preserve the primary outcome.
+      }
     }
 
     const exitCode = report.summary.exitCode;
@@ -1378,7 +1390,11 @@ async function main(
     return exitCode;
   } catch (err) {
     if (pgClient && !options.pgClient) {
-      await pgClient.end().catch(() => {});
+      try {
+        await pgClient.end();
+      } catch {
+        // Best-effort owned cleanup must preserve the primary outcome.
+      }
     }
     if (err instanceof ReceiptPublicationError) {
       io.error(`Error: Reconciliation evidence publication failed: ${err.message}`);
