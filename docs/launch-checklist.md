@@ -871,6 +871,18 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 350 — reconciliation direction mark display (2026-10-13):**
+  The shared display policy now escapes U+061C/U+200E/U+200F in report text
+  and receipt paths; raw JSON and exact destinations stay intact. Added 31
+  cases; **2081/2081**, lint/typecheck/build (**22/22** pages), syntax/help/
+  format/diff passed. Independent review found no issues and passed all 31
+  new cases. Actual results, sandbox limits and ordinary revert are in
+  [operations.md](operations.md) Prompt 350. Readiness remains **0 approved /
+  11 blocked / 70 blockers**. Display protection supplies no live recovery
+  evidence; Prompt 201, Category 6 and Phase 12 exit remain open. No live
+  services, deployment or push. Full ops suites/online audit not rerun;
+  no aggregate ops:check pass claimed.
+
 - **Prompt 349 — reconciliation receipt path display (2026-10-13):**
   Receipt-success logs now escape output paths with the existing terminal policy;
   exact filesystem paths, JSON and exclusive publication remain intact.

@@ -683,7 +683,7 @@ async function queryDatabaseStoredObjects({ pgClient }) {
 // Escape terminal controls at display time; raw evidence must keep exact identities.
 function summaryText(value) {
   return String(value).replace(
-    /[\\\x00-\x1f\x7f-\x9f\u2028-\u202e\u2066-\u2069]/g,
+    /[\\\x00-\x1f\x7f-\x9f\u061c\u200e-\u200f\u2028-\u202e\u2066-\u2069]/g,
     (character) =>
       character === "\\"
         ? "\\\\"

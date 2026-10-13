@@ -11776,3 +11776,165 @@ test("receipt path display: existing control-bearing filename stays exclusive", 
   assert.strictEqual(fs.readFileSync(output, "utf8"), "original bytes");
   assert.deepStrictEqual(fs.readdirSync(dir), [filename]);
 });
+
+// Direction marks are display controls; raw evidence and destination names stay exact.
+for (const [mark, escaped] of [
+  ["\u061c", "\\u061c"],
+  ["\u200e", "\\u200e"],
+  ["\u200f", "\\u200f"],
+]) {
+  for (const field of [
+    "objectKey",
+    "organizationId",
+    "id",
+    "mismatch",
+    "orphan",
+  ]) {
+    test(`direction mark display: ${escaped} in ${field}`, () => {
+      const raw = `before${mark}after`;
+      const row = Object.freeze(
+        inventoryDbRecord({
+          ...(["objectKey", "organizationId", "id"].includes(field)
+            ? { [field]: raw }
+            : field === "mismatch"
+              ? { objectKey: raw }
+              : {}),
+        }),
+      );
+      const dbObjects = Object.freeze(field === "orphan" ? [] : [row]);
+      const storageObjects = Object.freeze(
+        field === "mismatch"
+          ? [Object.freeze({ key: raw, byteCount: 2 })]
+          : field === "orphan"
+            ? [Object.freeze({ key: raw, byteCount: 1 })]
+            : [],
+      );
+      const inputs = JSON.stringify({ dbObjects, storageObjects });
+      const report = reconcileObjects({ dbObjects, storageObjects });
+      const before = JSON.stringify(report);
+      const output = formatReconciliationSummary(report);
+      assert.ok(output.includes(`before${escaped}after`));
+      assert.doesNotMatch(output, /[\u061c\u200e\u200f]/);
+      assert.strictEqual(
+        report.summary.status,
+        field === "orphan" ? "warning" : "error",
+      );
+      assert.strictEqual(JSON.stringify(report), before);
+      assert.strictEqual(JSON.stringify({ dbObjects, storageObjects }), inputs);
+    });
+  }
+
+  test(`direction mark display: ${escaped} direct fields and literal distinction`, () => {
+    const raw = `before${mark}after`;
+    const report = reconcileObjects({
+      dbObjects: [inventoryDbRecord()],
+      storageObjects: [],
+    });
+    report.timestamp = raw;
+    report.summary.status = raw;
+    report.missing[0].state = raw;
+    report.mismatches.push({ objectKey: "mismatch", issues: [raw] });
+    const before = JSON.stringify(report);
+    const output = formatReconciliationSummary(report);
+    assert.ok(
+      output.includes(`Timestamp:                 before${escaped}after`),
+    );
+    assert.ok(
+      output.includes(`Reconciliation Status:     BEFORE${escaped}AFTER`),
+    );
+    assert.ok(output.includes(`State: before${escaped}after)`));
+    assert.ok(output.includes(`mismatch -> before${escaped}after`));
+    assert.doesNotMatch(output, /[\u061c\u200e\u200f]/);
+    assert.strictEqual(JSON.stringify(report), before);
+    const distinct = reconcileObjects({
+      storageObjects: [
+        { key: raw, byteCount: 1 },
+        { key: `before${escaped}after`, byteCount: 1 },
+      ],
+    });
+    const lines = formatReconciliationSummary(distinct)
+      .split("\n")
+      .filter((line) => line.startsWith("  - Key: "));
+    assert.deepStrictEqual(lines, [
+      `  - Key: before${escaped}after (Bytes: 1)`,
+      `  - Key: before\\${escaped}after (Bytes: 1)`,
+    ]);
+  });
+
+  for (const location of ["filename", "parent", "error", "existing"]) {
+    test(`direction mark display: ${escaped} receipt ${location}`, async (t) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-direction-"));
+      t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+      const parent = location === "parent" ? `parent${mark}dir` : null;
+      const destinationDir = parent ? path.join(dir, parent) : dir;
+      if (parent) fs.mkdirSync(destinationDir);
+      const filename = parent ? "receipt.json" : `report${mark}next.json`;
+      const output = path.join(destinationDir, filename);
+      const dbObjects = Object.freeze(
+        location === "error"
+          ? [Object.freeze(inventoryDbRecord({ objectKey: `raw${mark}key` }))]
+          : [],
+      );
+      const storageObjects = Object.freeze([]);
+      const before = JSON.stringify({ dbObjects, storageObjects });
+      if (location === "existing") fs.writeFileSync(output, "original bytes");
+      const io = createIo();
+      const code = await main(
+        ["node", "script", "--dry-run", "--output", output],
+        io,
+        { env: {}, dbObjects, storageObjects },
+      );
+      assert.strictEqual(
+        code,
+        ["error", "existing"].includes(location) ? 1 : 0,
+      );
+      if (location === "existing") {
+        assert.deepStrictEqual(io.errors, [
+          "Error: Reconciliation evidence publication failed: output file already exists",
+        ]);
+        assert.ok(
+          io.logs.every((line) => !line.includes("evidence written to")),
+        );
+        assert.strictEqual(fs.readFileSync(output, "utf8"), "original bytes");
+      } else {
+        assert.deepStrictEqual(io.errors, []);
+        const message = io.logs.find((line) =>
+          line.includes("evidence written to"),
+        );
+        const displayPath = parent
+          ? path.join(dir, `parent${escaped}dir`, filename)
+          : path.join(dir, `report${escaped}next.json`);
+        assert.strictEqual(
+          message,
+          `\nReconciliation evidence written to ${displayPath}`,
+        );
+        assert.doesNotMatch(io.logs.join("\n"), /[\u061c\u200e\u200f]/);
+        const receipt = JSON.parse(fs.readFileSync(output, "utf8"));
+        assert.strictEqual(receipt.execution_mode, "simulation");
+        assert.strictEqual(receipt.drill_type, "storage_reconciliation");
+        assert.strictEqual(
+          receipt.summary.status,
+          location === "error" ? "error" : "clean",
+        );
+        assert.strictEqual(receipt.summary.exitCode, code);
+        if (location === "error")
+          assert.strictEqual(
+            receipt.missing[0].objectKey,
+            dbObjects[0].objectKey,
+          );
+      }
+      assert.deepStrictEqual(fs.readdirSync(destinationDir), [filename]);
+      if (parent) assert.deepStrictEqual(fs.readdirSync(dir), [parent]);
+      assert.strictEqual(JSON.stringify({ dbObjects, storageObjects }), before);
+    });
+  }
+}
+
+test("direction mark display: ordinary multilingual text remains readable", () => {
+  const key = "مرحبا/שלום/é/地域/🌾";
+  const report = reconcileObjects({ storageObjects: [{ key, byteCount: 1 }] });
+  assert.ok(
+    formatReconciliationSummary(report).endsWith(`  - Key: ${key} (Bytes: 1)`),
+  );
+  assert.strictEqual(report.orphans[0].key, key);
+});

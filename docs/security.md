@@ -1755,3 +1755,17 @@ byte-integrity or live recovery proof. Readiness stays **0 approved /
 No new trust boundary, services, credentials, SQL/schema, deployment, operator
 approval or push. Full ops suites/online audit not rerun; no aggregate
 ops:check/fresh audit claim. Ordinary revert restores prior display.
+
+**Prompt 350 — reconciliation direction marks (2026-10-13):**
+The existing terminal display boundary now also escapes U+061C/U+200E/U+200F
+in report text and receipt-success paths. Raw JSON identities and exact
+filesystem destinations remain unchanged. This bounded policy does not redact
+values, detect all Unicode confusables, authenticate evidence or establish live
+recovery. All **2081/2081** reconciliation cases and lint/typecheck/build,
+syntax/help/format/diff checks passed. Independent review found no issues and
+independently passed all 31 added cases. Results, sandbox limits and ordinary
+revert are in [operations.md](operations.md) Prompt 350. Readiness remains
+**0 approved / 11 blocked / 70 blockers**; Prompt 201, Category 6 and Phase 12
+exit stay open. No new trust boundary, services, credentials, SQL/schema,
+deployment, operator approval or push. Full ops suites/online audit not rerun;
+no aggregate ops:check or fresh audit claim.

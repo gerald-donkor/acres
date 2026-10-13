@@ -11218,3 +11218,86 @@ storage mutation. Inspect with:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 350 — Reconciliation direction mark display (2026-10-13)
+
+Continued Phase 12K after `2313c98` (Prompt 349). `summaryText` now escapes
+U+061C, U+200E and U+200F alongside its existing control ranges. Local Python
+`unicodedata` identified these as ARABIC LETTER MARK, LEFT-TO-RIGHT MARK and
+RIGHT-TO-LEFT MARK. They previously passed through the terminal boundary
+unchanged. The shared formatter covers report text and receipt-success paths;
+raw JSON values and exact filesystem destination names remain unchanged.
+This is a bounded project display policy, not universal terminal sanitization.
+No routes, UI, schema, dependencies, publication or cleanup behavior changed.
+
+Added 31 offline behavioral cases: each mark across missing object identifiers,
+mismatched and orphan keys, direct timestamp/status/state/issue text, actual
+versus literal escape-looking keys, receipt filenames/parents, error-result
+publication and existing-file refusal; ordinary Arabic/Hebrew/accented/CJK/emoji
+text remains readable. Tests check original evidence, immutable inputs, exact
+destination names and no leftover temporary files. The pre-change focused run
+reported:
+
+```text
+ℹ tests 31
+ℹ pass 4
+ℹ fail 27
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+After the one-line production change, focused output was `tests 31`, `pass 31`,
+`fail 0`, `cancelled 0`, `skipped 0`. The permitted full
+`npm run ops:reconcile-test` exited 0:
+
+```text
+ℹ tests 2081
+ℹ pass 2081
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 4001.750503
+```
+
+| Check | Result / actual output |
+| --- | --- |
+| source/spec `node -c` | exit 0 each, silent |
+| CLI `--help` | exit 0; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| appended tests Prettier | `added-region Prettier check: true` |
+| `npm run lint` | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| restricted build | `Error: Could not parse output from TypeScript's --showConfig.` |
+| permitted `npm run build` | exit 0; `Compiled successfully in 9.8s`; `Finished TypeScript in 5.7s`; `Generating static pages using 7 workers (22/22) in 1898ms`; Prisma Client `7.9.1` generated in `527ms`; `nest build` completed |
+| subsequent sequential `npm run typecheck` | exit 0; shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `398ms`; no diagnostics |
+| `git diff --check` | exit 0, silent |
+
+Restricted full-suite execution reported only the file wrapper (`pass 0`,
+`fail 1`), without behavioral totals. Permitted subprocess execution supplied
+the 2081/2081 result above. Focused red/green used `--test-isolation=none`.
+Logs are under `/tmp/acres-350-*.log`. Independent read-only review inspected
+the actual diff and prompt, independently passed all 31 new tests, and found
+no Critical, Important or Minor issues or plan deviations. Feedback was checked
+against the exact new character ranges, existing single-pass backslash handling,
+raw JSON and publication-path assertions; no fixes were required.
+
+The read-only example readiness validator exited 1 as expected:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Unrelated full ops suites and online audit were not rerun; no aggregate
+`ops:check` pass or fresh vulnerability inventory is claimed. Display escaping
+does not redact identifiers/paths, detect all Unicode confusables, authenticate
+evidence, prove completeness/object bytes, or establish atomic/live recovery.
+Prompt 201, Category 6 live sign-off and Phase 12 exit remain open. No live
+services, credentials, SQL/schema changes, deployment, operator approval or
+push occurred. Ordinary commit revert restores prior display without database
+or storage mutation. Inspect with:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

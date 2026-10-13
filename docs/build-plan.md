@@ -3520,3 +3520,15 @@ in [operations.md](operations.md) Prompt 349. Readiness stays **0 approved /
 11 blocked / 70 blockers**. Prompt 201, Category 6 live approval and Phase 12
 exit remain open. No live services, deployment or push occurred. Unrelated
 full ops suites/online audit not rerun; no aggregate ops:check pass claimed.
+
+**Prompt 350 — reconciliation direction mark display (2026-10-13):**
+Continued Phase 12K after committed Prompt 349. The shared terminal formatter
+now escapes U+061C/U+200E/U+200F; raw evidence and exact filenames stay intact.
+Added 31 behavioral cases; **2081/2081**, lint/typecheck/build (**22/22** pages),
+syntax/help/format/diff checks passed. Independent read-only review found no
+issues and independently passed the 31 new cases. Actual red/green, sandbox
+limits, compatibility and ordinary-revert rollback are in
+[operations.md](operations.md) Prompt 350. Readiness stays **0 approved /
+11 blocked / 70 blockers**. Prompt 201, Category 6 live sign-off and Phase 12
+exit remain open. No live services, deployment or push occurred. Unrelated full
+ops suites/online audit not rerun; no aggregate ops:check pass claimed.
