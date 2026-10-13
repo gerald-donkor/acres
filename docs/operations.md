@@ -12029,3 +12029,57 @@ drill orchestration.
   - Operator-owned launch checklist sign-offs across 11 categories (Prompt 201).
 - **Readiness check result**:
   - Read-only example readiness continues to exit 1 (0 approved / 11 unresolved / 70 blockers), preserving fail-closed launch posture.
+
+## Prompt 363 — Infrastructure failure and outage acceptance (2026-10-13)
+
+Executes Item 4 of `docs/project-status.md`: infrastructure-level failure modes,
+outage handling, error sanitization, lease recovery, transactional rollback, and
+storage parity across Garage/S3, Valkey/queue, ClamAV, worker crash leases, parser child
+containment, and restore reconciliation. Implemented in
+`server/test/infrastructure-failure.e2e-spec.ts`.
+
+### Six failure scenarios implemented and verified
+
+1. **ClamAV scanner failure modes**:
+   - 1A (`scanner_unavailable`): Connection refused/socket failure fail-closed rejection and dead-letter. Upload moves to `rejected` with `rejectionReason: "scanner_unavailable"`, dead-letter durable record logged in `JobDeadLetter`.
+   - 1B (`scanner_timeout`): Socket timeout during chunk streaming fail-closed rejection and dead-letter. Upload moves to `rejected` with `rejectionReason: "scanner_timeout"`, dead-letter durable record logged.
+   - 1C (`infected` detection): EICAR virus signature detected during scanning. Upload marked `rejected` with `rejectionReason: "infected"` and signature suppression (raw virus signature is excluded and never leaked into `failureMessage` or `JobDeadLetter.reasonMessage`).
+   - 1D (`health probe`): `ClamavScannerAdapter` health check fails cleanly on connection error and timeout without throwing unhandled exceptions.
+
+2. **Object storage / Garage failure modes**:
+   - 2A (`object_missing`): Object not found in storage buffer during processing. Job terminated safely, status marked `rejected` with `rejectionReason: "object_missing"`, dead-letter logged.
+   - 2B (`worker_exception` sanitization): S3 network exception during streaming. Status marked `failed` with sanitized generic message (`WORKER_EXCEPTION_MESSAGE = "Upload processing failed unexpectedly."`) to prevent internal storage endpoints, ports, or credentials from leaking into tenant-accessible database columns.
+   - 2C (`readiness probe`): `S3ObjectStorageAdapter` readiness check returns `false` when object storage endpoint is unreachable.
+
+3. **Work queue / Valkey failure modes**:
+   - 3A (`outbox retry backoff`): Temporary queue outage during event dispatch triggers exponential backoff retry when `attempts < maxAttempts`, setting next retry timestamp and logging `queue_unavailable`.
+   - 3B (`dead-letter exhaustion`): Enqueue failures exceeding `maxAttempts` transition outbox event to `dead_lettered` with durable `JobDeadLetter` record.
+
+4. **Worker crash and lock lease recovery**:
+   - 4A (`expired lease reclamation`): Ingestion worker crash while holding active row lock. Expired lock lease (`lockedAt < now - lockTimeout`) is safely reclaimed by restarting worker via PostgreSQL `FOR UPDATE SKIP LOCKED`.
+
+5. **Ingestion parser containment & transactional rollback**:
+   - 5A (`parser failure rollback`): Corrupted or malformed file during parsing triggers transactional rollback in `real-db-test-app` (using `InProcessParserExecutor` for database isolation verification), leaving zero partial `DatasetVersion`, `MetricObservation`, or `MetricAggregate` rows committed in the tenant schema (process-level isolation and timeouts verified in `child-process-parser.executor.spec.ts`).
+
+6. **Database restore drill & storage reconciliation parity**:
+   - 6A (`storage parity reconciliation`): `reconcileObjects` identifies missing objects, orphaned objects, and SHA-256 digest mismatches deterministically against database records.
+   - 6B (`restore drill CLI contracts`): Validated CLI contract for `run-restore-drill.sh --help` (live PostgreSQL restore drills and physical storage reconciliation remain operator-owned).
+
+### Verification results and actual command outputs
+
+1. **Infrastructure failure test suite (`npm run test:server -- server/test/infrastructure-failure.e2e-spec.ts`)**:
+   - Exit 0; **1/1 test suite passed, 13/13 tests passed** in 5.45 s.
+2. **Complete real database E2E suite (`npm run test:server`)**:
+   - Exit 0; **8/8 test suites passed, 159/159 tests passed** in 56.8 s across all real PostgreSQL/PostGIS suites under forced RLS.
+3. **Contracts check (`npm run contracts:check`)**:
+   - Exit 0; 0 schema drift.
+4. **Formatting & Linting (`npm run lint`)**:
+   - Exit 0; 0 errors, 0 warnings.
+5. **Typechecking (`npm run typecheck`)**:
+   - Exit 0; 0 errors across `@acres/shared`, `@acres/client`, and `@acres/server`.
+6. **Production builds (`npm run build`)**:
+   - Exit 0; Next.js 16.3.8 compiles 23/23 routes cleanly; Nest server compiles cleanly.
+7. **Operations preflight (`npm run ops:check`)**:
+   - Exit 0; all 33 offline stages and 27 test suites passed in 102.5 s; 182/182 launch drill tests passed.
+8. **Diff check (`git diff --check`)**:
+   - Exit 0; 0 trailing whitespace, 0 merge markers.

@@ -105,14 +105,24 @@ currently verified. Historical test results remain historical.
    suites (702 packages verified, 0 license violations, 0 blocking SAST findings).
    Dry-run launch drill passes 6/7 stages, with disaster recovery failing
    cleanly due to absent local object storage daemon as expected in item 4.
-4. **Finish infrastructure-level failure acceptance.** Exercise actual
-   Garage/Valkey/ClamAV outages, API/worker restart, retries/dead letters, backup
-   restore and database/object parity in designated isolated environments.
-   Parser child-process limits exist; OS-level sandboxing remains an
-   infrastructure responsibility in [ingestion.md](ingestion.md). Verify the
-   selected runtime containment rather than equating child isolation with a
-   network or kernel sandbox. Existing offline reconciliation tests are not
-   evidence of live restore or object-byte integrity.
+4. **Finish infrastructure-level failure acceptance.** Prompt 363 implements
+   and accepts the live infrastructure failure suite in
+   `server/test/infrastructure-failure.e2e-spec.ts` (13/13 tests, 8/8 real DB
+   suites, 159/159 tests under forced RLS). Proves fail-closed rejection and
+   dead-lettering on ClamAV connection outage and socket timeout; virus
+   signature isolation without leaking signature strings into `failureMessage` or
+   `JobDeadLetter.reasonMessage`; storage buffer outage rejection and dead-lettering;
+   generic exception sanitization ("Upload processing failed unexpectedly.")
+   preventing internal S3 endpoint or stack leak on network failure; storage and
+   scanner readiness probe failure resolution; Valkey queue dispatch retry backoff
+   and dead-letter exhaustion in the durable outbox; ingestion worker crash
+   lock-lease expiration reclamation via PostgreSQL `FOR UPDATE SKIP LOCKED`;
+   parser error transactional rollback (zero partial dataset versions, observations,
+   or aggregates committed); and deterministic object/database parity reconciliation
+   detecting missing objects, orphans, and checksum mismatches. Live physical
+   cluster cutover, hardware power loss drills, and operator sign-offs across
+   the 11 launch categories remain operator-owned in the launch checklist below.
+
 
 ## Operator-owned launch work
 

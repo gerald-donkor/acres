@@ -3733,3 +3733,26 @@ Dry-run launch drill passes 6/7 stages, with disaster recovery failing cleanly
 due to absent local object storage daemon as expected in item 4.
 `docs/operations.md` records verification details. Prompt 201 and Phase 12
 launch sign-offs remain open. No deploy or push.
+
+**Prompt 363 — infrastructure failure acceptance and outage recovery (2026-10-13):**
+Establishes the infrastructure failure and outage acceptance suite in
+`server/test/infrastructure-failure.e2e-spec.ts` under forced RLS against the real
+migrated PostgreSQL/PostGIS database. Verifies 6 failure scenarios across 13
+automated test cases: ClamAV connection refusal and socket timeout fail-closed
+rejection and dead-lettering (`scanner_unavailable`, `scanner_timeout`); EICAR
+virus detection with signature suppression; ClamAV and S3 adapter readiness probe
+unhealthy resolution; missing object buffer rejection and dead-lettering; S3 network exception
+sanitization with generic error message (`Upload processing failed unexpectedly.`) preventing
+leakage of internal URLs or stack traces; Valkey/queue outbox exponential backoff
+retries and dead-letter exhaustion logging into `JobDeadLetter`; ingestion worker
+crash lock-lease reclamation via PostgreSQL `FOR UPDATE SKIP LOCKED`; parser
+error transactional rollback in `real-db-test-app` (zero partial `DatasetVersion`,
+`MetricObservation`, or `MetricAggregate` rows committed); and storage/database
+parity reconciliation deterministically identifying missing objects, orphans,
+and checksum mismatches. Focused failure suite **13/13 passed**,
+full server real database suite **8/8 suites passed (159/159 tests)**, contracts
+check (0 drift), lint (0 errors, 0 warnings), sequential typecheck (0 errors across
+all 3 workspaces), production build (**23/23** routes), and operations preflight
+(`ops:check` 33/33 stages, 27/27 suites, 182/182 drill tests) pass.
+`docs/operations.md` records verification details. Operator-owned launch
+checklist sign-offs across 11 categories (Prompt 201) remain open. No deploy or push.
