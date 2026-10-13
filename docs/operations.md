@@ -11754,3 +11754,100 @@ node --test --test-isolation=none --test-name-pattern='runner cwd validation:' s
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 356 — reconciliation database port validation (2026-10-13)
+
+Continued Phase 12K after committed Prompt 355 (`75994dd`). Installed
+`pg/lib/connection-parameters.js` and a local probe confirmed permissive parsing:
+`5432suffix` and `5432.5` select 5432; `0x1538` becomes zero before the driver's
+falsy fallback selects 5432. The runner now validates the full PGPORT operand
+before acquiring its owned PostgreSQL client. Omitted/undefined and empty string
+retain 5432; other supplied values require ASCII decimal strings converting to
+an integer in 1–65535. Leading zeroes remain valid. The range is explicit
+connection policy, not a measured endpoint or proof of target identity.
+
+Malformed values use the existing private `Error: PostgreSQL connection failed`
+diagnostic, return 1 and create no receipt or client. Password-required
+precedence, help, injected client/inventory, connection cleanup and report
+publication remain compatible. Added 35 offline cases covering malformed syntax,
+range, non-string inputs, valid boundaries/defaults, actual simulation receipts,
+one owned end, caller ownership and frozen input descriptors. Mock clients never
+connect to live services. No dependencies, scripts, UI/API, SQL/schema or other
+environment handling changed.
+
+Focused pre-fix regression output:
+
+```text
+ℹ tests 35
+ℹ pass 11
+ℹ fail 24
+```
+
+Focused post-fix output:
+
+```text
+ℹ tests 35
+ℹ pass 35
+ℹ fail 0
+```
+
+The restricted full-suite wrapper returned `test failed`. Permitted
+`npm run ops:reconcile-test` exited 0:
+
+```text
+ℹ tests 2476
+ℹ pass 2476
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+Root lint exited 0 with client `eslint`, shared `eslint "src/**/*.ts"` and
+server `eslint "{src,test}/**/*.ts"`, without diagnostics. Restricted root
+build hit `Error: Could not parse output from TypeScript's --showConfig.`
+Permitted root build exited 0:
+
+```text
+✓ Compiled successfully in 3.2s
+✓ Generating static pages using 7 workers (22/22) in 758ms
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 421ms
+```
+
+Server `nest build` completed. Sequential root typecheck exited 0 with shared,
+client and server `tsc` checks; Prisma Client 7.9.1 generated in `268ms`.
+Source/spec `node -c` and `git diff --check` passed silently. CLI help began
+`Usage: node scripts/ops/reconcile-storage-objects.js [options]`.
+Installed Prettier reported `Added test block Prettier check: true`; only the
+new test block was formatted. Logs `/tmp/acres-356-*.log` are session-local
+verification records, not retained production evidence.
+
+Independent read-only review found no Critical, Important or Minor issues and
+no plan deviations. The reviewer independently passed all 35 focused cases and
+inspected runner lifecycle and installed driver parsing. Feedback was evaluated
+against the password/client/inventory branches, full-string validation and
+receipt behavior; no fixes or follow-up review were needed. The reviewer did
+not independently repeat full-suite, root build/lint/typecheck or readiness.
+
+Read-only example readiness exited 1 as expected:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Input validation cannot establish evidence authenticity/completeness, target
+identity, object bytes, atomic snapshots or live recovery. Prompt 201, Category 6
+live sign-off and Phase 12 exit remain open. No live services, real credentials,
+operator approval, deployment or push. Unrelated ops suites and online audit
+were not rerun; no aggregate ops:check or fresh audit claim. Ordinary commit
+revert restores permissive parsing without DB/storage mutation.
+
+Inspect from the repository root:
+
+```bash
+node --test --test-isolation=none --test-name-pattern='main database port validation:' scripts/ops/reconcile-storage-objects.spec.js
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

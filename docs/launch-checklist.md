@@ -871,6 +871,19 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 356 — reconciliation database port validation (2026-10-13):**
+  Malformed PGPORT fails privately before owned driver acquisition; full decimal
+  strings in 1–65535, leading zeroes, defaults and injection remain compatible.
+  Added 35 cases; **2476/2476** full permitted suite, lint/typecheck/build
+  (**22/22** pages), syntax/help/new-block format/diff passed. Independent
+  review found no issues or deviations and separately passed all 35 new cases.
+  Actual outputs, sandbox limits and ordinary revert are in
+  [operations.md](operations.md) Prompt 356. Readiness stays **0 approved /
+  11 blocked / 70 blockers**. Prompt 201, Category 6 live sign-off and Phase 12
+  exit remain open. Input validation proves no target identity or live recovery.
+  No live services, operator approval, deployment or push; no aggregate
+  ops:check or fresh audit claim.
+
 - **Prompt 355 — reconciliation runner cwd validation (2026-10-13):**
   Explicit invalid programmatic cwd values now reach existing parser validation
   before acquisition instead of falling back to the process directory. Omitted/

@@ -1290,10 +1290,19 @@ async function main(
           return 1;
         }
 
+        // parseInt accepts prefixes; recovery must use the entire configured port.
+        const rawPort = env.PGPORT;
+        const port = rawPort === undefined || rawPort === '' ? 5432 :
+          (typeof rawPort === 'string' && /^[0-9]+$/.test(rawPort)
+            ? Number(rawPort) : NaN);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          throw new Error('Invalid PostgreSQL port');
+        }
+
         const { Client } = require('pg');
         pgClient = new Client({
           host: env.PGHOST || 'localhost',
-          port: parseInt(env.PGPORT || '5432', 10),
+          port,
           user: env.PGUSER || 'acres_migrator',
           password: pgPassword,
           database: env.PGDATABASE || 'acres',

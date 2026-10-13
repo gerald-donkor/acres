@@ -12658,3 +12658,211 @@ for (const mode of ["omitted", "undefined", "absolute", "relative"]) {
     );
   });
 }
+
+// An invalid port must not silently select another reconciliation database.
+function databasePortFixture(t, env, extraOptions = {}) {
+  const pg = require("pg");
+  const events = [];
+  const ports = [];
+  const descriptor = Object.getOwnPropertyDescriptor(pg, "Client");
+  Object.defineProperty(pg, "Client", {
+    configurable: true,
+    get() {
+      events.push("export");
+      return class {
+        constructor(config) {
+          events.push("construct");
+          ports.push(config.port);
+        }
+        async connect() {
+          events.push("connect");
+        }
+        async query() {
+          events.push("query");
+          return { rows: [] };
+        }
+        async end() {
+          events.push("end");
+        }
+      };
+    },
+  });
+  t.after(() => Object.defineProperty(pg, "Client", descriptor));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-database-port-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const output = path.join(dir, "receipt.json");
+  const argv = Object.freeze([
+    "node",
+    "reconcile",
+    "--dry-run",
+    "--output",
+    output,
+  ]);
+  const options = Object.freeze({
+    env: Object.freeze(env),
+    storageObjects: Object.freeze([]),
+    ...extraOptions,
+  });
+  const before = [argv, options, env].map(Object.getOwnPropertyDescriptors);
+  const io = createIo();
+  return {
+    events,
+    ports,
+    io,
+    output,
+    async run() {
+      const code = await main(argv, io, options);
+      assert.deepStrictEqual(
+        [argv, options, env].map(Object.getOwnPropertyDescriptors),
+        before,
+      );
+      return code;
+    },
+  };
+}
+
+for (const [label, port] of [
+  ["suffix", "5432private"],
+  ["decimal", "5432.5"],
+  ["exponent", "5e3"],
+  ["hexadecimal", "0x1538"],
+  ["space", " "],
+  ["leading space", " 5432"],
+  ["trailing space", "5432 "],
+  ["newline", "5432\n"],
+  ["plus", "+5432"],
+  ["negative", "-1"],
+  ["zero", "0"],
+  ["padded zero", "000"],
+  ["overflow", "65536"],
+  ["unsafe integer", "9007199254740993"],
+  ["huge decimal", "9".repeat(400)],
+  ["null", null],
+  ["false", false],
+  ["true", true],
+  ["numeric zero", 0],
+  ["numeric port", 5432],
+  ["NaN", NaN],
+  ["bigint", 5432n],
+  ["array", Object.freeze(["5432"])],
+  ["object", Object.freeze({})],
+]) {
+  test(`main database port validation: rejects ${label} before client acquisition`, async (t) => {
+    const fixture = databasePortFixture(t, {
+      PGPASSWORD: "synthetic-test-only",
+      PGPORT: port,
+    });
+    assert.strictEqual(await fixture.run(), 1);
+    assert.deepStrictEqual(fixture.events, []);
+    assert.deepStrictEqual(fixture.ports, []);
+    assert.deepStrictEqual(fixture.io.errors, [
+      "Error: PostgreSQL connection failed",
+    ]);
+    assert.deepStrictEqual(fixture.io.logs, [
+      "Connecting to PostgreSQL and Object Storage...",
+    ]);
+    assert.strictEqual(fs.existsSync(fixture.output), false);
+    assert.deepStrictEqual(fs.readdirSync(path.dirname(fixture.output)), []);
+  });
+}
+
+for (const [label, env, expected] of [
+  ["omitted", {}, 5432],
+  ["undefined", { PGPORT: undefined }, 5432],
+  ["empty", { PGPORT: "" }, 5432],
+  ["minimum", { PGPORT: "1" }, 1],
+  ["ordinary", { PGPORT: "5432" }, 5432],
+  ["maximum", { PGPORT: "65535" }, 65535],
+  ["padded", { PGPORT: "005432" }, 5432],
+]) {
+  test(`main database port validation: preserves ${label} port and receipt`, async (t) => {
+    const fixture = databasePortFixture(t, {
+      PGPASSWORD: "synthetic-test-only",
+      ...env,
+    });
+    assert.strictEqual(await fixture.run(), 0);
+    assert.deepStrictEqual(fixture.events, [
+      "export",
+      "construct",
+      "connect",
+      "query",
+      "end",
+    ]);
+    assert.deepStrictEqual(fixture.ports, [expected]);
+    assert.deepStrictEqual(fixture.io.errors, []);
+    const report = JSON.parse(fs.readFileSync(fixture.output, "utf8"));
+    assert.strictEqual(report.execution_mode, "simulation");
+    assert.strictEqual(report.summary.status, "clean");
+    assert.strictEqual(report.summary.exitCode, 0);
+    assert.deepStrictEqual(fs.readdirSync(path.dirname(fixture.output)), [
+      "receipt.json",
+    ]);
+  });
+}
+
+for (const bypass of ["inventory", "client"]) {
+  test(`main database port validation: injected ${bypass} bypasses malformed port`, async (t) => {
+    const calls = [];
+    const fixture = databasePortFixture(
+      t,
+      { PGPORT: "5432private" },
+      bypass === "inventory"
+        ? { dbObjects: Object.freeze([]) }
+        : {
+            pgClient: {
+              async connect() {
+                calls.push("connect");
+              },
+              async query() {
+                calls.push("query");
+                return { rows: [] };
+              },
+              end() {
+                assert.fail("caller client must remain open");
+              },
+            },
+          },
+    );
+    assert.strictEqual(await fixture.run(), 0);
+    assert.deepStrictEqual(fixture.events, []);
+    assert.deepStrictEqual(
+      calls,
+      bypass === "client" ? ["connect", "query"] : [],
+    );
+    assert.deepStrictEqual(fixture.io.errors, []);
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(fixture.output, "utf8")).summary.status,
+      "clean",
+    );
+  });
+}
+
+test("main database port validation: missing password retains precedence", async (t) => {
+  const fixture = databasePortFixture(t, { PGPORT: "5432private" });
+  assert.strictEqual(await fixture.run(), 1);
+  assert.deepStrictEqual(fixture.events, []);
+  assert.deepStrictEqual(fixture.io.errors, [
+    "Error: PostgreSQL password is required (set PGPASSWORD, POSTGRES_PASSWORD, or ACRES_MIGRATOR_PASSWORD)",
+  ]);
+  assert.strictEqual(fs.existsSync(fixture.output), false);
+});
+
+test("main database port validation: help bypasses configuration", async () => {
+  const options = Object.freeze({
+    get env() {
+      assert.fail("help must not access env");
+    },
+  });
+  const io = createIo();
+  assert.strictEqual(
+    await main(Object.freeze(["node", "reconcile", "--help"]), io, options),
+    0,
+  );
+  assert.deepStrictEqual(io.errors, []);
+  assert.strictEqual(io.logs.length, 1);
+  assert.ok(
+    io.logs[0].startsWith(
+      "Usage: node scripts/ops/reconcile-storage-objects.js",
+    ),
+  );
+});

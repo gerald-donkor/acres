@@ -3602,3 +3602,19 @@ sandbox limits, compatibility and ordinary-revert rollback are in
 11 blocked / 70 blockers**. Prompt 201, Category 6 live approval and Phase 12
 exit remain open. No live services, operator approval, deployment or push;
 unrelated ops suites/online audit not rerun; no aggregate ops:check claim.
+
+
+**Prompt 356 — reconciliation database port validation (2026-10-13):**
+Continued Phase 12K after committed Prompt 355. Owned PostgreSQL setup now
+rejects malformed PGPORT before driver acquisition instead of partially parsing
+another port. Full decimal strings in 1–65535, leading zeroes, omitted/undefined/
+empty defaults and dependency injection remain compatible. Added 35 cases;
+focused **35/35**, full permitted **2476/2476**, lint/typecheck/build (**22/22**
+pages), syntax/help/new-block format/diff passed. Independent review found no
+issues or deviations and separately passed all 35 cases. Actual red/green,
+sandbox limits and ordinary-revert rollback are in
+[operations.md](operations.md) Prompt 356. Readiness stays **0 approved /
+11 blocked / 70 blockers**. Validation cannot establish target identity,
+evidence authenticity/completeness, bytes or atomic/live recovery. Prompt 201,
+Category 6 live sign-off and Phase 12 exit remain open. No live services,
+operator approval, deployment or push; no aggregate ops:check or fresh audit claim.
