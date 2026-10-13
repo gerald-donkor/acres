@@ -602,3 +602,120 @@ an organization owner/admin, select the organization and open
 `http://localhost:3000/app/audit`. Use More events/Latest events to inspect
 pagination. Revert this prompt's client files and codec repair together to roll
 back; the cursor wire format and existing schema/contracts remain compatible.
+
+## Audit history failure acceptance — Prompt 359, 2026-10-13
+
+Baseline `e1b63c9`. Added nine browser cases in
+`client/e2e/audit-history-failures.spec.ts` and a test-owned HTTP proxy in
+`client/e2e/support/audit-fault-proxy.mjs`. Application code, schema, API
+contracts and successful audit behavior are unchanged; no product defect was
+found. This closes the direct **simulated** race/failure coverage opportunity
+recorded in Prompt 358, not actual infrastructure outage or production recovery
+acceptance.
+
+`PLAYWRIGHT_AUDIT_FAULTS=true` opts into three owned local processes: real API,
+loopback proxy, then Next. API readiness uses the real origin; only Next's API
+origin goes through the proxy. Existing default configuration stays unchanged,
+and the new suite skips without this explicit opt-in. External browser targets
+and existing-server reuse are excluded in fault mode. The proxy accepts only
+an HTTP upstream at 127.0.0.1 and is never imported or started by app scripts.
+A generated control token protects rule installation/inspection/removal. Rules
+use a unique cookie UUID per test, not account/session tokens; traces are off.
+Rules and counters reset when armed, and fixture teardown removes the rule and
+asserts absence. Owned proxy shutdown closes connections and clears memory.
+
+Real registration, organization creation and audit reads establish each test's
+initial state. Faults simulate UNAUTHENTICATED, FORBIDDEN, NOT_FOUND and
+CURSOR_INVALID on the audit operation, transport 503, malformed JSON and socket
+disconnect, plus malformed initial session/organization reads. Audit fault
+counters capture successful context requests **at the first fault**, proving
+these failures occur after context loading. Partial data accompanying errors
+is rejected. Tests assert safe notices, zero audit rows and no upstream
+sentinel text, then keyboard-activate retry/restart and recover the exact real
+event identifier. The expiry case checks the local login return path, clears
+the simulated fault and reads real events again; it does not revoke a real
+session. A separate unmarked browser context with the same real identity
+remains unaffected while a FORBIDDEN rule is armed.
+
+### Verification and reproduction
+
+All following final checks exited 0. Selected actual output:
+
+```text
+$ npx --no-install prettier --check client/playwright.config.ts client/e2e/audit-history-failures.spec.ts client/e2e/support/audit-fault-proxy.mjs
+Checking formatting...
+All matched files use Prettier code style!
+
+$ node --check client/e2e/support/audit-fault-proxy.mjs
+(no output)
+
+$ npm run lint
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+
+$ npm run build
+▲ Next.js 16.3.8 (webpack)
+✓ Compiled successfully in 5.6s
+✓ Generating static pages using 7 workers (23/23) in 951ms
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 531ms
+
+$ npm run typecheck
+> @acres/shared@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+> @acres/client@0.1.0 typecheck
+> tsc --noEmit
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 936ms
+
+$ npm run contracts:check
+> prisma generate && nest build && node dist/contracts/generate-contracts.js --check
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 490ms
+
+$ PLAYWRIGHT_AUDIT_FAULTS=true PLAYWRIGHT_CLIENT_PORT=3390 PLAYWRIGHT_API_PORT=3391 PLAYWRIGHT_AUDIT_PROXY_PORT=3392 npm run test:e2e --workspace=@acres/client -- tests/audit-history.spec.ts e2e/audit-history.spec.ts e2e/audit-history-failures.spec.ts --workers=1
+20 passed (46.9s)
+
+$ PLAYWRIGHT_AUDIT_FAULTS=true PLAYWRIGHT_CLIENT_PORT=3390 PLAYWRIGHT_API_PORT=3391 PLAYWRIGHT_AUDIT_PROXY_PORT=3392 npm run test:e2e --workspace=@acres/client -- e2e/audit-history-failures.spec.ts --workers=2 --repeat-each=2
+18 passed (35.3s)
+
+$ npm run test:e2e --workspace=@acres/client -- tests/audit-history.spec.ts --list
+Total: 5 tests in 1 file
+
+$ git diff --check
+(no output)
+```
+
+Commands used `mise exec node@26.11.0 --` because the default Node shim had no
+version selected. Before starting services, listeners were checked; after both
+browser runs, `ss -ltnp | rg ':339[012]\b'` returned no listeners. Each run used
+the existing local development database. The first restricted production build
+failed with `Could not parse output from TypeScript's --showConfig`; the exact
+build passed with subprocess access. Browser/socket checks also used permitted
+local process access. An initial lint failure mistook Playwright's fixture
+callback named `use` for a React hook; renaming it `provide` fixed it. The first
+browser run had **6 failed / 14 passed (47.3s)** because the broad alert selector
+also matched Next's route announcer. Scoping to the existing alert slot fixed
+all six; no runtime change was needed. Expected server-side ApiClientError logs
+occur during the initial-context fault cases. No raw upstream error text is
+rendered.
+
+Independent read-only review found no findings and inspected the recorded
+20/20 and repeated 18/18 results without rerunning them. Final diff review,
+formatting and whitespace checks pass. Screenshots produced by the unchanged
+responsive audit suite were moved to `/tmp/acres-359-browser/`, outside the
+commit. There is no new visual surface or comp comparison in this change.
+
+This evidence does not establish live permission revocation, real API/worker or
+storage/queue outage recovery, whole-release acceptance, a fresh security audit,
+or launch approval. Scheduled job history retains its separate scope decision.
+Ordinary revert removes only test infrastructure/configuration and this record;
+no migration or data rollback is needed. Manual inspection remains
+`npm run dev:server` plus `npm run dev:client`, owner/admin sign-in, then
+`http://localhost:3000/app/audit`. Run the explicit opt-in commands above to
+inspect simulated failure behavior.

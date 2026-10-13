@@ -3655,3 +3655,21 @@ opportunity. `docs/authenticated-app.md` and `docs/backend.md` own details.
 Scheduled job history remains separately scoped because the existing endpoint
 returns global scheduled runs; this closes only the audit-history portion of
 journey 3.9 and does not approve launch or a full Phase 5/12 exit.
+
+**Prompt 359 — Phase 5 audit history failure acceptance (2026-10-13):**
+Added a test-owned loopback HTTP proxy and nine opt-in browser failure cases,
+using real local API/database setup and recovery. Cookie-scoped faults exercise
+post-context expiry/access/organization/cursor failures, query transport/JSON/
+socket errors and initial-context boundary retry. First-hit counters establish
+context ordering; tests reject partial rows/private error text, verify keyboard
+recovery and restore actual event IDs. An unmarked browser remains unaffected.
+No application/schema/contract change or product defect. Combined browser/helper
+acceptance **20/20** and concurrent repeated fault cases **18/18** passed, as did
+format/lint/typecheck/build (**23/23** pages)/contracts/syntax/diff checks.
+Independent read-only review found no findings. All three owned ports were
+released. Actual commands, initial test-selector/lint errors, sandbox limits,
+opt-in reproduction and ordinary-revert rollback are in
+[authenticated-app.md](authenticated-app.md), Prompt 359. This closes direct
+simulated failure coverage only; live revocation/outage/recovery and whole-release
+acceptance remain unproven. Scheduled job history needs separate tenant scoping;
+Prompt 201 and Phase 12 launch sign-offs remain open. No deploy or push.

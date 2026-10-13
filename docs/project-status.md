@@ -61,9 +61,11 @@ currently verified. Historical test results remain historical.
 1. **Finish the remaining administrative history scope.** Prompt 358 adds
    owner/admin `/app/audit` with real tenant-scoped GraphQL metadata, pagination,
    safe states and browser acceptance; see [authenticated-app.md](authenticated-app.md).
-   The audit persistence/query and new client surface are implemented. Direct
-   post-context session/access/outage/retry simulations remain a nonblocking
-   test opportunity. `server/src/jobs/jobs.controller.ts` still exposes global
+   The audit persistence/query and new client surface are implemented. Prompt 359
+   adds direct post-context session/access/outage/retry simulations with real local setup
+   and recovery (20/20 combined cases; 18/18 concurrent repeated fault cases).
+   These simulations do not prove live revocation or infrastructure recovery.
+   `server/src/jobs/jobs.controller.ts` still exposes global
    scheduled-run metadata through the owner/admin endpoint, so a job-history
    interface requires a bounded scope/safe-presentation decision before exposing
    it to tenants. Ingestion/export progress already exists; do not rebuild it.
