@@ -680,6 +680,17 @@ async function queryDatabaseStoredObjects({ pgClient }) {
   });
 }
 
+// Escape terminal controls at display time; raw evidence must keep exact identities.
+function summaryText(value) {
+  return String(value).replace(
+    /[\\\x00-\x1f\x7f-\x9f\u2028-\u202e\u2066-\u2069]/g,
+    (character) =>
+      character === "\\"
+        ? "\\\\"
+        : `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
 /**
  * Formats structured reconciliation summary report for terminal output.
  */
@@ -689,8 +700,8 @@ function formatReconciliationSummary(report) {
     '========================================================',
     '        Acres Storage Reconciliation Report             ',
     '========================================================',
-    `Timestamp:                 ${report.timestamp}`,
-    `Reconciliation Status:     ${summary.status.toUpperCase()}`,
+    `Timestamp:                 ${summaryText(report.timestamp)}`,
+    `Reconciliation Status:     ${summaryText(summary.status.toUpperCase())}`,
     `Total DB Objects:          ${summary.totalDatabaseObjects}`,
     `Active DB Objects:         ${summary.activeDatabaseObjects}`,
     `Pending/Excluded Objects:  ${summary.pendingOrDeletedExcluded}`,
@@ -705,21 +716,21 @@ function formatReconciliationSummary(report) {
   if (report.missing.length > 0) {
     lines.push('\n[CRITICAL ERROR] Missing Storage Objects (Active in DB, absent in Storage):');
     for (const m of report.missing) {
-      lines.push(`  - Key: ${m.objectKey} (Org: ${m.organizationId}, ID: ${m.id}, State: ${m.state})`);
+      lines.push(`  - Key: ${summaryText(m.objectKey)} (Org: ${summaryText(m.organizationId)}, ID: ${summaryText(m.id)}, State: ${summaryText(m.state)})`);
     }
   }
 
   if (report.mismatches.length > 0) {
     lines.push('\n[CRITICAL ERROR] Mismatched Storage Objects (Size or checksum mismatch):');
     for (const mm of report.mismatches) {
-      lines.push(`  - Key: ${mm.objectKey} -> ${mm.issues.join(', ')}`);
+      lines.push(`  - Key: ${summaryText(mm.objectKey)} -> ${summaryText(mm.issues.join(', '))}`);
     }
   }
 
   if (report.orphans.length > 0) {
     lines.push('\n[WARNING] Orphan Storage Objects (Present in Storage, absent in DB):');
     for (const o of report.orphans) {
-      lines.push(`  - Key: ${o.key} (Bytes: ${o.byteCount || 'unknown'})`);
+      lines.push(`  - Key: ${summaryText(o.key)} (Bytes: ${o.byteCount || 'unknown'})`);
     }
   }
 

@@ -11445,3 +11445,242 @@ for (const scenario of [
     assert.strictEqual(ends, 0);
   });
 }
+
+// Untrusted inventory text must not create lines or terminal commands in summaries.
+const terminalPayload =
+  "key\nFORGED\r\t\0\x1b[2J\x7f\x85\u2028\u2029\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\\u001b";
+const terminalDisplay =
+  "key\\u000aFORGED\\u000d\\u0009\\u0000\\u001b[2J\\u007f\\u0085\\u2028\\u2029\\u202a\\u202b\\u202c\\u202d\\u202e\\u2066\\u2067\\u2068\\u2069\\\\u001b";
+
+for (const field of [
+  "objectKey",
+  "organizationId",
+  "id",
+  "mismatch",
+  "orphan",
+]) {
+  test(`terminal summary escaping: ${field} cannot forge output`, () => {
+    const row = inventoryDbRecord({
+      ...(field === "mismatch" ? { objectKey: terminalPayload } : {}),
+      ...(["objectKey", "organizationId", "id"].includes(field)
+        ? { [field]: terminalPayload }
+        : {}),
+    });
+    const report = reconcileObjects({
+      dbObjects: field === "orphan" ? [] : [row],
+      storageObjects:
+        field === "mismatch"
+          ? [{ key: terminalPayload, byteCount: 2 }]
+          : field === "orphan"
+            ? [{ key: terminalPayload, byteCount: 1 }]
+            : [],
+    });
+    const before = JSON.stringify(report);
+    const output = formatReconciliationSummary(report);
+    const details = output
+      .split("\n")
+      .filter((line) => line.startsWith("  - Key: "));
+    assert.strictEqual(details.length, 1);
+    assert.ok(details[0].includes(terminalDisplay));
+    assert.doesNotMatch(
+      output,
+      /[\x00-\x09\x0b-\x1f\x7f-\x9f\u2028-\u202e\u2066-\u2069]/,
+    );
+    assert.strictEqual(output.split("\n").includes("FORGED"), false);
+    assert.strictEqual(JSON.stringify(report), before);
+    assert.strictEqual(
+      report.summary.status,
+      field === "orphan" ? "warning" : "error",
+    );
+  });
+}
+
+test("terminal summary escaping: escapes every control in the policy", () => {
+  for (const [first, last] of [
+    [0, 31],
+    [127, 159],
+    [0x2028, 0x202e],
+    [0x2066, 0x2069],
+  ]) {
+    for (let code = first; code <= last; code++) {
+      const raw = `before${String.fromCharCode(code)}after`;
+      const report = reconcileObjects({
+        storageObjects: [{ key: raw, byteCount: 0 }],
+      });
+      assert.ok(
+        formatReconciliationSummary(report).includes(
+          `before\\u${code.toString(16).padStart(4, "0")}after`,
+        ),
+      );
+      assert.strictEqual(report.orphans[0].key, raw);
+    }
+  }
+});
+
+test("terminal summary escaping: ordinary Unicode and punctuation stay readable", () => {
+  const key = 'é/地域/مرحبا/🌾 "quoted" (id): [key], 123';
+  const report = reconcileObjects({ storageObjects: [{ key, byteCount: 0 }] });
+  const output = formatReconciliationSummary(report);
+  assert.ok(output.endsWith(`  - Key: ${key} (Bytes: 0)`));
+  assert.ok(output.includes("Reconciliation Status:     WARNING"));
+});
+
+test("terminal summary escaping: literal escape-looking keys stay distinct", () => {
+  const report = reconcileObjects({
+    storageObjects: [
+      { key: "key\nvalue", byteCount: 1 },
+      { key: "key\\u000avalue", byteCount: 1 },
+    ],
+  });
+  const lines = formatReconciliationSummary(report)
+    .split("\n")
+    .filter((line) => line.startsWith("  - Key: "));
+  assert.deepStrictEqual(lines, [
+    "  - Key: key\\u000avalue (Bytes: 1)",
+    "  - Key: key\\\\u000avalue (Bytes: 1)",
+  ]);
+});
+
+test("terminal summary escaping: direct text call sites are escaped", () => {
+  const report = reconcileObjects({
+    dbObjects: [inventoryDbRecord()],
+    storageObjects: [],
+  });
+  report.timestamp = "time\rforged";
+  report.summary.status = "error\x1b[2J";
+  report.missing[0].state = "state\u202e";
+  report.mismatches.push({
+    objectKey: "mismatch",
+    issues: ["issue\nforged", "next\u2066"],
+  });
+  const before = JSON.stringify(report);
+  const output = formatReconciliationSummary(report);
+  assert.ok(output.includes("Timestamp:                 time\\u000dforged"));
+  assert.ok(output.includes("Reconciliation Status:     ERROR\\u001b[2J"));
+  assert.ok(output.includes("State: state\\u202e)"));
+  assert.ok(output.includes("issue\\u000aforged, next\\u2066"));
+  assert.strictEqual(JSON.stringify(report), before);
+});
+
+for (const scenario of [
+  "missing",
+  "mismatch",
+  "orphan",
+  "strict-orphan",
+  "clean",
+]) {
+  test(`terminal summary escaping: runner ${scenario} preserves raw evidence`, async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-terminal-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const output = path.join(dir, "receipt.json");
+    const orphan = scenario.includes("orphan");
+    const row = Object.freeze(
+      inventoryDbRecord({
+        objectKey: terminalPayload,
+        id: terminalPayload,
+        organizationId: terminalPayload,
+      }),
+    );
+    const dbObjects = Object.freeze(
+      orphan || scenario === "clean" ? [] : [row],
+    );
+    const storageObjects = Object.freeze(
+      scenario === "missing" || scenario === "clean"
+        ? []
+        : [Object.freeze({ key: terminalPayload, byteCount: 2 })],
+    );
+    const before = JSON.stringify({ dbObjects, storageObjects });
+    const io = createIo();
+    let queries = 0;
+    let sends = 0;
+    let ended = 0;
+    let destroyed = 0;
+    const code = await main(
+      [
+        "node",
+        "script",
+        "--dry-run",
+        "--output",
+        output,
+        ...(scenario === "strict-orphan" ? ["--fail-on-orphans"] : []),
+      ],
+      io,
+      {
+        env: {},
+        pgClient: {
+          async connect() {},
+          async query() {
+            queries++;
+            return { rows: dbObjects };
+          },
+          end() {
+            ended++;
+          },
+        },
+        s3Client: {
+          async send() {
+            sends++;
+            return {
+              IsTruncated: false,
+              Contents: storageObjects.map((item) => ({
+                Key: item.key,
+                Size: item.byteCount,
+              })),
+            };
+          },
+          destroy() {
+            destroyed++;
+          },
+        },
+      },
+    );
+    assert.strictEqual(
+      code,
+      ["missing", "mismatch", "strict-orphan"].includes(scenario) ? 1 : 0,
+    );
+    assert.deepStrictEqual(io.errors, []);
+    const summary = io.logs.find((line) =>
+      line.includes("Acres Storage Reconciliation Report"),
+    );
+    assert.doesNotMatch(
+      summary,
+      /[\x00-\x09\x0b-\x1f\x7f-\x9f\u2028-\u202e\u2066-\u2069]/,
+    );
+    const receipt = JSON.parse(fs.readFileSync(output, "utf8"));
+    assert.strictEqual(receipt.execution_mode, "simulation");
+    assert.strictEqual(receipt.summary.exitCode, code);
+    assert.strictEqual(
+      receipt.summary.status,
+      scenario === "clean" ? "clean" : orphan ? "warning" : "error",
+    );
+    if (scenario !== "clean") {
+      assert.ok(summary.includes(terminalDisplay));
+      const finding = orphan
+        ? receipt.orphans[0]
+        : scenario === "missing"
+          ? receipt.missing[0]
+          : receipt.mismatches[0];
+      assert.strictEqual(
+        orphan ? finding.key : finding.objectKey,
+        terminalPayload,
+      );
+      if (!orphan) {
+        assert.strictEqual(finding.id, terminalPayload);
+        assert.strictEqual(finding.organizationId, terminalPayload);
+      }
+    } else {
+      assert.strictEqual(
+        summary.split("\n").filter((line) => line.startsWith("  - Key: "))
+          .length,
+        0,
+      );
+      assert.ok(summary.includes("Reconciliation Status:     CLEAN"));
+    }
+    assert.strictEqual(queries, 1);
+    assert.strictEqual(sends, 1);
+    assert.strictEqual(ended, 0);
+    assert.strictEqual(destroyed, 0);
+    assert.deepStrictEqual(fs.readdirSync(dir), ["receipt.json"]);
+    assert.strictEqual(JSON.stringify({ dbObjects, storageObjects }), before);
+  });
+}

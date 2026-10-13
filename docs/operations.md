@@ -11041,3 +11041,97 @@ policy. Ordinary revert restores prior ordering without data mutation.
 
 Safe inspection: `npm run ops:reconcile-test`, then
 `node scripts/ops/reconcile-storage-objects.js --help`.
+
+## Prompt 348 — Reconciliation terminal summary escaping (2026-10-13)
+
+Continued Phase 12K's open recovery-evidence gate after committed Prompt 347
+(`c59e73a`). Accepted object keys and database identifiers were interpolated
+verbatim into terminal findings; embedded newlines and terminal controls could
+forge lines or alter their appearance. `formatReconciliationSummary` now uses
+a private single-pass `summaryText` helper on text fields: timestamp/status,
+missing key/org/id/state, mismatch key/issues and orphan key. Backslashes display
+doubled; C0 controls, DEL/C1, U+2028–U+202E and U+2066–U+2069 display as lowercase
+literal `\uXXXX` escapes. Structural newlines, fixed labels, numeric fields,
+status/exit decisions and ordinary Unicode/punctuation retain their behavior.
+The range policy is a local engineering decision; the loaded security skill has
+no Node CLI terminal-specific reference. JavaScript replacement, char-code and
+padding APIs were verified in installed TypeScript library declarations.
+
+Raw comparison records and exclusive JSON receipts keep original keys/IDs,
+including actual control characters. Display escapes are never written back to
+inventories or evidence. Literal escape-looking keys remain distinguishable
+from keys containing real controls. Added 14 tests cover five identifier sites,
+every code point in the selected ranges, normal Unicode/punctuation, literal
+backslashes, additional direct formatter call sites, and five offline runner
+cases (missing, mismatch, orphan, strict orphan, clean). Fake caller-owned
+PostgreSQL/S3 clients are not closed; receipts round-trip exact identities,
+inputs remain unchanged and no temporary publication files remain.
+
+Actual pre-fix focused results, exit 1:
+
+```text
+ℹ tests 14
+ℹ pass 2
+ℹ fail 12
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+After implementation, focused tests passed 14/14; actual
+`npm run ops:reconcile-test`, exit 0:
+
+```text
+ℹ tests 2040
+ℹ pass 2040
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 1630.016503
+```
+
+| Check | Exit | Actual output / observation |
+| --- | --- | --- |
+| source/spec `node -c` | 0 each | silent |
+| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| appended tests / new helper Prettier | 0 | added-region checks both `true` |
+| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
+| permitted `npm run build` | 0 | `Compiled successfully in 2.3s`; `Finished TypeScript in 2.0s`; `Generating static pages using 7 workers (22/22) in 625ms`; Prisma Client `7.9.1` generation and `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0 | shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `283ms`; no diagnostics |
+| `git diff --check` | 0 | silent |
+
+The first restricted test invocation reported only `pass 0 / fail 1` at the
+file wrapper and supplied no behavioral evidence. Permitted subprocess runs
+produced the red/green and full-suite totals above. Independent read-only review
+inspected the complete source/test diff, prompt, neighboring contracts and logs;
+it found no Critical, Important or Minor issues or implementation deviations.
+It independently ran the new tests with `--test-isolation=none`: **14 passed,
+0 failed**. Its default isolated full-suite invocation yielded a wrapper failure
+without details, so the reviewer did not independently reproduce full totals.
+Feedback was evaluated against the exact character ranges, single-pass escaping,
+all formatter call sites and raw evidence preservation; no fixes were required.
+
+Readiness example returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Unrelated full ops suites and online audit were not rerun; no aggregate
+`ops:check` pass or fresh vulnerability inventory is claimed. This policy does
+not redact identifiers, detect Unicode confusables, guarantee all terminal
+rendering behavior, authenticate evidence, prove completeness/byte integrity,
+or establish atomic/live recovery. Prompt 201, Category 6 live sign-off and
+Phase 12 exit remain open. No live services, credential access, SQL/schema
+changes, deployment, operator approval or push occurred. Ordinary commit revert
+restores prior terminal display without mutating database or storage data.
+
+Safe inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

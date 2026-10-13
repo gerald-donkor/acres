@@ -871,6 +871,18 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 348 — reconciliation terminal summary escaping (2026-10-13):**
+  Display controls and literal backslashes in inventory text now escape at the
+  formatter boundary; raw JSON evidence remains exact. Fourteen new cases,
+  **2040/2040** reconciliation tests, lint/typecheck/build (**22/22** pages),
+  syntax/help/format/diff passed. Independent review found no issues and passed
+  the 14 new cases. Actual checks, sandbox limits and rollback are in
+  [operations.md](operations.md) Prompt 348. Readiness remains **0 approved /
+  11 blocked / 70 blockers**. Display escaping supplies no evidence authenticity,
+  completeness, byte-integrity or live recovery proof; Prompt 201, Category 6
+  operator approval and Phase 12 exit stay open. No live services, deployment
+  or push; unrelated full ops suites/online audit not rerun.
+
 - **Prompt 345 — reconciliation storage setup failure cleanup (2026-10-13):**
   Continued Phase 12K after committed Prompt 344. SDK loading and S3 construction
   now share the listing failure catch: fixed private diagnostic, awaited guarded

@@ -3495,3 +3495,16 @@ no aggregate ops:check or fresh audit claim. Synthetic cleanup evidence cannot
 prove authenticity, completeness, bytes or atomic/live recovery. Prompt 201,
 Category 6 live approval and Phase 12 exit stay open. No live services,
 credentials, SQL/schema changes, operator approval, deployment or push occurred.
+
+**Prompt 348 — reconciliation terminal summary escaping (2026-10-13):**
+Continued Phase 12K after committed Prompt 347. Terminal summary text now escapes
+C0/C1/DEL, Unicode line/directional controls and literal backslashes; raw JSON
+identities, counts and exit behavior remain intact. Added 14 offline tests;
+**2040/2040**, lint/typecheck/build (**22/22** pages), syntax/help/format/diff
+passed. Independent review found no issues and independently passed the 14 new
+cases. Actual red/green, sandbox limits, compatibility and ordinary-revert
+rollback are in [operations.md](operations.md) Prompt 348. Readiness remains
+**0 approved / 11 blocked / 70 blockers**. This display policy supplies no live
+recovery or authenticity proof; Prompt 201, Category 6 live approval and Phase
+12 exit remain open. No live services, deployment or push occurred. Unrelated
+full ops suites and online audit not rerun; no aggregate ops:check pass claimed.
