@@ -831,6 +831,9 @@ function parseCliArguments(argv = process.argv.slice(2), cwd = process.cwd()) {
       if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
         throw new ReconcileUsageError('output requires a non-empty file path');
       }
+      if (/[\x00-\x1f\x7f-\x9f]/.test(val)) {
+        throw new ReconcileUsageError('output file path must be control-free');
+      }
       outputFile = val;
       continue;
     }
@@ -967,11 +970,16 @@ function parseCliArguments(argv = process.argv.slice(2), cwd = process.cwd()) {
   }
 
   const effectiveCwd = path.resolve(cwd, customCwd === undefined ? '.' : customCwd);
+  const resolvedOutput =
+    outputFile !== undefined ? path.resolve(effectiveCwd, outputFile) : null;
+  if (resolvedOutput !== null && /[\x00-\x1f\x7f-\x9f]/.test(resolvedOutput)) {
+    throw new ReconcileUsageError('output file path must be control-free');
+  }
 
   return {
     showHelp,
     cwd: effectiveCwd,
-    output: outputFile !== undefined ? path.resolve(effectiveCwd, outputFile) : null,
+    output: resolvedOutput,
     bucket,
     endpoint,
     region,

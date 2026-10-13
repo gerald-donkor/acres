@@ -871,6 +871,19 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 354 — reconciliation output path preflight (2026-10-13):**
+  Already-forbidden C0/DEL/C1 controls in raw output operands and final
+  resolved destinations now fail as usage before dependency acquisition.
+  Supported Unicode filenames and standalone publication remain compatible.
+  Added 287 cases; **2415/2415** full permitted suite, lint/typecheck/build
+  (**22/22** pages), syntax/help/new-block format/diff checks passed.
+  Independent review found no issues and separately passed all 287 focused
+  cases; its full rerun hit nine sandbox subprocess failures. Actual outputs,
+  limits and ordinary revert are in [operations.md](operations.md) Prompt 354.
+  Readiness stays **0 approved / 11 blocked / 70 blockers**. Prompt 201,
+  Category 6 live sign-off and Phase 12 exit remain open. No live services,
+  operator approval, deployment or push; no aggregate ops:check/audit claim.
+
 - **Prompt 353 — reconciliation runner argument shape (2026-10-13):**
   Non-array programmatic argv now produces fixed usage error/help and return 1
   before slicing or cwd/dependency access. Normal CLI/default argv remain

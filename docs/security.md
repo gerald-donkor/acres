@@ -1812,3 +1812,18 @@ Readiness stays **0 approved / 11 blocked / 70 blockers**; Prompt 201,
 Category 6 live sign-off and Phase 12 exit remain open. No live services,
 operator approval or push; unrelated ops suites/online audit not rerun;
 no aggregate ops:check or fresh audit claim.
+
+**Prompt 354 — reconciliation output path preflight (2026-10-13):**
+Already-forbidden C0/DEL/C1 path controls now fail during output argument
+parsing, before normalization can conceal raw controls or main can acquire
+dependencies. Final resolved output checks cover inherited cwd controls.
+Supported Unicode names and standalone publication policy remain compatible;
+no new trust boundary, credentials, SQL/schema, services or deployment changes.
+Added 287 offline cases; **2415/2415** full permitted suite and repository
+checks passed. Independent review found no issues and separately passed all
+287 focused cases; its full rerun hit subprocess sandbox restrictions.
+Actual outputs, limits and ordinary revert are in [operations.md](operations.md)
+Prompt 354. No authenticity, completeness, byte-integrity, atomic snapshot or
+live recovery proof. Readiness stays **0 approved / 11 blocked / 70 blockers**;
+Prompt 201, Category 6 and Phase 12 exit stay open. No live services, operator
+approval or push; no full ops:check or fresh audit claim.

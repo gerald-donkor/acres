@@ -12379,3 +12379,146 @@ test("runner argument shape: frozen full argv retains simulation publication", a
   assert.deepStrictEqual(fs.readdirSync(dir), ["receipt.json"]);
   assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), before);
 });
+
+// Receipt publication already forbids C0/C1; reject them before acquisition too.
+for (const code of [
+  ...Array.from({ length: 32 }, (_, i) => i),
+  ...Array.from({ length: 33 }, (_, i) => 127 + i),
+]) {
+  for (const flag of ["--output", "-o", "--output=", "-o="]) {
+    test(`output path preflight: ${flag} rejects U+${code.toString(16)}`, () => {
+      const value = `private${String.fromCharCode(code)}receipt.json`;
+      const args = Object.freeze(
+        flag.endsWith("=") ? [flag + value] : [flag, value],
+      );
+      const before = Object.getOwnPropertyDescriptors(args);
+      assert.throws(
+        () => parseCliArguments(args, "/tmp"),
+        (error) => {
+          assert.ok(error instanceof ReconcileUsageError);
+          assert.strictEqual(
+            error.message,
+            "output file path must be control-free",
+          );
+          return true;
+        },
+      );
+      assert.deepStrictEqual(Object.getOwnPropertyDescriptors(args), before);
+    });
+  }
+}
+
+for (const [label, args, base] of [
+  ["NUL output", ["--output", "private\0receipt.json"]],
+  ["newline output", ["-o=private\nreceipt.json"]],
+  ["DEL output", ["--output=private\x7freceipt.json"]],
+  ["C1 output", ["-o", "private\x85receipt.json"]],
+  ["normalized raw component", ["--output", "private\0/../receipt.json"]],
+  ["cwd component", ["--cwd", "private\0", "--output", "receipt.json"]],
+  ["base cwd", ["--output", "receipt.json"], "private\x9f"],
+  ["help with invalid output", ["--help", "--output=private\0receipt.json"]],
+]) {
+  test(`output path preflight: runner rejects ${label} before acquisition`, async (t) => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "acres-output-preflight-"),
+    );
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const options = { cwd: base ? path.join(dir, base) : dir };
+    for (const field of [
+      "env",
+      "dbObjects",
+      "storageObjects",
+      "pgClient",
+      "s3Client",
+    ]) {
+      Object.defineProperty(options, field, {
+        get() {
+          assert.fail(`unexpected dependency access: ${field}`);
+        },
+      });
+    }
+    const argv = Object.freeze(["node", "reconcile", ...args]);
+    const before = Object.getOwnPropertyDescriptors(argv);
+    const io = createIo();
+    assert.strictEqual(await main(argv, io, Object.freeze(options)), 1);
+    assert.deepStrictEqual(io.errors, [
+      "reconciliation usage error: output file path must be control-free",
+    ]);
+    assert.strictEqual(io.logs.length, 1);
+    assert.ok(
+      io.logs[0].startsWith(
+        "Usage: node scripts/ops/reconcile-storage-objects.js",
+      ),
+    );
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+    assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), before);
+  });
+}
+
+for (const name of [
+  "space name",
+  "évidence",
+  "🌳",
+  "\u061c",
+  "\u200e",
+  "\u200f",
+  "\u2028",
+  "\u2029",
+  "\u202a",
+  "\u202b",
+  "\u202c",
+  "\u202d",
+  "\u202e",
+  "\u2066",
+  "\u2067",
+  "\u2068",
+  "\u2069",
+]) {
+  test(`output path preflight: preserves ${JSON.stringify(name)}`, () => {
+    const args = Object.freeze(["--output", `${name}.json`]);
+    const before = Object.getOwnPropertyDescriptors(args);
+    assert.strictEqual(
+      parseCliArguments(args, "/tmp").output,
+      path.join("/tmp", `${name}.json`),
+    );
+    assert.deepStrictEqual(Object.getOwnPropertyDescriptors(args), before);
+  });
+}
+
+test("output path preflight: cwd without output retains prior policy", () => {
+  assert.strictEqual(
+    parseCliArguments(["--cwd", "private\0"], "/tmp").output,
+    null,
+  );
+});
+
+test("output path preflight: publishes exact spaced Unicode simulation destination", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-output-valid-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const filename = "évidence 🌳.json";
+  const argv = Object.freeze([
+    "node",
+    "reconcile",
+    "--dry-run",
+    "--output",
+    filename,
+  ]);
+  const before = Object.getOwnPropertyDescriptors(argv);
+  const io = createIo();
+  assert.strictEqual(
+    await main(argv, io, {
+      cwd: dir,
+      env: Object.freeze({}),
+      dbObjects: Object.freeze([]),
+      storageObjects: Object.freeze([]),
+    }),
+    0,
+  );
+  assert.deepStrictEqual(io.errors, []);
+  const report = JSON.parse(fs.readFileSync(path.join(dir, filename), "utf8"));
+  assert.strictEqual(report.execution_mode, "simulation");
+  assert.strictEqual(report.summary.status, "clean");
+  assert.strictEqual(report.summary.exitCode, 0);
+  assert.deepStrictEqual(fs.readdirSync(dir), [filename]);
+  assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), before);
+});

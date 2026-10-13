@@ -11570,3 +11570,96 @@ node --test --test-name-pattern='runner argument shape:' scripts/ops/reconcile-s
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 354 — Reconciliation output path preflight (2026-10-13)
+
+Continued Phase 12K after `5a60b05` (Prompt 353). Inspection reproduced the
+parser accepting `--output bad\0receipt.json` and main accessing environment
+before the existing publication guard could reject it. The parser now rejects
+C0 U+0000–001F and DEL/C1 U+007F–009F in raw output operands before
+normalization and in the final resolved destination before acquisition.
+Both checks use the existing publication range and fixed ReconcileUsageError
+`output file path must be control-free`, without printing the raw path.
+Main returns 1 with usage help; even --help cannot bypass validation.
+
+All four output flag forms are covered. Resolved controls inherited from
+--cwd or programmatic base cwd fail early; cwd without output retains its
+prior policy. Spaces, accented/astral names and supported Unicode display
+marks remain literal destinations. Standalone publishReceipt validation,
+parent checks, exclusivity, resource lifecycle and report schema are unchanged.
+No routes, UI, SQL/schema, dependencies or package scripts changed.
+
+Added 287 offline tests: all 65 forbidden code points across four flag forms,
+eight runner cases proving no environment/inventory/client access, 17 Unicode
+parser controls, cwd-without-output compatibility and real temporary clean
+simulation publication. Frozen input descriptors remain unchanged. Focused
+pre-change output was `tests 287`, `pass 19`, `fail 268`; post-change:
+
+```text
+ℹ tests 287
+ℹ pass 287
+ℹ fail 0
+```
+
+The restricted full suite returned file-wrapper `test failed`; permitted
+`npm run ops:reconcile-test` exited 0:
+
+```text
+ℹ tests 2415
+ℹ pass 2415
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 1410.193829
+```
+
+Source/spec `node -c` passed silently. CLI help returned
+`Usage: node scripts/ops/reconcile-storage-objects.js [options]`.
+Installed Prettier reported `Added test block Prettier check: true`;
+only new tests were formatted. Root lint exited 0 with client `eslint`, shared
+`eslint "src/**/*.ts"` and server `eslint "{src,test}/**/*.ts"`, no diagnostics.
+Restricted build failed with
+`Error: Could not parse output from TypeScript's --showConfig.`
+Permitted root production build exited 0:
+
+```text
+✓ Compiled successfully in 2.4s
+✓ Generating static pages using 7 workers (22/22) in 575ms
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 332ms
+```
+
+Server `nest build` completed. Sequential root typecheck exited 0 with all
+three workspace checks and Prisma Client 7.9.1 generated in `275ms`.
+`git diff --check` passed silently. Logs `/tmp/acres-354-*.log` are session-local
+verification, not retained launch evidence.
+
+Independent read-only review found no Critical, Important or Minor issues or
+plan deviations, and independently passed all 287 focused cases and diff
+whitespace checks. Its full restricted rerun reached 2415 tests with 2406
+passes and nine existing subprocess `spawnSync ... EPERM` failures. It did not
+rerun with escalation or independently repeat lint/build/typecheck. Feedback
+was evaluated against raw/resolved guard ordering, publication policy and
+regressions; no fixes or follow-up review were necessary.
+
+Read-only example readiness remained fail-closed:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+This preflight prevents wasted dependency acquisition; it does not authenticate
+evidence, prove inventory completeness/object bytes or establish atomic/live
+recovery. Prompt 201, Category 6 live sign-off and Phase 12 exit remain open.
+No live services, credentials, operator approval, deployment or push occurred.
+Unrelated ops suites/online audit were not rerun; no aggregate ops:check pass
+or fresh vulnerability inventory is claimed. Ordinary commit revert restores
+late output-path rejection without data mutation. Inspect with:
+
+```bash
+node --test --test-name-pattern='output path preflight:' scripts/ops/reconcile-storage-objects.spec.js
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

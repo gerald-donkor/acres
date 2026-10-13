@@ -3574,3 +3574,17 @@ red/green, checks, review limits and ordinary-revert rollback are in
 exit remain open. No live services, operator approval, deployment or push.
 Unrelated ops suites/online audit not rerun; no aggregate ops:check pass or
 fresh audit claim.
+
+**Prompt 354 — reconciliation output path preflight (2026-10-13):**
+Continued Phase 12K after Prompt 353. C0/DEL/C1 controls in raw output
+operands and final resolved destinations now produce fixed usage failure
+before reconciliation acquisition. Existing Unicode paths and standalone
+publication remain compatible. Added 287 offline cases; focused **287/287**,
+full permitted **2415/2415**, lint/typecheck/build (**22/22** pages), syntax,
+help, new-block formatting and diff checks passed. Independent review found
+no issues and independently passed all 287 focused cases; its full rerun hit
+nine sandbox subprocess failures. Actual outputs, limits and ordinary-revert
+rollback are in [operations.md](operations.md) Prompt 354. Example readiness
+stays **0 approved / 11 blocked / 70 blockers**. Prompt 201, Category 6 live
+sign-off and Phase 12 exit remain open. No live services, operator approval,
+deployment or push; no aggregate ops:check or fresh audit claim.
