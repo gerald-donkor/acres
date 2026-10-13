@@ -90,13 +90,21 @@ currently verified. Historical test results remain historical.
    defense on invalid geography references). Full server real database suite passes
    146/146 tests across 7 test suites. Live infrastructure-level failure acceptance
    (Garage/Valkey/ClamAV outages and host restarts) remains in item 4 below.
-3. **Refresh release verification and triage real findings.** Run contracts,
-   server unit/integration and real PostgreSQL/PostGIS tests, representative
-   query plans, browser/accessibility/responsive journeys, operations checks and
-   dependency/SAST/container/license checks against the selected candidate.
-   Record environment, actual commands and failures; resolve launch-blocking
-   findings or obtain the explicit acceptance allowed by policy. This assessment
-   does not supply a fresh vulnerability count or a full-suite pass.
+3. **Refresh release verification and triage real findings.** Prompt 362
+   refreshes the complete repository verification baseline and triages real
+   findings: contracts drift check passes (0 drift); lint and typecheck pass
+   across all 3 workspaces; production build passes for all workspaces (Next.js
+   23/23 routes); server unit suite passes 120/120 suites and 1876/1876 tests
+   (triaging missing `CSRF_SECRET` in `server/.env` and adding test fallback in
+   `geoboundaries-cli.spec.ts`); real PostgreSQL/PostGIS database E2E suite passes
+   7/7 suites and 146/146 tests under forced RLS; representative analytics
+   (6/6) and geography (2/2) EXPLAIN query plans pass against the test database;
+   client Playwright browser suite passes 85/85 tests (9 skipped opt-in fault
+   cases) across 375px/800px/1280px viewports (triaging `/output/` in `.gitignore`);
+   and operations preflight (`ops:check`) passes all 33 offline stages and 27
+   suites (702 packages verified, 0 license violations, 0 blocking SAST findings).
+   Dry-run launch drill passes 6/7 stages, with disaster recovery failing
+   cleanly due to absent local object storage daemon as expected in item 4.
 4. **Finish infrastructure-level failure acceptance.** Exercise actual
    Garage/Valkey/ClamAV outages, API/worker restart, retries/dead letters, backup
    restore and database/object parity in designated isolated environments.

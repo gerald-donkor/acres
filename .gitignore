@@ -20,6 +20,7 @@ client/test-results/
 client/playwright-report/
 test-results/
 playwright-report/
+/output/
 
 # next.js
 /client/.next/

@@ -11925,3 +11925,107 @@ production mutations, approvals or push occurred. Ordinary commit revert
 restores prior documentation. To inspect the result, open
 `docs/project-status.md`; reproduce the repository-visible gate with
 `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`.
+
+
+## Prompt 362 — Release verification refresh and triage (2026-10-13)
+
+Continued Phase 12 release hardening following Prompt 361. Executes item 3 of
+`docs/project-status.md`: comprehensive verification refresh across contracts,
+server unit suites, real PostgreSQL/PostGIS integration suites under forced RLS,
+measured query plans, client Playwright browser journeys across all three reference
+viewports, operational preflight suites, security/SAST/container scans, and launch
+drill orchestration.
+
+### Execution environment
+
+- Host: Linux `milk7` (kernel 7.2.5-3-omarchy #1 SMP PREEMPT_DYNAMIC Mon, 14 Sep 2026 x86_64)
+- Node.js: `v26.11.1`
+- npm: `11.20.0`
+- Docker: `29.7.2` (build `a7dcaa6fdb`)
+- PostgreSQL / PostGIS: `postgis/postgis:18-3.6` (PostgreSQL 18 + PostGIS 3.6 on port 5432, container `acres-postgres-1`)
+
+### Verification results and actual command outputs
+
+1. **Contracts check (`npm run contracts:check`)**:
+   - Exit 0; verified OpenAPI 3.1 schema and GraphQL SDL schema are clean and strictly in sync with source decorators and resolver definitions. Zero drift detected.
+
+2. **Linting (`npm run lint`)**:
+   - Exit 0; executed ESLint across `@acres/client`, `@acres/shared`, and `@acres/server`. Zero errors, zero warnings.
+
+3. **Typechecking (`npm run typecheck`)**:
+   - Exit 0; built `@acres/shared`, generated Prisma Client (7.9.1) in 402 ms, typechecked shared, client, and server workspaces without errors.
+
+4. **Production builds (`npm run build`)**:
+   - Exit 0; `@acres/shared` compiled with TypeScript; `@acres/client` compiled Next.js 16.3.8 in 4.0s generating 23/23 static and dynamic routes; `@acres/server` compiled NestJS production artifacts with Prisma Client (7.9.1) generated in 393 ms.
+
+5. **Whitespace & conflict marker check (`git diff --check`)**:
+   - Exit 0; zero trailing whitespace, zero merge markers detected.
+
+6. **Server unit test suite (`npm run test --workspace=@acres/server`)**:
+   - Initial run uncovered 1 failing suite: `src/geography/geoboundaries-cli.spec.ts` (3 failed, 24 passed) with `Missing required environment variable(s): CSRF_SECRET. Copy server/.env.example to server/.env and fill them in.`
+   - Triage & remediation: Commit `517925c` had separated `CSRF_SECRET` from `SESSION_SECRET` in `server/.env.example`, but local developer `server/.env` had not been populated with `CSRF_SECRET`. Added `CSRF_SECRET=change-me-distinct-32-bytes-minimum-in-real-environments` to `server/.env` and added `process.env.CSRF_SECRET ??=` fallback to `geoboundaries-cli.spec.ts` to ensure isolated execution without `.env`.
+   - Re-run result: Exit 0; **120/120 test suites passed, 1876/1876 tests passed, 1 snapshot passed** in 7.993 s.
+
+7. **Real PostgreSQL/PostGIS database E2E suite (`npm run test:server`)**:
+   - Executed Jest E2E against migrated `acres_test` database under forced RLS.
+   - Exit 0; **7/7 test suites passed, 146/146 tests passed** in 47.514 s:
+     - `test/api.e2e-spec.ts`: 78/78 passed (auth, session, CSRF, REST API contracts, versioned envelopes)
+     - `test/database.e2e-spec.ts`: 17/17 passed (forced RLS, ownership transfers, concurrent idempotency, parser error handling)
+     - `test/data-journey.e2e-spec.ts`: 1/1 passed (11 integrated phases: PostGIS polygon geography, multi-tenant Org A/B setup, upload initiation/completion, dataset mapping, ingestion publication, deterministic metrics/observations/aggregates/lineage, analytics reads, saved view CRUD, report drafting/evidence freezing/review/publication, CSV export/download, cross-tenant isolation, RBAC denials, and partial publication rollback defense)
+     - `test/organizations.e2e-spec.ts`: 18/18 passed (memberships, role transitions, invitation issuance and revoking)
+     - `test/auth-recovery.e2e-spec.ts`: 18/18 passed (password recovery, single-use token consumption, session revocation)
+     - `test/geography-database.e2e-spec.ts`: 10/10 passed (PostGIS polygon queries, ST_Contains spatial lookups, hierarchical boundaries)
+     - `test/env-validation.e2e-spec.ts`: 4/4 passed (environment validation and missing variable guards)
+
+8. **Representative query plan gates**:
+   - `DATABASE_URL=... npm run analytics:plans`: Exit 0; **6/6 query plans passed**:
+     - `findMetrics`: PASS (0.03 ms, cost 8.18, 4 rows, Index Scan `MetricDefinition_organizationId_key_key`)
+     - `findAggregates (filtered)`: PASS (0.09 ms, cost 34.45, 1 row, Index Scan `MetricAggregate_main_read_idx`)
+     - `findObservations (filtered)`: PASS (0.06 ms, cost 34.45, 1 row, Index Scan `MetricObservation_main_read_idx`)
+     - `findAggregateEvidence (lineage)`: PASS (0.04 ms, cost 8.33, 1 row, Index Scan `MetricAggregateLineage_organizationId_aggregateId_observationId`)
+     - `listDashboardViews`: PASS (0.04 ms, cost 1.04, 2 rows, Limit, Sort, Result, Seq Scan)
+     - `dashboardSummary (aggregates)`: PASS (1.00 ms, cost 195.40, 24 rows, Limit, Sort, Seq Scan)
+   - `DATABASE_URL=... npm run geography:plans`: Exit 0; **2/2 query plans passed**:
+     - `spatialPointIntersection (GiST index)`: PASS (0.07 ms, cost 20.68, 1 row, Index Scan `RegionGeometry_geometry_gist_idx`)
+     - `hierarchyChildren (parentId, level index)`: PASS (0.04 ms, cost 8.19, 25 rows, Index Scan `Region_parentId_level_idx`)
+
+9. **Client browser, responsive, and accessibility E2E journeys (`npm run test:client:e2e`)**:
+   - Executed Playwright across headless Chromium against live local Next.js client and Nest server.
+   - Exit 0; **85 passed, 9 skipped** (the 9 opt-in loopback proxy fault simulation tests from Prompt 359), **0 failed** in 1.2 m.
+   - Tested marketing page, responsive layouts at 375px mobile, 800px tablet, and 1280px desktop, keyboard navigation, skip link, contrast, touch targets >= 44px, auth login/register/recovery, invitation acceptance, member administration, audit workspace pagination and switching, dashboards, datasets with SSE streaming, report authoring and export queuing.
+   - Triage: added `/output/` to `.gitignore` to prevent generated screenshot artifacts (`output/playwright/*.png`) from polluting git status.
+
+10. **Operations preflights, security, and supply-chain scans (`npm run ops:check`)**:
+    - Exit 0; executed all 33 offline stages and 27 test suites in 132.7 s:
+      - Production template keys, proxy environment, application environment, garage metrics, postgres diagnostics, release images, and production shell templates verified.
+      - Secret scanning: passed with zero unmasked credentials or tracked private secrets.
+      - Docker runtime: verified valid pinned base images and non-root user execution.
+      - Dependency audit: passed with zero critical production vulnerabilities.
+      - Readiness schema & launch readiness tests: passed validator test harness.
+      - Storage reconciliation tests: 9/9 unit tests passed.
+      - Backup & restore drill tests: passed.
+      - Caddy routing & deployment drill tests: passed.
+      - Volume encryption preflight: 9 stateful mounts verified.
+      - Secret rotation drill tests: passed.
+      - SBOM & license compliance: verified 702 packages, 0 license violations.
+      - SAST scan: 379 files scanned, 12 total findings (9 triaged and documented, 0 active blocking findings).
+      - Container security: 22/22 checks passed.
+      - Capacity & alert simulation tests: passed.
+      - DoS resilience & capacity alerting tests: passed.
+      - Launch drill orchestrator tests: 182/182 tests passed.
+
+11. **Unified launch drill orchestrator (`npm run ops:launch-drill`)**:
+    - Executed unified drill runner in `--dry-run`: 6/7 stages passed, 1 failed (duration 9.74 s).
+    - Passed: `static_templates`, `supply_chain_sast`, `ingress_deployment`, `volume_encryption`, `secret_rotation`, `capacity_alerting`.
+    - Failed: `disaster_recovery` — fails cleanly on offline development environment because Garage (object storage) daemon is not running locally. Real live disaster recovery restore drill and reconciliation requires active storage daemon and isolated drill environment per item 4.
+
+### Triage summary and release posture
+
+- **Resolved issues**:
+  - `CSRF_SECRET` added to `server/.env` and fallback added to `geoboundaries-cli.spec.ts`.
+  - Added `/output/` to `.gitignore` for Playwright screenshot outputs.
+- **Open non-code release prerequisites**:
+  - Item 4 (infrastructure-level failure acceptance with live Garage/Valkey/ClamAV outages and backup restore).
+  - Operator-owned launch checklist sign-offs across 11 categories (Prompt 201).
+- **Readiness check result**:
+  - Read-only example readiness continues to exit 1 (0 approved / 11 unresolved / 70 blockers), preserving fail-closed launch posture.

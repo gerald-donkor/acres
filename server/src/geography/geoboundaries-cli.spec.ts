@@ -33,6 +33,13 @@ import type {
   GeoBoundariesLevel,
 } from './geoboundaries.types';
 
+process.env.DATABASE_URL ??=
+  'postgresql://acres_test:acres_test_dev_password@localhost:5432/acres_test?schema=public';
+process.env.CLIENT_ORIGIN ??= 'http://localhost:3000';
+process.env.SESSION_SECRET ??= 'test-secret-that-is-at-least-32-characters';
+process.env.CSRF_SECRET ??=
+  'test-csrf-secret-distinct-and-at-least-32-characters';
+
 describe('geoBoundaries CLI', () => {
   let directory: string;
   let logSpy: jest.SpyInstance;

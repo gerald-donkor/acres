@@ -3711,3 +3711,25 @@ server test suite **7/7 suites passed (146/146 tests)**, lint, typecheck across
 all 3 workspaces, production build (**23/23** pages), contracts check, and diff
 checks pass. `docs/backend.md` records verification details. Prompt 201 and
 Phase 12 launch sign-offs remain open. No deploy or push.
+
+**Prompt 362 — release verification refresh and triage (2026-10-13):**
+Refreshes the complete repository verification baseline and triages findings
+following Prompt 361. OpenAPI and GraphQL SDL schema drift check passes with 0
+drift (`contracts:check`); lint and sequential typecheck pass with 0 errors or
+warnings across client, shared, and server workspaces; production build passes for
+all workspaces (Next.js 16.3.8 compiles in 4.0s generating 23/23 static and
+dynamic routes; shared and Nest server compile cleanly). Server unit test suite
+passes **120/120 suites and 1876/1876 tests** in 7.99s, triaging a missing
+`CSRF_SECRET` in `server/.env` by adding the variable and introducing an isolated
+fallback in `server/src/geography/geoboundaries-cli.spec.ts`. Real PostgreSQL/PostGIS
+database E2E suite under forced RLS passes **7/7 suites and 146/146 tests** in
+47.51s. Measured query plan gates pass for analytics (6/6 plans) and PostGIS
+geography (2/2 plans). Client Playwright browser E2E suite passes **85/85 tests**
+(9 skipped opt-in fault cases) in 1.2m across 375px/800px/1280px viewports,
+triaging test screenshots by ignoring `/output/` in `.gitignore`. Operations
+preflight (`ops:check`) passes all **33 offline stages and 27 test suites** in
+132.7s (702 packages verified, 0 license violations, 0 blocking SAST findings).
+Dry-run launch drill passes 6/7 stages, with disaster recovery failing cleanly
+due to absent local object storage daemon as expected in item 4.
+`docs/operations.md` records verification details. Prompt 201 and Phase 12
+launch sign-offs remain open. No deploy or push.
