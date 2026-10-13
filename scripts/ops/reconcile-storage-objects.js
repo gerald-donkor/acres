@@ -588,6 +588,13 @@ async function queryDatabaseStoredObjects({ pgClient }) {
   if (!isInventoryRecord(result))
     throw new Error('Database inventory is invalid');
   validateInventory(result.rows, true);
+  // Persisted checksums represent full SHA-256 digests, as upload DTOs require.
+  if (
+    result.rows.some(
+      (row) => row.checksumHex != null && row.checksumHex.length !== 64,
+    )
+  )
+    throw new Error('Database inventory is invalid');
   // The fixed projection casts a nonnegative SQL bigint column to text.
   if (
     result.rows.some(

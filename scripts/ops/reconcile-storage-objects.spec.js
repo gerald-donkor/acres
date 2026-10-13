@@ -451,7 +451,7 @@ test('queryDatabaseStoredObjects: preserves optional algorithms and valid digest
             id: `row-${i}`,
             objectKey: `key-${i}`,
             byteCount: '1',
-            checksumHex: 'aBcD',
+            checksumHex: 'aBcD'.repeat(16),
             ...patch,
           }),
         ),
@@ -465,7 +465,9 @@ test('queryDatabaseStoredObjects: preserves optional algorithms and valid digest
     rows.map((row) => ({ ...row, byteCount: 1n })),
   );
   assert.ok(
-    rows.every((row) => row.byteCount === '1' && row.checksumHex === 'aBcD'),
+    rows.every(
+      (row) => row.byteCount === '1' && row.checksumHex === 'aBcD'.repeat(16),
+    ),
   );
 });
 
@@ -9887,4 +9889,206 @@ test('SQL byte range: generic and injected comparison retain arbitrary bigint co
   assert.deepStrictEqual(io.errors, []);
   assert.strictEqual(dbObjects[0].byteCount, byteCount);
   assert.strictEqual(storageObjects[0].byteCount, byteCount);
+});
+
+// Database SHA-256 acquisition requires a full digest, not arbitrary hex.
+for (const [metadata, patch] of [
+  ['absent', {}],
+  ['undefined', { fields: undefined }],
+  [
+    'described',
+    { fields: Object.freeze(databaseInventoryFields().map(Object.freeze)) },
+  ],
+]) {
+  for (const length of [2, 62, 66, 128]) {
+    for (const later of [false, true]) {
+      test(`queryDatabaseStoredObjects: rejects ${length}-character SHA256 ${later ? 'later' : 'first'} with ${metadata} metadata`, async () => {
+        const row = Object.freeze(
+          projectedInventoryRow({ checksumHex: 'a'.repeat(length) }),
+        );
+        const rows = Object.freeze(
+          later
+            ? [
+                Object.freeze(
+                  projectedInventoryRow({ id: 'first', objectKey: 'first' }),
+                ),
+                row,
+              ]
+            : [row],
+        );
+        const result = Object.freeze({ rows, ...patch });
+        let queries = 0;
+        await assert.rejects(
+          queryDatabaseStoredObjects({
+            pgClient: {
+              async query() {
+                queries++;
+                return result;
+              },
+            },
+          }),
+          { message: 'Database inventory is invalid' },
+        );
+        assert.strictEqual(queries, 1);
+        assert.strictEqual(row.checksumHex, 'a'.repeat(length));
+        assert.strictEqual(result.rows, rows);
+      });
+    }
+  }
+  for (const checksumHex of [
+    'ab'.repeat(32),
+    'AB'.repeat(32),
+    'aB'.repeat(32),
+    null,
+    undefined,
+  ]) {
+    test(`queryDatabaseStoredObjects: preserves SHA256 ${String(checksumHex)} with ${metadata} metadata`, async () => {
+      const row = Object.freeze(
+        projectedInventoryRow({ checksumHex, extra: 'retained' }),
+      );
+      const second = Object.freeze(
+        projectedInventoryRow({ id: 'second', objectKey: 'second' }),
+      );
+      const rows = Object.freeze([row, second]);
+      const actual = await queryDatabaseStoredObjects({
+        pgClient: { query: async () => Object.freeze({ rows, ...patch }) },
+      });
+      assert.deepStrictEqual(actual, [
+        { ...row, byteCount: 1n },
+        { ...second, byteCount: 1n },
+      ]);
+      assert.strictEqual(actual[0].checksumHex, checksumHex);
+      assert.strictEqual(row.byteCount, 1);
+      if (checksumHex != null) {
+        for (const matching of [true, false]) {
+          const comparison = reconcileObjects({
+            dbObjects: [actual[0]],
+            storageObjects: [
+              {
+                key: row.objectKey,
+                byteCount: 1,
+                checksumHex: matching
+                  ? checksumHex.toLowerCase()
+                  : 'cd'.repeat(32),
+              },
+            ],
+          });
+          assert.strictEqual(
+            comparison.summary.status,
+            matching ? 'clean' : 'error',
+          );
+        }
+      }
+    });
+  }
+  test(`queryDatabaseStoredObjects: rejects hidden excluded SHA256 with ${metadata} metadata`, async () => {
+    for (const state of ['deleted', 'pending_upload']) {
+      const row = projectedInventoryRow({ state });
+      Object.defineProperty(row, 'checksumHex', {
+        value: 'ab',
+        enumerable: false,
+      });
+      Object.freeze(row);
+      const before = Object.getOwnPropertyDescriptors(row);
+      await assert.rejects(
+        queryDatabaseStoredObjects({
+          pgClient: {
+            query: async () => ({ rows: Object.freeze([row]), ...patch }),
+          },
+        }),
+        { message: 'Database inventory is invalid' },
+      );
+      assert.deepStrictEqual(Object.getOwnPropertyDescriptors(row), before);
+    }
+  });
+  test(`main: rejects malformed SHA256 privately before storage with ${metadata} metadata`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-db-sha256-'));
+    const previousExitCode = process.exitCode;
+    try {
+      const io = createIo();
+      const s3Client = listingClient([]);
+      let queries = 0;
+      let ended = false;
+      s3Client.destroy = () => {
+        throw new Error('caller S3 must stay open');
+      };
+      const pgClient = {
+        async query() {
+          queries++;
+          return {
+            rows: [projectedInventoryRow({ checksumHex: 'ab' })],
+            ...patch,
+          };
+        },
+        async end() {
+          ended = true;
+        },
+      };
+      assert.strictEqual(
+        await main(
+          [
+            'node',
+            'script',
+            '--dry-run',
+            '--output',
+            path.join(dir, 'receipt.json'),
+          ],
+          io,
+          { env: {}, pgClient, s3Client },
+        ),
+        1,
+      );
+      assert.strictEqual(queries, 1);
+      assert.strictEqual(ended, false);
+      assert.strictEqual(s3Client.inputs.length, 0);
+      assert.deepStrictEqual(io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(io.errors, ['Error: Database query failed']);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    } finally {
+      process.exitCode = previousExitCode;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  test(`queryDatabaseStoredObjects: accepts empty SHA256 inventory with ${metadata} metadata`, async () => {
+    assert.deepStrictEqual(
+      await queryDatabaseStoredObjects({
+        pgClient: { query: async () => ({ rows: [], ...patch }) },
+      }),
+      [],
+    );
+  });
+}
+
+test('queryDatabaseStoredObjects: preserves absent checksum and algorithm properties', async () => {
+  const row = Object.freeze(inventoryDbRecord());
+  const [actual] = await queryDatabaseStoredObjects({
+    pgClient: { query: async () => ({ rows: [row] }) },
+  });
+  assert.strictEqual(Object.hasOwn(actual, 'checksumHex'), false);
+  assert.strictEqual(Object.hasOwn(actual, 'checksumAlgorithm'), false);
+});
+
+test('reconcileObjects and injected main inventories: retain short-hex compatibility', async () => {
+  const dbObjects = [
+    inventoryDbRecord({ checksumHex: 'ab', checksumAlgorithm: 'sha256' }),
+  ];
+  const storageObjects = [
+    { key: 'fixture-key', byteCount: 1, checksumHex: 'AB' },
+  ];
+  assert.strictEqual(
+    reconcileObjects({ dbObjects, storageObjects }).summary.status,
+    'clean',
+  );
+  const io = createIo();
+  assert.strictEqual(
+    await main(['node', 'script', '--dry-run'], io, {
+      env: {},
+      dbObjects,
+      storageObjects,
+    }),
+    0,
+  );
+  assert.deepStrictEqual(io.errors, []);
 });

@@ -1600,3 +1600,23 @@ Prompt 340. Readiness remains **0 approved / 11 blocked / 70 blockers**; Prompt
 no aggregate ops:check/fresh audit claim. Range validation cannot authenticate
 responses, prove completeness, verify bytes or establish atomic/live recovery.
 No live services, secrets, SQL/schema, new trust boundary, deployment or push.
+
+
+**Prompt 341 — database inventory SHA-256 digest length (2026-10-13):**
+Continued Phase 12K after committed Prompt 340. Database acquisition rejects
+supplied non-null checksumHex unless it is a full 64-character hexadecimal
+SHA-256 digest, after existing type/hex validation and before S3/publication.
+Generic/injected comparison retains even-length hex compatibility; valid mixed
+case, NULL/optional values, metadata, hidden own fields and immutable ownership
+remain compatible. Added 50 behavioral cases and expanded one truncated-digest
+acquisition fixture while retaining all assertions. Focused **1924/1924**,
+root lint/typecheck/build (**22/22** pages), formatting/syntax/help/diff and
+**33 offline stages / 27 suites / 4905 tests / zero failures or skipped** passed.
+Independent read-only review found no issues. Probe, red/green, fixture/log
+corrections, sandbox limits and ordinary-revert rollback are in
+[operations.md](operations.md) Prompt 341. Readiness stays **0 approved /
+11 blocked / 70 blockers**. Online audit omitted; no aggregate ops:check or
+fresh audit claim. Digest shape cannot authenticate evidence, prove
+completeness, verify bytes or establish atomic/live recovery. Prompt 201,
+Category 6 live approval and Phase 12 exit remain open. No live services,
+operator approval, SQL/schema changes, deployment or push occurred.

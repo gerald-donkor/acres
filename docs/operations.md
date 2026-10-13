@@ -10565,3 +10565,75 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 341 — Database inventory SHA-256 digest length (2026-10-13)
+
+Continued Phase 12K after committed Prompt 340 (`b665b0803088cba1084ccdf30e1e60d935cf032a`). An offline synthetic probe supplied checksumAlgorithm `sha256` and checksumHex `ab` to queryDatabaseStoredObjects. It returned `{"acceptedChecksum":"ab","status":"clean"}` when compared against a storage entry without digest metadata. This demonstrates malformed acquisition evidence being accepted; no live database or recovery was inspected.
+
+The database acquisition adapter now rejects every supplied non-null checksumHex whose length is not exactly 64, after existing string/hex validation and before returning any inventory. This matches both upload DTOs' case-insensitive 64-hex contract and the storage adapter's 32-byte SHA-256 extension. The SQL column remains nullable text without a digest-length constraint; this enforces application evidence semantics rather than a SQL type limit. Rejection throws fixed `Database inventory is invalid`; main returns 1 with fixed `Error: Database query failed`, no S3 requests and no receipt/temp publication, retaining caller-owned clients.
+
+Generic reconciliation and explicitly injected main inventories retain arbitrary even-length hex compatibility. Valid lower/upper/mixed-case digests are preserved verbatim at acquisition and compare case-insensitively. NULL, undefined, omitted checksum/algorithm fields, absent/undefined/described metadata, row order, extra keys, hidden own projection fields, frozen ownership, and prior byte-count/descriptor checks remain compatible. No SQL, schema, facade, route or dependency changes.
+
+Added 50 cases covering short/long even hex, first/later rows, metadata modes, hidden checksums on deleted/pending rows, optional/valid checksums, exact output/immutability, matching/mismatching comparisons, empty results, runner privacy/publication/ownership and generic/injected short-hex compatibility. One existing adapter success fixture expanded `aBcD` to `aBcD`.repeat(16), retaining every assertion and mixed-case preservation. Generic fixtures were unchanged.
+
+Restricted red execution returned only a file-level failure. Identical permitted red execution returned exit 1:
+
+```text
+ℹ tests 1924
+ℹ pass 1894
+ℹ fail 30
+ℹ skipped 0
+```
+
+Initial green returned 1920 passed and 4 failed: the legacy truncated-digest acquisition fixture and three new assertions that incorrectly abbreviated the existing connection log. After correcting only fixture values and expected log text, npm run ops:reconcile-test returned exit 0:
+
+```text
+ℹ tests 1924
+ℹ pass 1924
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual checks:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier changed source function/new test region | 0 | {"newTestRegion":true,"sourceFunction":true} |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
+| permitted npm run build | 0 | Compiled successfully in 5.2s; Generating static pages using 7 workers (22/22) in 1275ms; prisma generate && nest build |
+| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1) |
+| git diff --check | 0 | silent |
+
+A first typecheck overlapped the tail of the server build; the recorded typecheck above was repeated after confirmed build completion. Formatting was limited to changed test regions.
+
+Independent read-only review inspected the source, working diff and prompt. It found no Critical, Important or Minor issues and assessed the implementation ready to merge after completion records. Feedback was evaluated against guard placement, type-validation ordering, whole-inventory rejection, optional/generic compatibility, private failure paths and ownership; no fixes or follow-up review were needed. Its independent npm run ops:reconcile-test exited 0 with a restricted file-level tests 1 / pass 1 wrapper; individual case counts above come from the coordinator's permitted runs.
+
+All **33 independent offline stages / 27 suite invocations / 4905 tests / 4905 passed / zero failures or skipped** resolved from package.json ops:check passed. Every stage exit and suite count was inspected. This includes templates, secret/default scans, Docker runtime, offline SBOM license verification, SAST, container checks and final launch-orchestrator/dossier tests:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+The example readiness validator returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online ops:audit remains omitted under the recorded dependency-metadata disclosure restriction; no aggregate ops:check pass or fresh vulnerability audit is claimed. Digest shape validation cannot authenticate evidence, prove inventory completeness, verify bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit stay open. No live services, credentials, migration, operator approval, deployment or push. Ordinary commit revert restores prior adapter acceptance without DB/storage mutation. Privately inspect and repair a rejected source digest; never pad/truncate live evidence to bypass validation or reuse old receipts.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

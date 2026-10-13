@@ -871,6 +871,21 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 341 (2026-10-13):** Database acquisition rejects non-null
+  checksumHex unless it is a full 64-character SHA-256 hex digest, with fixed
+  private errors before S3 access or publication. Generic/injected short-hex
+  compatibility, valid case/NULL/optional fields, metadata and frozen ownership
+  remain intact. Focused **1924/1924**, root lint/typecheck/build, formatting,
+  syntax/help/diff and **33 offline stages / 27 suites / 4905 tests / zero
+  failures or skipped** passed. Independent review found no issues. Probe,
+  red/green, fixture/log corrections, sandbox limits and ordinary-revert
+  rollback are in [operations.md](operations.md) Prompt 341. Readiness stays
+  **0 approved / 11 blocked / 70 blockers**; Prompt 201, Category 6 live approval
+  and Phase 12 exit remain open. Online audit omitted; no aggregate ops:check
+  or fresh audit claim. Digest shape cannot prove authenticity, completeness,
+  bytes or atomic/live recovery. No live services, SQL/schema changes,
+  operator approval, deployment or push occurred.
+
 - **Prompt 340 (2026-10-13):** Database acquisition rejects byteCount above
   SQL bigint maximum 9223372036854775807 with exact BigInt arithmetic and
   fixed private errors before returning inventory, S3 access or publication.
