@@ -10705,3 +10705,50 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+
+## Prompt 343 — Reconciliation failed database connection cleanup (2026-10-13)
+
+Continued Phase 12K after committed Prompt 342 (`80cd784f53bfcaa8cb662bbcf960d0db5dea1377`). Code inspection found main's connection-failure branch returned or exited without ending its runner-created PostgreSQL client. The installed `node_modules/pg/lib/client.js` defines Promise-returning `end()` with never-connected/already-ended handling and failed-stream destruction. This verifies the API contract; no leaked live socket measurement is claimed.
+
+The connection catch now makes one awaited `end()` attempt for runner-owned clients before return or optional immediate exit. Synchronous throws and rejected cleanup Promises are suppressed to preserve the primary fixed `Error: PostgreSQL connection failed` diagnostic and exit 1. This is best-effort teardown, not a guarantee when cleanup fails or stalls. Caller-owned clients remain open. Injected inventories, early exits, later cleanup paths, SQL, storage acquisition/comparison and receipt publication are unchanged. No new resource abstraction or dependency was introduced.
+
+Added **14 offline behavioral cases** using actual pg Client construction with restored prototype stubs: synchronous/rejected connect crossed with resolving/rejecting/throwing end; deferred settlement proving main waits; two caller failures; injected inventory bypass; help/usage/missing-password early exits; and a real child process proving asynchronous cleanup precedes immediate exit. Synthetic configuration and isolated temporary receipts avoid live transports and credentials. No summary/receipt or underlying exception escapes a failed connection.
+
+Actual verification:
+
+| Command | Exit | Real output / observation |
+| --- | --- | --- |
+| restricted focused `node --test --test-name-pattern='main failed database cleanup' scripts/ops/reconcile-storage-objects.spec.js` | 1 | file-level `tests 1 / pass 0 / fail 1`, `test failed`; not behavioral evidence |
+| permitted focused regression, before source fix | 1 | `tests 14 / pass 6 / fail 8 / skipped 0`; missing end calls, premature settlement and empty child stdout reproduced the gap |
+| permitted `npm run ops:reconcile-test`, after fix | 0 | `tests 1958 / pass 1958 / fail 0 / cancelled 0 / skipped 0` |
+| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
+| permitted `npm run build` | 0 | `Compiled successfully in 11.4s`; `Finished TypeScript in 9.3s`; `Generating static pages using 7 workers (22/22) in 2.8s`; Prisma Client `7.9.1` generated, `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0 | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
+| `node -c` source and spec | 0 each | silent |
+| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| installed Prettier check of appended test region | 0 | `Added test region format check: true` |
+| `git diff --check` | 0 | silent |
+
+Independent read-only review inspected the full diff, prompt, surrounding lifecycle paths, installed driver and verification logs; it found no Critical, Important or Minor issues and assessed the implementation ready to merge after records and final offline checks. Feedback was evaluated against ownership, await ordering, primary-error preservation and test isolation; no corrections or follow-up review were needed. The reviewer's restricted focused test failed at the file wrapper with `test failed`; it did not independently reproduce behavioral totals. Coordinator permitted runs above provide the behavioral results.
+
+All **33 independent offline stages / 27 suite invocations / 4939 tests / 4939 passed / zero failures, cancellations or skipped** resolved from package.json ops:check passed. Every stage exit and suite total was inspected, including final launch-orchestrator/dossier output `tests 182 / pass 182 / fail 0 / skipped 0`. Online ops:audit was excluded; no live operational drill was executed.
+
+The example readiness command `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json` returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online ops:audit remains omitted under the recorded dependency-metadata disclosure restriction; no aggregate ops:check pass or fresh vulnerability audit is claimed. Cleanup cannot authenticate evidence, establish completeness, verify bytes or prove atomic/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live services, credentials, SQL/schema/migrations, operator approval, deployment or push. Ordinary commit revert restores the previous lifecycle without DB/storage mutation. No new timeout/cancellation policy is claimed.
+
+Safe inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

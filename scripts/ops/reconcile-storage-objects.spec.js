@@ -10316,3 +10316,244 @@ test('main owned storage cleanup: immediate exit happens after destroy', () => {
   assert.strictEqual(result.stdout, 'destroyed\n');
   assert.strictEqual(result.stderr, '');
 });
+
+// Only prototype methods are replaced: the runner still constructs the pg Client.
+function stubFailedDatabaseConnection(t, connect, end) {
+  const { Client } = require('pg');
+  const methods = {
+    connect,
+    end,
+    query() {
+      throw new Error('unexpected query');
+    },
+  };
+  for (const [name, value] of Object.entries(methods)) {
+    const descriptor = Object.getOwnPropertyDescriptor(Client.prototype, name);
+    Object.defineProperty(Client.prototype, name, {
+      configurable: true,
+      writable: true,
+      value,
+    });
+    t.after(() => Object.defineProperty(Client.prototype, name, descriptor));
+  }
+  return Client;
+}
+
+for (const connectThrows of [false, true]) {
+  for (const cleanup of ['resolve', 'reject', 'throw']) {
+    test(
+      `main failed database cleanup: connect throws=${connectThrows}, end=${cleanup}`,
+      { concurrency: false },
+      async (t) => {
+        const events = [];
+        let connectedClient;
+        let endedClient;
+        let sends = 0;
+        const Client = stubFailedDatabaseConnection(
+          t,
+          function () {
+            connectedClient = this;
+            events.push('connect');
+            if (connectThrows) throw new Error('private-connect-sentinel');
+            return Promise.reject(new Error('private-connect-sentinel'));
+          },
+          function () {
+            endedClient = this;
+            events.push('end');
+            if (cleanup === 'throw') throw new Error('private-end-sentinel');
+            return cleanup === 'reject'
+              ? Promise.reject(new Error('private-end-sentinel'))
+              : Promise.resolve();
+          },
+        );
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-failed-pg-'));
+        t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+        const io = createIo();
+        assert.strictEqual(
+          await main(
+            ['node', 'script', '--output', path.join(dir, 'receipt.json')],
+            io,
+            {
+              env: { PGPASSWORD: 'synthetic-test-only' },
+              s3Client: {
+                send() {
+                  sends++;
+                  throw new Error('unexpected storage');
+                },
+              },
+            },
+          ),
+          1,
+        );
+        assert.deepStrictEqual(events, ['connect', 'end']);
+        assert.ok(connectedClient instanceof Client);
+        assert.strictEqual(endedClient, connectedClient);
+        assert.strictEqual(sends, 0);
+        assert.deepStrictEqual(io.errors, [
+          'Error: PostgreSQL connection failed',
+        ]);
+        assert.deepStrictEqual(io.logs, [
+          'Connecting to PostgreSQL and Object Storage...',
+        ]);
+        assert.deepStrictEqual(fs.readdirSync(dir), []);
+        assert.ok(!JSON.stringify(io).includes('sentinel'));
+      },
+    );
+  }
+}
+
+test(
+  'main failed database cleanup: waits for asynchronous end settlement',
+  { concurrency: false },
+  async (t) => {
+    let release;
+    const cleanup = new Promise((resolve) => {
+      release = resolve;
+    });
+    let ends = 0;
+    stubFailedDatabaseConnection(
+      t,
+      async () => {
+        throw new Error('private-connect');
+      },
+      () => {
+        ends++;
+        return cleanup;
+      },
+    );
+    const io = createIo();
+    let settled = false;
+    const running = main(['node', 'script'], io, {
+      env: { PGPASSWORD: 'synthetic-test-only' },
+      storageObjects: [],
+    }).then((code) => {
+      settled = true;
+      return code;
+    });
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.strictEqual(ends, 1);
+      assert.strictEqual(settled, false);
+    } finally {
+      release();
+      assert.strictEqual(await running, 1);
+    }
+    assert.strictEqual(settled, true);
+    assert.deepStrictEqual(io.errors, ['Error: PostgreSQL connection failed']);
+  },
+);
+
+for (const synchronous of [false, true]) {
+  test(`main failed database cleanup: caller retains client, synchronous=${synchronous}`, async () => {
+    let ends = 0;
+    let queries = 0;
+    const io = createIo();
+    assert.strictEqual(
+      await main(['node', 'script'], io, {
+        env: {},
+        storageObjects: [],
+        pgClient: {
+          connect() {
+            if (synchronous) throw new Error('private-caller');
+            return Promise.reject(new Error('private-caller'));
+          },
+          end() {
+            ends++;
+          },
+          query() {
+            queries++;
+          },
+        },
+      }),
+      1,
+    );
+    assert.strictEqual(ends, 0);
+    assert.strictEqual(queries, 0);
+    assert.deepStrictEqual(io.errors, ['Error: PostgreSQL connection failed']);
+  });
+}
+
+test('main failed database cleanup: injected inventory bypasses caller client', async () => {
+  const calls = [];
+  const io = createIo();
+  assert.strictEqual(
+    await main(['node', 'script', '--dry-run'], io, {
+      env: {},
+      dbObjects: [],
+      storageObjects: [],
+      pgClient: {
+        connect() {
+          calls.push('connect');
+        },
+        query() {
+          calls.push('query');
+        },
+        end() {
+          calls.push('end');
+        },
+      },
+    }),
+    0,
+  );
+  assert.deepStrictEqual(calls, []);
+  assert.deepStrictEqual(io.errors, []);
+});
+
+for (const [label, args, expected] of [
+  ['help', ['--help'], 0],
+  ['usage', ['--unknown'], 1],
+  ['missing password', [], 1],
+]) {
+  test(
+    `main failed database cleanup: ${label} bypasses database acquisition`,
+    { concurrency: false },
+    async (t) => {
+      const calls = [];
+      stubFailedDatabaseConnection(
+        t,
+        () => {
+          calls.push('connect');
+          throw new Error('unexpected connect');
+        },
+        () => {
+          calls.push('end');
+        },
+      );
+      assert.strictEqual(
+        await main(['node', 'script', ...args], createIo(), {
+          env: {},
+          storageObjects: [],
+        }),
+        expected,
+      );
+      assert.deepStrictEqual(calls, []);
+    },
+  );
+}
+
+test('main failed database cleanup: asynchronous end completes before immediate exit', () => {
+  const { spawnSync } = require('node:child_process');
+  const result = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `
+    const { Client } = require('pg');
+    const { main } = require('./scripts/ops/reconcile-storage-objects');
+    Client.prototype.connect = async () => { throw new Error('private-connect'); };
+    Client.prototype.end = () => new Promise(resolve => setImmediate(() => {
+      process.stdout.write('ended\\n'); resolve();
+    }));
+    main(['node', 'script'], { log() {}, error() {} }, {
+      env: { PGPASSWORD: 'synthetic-test-only' }, storageObjects: [], exitOnError: true,
+    });
+  `,
+    ],
+    { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8', timeout: 10000 },
+  );
+  assert.ifError(result.error);
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.signal, null);
+  assert.strictEqual(result.stdout, 'ended\n');
+  assert.strictEqual(result.stderr, '');
+});

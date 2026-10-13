@@ -871,6 +871,22 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 343 — reconciliation failed database connection cleanup (2026-10-13):**
+  Continued Phase 12K after committed Prompt 342. The runner makes one awaited
+  end attempt on its PostgreSQL client after connection failure, before return
+  or immediate exit. Caller clients stay open; cleanup throws/rejections preserve
+  primary fixed diagnostics. Added 14 offline lifecycle cases; focused
+  **1958/1958**, lint/typecheck/build (**22/22** pages), syntax/help/format/diff
+  checks passed. Independent read-only review found no issues; its restricted
+  wrapper did not independently reproduce behavioral totals. Actual red/green,
+  driver authority, sandbox limits and ordinary-revert rollback are in
+  [operations.md](operations.md) Prompt 343. All **33 offline stages / 27 suites / 4939 tests / zero failures or skipped** passed.
+  Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit omitted;
+  no aggregate ops:check or fresh audit claim. Cleanup cannot prove authenticity,
+  completeness, bytes or atomic/live recovery. Prompt 201, Category 6 live approval
+  and Phase 12 exit stay open. No live services, SQL/schema changes, operator
+  approval, deployment or push occurred.
+
 - **Prompt 342 (2026-10-13):**
   Continued Phase 12K after committed Prompt 341. The runner now attempts one
   synchronous destroy of its own S3 client after listing settles, before reports

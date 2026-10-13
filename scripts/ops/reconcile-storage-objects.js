@@ -1277,6 +1277,13 @@ async function main(
       }
     } catch (_err) {
       io.error('Error: PostgreSQL connection failed');
+      if (!options.pgClient) {
+        try {
+          await pgClient.end();
+        } catch {
+          // Best-effort owned cleanup must preserve the connection failure.
+        }
+      }
       setExitCode(1);
       if (options.exitOnError === true) process.exit(1);
       return 1;
