@@ -1381,7 +1381,7 @@ async function main(
 
     if (outputFile) {
       publishReceipt(outputFile, report);
-      io.log(`\nReconciliation evidence written to ${outputFile}`);
+      io.log(`\nReconciliation evidence written to ${summaryText(outputFile)}`);
     }
 
     if (pgClient && !options.pgClient) {

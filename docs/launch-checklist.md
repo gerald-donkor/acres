@@ -871,6 +871,17 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 349 — reconciliation receipt path display (2026-10-13):**
+  Receipt-success logs now escape output paths with the existing terminal policy;
+  exact filesystem paths, JSON and exclusive publication remain intact.
+  Ten new cases; **2050/2050**, lint/typecheck/build, syntax/help/format/diff
+  passed. Independent review found no issues and passed all ten new cases.
+  Evidence and sandbox limits are in [operations.md](operations.md) Prompt 349.
+  Readiness stays **0 approved / 11 blocked / 70 blockers**. Display protection
+  supplies no live recovery approval; Prompt 201, Category 6 and Phase 12 exit
+  remain open. No live services, deployment or push. Unrelated full ops suites
+  and online audit not rerun; no aggregate ops:check pass claimed.
+
 - **Prompt 348 — reconciliation terminal summary escaping (2026-10-13):**
   Display controls and literal backslashes in inventory text now escape at the
   formatter boundary; raw JSON evidence remains exact. Fourteen new cases,

@@ -1739,3 +1739,19 @@ review found no issues and passed the 14 new cases. Checks and limits are in
 exit remain open. No trust-boundary, service, SQL/schema or deployment change;
 no live credentials, operator approval or push. Full ops suites/online audit
 not rerun; no aggregate ops:check or fresh audit claim.
+
+**Prompt 349 — reconciliation receipt path display (2026-10-13):**
+The receipt-success message now uses the existing terminal escaping policy on
+its resolved output path. Accepted Unicode separators/directional controls and
+literal backslashes cannot bypass that policy through this interpolation;
+filesystem destinations and raw JSON evidence stay exact. Ten new offline
+cases and **2050/2050** reconciliation tests pass, as do lint/typecheck/build,
+syntax/help/format/diff checks. Independent review found no issues and passed
+the ten focused cases. Actual red/green and sandbox limits are in
+[operations.md](operations.md) Prompt 349. This is bounded display protection,
+not redaction, complete Unicode spoof detection, authenticity/completeness,
+byte-integrity or live recovery proof. Readiness stays **0 approved /
+11 blocked / 70 blockers**; Prompt 201, Category 6 and Phase 12 exit stay open.
+No new trust boundary, services, credentials, SQL/schema, deployment, operator
+approval or push. Full ops suites/online audit not rerun; no aggregate
+ops:check/fresh audit claim. Ordinary revert restores prior display.

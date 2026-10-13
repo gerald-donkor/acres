@@ -11684,3 +11684,95 @@ for (const scenario of [
     assert.strictEqual(JSON.stringify({ dbObjects, storageObjects }), before);
   });
 }
+
+for (const [label, filename, displayName, parent, displayParent, missing] of [
+  ["line separator", "report\u2028next.json", "report\\u2028next.json"],
+  ["paragraph separator", "report\u2029next.json", "report\\u2029next.json"],
+  ["direction override", "report\u202enext.json", "report\\u202enext.json"],
+  [
+    "direction isolates",
+    "report\u2066next\u2069.json",
+    "report\\u2066next\\u2069.json",
+  ],
+  ["literal escape", "report\\u2028next.json", "report\\\\u2028next.json"],
+  ["ordinary Unicode", "résumé 'report'.json", "résumé 'report'.json"],
+  ["ordinary path", "receipt.json", "receipt.json"],
+  [
+    "parent path",
+    "receipt.json",
+    "receipt.json",
+    "parent\u2028next",
+    "parent\\u2028next",
+  ],
+  [
+    "missing result",
+    "report\u2028missing.json",
+    "report\\u2028missing.json",
+    undefined,
+    undefined,
+    true,
+  ],
+]) {
+  test(`receipt path display: ${label} preserves exact publication path`, async (t) => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "acres-receipt-display-"),
+    );
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const destinationDir = parent ? path.join(dir, parent) : dir;
+    if (parent) fs.mkdirSync(destinationDir);
+    const output = path.join(destinationDir, filename);
+    const dbObjects = Object.freeze(
+      missing ? [Object.freeze(inventoryDbRecord())] : [],
+    );
+    const storageObjects = Object.freeze([]);
+    const before = JSON.stringify({ dbObjects, storageObjects });
+    const io = createIo();
+    const code = await main(
+      ["node", "script", "--dry-run", "--output", output],
+      io,
+      { env: {}, dbObjects, storageObjects },
+    );
+    assert.strictEqual(code, missing ? 1 : 0);
+    assert.deepStrictEqual(io.errors, []);
+    const message = io.logs.find((line) =>
+      line.includes("evidence written to"),
+    );
+    assert.strictEqual(
+      message,
+      `\nReconciliation evidence written to ${path.join(dir, ...(parent ? [displayParent] : []), displayName)}`,
+    );
+    assert.strictEqual(message.split("\n").length, 2);
+    assert.doesNotMatch(message, /[\u2028-\u202e\u2066-\u2069]/);
+    const receipt = JSON.parse(fs.readFileSync(output, "utf8"));
+    assert.strictEqual(receipt.execution_mode, "simulation");
+    assert.strictEqual(receipt.drill_type, "storage_reconciliation");
+    assert.strictEqual(receipt.summary.status, missing ? "error" : "clean");
+    assert.strictEqual(receipt.summary.exitCode, code);
+    if (missing)
+      assert.strictEqual(receipt.missing[0].objectKey, dbObjects[0].objectKey);
+    assert.deepStrictEqual(fs.readdirSync(destinationDir), [filename]);
+    if (parent) assert.deepStrictEqual(fs.readdirSync(dir), [parent]);
+    assert.strictEqual(JSON.stringify({ dbObjects, storageObjects }), before);
+  });
+}
+
+test("receipt path display: existing control-bearing filename stays exclusive", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-receipt-display-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const filename = "existing\u2028receipt.json";
+  const output = path.join(dir, filename);
+  fs.writeFileSync(output, "original bytes");
+  const io = createIo();
+  const code = await main(
+    ["node", "script", "--dry-run", "--output", output],
+    io,
+    { env: {}, dbObjects: [], storageObjects: [] },
+  );
+  assert.strictEqual(code, 1);
+  assert.deepStrictEqual(io.errors, [
+    "Error: Reconciliation evidence publication failed: output file already exists",
+  ]);
+  assert.ok(io.logs.every((line) => !line.includes("evidence written to")));
+  assert.strictEqual(fs.readFileSync(output, "utf8"), "original bytes");
+  assert.deepStrictEqual(fs.readdirSync(dir), [filename]);
+});

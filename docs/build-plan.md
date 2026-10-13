@@ -3508,3 +3508,15 @@ rollback are in [operations.md](operations.md) Prompt 348. Readiness remains
 recovery or authenticity proof; Prompt 201, Category 6 live approval and Phase
 12 exit remain open. No live services, deployment or push occurred. Unrelated
 full ops suites and online audit not rerun; no aggregate ops:check pass claimed.
+
+**Prompt 349 — reconciliation receipt path display (2026-10-13):**
+Continued Phase 12K after committed Prompt 348. Receipt success messages now
+escape the resolved path using the existing terminal policy; filesystem paths,
+JSON evidence, status and exclusive publication stay intact. Ten new cases;
+**2050/2050**, lint/typecheck/build (**22/22** pages), syntax/help/format/diff
+passed. Independent review found no issues and independently passed all ten
+new cases. Actual red/green, sandbox limits and ordinary-revert rollback are
+in [operations.md](operations.md) Prompt 349. Readiness stays **0 approved /
+11 blocked / 70 blockers**. Prompt 201, Category 6 live approval and Phase 12
+exit remain open. No live services, deployment or push occurred. Unrelated
+full ops suites/online audit not rerun; no aggregate ops:check pass claimed.

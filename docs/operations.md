@@ -11135,3 +11135,86 @@ Safe inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 349 — Reconciliation receipt path display (2026-10-13)
+
+Continued Phase 12K after `76c81e9` (Prompt 348). The success message after
+receipt publication now applies the existing `summaryText` helper to the resolved
+output path. Accepted Unicode separators/directional controls previously
+survived raw in that message even though report fields were escaped. Literal
+backslashes also display doubled, distinguishing escape-looking names from
+actual control-bearing names. The exact filesystem destination remains raw;
+publication validation, exclusivity, receipt schema, JSON identities, status,
+exit behavior and client ownership are unchanged. No route or UI changed.
+
+Ten appended offline runner cases exercise U+2028/U+2029, U+202E,
+U+2066/U+2069, literal escape-looking filenames, ordinary Unicode/spaces/quotes,
+ordinary paths, a control-bearing parent directory, exit-1 missing-object
+publication and existing-file refusal. They verify exact destination names,
+parseable receipts, safe success messages, unchanged inputs and no leftover
+temporary files. The pre-change focused run exited 1:
+
+```text
+ℹ tests 10
+ℹ pass 3
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+After the one-line source change, focused tests exited 0 with `tests 10`,
+`pass 10`, `fail 0`. Actual permitted `npm run ops:reconcile-test` output,
+exit 0:
+
+```text
+ℹ tests 2050
+ℹ pass 2050
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 1310.545994
+```
+
+| Check | Exit | Actual output / observation |
+| --- | --- | --- |
+| source/spec `node -c` | 0 each | silent |
+| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| added tests Prettier | 0 | `added-region Prettier check: true` |
+| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
+| permitted `npm run build` | 0 | `Compiled successfully in 2.6s`; `Finished TypeScript in 2.5s`; `Generating static pages using 7 workers (22/22) in 753ms`; Prisma Client `7.9.1` generated in `395ms`, `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0 | shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `343ms`; no diagnostics |
+| `git diff --check` | 0 | silent |
+
+Restricted isolated full-suite invocation yielded only file-wrapper
+`pass 0 / fail 1`, without behavioral totals; approved subprocess execution
+produced the full-suite result above. Focused red/green used
+`--test-isolation=none`. Logs were captured under `/tmp/acres-349-*.log`.
+Independent read-only review inspected source/spec, prompt, neighboring
+contracts and check logs, independently passed the ten focused tests and
+`git diff --check`, and found no issues or plan deviations. Evaluated feedback
+against the raw publication argument, existing escaping policy and exact path
+assertions; no fixes were required.
+
+Readiness example returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Unrelated full ops suites and online audit were not rerun; no aggregate
+`ops:check` pass or fresh vulnerability inventory is claimed. Display escaping
+does not redact paths, detect all Unicode confusables, authenticate evidence,
+prove completeness or object-byte integrity, or establish atomic/live recovery.
+Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live
+services, credentials, SQL/schema changes, deployment, operator approval or
+push occurred. Ordinary commit revert restores prior display without DB or
+storage mutation. Inspect with:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
