@@ -11256,3 +11256,192 @@ for (const failure of ['constructor', 'export']) {
     assert.strictEqual(fs.existsSync(output), false);
   });
 }
+
+// Diagnostic sinks may throw; owned resources must already be released.
+for (const scenario of ['connection', 'query', 'listing', 'storage-setup']) {
+  for (const cleanup of ['deferred', 'throw', 'reject']) {
+    test(`main diagnostic failure cleanup: ${scenario}, ${cleanup}`, async (t) => {
+      const events = [];
+      const pg = require('pg');
+      const sdk = require('@aws-sdk/client-s3');
+      const replace = (object, name, value) => {
+        const descriptor = Object.getOwnPropertyDescriptor(object, name);
+        Object.defineProperty(object, name, {
+          configurable: true,
+          writable: true,
+          value,
+        });
+        t.after(() => Object.defineProperty(object, name, descriptor));
+      };
+      replace(pg.Client.prototype, 'connect', async () => {
+        events.push('connect');
+        if (scenario === 'connection') throw new Error('private-acquisition');
+      });
+      replace(pg.Client.prototype, 'query', async () => {
+        events.push('query');
+        if (scenario === 'query') throw new Error('private-acquisition');
+        return { rows: [] };
+      });
+      replace(pg.Client.prototype, 'end', function () {
+        events.push('end');
+        if (cleanup === 'throw') throw new Error('private-cleanup');
+        if (cleanup === 'reject')
+          return Promise.reject(new Error('private-cleanup'));
+        return new Promise((resolve) =>
+          setImmediate(() => {
+            events.push('ended');
+            resolve();
+          }),
+        );
+      });
+      replace(
+        sdk,
+        'S3Client',
+        class {
+          constructor() {
+            events.push('storage');
+            if (scenario === 'storage-setup')
+              throw new Error('private-acquisition');
+          }
+          async send() {
+            events.push('send');
+            throw new Error('private-acquisition');
+          }
+          destroy() {
+            events.push('destroy');
+          }
+        },
+      );
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-diagnostic-'));
+      t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+      const output = path.join(dir, 'receipt.json');
+      const writerError = new Error('private-writer');
+      const logs = [];
+      const errors = [];
+      await assert.rejects(
+        main(
+          ['node', 'script', '--output', output],
+          {
+            log: (message) => logs.push(message),
+            error: (message) => {
+              events.push('diagnostic');
+              errors.push(message);
+              throw writerError;
+            },
+          },
+          { env: { PGPASSWORD: 'synthetic-test-only' } },
+        ),
+        (error) => error === writerError,
+      );
+      const before =
+        scenario === 'connection'
+          ? ['connect']
+          : scenario === 'query'
+            ? ['connect', 'query']
+            : scenario === 'listing'
+              ? ['connect', 'query', 'storage', 'send']
+              : ['connect', 'query', 'storage'];
+      assert.deepStrictEqual(events, [
+        ...before,
+        'end',
+        ...(cleanup === 'deferred' ? ['ended'] : []),
+        'diagnostic',
+        ...(scenario === 'listing' ? ['destroy'] : []),
+      ]);
+      assert.deepStrictEqual(errors, [
+        scenario === 'connection'
+          ? 'Error: PostgreSQL connection failed'
+          : scenario === 'query'
+            ? 'Error: Database query failed'
+            : 'Error: Object storage connection or listing failed',
+      ]);
+      assert.deepStrictEqual(logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.deepStrictEqual(fs.readdirSync(dir), []);
+    });
+  }
+}
+
+for (const scenario of [
+  'connection',
+  'query',
+  'listing',
+  'database-setup',
+  'inventories',
+]) {
+  test(`main diagnostic failure cleanup: bypass ${scenario}`, async (t) => {
+    const pg = require('pg');
+    const original = Object.getOwnPropertyDescriptor(pg, 'Client');
+    Object.defineProperty(pg, 'Client', {
+      configurable: true,
+      value: class {
+        constructor() {
+          throw new Error('private-setup');
+        }
+      },
+    });
+    t.after(() => Object.defineProperty(pg, 'Client', original));
+    let ends = 0;
+    const client = {
+      async connect() {
+        if (scenario === 'connection') throw new Error('private-connect');
+      },
+      async query() {
+        if (scenario === 'query') throw new Error('private-query');
+        return { rows: [] };
+      },
+      end() {
+        ends++;
+      },
+    };
+    const writerError = new Error('private-writer');
+    const errors = [];
+    const logs = [];
+    const options =
+      scenario === 'database-setup'
+        ? { env: { PGPASSWORD: 'synthetic-test-only' } }
+        : {
+            env: {},
+            pgClient: client,
+            s3Client: {
+              async send() {
+                throw new Error('private-listing');
+              },
+              destroy() {
+                throw new Error('caller-owned');
+              },
+            },
+            ...(scenario === 'inventories'
+              ? { dbObjects: [], storageObjects: [] }
+              : {}),
+          };
+    const invoke = main(
+      ['node', 'script'],
+      {
+        log: (message) => logs.push(message),
+        error: (message) => {
+          errors.push(message);
+          throw writerError;
+        },
+      },
+      options,
+    );
+    if (scenario === 'inventories') {
+      assert.strictEqual(await invoke, 0);
+      assert.deepStrictEqual(errors, []);
+      assert.ok(
+        logs.some((message) =>
+          message.includes('Acres Storage Reconciliation Report'),
+        ),
+      );
+    } else {
+      await assert.rejects(invoke, (error) => error === writerError);
+      assert.strictEqual(errors.length, 1);
+      assert.deepStrictEqual(logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+    }
+    assert.strictEqual(ends, 0);
+  });
+}

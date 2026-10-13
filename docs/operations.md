@@ -10961,3 +10961,83 @@ All **33 independent offline stages / 27 suite invocations / 4990 tests / 4990 p
 ```
 
 These are independent offline checks excluding online ops:audit, not an aggregate ops:check pass.
+
+## Prompt 347 — Reconciliation diagnostic failure cleanup (2026-10-13)
+
+Continued the open Phase 12K recovery gate after committed Prompt 346
+(`6903f10`). Connection/query/listing acquisition catches previously wrote their
+fixed diagnostic before owned PostgreSQL cleanup. A throwing diagnostic writer
+could therefore skip end. The three catches now perform their existing guarded,
+awaited cleanup first. Normal messages and return/exit codes remain unchanged;
+a throwing writer still rejects main with the same thrown object. Storage
+finally still destroys its owned S3 client. Caller-owned clients stay open.
+Installed `node_modules/pg/lib/client.js` verifies end's Promise contract.
+
+Added 17 offline cases: 12 acquisition/cleanup combinations cover connection,
+query, listing and storage constructor failure with deferred successful end,
+synchronous cleanup throws and rejected cleanup; five cases cover caller
+ownership, database constructor failure and inventory bypass. Tests assert
+ordering, one cleanup attempt, exact writer exception identity, fixed/private
+diagnostics, no successful summary or receipt, and storage finally behavior.
+Descriptors and temporary fixtures are restored. This is synthetic evidence,
+not proof of a live socket leak or provider incident.
+
+Actual pre-fix focused output (exit 1):
+
+```text
+ℹ tests 17
+ℹ pass 5
+ℹ fail 12
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+Actual `npm run ops:reconcile-test` output after the fix (exit 0):
+
+```text
+ℹ tests 2026
+ℹ pass 2026
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+| Check | Exit | Actual output / observation |
+| --- | --- | --- |
+| source/spec `node -c` | 0 each | silent |
+| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| appended-region Prettier | 0 | `Added test region format check: true` |
+| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
+| permitted `npm run build` | 0 | `Compiled successfully in 2.4s`; `Finished TypeScript in 1903ms`; `Generating static pages using 7 workers (22/22) in 847ms`; generated Prisma Client `7.9.1` and completed `nest build` |
+| subsequent sequential `npm run typecheck` | 0 | shared/client/server `tsc` checks and Prisma generation completed without diagnostics |
+| `git diff --check` | 0 | silent |
+
+The initial restricted test invocation failed at the file wrapper (`pass 0 /
+fail 1`) and provided no behavioral evidence. Permitted offline test runs
+produced the red/green results above. Independent read-only review inspected
+the complete source/test diff, prompt, surrounding lifecycle and actual logs;
+it found no Critical, Important or Minor findings and assessed the work ready
+for completion records and commit. It did not independently rerun checks.
+Feedback was evaluated against the three catch boundaries, ownership guards,
+await behavior, writer identity and S3 finally; no fixes were required.
+
+Readiness example returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Unrelated full ops suites and online audit were not rerun; no aggregate
+`ops:check` pass or fresh vulnerability inventory is claimed. No live services,
+credential access, SQL/schema change, operator approval, deployment or push
+occurred. Cleanup does not establish authenticity, completeness, byte integrity
+or atomic/live recovery. Prompt 201, Category 6 live sign-off and Phase 12 exit
+remain open. A hung cleanup, process kill or logging outage has no new recovery
+policy. Ordinary revert restores prior ordering without data mutation.
+
+Safe inspection: `npm run ops:reconcile-test`, then
+`node scripts/ops/reconcile-storage-objects.js --help`.

@@ -3479,3 +3479,19 @@ authenticity, completeness, bytes or atomic/live recovery. Prompt 201, Category
 SQL/schema changes, operator approval, deployment or push occurred.
 
 Completed independent offline checks: **33 stages / 27 suite invocations / 4990 tests / 4990 passed / zero failures, cancellations or skipped**. Online ops:audit excluded; no aggregate ops:check pass is claimed.
+
+**Prompt 347 — reconciliation diagnostic failure cleanup (2026-10-13):**
+Continued Phase 12K after committed Prompt 346. Connection/query/listing
+failure catches now await guarded owned PostgreSQL cleanup before diagnostics,
+so a throwing writer cannot skip end. Writer exception identity, caller
+ownership, normal diagnostics/codes and S3 finally remain compatible.
+Added 17 offline cases; focused **2026/2026**, lint/typecheck/build (**22/22**
+pages), syntax/help/format/diff passed. Independent read-only review found no
+issues; it inspected logs without rerunning checks. Actual red/green and
+sandbox results, limits and ordinary-revert rollback are in
+[operations.md](operations.md) Prompt 347. Readiness remains **0 approved /
+11 blocked / 70 blockers**. Unrelated full ops suites/online audit not rerun;
+no aggregate ops:check or fresh audit claim. Synthetic cleanup evidence cannot
+prove authenticity, completeness, bytes or atomic/live recovery. Prompt 201,
+Category 6 live approval and Phase 12 exit stay open. No live services,
+credentials, SQL/schema changes, operator approval, deployment or push occurred.

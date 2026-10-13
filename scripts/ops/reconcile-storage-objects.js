@@ -1276,7 +1276,6 @@ async function main(
         await pgClient.connect();
       }
     } catch (_err) {
-      io.error('Error: PostgreSQL connection failed');
       if (pgClient && !options.pgClient) {
         try {
           await pgClient.end();
@@ -1284,6 +1283,7 @@ async function main(
           // Best-effort owned cleanup must preserve the connection failure.
         }
       }
+      io.error('Error: PostgreSQL connection failed');
       setExitCode(1);
       if (options.exitOnError === true) process.exit(1);
       return 1;
@@ -1292,7 +1292,6 @@ async function main(
     try {
       dbObjects = await queryDatabaseStoredObjects({ pgClient });
     } catch (_err) {
-      io.error('Error: Database query failed');
       if (pgClient && !options.pgClient) {
         try {
           await pgClient.end();
@@ -1300,6 +1299,7 @@ async function main(
           // Best-effort owned cleanup must preserve the primary outcome.
         }
       }
+      io.error('Error: Database query failed');
       setExitCode(1);
       if (options.exitOnError === true) process.exit(1);
       return 1;
@@ -1328,7 +1328,6 @@ async function main(
       storageObjects = await listBucketObjects({ s3Client, bucket, prefix });
     } catch (_err) {
       listingFailed = true;
-      io.error('Error: Object storage connection or listing failed');
       if (pgClient && !options.pgClient) {
         try {
           await pgClient.end();
@@ -1336,6 +1335,7 @@ async function main(
           // Best-effort owned cleanup must preserve the primary outcome.
         }
       }
+      io.error('Error: Object storage connection or listing failed');
     } finally {
       if (s3Client && !options.s3Client) {
         try {

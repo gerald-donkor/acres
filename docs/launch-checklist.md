@@ -1568,6 +1568,22 @@ authenticity, completeness, byte integrity or live recovery. Readiness stays
 and Phase 12 exit remain open. No live services or operator sign-off occurred.
 Online audit remains omitted; no aggregate ops:check or fresh audit is claimed.
 
+**Prompt 347 — reconciliation diagnostic failure cleanup (2026-10-13):**
+Continued Phase 12K after committed Prompt 346. Connection/query/listing
+failure catches now await guarded owned PostgreSQL cleanup before diagnostics,
+so a throwing writer cannot skip end. Writer exception identity, caller
+ownership, normal diagnostics/codes and S3 finally remain compatible.
+Added 17 offline cases; focused **2026/2026**, lint/typecheck/build (**22/22**
+pages), syntax/help/format/diff passed. Independent read-only review found no
+issues; it inspected logs without rerunning checks. Actual red/green and
+sandbox results, limits and ordinary-revert rollback are in
+[operations.md](operations.md) Prompt 347. Readiness remains **0 approved /
+11 blocked / 70 blockers**. Unrelated full ops suites/online audit not rerun;
+no aggregate ops:check or fresh audit claim. Synthetic cleanup evidence cannot
+prove authenticity, completeness, bytes or atomic/live recovery. Prompt 201,
+Category 6 live approval and Phase 12 exit stay open. No live services,
+credentials, SQL/schema changes, operator approval, deployment or push occurred.
+
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table
