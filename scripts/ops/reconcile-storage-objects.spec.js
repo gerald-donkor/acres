@@ -11077,3 +11077,182 @@ test('main storage setup failure: awaited cleanup precedes immediate exit', () =
     'Error: Object storage connection or listing failed\n',
   );
 });
+
+function databaseSetupFailureFixture(t, failure, options = {}) {
+  const pg = require('pg');
+  const sdk = require('@aws-sdk/client-s3');
+  const events = [];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-database-setup-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const output = path.join(dir, 'receipt.json');
+  const descriptor = Object.getOwnPropertyDescriptor(pg, 'Client');
+  Object.defineProperty(pg, 'Client', {
+    configurable: true,
+    get() {
+      events.push('export');
+      if (failure === 'export') throw new Error('private-database-export');
+      return class {
+        constructor() {
+          events.push('construct');
+          throw new Error('private-database-constructor');
+        }
+        connect() {
+          events.push('connect');
+        }
+        query() {
+          events.push('query');
+        }
+        end() {
+          events.push('end');
+        }
+      };
+    },
+  });
+  t.after(() => Object.defineProperty(pg, 'Client', descriptor));
+  const storageDescriptor = Object.getOwnPropertyDescriptor(sdk, 'S3Client');
+  Object.defineProperty(sdk, 'S3Client', {
+    configurable: true,
+    value: class {
+      constructor() {
+        events.push('storage-construct');
+      }
+      send() {
+        events.push('send');
+      }
+      destroy() {
+        events.push('destroy');
+      }
+    },
+  });
+  t.after(() => Object.defineProperty(sdk, 'S3Client', storageDescriptor));
+  const io = createIo();
+  return {
+    events,
+    io,
+    output,
+    run() {
+      return main(['node', 'script', '--dry-run', '--output', output], io, {
+        env: { PGPASSWORD: 'synthetic-test-only' },
+        ...options,
+      });
+    },
+  };
+}
+
+for (const failure of ['constructor', 'export']) {
+  test(
+    `main database setup failure: ${failure} resolves privately before storage`,
+    { concurrency: false },
+    async (t) => {
+      const fixture = databaseSetupFailureFixture(t, failure);
+      assert.strictEqual(await fixture.run(), 1);
+      assert.deepStrictEqual(
+        fixture.events,
+        failure === 'export' ? ['export'] : ['export', 'construct'],
+      );
+      assert.deepStrictEqual(fixture.io.errors, [
+        'Error: PostgreSQL connection failed',
+      ]);
+      assert.deepStrictEqual(fixture.io.logs, [
+        'Connecting to PostgreSQL and Object Storage...',
+      ]);
+      assert.strictEqual(fs.existsSync(fixture.output), false);
+    },
+  );
+
+  for (const bypass of ['client', 'inventory']) {
+    test(
+      `main database setup failure: ${failure} bypassed by injected ${bypass}`,
+      { concurrency: false },
+      async (t) => {
+        const calls = [];
+        const fixture = databaseSetupFailureFixture(t, failure, {
+          storageObjects: [],
+          ...(bypass === 'inventory'
+            ? { dbObjects: [] }
+            : {
+                pgClient: {
+                  async connect() {
+                    calls.push('connect');
+                  },
+                  async query() {
+                    calls.push('query');
+                    return { rows: [] };
+                  },
+                  end() {
+                    calls.push('end');
+                  },
+                },
+              }),
+        });
+        assert.strictEqual(await fixture.run(), 0);
+        assert.deepStrictEqual(fixture.events, []);
+        assert.deepStrictEqual(
+          calls,
+          bypass === 'client' ? ['connect', 'query'] : [],
+        );
+        assert.deepStrictEqual(fixture.io.errors, []);
+        assert.strictEqual(
+          JSON.parse(fs.readFileSync(fixture.output, 'utf8')).summary.status,
+          'clean',
+        );
+      },
+    );
+  }
+
+  test(
+    `main database setup failure: missing password precedes ${failure}`,
+    { concurrency: false },
+    async (t) => {
+      const fixture = databaseSetupFailureFixture(t, failure, { env: {} });
+      assert.strictEqual(await fixture.run(), 1);
+      assert.deepStrictEqual(fixture.events, []);
+      assert.deepStrictEqual(fixture.io.errors, [
+        'Error: PostgreSQL password is required (set PGPASSWORD, POSTGRES_PASSWORD, or ACRES_MIGRATOR_PASSWORD)',
+      ]);
+      assert.strictEqual(fs.existsSync(fixture.output), false);
+    },
+  );
+
+  test(`main database setup failure: ${failure} immediate exit`, (t) => {
+    const { spawnSync } = require('node:child_process');
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-database-setup-exit-'),
+    );
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const output = path.join(dir, 'receipt.json');
+    const result = spawnSync(
+      process.execPath,
+      [
+        '-e',
+        `
+      const pg = require('pg');
+      const sdk = require('@aws-sdk/client-s3');
+      const { main } = require('./scripts/ops/reconcile-storage-objects');
+      Object.defineProperty(pg, 'Client', { get() {
+        if (${JSON.stringify(failure)} === 'export') throw new Error('private-export');
+        return class { constructor() { throw new Error('private-constructor'); }
+          end() { process.stdout.write('unexpected-end'); }
+        };
+      } });
+      sdk.S3Client = class { constructor() { process.stdout.write('unexpected-storage'); } };
+      main(['node', 'script', '--dry-run', '--output', ${JSON.stringify(output)}], {
+        log() {}, error(message) { process.stderr.write(message + '\\n'); },
+      }, { env: { PGPASSWORD: 'synthetic-test-only' }, exitOnError: true })
+        .then(() => process.exit(8), () => process.exit(9));
+    `,
+      ],
+      {
+        cwd: path.resolve(__dirname, '../..'),
+        encoding: 'utf8',
+        timeout: 10000,
+      },
+    );
+    assert.ifError(result.error);
+    assert.strictEqual(result.status, 1);
+    assert.strictEqual(result.signal, null);
+    assert.strictEqual(result.stdout, '');
+    assert.strictEqual(result.stderr, 'Error: PostgreSQL connection failed\n');
+    assert.strictEqual(fs.existsSync(output), false);
+  });
+}

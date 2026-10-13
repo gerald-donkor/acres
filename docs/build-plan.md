@@ -3461,3 +3461,21 @@ remain open. No live services, SQL/schema changes, operator approval,
 deployment or push occurred.
 
 Completed offline checks: **33 stages / 27 suites / 4980 tests / zero failures or skipped** passed.
+
+**Prompt 346 — reconciliation database setup failure handling (2026-10-13):**
+Continued Phase 12K after committed Prompt 345. Driver export acquisition and
+PostgreSQL client construction now share the connection failure policy: fixed
+private diagnostic, return/exit 1 and no downstream storage/report/receipt.
+Cleanup requires a returned owned client; existing connection cleanup and
+password/client/inventory bypasses remain compatible. Added 10 offline cases;
+focused **2009/2009**, lint, sequential typecheck, build (**22/22** pages),
+syntax/help/format/diff passed. Independent review found no issues or material
+plan deviations. Red/green evidence, installed driver authority, sandbox limits
+and ordinary-revert rollback are in [operations.md](operations.md) Prompt 346.
+Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit omitted;
+no aggregate ops:check or fresh audit claim. Fixed setup handling cannot prove
+authenticity, completeness, bytes or atomic/live recovery. Prompt 201, Category
+6 live approval and Phase 12 exit stay open. No live services, credentials,
+SQL/schema changes, operator approval, deployment or push occurred.
+
+Completed independent offline checks: **33 stages / 27 suite invocations / 4990 tests / 4990 passed / zero failures, cancellations or skipped**. Online ops:audit excluded; no aggregate ops:check pass is claimed.

@@ -1248,36 +1248,36 @@ async function main(
   let pgClient = options.pgClient;
 
   if (dbObjects === undefined) {
-    if (!pgClient) {
-      const pgPassword =
-        env.PGPASSWORD ||
-        env.POSTGRES_PASSWORD ||
-        env.ACRES_MIGRATOR_PASSWORD;
+    try {
+      if (!pgClient) {
+        const pgPassword =
+          env.PGPASSWORD ||
+          env.POSTGRES_PASSWORD ||
+          env.ACRES_MIGRATOR_PASSWORD;
 
-      if (!pgPassword) {
-        io.error('Error: PostgreSQL password is required (set PGPASSWORD, POSTGRES_PASSWORD, or ACRES_MIGRATOR_PASSWORD)');
-        setExitCode(1);
-        if (options.exitOnError === true) process.exit(1);
-        return 1;
+        if (!pgPassword) {
+          io.error('Error: PostgreSQL password is required (set PGPASSWORD, POSTGRES_PASSWORD, or ACRES_MIGRATOR_PASSWORD)');
+          setExitCode(1);
+          if (options.exitOnError === true) process.exit(1);
+          return 1;
+        }
+
+        const { Client } = require('pg');
+        pgClient = new Client({
+          host: env.PGHOST || 'localhost',
+          port: parseInt(env.PGPORT || '5432', 10),
+          user: env.PGUSER || 'acres_migrator',
+          password: pgPassword,
+          database: env.PGDATABASE || 'acres',
+        });
       }
 
-      const { Client } = require('pg');
-      pgClient = new Client({
-        host: env.PGHOST || 'localhost',
-        port: parseInt(env.PGPORT || '5432', 10),
-        user: env.PGUSER || 'acres_migrator',
-        password: pgPassword,
-        database: env.PGDATABASE || 'acres',
-      });
-    }
-
-    try {
       if (typeof pgClient.connect === 'function') {
         await pgClient.connect();
       }
     } catch (_err) {
       io.error('Error: PostgreSQL connection failed');
-      if (!options.pgClient) {
+      if (pgClient && !options.pgClient) {
         try {
           await pgClient.end();
         } catch {

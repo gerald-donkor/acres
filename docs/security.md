@@ -1690,3 +1690,21 @@ remain open. No live services, SQL/schema changes, operator approval,
 deployment or push occurred.
 
 Completed offline checks: **33 stages / 27 suites / 4980 tests / zero failures or skipped** passed.
+
+**Prompt 346 — reconciliation PostgreSQL setup error boundary (2026-10-13):**
+Phase 12K now routes driver export/client-construction exceptions through the
+existing private connection diagnostic and return/exit 1 before query, storage
+or receipt publication. Cleanup requires a returned owned client; constructor
+internals that throw before returning cannot be torn down here. Caller/inventory
+bypasses and prior connection cleanup remain compatible. Ten synthetic offline
+cases were added; focused **2009/2009**, lint/typecheck/build, syntax/format/diff
+passed; independent review found no issues. Actual checks, red/green and sandbox
+limits are in [operations.md](operations.md) Prompt 346. Readiness remains
+**0 approved / 11 blocked / 70 blockers**. This establishes no evidence
+authenticity, inventory completeness, byte integrity or atomic/live recovery.
+Prompt 201, Category 6 live sign-off and Phase 12 exit remain open. No new
+trust boundary, live service, credential access, SQL/schema change, operator
+approval, deployment or push occurred. Online audit omitted; no aggregate
+ops:check pass or fresh audit claim. Ordinary revert restores prior handling.
+
+Completed independent offline checks: **33 stages / 27 suite invocations / 4990 tests / 4990 passed / zero failures, cancellations or skipped**. Online ops:audit excluded; no aggregate ops:check pass is claimed.

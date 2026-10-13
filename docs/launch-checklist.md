@@ -1556,6 +1556,18 @@ echoes do not prove bucket identity/authenticity or live recovery. Readiness
 remains 0 approved / 11 blocked / 70 blockers; Prompt 201 and Category 6 live
 sign-off stay open. Actual outputs/rollback are in docs/operations.md Prompt 326.
 
+**Prompt 346 database setup failure handling (2026-10-13).** Reconciliation
+now handles PostgreSQL export/client-construction failures with its private
+connection diagnostic and return/exit 1 before querying, storage acquisition
+or receipt publication. Cleanup requires a returned owned client. Ten offline
+regressions were added; focused **2009/2009**, lint/typecheck/build and independent
+review passed. Actual red/green evidence and sandbox limits are recorded in
+[operations.md](operations.md) Prompt 346. Synthetic setup tests cannot establish
+authenticity, completeness, byte integrity or live recovery. Readiness stays
+**0 approved / 11 blocked / 70 blockers**; Prompt 201, Category 6 live approval
+and Phase 12 exit remain open. No live services or operator sign-off occurred.
+Online audit remains omitted; no aggregate ops:check or fresh audit is claimed.
+
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table

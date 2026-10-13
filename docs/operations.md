@@ -10887,3 +10887,77 @@ node scripts/ops/reconcile-storage-objects.js --help
 ```
 
 All **33 independent offline stages / 27 suite invocations / 4980 tests / 4980 passed / zero failures, cancellations or skipped** resolved from package.json `ops:check` completed with exit 0. Each stage exit and suite count was inspected, including templates, secret/default scanning, Docker runtime, offline SBOM licences, SAST and container checks. Final `ops:launch-drill-test` returned `tests 182 / pass 182 / fail 0 / cancelled 0 / skipped 0`, duration `229372.696308ms`. These are independent offline checks, excluding online `ops:audit`; no aggregate `ops:check` pass is claimed.
+
+## Prompt 346 — Reconciliation database setup failure handling (2026-10-13)
+
+Continued Phase 12K after committed Prompt 345 (`1e1c620d9c20f8d9167639ed79b4eda67b331215`). PostgreSQL driver export acquisition and Client construction previously ran outside the connection try. Synthetic export-getter and constructor exceptions reproduced rejection without the fixed connection diagnostic or intended immediate exit. Installed `node_modules/pg/lib/client.js` verifies synchronous construction; this is failure-injection evidence, not proof of a demonstrated live setup fault or leaked socket.
+
+Database setup now shares the existing connection try/catch. Setup exceptions emit only `Error: PostgreSQL connection failed`, set/return 1 or immediately exit 1, and never reach query, S3 acquisition, summary or receipt publication. Owned cleanup requires an actually returned client; an unreturned constructor instance cannot be closed by its caller. Existing connection-failure cleanup remains guarded and awaited. Password selection/missing-password diagnostics, caller-owned clients, injected inventories, configuration, SQL, comparison and receipts remain compatible. No new timeout, retry or resource-factory policy was introduced.
+
+Added **10 serial offline behavioral cases** using restored pg/S3 export descriptors, synthetic configuration and isolated temporary receipt paths. Two cases exercise constructor/export-getter throws, four cover caller-client/inventory bypasses, two verify missing-password precedence and two actual child processes verify immediate exits with no private sentinel, storage acquisition or receipt. Export-getter injection models export acquisition failure, not an actual module-load failure. All previous tests remain intact.
+
+The restricted new-test invocation failed at the file wrapper (`tests 1 / pass 0 / fail 1`, `test failed`) and supplied no behavioral evidence. Permitted pre-fix focused regression reported:
+
+```text
+ℹ tests 10
+ℹ pass 6
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+The bypass and password cases passed before the fix; both setup failures and immediate exits failed. After the source change, permitted `npm run ops:reconcile-test` returned exit 0:
+
+```text
+ℹ tests 2009
+ℹ pass 2009
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+```
+
+Actual self-verification:
+
+| Command | Exit | Real output / observation |
+| --- | --- | --- |
+| source/spec `node -c` | 0 each | silent |
+| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
+| installed Prettier appended-region check | 0 | `Added test region format check: true` |
+| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
+| permitted `npm run build` | 0 | `Compiled successfully in 3.1s`; `Finished TypeScript in 3.3s`; `Generating static pages using 7 workers (22/22) in 719ms`; Prisma Client `7.9.1` generated and server `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0 | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
+| `git diff --check` | 0 | silent |
+
+Independent read-only review inspected the full source/test diff, prompt, surrounding lifecycle, installed pg implementation and actual verification logs. It found no Critical, Important or Minor issues or material plan deviations, and assessed the work ready after completion records. Feedback was evaluated against the try boundary, existence/ownership cleanup guard, unchanged failure cleanup, private diagnostics and bypasses; no fixes or re-review were necessary. Its own restricted focused run failed at the file wrapper (`1 failed`), so it did not independently reproduce behavioral totals. The reviewer confirmed the coordinator's green log and the 30 offline stages recorded at review time. Its initial turn failed before work due model capacity; the same review task succeeded on retry.
+
+The example `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json` returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online `ops:audit` remains omitted under the recorded dependency-metadata disclosure restriction; no aggregate `ops:check` pass or fresh vulnerability inventory is claimed. Fixed setup handling cannot authenticate evidence, prove inventory completeness, verify object bytes or establish atomic/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live services, credential access, SQL/schema changes, operator approval, deployment or push occurred. Ordinary commit revert restores prior setup handling without DB/storage mutation.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```
+
+All **33 independent offline stages / 27 suite invocations / 4990 tests / 4990 passed / zero failures, cancellations or skipped** resolved from package.json ops:check completed with exit 0. Each stage exit and suite count was inspected, including production templates, secret/default scanning, Docker runtime, offline SBOM licences, SAST and container checks. The final ops:launch-drill-test returned:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 108083.467275
+```
+
+These are independent offline checks excluding online ops:audit, not an aggregate ops:check pass.
