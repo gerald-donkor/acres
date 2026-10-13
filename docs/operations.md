@@ -10637,3 +10637,71 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 342 — Reconciliation owned storage client cleanup (2026-10-13)
+
+Continued Phase 12K after committed Prompt 341 (`0e4856a66ace2f99710a36fb83d4718e87e419e2`). The runner constructed an S3Client for acquisition but never destroyed it. The installed `@aws-sdk/client-s3/dist-types/S3Client.d.ts` declares synchronous `destroy(): void` and explicitly recommends closing Node clients' underlying socket agents after use; its installed implementation delegates to the parent destroy method. This is a lifecycle defect found by code inspection and offline regression, not a measurement of leaked live sockets.
+
+`main` now attempts exactly one destroy of a runner-created storage client in the listing acquisition `finally`, after success or failure and before report generation/publication. Caller-supplied clients remain open, and injected inventories bypass storage acquisition. Synchronous cleanup exceptions are suppressed as best-effort teardown, consistent with existing PostgreSQL end-error handling: neither the primary outcome nor private diagnostics are replaced, and a successful teardown is not asserted when destroy throws. The optional listing-failure `process.exit(1)` is deferred until after finally; immediate process exit otherwise bypasses JavaScript unwinding. PostgreSQL cleanup behavior, SQL, inventories, comparison, receipts and public injection APIs remain unchanged.
+
+Added **20 behavioral cases**. Sixteen exercise real SDK construction with offline send/destroy prototype stubs: empty/matched/missing/mismatching/orphan inventories, malformed responses, thrown sends and retained-receipt publication failure, each with normal or throwing cleanup. They verify one destroy on the same client, ordering before report output, preserved exits/private errors and exclusive receipt behavior. Three cover caller ownership and injected inventories. A separate child process uses real `process.exit` to verify destroy precedes immediate failure exit. Prototype descriptors, temporary directories and exit state are restored. No network transport or live storage/database was used.
+
+Restricted initial test execution produced a file-level failure. The first permitted red run exposed a test harness receiver error in the log wrapper; binding the existing logger to its IO object fixed the harness without changing source. The resulting behavioral red run returned exit 1:
+
+```text
+ℹ tests 1943
+ℹ pass 1927
+ℹ fail 16
+ℹ skipped 0
+```
+
+The first finally fix passed all 1943 cases. The added real immediate-exit regression then failed (**1944 tests / 1943 passed / 1 failed**) because exit bypassed cleanup. Deferring that failure return/exit until after finally resolved it. Final permitted `npm run ops:reconcile-test` returned exit 0:
+
+```text
+ℹ tests 1944
+ℹ pass 1944
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual checks:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier new test region | 0 | {"newTestRegion":true} |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
+| permitted npm run build | 0 | Compiled successfully in 6.8s; Generating static pages using 7 workers (22/22) in 1275ms; prisma generate && nest build |
+| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1) |
+| git diff --check | 0 | silent |
+
+Independent read-only review inspected the complete source/test diff, prompt, runner and installed SDK declaration. It found no Critical, Important or Minor issues and assessed the change ready to merge after records. Its restricted direct execution passed **1943/1944**, with only the subprocess regression blocked by `spawnSync node EPERM`; its restricted node test-runner invocation reported a file-level failure. Coordinator permitted runs supply the full passing counts. Review feedback was evaluated against finally placement, client ownership, synchronous SDK teardown, immediate exit ordering and primary outcome preservation; no fixes or follow-up review were needed.
+
+All **33 independent offline stages / 27 suite invocations / 4925 tests / 4925 passed / zero failures or skipped** resolved from package.json ops:check passed. Every stage exit and count was inspected, including production templates, secret/default scans, Docker runtime, offline SBOM licences, SAST, container checks and final orchestrator/dossier suite:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+The example readiness validator returned expected exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online ops:audit remains omitted under the recorded dependency-metadata disclosure restriction; no aggregate ops:check pass or fresh vulnerability audit is claimed. Client cleanup does not authenticate evidence, establish inventory completeness, verify object bytes or prove atomic snapshots/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit remain open. No live services, credentials, migrations, operator approval, deployment or push. Ordinary commit revert restores prior resource lifecycle without DB/storage mutation.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

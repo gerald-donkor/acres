@@ -1313,13 +1313,25 @@ async function main(
       });
     }
 
+    let listingFailed = false;
     try {
       storageObjects = await listBucketObjects({ s3Client, bucket, prefix });
     } catch (_err) {
+      listingFailed = true;
       io.error('Error: Object storage connection or listing failed');
       if (pgClient && !options.pgClient) {
         await pgClient.end().catch(() => {});
       }
+    } finally {
+      if (!options.s3Client) {
+        try {
+          s3Client.destroy();
+        } catch {
+          // Best-effort owned cleanup must not replace the acquisition outcome.
+        }
+      }
+    }
+    if (listingFailed) {
       setExitCode(1);
       if (options.exitOnError === true) process.exit(1);
       return 1;

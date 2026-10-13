@@ -10092,3 +10092,227 @@ test('reconcileObjects and injected main inventories: retain short-hex compatibi
   );
   assert.deepStrictEqual(io.errors, []);
 });
+
+// Exercise runner-created SDK clients without opening a transport or network socket.
+for (const cleanupThrows of [false, true]) {
+  for (const scenario of [
+    'empty',
+    'matched',
+    'missing',
+    'mismatch',
+    'orphan',
+    'malformed',
+    'send failure',
+    'publication failure',
+  ]) {
+    test(
+      `main owned storage cleanup: ${scenario}, destroy throws=${cleanupThrows}`,
+      { concurrency: false },
+      async () => {
+        const { S3Client } = require('@aws-sdk/client-s3');
+        const prototype = S3Client.prototype;
+        const originalSend = Object.getOwnPropertyDescriptor(prototype, 'send');
+        const originalDestroy = Object.getOwnPropertyDescriptor(
+          prototype,
+          'destroy',
+        );
+        const previousExitCode = process.exitCode;
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'acres-owned-s3-'));
+        const output = path.join(dir, 'receipt.json');
+        const events = [];
+        let sentClient;
+        let destroyedClient;
+        let sends = 0;
+        let destroys = 0;
+        try {
+          Object.defineProperty(prototype, 'send', {
+            configurable: true,
+            writable: true,
+            async value(command) {
+              sends++;
+              sentClient = this;
+              events.push('send');
+              assert.strictEqual(command.input.Bucket, 'acres-quarantine');
+              if (scenario === 'send failure')
+                throw new Error('private-send-sentinel');
+              if (scenario === 'malformed') return {};
+              return {
+                IsTruncated: false,
+                Contents: [
+                  'matched',
+                  'mismatch',
+                  'orphan',
+                  'publication failure',
+                ].includes(scenario)
+                  ? [
+                      {
+                        Key: 'fixture-key',
+                        Size: scenario === 'mismatch' ? 2 : 1,
+                      },
+                    ]
+                  : [],
+              };
+            },
+          });
+          Object.defineProperty(prototype, 'destroy', {
+            configurable: true,
+            writable: true,
+            value() {
+              destroys++;
+              destroyedClient = this;
+              events.push('destroy');
+              if (cleanupThrows) throw new Error('private-cleanup-sentinel');
+            },
+          });
+          if (scenario === 'publication failure')
+            fs.writeFileSync(output, 'retained');
+          const io = createIo();
+          const log = io.log;
+          io.log = (message) => {
+            if (message.includes('Acres Storage Reconciliation Report'))
+              events.push('report');
+            log.call(io, message);
+          };
+          const dbObjects = [
+            'empty',
+            'orphan',
+            'malformed',
+            'send failure',
+          ].includes(scenario)
+            ? []
+            : [inventoryDbRecord()];
+          const code = await main(
+            [
+              'node',
+              'script',
+              '--dry-run',
+              '--fail-on-orphans',
+              '--output',
+              output,
+            ],
+            io,
+            { env: {}, dbObjects },
+          );
+          const failedListing = ['malformed', 'send failure'].includes(
+            scenario,
+          );
+          const expectedCode = ['empty', 'matched'].includes(scenario) ? 0 : 1;
+          assert.strictEqual(code, expectedCode);
+          assert.strictEqual(sends, 1);
+          assert.strictEqual(destroys, 1);
+          assert.strictEqual(destroyedClient, sentClient);
+          assert.ok(sentClient instanceof S3Client);
+          assert.deepStrictEqual(
+            events,
+            failedListing ? ['send', 'destroy'] : ['send', 'destroy', 'report'],
+          );
+          if (failedListing) {
+            assert.deepStrictEqual(io.errors, [
+              'Error: Object storage connection or listing failed',
+            ]);
+            assert.deepStrictEqual(io.logs, [
+              'Connecting to PostgreSQL and Object Storage...',
+            ]);
+            assert.deepStrictEqual(fs.readdirSync(dir), []);
+          } else if (scenario === 'publication failure') {
+            assert.deepStrictEqual(io.errors, [
+              'Error: Reconciliation evidence publication failed: output file already exists',
+            ]);
+            assert.strictEqual(fs.readFileSync(output, 'utf8'), 'retained');
+            assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+          } else {
+            assert.deepStrictEqual(io.errors, []);
+            const receipt = JSON.parse(fs.readFileSync(output, 'utf8'));
+            assert.strictEqual(receipt.summary.exitCode, expectedCode);
+            assert.strictEqual(receipt.execution_mode, 'simulation');
+            assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+          }
+          assert.ok(!JSON.stringify(io).includes('sentinel'));
+        } finally {
+          if (originalSend)
+            Object.defineProperty(prototype, 'send', originalSend);
+          else delete prototype.send;
+          Object.defineProperty(prototype, 'destroy', originalDestroy);
+          process.exitCode = previousExitCode;
+          fs.rmSync(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  }
+}
+
+for (const failure of [false, true]) {
+  test(`main caller storage cleanup: caller retains client on listing failure=${failure}`, async () => {
+    const io = createIo();
+    let destroys = 0;
+    const s3Client = {
+      async send() {
+        if (failure) throw new Error('private-caller-send');
+        return { IsTruncated: false };
+      },
+      destroy() {
+        destroys++;
+      },
+    };
+    assert.strictEqual(
+      await main(['node', 'script', '--dry-run'], io, {
+        env: {},
+        dbObjects: [],
+        s3Client,
+      }),
+      failure ? 1 : 0,
+    );
+    assert.strictEqual(destroys, 0);
+  });
+}
+
+test('main caller storage cleanup: injected inventory never uses caller client', async () => {
+  let sends = 0;
+  let destroys = 0;
+  const io = createIo();
+  assert.strictEqual(
+    await main(['node', 'script', '--dry-run'], io, {
+      env: {},
+      dbObjects: [],
+      storageObjects: [],
+      s3Client: {
+        send() {
+          sends++;
+          throw new Error('must not send');
+        },
+        destroy() {
+          destroys++;
+        },
+      },
+    }),
+    0,
+  );
+  assert.strictEqual(sends, 0);
+  assert.strictEqual(destroys, 0);
+  assert.deepStrictEqual(io.errors, []);
+});
+
+test('main owned storage cleanup: immediate exit happens after destroy', () => {
+  const { spawnSync } = require('node:child_process');
+  const result = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `
+    const { S3Client } = require('@aws-sdk/client-s3');
+    const { main } = require('./scripts/ops/reconcile-storage-objects');
+    S3Client.prototype.send = async () => { throw new Error('private-send'); };
+    S3Client.prototype.destroy = () => process.stdout.write('destroyed\\n');
+    main(['node', 'script', '--dry-run'], { log() {}, error() {} }, {
+      env: {}, dbObjects: [], exitOnError: true,
+    });
+  `,
+    ],
+    { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8' },
+  );
+  assert.ifError(result.error);
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.signal, null);
+  assert.strictEqual(result.stdout, 'destroyed\n');
+  assert.strictEqual(result.stderr, '');
+});

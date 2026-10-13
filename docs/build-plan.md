@@ -3391,3 +3391,21 @@ fresh audit claim. Digest shape cannot authenticate evidence, prove
 completeness, verify bytes or establish atomic/live recovery. Prompt 201,
 Category 6 live approval and Phase 12 exit remain open. No live services,
 operator approval, SQL/schema changes, deployment or push occurred.
+
+**Prompt 342 — reconciliation owned storage client cleanup (2026-10-13):**
+Continued Phase 12K after committed Prompt 341. The runner now attempts one
+synchronous destroy of its own S3 client after listing settles, before reports
+or publication, including failure and optional immediate exit. Caller clients
+stay open; cleanup errors preserve primary outcomes/private diagnostics.
+Added 20 offline lifecycle cases; focused **1944/1944**, root lint/typecheck/
+build (**22/22** pages), syntax/help/format/diff checks passed. Independent
+read-only review found no issues; its child-process test was blocked by EPERM,
+while permitted coordinator tests passed. All **33 offline stages / 27 suites /
+4925 tests / zero failures or skipped** passed. Actual red/green, SDK contract,
+review, sandbox limits and ordinary-revert rollback are recorded in
+[operations.md](operations.md) Prompt 342. Readiness remains **0 approved /
+11 blocked / 70 blockers**. Online audit omitted; no aggregate ops:check or
+fresh audit claim. Cleanup cannot prove evidence authenticity, completeness,
+bytes or atomic/live recovery. Prompt 201, Category 6 live approval and Phase 12
+exit remain open. No live services, operator approval, SQL/schema changes,
+deployment or push occurred.
