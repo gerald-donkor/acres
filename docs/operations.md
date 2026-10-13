@@ -10424,3 +10424,74 @@ Safe local inspection:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 339 — Preserve database inventory projected values (2026-10-13)
+
+Continued Phase 12K after committed Prompt 338 (`89c8793eb6af97ef8bf2c5a4d008155aa34a23cb`). A read-only, offline probe with a frozen complete row, valid twelve-column descriptors, and conflicting 32-byte SHA256 digests returned `{"inputOwnChecksum":true,"returnedOwnChecksum":false,"status":"clean","mismatches":0}`: `validateInventory` and the projection guard accepted an own, non-enumerable `checksumHex`, but the final object spread in `queryDatabaseStoredObjects` dropped non-enumerable properties. Conflicting checksums were thus suppressed and falsely reported clean.
+
+`queryDatabaseStoredObjects` now returns a fresh ordinary record per row preserving every own property in `DATABASE_INVENTORY_COLUMNS`, regardless of enumerability, across described, undefined, and omitted descriptor metadata. It retains enumerable extra property spread, explicitly copies known own projection values using `DATABASE_INVENTORY_COLUMNS`, and normalizes `byteCount` to bigint or null if present as an own property.
+
+Missing projection properties remain missing, own-undefined properties remain own-undefined, SQL NULLs, strings, Date objects, row order, and enumerable extra keys are preserved. Inherited properties are not copied and arbitrary non-enumerable extras remain omitted. Input rows, input arrays, and field descriptors remain completely untouched and frozen. Existing validation guards, descriptor compatibility, complete projection keys when fields are present, duplicate detection, lifecycle/checksum/date/count guards, command/mode checks, SQL, schema, public contracts, comparison, receipt publication, and Stage 7 remain unchanged.
+
+Added 31 behavioral cases (from 1808 to 1839 tests). Direct cases cover absent, undefined, and described metadata with matching and mismatching checksums. All twelve projected fields are verified as non-enumerable own properties with null and undefined values, testing ownership, output freshness, row ordering, and omission of hidden unrelated extra properties. Lifecycle filtering (`deleted`, `expired`, `completed pending object`, `quarantine date`, `expiry retained`) verifies hidden lifecycle fields. Missing and inherited optional properties remain omitted when descriptors are absent. Runner scenarios confirm conflicting checksums yield exit 1 with error simulation receipt and `checksum_mismatch` details, while matching checksums yield exit 0 with clean simulation receipt. One query, bounded S3 sends, caller clients remain open, no temporary leftovers, and caller fixture immutability are verified.
+
+Red-state execution returned exit 1 across all 61 new assertions exercising hidden fields and runner checksum comparison:
+
+```text
+ℹ tests 1870
+ℹ pass 1809
+ℹ fail 61
+ℹ skipped 0
+```
+
+After the compact row-copy implementation, direct `node --test` and final formatted `npm run ops:reconcile-test` returned exit 0:
+
+```text
+ℹ tests 1839
+ℹ pass 1839
+ℹ fail 0
+ℹ skipped 0
+```
+
+Actual checks:
+
+| command/check | exit | output/result |
+| --- | --- | --- |
+| source/spec node -c | 0 | silent |
+| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
+| installed Prettier, changed function/new tests | 0 | formatted changed regions |
+| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
+| npm run build | 0 | Compiled successfully in 2.8s; Generating static pages using 7 workers (22/22) in 784ms; prisma generate && nest build |
+| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
+| git diff --check | 0 | silent |
+
+All 33 independent offline stages resolved from package.json ops:check passed:
+**27 suite invocations / 4820 tests / 4820 passed / zero failures or skipped**.
+Every exit and suite count was inspected. Production templates, secret/default scan, Docker runtime, offline SBOM license verification, SAST, container security, and final launch-orchestrator/dossier suites passed:
+
+```text
+ℹ tests 182
+ℹ pass 182
+ℹ fail 0
+ℹ skipped 0
+```
+
+Independent read-only review inspected the actual diff, prompt, and requirements. It reported no Critical or Important issues, verified that descriptor-present and descriptor-absent paths remain compatible, error receipts are preserved, and confirmed readiness to merge. Feedback was evaluated; one minor note regarding uniform loop assignment of byteCount before bigint normalization was verified as intentional and requires no change. Result records were added after review; final staged diff inspection precedes the local commit.
+
+The readiness example returned expected fail-closed exit 1:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Online ops:audit remains omitted under the recorded registry metadata-disclosure restriction; no aggregate ops:check pass or fresh vulnerability audit is claimed. Preserving accepted projection values cannot authenticate responses, establish catalog identity, prove inventory completeness, verify bytes, or establish atomic snapshots/live recovery. Prompt 201, Category 6 live approval, and Phase 12 exit remain open. No live services, credentials, migrations, operator approval, deployment, or push. Ordinary commit revert restores previous row-copying without DB/storage mutation.
+
+Safe local inspection:
+
+```bash
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

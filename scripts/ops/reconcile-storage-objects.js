@@ -651,10 +651,18 @@ async function queryDatabaseStoredObjects({ pgClient }) {
       result.rowCount !== result.rows.length)
   )
     throw new Error('Database inventory is invalid');
-  return result.rows.map((row) => ({
-    ...row,
-    byteCount: row.byteCount != null ? BigInt(row.byteCount) : null,
-  }));
+  return result.rows.map((row) => {
+    const record = { ...row };
+    for (const name of DATABASE_INVENTORY_COLUMNS) {
+      if (Object.hasOwn(row, name)) {
+        record[name] = row[name];
+      }
+    }
+    if (Object.hasOwn(row, 'byteCount')) {
+      record.byteCount = row.byteCount != null ? BigInt(row.byteCount) : null;
+    }
+    return record;
+  });
 }
 
 /**

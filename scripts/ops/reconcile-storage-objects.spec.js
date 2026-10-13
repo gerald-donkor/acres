@@ -9385,3 +9385,270 @@ test('queryDatabaseStoredObjects: installed pg preserves high-bit lifecycle IDs 
     [{ ...result.rows[0], byteCount: 1n }],
   );
 });
+
+
+// Own projection evidence must survive adapter copying even when hidden.
+function hideInventoryValues(row, names) {
+  for (const name of names)
+    Object.defineProperty(row, name, { enumerable: false });
+  return Object.freeze(row);
+}
+
+for (const [metadata, patch] of [
+  ['absent', {}],
+  ['undefined', { fields: undefined }],
+  [
+    'described',
+    { fields: Object.freeze(databaseInventoryFields().map(Object.freeze)) },
+  ],
+]) {
+  for (const matching of [false, true]) {
+    test(`projected values: hidden checksum survives ${metadata} metadata matching=${matching}`, async () => {
+      const checksumHex = Buffer.alloc(32, 1).toString('hex');
+      const row = hideInventoryValues(projectedInventoryRow({ checksumHex }), [
+        'checksumHex',
+      ]);
+      const before = Object.getOwnPropertyDescriptors(row);
+      const rows = Object.freeze([row]);
+      const actual = await queryDatabaseStoredObjects({
+        pgClient: { query: async () => ({ rows, ...patch }) },
+      });
+      assert.strictEqual(Object.hasOwn(actual[0], 'checksumHex'), true);
+      assert.strictEqual(actual[0].checksumHex, checksumHex);
+      const report = reconcileObjects({
+        dbObjects: actual,
+        storageObjects: [
+          {
+            key: row.objectKey,
+            byteCount: 1,
+            checksumHex: Buffer.alloc(32, matching ? 1 : 2).toString('hex'),
+          },
+        ],
+      });
+      assert.strictEqual(report.summary.status, matching ? 'clean' : 'error');
+      assert.strictEqual(report.summary.exitCode, matching ? 0 : 1);
+      assert.strictEqual(report.mismatches.length, matching ? 0 : 1);
+      if (!matching)
+        assert.match(report.mismatches[0].issues[0], /^checksum_mismatch/);
+      assert.deepStrictEqual(Object.getOwnPropertyDescriptors(row), before);
+    });
+  }
+
+  for (const value of [null, undefined]) {
+    test(`projected values: all hidden fields preserve ownership and order ${metadata} ${value}`, async () => {
+      const createdAt = new Date('2026-01-01T00:00:00Z');
+      const names = databaseInventoryFields().map(({ name }) => name);
+      const rows = Object.freeze(
+        ['0001', '9007199254740993', value].map((byteCount, i) => {
+          const row = projectedInventoryRow({
+            id: `hidden-${i}`,
+            objectKey: `hidden-key-${i}`,
+            byteCount,
+            checksumAlgorithm: value,
+            checksumHex: value,
+            deletedAt: value,
+            createdAt,
+            uploadState: value,
+            uploadExpiresAt: value,
+            extra: 'preserved',
+          });
+          Object.defineProperty(row, 'unrelated', {
+            value: 'omit',
+            enumerable: false,
+          });
+          return hideInventoryValues(row, names);
+        }),
+      );
+      const before = rows.map(Object.getOwnPropertyDescriptors);
+      const actual = await queryDatabaseStoredObjects({
+        pgClient: { query: async () => Object.freeze({ rows, ...patch }) },
+      });
+      assert.notStrictEqual(actual, rows);
+      assert.deepStrictEqual(
+        actual.map((row) => row.id),
+        ['hidden-0', 'hidden-1', 'hidden-2'],
+      );
+      for (const [i, row] of rows.entries()) {
+        assert.notStrictEqual(actual[i], row);
+        assert.strictEqual(Object.getPrototypeOf(actual[i]), Object.prototype);
+        for (const name of names) {
+          assert.ok(Object.hasOwn(actual[i], name), name);
+          assert.strictEqual(
+            actual[i][name],
+            name === 'byteCount'
+              ? row[name] == null
+                ? null
+                : BigInt(row[name])
+              : row[name],
+            name,
+          );
+        }
+        assert.strictEqual(actual[i].extra, 'preserved');
+        assert.strictEqual(Object.hasOwn(actual[i], 'unrelated'), false);
+      }
+      assert.deepStrictEqual(
+        rows.map(Object.getOwnPropertyDescriptors),
+        before,
+      );
+    });
+  }
+
+  for (const [label, overrides, hidden, excluded] of [
+    [
+      'deleted',
+      { deletedAt: new Date('2026-01-01T00:00:00Z') },
+      ['deletedAt'],
+      1,
+    ],
+    ['expired', { uploadState: 'expired' }, ['uploadState'], 1],
+    [
+      'completed pending object',
+      { state: 'pending_upload', uploadState: 'completed' },
+      ['uploadState'],
+      0,
+    ],
+    [
+      'quarantine date',
+      { state: 'quarantined', createdAt: new Date('2026-01-01T00:00:00Z') },
+      ['createdAt'],
+      1,
+    ],
+    [
+      'expiry retained',
+      { uploadExpiresAt: new Date('2026-01-01T00:00:00Z') },
+      ['uploadExpiresAt'],
+      0,
+    ],
+  ]) {
+    test(`projected values: ${label} preserves existing lifecycle ${metadata}`, async () => {
+      const row = hideInventoryValues(projectedInventoryRow(overrides), hidden);
+      const actual = await queryDatabaseStoredObjects({
+        pgClient: {
+          query: async () => ({ rows: Object.freeze([row]), ...patch }),
+        },
+      });
+      for (const name of hidden) assert.strictEqual(actual[0][name], row[name]);
+      const report = reconcileObjects({
+        dbObjects: actual,
+        storageObjects: [],
+        options: { now: '2026-01-02T00:00:00Z' },
+      });
+      assert.strictEqual(report.summary.pendingOrDeletedExcluded, excluded);
+      assert.strictEqual(report.missing.length, 1 - excluded);
+    });
+  }
+}
+
+for (const patch of [{}, { fields: undefined }]) {
+  test(`projected values: missing and inherited optional fields stay absent ${Object.hasOwn(patch, 'fields')}`, async () => {
+    const row = inventoryDbRecord();
+    Object.setPrototypeOf(row, {
+      checksumHex: 'ab'.repeat(32),
+      uploadExpiresAt: null,
+    });
+    Object.defineProperty(row, 'deletedAt', {
+      value: undefined,
+      enumerable: false,
+    });
+    Object.freeze(row);
+    const [actual] = await queryDatabaseStoredObjects({
+      pgClient: {
+        query: async () => ({ rows: Object.freeze([row]), ...patch }),
+      },
+    });
+    assert.strictEqual(Object.hasOwn(actual, 'checksumHex'), false);
+    assert.strictEqual(Object.hasOwn(actual, 'uploadExpiresAt'), false);
+    assert.strictEqual(Object.hasOwn(actual, 'createdAt'), false);
+    assert.strictEqual(Object.hasOwn(actual, 'deletedAt'), true);
+    assert.strictEqual(actual.deletedAt, undefined);
+    assert.strictEqual(actual.byteCount, 1n);
+  });
+}
+
+for (const matching of [false, true]) {
+  test(`projected values: runner publishes hidden checksum comparison matching=${matching}`, async () => {
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'acres-hidden-checksum-'),
+    );
+    const previousExitCode = process.exitCode;
+    try {
+      const row = hideInventoryValues(
+        projectedInventoryRow({
+          checksumHex: Buffer.alloc(32, 1).toString('hex'),
+        }),
+        ['checksumHex'],
+      );
+      const before = Object.getOwnPropertyDescriptors(row);
+      const rows = Object.freeze([row]);
+      const fields = Object.freeze(
+        databaseInventoryFields().map(Object.freeze),
+      );
+      const beforeFields = fields.map((field) => ({ ...field }));
+      let queries = 0,
+        ended = 0,
+        destroyed = 0;
+      const s3Client = listingClient([
+        {
+          IsTruncated: false,
+          Contents: [
+            {
+              Key: row.objectKey,
+              Size: 1,
+              ChecksumSHA256: Buffer.alloc(32, matching ? 1 : 2).toString(
+                'base64',
+              ),
+            },
+          ],
+        },
+      ]);
+      s3Client.destroy = () => destroyed++;
+      const io = createIo();
+      const output = path.join(dir, 'receipt.json');
+      const code = await main(
+        ['node', 'script', '--dry-run', '--output', output],
+        io,
+        {
+          env: {},
+          s3Client,
+          pgClient: {
+            query: async () => {
+              queries++;
+              return Object.freeze({ rows, fields });
+            },
+            end: async () => {
+              ended++;
+            },
+          },
+        },
+      );
+      assert.strictEqual(code, matching ? 0 : 1);
+      assert.strictEqual(queries, 1);
+      assert.strictEqual(s3Client.inputs.length, 1);
+      assert.strictEqual(ended, 0);
+      assert.strictEqual(destroyed, 0);
+      assert.deepStrictEqual(io.errors, []);
+      const receipt = JSON.parse(fs.readFileSync(output, 'utf8'));
+      assert.strictEqual(receipt.execution_mode, 'simulation');
+      assert.strictEqual(receipt.summary.status, matching ? 'clean' : 'error');
+      assert.strictEqual(receipt.summary.exitCode, code);
+      assert.strictEqual(receipt.mismatches.length, matching ? 0 : 1);
+      if (!matching) {
+        assert.match(receipt.mismatches[0].issues[0], /^checksum_mismatch/);
+        assert.strictEqual(
+          receipt.mismatches[0].db.checksumHex,
+          row.checksumHex,
+        );
+      }
+      assert.ok(
+        io.logs.some((line) => line.includes(matching ? 'CLEAN' : 'ERROR')),
+      );
+      assert.deepStrictEqual(fs.readdirSync(dir), ['receipt.json']);
+      assert.deepStrictEqual(Object.getOwnPropertyDescriptors(row), before);
+      assert.deepStrictEqual(fields, beforeFields);
+      assert.strictEqual(rows[0], row);
+    } finally {
+      process.exitCode = previousExitCode;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}

@@ -871,6 +871,25 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 339 (2026-10-13):** Database adapter row conversion in
+  `queryDatabaseStoredObjects` now preserves all own properties in
+  `DATABASE_INVENTORY_COLUMNS` regardless of enumerability across described,
+  undefined, and absent metadata. Fixes accepted own non-enumerable checksumHex
+  values being dropped by object spread, ensuring conflicting storage digests
+  remain visible to reconciliation and produce checksum mismatch evidence rather
+  than false clean reports. Missing/undefined properties, SQL NULLs, Date objects,
+  order, and extra keys are preserved; inherited properties remain uncopied.
+  Focused **1839/1839**, root lint/typecheck/build, formatting/syntax/help/diff
+  and **33 offline stages / 27 suites / 4820 tests / zero failures or skipped**
+  passed. Independent review reported no issues. Actual red/green, review
+  evaluation and ordinary-revert rollback are in docs/operations.md Prompt 339.
+  Readiness remains **0 approved / 11 blocked / 70 blockers**. Online audit
+  stays omitted; no aggregate ops:check/fresh audit claim. Preserving accepted
+  projection values cannot prove authenticity, completeness, bytes, or atomic
+  snapshots/live recovery. Prompt 201, Category 6 live approval and Phase 12 exit
+  remain open. No live services, operator approval, migrations, deployment or push
+  occurred.
+
 - **Prompt 338 (2026-10-12):** Defined lifecycle descriptor type IDs on database
   inventory state/uploadState now require primitive numeric uint32 shape,
   matching installed pg-protocol. Malformed types/bounds reject even empty
