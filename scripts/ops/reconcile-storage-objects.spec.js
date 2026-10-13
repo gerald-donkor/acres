@@ -12236,3 +12236,146 @@ test("sparse argument validation: dense dry-run still publishes simulation recei
   assert.deepStrictEqual(fs.readdirSync(dir), ["receipt.json"]);
   assert.strictEqual(logs.length, 3);
 });
+
+// The full runner argv must be an array before any slice or dependency access.
+for (const [label, argv] of [
+  ["null", null],
+  ["false", false],
+  ["true", true],
+  ["zero", 0],
+  ["NaN", NaN],
+  ["bigint", 1n],
+  ["symbol", Symbol("argv")],
+  ["string", "node reconcile --help"],
+  ["plain object", Object.freeze({})],
+  [
+    "array-like object",
+    Object.freeze({ 0: "node", 1: "reconcile", 2: "--help", length: 3 }),
+  ],
+  ["typed array", new Uint8Array([1, 2, 3])],
+  [
+    "throwing slice getter",
+    Object.freeze({
+      get slice() {
+        assert.fail("non-array slice getter accessed");
+      },
+    }),
+  ],
+  [
+    "callable slice",
+    Object.freeze({
+      slice() {
+        assert.fail("non-array slice called");
+        return ["--help"];
+      },
+    }),
+  ],
+]) {
+  test(`runner argument shape: rejects ${label} before side effects`, async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-runner-argv-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const before =
+      argv !== null && typeof argv === "object"
+        ? Object.getOwnPropertyDescriptors(argv)
+        : null;
+    const options = {};
+    for (const field of [
+      "cwd",
+      "env",
+      "dbObjects",
+      "storageObjects",
+      "pgClient",
+      "s3Client",
+    ]) {
+      Object.defineProperty(options, field, {
+        get() {
+          assert.fail(`unexpected dependency access: ${field}`);
+        },
+      });
+    }
+    const logs = [];
+    const errors = [];
+    assert.strictEqual(
+      await main(
+        argv,
+        {
+          log: (text) => logs.push(text),
+          error: (text) => errors.push(text),
+        },
+        Object.freeze(options),
+      ),
+      1,
+    );
+    assert.deepStrictEqual(errors, [
+      "reconciliation usage error: arguments must be an array of strings",
+    ]);
+    assert.strictEqual(logs.length, 1);
+    assert.ok(
+      logs[0].startsWith(
+        "Usage: node scripts/ops/reconcile-storage-objects.js",
+      ),
+    );
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+    if (before)
+      assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), before);
+  });
+}
+
+for (const flag of ["--help", "-h"]) {
+  test(`runner argument shape: frozen full argv retains ${flag}`, async () => {
+    const argv = Object.freeze(["node", "reconcile", flag]);
+    const before = Object.getOwnPropertyDescriptors(argv);
+    const logs = [];
+    assert.strictEqual(
+      await main(argv, {
+        log: (text) => logs.push(text),
+        error: () => assert.fail("valid help should not fail"),
+      }),
+      0,
+    );
+    assert.strictEqual(logs.length, 1);
+    assert.ok(
+      logs[0].startsWith(
+        "Usage: node scripts/ops/reconcile-storage-objects.js",
+      ),
+    );
+    assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), before);
+  });
+}
+
+test("runner argument shape: frozen full argv retains simulation publication", async (t) => {
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "acres-runner-valid-argv-"),
+  );
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const destination = path.join(dir, "receipt.json");
+  const argv = Object.freeze([
+    "node",
+    "reconcile",
+    "--dry-run",
+    "--output",
+    destination,
+  ]);
+  const before = Object.getOwnPropertyDescriptors(argv);
+  assert.strictEqual(
+    await main(
+      argv,
+      {
+        log() {},
+        error: () => assert.fail("valid simulation should not fail"),
+      },
+      {
+        env: Object.freeze({}),
+        dbObjects: Object.freeze([]),
+        storageObjects: Object.freeze([]),
+      },
+    ),
+    0,
+  );
+  const receipt = JSON.parse(fs.readFileSync(destination, "utf8"));
+  assert.strictEqual(receipt.execution_mode, "simulation");
+  assert.strictEqual(receipt.summary.status, "clean");
+  assert.strictEqual(receipt.summary.exitCode, 0);
+  assert.deepStrictEqual(fs.readdirSync(dir), ["receipt.json"]);
+  assert.deepStrictEqual(Object.getOwnPropertyDescriptors(argv), before);
+});

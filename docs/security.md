@@ -1797,3 +1797,18 @@ bytes or establish live recovery. Readiness stays **0 approved / 11 blocked /
 70 blockers**; Prompt 201, Category 6 and Phase 12 exit remain open. No live
 services, operator approval or push. Unrelated ops suites/online audit not
 rerun; no aggregate ops:check or fresh audit claim.
+
+**Prompt 353 — reconciliation runner argv shape (2026-10-13):**
+Non-array programmatic argv now follows the fixed usage failure before slice
+or cwd/dependency access; normal CLI and default argv remain compatible. No
+new trust boundary, credentials, SQL/schema, services or deployment changes.
+Added 16 offline cases; **2128/2128**, lint/typecheck/build (**22/22** pages)
+and syntax/help/format/diff passed. Independent review found no issues and
+separately passed all 16 new cases; its broader rerun hit sandbox restrictions.
+Actual outputs, limits and ordinary-revert rollback are in
+[operations.md](operations.md) Prompt 353. This supplies no authenticity,
+completeness, byte-integrity, atomic snapshot or live recovery proof.
+Readiness stays **0 approved / 11 blocked / 70 blockers**; Prompt 201,
+Category 6 live sign-off and Phase 12 exit remain open. No live services,
+operator approval or push; unrelated ops suites/online audit not rerun;
+no aggregate ops:check or fresh audit claim.

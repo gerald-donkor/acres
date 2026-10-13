@@ -3558,3 +3558,19 @@ rollback are in [operations.md](operations.md) Prompt 352. Readiness stays
 **0 approved / 11 blocked / 70 blockers**. Prompt 201, Category 6 live approval
 and Phase 12 exit remain open. No live services, deployment or push; unrelated
 ops suites/online audit not rerun; no aggregate ops:check pass claimed.
+
+
+**Prompt 353 — reconciliation runner argument shape (2026-10-13):**
+Continued Phase 12K after committed Prompt 352. The exported runner rejects
+non-array argv before slicing or cwd/dependency access, using the existing
+fixed usage error/help and return 1. Normal arrays/default argv and publication
+semantics remain compatible. Added 16 cases; focused **16/16**, full
+**2128/2128**, lint/typecheck/build (**22/22** pages), syntax/help/format/diff
+passed. Independent review found no issues and separately passed all 16 new
+cases; its full rerun hit existing sandbox subprocess restrictions. Actual
+red/green, checks, review limits and ordinary-revert rollback are in
+[operations.md](operations.md) Prompt 353. Example readiness stays **0 approved /
+11 blocked / 70 blockers**. Prompt 201, Category 6 live sign-off and Phase 12
+exit remain open. No live services, operator approval, deployment or push.
+Unrelated ops suites/online audit not rerun; no aggregate ops:check pass or
+fresh audit claim.

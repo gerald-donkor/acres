@@ -11476,3 +11476,97 @@ node --test --test-name-pattern='sparse argument validation:' scripts/ops/reconc
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
+
+## Prompt 353 — Reconciliation runner argument shape (2026-10-13)
+
+Continued Phase 12K after `959b529` (Prompt 352). Inspection reproduced
+`main(null)` rejecting with `TypeError: Cannot read properties of null
+(reading 'slice')` before parser validation. The runner now checks
+`Array.isArray(argv)` inside the existing parsing try before slicing or
+reading options.cwd. Non-arrays follow the existing ReconcileUsageError
+boundary: `arguments must be an array of strings`, usage help, and return 1.
+Non-array slice methods/getters are never invoked. Default undefined argv,
+two-prefix slicing, sparse-array parser validation, normal CLI behavior,
+resource ownership, output exclusivity and report schema remain unchanged.
+Custom array methods/proxies/getters and header-content policy are outside
+this bounded correction. No routes, UI, dependencies, SQL or schema changed.
+
+Added 16 offline cases: null, booleans, zero/NaN, bigint, Symbol, string,
+plain/array-like objects, typed array, throwing slice getter, callable slice,
+both help flags and real temporary simulation publication. Tests assert fixed
+usage diagnostics before cwd/environment/inventory/client access and preserve
+input descriptors. Object fixtures are frozen where applicable; the nonempty
+typed array is checked for mutation without freezing. Pre-change permitted
+focused results:
+
+```text
+ℹ tests 16
+ℹ pass 3
+ℹ fail 13
+```
+
+Post-change focused results were `tests 16`, `pass 16`, `fail 0`. Full
+permitted `npm run ops:reconcile-test` output:
+
+```text
+ℹ tests 2128
+ℹ pass 2128
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ duration_ms 1794.258312
+```
+
+Restricted focused execution returned a file-wrapper `test failed`; permitted
+subprocess execution supplied the actual red/green results above. Source/spec
+`node -c` passed silently. CLI help returned
+`Usage: node scripts/ops/reconcile-storage-objects.js [options]`. Installed
+Prettier reported `Added test block Prettier check: true`; only new tests were
+formatted. Root lint exited 0 with client `eslint`, shared
+`eslint "src/**/*.ts"` and server `eslint "{src,test}/**/*.ts"`, no diagnostics.
+Restricted build failed with
+`Error: Could not parse output from TypeScript's --showConfig.`
+Permitted root production build exited 0:
+
+```text
+✓ Compiled successfully in 2.3s
+✓ Generating static pages using 7 workers (22/22) in 559ms
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 504ms
+```
+
+Server `nest build` completed. Sequential root typecheck exited 0 with shared,
+client and server `tsc` checks; Prisma Client 7.9.1 generated in `471ms`.
+`git diff --check` passed silently. Logs under `/tmp/acres-353-*.log` are
+session-local verification, not retained launch evidence.
+
+Independent read-only review found no Critical, Important or Minor issues and
+no plan deviations. It independently passed all 16 new cases using Node's
+`--test-isolation=none` and passed `git diff --check`. Its full-suite rerun
+hit sandbox `spawnSync ... EPERM` failures in existing subprocess tests; it
+inspected the permitted 2128/2128 log without independently reproducing that
+full result or rerunning lint/build/typecheck. Feedback was evaluated against
+the guard ordering, existing usage catch and regression assertions; no source
+or test fixes were needed.
+
+Read-only example readiness remained fail-closed:
+
+```text
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+Unrelated ops suites and online audit were not rerun; no aggregate ops:check
+pass or fresh vulnerability inventory is claimed. Runner validation cannot
+authenticate evidence, prove inventory completeness/object bytes or establish
+atomic/live recovery. Prompt 201, Category 6 live sign-off and Phase 12 exit
+remain open. No live services, credentials, operator approval, deployment or
+push occurred. Ordinary commit revert restores prior malformed runner handling
+without data mutation. Inspect with:
+
+```bash
+node --test --test-name-pattern='runner argument shape:' scripts/ops/reconcile-storage-objects.spec.js
+npm run ops:reconcile-test
+node scripts/ops/reconcile-storage-objects.js --help
+```

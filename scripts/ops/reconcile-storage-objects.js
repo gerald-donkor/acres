@@ -1216,6 +1216,9 @@ async function main(
 
   let parsed;
   try {
+    if (!Array.isArray(argv)) {
+      throw new ReconcileUsageError('arguments must be an array of strings');
+    }
     parsed = parseCliArguments(argv.slice(2), options.cwd || process.cwd());
   } catch (error) {
     if (!(error instanceof ReconcileUsageError)) throw error;

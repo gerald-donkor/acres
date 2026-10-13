@@ -871,6 +871,18 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
+- **Prompt 353 — reconciliation runner argument shape (2026-10-13):**
+  Non-array programmatic argv now produces fixed usage error/help and return 1
+  before slicing or cwd/dependency access. Normal CLI/default argv remain
+  compatible. Added 16 cases; **2128/2128**, lint/typecheck/build (**22/22**
+  pages), syntax/help/format/diff passed. Independent review found no issues
+  and separately passed all 16 new cases; its full rerun hit sandbox subprocess
+  restrictions. Actual outputs, limits and ordinary revert are in
+  [operations.md](operations.md) Prompt 353. Readiness stays **0 approved /
+  11 blocked / 70 blockers**. Prompt 201, Category 6 live sign-off and Phase 12
+  exit remain open. No live services, operator approval, deployment or push;
+  unrelated ops suites/online audit not rerun; no aggregate ops:check claim.
+
 - **Prompt 352 — reconciliation sparse argument validation (2026-10-13):**
   Empty programmatic argument slots now produce the fixed usage failure before
   service access or receipt creation. Dense CLI behavior is preserved. Added
