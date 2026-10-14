@@ -12303,3 +12303,100 @@ prompt against the baseline and checklist. It reported no critical, important
 or minor findings and assessed the change ready to commit. Review evaluation
 confirmed the reported scope and links; no implementation fix was required.
 The reviewer independently checked the diff, not the build/test executions.
+
+
+## Prompt 370 — Operator handoff package (2026-10-14)
+
+Baseline: `6a06864b1a8f4628c881cb385d95fe6d7d5041b8` on `main`.
+The user requested a recommended handoff package and explicitly authorized
+execution after prompt preparation. Created the incomplete
+[operator form](../infra/launch/operator-handoff.example.md) and
+[completion guide](operator-handoff.md), linked from the existing checklist and
+AGENTS.md index. Recommendations retain the Compose+Caddy reference topology,
+immutable images, least privilege, restricted evidence access, encrypted state
+and off-host recovery, with the existing no-AI posture. Official Caddy/Docker
+guidance was inspected; Firecrawl CLI could not start because its mise runtime
+version was unset, so the web tool supplied the official sources. No runtime
+configuration or secret transport was changed.
+
+The form covers target, candidate, people, evidence access and action boundary;
+its eleven category keys match the readiness example in canonical order. Named
+people, target facts, source/image identities and approvals remain `PENDING`,
+with all categories `unresolved` and actions `not authorized`. The package does
+not supply the missing production intake or approve launch. Prompt 369 remains
+unchanged and untracked. No operator message, credential discovery, live probe,
+external evidence write, deployment or push occurred.
+
+### Actual verification
+
+`npm run lint` exited **0**, with all three workspace ESLint commands and no
+diagnostics:
+
+```text
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+```
+
+`npm run typecheck` exited **0** across shared, client and server:
+
+```text
+> tsc -p tsconfig.json
+> tsc -p tsconfig.json --noEmit
+> tsc --noEmit
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 481ms
+```
+
+Two sandboxed `npm run build` attempts exited **1**:
+
+```text
+Error: Could not parse output from TypeScript's --showConfig.
+```
+
+Direct TypeScript `--showConfig` inspection returned JSON; installed Next.js
+CLI source and prior operations records were inspected. This did not establish
+the exact cause. The permitted build outside the sandbox exited **0**:
+
+```text
+▲ Next.js 16.3.8 (webpack)
+✓ Compiled successfully in 2.4s
+Finished TypeScript in 1853ms ...
+✓ Generating static pages using 7 workers (23/23) in 739ms
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 355ms
+```
+
+`node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`
+exited **1**, as expected for the unchanged template:
+
+```text
+Total Required Categories: 11
+Approved Categories:       0
+Unresolved / Blocked:      11
+Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+`git diff --check` exited **0**, with no output. An ad hoc local document check
+reported:
+
+```text
+Handoff check: 11 category keys in canonical order; five intake groups; local link targets exist.
+```
+
+Independent read-only review reported no Critical, Important or Minor findings
+and assessed the package ready to record and commit. Feedback was evaluated
+against the five intake groups, eleven category/signer rows, canonical links,
+secret-injection guidance and unapproved action states; no fixes or re-review
+were required. The reviewer inspected supplied check logs rather than claiming
+independent execution of the full gates.
+
+No formatter, fresh database/browser/full-ops suite or live acceptance was run
+for this documentation-only change. Completion requires operators to place a
+private copy in an approved restricted store, supply its missing facts, and
+arrange scoped independent inspection under Prompt 369; the eleven-category
+launch exit remains open.

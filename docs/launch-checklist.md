@@ -3122,6 +3122,11 @@ from an operator's private store.
 
 ### Operator handoff
 
+Use the [operator handoff completion guide](operator-handoff.md) and its
+[incomplete form](../infra/launch/operator-handoff.example.md) to assemble the
+shared intake in the restricted operator store. The form grants no access or
+action authority and does not replace this checklist's evidence or sign-offs.
+
 **Repository prefill — 2026-10-14T10:30:00Z UTC.** These values were checked
 locally before the operator handoff. They identify the implementation snapshot
 and reference material only; none identifies a deployed production release or
