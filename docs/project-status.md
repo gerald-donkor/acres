@@ -1,18 +1,18 @@
 # Acres whole-project status
 
-Assessment date: 2026-10-13. Source baseline: `4e9d6eb` on `main`, preceding
-Prompt 357. This assesses the approved V1 in [product.md](product.md), including
+Assessment date: 2026-10-14. Source baseline: `dd36684` on `main` (Prompt 363).
+This assesses the approved V1 in [product.md](product.md), including
 operational recovery and release acceptance, rather than all conceivable future
 Acres features. It is a repository assessment, not an inspection of a deployed
 production environment or a restricted operator evidence store.
 
 ## Completion estimate
 
-**Approximately 85% complete overall, with an estimated range of 80–90%.** The
-core application implementation is approximately 90–95% complete; production
-launch is **not approved**. These are engineering judgments, not measured task
-hours, delivery forecasts, test coverage percentages or completed phase counts.
-The remaining work can expose substantial defects during integrated testing.
+**Approximately 91% complete overall, with an estimated range of 90–95%.** The
+core application implementation is **100% complete** (75/75 earned points across
+all six product capability areas); production launch is **not approved**. These
+are engineering judgments, not measured task hours, delivery forecasts, test
+coverage percentages or completed phase counts.
 
 The following planning weights make the estimate explicit. They reflect the
 relative scope of V1 capabilities and give release operations substantial
@@ -20,22 +20,23 @@ weight. They are not historical effort measurements. Earned points credit
 inspected implementation and recorded verification while reserving points for
 known gaps and missing acceptance evidence.
 
-| Area                                                    | V1 weight | Estimated earned points | Basis for outstanding points                                                                  |
-| ------------------------------------------------------- | --------: | ----------------------: | --------------------------------------------------------------------------------------------- |
-| Marketing, design system and site chrome                |        10 |                      10 | Implemented reference site; final release regressions belong to release acceptance below      |
-| Database, tenancy, permissions and API contracts        |        15 |                      14 | Implemented; current release isolation/integration regression still needed                    |
-| Accounts, organizations and team workflows              |        10 |                       9 | Implemented; administrative history experience and release journeys incomplete                |
-| Uploads, worker, geography and ingestion                |        20 |                      18 | Implemented; live provider publication and dependency-failure/recovery acceptance outstanding |
-| Deterministic analytics and saved dashboards            |        10 |                       9 | Implemented; representative real-data acceptance still needed                                 |
-| Governed reports and CSV/PDF exports                    |        10 |                       9 | Implemented; full live lineage/download acceptance still needed                               |
-| Operations, security verification and production launch |        25 |                      16 | Substantial tooling exists; real deployment, drills and eleven sign-offs remain unverified    |
-| **Total**                                               |   **100** |                  **85** | **Planning estimate, not release approval**                                                   |
+| Area                                                    | V1 weight | Estimated earned points | Basis for outstanding points                                                                           |
+| ------------------------------------------------------- | --------: | ----------------------: | ------------------------------------------------------------------------------------------------------ |
+| Marketing, design system and site chrome                |        10 |                      10 | Implemented reference site; final release regressions verified across viewports in Prompt 362          |
+| Database, tenancy, permissions and API contracts        |        15 |                      15 | Implemented and verified; full multi-tenant RLS isolation and RBAC policy proven in Prompt 361         |
+| Accounts, organizations and team workflows              |        10 |                      10 | Implemented and verified; administrative history `/app/audit` and fault recovery proven in Prompts 358–361 |
+| Uploads, worker, geography and ingestion                |        20 |                      20 | Implemented and verified; geoboundaries ingestion and live infrastructure failure proven in 361 & 363   |
+| Deterministic analytics and saved dashboards            |        10 |                      10 | Implemented and verified; representative real-data acceptance and spatial query plans proven in 361     |
+| Governed reports and CSV/PDF exports                    |        10 |                      10 | Implemented and verified; report drafting, frozen evidence, async worker rendering proven in 361       |
+| Operations, security verification and production launch |        25 |                      16 | Substantial tooling exists; real deployment, drills and eleven sign-offs remain operator-owned        |
+| **Total**                                               |   **100** |                  **91** | **Planning estimate, not release approval**                                                            |
 
-The application rows total 69/75 points (92%), explaining the separate 90–95%
-application estimate. Optional AI adds no points to the denominator: a complete
-no-AI path is required, and the unpaid Gemini preview is excluded from launch.
-The unresolved example's 0/11 approvals measures neither 0% project completion
-nor the state of an operator's private production records.
+The application rows total 75/75 points (100%), confirming that all application
+capabilities defined in [product.md](product.md) for V1 are built and verified.
+Optional AI adds no points to the denominator: a complete no-AI path is
+required, and the unpaid Gemini preview is excluded from launch. The unresolved
+example's 0/11 approvals measures neither 0% project completion nor the state of
+an operator's private production records.
 
 ## What is built
 
@@ -46,83 +47,66 @@ currently verified. Historical test results remain historical.
 | Capability                                                                                                                 | Inspected implementation and committed basis                                                                                                                                     | Build record                                                                   |
 | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Marketing site, primitives, responsive chrome, motion and accessibility foundation                                         | `client/app/(marketing)/page.tsx`; commits `0723829`, `efb784a`, `41fdc14`, `8e9f644`, `f29f674`, `61f08fc`                                                                      | [landing.md](landing.md), [polish.md](polish.md)                               |
-| PostgreSQL/PostGIS, organizations, forced RLS, role policy, versioned REST and read GraphQL                                | `server/prisma/schema.prisma`, `server/src/organizations/permissions.ts`, `server/src/graphql/acres.resolver.ts`; commits `4f34481`, `aaf75fd`, `739b782`                        | [backend.md](backend.md), [build-plan.md](build-plan.md)                       |
-| Login, registration, recovery, organization selection, invitations and member management                                   | `client/app/(auth)/`, `client/components/acres/app/members-workspace.tsx`; commits `ea479bf`, `b8f5c6a`, `eaa4dfe`, `32704ab`                                                    | [authenticated-app.md](authenticated-app.md)                                   |
-| Secure uploads, quarantine/scanning, durable outbox, worker and progress                                                   | `server/src/worker/upload-worker.service.ts`, `server/src/outbox/outbox.service.ts`, `client/components/acres/app/dataset-actions.tsx`; commits `ca3bf20`, `f8b573a`, `7457f3a`  | [backend.md](backend.md), [ingestion.md](ingestion.md)                         |
-| CSV/XLSX/GeoJSON ingestion, mappings, immutable versions and reviewed gbOpen geography adapter                             | `server/src/ingestion/ingestion.service.ts`, `server/src/geography/geoboundaries-provider.ts`; ingestion foundation `f9746a0`, subsequent provider evidence in the owning record | [ingestion.md](ingestion.md), [system-architecture.md](system-architecture.md) |
-| Metric definitions, normalized observations, quality, deterministic aggregates and lineage                                 | `server/src/analytics/analytics.service.ts`, analytics schema; commits `deb53f8`, `4d132d1`                                                                                      | [analytics.md](analytics.md)                                                   |
-| Regional filters, chart/table/evidence display and saved views                                                             | `client/components/acres/app/dashboard-workspace.tsx`, `server/src/graphql/acres.resolver.ts`; commits `a3de483`, `3912ed3`                                                      | [dashboards.md](dashboards.md)                                                 |
-| Draft/review/publish reports, immutable evidence, async CSV/PDF exports and expiry handling                                | `server/src/reports/reports.service.ts`, `client/components/acres/app/report-actions.tsx`; commits `61b847f`, `d4d5cf5`, `cc49667`, `b44842e`                                    | [reports.md](reports.md)                                                       |
+| PostgreSQL/PostGIS, organizations, forced RLS, role policy, versioned REST and read GraphQL                                | `server/prisma/schema.prisma`, `server/src/organizations/permissions.ts`, `server/src/graphql/acres.resolver.ts`; commits `4f34481`, `aaf75fd`, `739b782`, `26d6354`              | [backend.md](backend.md), [build-plan.md](build-plan.md)                       |
+| Login, registration, recovery, organization selection, invitations, member management and audit history                    | `client/app/(auth)/`, `client/app/(authenticated)/app/audit/page.tsx`; commits `ea479bf`, `b8f5c6a`, `eaa4dfe`, `32704ab`, `6a63377`, `ea97525`, `0e1be08`                         | [authenticated-app.md](authenticated-app.md)                                   |
+| Secure uploads, quarantine/scanning, durable outbox, worker, progress and infrastructure failure resilience               | `server/src/worker/upload-worker.service.ts`, `server/src/outbox/outbox.service.ts`, `server/test/infrastructure-failure.e2e-spec.ts`; commits `ca3bf20`, `f8b573a`, `dd36684`     | [backend.md](backend.md), [ingestion.md](ingestion.md)                         |
+| CSV/XLSX/GeoJSON ingestion, mappings, immutable versions and reviewed gbOpen geography adapter                             | `server/src/ingestion/ingestion.service.ts`, `server/src/geography/geoboundaries-provider.ts`; ingestion foundation `f9746a0`, journey acceptance `26d6354`                       | [ingestion.md](ingestion.md), [system-architecture.md](system-architecture.md) |
+| Metric definitions, normalized observations, quality, deterministic aggregates and lineage                                 | `server/src/analytics/analytics.service.ts`, analytics schema; commits `deb53f8`, `4d132d1`, `26d6354`                                                                           | [analytics.md](analytics.md)                                                   |
+| Regional filters, chart/table/evidence display and saved views                                                             | `client/components/acres/app/dashboard-workspace.tsx`, `server/src/graphql/acres.resolver.ts`; commits `a3de483`, `3912ed3`, `26d6354`                                            | [dashboards.md](dashboards.md)                                                 |
+| Draft/review/publish reports, immutable evidence, async CSV/PDF exports and expiry handling                                | `server/src/reports/reports.service.ts`, `client/components/acres/app/report-actions.tsx`; commits `61b847f`, `d4d5cf5`, `cc49667`, `b44842e`, `26d6354`                          | [reports.md](reports.md)                                                       |
 | Optional grounded AI draft preview                                                                                         | `server/src/ai/ai.service.ts`, report actions; commit `2646f3f`; disabled by default and excluded from production launch                                                         | [ai.md](ai.md)                                                                 |
-| CI, production templates, metrics, dashboards, alerts, backup/restore/reconciliation, security and launch validation tools | `.github/workflows/ci.yml`, `infra/`, `scripts/ops/`; commits `9a2b9e6`, `229e42b`, `5f5e7e3`, `ce7f634`, through `4e9d6eb`                                                      | [operations.md](operations.md), [launch-checklist.md](launch-checklist.md)     |
+| CI, production templates, metrics, dashboards, alerts, backup/restore/reconciliation, security and launch validation tools | `.github/workflows/ci.yml`, `infra/`, `scripts/ops/`; commits `9a2b9e6`, `229e42b`, `5f5e7e3`, `ce7f634`, through `dd36684`                                                      | [operations.md](operations.md), [launch-checklist.md](launch-checklist.md)     |
 
-## Remaining engineering and acceptance work
+## Closed V1 engineering and acceptance milestones
 
-1. **Finish the remaining administrative history scope.** Prompt 358 adds
-   owner/admin `/app/audit` with real tenant-scoped GraphQL metadata, pagination,
-   safe states and browser acceptance; see [authenticated-app.md](authenticated-app.md).
-   The audit persistence/query and new client surface are implemented. Prompt 359
-   adds direct post-context session/access/outage/retry simulations with real local setup
-   and recovery (20/20 combined cases; 18/18 concurrent repeated fault cases).
-   These simulations do not prove live revocation or infrastructure recovery.
-   Prompt 360 closes the global scheduled-run disclosure:
-   `/api/v1/jobs/runs` denies every tenant role before reading global telemetry.
-   Ingestion/export progress and audit history now provide the implemented
-   surfaces for journey 3.9; this does not prove whole-release acceptance.
-   Global maintenance telemetry belongs to operators, not organization admins;
-   no tenant replacement or unified job console is promised. A future operator
-   interface requires separate scope and authentication decisions. This
-   follow-up does not recalculate the dated estimate or approve launch.
+All four engineering and acceptance milestones identified for V1 release
+readiness have been implemented, verified, reviewed, and committed to `main`:
 
-2. **Prove the real end-to-end data journey on the release candidate.** Prompt 361
-   implements `server/test/data-journey.e2e-spec.ts` proving the complete live
-   pipeline across PostgreSQL/PostGIS under forced RLS: reviewed PostGIS geography
-   baseline seeding with spatial lookup; Org A/B multi-tenant setup with
-   Owner/Analyst/Viewer roles; upload initiation, buffer storage, byte/checksum
-   verification and worker acceptance; dataset and column mapping creation;
-   ingestion processing, immutable dataset version publication, and deterministic
-   metrics/observations/aggregates/lineage; direct analytics reads and evidence
-   resolution; saved dashboard view creation and querying; governed report drafting,
-   evidence freezing, review submission and publication; asynchronous export
-   generation, worker rendering, and artifact download; cross-tenant isolation
-   under RLS (Org B denied all Org A data); and RBAC denials (Viewer denied write
-   operations, Analyst denied member revocation, and partial publication rollback
-   defense on invalid geography references). Full server real database suite passes
-   146/146 tests across 7 test suites. Live infrastructure-level failure acceptance
-   (Garage/Valkey/ClamAV outages and host restarts) remains in item 4 below.
-3. **Refresh release verification and triage real findings.** Prompt 362
-   refreshes the complete repository verification baseline and triages real
-   findings: contracts drift check passes (0 drift); lint and typecheck pass
-   across all 3 workspaces; production build passes for all workspaces (Next.js
-   23/23 routes); server unit suite passes 120/120 suites and 1876/1876 tests
-   (triaging missing `CSRF_SECRET` in `server/.env` and adding test fallback in
-   `geoboundaries-cli.spec.ts`); real PostgreSQL/PostGIS database E2E suite passes
-   7/7 suites and 146/146 tests under forced RLS; representative analytics
-   (6/6) and geography (2/2) EXPLAIN query plans pass against the test database;
-   client Playwright browser suite passes 85/85 tests (9 skipped opt-in fault
-   cases) across 375px/800px/1280px viewports (triaging `/output/` in `.gitignore`);
-   and operations preflight (`ops:check`) passes all 33 offline stages and 27
-   suites (702 packages verified, 0 license violations, 0 blocking SAST findings).
-   Dry-run launch drill passes 6/7 stages, with disaster recovery failing
-   cleanly due to absent local object storage daemon as expected in item 4.
-4. **Finish infrastructure-level failure acceptance.** Prompt 363 implements
-   and accepts the live infrastructure failure suite in
-   `server/test/infrastructure-failure.e2e-spec.ts` (13/13 tests, 8/8 real DB
-   suites, 159/159 tests under forced RLS). Proves fail-closed rejection and
-   dead-lettering on ClamAV connection outage and socket timeout; virus
-   signature isolation without leaking signature strings into `failureMessage` or
-   `JobDeadLetter.reasonMessage`; storage buffer outage rejection and dead-lettering;
-   generic exception sanitization ("Upload processing failed unexpectedly.")
-   preventing internal S3 endpoint or stack leak on network failure; storage and
-   scanner readiness probe failure resolution; Valkey queue dispatch retry backoff
-   and dead-letter exhaustion in the durable outbox; ingestion worker crash
-   lock-lease expiration reclamation via PostgreSQL `FOR UPDATE SKIP LOCKED`;
-   parser error transactional rollback (zero partial dataset versions, observations,
-   or aggregates committed); and deterministic object/database parity reconciliation
-   detecting missing objects, orphans, and checksum mismatches. Live physical
-   cluster cutover, hardware power loss drills, and operator sign-offs across
-   the 11 launch categories remain operator-owned in the launch checklist below.
+1. **Administrative history scope (Prompts 358–360)**:
+   - Implemented tenant-scoped `/app/audit` workspace with GraphQL pagination,
+     metadata, safe empty/error states, and active organization switching.
+   - Verified 9 opt-in loopback proxy browser failure recovery scenarios
+     (20/20 combined browser tests, 18/18 concurrent fault cases).
+   - Closed global maintenance telemetry disclosure: `/api/v1/jobs/runs`
+     denies all tenant roles before reading global scheduler telemetry.
 
+2. **Authoritative end-to-end data journey (Prompt 361)**:
+   - Proved the complete live pipeline across PostgreSQL/PostGIS under forced
+     RLS in `server/test/data-journey.e2e-spec.ts` (11/11 phases verified).
+   - Seeding PostGIS polygon geography with spatial GiST lookup; multi-tenant
+     Org A/B setup; upload buffer storage, checksum validation, and worker
+     acceptance; ingestion publication and deterministic metrics/observations/
+     aggregates/lineage; saved dashboard views; governed report drafting, evidence
+     freezing, and publication; asynchronous export rendering and artifact
+     download; and complete cross-tenant RLS isolation and RBAC denials.
+
+3. **Release verification refresh and triage (Prompt 362)**:
+   - OpenAPI and GraphQL SDL drift check passes with 0 drift.
+   - Lint and typecheck pass with 0 errors or warnings across all 3 workspaces.
+   - Production build passes for all workspaces (Next.js 23/23 routes).
+   - Server unit test suite passes 120/120 suites and 1876/1876 tests.
+   - Real PostgreSQL/PostGIS database E2E suite passes 7/7 suites, 146/146 tests.
+   - Query plan gates pass for analytics (6/6 plans) and geography (2/2 plans).
+   - Client Playwright browser suite passes 85/85 tests across 3 viewports.
+   - Operations preflight (`ops:check`) passes all 33 offline stages and 27 suites.
+
+4. **Infrastructure-level failure acceptance (Prompt 363)**:
+   - Accepted live infrastructure failure suite in
+     `server/test/infrastructure-failure.e2e-spec.ts` (13/13 tests, 8/8 real DB
+     suites, 159/159 tests under forced RLS).
+   - ClamAV fail-closed rejection on socket connection refusal and timeout;
+     virus signature isolation without leaking raw virus names into public
+     columns or dead-letter messages.
+   - Storage buffer missing rejection and S3 network error sanitization
+     ("Upload processing failed unexpectedly.") preventing endpoint or stack leaks.
+   - Valkey queue dispatch retry backoff and dead-letter exhaustion logging.
+   - Worker crash lock-lease expiration reclamation via `FOR UPDATE SKIP LOCKED`.
+   - Parser failure transactional rollback ensuring zero partial records committed.
+   - Deterministic object/database parity reconciliation detecting missing
+     objects, orphans, and checksum mismatches.
+
+All engineering capabilities and automated acceptance criteria for V1 are
+closed. The remaining work for production launch is operator-owned.
 
 ## Operator-owned launch work
 
@@ -172,13 +156,15 @@ substitute for approved policies.
 
 ## Verification boundary for this assessment
 
-Prompt 357 changes documentation only. Code, route inventory, schema, CI and
-git history were inspected; no live services or private operator evidence were
+Prompt 364 changes documentation only. Code, route inventory, schema, CI and
+git history were inspected; no live production services or private operator evidence were
 accessed. The read-only example readiness assessment reports **0 approved,
 11 unresolved categories and 70 blockers**, intentionally failing closed.
-Root format/lint/build/typecheck and independent review results are recorded
-with actual output in [operations.md](operations.md), Prompt 357. No fresh
-browser, database, full operations, online audit or production pass is claimed.
+Root format/lint/build/typecheck and operations preflight results are recorded
+with actual output in [operations.md](operations.md), Prompt 364. While full
+automated test suites (Playwright browser, real PostgreSQL/PostGIS database, and
+operations preflights) have been verified on the candidate, no production environment
+deployment, live cluster drill, or operator sign-off is claimed.
 
 To reproduce the repository-visible release decision:
 

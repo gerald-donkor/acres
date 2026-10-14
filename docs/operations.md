@@ -12083,3 +12083,42 @@ containment, and restore reconciliation. Implemented in
    - Exit 0; all 33 offline stages and 27 test suites passed in 102.5 s; 182/182 launch drill tests passed.
 8. **Diff check (`git diff --check`)**:
    - Exit 0; 0 trailing whitespace, 0 merge markers.
+
+## Prompt 364 — V1 Release Candidate baseline and launch readiness handoff (2026-10-14)
+
+Reconciles whole-project status following the completion of Prompts 358 through
+363, establishing the formal **V1 Release Candidate baseline at commit `dd36684`**.
+
+### Milestone reconciliation & release posture
+
+1. **Closed V1 engineering and acceptance milestones**:
+   - Milestone 1 (Administrative history scope, Prompts 358–360): `/app/audit`, 9 opt-in browser fault scenarios, `/api/v1/jobs/runs` denial.
+   - Milestone 2 (Authoritative 11-phase data journey on PostgreSQL/PostGIS under forced RLS, Prompt 361): 11 phases verified, complete multi-tenant isolation, RBAC denial.
+   - Milestone 3 (Release verification refresh and triage, Prompt 362): 0 contract drift, 0 lint/typecheck errors, 23/23 Next.js routes, 120/120 unit suites (1876/1876 tests), 85/85 browser tests, 6/6 analytics & 2/2 geography EXPLAIN plans, 33/33 ops preflights.
+   - Milestone 4 (Infrastructure failure acceptance, Prompt 363): 13/13 tests, 8/8 real DB suites (159/159 tests), fail-closed ClamAV socket downtime & timeout quarantine, virus signature isolation, S3 missing buffer rejection & error sanitization, Valkey retry backoff & dead-lettering, worker crash lock-lease reclamation via `FOR UPDATE SKIP LOCKED`, parser rollback, and storage/database parity reconciliation.
+
+2. **Updated V1 completion scorecard**:
+   - Application capability completion: **75 / 75 earned points (100% complete)** across all 6 capability domains.
+   - Whole-project completion: **91 / 100 points (91% complete)**.
+   - Remaining 9 points are strictly operator-owned launch activities: physical production host provisioning, live cluster drills, and 11 category sign-offs in `infra/launch/readiness.example.json` under Prompt 201.
+
+3. **Launch readiness validator status**:
+   - Target: `infra/launch/readiness.example.json`.
+   - Result: Fail-closed (exit code 1), 0 of 11 categories approved, 11 unresolved, 70 blockers detected.
+
+### Verification results and actual command outputs
+
+1. **Contracts check (`npm run contracts:check`)**:
+   - Exit 0; 0 schema drift detected between code and checked-in artifacts.
+2. **Formatting & Linting (`npm run lint`)**:
+   - Exit 0; 0 errors, 0 warnings across client, shared, and server workspaces.
+3. **Typechecking (`npm run typecheck`)**:
+   - Exit 0; 0 errors across `@acres/shared`, `@acres/client`, and `@acres/server`.
+4. **Production builds (`npm run build`)**:
+   - Exit 0; Next.js 16.3.8 compiles 23/23 routes cleanly; Nest server and shared library compile cleanly.
+5. **Operations preflight (`npm run ops:check`)**:
+   - Exit 0; all 33 offline stages and 27 test suites passed.
+6. **Launch readiness check (`node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`)**:
+   - Exit 1 (fail-closed as intended); 0 approved, 11 unresolved, 70 blockers.
+7. **Diff check (`git diff --check`)**:
+   - Exit 0; 0 trailing whitespace, 0 merge markers.

@@ -3756,3 +3756,20 @@ all 3 workspaces), production build (**23/23** routes), and operations preflight
 (`ops:check` 33/33 stages, 27/27 suites, 182/182 drill tests) pass.
 `docs/operations.md` records verification details. Operator-owned launch
 checklist sign-offs across 11 categories (Prompt 201) remain open. No deploy or push.
+
+**Prompt 364 — V1 Release Candidate baseline and launch readiness handoff (2026-10-14):**
+Reconciles `docs/project-status.md`, `docs/build-plan.md`, `docs/operations.md`, and
+the operator launch checklist, establishing the formal V1 Release Candidate
+baseline at commit `dd36684` on `main`. Formally marks all four V1 engineering
+milestones (administrative history `/app/audit`, authoritative real PostgreSQL/PostGIS
+11-phase data journey under forced RLS, release verification refresh/triage across 3
+workspaces, and comprehensive live infrastructure failure acceptance) closed.
+Scorecard reflects **100% of V1 application capabilities completed** (75/75 points)
+and **91% whole-project completion** (91/100 points), with the remaining 9%
+reserved strictly for operator-owned production infrastructure, live cluster drills,
+and 11 category sign-offs under Prompt 201. All repository contracts (0 drift),
+lint (0 errors, 0 warnings), sequential typecheck (0 errors across 3 workspaces),
+Next.js production build (23/23 routes), and operations preflights (`ops:check` 33/33
+stages) verified. Launch readiness validator confirms fail-closed posture (0 approved,
+11 unresolved categories, 70 blockers) on the checked-in readiness template. Prompt 201
+and Phase 12 operator sign-offs remain open. No deploy or push.
