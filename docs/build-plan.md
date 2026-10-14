@@ -3792,3 +3792,25 @@ RLS), and 33 offline ops preflight stages. Launch readiness check confirms fail-
 posture (0 approved, 11 unresolved categories, 70 blockers) on `readiness.example.json`.
 `docs/operations.md` records verification details. Prompt 201 and Phase 12 operator
 sign-offs remain open. No deploy or push.
+
+**Prompt 366 — reconcile checklist category intakes with V1 Release Candidate baseline (2026-10-14):**
+Reconciles `docs/launch-checklist.md` §3's Category 1 through 11 preflight intake
+records with the V1 Release Candidate baseline at commit `dd36684` on `main`.
+Appends authoritative candidate intake assessments across all 11 categories:
+Category 1 (`production_domain_tls`, 18/18 Caddy routes, Next 16.3.8 23/23 routes),
+Category 2 (`smtp_delivery`, template keys and end-to-end mail generation),
+Category 3 (`secrets_management`, 0 leaks, 7 credential classes, dry-run rotation),
+Category 4 (`secret_references`, 12 indirect secret fields, CSRF signing isolation),
+Category 5 (`slo_and_alerting`, 11 alert rules, 6/6 analytics & 2/2 spatial query plan gates),
+Category 6 (`backup_and_disaster_recovery`, hardened backup/restore/reconciliation, 13 failure recovery tests),
+Category 7 (`data_retention_policy`, purge batch bounds and download expiry),
+Category 8 (`volume_encryption`, 9 stateful mounts and separated key custody),
+Category 9 (`graphql_introspection`, production introspection policy and 0 SDL drift),
+Category 10 (`deployment_and_rollback`, 23/23 routes, Nest compile, 85 Playwright tests), and
+Category 11 (`optional_ai_posture`, disabled preview, absent key, 3 deterministic no-AI journeys).
+Reaffirms fail-closed posture: all 11 categories remain `unresolved` in `readiness.example.json`
+(70 blockers detected by `scripts/ops/check-launch-readiness.js`). All repository contracts
+(0 drift), lint (0 errors, 0 warnings), sequential typecheck (0 errors across 3 workspaces),
+Next.js production build (23/23 routes), and full operations preflight (`ops:check` 33/33
+stages) verified. `docs/operations.md` records verification details. Prompt 201 and Phase 12
+operator sign-offs remain open. No deploy or push.

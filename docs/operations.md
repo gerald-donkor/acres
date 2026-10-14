@@ -12168,3 +12168,42 @@ handoff repository prefill with the V1 Release Candidate baseline at commit
    - Exit 1 (fail-closed as intended); 0 approved, 11 unresolved, 70 blockers.
 7. **Diff check (`git diff --check`)**:
    - Exit 0; 0 trailing whitespace, 0 merge markers.
+
+## Prompt 366 — Reconcile checklist category intakes with V1 Release Candidate baseline (2026-10-14)
+
+Reconciles `docs/launch-checklist.md` §3's Category 1 through 11 preflight intake
+records with the V1 Release Candidate baseline at commit `dd36684` on `main`.
+
+### Category 1–11 candidate intake alignment
+
+Appends authoritative candidate intake assessments across all 11 categories in §3:
+1. **Category 1 (`production_domain_tls`)**: Caddy production routing and security headers verifier (`verify-caddy-routing.js`) passes 18/18 routes; reverse proxy, timeouts, security headers, and S3 SigV4 Host preservation verified; Next.js 16.3.8 compiles 23/23 routes cleanly. Unresolved (4 blockers: domain, tls_contact_email placeholders, section status, evidence array).
+2. **Category 2 (`smtp_delivery`)**: Template keys verified (`check-smtp-template-keys.js`); end-to-end invitation and recovery email pipelines verified in Prompts 58 and 361. Unresolved (8 blockers).
+3. **Category 3 (`secrets_management`)**: Secret scanning zero leaks (`scan-secrets.sh`); 7 credential classes and redaction audit verified in Prompts 230 and 363; dry-run rotation drill passing; SBOM (702 packages, 0 license violations) passing. Unresolved (5 blockers).
+4. **Category 4 (`secret_references`)**: 12 indirect secret fields validated by schema (`ops:readiness-schema-test` 8/8); `CSRF_SECRET` isolated in `server/.env`. Unresolved (14 blockers).
+5. **Category 5 (`slo_and_alerting`)**: 11 operational Prometheus alert rules verified (`verify-alert-rules.js`); measured query plan gates passing (6/6 analytics, 2/2 spatial PostGIS); capacity load evaluator preflight verified. Unresolved (4 blockers).
+6. **Category 6 (`backup_and_disaster_recovery`)**: Hardened `backup-postgres.sh`, `restore-postgres.sh`, and `reconcile-storage-objects.js` automation (Prompts 305–356); 13/13 infrastructure failure recovery tests passing under forced RLS in Prompt 363. Unresolved (3 blockers).
+7. **Category 7 (`data_retention_policy`)**: Export artifact retention purge batch bounds (Prompt 79) and download expiry enforcement (Prompt 71) verified; 8 policy fields enforced. Unresolved (5 blockers).
+8. **Category 8 (`volume_encryption`)**: `verify-volume-encryption.js` verifying 9 required stateful service mounts and key separation; PostgreSQL compose layout verified (Prompt 48). Unresolved (7 blockers).
+9. **Category 9 (`graphql_introspection`)**: Production introspection probe policy and `/graphql` schema verification (0 SDL drift). Unresolved (3 blockers).
+10. **Category 10 (`deployment_and_rollback`)**: Next.js 16.3.8 compiling 23/23 routes cleanly; Nest server compiling cleanly; `check-release-images.js` and dry-run deployment drill passing; 85 Playwright browser tests passing. Unresolved (15 blockers).
+11. **Category 11 (`optional_ai_posture`)**: AI draft preview disabled by default (`ai_enabled: false`, `AI_DRAFT_ENABLED=false`), absent `GEMINI_API_KEY`, unpaid Gemini Developer API excluded, 3 deterministic core user journeys verified without AI in Prompt 361. Unresolved (2 blockers).
+
+Reaffirmed fail-closed posture: all 11 categories remain `unresolved` in `infra/launch/readiness.example.json` (70 blockers detected by `scripts/ops/check-launch-readiness.js`).
+
+### Verification results and actual command outputs
+
+1. **Contracts check (`npm run contracts:check`)**:
+   - Exit 0; 0 schema drift detected between code and checked-in artifacts.
+2. **Formatting & Linting (`npm run lint`)**:
+   - Exit 0; 0 errors, 0 warnings across client, shared, and server workspaces.
+3. **Typechecking (`npm run typecheck`)**:
+   - Exit 0; 0 errors across `@acres/shared`, `@acres/client`, and `@acres/server`.
+4. **Production builds (`npm run build`)**:
+   - Exit 0; Next.js 16.3.8 compiles 23/23 routes cleanly; Nest server and shared library compile cleanly.
+5. **Operations preflight (`npm run ops:check`)**:
+   - Exit 0; all 33 offline stages and 27 test suites passed.
+6. **Launch readiness check (`node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`)**:
+   - Exit 1 (fail-closed as intended); 0 approved, 11 unresolved, 70 blockers.
+7. **Diff check (`git diff --check`)**:
+   - Exit 0; 0 trailing whitespace, 0 merge markers.

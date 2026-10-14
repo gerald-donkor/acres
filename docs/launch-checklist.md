@@ -152,6 +152,22 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   static evidence checks, emitting `'A referenced Caddy routing report is invalid or failed'`
   and explicitly terminating inspection with `continue;` to prevent fall-through.
 
+**Prompt 366 Category 1 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). Caddy production routing and security headers verifier
+(`node scripts/ops/verify-caddy-routing.js`) passed all 18/18 routes; reverse
+proxy routing, transport timeouts, security headers, and S3 SigV4 Host
+preservation are verified. Full Next.js 16.3.8 client build compiled 23/23 routes
+cleanly. Root contracts check (0 schema drift), lint (0 errors, 0 warnings
+across all 3 workspaces), sequential typecheck (0 errors across 3 workspaces),
+and operations preflight (33 offline stages, 27 test suites) passed. Example
+readiness check exited 1 fail-closed (0 approved, 11 unresolved, 70 blockers, 4
+Category 1 blockers: unresolved domain placeholder, unresolved tls_contact_email
+placeholder, unresolved section status, empty evidence array). Category 1 remains
+**unresolved** pending operator-selected production FQDN, TLS contact email,
+issued certificate, active HSTS decision, and signed live operator receipt under
+Prompt 201.
+
 ### 2. SMTP Delivery (`smtp_delivery`)
 
 - Drill/verify: test delivery via the configured provider, DKIM/SPF/DMARC DNS checks
@@ -236,6 +252,21 @@ operator child receipt (`execution_mode: "live"`) when approved:
   private file paths, canary tokens, stack traces, and internal errors.
 - Unresolved example readiness record failed closed with 0 approved categories,
   11 blocked, and 70 blockers.
+
+**Prompt 366 Category 2 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). SMTP configuration template keys verified (`node
+scripts/ops/check-smtp-template-keys.js` 1/1 suite passed). End-to-end member
+invitation and password recovery mail generation verified in Prompts 58 and 361.
+Full offline operations preflight passed (33 offline stages, 27 test suites).
+Example readiness check exited 1 fail-closed (0 approved, 11 unresolved, 70
+blockers, 8 Category 2 blockers: provider, host, from_address,
+credentials_source_reference, delivery_policy, bounce_abuse_handling placeholders,
+unresolved section status, empty evidence array). Category 2 remains
+**unresolved** pending production SMTP provider, host/port/TLS mode, sender
+address, indirect credentials reference matching `secret_references.smtp_secret_source`,
+delivery and bounce policies, live delivery receipt, and ops lead sign-off under
+Prompt 201.
 
 ### 3. Secrets Management (`secrets_management`)
 
@@ -348,6 +379,21 @@ exited 0. The example readiness validator exited 1 as designed: 0 of 11
 categories approved, 11 blocked, 70 blockers, including five Category 3
 blockers (`injection_mechanism`, `masking_policy`, `compromise_response_plan`,
 unresolved section status, empty evidence array).
+
+**Prompt 366 Category 3 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). Runtime secret scanning (`scripts/ops/scan-secrets.sh`)
+verified zero secret leaks. Seven credential classes and credential redaction
+audit verified in Prompts 230 and 363. Secret rotation rehearsal (`bash
+scripts/ops/run-secret-rotation-drill.sh --dry-run`) verified cleanly;
+supply-chain SAST, SBOM (702 packages, 0 license violations), and container
+security preflights passing. Example readiness check exited 1 fail-closed (0
+approved, 11 unresolved, 70 blockers, 5 Category 3 blockers:
+`injection_mechanism`, `masking_policy`, `compromise_response_plan` placeholders,
+unresolved section status, empty evidence array). Category 3 remains
+**unresolved** pending production runtime injection mechanism, masking policy,
+rotation cadence decision (<=90 days), compromise response runbook reference,
+live rotation receipt, and security lead sign-off under Prompt 201.
 
 ### 4. Secret References (`secret_references`)
 
@@ -581,6 +627,19 @@ operator child receipt (`execution_mode: "live"`) when approved:
   private file paths, canary tokens, stack traces, and internal errors.
 - Unresolved example readiness record failed closed with 0 approved categories,
   11 blocked, and 70 blockers.
+
+**Prompt 366 Category 4 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). Readiness schema validation (`npm run ops:readiness-schema-test`
+8/8) verifies all 12 distinct indirect secret source fields. CSRF signing secret
+isolated in `server/.env` (Prompt 221). Docker Compose production templates
+verified with scoped secret environments. Example readiness check exited 1
+fail-closed (0 approved, 11 unresolved, 70 blockers, 14 Category 4 blockers:
+12 indirect secret source placeholders, unresolved section status, empty evidence
+array). Category 4 remains **unresolved** pending 12 distinct indirect secret
+store references (session, csrf, db_migrator, db_app, db_monitor, valkey,
+garage_rpc, garage_admin, garage_metrics, garage_s3, smtp, grafana_admin), store
+access policy verification, and security lead sign-off under Prompt 201.
 
 ### 5. SLOs, Alerting & Capacity (`slo_and_alerting`)
 
@@ -868,6 +927,21 @@ inspected live operator child receipt (`execution_mode: "live"`) when approved:
   private file paths, canary tokens, stack traces, and internal errors.
 - Unresolved example readiness record failed closed with 0 approved categories,
   11 blocked, and 70 blockers.
+
+**Prompt 366 Category 5 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). 11 operational Prometheus alert rules verified
+(`verify-alert-rules.js`). Measured EXPLAIN query plan gates pass 6/6 analytics
+plans and 2/2 spatial PostGIS polygon queries (Prompts 39, 49, 361). Capacity load
+evaluator preflight verified (`verify-capacity-load.js`). Full offline operations
+preflight passed (33 offline stages, 27 test suites). Example readiness check
+exited 1 fail-closed (0 approved, 11 unresolved, 70 blockers, 4 Category 5
+blockers: `alert_recipients[0]` and `escalation_runbook_ref` placeholders,
+unresolved section status, empty evidence array). Category 5 remains
+**unresolved** pending operator adoption of SLO targets (>=99.9% availability,
+<=500ms HTTP p95, >=100 RPS, <=50ms DB pool acquisition p95, <=100ms DB query
+execution p95), live on-call alert routing, fresh target-bound Prometheus
+telemetry evidence, and SRE lead sign-off under Prompt 201.
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
@@ -1694,6 +1768,24 @@ prove authenticity, completeness, bytes or atomic/live recovery. Prompt 201,
 Category 6 live approval and Phase 12 exit stay open. No live services,
 credentials, SQL/schema changes, operator approval, deployment or push occurred.
 
+**Prompt 366 Category 6 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). PostgreSQL backup automation (`backup-postgres.sh`),
+isolated database restoration (`restore-postgres.sh`), and object storage
+reconciliation (`reconcile-storage-objects.js`) verified across Prompts 305–356.
+Full server real database E2E suite passes 8/8 suites and 159/159 tests under
+forced RLS, including 13/13 infrastructure failure recovery tests in Prompt 363
+(handling ClamAV socket downtime/timeouts, missing storage buffers, S3 error
+sanitization, Valkey outbox exponential backoff retries, worker crash lock-lease
+reclamation via `FOR UPDATE SKIP LOCKED`, parser transactional rollback, and
+storage/database parity reconciliation). Full offline operations preflight
+passed (33 offline stages, 27 test suites). Example readiness check exited 1
+fail-closed (0 approved, 11 unresolved, 70 blockers, 3 Category 6 blockers:
+`backup_destination` placeholder, unresolved section status, empty evidence
+array). Category 6 remains **unresolved** pending operator adoption of RPO
+(<=1h) and RTO (<=4h), off-host encrypted destination, isolated restore drill,
+and SRE lead sign-off under Prompt 201.
+
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table
@@ -1851,6 +1943,20 @@ typecheck`, and `npm run build` (client Next 16.3.4 webpack, NestJS, and
 shared) exited 0 across all workspaces, and `git diff --check` exited 0. No
 operator production source, retention review, or approval was inspected, and
 none of these repository results supplies Category 7 evidence.
+
+**Prompt 366 Category 7 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). Export artifact retention purge batch bounds (Prompt 79)
+and export download expiration enforcement (Prompt 71) verified. Schema and
+validator enforce 8 retention policy fields (account, audit, upload quarantine,
+rejected objects, exports, reports, telemetry, backups). Full offline
+operations preflight passed (33 offline stages, 27 test suites). Example
+readiness check exited 1 fail-closed (0 approved, 11 unresolved, 70 blockers, 5
+Category 7 blockers: `account_retention_policy`, `audit_retention_policy`, and
+`report_retention_policy` placeholders, unresolved section status, empty
+evidence array). Category 7 remains **unresolved** pending approved tenant data,
+audit log, and report retention windows, cleanup verification, and legal lead
+sign-off under Prompt 201.
 
 ### 8. Volume Encryption (`volume_encryption`)
 
@@ -2033,6 +2139,19 @@ inspected, and none of these repository results supplies Category 8 evidence.
   emitting `'A referenced volume encryption report is invalid or failed'` and explicitly terminating
   inspection with `continue;` to prevent fall-through.
 
+**Prompt 366 Category 8 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). Volume encryption verifier (`verify-volume-encryption.js`)
+verifies 9 required stateful service mounts and unlock material key separation.
+Hardened PostgreSQL compose volume layout verified in Prompt 48. Full offline
+operations preflight passed (33 offline stages, 27 test suites). Example
+readiness check exited 1 fail-closed (0 approved, 11 unresolved, 70 blockers, 7
+Category 8 blockers: `encryption_mechanism`, 3 `encrypted_mount_paths`,
+`key_recovery_owner` placeholders, unresolved section status, empty evidence
+array). Category 8 remains **unresolved** pending approved host LUKS/dm-crypt or
+cloud volume encryption for 9 stateful mounts, separated key custody
+verification, and security lead + key recovery owner sign-off under Prompt 201.
+
 ### 9. GraphQL Introspection (`graphql_introspection`)
 
 - Drill/verify: production route probe (introspection query must fail closed)
@@ -2136,6 +2255,18 @@ operator child receipt (`execution_mode: "live"`) when approved:
   private file paths, canary tokens, stack traces, and internal errors.
 - Unresolved example readiness record failed closed with 0 approved categories,
   11 blocked, and 70 blockers.
+
+**Prompt 366 Category 9 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). Production GraphQL schema introspection policy established
+(defaulting to false). Schema SDL and contract drift check (`npm run contracts:check`)
+passes with 0 drift. Comprehensive GraphQL query resolvers and pagination verified
+in Prompts 50, 52, 358, and 361. Full offline operations preflight passed (33
+offline stages, 27 test suites). Example readiness check exited 1 fail-closed (0
+approved, 11 unresolved, 70 blockers, 3 Category 9 blockers: `justification`
+placeholder, unresolved section status, empty evidence array). Category 9 remains
+**unresolved** pending operator production introspection policy decision, live
+`/graphql` ingress route probe, and security lead sign-off under Prompt 201.
 
 ### 10. Deployment & Rollback (`deployment_and_rollback`)
 
@@ -2328,6 +2459,22 @@ stopped in the Next 16.3.4 client build with `Could not parse output from
 TypeScript's --showConfig`. These environment failures are not passes and none
 of the repository checks proves a production promotion or rollback.
 
+**Prompt 366 Category 10 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). Next.js 16.3.8 compiles 23/23 routes cleanly. Nest server
+and shared library compile cleanly. Release image environment validator
+(`node scripts/ops/check-release-images.js`) and dry-run deployment drill
+(`bash scripts/ops/run-deployment-drill.sh --dry-run`) passing. Playwright
+browser test suite passes 85/85 tests across 3 viewports. Full offline operations
+preflight passed (33 offline stages, 27 test suites). Example readiness check
+exited 1 fail-closed (0 approved, 11 unresolved, 70 blockers, 15 Category 10
+blockers: `target_host_profile`, `image_registry_path`, `deployment_approver`,
+`rollback_authority`, `image_provenance_policy`, 7 release placeholders,
+unresolved section status, empty evidence array). Category 10 remains
+**unresolved** pending host profile, OCI registry, immutable digest-pinned image
+pairs, release approver, rollback authority, live promotion/rollback drill, and
+release manager sign-off under Prompt 201.
+
 ### 11. No-AI Production Posture (`optional_ai_posture`)
 
 - Drill/verify: `node scripts/ops/check-launch-readiness.js <record>` (fail-closed AI gates)
@@ -2411,6 +2558,19 @@ DNS resolution of `registry.npmjs.org` returned `EAI_AGAIN`; subsequent checks
 in that command did not run. `npm run build` stopped in the Next 16.3.4 client
 build with `Could not parse output from TypeScript's --showConfig`. None of
 these repository checks establishes a production runtime or journey result.
+
+**Prompt 366 Category 11 candidate intake — 2026-10-14T10:30:00Z UTC.** Reviewed
+source commit `dd366847cde9dc76af2ad4acc6d200a6528ced3b` on `main` (V1 Release
+Candidate baseline). AI draft preview disabled by default (`ai_enabled: false`,
+`AI_DRAFT_ENABLED=false`), absent `GEMINI_API_KEY` in production environments,
+unpaid Gemini Developer API preview excluded from launch, and 3 deterministic
+core user journeys (analytics dashboards, governed reports, export downloads)
+verified without AI in Prompt 361. Full offline operations preflight passed (33
+offline stages, 27 test suites). Example readiness check exited 1 fail-closed (0
+approved, 11 unresolved, 70 blockers, 2 Category 11 blockers: unresolved section
+status, empty evidence array). Category 11 remains **unresolved** pending
+production API/worker configuration inspection and product-and-security lead
+sign-off under Prompt 201.
 
 ## 4. Unified Drill Execution & Evidence Dossier
 
