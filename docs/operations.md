@@ -12207,3 +12207,99 @@ Reaffirmed fail-closed posture: all 11 categories remain `unresolved` in `infra/
    - Exit 1 (fail-closed as intended); 0 approved, 11 unresolved, 70 blockers.
 7. **Diff check (`git diff --check`)**:
    - Exit 0; 0 trailing whitespace, 0 merge markers.
+
+## Prompt 368 — Production target and authority intake (2026-10-14)
+
+Repository baseline: `110236332489c24ebaf17fea58304fc1ab783028` on `main`.
+`git status --short` initially reported only the approved, untracked
+`prompts/368-production-target-and-authority-intake.md`. The latest five commits
+were `1102363`, `9e81a21`, `b9575db`, `32cbae6`, and `dd36684`.
+The baseline and historical candidate are repository identities; neither has
+been selected or verified as the deployed production source in this intake.
+
+**Disposition: blocked intake.** One consolidated asynchronous operator request
+was issued during execution. No intake response or designated restricted record
+was supplied before this record was prepared. The following states describe
+this session's inputs, not whether private operator records exist elsewhere.
+
+| Input group     | Session disposition                                                                                                                                                              | Required supplier / remaining owner                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Target          | Absent: environment ID, selected topology confirmation, and approved channel for host/FQDN. Compose+Caddy is only the repository reference topology.                             | Operations lead; named contact not supplied.                                                       |
+| Candidate       | Absent: operator-reviewed 40-character source SHA, immutable current/previous image pairs, provenance and materialized deployment references.                                    | Release manager; named person not supplied.                                                        |
+| People          | Absent: release manager, deployment approver, rollback authority, evidence custodian and all eleven category suppliers/signers.                                                  | Operations lead to coordinate the role owners in the existing sign-off matrix; names not supplied. |
+| Evidence access | Absent: restricted store/readiness-record references, access contact/procedure, allowed records/fields and existing-record-only scope confirmation. No private source inspected. | Evidence custodian; named person not supplied.                                                     |
+| Action boundary | No exact-action production authorization, target, window or recovery scope supplied. Approval of Prompt 368 covers this bounded repository intake.                               | Deployment approver and rollback authority; names not supplied.                                    |
+
+No production fact reached `supplied, unverified` or independently inspected
+status. No non-sensitive operator reference was available to record. No
+credential directories, secret values, account inventories or live endpoints
+were searched to discover a target. Production activation has not occurred in
+this execution; Prompt 201 and Phase 12 remain open.
+
+**Single next action:** the operations lead supplies the consolidated shared
+prerequisites through an operator-approved channel, including a named evidence
+custodian and scoped read-only access to existing designated records. Keep
+credentials, private hosts and raw evidence outside chat and git. See
+[the existing shared prerequisites and operator handoff](launch-checklist.md#6a-production-evidence-preflight-gap-register--2026-10-14)
+and [sign-off owners](launch-checklist.md#7-formal-pre-launch-sign-off-matrix);
+this record creates no new launch milestone or category approval.
+
+### Actual verification and limits
+
+`node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`
+exited **1**, with the following actual summary:
+
+```text
+SUMMARY:
+  Total Required Categories: 11
+  Approved Categories:       0
+  Unresolved / Blocked:      11
+  Total Blockers Detected:   70
+Result: FAIL-CLOSED. Launch readiness check failed: unresolved blockers remain.
+```
+
+This assesses only the checked-in unresolved example. It does not inspect or
+invalidate a private operator readiness record. No unified launch drill,
+live-category verifier, deployment, external evidence write or push was run.
+
+Root verification ran sequentially. `npm run lint` exited **0** after all
+three workspace ESLint commands, with no diagnostic output. `npm run typecheck`
+exited **0** after the shared build and all three workspace typechecks; its
+server step reported:
+
+```text
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 307ms
+```
+
+The first sandboxed `npm run build` exited **1** during the client build:
+
+```text
+Error: Could not parse output from TypeScript's --showConfig.
+```
+
+The same `npm run build`, retried with local execution permission, exited **0**:
+
+```text
+▲ Next.js 16.3.8 (webpack)
+✓ Compiled successfully in 2.4s
+✓ Generating static pages using 7 workers (23/23) in 540ms
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 314ms
+```
+
+The installed Prettier initially flagged the approved prompt (exit **1**);
+formatting was applied only to that prompt and the new intake section.
+`node node_modules/prettier/bin/prettier.cjs --check
+/tmp/acres-368-intake.md prompts/368-production-target-and-authority-intake.md`
+then exited **0**: `All matched files use Prettier code style!`
+The temporary file is the extracted new section; historical operations content
+was not reformatted. `git diff --check` exited **0** with no output.
+No fresh full-ops, database or browser suite is claimed for this documentation
+change. An ordinary revert removes the intake record without a production action.
+
+Independent read-only review inspected the uncommitted intake diff and approved
+prompt against the baseline and checklist. It reported no critical, important
+or minor findings and assessed the change ready to commit. Review evaluation
+confirmed the reported scope and links; no implementation fix was required.
+The reviewer independently checked the diff, not the build/test executions.
