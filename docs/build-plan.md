@@ -3773,3 +3773,22 @@ Next.js production build (23/23 routes), and operations preflights (`ops:check` 
 stages) verified. Launch readiness validator confirms fail-closed posture (0 approved,
 11 unresolved categories, 70 blockers) on the checked-in readiness template. Prompt 201
 and Phase 12 operator sign-offs remain open. No deploy or push.
+
+**Prompt 365 — reconcile launch checklist with V1 Release Candidate baseline (2026-10-14):**
+Reconciles `docs/launch-checklist.md` §6A's preflight gap register and operator
+handoff repository prefill with the V1 Release Candidate baseline at commit
+`dd36684` on `main`. Replaces stale September 2026 preflight references (`3da8949`,
+`efb36d5`, `5a1cc5e`) with current verified preflight capabilities across all 11
+launch categories: Caddy routing and security headers (18/18 routes), SMTP
+templating keys, runtime secret scanning and 7 credential classes, 12 indirect
+secret references with isolated CSRF signing, 11 operational alert rules with 6/6
+analytics and 2/2 spatial EXPLAIN query plan gates, hardened backup/restore/reconciliation
+automation with 13/13 infrastructure failure recovery tests, data retention purge
+bounds, 9 stateful mount volume encryption checks, GraphQL introspection policy,
+Next.js 16.3.8 production build (23/23 routes) with immutable image contracts, and
+fail-closed no-AI posture. The repository prefill table records 120 server unit
+suites (1876/1876 tests), 8 real PostgreSQL/PostGIS suites (159/159 tests under forced
+RLS), and 33 offline ops preflight stages. Launch readiness check confirms fail-closed
+posture (0 approved, 11 unresolved categories, 70 blockers) on `readiness.example.json`.
+`docs/operations.md` records verification details. Prompt 201 and Phase 12 operator
+sign-offs remain open. No deploy or push.
