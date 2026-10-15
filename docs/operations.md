@@ -12305,7 +12305,7 @@ confirmed the reported scope and links; no implementation fix was required.
 The reviewer independently checked the diff, not the build/test executions.
 
 
-## Prompt 370 — Operator handoff package (2026-10-14)
+## Prompt 369 (originally 370) — Operator handoff package (2026-10-14)
 
 Baseline: `6a06864b1a8f4628c881cb385d95fe6d7d5041b8` on `main`.
 The user requested a recommended handoff package and explicitly authorized
@@ -12323,8 +12323,9 @@ The form covers target, candidate, people, evidence access and action boundary;
 its eleven category keys match the readiness example in canonical order. Named
 people, target facts, source/image identities and approvals remain `PENDING`,
 with all categories `unresolved` and actions `not authorized`. The package does
-not supply the missing production intake or approve launch. Prompt 369 remains
-unchanged and untracked. No operator message, credential discovery, live probe,
+not supply the missing production intake or approve launch. At execution time,
+the separate verify-operator-production-intake prompt remained unchanged and
+untracked; it was subsequently removed in the 2026-10-15 reorganization below. No operator message, credential discovery, live probe,
 external evidence write, deployment or push occurred.
 
 ### Actual verification
@@ -12398,5 +12399,31 @@ independent execution of the full gates.
 No formatter, fresh database/browser/full-ops suite or live acceptance was run
 for this documentation-only change. Completion requires operators to place a
 private copy in an approved restricted store, supply its missing facts, and
-arrange scoped independent inspection under Prompt 369; the eleven-category
+arrange scoped independent inspection under the launch checklist; the eleven-category
 launch exit remains open.
+
+
+## Prompt sequence reorganization (2026-10-15)
+
+The user explicitly requested removal of the unused intake prompt and
+reorganization of the final prompt numbers. Removed the untracked
+`369-verify-operator-production-intake.md`; moved the already executed handoff
+package from 370 to [369](../prompts/369-operator-handoff-package.md), and the
+approved, unexecuted Vercel migration from 371 to
+[370](../prompts/370-vercel-managed-migration-and-deployment.md). The handoff
+implementation remains the work committed in `aff196a`; renumbering does not
+rerun it. Migration approval follows its unchanged implementation scope.
+
+Updated stale intake dependencies and the AGENTS.md numbering exception. No
+application code, deployment, production evidence, or git history was changed.
+Verification checks the prompt sequence, headings, removed-path references and
+`git diff --check`; application tests/builds are not rerun for file organization.
+
+Actual verification: `git diff --check` exited 0 with no output. The local
+sequence check reported `PASS: tail is 368 -> 369 handoff -> 370 Vercel; headings
+match; obsolete paths absent; no new numbering duplicates/gaps.` Existing
+duplicate numbers 92–94 were verified against HEAD and left unchanged. Independent
+read-only review reported no Critical, Important or Minor findings and assessed
+the reorganization ready to commit. Feedback was checked against completed-work
+status, migration approval continuity, old-path removal and the bounded numbering
+exception; no implementation fixes were required. The next new prompt is 371.

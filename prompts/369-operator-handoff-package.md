@@ -1,20 +1,23 @@
-# Prompt 370 — Create the operator handoff package
+# Prompt 369 — Create the operator handoff package
 
 ## Scope and why this is next
 
-Baseline: `6a06864b1a8f4628c881cb385d95fe6d7d5041b8` on main. Prompt 369 is
-untracked and blocked by missing operator input; preserve it unchanged. The user
-now requests creation of the recommended handoff and explicitly authorizes
-execution after this prompt is written. Create a reusable, reviewable form and
-completion procedure for Phase 12. A form makes the missing intake concrete; it
-does not establish a production target or close Prompt 369's gate.
+Historical execution baseline: `6a06864b1a8f4628c881cb385d95fe6d7d5041b8` on main.
+Originally executed as Prompt 370 and committed in `aff196a`; renumbered to 369
+on 2026-10-15 at the user’s request after removing the unused intake prompt.
+This file records completed work and must not be executed again merely because
+its number changed. The user requested creation of the recommended handoff and
+explicitly authorized execution after prompt preparation. Create a reusable,
+reviewable form and completion procedure for Phase 12. A form makes the missing
+intake concrete; it
+does not establish a production target or close the operator intake gate.
 
 ## References and verified guidance
 
 Read `AGENTS.md`, `docs/build-plan.md` §§13–14, `docs/project-status.md`
 operator-owned launch work, `docs/operations.md` Prompt 368,
 `docs/launch-checklist.md` §§6A–7, `docs/system-architecture.md` §11,
-`docs/security.md`, `docs/skills.md`, and Prompts 367–369. Inspect
+`docs/security.md`, `docs/skills.md`, and Prompts 367–368. Inspect
 `infra/compose/docker-compose.production.example.yml`,
 `infra/caddy/Caddyfile.example`, `infra/env/production.env.example`,
 `infra/launch/readiness.example.json`, its schema, root scripts, and
@@ -52,7 +55,7 @@ sources, never measurements or operator approvals.
    Every unknown value is explicitly `PENDING`; no invented digests, hostnames,
    contacts, approval dates, or signature. Historical source SHAs may be cited only
    as context in the guide, not preselected in the form.
-2. Include all five intake groups from Prompt 369: target, candidate, people,
+2. Include all five intake groups from the operator handoff contract: target, candidate, people,
    evidence access, action boundary. Separate proposed topology recommendation
    `single-host-compose-caddy` from selected/approved topology. First deployment
    without previous images remains an unresolved rollback prerequisite.
@@ -93,9 +96,8 @@ claim a formatter pass unless run. Review the complete diff with an independent
 reviewer subagent and provide baseline/head SHA, task requirements and actual
 checks. Evaluate feedback, fix valid findings and recheck relevant gates.
 
-Record actual results in `docs/operations.md`. Stage only Prompt 370, the two new
-artifacts, AGENTS.md, checklist link and operations record; preserve Prompt 369
-untracked. Inspect staged diff and commit on main using caveman-commit. No push.
+Record actual results in `docs/operations.md`. Stage only this prompt, the two new
+artifacts, AGENTS.md, checklist link and operations record. Inspect staged diff and commit on main using caveman-commit. No push.
 
 ## Non-goals and exit
 

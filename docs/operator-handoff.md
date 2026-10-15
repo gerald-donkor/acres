@@ -3,7 +3,8 @@
 Use [the handoff form](../infra/launch/operator-handoff.example.md) to assemble
 Phase 12's shared prerequisites for one production environment and release.
 The package is prepared; the production intake remains missing until operators
-supply and independently verify its facts. Prompt 369 governs intake inspection;
+supply and independently verify its facts. The launch checklist governs intake
+inspection;
 Prompt 201 and the [launch checklist](launch-checklist.md) govern launch evidence
 and sign-off. This form supplements their contracts and does not replace them.
 
@@ -97,7 +98,7 @@ This request is provided for operator use; creating this guide sends no message.
 
 ## Validation and handback
 
-Compare the completed intake with Prompt 369 and the existing category contracts.
+Compare the completed intake with the existing launch category contracts.
 The Markdown form has no automated validator and is not accepted as readiness JSON.
 For the actual restricted readiness record, use the existing command:
 

@@ -594,6 +594,13 @@ number in `prompts/` plus one. Never renumber, never overwrite, never reuse — 
 sequence is the project's build history, and a gap or a reused number makes
 "what is already built" unresolvable in a later session.
 
+**User-authorized exception — 2026-10-15:** remove the unused intake prompt 369,
+renumber the completed handoff package 370 → 369 and the approved Vercel migration
+371 → 370, and update their references. Historical commits retain their original
+identities; the handoff remains executed and the migration approval follows its
+scope. The next new prompt number is 371. This bounded reorganization does not
+permit other renumbering.
+
 **A prompt file must state**, in whatever order the work makes natural:
 
 - the scope, and why it is next;
