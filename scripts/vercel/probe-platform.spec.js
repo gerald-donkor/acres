@@ -1,10 +1,12 @@
 "use strict";
-const { test } = require("node:test");
+const { test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const {
   configuration,
   probeBlob,
   probeScanner,
+  probeScannerFailures,
+  SANDBOX_BUDGET,
   readBounded,
 } = require("./probe-platform");
 
@@ -129,67 +131,305 @@ test("bounded read cancels an oversized body", async () => {
   assert.equal(cancelled, true);
 });
 
-function scannerFake(codes = [0, 0, 1], failWrite = false, failStop = false) {
-  let stopped = 0;
-  let commands = 0;
+const DIGEST = `sha256:${"a".repeat(64)}`;
+
+// Virtual clock: the double "spends" time on sleep commands so the probe's
+// timing windows are exercised without real waits.
+const realNow = Date.now;
+let clockSkew = 0;
+Date.now = () => realNow() + clockSkew;
+afterEach(() => {
+  clockSkew = 0;
+});
+
+// Scripted Sandbox double. Each command is answered by what a healthy
+// pinned image does; `override(name, cmd)` may replace any answer.
+function defaultAnswer(cmd) {
+  const args = cmd.args ?? [];
+  const ok = (stdout, exitCode = 0) => ({ exitCode, stdout });
+  if (cmd.cmd === "sh" && args[1].includes("uid="))
+    return ok("uid=1000\ndb=1\ntmp=1\n");
+  if (cmd.cmd === "sh" && args[1].includes("VmHWM"))
+    return ok("total=2048\nexit=0\npeak=969\n");
+  if (cmd.cmd === "mkdir") return ok("");
+  if (cmd.cmd === "node" && args[1].includes("fetch(")) return ok("", 7);
+  if (cmd.cmd === "node") {
+    if (args[2] === "0".repeat(64)) return ok("", 2);
+    if (args[5]?.endsWith("emptydb")) return ok("", 1);
+    if (args[4] === "0.001") return ok("", 3);
+    return ok("signatures-ok\n");
+  }
+  if (cmd.cmd === "sleep") {
+    if (cmd.timeoutMs) {
+      clockSkew += cmd.timeoutMs;
+      return ok("", 137);
+    }
+    clockSkew += 14_000;
+    throw new Error("session ended");
+  }
+  if (cmd.cmd === "clamscan") {
+    const file = args.at(-1);
+    if (file.endsWith("eicar.txt"))
+      return ok(`${file}: Eicar-Test-Signature FOUND\n`, 1);
+    if (file.endsWith("large.bin") && args.includes("--alert-exceeds-max=yes"))
+      return ok(`${file}: Heuristics.Limits.Exceeded.MaxFileSize FOUND\n`, 2);
+    return ok(`${file}: OK\n`);
+  }
+  throw new Error(`unexpected command ${cmd.cmd}`);
+}
+
+function scannerFake({
+  override = () => undefined,
+  image = `vcr.vercel.com/test/probe/scanner@${DIGEST}`,
+  failCreate = false,
+  failWrite = false,
+  failStop = false,
+  failDelete = false,
+} = {}) {
+  const events = [];
+  const creates = [];
+  let caseIndex = 0;
   const sdk = {
     Sandbox: {
       async create(options) {
-        assert.equal(options.networkPolicy, "deny-all");
-        assert.equal(options.region, "fra1");
-        assert.equal(options.timeout, 120000);
-        assert.deepEqual(options.resources, { vcpus: 1 });
-        assert.match(options.image, /@sha256:/);
-        assert.equal(options.env, undefined);
+        creates.push(options);
+        if (failCreate) throw new Error("create failure with test-token");
+        const name = `sbx-${caseIndex++}`;
         return {
+          name,
+          image,
           async runCommand(cmd) {
             assert.equal(cmd.detached, undefined);
-            assert.equal(cmd.timeoutMs, 30000);
-            return { exitCode: codes[commands++] };
+            assert.equal(cmd.sudo, undefined);
+            const answer = override(name, cmd) ?? defaultAnswer(cmd);
+            events.push(`${name}:run:${cmd.cmd}`);
+            return {
+              exitCode: answer.exitCode,
+              stdout: async () => answer.stdout,
+            };
           },
           async writeFiles(files) {
-            assert.equal(files.length, 2);
-            assert.match(
-              files[1].content.toString(),
-              /EICAR-STANDARD-ANTIVIRUS-TEST-FILE/,
-            );
+            for (const f of files) assert.match(f.path, /^\/tmp\/acres-scan\//);
+            events.push(`${name}:write`);
             if (failWrite) throw new Error("private failure");
           },
-          async stop() {
-            stopped++;
+          async stop(opts) {
+            assert.ok(opts.signal instanceof AbortSignal);
+            events.push(`${name}:stop`);
             if (failStop) throw new Error("cleanup failure");
+          },
+          async delete(opts) {
+            assert.equal(opts.deleteOrphanSnapshots, true);
+            assert.ok(opts.signal instanceof AbortSignal);
+            events.push(`${name}:delete`);
+            if (failDelete) throw new Error("delete failure");
           },
         };
       },
     },
   };
-  return { sdk, stopped: () => stopped };
+  const cleanupOrdered = () =>
+    creates.length > 0 &&
+    creates.every((_, i) => {
+      const stop = events.indexOf(`sbx-${i}:stop`);
+      const del = events.indexOf(`sbx-${i}:delete`);
+      return stop >= 0 && del > stop;
+    });
+  return { sdk, events, creates, cleanupOrdered };
 }
-test("scanner checks signatures, clean/EICAR, then stops without production claim", async () => {
+
+const scannerConfig = () => configuration(base, "scanner");
+
+test("scanner creates non-persistent deny-all VMs and passes clean/EICAR", async () => {
   const fake = scannerFake();
-  const result = await probeScanner(configuration(base, "scanner"), fake.sdk);
+  const result = await probeScanner(scannerConfig(), fake.sdk);
   assert.equal(result.productionScannerProven, false);
   assert.equal(result.eicarRejected, true);
-  assert.equal(fake.stopped(), 1);
+  assert.equal(result.eicarSignature, "Eicar-Test-Signature");
+  assert.deepEqual(result.sandboxUser, {
+    uid: 1000,
+    signaturesReadable: true,
+    scanDirWritable: true,
+  });
+  assert.equal(fake.creates.length, 1);
+  const [options] = fake.creates;
+  assert.equal(options.persistent, false);
+  assert.equal(options.networkPolicy, "deny-all");
+  assert.equal(options.region, "fra1");
+  assert.equal(options.timeout, 120000);
+  assert.deepEqual(options.resources, { vcpus: 1 });
+  assert.equal(options.env, undefined);
+  assert.equal(options.source, undefined);
+  assert.ok(fake.cleanupOrdered());
 });
-for (const codes of [[2], [3], [0, 2, 1], [0, 0, 0], [0, 0, 2]]) {
-  test(`scanner rejects nonconforming signature/scan exits ${codes}`, async () => {
-    const fake = scannerFake(codes);
-    await assert.rejects(
-      probeScanner(configuration(base, "scanner"), fake.sdk),
-    );
-    assert.equal(fake.stopped(), 1);
+
+const scannerBreaks = {
+  "unreadable signatures": (n, c) =>
+    c.cmd === "sh"
+      ? { exitCode: 0, stdout: "uid=1000\ndb=0\ntmp=1\n" }
+      : undefined,
+  "signature exit 2": (n, c) =>
+    c.cmd === "node" ? { exitCode: 2, stdout: "" } : undefined,
+  "signature exit 0 without marker": (n, c) =>
+    c.cmd === "node" ? { exitCode: 0, stdout: "" } : undefined,
+  "clean exit 1": (n, c) =>
+    c.cmd === "clamscan" && c.args.at(-1).endsWith("clean.csv")
+      ? { exitCode: 1, stdout: "" }
+      : undefined,
+  "clean exit 0 without OK line": (n, c) =>
+    c.cmd === "clamscan" && c.args.at(-1).endsWith("clean.csv")
+      ? { exitCode: 0, stdout: "" }
+      : undefined,
+  "EICAR exit 0": (n, c) =>
+    c.cmd === "clamscan" && c.args.at(-1).endsWith("eicar.txt")
+      ? { exitCode: 0, stdout: "" }
+      : undefined,
+  "EICAR exit 2": (n, c) =>
+    c.cmd === "clamscan" && c.args.at(-1).endsWith("eicar.txt")
+      ? { exitCode: 2, stdout: "" }
+      : undefined,
+};
+for (const [label, override] of Object.entries(scannerBreaks)) {
+  test(`scanner fails and still stops+deletes on ${label}`, async () => {
+    const fake = scannerFake({ override });
+    await assert.rejects(probeScanner(scannerConfig(), fake.sdk));
+    assert.ok(fake.cleanupOrdered());
   });
 }
-test("scanner stops after file-write failure", async () => {
-  const fake = scannerFake([], true);
-  await assert.rejects(probeScanner(configuration(base, "scanner"), fake.sdk));
-  assert.equal(fake.stopped(), 1);
+for (const [label, options] of [
+  ["file-write failure", { failWrite: true }],
+  ["stop failure", { failStop: true }],
+  ["delete failure", { failDelete: true }],
+  [
+    "image digest mismatch",
+    { image: `vcr.vercel.com/test/probe/scanner@sha256:${"f".repeat(64)}` },
+  ],
+  ["missing image getter", { image: null }],
+]) {
+  test(`scanner cleanup/identity failure cannot mint success: ${label}`, async () => {
+    const fake = scannerFake(options);
+    await assert.rejects(probeScanner(scannerConfig(), fake.sdk));
+    assert.ok(fake.events.includes("sbx-0:stop"));
+    assert.ok(fake.events.includes("sbx-0:delete"));
+  });
+}
+test("scanner create failure leaves nothing to clean", async () => {
+  const fake = scannerFake({ failCreate: true });
+  await assert.rejects(probeScanner(scannerConfig(), fake.sdk));
+  assert.equal(fake.events.length, 0);
 });
-test("scanner cleanup failure cannot mint success", async () => {
-  const fake = scannerFake([0, 0, 1], false, true);
-  await assert.rejects(probeScanner(configuration(base, "scanner"), fake.sdk));
-  assert.equal(fake.stopped(), 1);
+
+test("scanner-failures passes every expected fail-closed case within budget", async () => {
+  const fake = scannerFake();
+  const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+  assert.equal(result.gatePassed, true, JSON.stringify(result.cases));
+  assert.equal(result.cases.missing.variant, "empty-database-directory");
+  assert.equal(result.cases["size-limit"].withoutAlert.shape, "ok");
+  assert.equal(result.cases["session-timeout"].shape, "rejected");
+  assert.equal(result.cases.memory.clamscanPeakRssMiB, 969);
+  assert.equal(result.sandboxCreations, fake.creates.length);
+  assert.ok(fake.creates.length <= SANDBOX_BUDGET["scanner-failures"]);
+  assert.ok(SANDBOX_BUDGET.scanner + SANDBOX_BUDGET["scanner-failures"] <= 10);
+  for (const options of fake.creates) {
+    assert.equal(options.persistent, false);
+    assert.equal(options.networkPolicy, "deny-all");
+    assert.deepEqual(options.resources, { vcpus: 1 });
+    assert.ok(options.timeout <= 120000);
+  }
+  assert.equal(fake.creates[5].timeout, 15000);
+  assert.ok(fake.cleanupOrdered());
+});
+
+// The opposite result of each case must fail that case and the gate.
+const failureBreaks = {
+  "wrong-hash": (n, c) =>
+    c.cmd === "node" && c.args[2] === "0".repeat(64)
+      ? { exitCode: 0, stdout: "signatures-ok\n" }
+      : undefined,
+  missing: (n, c) =>
+    c.cmd === "node" && c.args[5]?.endsWith("emptydb")
+      ? { exitCode: 0, stdout: "signatures-ok\n" }
+      : undefined,
+  stale: (n, c) =>
+    c.cmd === "node" && c.args[4] === "0.001"
+      ? { exitCode: 0, stdout: "signatures-ok\n" }
+      : undefined,
+  "egress-denied": (n, c) =>
+    c.cmd === "node" && c.args[1].includes("fetch(")
+      ? { exitCode: 0, stdout: "" }
+      : undefined,
+  "command-timeout": (n, c) =>
+    c.cmd === "sleep" && c.timeoutMs ? { exitCode: 0, stdout: "" } : undefined,
+  "session-timeout": (n, c) =>
+    c.cmd === "sleep" && !c.timeoutMs ? { exitCode: 0, stdout: "" } : undefined,
+  "size-limit": (n, c) =>
+    c.cmd === "clamscan" &&
+    c.args.includes("--alert-exceeds-max=yes") &&
+    c.args.at(-1).endsWith("large.bin")
+      ? { exitCode: 0, stdout: `${c.args.at(-1)}: OK\n` }
+      : undefined,
+};
+for (const [name, override] of Object.entries(failureBreaks)) {
+  test(`scanner-failures fails ${name} on the opposite result`, async () => {
+    const fake = scannerFake({ override });
+    const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+    assert.equal(result.cases[name].passed, false);
+    assert.equal(result.gatePassed, false);
+    for (const [other, c] of Object.entries(result.cases))
+      if (other !== name) assert.equal(c.passed, true, other);
+  });
+}
+const instantRejection = {
+  "command-timeout": (n, c) => {
+    if (c.cmd === "sleep" && c.timeoutMs) throw new Error("transport error");
+  },
+  "session-timeout": (n, c) => {
+    if (c.cmd === "sleep" && !c.timeoutMs) throw new Error("403");
+  },
+  "egress-denied": (n, c) =>
+    c.cmd === "node" && c.args[1].includes("fetch(")
+      ? { exitCode: 1, stdout: "" }
+      : undefined,
+};
+for (const [name, override] of Object.entries(instantRejection)) {
+  test(`scanner-failures fails ${name} on an unrelated failure`, async () => {
+    const fake = scannerFake({ override });
+    const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+    assert.equal(result.cases[name].passed, false);
+    assert.equal(result.gatePassed, false);
+  });
+}
+test("command-timeout fails when the kill comes too late", async () => {
+  const fake = scannerFake({
+    override: (n, c) => {
+      if (c.cmd !== "sleep" || !c.timeoutMs) return undefined;
+      clockSkew += 12_000;
+      return { exitCode: 137, stdout: "" };
+    },
+  });
+  const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+  assert.equal(result.cases["command-timeout"].passed, false);
+});
+test("scanner-failures marks a case failed when its cleanup fails", async () => {
+  const fake = scannerFake({ failDelete: true });
+  const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+  assert.equal(result.gatePassed, false);
+  assert.ok(Object.values(result.cases).every((c) => c.passed === false));
+});
+test("session-timeout tolerates a stop error only when delete succeeds", async () => {
+  const fake = scannerFake({ failStop: true });
+  const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+  assert.equal(result.cases["session-timeout"].passed, true);
+  assert.equal(result.cases["session-timeout"].stopFailed, true);
+  assert.equal(result.cases["wrong-hash"].passed, false);
+});
+test("scanner summaries never carry the token or image reference", async () => {
+  for (const run of [probeScanner, probeScannerFailures]) {
+    const text = JSON.stringify(await run(scannerConfig(), scannerFake().sdk));
+    assert.ok(!text.includes(base.VERCEL_TOKEN));
+    assert.ok(!text.includes("vcr.vercel.com"));
+    assert.ok(!text.includes("a".repeat(64)));
+  }
 });
 
 // ---- blob-browser ---------------------------------------------------------

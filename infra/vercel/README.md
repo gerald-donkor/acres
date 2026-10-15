@@ -10,7 +10,7 @@ application as if it were invocation-safe.
 The Queues layout/delivery probe is a separately deployed synthetic project
 root: see [probes/queues](probes/queues/README.md).
 
-Run `npm run vercel:probe -- --help` without credentials. `@vercel/sandbox` is a development-only dependency; `@vercel/blob` is a server runtime dependency since Prompt 371, and these probes are not bundled into serving code. Local behavior tests:
+Run `npm run vercel:probe -- --help` without credentials. `@vercel/blob` (since Prompt 371) and `@vercel/sandbox` (since Prompt 372, loaded lazily by the `vercel-sandbox` scanner adapter only) are server runtime dependencies; these probes are not bundled into serving code. Local behavior tests:
 `npm run vercel:probe-test`. These tests use doubles and approve no hosted gate.
 
 After selecting an isolated synthetic-only preview and permitted resource use
@@ -23,9 +23,9 @@ paste keys into chat, source, shell history or documentation):
 | `VERCEL_ENV=preview`                                      | Reject accidental production invocation                                               |
 | `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                     | Selected account identities; resolve and check them through MCP first                 |
 | `BLOB_READ_WRITE_TOKEN`                                   | Only for `blob`/`blob-browser`: token for the selected isolated private store         |
-| `VERCEL_TOKEN`                                            | Only for `scanner`: restricted access to the selected preview project                 |
-| `ACRES_VERCEL_PROBE_REGION`                               | Only for `scanner`: explicitly selected Vercel region (no implicit `iad1` fallback)   |
-| `ACRES_SCANNER_IMAGE`                                     | Only for `scanner`: approved `vcr.vercel.com/...@sha256:<64 lowercase hex>` image     |
+| `VERCEL_TOKEN`                                            | `scanner*` modes only: restricted access to the selected preview project              |
+| `ACRES_VERCEL_PROBE_REGION`                               | `scanner*` modes only: explicit Vercel region (no implicit `iad1` fallback)           |
+| `ACRES_SCANNER_IMAGE`                                     | `scanner*` modes only: `vcr.vercel.com/...@sha256:<64 lowercase hex>` image           |
 | `ACRES_SCANNER_MAIN_SHA256`, `ACRES_SCANNER_DAILY_SHA256` | Reviewed digests of `/var/lib/clamav/main.cvd` and `daily.cvd` in that pinned image   |
 | `ACRES_SCANNER_MAX_SIGNATURE_AGE_HOURS`                   | Adopted freshness threshold, integer 1–168; probe bound, no default production policy |
 
@@ -62,28 +62,49 @@ carries statuses, booleans and header _shapes_ only, never a URL, token or
 signature. Exit code 1 means a gate case failed. This proves the storage seam,
 not application acceptance through a deployed preview.
 
-`npm run vercel:probe -- scanner` requires a prebuilt approved VCR image with
-`node`, `sigtool`, `clamscan` and the two checksum-bound CVD files. It provisions
-one Sandbox, denies all network egress, verifies both signature hashes/build
-timestamps and daily signature freshness, writes synthetic clean/EICAR files,
-requires clamscan exits 0/1 respectively, and stops the sandbox in `finally`.
-A one-vCPU allocation and 120-second lifetime cap are **probe choices**,
-not measured capacity or adopted production budgets. Each command has a
-30-second kill limit. The SDK declares memory as 2048 MB per vCPU. No daemon,
-package install, signature download, broad secrets or customer data is passed.
-Image construction/license/signature acquisition and account availability are
-still unresolved. No old-signature fallback. Main signatures may be older than
-daily; both hashes and nonfuture build dates must verify.
+`npm run vercel:probe -- scanner` needs the pinned image built from
+[scanner/](scanner/README.md): `node`, `sigtool`, `clamscan` and the two
+checksum-bound CVD files. It creates **one** Sandbox with `persistent: false`,
+`deny-all` egress, one vCPU and a 120-second lifetime, and checks that the
+SDK's `sandbox.image` ends with the configured digest. A first command records
+the VM's uid and whether it can read `/var/lib/clamav/daily.cvd` and write
+`/tmp/acres-scan`. The signature check (identical to the server's
+`sandbox-signature-check.ts`) verifies both hashes, non-future build dates and
+daily freshness, and must print its `signatures-ok` marker. Synthetic clean and
+EICAR files under `/tmp/acres-scan/` are scanned with the adapter's exact
+flags; clean needs exit 0 **and** the file's `OK` line, EICAR exit 1 **and** a
+`FOUND` line, because SDK 3.8.0 reports a missing exit code as 0.
+
+`npm run vercel:probe -- scanner-failures` runs nine cases, each in its own
+short-lived Sandbox with the same settings, and passes each only on its
+expected fail-closed result: a wrong `main.cvd` hash (exit 2); an empty
+database directory (the image has no `sudo`; non-zero exit); a 0.001-hour age
+(exit 3); egress to `database.clamav.net` (the script's fetch-failed exit 7);
+a 3-second command `timeoutMs` (must reject or exit non-zero after 2.5–10 s); a
+15-second session (`sleep 60` must reject after 8–40 s; the lower bounds stop an
+instant unrelated rejection from passing); a 7 MiB file under 6M limits, which reads `OK` without
+`--alert-exceeds-max=yes` and must report `Heuristics.Limits.Exceeded` with a
+non-zero exit with it (ClamAV 1.5.4 exits **2** there, measured locally); a
+malformed ZIP (any completed exit); and a memory measurement. The two modes
+together create at most **ten** Sandboxes. Exit code 1 means a case failed.
+
+Cleanup is `stop()` then `delete({ deleteOrphanSnapshots: true })`, each with a
+30-second timeout. Sandboxes are persistent by default and snapshot on stop, so
+stop alone would keep scanned bytes in a snapshot for 30 days. A stop or delete
+error is failure, never success; only the session-timeout case tolerates a stop
+error after its session ended, and only when delete succeeds. Sandbox names are
+printed to stderr so an operator can confirm no residue; they are not secrets.
+No daemon, package install, signature download, broad secret or customer data
+is passed. No old-signature fallback. Main signatures may be older than daily;
+both hashes and non-future build dates must verify.
 
 The scripts suppress SDK exceptions, command output, tokens, URLs and signatures
-from public console output. Inspect failure details through the restricted
-provider console, including deletion/termination after interrupted requests.
-A stop/delete error is failure, never success; creation-response loss is bounded
-by the requested Sandbox lifetime and requires provider inspection. The simple
-scanner probe is not production scanner acceptance: deliberate stale/missing
-signatures, resource exhaustion, kill/timeout and large malformed inputs still
-need live failure tests. No browser, RLS, queue delivery, launch or deployment
-claim is emitted by either probe.
+other than a `FOUND` name from public console output. Inspect failure details
+through the restricted provider console. Creation-response loss is bounded by
+the requested Sandbox lifetime and requires provider inspection. Neither mode is
+production scanner acceptance: that needs an app upload scanned through a
+deployed preview. No browser, RLS, queue delivery, launch or deployment claim is
+emitted by any probe.
 
 ## Environment ownership and activation
 

@@ -2,7 +2,7 @@
 "use strict";
 
 // Explicit opt-in synthetic probes. Never imported by application boot.
-const { createHash, randomUUID } = require("node:crypto");
+const { createHash, randomBytes, randomUUID } = require("node:crypto");
 const { createRequire } = require("node:module");
 const path = require("node:path");
 const serverRequire = createRequire(
@@ -17,8 +17,8 @@ function required(env, key) {
 }
 
 function configuration(env, mode) {
-  if (!["blob", "blob-browser", "scanner"].includes(mode))
-    throw new Error("Choose blob, blob-browser or scanner.");
+  if (!["blob", "blob-browser", "scanner", "scanner-failures"].includes(mode))
+    throw new Error("Choose blob, blob-browser, scanner or scanner-failures.");
   if (env.ACRES_VERCEL_PROBE !== "isolated-synthetic-preview") {
     throw new Error(
       "Set ACRES_VERCEL_PROBE=isolated-synthetic-preview only for an approved isolated target.",
@@ -657,99 +657,456 @@ async function openProbeBrowser(clientRequire) {
   }
 }
 
+// Kept identical to server/src/scanner/sandbox-signature-check.ts (a server
+// unit test compares the two). argv: main hash, daily hash, max daily age in
+// hours, optional database directory. Prints a marker only when every check
+// passed, so a killed or truncated run cannot read as success.
 const SIGNATURE_CHECK = `
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const cp = require('node:child_process');
+const dir = process.argv[4] || '/var/lib/clamav';
+const maxAgeMs = Number(process.argv[3]) * 3600000;
+if (!(maxAgeMs > 0)) process.exit(4);
 for (const [name, hash] of [['main.cvd', process.argv[1]], ['daily.cvd', process.argv[2]]]) {
-  const file = '/var/lib/clamav/' + name;
+  const file = dir + '/' + name;
   if (crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') !== hash) process.exit(2);
   const info = cp.execFileSync('sigtool', ['--info', file], { encoding: 'utf8', timeout: 10000 });
   const line = info.match(/^Build time:\\s*(.+)$/m);
   const time = line ? Date.parse(line[1]) : NaN;
   const age = Date.now() - time;
-  if (!Number.isFinite(time) || age < 0 || (name === 'daily.cvd' && age > Number(process.argv[3]) * 3600000)) process.exit(3);
+  if (!Number.isFinite(time) || age < 0 || (name === 'daily.cvd' && age > maxAgeMs)) process.exit(3);
 }
+process.stdout.write('signatures-ok\\n');
 `;
 
-async function probeScanner(config, sdk) {
-  let sandbox;
+const SCAN_DIR = "/tmp/acres-scan";
+const SANDBOX_TIMEOUT_MS = 120_000;
+const CLEANUP_TIMEOUT_MS = 30_000;
+// Per invocation; scanner + scanner-failures together stay within 10.
+const SANDBOX_BUDGET = { scanner: 1, "scanner-failures": 9 };
+const EICAR = Buffer.from(
+  "X5O!P%@AP[4" + "\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",
+);
+const ADAPTER_SCAN_FLAGS = [
+  "--no-summary",
+  "--database=/var/lib/clamav",
+  "--max-filesize=50M",
+  "--max-scansize=50M",
+  "--alert-exceeds-max=yes",
+];
+
+// Signature name only; never an output body.
+function scanShape(stdout, file) {
+  if (stdout.includes(`${file}: OK`)) return "ok";
+  const found = stdout.match(/: (.+) FOUND$/m);
+  if (found && found[1].length <= 200) return `found:${found[1]}`;
+  return "other";
+}
+
+async function cleanupSandbox(sandbox, { tolerateStopError = false } = {}) {
+  let stopFailed = false;
+  let deleteFailed = false;
   try {
-    sandbox = await sdk.Sandbox.create({
-      token: config.token,
-      teamId: config.teamId,
-      projectId: config.projectId,
-      image: config.image,
-      region: config.region,
-      networkPolicy: "deny-all",
-      timeout: 120_000,
-      resources: { vcpus: 1 },
+    await sandbox.stop({ signal: AbortSignal.timeout(CLEANUP_TIMEOUT_MS) });
+  } catch {
+    stopFailed = true;
+  }
+  try {
+    // Without this, persistent-by-default snapshots keep scanned bytes.
+    await sandbox.delete({
+      deleteOrphanSnapshots: true,
+      signal: AbortSignal.timeout(CLEANUP_TIMEOUT_MS),
     });
-    const verify = await sandbox.runCommand({
-      cmd: "node",
+  } catch {
+    deleteFailed = true;
+  }
+  if (deleteFailed || (stopFailed && !tolerateStopError))
+    throw new Error("Sandbox cleanup failed.");
+  return { stopFailed };
+}
+
+function sandboxRunner(config, sdk, mode, log = () => {}) {
+  const digest = config.image.slice(config.image.indexOf("@") + 1);
+  let created = 0;
+  return {
+    created: () => created,
+    async run(overrides, fn, cleanupOptions) {
+      if (created >= SANDBOX_BUDGET[mode])
+        throw new Error("Sandbox creation budget exceeded.");
+      created++;
+      let sandbox;
+      let value;
+      try {
+        sandbox = await sdk.Sandbox.create({
+          token: config.token,
+          teamId: config.teamId,
+          projectId: config.projectId,
+          image: config.image,
+          region: config.region,
+          persistent: false,
+          networkPolicy: "deny-all",
+          timeout: SANDBOX_TIMEOUT_MS,
+          resources: { vcpus: 1 },
+          ...overrides,
+        });
+        log(sandbox.name);
+        if (
+          typeof sandbox.image !== "string" ||
+          !sandbox.image.endsWith(`@${digest}`)
+        )
+          throw new Error("Scanner image digest mismatch.");
+        value = await fn(sandbox);
+      } finally {
+        if (sandbox) {
+          const cleanup = await cleanupSandbox(sandbox, cleanupOptions);
+          if (value && typeof value === "object")
+            value.stopFailed = cleanup.stopFailed;
+        }
+      }
+      return value;
+    },
+  };
+}
+
+async function runChecked(sandbox, params) {
+  const started = Date.now();
+  const result = await sandbox.runCommand(params);
+  return {
+    exitCode: result.exitCode,
+    stdout: await result.stdout(),
+    durationMs: Date.now() - started,
+  };
+}
+
+function signatureCheck(config, overrides = {}) {
+  const maxAge = overrides.maxAgeHours ?? config.maxAgeHours;
+  return {
+    cmd: "node",
+    args: [
+      "-e",
+      SIGNATURE_CHECK,
+      overrides.mainSha256 ?? config.mainSha256,
+      config.dailySha256,
+      String(maxAge),
+      ...(overrides.dir ? [overrides.dir] : []),
+    ],
+    timeoutMs: 30_000,
+  };
+}
+
+const signaturesOk = (r) =>
+  r.exitCode === 0 && r.stdout.includes("signatures-ok");
+
+async function probeScanner(config, sdk, log) {
+  const runner = sandboxRunner(config, sdk, "scanner", log);
+  const result = await runner.run({}, async (sandbox) => {
+    const identity = await runChecked(sandbox, {
+      cmd: "sh",
       args: [
-        "-e",
-        SIGNATURE_CHECK,
-        config.mainSha256,
-        config.dailySha256,
-        String(config.maxAgeHours),
+        "-c",
+        `mkdir -p ${SCAN_DIR} && echo uid=$(id -u) && ` +
+          `{ test -r /var/lib/clamav/daily.cvd && echo db=1 || echo db=0; } && ` +
+          `{ test -w ${SCAN_DIR} && echo tmp=1 || echo tmp=0; }`,
       ],
       timeoutMs: 30_000,
     });
-    if (verify.exitCode !== 0)
+    const uid = identity.stdout.match(/^uid=(\d+)$/m);
+    const sandboxUser = {
+      uid: uid ? Number(uid[1]) : null,
+      signaturesReadable: /^db=1$/m.test(identity.stdout),
+      scanDirWritable: /^tmp=1$/m.test(identity.stdout),
+    };
+    if (!sandboxUser.signaturesReadable || !sandboxUser.scanDirWritable)
+      throw new Error(
+        "Scanner sandbox user cannot read signatures or write scan inputs.",
+      );
+    if (!signaturesOk(await runChecked(sandbox, signatureCheck(config))))
       throw new Error("Scanner signature verification failed.");
-    const eicar = Buffer.from(
-      "X5O!P%@AP[4" +
-        "\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",
-    );
     await sandbox.writeFiles([
       {
-        path: "/tmp/acres-clean.csv",
+        path: `${SCAN_DIR}/clean.csv`,
         content: Buffer.from("region,value\nsynthetic,1\n"),
       },
-      { path: "/tmp/acres-eicar.txt", content: eicar },
+      { path: `${SCAN_DIR}/eicar.txt`, content: EICAR },
     ]);
-    const clean = await sandbox.runCommand({
-      cmd: "clamscan",
-      args: [
-        "--no-summary",
-        "--database=/var/lib/clamav",
-        "--max-filesize=6M",
-        "--max-scansize=6M",
-        "/tmp/acres-clean.csv",
-      ],
-      timeoutMs: 30_000,
-    });
-    const infected = await sandbox.runCommand({
-      cmd: "clamscan",
-      args: [
-        "--no-summary",
-        "--database=/var/lib/clamav",
-        "--max-filesize=6M",
-        "--max-scansize=6M",
-        "/tmp/acres-eicar.txt",
-      ],
-      timeoutMs: 30_000,
-    });
-    if (clean.exitCode !== 0 || infected.exitCode !== 1)
+    const scan = (file) =>
+      runChecked(sandbox, {
+        cmd: "clamscan",
+        args: [...ADAPTER_SCAN_FLAGS, file],
+        timeoutMs: 60_000,
+      });
+    const clean = await scan(`${SCAN_DIR}/clean.csv`);
+    const infected = await scan(`${SCAN_DIR}/eicar.txt`);
+    if (
+      clean.exitCode !== 0 ||
+      scanShape(clean.stdout, `${SCAN_DIR}/clean.csv`) !== "ok" ||
+      infected.exitCode !== 1 ||
+      !scanShape(infected.stdout, `${SCAN_DIR}/eicar.txt`).startsWith("found:")
+    )
       throw new Error("Scanner clean/EICAR verification failed.");
     return {
       probe: "sandbox-clean-eicar",
+      sandboxUser,
       signaturesVerified: true,
       cleanAccepted: true,
       eicarRejected: true,
+      eicarSignature: scanShape(infected.stdout, `${SCAN_DIR}/eicar.txt`).slice(
+        6,
+      ),
+      cleanScanMs: clean.durationMs,
+      eicarScanMs: infected.durationMs,
       network: "deny-all",
+      persistent: false,
       productionScannerProven: false,
     };
-  } finally {
-    if (sandbox) await sandbox.stop();
+  });
+  delete result.stopFailed;
+  return { ...result, sandboxCreations: runner.created() };
+}
+
+// Timeout cases need a lower bound too: an instant, unrelated rejection
+// (transport error, 4xx) must not count as an enforced limit.
+const COMMAND_TIMEOUT_WINDOW = [2_500, 10_000];
+const SESSION_TIMEOUT_WINDOW = [8_000, 40_000];
+const within = (ms, [min, max]) => ms >= min && ms < max;
+
+// Each case runs in its own short-lived sandbox and passes only on its
+// expected fail-closed result. Summary: statuses, codes, booleans, durations.
+const FAILURE_CASES = {
+  async "wrong-hash"(sandbox, config) {
+    const r = await runChecked(
+      sandbox,
+      signatureCheck(config, { mainSha256: "0".repeat(64) }),
+    );
+    return {
+      passed: r.exitCode === 2 && !signaturesOk(r),
+      exitCode: r.exitCode,
+    };
+  },
+  async missing(sandbox, config) {
+    // The image has no sudo, so the check reads an empty database directory.
+    await runChecked(sandbox, {
+      cmd: "mkdir",
+      args: ["-p", `${SCAN_DIR}/emptydb`],
+      timeoutMs: 10_000,
+    });
+    const r = await runChecked(
+      sandbox,
+      signatureCheck(config, { dir: `${SCAN_DIR}/emptydb` }),
+    );
+    return {
+      passed: r.exitCode !== 0 && !signaturesOk(r),
+      exitCode: r.exitCode,
+      variant: "empty-database-directory",
+    };
+  },
+  async stale(sandbox, config) {
+    const r = await runChecked(
+      sandbox,
+      signatureCheck(config, { maxAgeHours: 0.001 }),
+    );
+    return {
+      passed: r.exitCode === 3 && !signaturesOk(r),
+      exitCode: r.exitCode,
+    };
+  },
+  async "egress-denied"(sandbox) {
+    const r = await runChecked(sandbox, {
+      cmd: "node",
+      args: [
+        "-e",
+        "fetch('https://database.clamav.net',{signal:AbortSignal.timeout(5000)}).then(()=>process.exit(0),()=>process.exit(7))",
+      ],
+      timeoutMs: 20_000,
+    });
+    // Exactly the script's fetch-failed exit: a node that never ran is not
+    // evidence of denied egress.
+    return { passed: r.exitCode === 7, exitCode: r.exitCode };
+  },
+  async "command-timeout"(sandbox) {
+    const started = Date.now();
+    try {
+      const r = await sandbox.runCommand({
+        cmd: "sleep",
+        args: ["60"],
+        timeoutMs: 3_000,
+      });
+      const durationMs = Date.now() - started;
+      return {
+        passed: r.exitCode !== 0 && within(durationMs, COMMAND_TIMEOUT_WINDOW),
+        shape: "resolved",
+        exitCode: r.exitCode,
+        durationMs,
+      };
+    } catch {
+      const durationMs = Date.now() - started;
+      return {
+        passed: within(durationMs, COMMAND_TIMEOUT_WINDOW),
+        shape: "rejected",
+        durationMs,
+      };
+    }
+  },
+  async "session-timeout"(sandbox) {
+    const started = Date.now();
+    try {
+      // The signal only stops the probe hanging if the session never ends.
+      const r = await sandbox.runCommand({
+        cmd: "sleep",
+        args: ["60"],
+        signal: AbortSignal.timeout(45_000),
+      });
+      return {
+        passed: false,
+        shape: "resolved",
+        exitCode: r.exitCode,
+        durationMs: Date.now() - started,
+      };
+    } catch {
+      const durationMs = Date.now() - started;
+      return {
+        passed: within(durationMs, SESSION_TIMEOUT_WINDOW),
+        shape: "rejected",
+        durationMs,
+      };
+    }
+  },
+  async "size-limit"(sandbox) {
+    const file = `${SCAN_DIR}/large.bin`;
+    await runChecked(sandbox, {
+      cmd: "mkdir",
+      args: ["-p", SCAN_DIR],
+      timeoutMs: 10_000,
+    });
+    await sandbox.writeFiles([
+      { path: file, content: randomBytes(7 * 1024 * 1024) },
+    ]);
+    const flags = [
+      "--no-summary",
+      "--database=/var/lib/clamav",
+      "--max-filesize=6M",
+      "--max-scansize=6M",
+    ];
+    const plain = await runChecked(sandbox, {
+      cmd: "clamscan",
+      args: [...flags, file],
+      timeoutMs: 60_000,
+    });
+    const alert = await runChecked(sandbox, {
+      cmd: "clamscan",
+      args: [...flags, "--alert-exceeds-max=yes", file],
+      timeoutMs: 60_000,
+    });
+    // ClamAV 1.5.4 reports the limit as FOUND but exits 2 ("Virus(es)
+    // detected ERROR"); without the flag the same file reads OK. Either
+    // non-zero exit fails closed in the adapter.
+    return {
+      passed:
+        alert.exitCode !== 0 &&
+        scanShape(alert.stdout, file).startsWith(
+          "found:Heuristics.Limits.Exceeded",
+        ),
+      withoutAlert: {
+        exitCode: plain.exitCode,
+        shape: scanShape(plain.stdout, file),
+      },
+      withAlert: {
+        exitCode: alert.exitCode,
+        shape: scanShape(alert.stdout, file),
+      },
+    };
+  },
+  async malformed(sandbox) {
+    const file = `${SCAN_DIR}/malformed.zip`;
+    await runChecked(sandbox, {
+      cmd: "mkdir",
+      args: ["-p", SCAN_DIR],
+      timeoutMs: 10_000,
+    });
+    const bytes = Buffer.concat([
+      Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]),
+      randomBytes(2 * 1024 * 1024),
+    ]);
+    await sandbox.writeFiles([{ path: file, content: bytes }]);
+    const r = await runChecked(sandbox, {
+      cmd: "clamscan",
+      args: [...ADAPTER_SCAN_FLAGS, file],
+      timeoutMs: 60_000,
+    });
+    // Completion is the gate; exit >= 2 maps to scanner_error (fail closed).
+    return {
+      passed: true,
+      exitCode: r.exitCode,
+      shape: scanShape(r.stdout, file),
+      adapterOutcome:
+        r.exitCode === 0
+          ? "clean"
+          : r.exitCode === 1
+            ? "infected"
+            : "scanner_error",
+    };
+  },
+  async memory(sandbox) {
+    // Peak RSS sampled from /proc while one clamscan runs: a measurement.
+    const r = await runChecked(sandbox, {
+      cmd: "sh",
+      args: [
+        "-c",
+        `mkdir -p ${SCAN_DIR} && printf 'a,b\\n1,2\\n' > ${SCAN_DIR}/m.csv && ` +
+          `awk '/MemTotal/{print "total=" int($2/1024)}' /proc/meminfo && ` +
+          `clamscan ${ADAPTER_SCAN_FLAGS.join(" ")} ${SCAN_DIR}/m.csv >/dev/null & pid=$!; peak=0; ` +
+          `while kill -0 $pid 2>/dev/null; do ` +
+          `v=$(awk '/VmHWM/{print $2}' /proc/$pid/status 2>/dev/null); ` +
+          `[ -n "$v" ] && [ "$v" -gt "$peak" ] && peak=$v; sleep 0.2; done; ` +
+          `wait $pid; echo exit=$?; echo peak=$((peak/1024))`,
+      ],
+      timeoutMs: 90_000,
+    });
+    const num = (k) => {
+      const m = r.stdout.match(new RegExp(`^${k}=(\\d+)$`, "m"));
+      return m ? Number(m[1]) : null;
+    };
+    return {
+      passed: true,
+      memTotalMiB: num("total"),
+      clamscanPeakRssMiB: num("peak"),
+      clamscanExitCode: num("exit"),
+      durationMs: r.durationMs,
+    };
+  },
+};
+
+async function probeScannerFailures(config, sdk, log) {
+  const runner = sandboxRunner(config, sdk, "scanner-failures", log);
+  const cases = {};
+  for (const [name, fn] of Object.entries(FAILURE_CASES)) {
+    const session = name === "session-timeout";
+    try {
+      cases[name] = await runner.run(
+        session ? { timeout: 15_000 } : {},
+        (sandbox) => fn(sandbox, config),
+        { tolerateStopError: session },
+      );
+    } catch {
+      cases[name] = { passed: false, shape: "probe-error" };
+    }
   }
+  return {
+    probe: "sandbox-scanner-failures",
+    cases,
+    gatePassed: Object.values(cases).every((c) => c.passed),
+    sandboxCreations: runner.created(),
+    network: "deny-all",
+    persistent: false,
+    productionScannerProven: false,
+  };
 }
 
 async function main(args = process.argv.slice(2), env = process.env) {
   if (args.length === 1 && args[0] === "--help") {
     console.log(
-      "Usage: npm run vercel:probe -- blob|blob-browser|scanner\nRequires an explicitly selected isolated synthetic preview. See infra/vercel/README.md.",
+      "Usage: npm run vercel:probe -- blob|blob-browser|scanner|scanner-failures\nRequires an explicitly selected isolated synthetic preview. See infra/vercel/README.md.",
     );
     return;
   }
@@ -780,10 +1137,18 @@ async function main(args = process.argv.slice(2), env = process.env) {
     if (!result.gatePassed) process.exitCode = 1;
     return;
   }
+  // Sandbox names are not secrets; they let an operator verify no residue.
+  const log = (name) => console.error(`probe sandbox: ${name}`);
   const result =
     args[0] === "blob"
       ? await probeBlob(config, serverRequire("@vercel/blob"))
-      : await probeScanner(config, serverRequire("@vercel/sandbox"));
+      : args[0] === "scanner"
+        ? await probeScanner(config, serverRequire("@vercel/sandbox"), log)
+        : await probeScannerFailures(
+            config,
+            serverRequire("@vercel/sandbox"),
+            log,
+          );
   console.log(
     JSON.stringify({
       ...result,
@@ -791,6 +1156,7 @@ async function main(args = process.argv.slice(2), env = process.env) {
       launchApproved: false,
     }),
   );
+  if (result.gatePassed === false) process.exitCode = 1;
 }
 
 module.exports = {
@@ -802,6 +1168,9 @@ module.exports = {
   syntheticBytes,
   dispositionShape,
   probeScanner,
+  probeScannerFailures,
+  SANDBOX_BUDGET,
+  SIGNATURE_CHECK,
   main,
 };
 if (require.main === module)
