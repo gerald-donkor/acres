@@ -1,8 +1,81 @@
 # Vercel migration — Prompt 370
 
-Status: implementation in progress; no hosted proof, preview or production
-migration/deployment established. Starting source: `a1350d0` on `main`.
+Status: implementation in progress. Preview Blob (server SDK) and Neon
+database/RLS seams are proven; no deployment, preview or production, exists.
+Starting source: `a1350d0` on `main`.
 [ADR 0001](adr/0001-vercel-managed-production.md) records the accepted target.
+
+## Resume here (new session)
+
+Prompt 370 is approved and still executing; do not write a new prompt for its
+remaining scope. A new session resumes it from this section and `git log`.
+
+**Fixed target.** Team `dgsloxx417's projects`
+(`team_zE3mp7nrEZ6a7cxRavwUMYC4`), project `acres`
+(`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`), region `iad1` / `aws-us-east-1`,
+**free tiers only** (stop and report if a gate needs paid usage), Resend
+deferred until the user owns a sender domain. The repository is linked
+(`.vercel/`, gitignored). Never use the two unrelated Neon projects in the
+Vercel-managed org or the other thirteen Vercel projects.
+
+**Re-establish access (no secrets in the repo or chat).**
+
+1. Vercel MCP: authenticate if its tools are absent. CLI: `npx vercel@latest
+whoami`; if signed out, the user runs `! npx vercel@latest login`.
+2. Secrets directory `~/.config/acres/vercel-preview/` (0700, files 0600):
+   `preview.env` (from `npx vercel@latest env pull <dir>/preview.env
+--environment=preview --yes`), `neon-roles.env` (generated role
+   passwords) and `neon-urls.env` (migrator direct URL, `acres_app` pooled
+   and direct URLs). List names only (`cut -d= -f1`), never values. If lost,
+   re-pull `preview.env` and rerun the bootstrap: it regenerates passwords
+   and re-sets them on the roles.
+3. Node 24 for checks: `.node-version` pins **24.21.0**; the system Node is 26. Without a version manager, `npm install --prefix /tmp/acres-node24
+--no-save --ignore-scripts node-linux-x64@24.21.0` and put
+   `/tmp/acres-node24/node_modules/node-linux-x64/bin` first on `PATH`
+   (the npm shim must also resolve to that Node; check `node --version`
+   inside `npm run`).
+
+**Re-run the proofs (idempotent, preview only).**
+
+```bash
+scripts/vercel/neon-bootstrap.sh            # roles, database, PostGIS
+(set -a; . ~/.config/acres/vercel-preview/neon-urls.env; set +a; \
+  cd server && npx prisma migrate deploy)   # migrator, direct host
+scripts/vercel/neon-verify.sh               # harden + RLS/pooling evidence
+(set -a; . ~/.config/acres/vercel-preview/preview.env; set +a; \
+  ACRES_VERCEL_PROBE=isolated-synthetic-preview \
+  VERCEL_TEAM_ID=team_zE3mp7nrEZ6a7cxRavwUMYC4 \
+  VERCEL_PROJECT_ID=prj_q9ApajZWDgdYZetnm5s5oakEjrUD \
+  node scripts/vercel/probe-platform.js blob)
+```
+
+**Remaining work, in order** (each ends verified, reviewed, recorded here and
+committed per AGENTS.md §2):
+
+- [ ] **Queues consumer** — wire `@vercel/queue` behind the existing queue
+      port around `server/src/worker/job-processor.service.ts`: same-project
+      producer/consumer, forged-callback denial, duplicate/retry/interruption
+      idempotency, preview isolation. Load the `vercel:queues`,
+      `vercel:vercel-functions`, `nestjs-best-practices` skills first.
+- [ ] **Blob browser upload** — scoped client tokens, direct upload above the
+      function body limit, callback provenance, tenant authorization,
+      cancel/delete, download revocation (`vercel:vercel-storage`).
+- [ ] **Scanner image** — build and push a pinned VCR ClamAV image with
+      checksum-bound `main.cvd`/`daily.cvd`, then run the scanner probe with
+      `VERCEL_TOKEN`, `ACRES_VERCEL_PROBE_REGION=iad1`,
+      `ACRES_SCANNER_IMAGE` (digest-pinned), `ACRES_SCANNER_MAIN_SHA256`,
+      `ACRES_SCANNER_DAILY_SHA256` and `ACRES_SCANNER_MAX_SIGNATURE_AGE_HOURS`
+      (see [the probe guide](../infra/vercel/README.md)) plus the live failure
+      cases (`vercel:vercel-sandbox`). Hobby: 45-minute sessions, 5
+      CPU-hours/month.
+- [ ] **First preview deployment** — Services/route config, only the
+      `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, remove or mark
+      sensitive the `NEON_OWNER_*` variables, migrations as a guarded
+      non-runtime step, distributed throttling, protected endpoints
+      (`vercel:vercel-services`, `vercel:deployments-cicd`, `vercel:env-vars`).
+- [ ] **Production decision** — Cron proves only on production; Hobby is
+      non-commercial. Needs the user's plan decision and the eleven launch
+      categories before any promotion.
 
 ## Access and target
 
@@ -82,6 +155,17 @@ context reuse: 20 sequential sessions with 0 leaked contexts and 8 concurrent
 transactions each reading back only their own context. This proves the
 database role/RLS seam, not the application's pooled Prisma behaviour under
 real traffic.
+
+**Pooler constraint (found by review follow-up).** On the pooled host a
+**session-level** `set_config(..., false)` survived into the next client in
+10/10 attempts: Neon's pooler does not reset session state between clients.
+Tenant context must therefore always be transaction-local. Every
+`set_config` in `server/src` (excluding specs) passes `true` today; keep it
+that way and never use `SET` without `LOCAL` for `acres.*` settings. The
+verify script reports this as `info pooled_session_level_leaks`, then resets
+the probe value and asserts no residue. `scripts/vercel/neon-verify.sh` now
+exits nonzero on any failed assertion; both scripts pass passwords to psql via
+the environment only.
 
 Follow-ups before any deployment: put the `acres_app` pooled URL (and never an
 owner/migrator URL) in project env as **sensitive**; remove or mark sensitive
