@@ -14,6 +14,34 @@ operator test address and existing hosted data/deployments remain unverified.
 A consolidated request is pending; generic migration/deployment approval already
 exists. No resource creation, billable probe or mail delivery occurs on guesses.
 
+### Account inspection and provisioning — 2026-10-15
+
+Vercel MCP connected after user OAuth. Read-only inspection: one team,
+`dgsloxx417's projects` (`team_zE3mp7nrEZ6a7cxRavwUMYC4`); thirteen unrelated
+projects, none named Acres; Marketplace already holds a free Neon installation
+whose Vercel-managed Neon org has two unrelated projects (left untouched).
+User decisions: new project, **iad1 / aws-us-east-1**, **free tiers only**
+(stop and report when a gate needs a paid plan), Resend deferred.
+
+Official pricing pages read this session: Sandbox on Hobby is free within
+5 active-CPU hours, 5,000 creations, 10 concurrent and 45-minute sessions per
+month, pausing (not billing) past quota; Queues (Beta) is available on all
+plans; Cron invokes production deployments only, so the Cron gate cannot be
+proven on a preview. Hobby is a non-commercial plan — a launch-time plan
+decision, not a proof blocker.
+
+Created:
+
+| resource                         | identity                           | settings                                                                                                                                             |
+| -------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vercel project `acres`           | `prj_q9ApajZWDgdYZetnm5s5oakEjrUD` | no framework/Git yet, functions and Sandbox default `iad1`, Node 24.x, Vercel Authentication on all deployments except custom domains, no deployment |
+| Blob store `acres-preview-probe` | `store_g2fmCH5CW7TJbkN3`           | private, `iad1`, linked to `acres`; its `BLOB_READ_WRITE_TOKEN` was narrowed to preview/development only (never production)                          |
+
+Neon creation through the Neon MCP was refused (`organization is managed by
+Vercel`); Vercel MCP exposes no Marketplace resource-provisioning call, so the
+Neon/PostGIS resource needs the dashboard or an authenticated Vercel CLI.
+No secret was decrypted or printed; no probe has run.
+
 ## Target and gates
 
 Vercel Services is the candidate single-project arrangement, documented in Beta
