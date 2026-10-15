@@ -8,6 +8,7 @@ const {
   probeScannerFailures,
   SANDBOX_BUDGET,
   readBounded,
+  credentialsFor,
 } = require("./probe-platform");
 
 const base = {
@@ -18,11 +19,26 @@ const base = {
   BLOB_READ_WRITE_TOKEN: "private-test-token",
   VERCEL_TOKEN: "test-token",
   ACRES_VERCEL_PROBE_REGION: "fra1",
-  ACRES_SCANNER_IMAGE: `vcr.vercel.com/test/probe/scanner@sha256:${"a".repeat(64)}`,
+  ACRES_SCANNER_SNAPSHOT_ID: "snap_Test123",
   ACRES_SCANNER_MAIN_SHA256: "b".repeat(64),
   ACRES_SCANNER_DAILY_SHA256: "c".repeat(64),
   ACRES_SCANNER_MAX_SIGNATURE_AGE_HOURS: "24",
 };
+const noSleep = { sleep: async () => {} };
+
+// An unsigned JWT-shaped token; the probe decodes, never verifies, it.
+const jwt = (claims) =>
+  [
+    Buffer.from('{"alg":"RS256"}').toString("base64url"),
+    Buffer.from(JSON.stringify(claims)).toString("base64url"),
+    "signature",
+  ].join(".");
+const inHours = (h) => Math.floor(Date.now() / 1000) + h * 3600;
+const OIDC = jwt({
+  owner_id: "team-test",
+  project_id: "prj-test",
+  exp: inHours(12),
+});
 
 for (const [key, value] of [
   ["ACRES_VERCEL_PROBE", ""],
@@ -38,7 +54,13 @@ for (const [key, value] of [
   ["VERCEL_TOKEN", ""],
   ["ACRES_VERCEL_PROBE_REGION", ""],
   ["ACRES_VERCEL_PROBE_REGION", "unselected"],
-  ["ACRES_SCANNER_IMAGE", "latest"],
+  ["ACRES_SCANNER_SNAPSHOT_ID", ""],
+  ["ACRES_SCANNER_SNAPSHOT_ID", "latest"],
+  ["ACRES_SCANNER_SNAPSHOT_ID", "snap_../x"],
+  [
+    "ACRES_SCANNER_SNAPSHOT_ID",
+    `vcr.vercel.com/test/probe/scanner@sha256:${"a".repeat(64)}`,
+  ],
   ["ACRES_SCANNER_MAIN_SHA256", "bad"],
   ["ACRES_SCANNER_DAILY_SHA256", ""],
   ["ACRES_SCANNER_MAX_SIGNATURE_AGE_HOURS", "24junk"],
@@ -50,6 +72,74 @@ for (const [key, value] of [
 }
 test("unknown mode fails closed", () =>
   assert.throws(() => configuration(base, "deploy")));
+
+test("token auth passes explicit credentials", () => {
+  const config = configuration(base, "scanner");
+  assert.equal(config.auth, "token");
+  assert.deepEqual(credentialsFor(config), {
+    token: "test-token",
+    teamId: "team-test",
+    projectId: "prj-test",
+  });
+});
+test("OIDC auth binds the checked token to its target and wins over VERCEL_TOKEN", () => {
+  for (const env of [
+    { ...base, VERCEL_TOKEN: "", VERCEL_OIDC_TOKEN: OIDC },
+    { ...base, VERCEL_OIDC_TOKEN: OIDC },
+  ]) {
+    const config = configuration(env, "scanner");
+    assert.equal(config.auth, "oidc");
+    // Explicit credentials stop the SDK refreshing for the cwd's .vercel link.
+    assert.deepEqual(credentialsFor(config), {
+      token: OIDC,
+      teamId: "team-test",
+      projectId: "prj-test",
+    });
+  }
+});
+for (const [label, exp] of [
+  ["expired", inHours(-1)],
+  ["expiring within 30 minutes", inHours(0.25)],
+  ["without exp", undefined],
+]) {
+  test(`OIDC token ${label} is refused so the SDK never refreshes it`, () =>
+    assert.throws(
+      () =>
+        configuration(
+          {
+            ...base,
+            VERCEL_OIDC_TOKEN: jwt({
+              owner_id: "team-test",
+              project_id: "prj-test",
+              exp,
+            }),
+          },
+          "scanner",
+        ),
+      /expires too soon/,
+    ));
+}
+for (const claims of [
+  { owner_id: "team-other", project_id: "prj-test", exp: inHours(12) },
+  { owner_id: "team-test", project_id: "prj-other", exp: inHours(12) },
+  { owner_id: "team-test", exp: inHours(12) },
+]) {
+  test(`OIDC claims mismatch throws: ${JSON.stringify(claims)}`, () =>
+    assert.throws(
+      () =>
+        configuration({ ...base, VERCEL_OIDC_TOKEN: jwt(claims) }, "scanner"),
+      /different project or team/,
+    ));
+}
+for (const malformed of ["not-a-jwt", "a.b", "a.%%%.c", "a.bnVsbA.c"]) {
+  test(`malformed OIDC token throws without echoing it: ${malformed}`, () =>
+    assert.throws(
+      () => configuration({ ...base, VERCEL_OIDC_TOKEN: malformed }, "scanner"),
+      (error) =>
+        error.message === "VERCEL_OIDC_TOKEN is not a JWT." &&
+        !error.message.includes(malformed),
+    ));
+}
 
 function blobFake({
   status = 403,
@@ -131,8 +221,6 @@ test("bounded read cancels an oversized body", async () => {
   assert.equal(cancelled, true);
 });
 
-const DIGEST = `sha256:${"a".repeat(64)}`;
-
 // Virtual clock: the double "spends" time on sleep commands so the probe's
 // timing windows are exercised without real waits.
 const realNow = Date.now;
@@ -178,9 +266,18 @@ function defaultAnswer(cmd) {
   throw new Error(`unexpected command ${cmd.cmd}`);
 }
 
-function scannerFake({
+function scannerFake(options = {}) {
+  // `in`, not a default: an explicit undefined must reach the probe.
+  const sourceSnapshotId =
+    "sourceSnapshotId" in options ? options.sourceSnapshotId : "snap_Test123";
+  return scannerDouble({ ...options, sourceSnapshotId });
+}
+function scannerDouble({
   override = () => undefined,
-  image = `vcr.vercel.com/test/probe/scanner@${DIGEST}`,
+  sourceSnapshotId,
+  baseSnapshot = "created",
+  writeCreatesParents = true,
+  sessions = 1,
   failCreate = false,
   failWrite = false,
   failStop = false,
@@ -188,28 +285,58 @@ function scannerFake({
 } = {}) {
   const events = [];
   const creates = [];
+  const snapshotGets = [];
   let caseIndex = 0;
   const sdk = {
+    Snapshot: {
+      async get(params) {
+        snapshotGets.push(params);
+        events.push("snapshot:get");
+        if (baseSnapshot === "error") throw new Error("404 with test-token");
+        return { snapshotId: params.snapshotId, status: baseSnapshot };
+      },
+    },
     Sandbox: {
       async create(options) {
         creates.push(options);
         if (failCreate) throw new Error("create failure with test-token");
         const name = `sbx-${caseIndex++}`;
+        const files = new Set();
         return {
           name,
-          image,
+          sourceSnapshotId,
+          async listSessions(params) {
+            assert.ok(params.signal instanceof AbortSignal);
+            events.push(`${name}:listSessions`);
+            return { sessions: Array(sessions).fill({}), pagination: {} };
+          },
           async runCommand(cmd) {
             assert.equal(cmd.detached, undefined);
             assert.equal(cmd.sudo, undefined);
-            const answer = override(name, cmd) ?? defaultAnswer(cmd);
+            const answer =
+              override(name, cmd) ??
+              (cmd.cmd === "sh" && cmd.args[1].includes("acres-missing-dir")
+                ? {
+                    exitCode: 0,
+                    stdout: files.has("/tmp/acres-missing-dir/x")
+                      ? "present\n"
+                      : "",
+                  }
+                : defaultAnswer(cmd));
             events.push(`${name}:run:${cmd.cmd}`);
             return {
               exitCode: answer.exitCode,
               stdout: async () => answer.stdout,
             };
           },
-          async writeFiles(files) {
-            for (const f of files) assert.match(f.path, /^\/tmp\/acres-scan\//);
+          async writeFiles(written) {
+            for (const f of written) {
+              assert.match(f.path, /^\/tmp\/acres-(scan|missing-dir)\//);
+              if (f.path.startsWith("/tmp/acres-missing-dir/")) {
+                if (!writeCreatesParents) throw new Error("ENOENT");
+                files.add(f.path);
+              }
+            }
             events.push(`${name}:write`);
             if (failWrite) throw new Error("private failure");
           },
@@ -235,14 +362,19 @@ function scannerFake({
       const del = events.indexOf(`sbx-${i}:delete`);
       return stop >= 0 && del > stop;
     });
-  return { sdk, events, creates, cleanupOrdered };
+  return { sdk, events, creates, snapshotGets, cleanupOrdered };
 }
 
 const scannerConfig = () => configuration(base, "scanner");
 
 test("scanner creates non-persistent deny-all VMs and passes clean/EICAR", async () => {
   const fake = scannerFake();
-  const result = await probeScanner(scannerConfig(), fake.sdk);
+  const result = await probeScanner(
+    scannerConfig(),
+    fake.sdk,
+    undefined,
+    noSleep,
+  );
   assert.equal(result.productionScannerProven, false);
   assert.equal(result.eicarRejected, true);
   assert.equal(result.eicarSignature, "Eicar-Test-Signature");
@@ -259,8 +391,66 @@ test("scanner creates non-persistent deny-all VMs and passes clean/EICAR", async
   assert.equal(options.timeout, 120000);
   assert.deepEqual(options.resources, { vcpus: 1 });
   assert.equal(options.env, undefined);
-  assert.equal(options.source, undefined);
+  assert.deepEqual(options.source, {
+    type: "snapshot",
+    snapshotId: "snap_Test123",
+  });
+  assert.ok(!("image" in options));
+  assert.equal(options.token, "test-token");
   assert.ok(fake.cleanupOrdered());
+  assert.equal(result.baseSnapshotSurvived, true);
+  assert.equal(result.gatePassed, true);
+  // The base snapshot is checked only after the scan VM is deleted.
+  assert.ok(
+    fake.events.indexOf("snapshot:get") > fake.events.indexOf("sbx-0:delete"),
+  );
+  assert.equal(fake.snapshotGets[0].snapshotId, "snap_Test123");
+  assert.equal(fake.snapshotGets[0].token, "test-token");
+});
+
+test("OIDC scan sandboxes and the snapshot check use the checked token", async () => {
+  const fake = scannerFake();
+  const config = configuration({ ...base, VERCEL_OIDC_TOKEN: OIDC }, "scanner");
+  const result = await probeScanner(config, fake.sdk, undefined, noSleep);
+  for (const call of [fake.creates[0], fake.snapshotGets[0]]) {
+    assert.equal(call.token, OIDC);
+    assert.equal(call.teamId, "team-test");
+    assert.equal(call.projectId, "prj-test");
+  }
+  assert.ok(!JSON.stringify(result).includes(OIDC));
+});
+
+for (const [label, baseSnapshot] of [
+  ["deleted", "deleted"],
+  ["lookup error", "error"],
+]) {
+  test(`a base snapshot that did not survive fails both modes: ${label}`, async () => {
+    const scanner = await probeScanner(
+      scannerConfig(),
+      scannerFake({ baseSnapshot }).sdk,
+      undefined,
+      noSleep,
+    );
+    assert.equal(scanner.baseSnapshotSurvived, false);
+    assert.equal(scanner.gatePassed, false);
+    const failures = await probeScannerFailures(
+      scannerConfig(),
+      scannerFake({ baseSnapshot }).sdk,
+      undefined,
+      noSleep,
+    );
+    assert.equal(failures.baseSnapshotSurvived, false);
+    assert.equal(failures.gatePassed, false);
+    for (const c of Object.values(failures.cases)) assert.equal(c.passed, true);
+  });
+}
+
+test("the base snapshot check waits before looking", async () => {
+  const waits = [];
+  await probeScanner(scannerConfig(), scannerFake().sdk, undefined, {
+    sleep: async (ms) => waits.push(ms),
+  });
+  assert.deepEqual(waits, [30_000]);
 });
 
 const scannerBreaks = {
@@ -292,7 +482,9 @@ const scannerBreaks = {
 for (const [label, override] of Object.entries(scannerBreaks)) {
   test(`scanner fails and still stops+deletes on ${label}`, async () => {
     const fake = scannerFake({ override });
-    await assert.rejects(probeScanner(scannerConfig(), fake.sdk));
+    await assert.rejects(
+      probeScanner(scannerConfig(), fake.sdk, undefined, noSleep),
+    );
     assert.ok(fake.cleanupOrdered());
   });
 }
@@ -300,28 +492,34 @@ for (const [label, options] of [
   ["file-write failure", { failWrite: true }],
   ["stop failure", { failStop: true }],
   ["delete failure", { failDelete: true }],
-  [
-    "image digest mismatch",
-    { image: `vcr.vercel.com/test/probe/scanner@sha256:${"f".repeat(64)}` },
-  ],
-  ["missing image getter", { image: null }],
+  ["source snapshot mismatch", { sourceSnapshotId: "snap_Other" }],
+  ["missing source snapshot", { sourceSnapshotId: undefined }],
 ]) {
   test(`scanner cleanup/identity failure cannot mint success: ${label}`, async () => {
     const fake = scannerFake(options);
-    await assert.rejects(probeScanner(scannerConfig(), fake.sdk));
+    await assert.rejects(
+      probeScanner(scannerConfig(), fake.sdk, undefined, noSleep),
+    );
     assert.ok(fake.events.includes("sbx-0:stop"));
     assert.ok(fake.events.includes("sbx-0:delete"));
   });
 }
 test("scanner create failure leaves nothing to clean", async () => {
   const fake = scannerFake({ failCreate: true });
-  await assert.rejects(probeScanner(scannerConfig(), fake.sdk));
+  await assert.rejects(
+    probeScanner(scannerConfig(), fake.sdk, undefined, noSleep),
+  );
   assert.equal(fake.events.length, 0);
 });
 
 test("scanner-failures passes every expected fail-closed case within budget", async () => {
   const fake = scannerFake();
-  const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+  const result = await probeScannerFailures(
+    scannerConfig(),
+    fake.sdk,
+    undefined,
+    noSleep,
+  );
   assert.equal(result.gatePassed, true, JSON.stringify(result.cases));
   assert.equal(result.cases.missing.variant, "empty-database-directory");
   assert.equal(result.cases["size-limit"].withoutAlert.shape, "ok");
@@ -338,6 +536,98 @@ test("scanner-failures passes every expected fail-closed case within budget", as
   }
   assert.equal(fake.creates[5].timeout, 15000);
   assert.ok(fake.cleanupOrdered());
+  assert.equal(result.baseSnapshotSurvived, true);
+  assert.equal(fake.events.filter((e) => e === "snapshot:get").length, 1);
+  assert.equal(result.cases["size-limit"].writeCreatesParents, true);
+  assert.equal(result.cases["session-timeout"].sessions, 1);
+  assert.deepEqual(result.cases["session-timeout"].error, {
+    name: "Error",
+    status: null,
+    code: null,
+  });
+  assert.equal(result.cases["command-timeout"].exitCode, 137);
+});
+
+test("diagnostics never change a case's result", async () => {
+  const fake = scannerFake({ writeCreatesParents: false, sessions: 2 });
+  const result = await probeScannerFailures(
+    scannerConfig(),
+    fake.sdk,
+    undefined,
+    noSleep,
+  );
+  assert.equal(result.gatePassed, true);
+  assert.equal(result.cases["size-limit"].writeCreatesParents, false);
+  assert.equal(result.cases["size-limit"].passed, true);
+  assert.equal(result.cases["session-timeout"].sessions, 2);
+  assert.equal(result.cases["session-timeout"].passed, true);
+});
+
+// Hosted shape (Prompt 373): the session end resolves the command with 143.
+const resolvedSessionEnd = (exitCode, spentMs) => (n, c) => {
+  if (c.cmd !== "sleep" || c.timeoutMs) return undefined;
+  clockSkew += spentMs;
+  return { exitCode, stdout: "" };
+};
+test("session-timeout passes a session end that resolves non-zero in the window", async () => {
+  const fake = scannerFake({ override: resolvedSessionEnd(143, 14_900) });
+  const result = await probeScannerFailures(
+    scannerConfig(),
+    fake.sdk,
+    undefined,
+    noSleep,
+  );
+  const c = result.cases["session-timeout"];
+  assert.equal(c.passed, true);
+  assert.equal(c.shape, "resolved");
+  assert.equal(c.exitCode, 143);
+  assert.equal(c.sessions, 1);
+  assert.equal(result.gatePassed, true);
+});
+for (const [label, exitCode, spentMs] of [
+  ["exit 0 (the SDK's missing-code default)", 0, 14_900],
+  ["a non-zero exit before the session could end", 143, 1_000],
+  ["a non-zero exit after the window", 143, 41_000],
+]) {
+  test(`session-timeout fails a resolved ${label}`, async () => {
+    const fake = scannerFake({
+      override: resolvedSessionEnd(exitCode, spentMs),
+    });
+    const result = await probeScannerFailures(
+      scannerConfig(),
+      fake.sdk,
+      undefined,
+      noSleep,
+    );
+    assert.equal(result.cases["session-timeout"].passed, false);
+    assert.equal(result.gatePassed, false);
+  });
+}
+
+test("the session error shape keeps type, status and code only", async () => {
+  class APIError extends Error {}
+  const fake = scannerFake({
+    override: (n, c) => {
+      if (c.cmd !== "sleep" || c.timeoutMs) return undefined;
+      clockSkew += 14_000;
+      const error = new APIError("secret body with test-token");
+      error.response = { status: 410 };
+      error.code = "sandbox_stopped";
+      throw error;
+    },
+  });
+  const result = await probeScannerFailures(
+    scannerConfig(),
+    fake.sdk,
+    undefined,
+    noSleep,
+  );
+  assert.deepEqual(result.cases["session-timeout"].error, {
+    name: "APIError",
+    status: 410,
+    code: "sandbox_stopped",
+  });
+  assert.ok(!JSON.stringify(result).includes("test-token"));
 });
 
 // The opposite result of each case must fail that case and the gate.
@@ -372,7 +662,12 @@ const failureBreaks = {
 for (const [name, override] of Object.entries(failureBreaks)) {
   test(`scanner-failures fails ${name} on the opposite result`, async () => {
     const fake = scannerFake({ override });
-    const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+    const result = await probeScannerFailures(
+      scannerConfig(),
+      fake.sdk,
+      undefined,
+      noSleep,
+    );
     assert.equal(result.cases[name].passed, false);
     assert.equal(result.gatePassed, false);
     for (const [other, c] of Object.entries(result.cases))
@@ -394,7 +689,12 @@ const instantRejection = {
 for (const [name, override] of Object.entries(instantRejection)) {
   test(`scanner-failures fails ${name} on an unrelated failure`, async () => {
     const fake = scannerFake({ override });
-    const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+    const result = await probeScannerFailures(
+      scannerConfig(),
+      fake.sdk,
+      undefined,
+      noSleep,
+    );
     assert.equal(result.cases[name].passed, false);
     assert.equal(result.gatePassed, false);
   });
@@ -407,28 +707,45 @@ test("command-timeout fails when the kill comes too late", async () => {
       return { exitCode: 137, stdout: "" };
     },
   });
-  const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+  const result = await probeScannerFailures(
+    scannerConfig(),
+    fake.sdk,
+    undefined,
+    noSleep,
+  );
   assert.equal(result.cases["command-timeout"].passed, false);
 });
 test("scanner-failures marks a case failed when its cleanup fails", async () => {
   const fake = scannerFake({ failDelete: true });
-  const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+  const result = await probeScannerFailures(
+    scannerConfig(),
+    fake.sdk,
+    undefined,
+    noSleep,
+  );
   assert.equal(result.gatePassed, false);
   assert.ok(Object.values(result.cases).every((c) => c.passed === false));
 });
 test("session-timeout tolerates a stop error only when delete succeeds", async () => {
   const fake = scannerFake({ failStop: true });
-  const result = await probeScannerFailures(scannerConfig(), fake.sdk);
+  const result = await probeScannerFailures(
+    scannerConfig(),
+    fake.sdk,
+    undefined,
+    noSleep,
+  );
   assert.equal(result.cases["session-timeout"].passed, true);
   assert.equal(result.cases["session-timeout"].stopFailed, true);
   assert.equal(result.cases["wrong-hash"].passed, false);
 });
-test("scanner summaries never carry the token or image reference", async () => {
+test("scanner summaries never carry the token, claims or snapshot id", async () => {
   for (const run of [probeScanner, probeScannerFailures]) {
-    const text = JSON.stringify(await run(scannerConfig(), scannerFake().sdk));
+    const text = JSON.stringify(
+      await run(scannerConfig(), scannerFake().sdk, undefined, noSleep),
+    );
     assert.ok(!text.includes(base.VERCEL_TOKEN));
-    assert.ok(!text.includes("vcr.vercel.com"));
-    assert.ok(!text.includes("a".repeat(64)));
+    assert.ok(!text.includes("snap_Test123"));
+    assert.ok(!text.includes("b".repeat(64)));
   }
 });
 

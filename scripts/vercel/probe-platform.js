@@ -9,6 +9,8 @@ const serverRequire = createRequire(
   path.resolve(__dirname, "../../server/package.json"),
 );
 
+const SNAPSHOT_ID = /^snap_[A-Za-z0-9]+$/;
+
 function required(env, key) {
   const value = env[key]?.trim();
   if (!value || value.startsWith("__REQUIRED_"))
@@ -16,9 +18,7 @@ function required(env, key) {
   return value;
 }
 
-function configuration(env, mode) {
-  if (!["blob", "blob-browser", "scanner", "scanner-failures"].includes(mode))
-    throw new Error("Choose blob, blob-browser, scanner or scanner-failures.");
+function isolatedTarget(env) {
   if (env.ACRES_VERCEL_PROBE !== "isolated-synthetic-preview") {
     throw new Error(
       "Set ACRES_VERCEL_PROBE=isolated-synthetic-preview only for an approved isolated target.",
@@ -26,21 +26,88 @@ function configuration(env, mode) {
   }
   if (env.VERCEL_ENV !== "preview")
     throw new Error("Probes require VERCEL_ENV=preview.");
-  const common = {
+  return {
     teamId: required(env, "VERCEL_TEAM_ID"),
     projectId: required(env, "VERCEL_PROJECT_ID"),
   };
-  if (mode === "blob" || mode === "blob-browser")
-    return { ...common, token: required(env, "BLOB_READ_WRITE_TOKEN") };
+}
+
+// The payload is decoded without verifying the signature: this only checks
+// which project the token is for. Vercel verifies it. Never echo the value.
+function oidcClaims(token) {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("VERCEL_OIDC_TOKEN is not a JWT.");
+  try {
+    const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+    if (claims && typeof claims === "object") return claims;
+  } catch {
+    // Fall through to the fixed message.
+  }
+  throw new Error("VERCEL_OIDC_TOKEN is not a JWT.");
+}
+
+// Longer than any run (the builder lives up to 15 minutes), so the token is
+// never refreshed mid-run.
+const OIDC_MIN_REMAINING_MS = 30 * 60_000;
+
+/**
+ * Sandbox target and credentials, shared by the probe and the snapshot build.
+ * OIDC wins when both tokens are set. The checked OIDC token is passed
+ * explicitly: given no credentials, the SDK refreshes an expiring token for
+ * the cwd's `.vercel` link (`@vercel/oidc` `findProjectInfo`), not for the
+ * project its claims were checked against.
+ */
+function sandboxTarget(env) {
+  const common = isolatedTarget(env);
   const region = required(env, "ACRES_VERCEL_PROBE_REGION");
   if (!/^[a-z]{3}[1-9][0-9]?$/.test(region))
     throw new Error("Select a valid Vercel region for the probe.");
-  const image = required(env, "ACRES_SCANNER_IMAGE");
-  if (!/^vcr\.vercel\.com\/[a-zA-Z0-9_/-]+@sha256:[a-f0-9]{64}$/.test(image)) {
-    throw new Error(
-      "ACRES_SCANNER_IMAGE must be an approved VCR image pinned by SHA-256 digest.",
-    );
+  const oidc = env.VERCEL_OIDC_TOKEN?.trim();
+  if (oidc) {
+    const claims = oidcClaims(oidc);
+    if (
+      claims.project_id !== common.projectId ||
+      claims.owner_id !== common.teamId
+    )
+      throw new Error("OIDC token is for a different project or team.");
+    if (
+      !Number.isFinite(claims.exp) ||
+      claims.exp * 1000 < Date.now() + OIDC_MIN_REMAINING_MS
+    )
+      throw new Error(
+        "VERCEL_OIDC_TOKEN expires too soon; pull a fresh one with vercel env pull.",
+      );
+    return { ...common, region, auth: "oidc", token: oidc };
   }
+  return {
+    ...common,
+    region,
+    auth: "token",
+    token: required(env, "VERCEL_TOKEN"),
+  };
+}
+
+/** Explicit SDK credentials, bound to the checked target in both modes. */
+function credentialsFor(config) {
+  return {
+    token: config.token,
+    teamId: config.teamId,
+    projectId: config.projectId,
+  };
+}
+
+function configuration(env, mode) {
+  if (!["blob", "blob-browser", "scanner", "scanner-failures"].includes(mode))
+    throw new Error("Choose blob, blob-browser, scanner or scanner-failures.");
+  if (mode === "blob" || mode === "blob-browser")
+    return {
+      ...isolatedTarget(env),
+      token: required(env, "BLOB_READ_WRITE_TOKEN"),
+    };
+  const target = sandboxTarget(env);
+  const snapshotId = required(env, "ACRES_SCANNER_SNAPSHOT_ID");
+  if (!SNAPSHOT_ID.test(snapshotId))
+    throw new Error("ACRES_SCANNER_SNAPSHOT_ID must be a Sandbox snapshot id.");
   const mainSha256 = required(env, "ACRES_SCANNER_MAIN_SHA256");
   const dailySha256 = required(env, "ACRES_SCANNER_DAILY_SHA256");
   if (![mainSha256, dailySha256].every((v) => /^[a-f0-9]{64}$/.test(v)))
@@ -51,10 +118,8 @@ function configuration(env, mode) {
       "Adopt a signature age from 1 through 168 hours for the probe.",
     );
   return {
-    ...common,
-    token: required(env, "VERCEL_TOKEN"),
-    image,
-    region,
+    ...target,
+    snapshotId,
     mainSha256,
     dailySha256,
     maxAgeHours: Number(age),
@@ -681,6 +746,7 @@ process.stdout.write('signatures-ok\\n');
 `;
 
 const SCAN_DIR = "/tmp/acres-scan";
+const MISSING_DIR = "/tmp/acres-missing-dir";
 const SANDBOX_TIMEOUT_MS = 120_000;
 const CLEANUP_TIMEOUT_MS = 30_000;
 // Per invocation; scanner + scanner-failures together stay within 10.
@@ -713,7 +779,9 @@ async function cleanupSandbox(sandbox, { tolerateStopError = false } = {}) {
     stopFailed = true;
   }
   try {
-    // Without this, persistent-by-default snapshots keep scanned bytes.
+    // Without this, persistent-by-default snapshots keep scanned bytes. The
+    // base snapshot belongs to the builder, and `baseSnapshotSurvived`
+    // proves this flag does not remove it.
     await sandbox.delete({
       deleteOrphanSnapshots: true,
       signal: AbortSignal.timeout(CLEANUP_TIMEOUT_MS),
@@ -727,7 +795,6 @@ async function cleanupSandbox(sandbox, { tolerateStopError = false } = {}) {
 }
 
 function sandboxRunner(config, sdk, mode, log = () => {}) {
-  const digest = config.image.slice(config.image.indexOf("@") + 1);
   let created = 0;
   return {
     created: () => created,
@@ -739,10 +806,8 @@ function sandboxRunner(config, sdk, mode, log = () => {}) {
       let value;
       try {
         sandbox = await sdk.Sandbox.create({
-          token: config.token,
-          teamId: config.teamId,
-          projectId: config.projectId,
-          image: config.image,
+          ...credentialsFor(config),
+          source: { type: "snapshot", snapshotId: config.snapshotId },
           region: config.region,
           persistent: false,
           networkPolicy: "deny-all",
@@ -751,11 +816,8 @@ function sandboxRunner(config, sdk, mode, log = () => {}) {
           ...overrides,
         });
         log(sandbox.name);
-        if (
-          typeof sandbox.image !== "string" ||
-          !sandbox.image.endsWith(`@${digest}`)
-        )
-          throw new Error("Scanner image digest mismatch.");
+        if (sandbox.sourceSnapshotId !== config.snapshotId)
+          throw new Error("Scanner snapshot mismatch.");
         value = await fn(sandbox);
       } finally {
         if (sandbox) {
@@ -798,7 +860,53 @@ function signatureCheck(config, overrides = {}) {
 const signaturesOk = (r) =>
   r.exitCode === 0 && r.stdout.includes("signatures-ok");
 
-async function probeScanner(config, sdk, log) {
+// Orphan-snapshot deletion is asynchronous, so the base snapshot is checked
+// after a pause rather than straight after the last delete.
+const BASE_SNAPSHOT_RECHECK_MS = 30_000;
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function baseSnapshotSurvived(config, sdk, sleep) {
+  await sleep(BASE_SNAPSHOT_RECHECK_MS);
+  try {
+    const snapshot = await sdk.Snapshot.get({
+      ...credentialsFor(config),
+      snapshotId: config.snapshotId,
+      signal: AbortSignal.timeout(CLEANUP_TIMEOUT_MS),
+    });
+    return snapshot.status === "created";
+  } catch {
+    return false;
+  }
+}
+
+// Diagnostic only. runCommand resumes a stopped session and retries, so the
+// count shows whether a second VM was booted. listSessions is not
+// resume-wrapped, so asking cannot boot one.
+async function sessionCount(sandbox) {
+  try {
+    const page = await sandbox.listSessions({
+      limit: 10,
+      signal: AbortSignal.timeout(CLEANUP_TIMEOUT_MS),
+    });
+    return page.sessions.length;
+  } catch {
+    return null;
+  }
+}
+
+// Type name, HTTP status and stream code only: never a message or body.
+function errorShape(error) {
+  const name = error?.constructor?.name;
+  const status = error?.response?.status;
+  const code = error?.code;
+  return {
+    name: typeof name === "string" && /^\w{1,40}$/.test(name) ? name : "other",
+    status: Number.isInteger(status) ? status : null,
+    code: typeof code === "string" && /^[\w.-]{1,60}$/.test(code) ? code : null,
+  };
+}
+
+async function probeScanner(config, sdk, log, { sleep = pause } = {}) {
   const runner = sandboxRunner(config, sdk, "scanner", log);
   const result = await runner.run({}, async (sandbox) => {
     const identity = await runChecked(sandbox, {
@@ -862,7 +970,13 @@ async function probeScanner(config, sdk, log) {
     };
   });
   delete result.stopFailed;
-  return { ...result, sandboxCreations: runner.created() };
+  const survived = await baseSnapshotSurvived(config, sdk, sleep);
+  return {
+    ...result,
+    baseSnapshotSurvived: survived,
+    gatePassed: survived,
+    sandboxCreations: runner.created(),
+  };
 }
 
 // Timeout cases need a lower bound too: an instant, unrelated rejection
@@ -885,7 +999,8 @@ const FAILURE_CASES = {
     };
   },
   async missing(sandbox, config) {
-    // The image has no sudo, so the check reads an empty database directory.
+    // Scan commands run without sudo and the real database must stay
+    // intact, so the check reads an empty database directory instead.
     await runChecked(sandbox, {
       cmd: "mkdir",
       args: ["-p", `${SCAN_DIR}/emptydb`],
@@ -950,6 +1065,9 @@ const FAILURE_CASES = {
   },
   async "session-timeout"(sandbox) {
     const started = Date.now();
+    // Hosted (Prompt 373): the session end resolves the command with exit 143
+    // (SIGTERM) instead of rejecting it. Like command-timeout, either shape
+    // passes inside the window, but a resolved exit 0 never does.
     try {
       // The signal only stops the probe hanging if the session never ends.
       const r = await sandbox.runCommand({
@@ -957,23 +1075,42 @@ const FAILURE_CASES = {
         args: ["60"],
         signal: AbortSignal.timeout(45_000),
       });
+      const durationMs = Date.now() - started;
       return {
-        passed: false,
+        passed: r.exitCode !== 0 && within(durationMs, SESSION_TIMEOUT_WINDOW),
         shape: "resolved",
         exitCode: r.exitCode,
-        durationMs: Date.now() - started,
+        durationMs,
+        sessions: await sessionCount(sandbox),
       };
-    } catch {
+    } catch (error) {
       const durationMs = Date.now() - started;
       return {
         passed: within(durationMs, SESSION_TIMEOUT_WINDOW),
         shape: "rejected",
         durationMs,
+        error: errorShape(error),
+        sessions: await sessionCount(sandbox),
       };
     }
   },
   async "size-limit"(sandbox) {
     const file = `${SCAN_DIR}/large.bin`;
+    // Diagnostic: does writeFiles create a missing parent directory?
+    let writeCreatesParents = false;
+    try {
+      await sandbox.writeFiles([
+        { path: `${MISSING_DIR}/x`, content: Buffer.from("x") },
+      ]);
+      const seen = await runChecked(sandbox, {
+        cmd: "sh",
+        args: ["-c", `test -f ${MISSING_DIR}/x && echo present`],
+        timeoutMs: 10_000,
+      });
+      writeCreatesParents = /^present$/m.test(seen.stdout);
+    } catch {
+      writeCreatesParents = false;
+    }
     await runChecked(sandbox, {
       cmd: "mkdir",
       args: ["-p", SCAN_DIR],
@@ -1002,6 +1139,7 @@ const FAILURE_CASES = {
     // detected ERROR"); without the flag the same file reads OK. Either
     // non-zero exit fails closed in the adapter.
     return {
+      writeCreatesParents,
       passed:
         alert.exitCode !== 0 &&
         scanShape(alert.stdout, file).startsWith(
@@ -1077,7 +1215,7 @@ const FAILURE_CASES = {
   },
 };
 
-async function probeScannerFailures(config, sdk, log) {
+async function probeScannerFailures(config, sdk, log, { sleep = pause } = {}) {
   const runner = sandboxRunner(config, sdk, "scanner-failures", log);
   const cases = {};
   for (const [name, fn] of Object.entries(FAILURE_CASES)) {
@@ -1092,10 +1230,12 @@ async function probeScannerFailures(config, sdk, log) {
       cases[name] = { passed: false, shape: "probe-error" };
     }
   }
+  const survived = await baseSnapshotSurvived(config, sdk, sleep);
   return {
     probe: "sandbox-scanner-failures",
     cases,
-    gatePassed: Object.values(cases).every((c) => c.passed),
+    baseSnapshotSurvived: survived,
+    gatePassed: survived && Object.values(cases).every((c) => c.passed),
     sandboxCreations: runner.created(),
     network: "deny-all",
     persistent: false,
@@ -1171,6 +1311,13 @@ module.exports = {
   probeScannerFailures,
   SANDBOX_BUDGET,
   SIGNATURE_CHECK,
+  SNAPSHOT_ID,
+  sandboxTarget,
+  credentialsFor,
+  scanShape,
+  signaturesOk,
+  EICAR,
+  ADAPTER_SCAN_FLAGS,
   main,
 };
 if (require.main === module)
