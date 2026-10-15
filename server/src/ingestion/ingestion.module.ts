@@ -3,7 +3,7 @@ import { AnalyticsModule } from '../analytics/analytics.module';
 import { AcresConfigService } from '../config/acres-config.service';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { PrismaModule } from '../prisma/prisma.module';
-import { QueueModule } from '../queue/queue.module';
+import { OutboxModule } from '../outbox/outbox.module';
 import { StorageModule } from '../storage/storage.module';
 import { IngestionController } from './ingestion.controller';
 import { IngestionProcessorService } from './ingestion-processor.service';
@@ -16,7 +16,7 @@ import { SourceParserService } from './parsers/source-parser.service';
   imports: [
     PrismaModule,
     IdempotencyModule,
-    QueueModule,
+    OutboxModule,
     StorageModule,
     AnalyticsModule,
   ],

@@ -514,6 +514,17 @@ describe('Acres API', () => {
         ok: true,
         data: { id: runRow.id, state: 'queued', stage: 'inspect' },
       });
+      expect(prisma.outboxEvent.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            eventType: 'ingestion.run',
+            aggregateType: 'IngestionRun',
+            aggregateId: runRow.id,
+            organizationId: ORG_CONTEXT.organizationId,
+          }) as unknown,
+          update: {},
+        }),
+      );
     });
 
     it('lists run status and bounded issues', async () => {

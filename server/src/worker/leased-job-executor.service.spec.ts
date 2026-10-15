@@ -24,7 +24,7 @@ function setup() {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUniqueOrThrow: jest
         .fn()
-        .mockResolvedValue({ attempts: 1, maxAttempts: 3 }),
+        .mockResolvedValue({ state: 'queued', attempts: 1, maxAttempts: 3 }),
     },
     jobDeadLetter: {
       create: jest.fn().mockResolvedValue({}),
@@ -235,13 +235,115 @@ describe('LeasedJobExecutorService', () => {
   it('keeps an unrecorded failure retryable when the ledger write itself fails', async () => {
     const { tx, processor, executor } = setup();
     tx.upload.findUnique.mockResolvedValue({ organizationId: ORG });
-    tx.durableJob.findUniqueOrThrow.mockRejectedValue(new Error('db down'));
+    tx.durableJob.findUniqueOrThrow
+      .mockResolvedValueOnce({ state: 'running', attempts: 1, maxAttempts: 3 })
+      .mockRejectedValue(new Error('db down'));
     processor.process.mockRejectedValue(new Error('boom'));
     const error = await executor
       .execute({ v: 1, jobName: 'upload.completed', id: ID })
       .catch((e: unknown) => e);
     expect(error).not.toBeInstanceOf(JobAttemptsExhaustedError);
     expect((error as Error).message).toBe('boom');
+  });
+
+  it.each(['succeeded', 'cancelled', 'dead_lettered'])(
+    'never starts work for an already %s ledger',
+    async (state) => {
+      const { tx, leases, processor, executor } = setup();
+      tx.upload.findUnique.mockResolvedValue({
+        organizationId: ORG,
+        state: 'scanning',
+      });
+      tx.durableJob.findUniqueOrThrow.mockResolvedValue({
+        state,
+        attempts: 3,
+        maxAttempts: 3,
+      });
+      await expect(
+        executor.execute({ v: 1, jobName: 'upload.completed', id: ID }),
+      ).resolves.toBe('already_terminal');
+      expect(processor.process).not.toHaveBeenCalled();
+      expect(tx.durableJob.update).not.toHaveBeenCalled();
+      expect(tx.jobDeadLetter.create).not.toHaveBeenCalled();
+      expect(leases.release).toHaveBeenCalledWith(LEASE);
+    },
+  );
+
+  it.each(['queued', 'running', 'failed'])(
+    'settles a spent %s execution budget without starting more work',
+    async (state) => {
+      const { tx, processor, executor } = setup();
+      tx.upload.findUnique.mockResolvedValue({
+        organizationId: ORG,
+        state: 'scanning',
+      });
+      tx.durableJob.findUniqueOrThrow.mockResolvedValue({
+        state,
+        attempts: 3,
+        maxAttempts: 3,
+      });
+      await expect(
+        executor.execute({ v: 1, jobName: 'upload.completed', id: ID }),
+      ).rejects.toBeInstanceOf(JobAttemptsExhaustedError);
+      expect(processor.process).not.toHaveBeenCalled();
+      expect(tx.jobDeadLetter.create).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('keeps unrecorded preflight exhaustion retryable and releases its lease', async () => {
+    const { tx, leases, processor, executor } = setup();
+    tx.upload.findUnique.mockResolvedValue({
+      organizationId: ORG,
+      state: 'scanning',
+    });
+    tx.durableJob.findUniqueOrThrow.mockResolvedValue({
+      state: 'running',
+      attempts: 3,
+      maxAttempts: 3,
+    });
+    tx.jobDeadLetter.create.mockRejectedValue(new Error('database down'));
+    const error = await executor
+      .execute({ v: 1, jobName: 'upload.completed', id: ID })
+      .catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(JobAttemptsExhaustedError);
+    expect(processor.process).not.toHaveBeenCalled();
+    expect(leases.release).toHaveBeenCalledWith(LEASE);
+  });
+
+  it('honors completed aggregate state before settling a spent execution budget', async () => {
+    const { tx, processor, executor } = setup();
+    tx.upload.findUnique.mockResolvedValue({
+      organizationId: ORG,
+      state: 'accepted',
+    });
+    tx.durableJob.findUniqueOrThrow.mockResolvedValue({
+      state: 'running',
+      attempts: 3,
+      maxAttempts: 3,
+    });
+    await expect(
+      executor.execute({ v: 1, jobName: 'upload.completed', id: ID }),
+    ).resolves.toBe('already_terminal');
+    expect(processor.process).not.toHaveBeenCalled();
+    expect(tx.jobDeadLetter.create).not.toHaveBeenCalled();
+    expect(tx.durableJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { state: 'succeeded', finishedAt: expect.any(Date) as Date },
+      }),
+    );
+  });
+
+  it('does not process when preflight cannot read the ledger', async () => {
+    const { tx, leases, processor, executor } = setup();
+    tx.upload.findUnique.mockResolvedValue({ organizationId: ORG });
+    tx.durableJob.findUniqueOrThrow.mockRejectedValue(
+      new Error('preflight unavailable'),
+    );
+    await expect(
+      executor.execute({ v: 1, jobName: 'upload.completed', id: ID }),
+    ).rejects.toThrow('preflight unavailable');
+    expect(processor.process).not.toHaveBeenCalled();
+    expect(leases.release).toHaveBeenCalledWith(LEASE);
   });
 
   it('never masks the job outcome when lease release fails', async () => {

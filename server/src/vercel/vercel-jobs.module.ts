@@ -3,6 +3,7 @@ import { SessionsModule } from '../sessions/sessions.module';
 import { AcresWorkerConfigModule } from '../config/config.module';
 import { IngestionModule } from '../ingestion/ingestion.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { OutboxModule } from '../outbox/outbox.module';
 import { QueueModule } from '../queue/queue.module';
 import { ReportsModule } from '../reports/reports.module';
 import { ScannerModule } from '../scanner/scanner.module';
@@ -23,6 +24,7 @@ import { LeasedJobExecutorService } from '../worker/leased-job-executor.service'
     AcresWorkerConfigModule,
     PrismaModule,
     QueueModule,
+    OutboxModule,
     ScannerModule,
     StorageModule,
     IngestionModule,

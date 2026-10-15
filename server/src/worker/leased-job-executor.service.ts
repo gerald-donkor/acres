@@ -78,19 +78,59 @@ export class LeasedJobExecutorService {
         await this.leases.remainingMs(deterministicKey),
       );
     }
-    // The upload processor maintains its own DurableJob row; ingestion and
-    // export record outcomes on their aggregates, mirrored here.
+    try {
+      const job = await this.tenants.workerScoped((tx) =>
+        tx.durableJob.findUniqueOrThrow({
+          where: { id: lease.durableJobId },
+          select: { state: true, attempts: true, maxAttempts: true },
+        }),
+      );
+      if (
+        job.state === 'dead_lettered' ||
+        job.state === 'succeeded' ||
+        job.state === 'cancelled'
+      )
+        return 'already_terminal';
+      // Aggregate publication may have committed before ledger completion failed.
+      // Honor that terminal state before deciding whether the budget is exhausted.
+      const before = await this.aggregateLedgerState(message);
+      if (before !== 'running') {
+        await this.syncTerminal(lease, before);
+        return 'already_terminal';
+      }
+      if (job.attempts >= job.maxAttempts) {
+        // A crash may have spent the last execution attempt without recording its
+        // exhaustion. Record it durably without starting or incrementing work.
+        const recorded = await this.recordFailure(
+          lease,
+          owner.organizationId,
+          message,
+          false,
+        );
+        if (!recorded)
+          throw new Error('Job budget exhaustion could not be recorded.');
+        throw new JobAttemptsExhaustedError(lease.durableJobId);
+      }
+      return await this.processClaimed(message, owner, lease);
+    } finally {
+      try {
+        await this.leases.release(lease);
+      } catch {
+        // The lease then expires on its own; never mask the job outcome.
+        this.logger.warn(`Lease release failed for job ${lease.durableJobId}`);
+      }
+    }
+  }
+
+  private async processClaimed(
+    message: QueueMessage,
+    owner: Owner,
+    lease: JobLease,
+  ): Promise<ExecutionOutcome> {
+    // Upload processing owns its ledger writes; ingestion/export mirror outcomes.
     const mirrorsLedger = message.jobName !== 'upload.completed';
     try {
-      if (mirrorsLedger) {
-        const before = await this.aggregateLedgerState(message);
-        if (before !== 'running') {
-          // A duplicate for a finished job: never re-run or reopen it.
-          await this.syncTerminal(lease, before);
-          return 'already_terminal';
-        }
-        await this.markStarted(lease);
-      }
+      if (mirrorsLedger) await this.markStarted(lease);
       await this.processor.process(toJobPayload(message), {
         resumeInterrupted: true,
       });
@@ -116,13 +156,6 @@ export class LeasedJobExecutorService {
       );
       if (exhausted) throw new JobAttemptsExhaustedError(lease.durableJobId);
       throw error;
-    } finally {
-      try {
-        await this.leases.release(lease);
-      } catch {
-        // The lease then expires on its own; never mask the job outcome.
-        this.logger.warn(`Lease release failed for job ${lease.durableJobId}`);
-      }
     }
   }
 
@@ -160,9 +193,26 @@ export class LeasedJobExecutorService {
     });
   }
 
-  /** Ledger state implied by an ingestion run or export's own state. */
+  /** Ledger state implied by the authoritative aggregate's own state. */
   private aggregateLedgerState(message: QueueMessage): Promise<LedgerState> {
     return this.tenants.workerScoped(async (tx): Promise<LedgerState> => {
+      if (message.jobName === 'upload.completed') {
+        const upload = await tx.upload.findUnique({
+          where: { id: message.id },
+          select: { state: true },
+        });
+        switch (upload?.state) {
+          case 'accepted':
+            return 'succeeded';
+          case 'rejected':
+            return 'failed';
+          case 'cancelled':
+          case 'expired':
+            return 'cancelled';
+          default:
+            return 'running';
+        }
+      }
       if (message.jobName === 'ingestion.run') {
         const run = await tx.ingestionRun.findUnique({
           where: { id: message.id },

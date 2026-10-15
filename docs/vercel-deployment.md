@@ -2,7 +2,8 @@
 
 Status: implementation in progress. Preview Blob (server SDK and browser
 presigned upload) and Neon database/RLS seams are proven. The Sandbox scanner
-exists locally only (VCR push blocked on cost). Only synthetic probe
+is built from a Sandbox snapshot and its hosted seam is proven (Prompt 373);
+VCR remains unused because it is not free on Hobby. Only synthetic probe
 deployments exist; the Acres application has not been deployed.
 Starting source: `a1350d0` on `main`.
 [ADR 0001](adr/0001-vercel-managed-production.md) records the accepted target.
@@ -11,7 +12,8 @@ Starting source: `a1350d0` on `main`.
 
 Prompt 370 is approved and still executing. Remaining checklist items may be
 split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
-scanner image, Prompt 373 = scanner snapshot); each
+scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
+outbox); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -77,7 +79,9 @@ committed per AGENTS.md §2):
       consumer/adapter/lease implemented locally (see "Queues — 2026-10-15"
       below). Still open, owned by later items: a Vercel outbox dispatcher
       (after-commit kick plus Cron reconciliation sweeper) that also carries
-      `ingestion.run`, wiring `server/src/vercel/jobs.function.ts` into the
+      `ingestion.run` (the shared bounded dispatcher and transactional ingestion
+      intent are implemented locally in Prompt 374; automatic triggers remain open),
+      wiring `server/src/vercel/jobs.function.ts` into the
       real Services config with no `maxDeliveries` and pinned regions, and an
       application-level hosted job proof on the first preview deployment.
 - [ ] **Blob browser upload** — local implementation done (Prompt 371); the
@@ -1018,3 +1022,217 @@ The nine skipped cases are the existing opt-in audit-fault tests. Single-worker
 execution matches the configured CI worker count. No test assertion or timeout
 was weakened for this browser rerun. These are local browser/helper results,
 including 375/800/1280 responsive cases, not hosted provider acceptance.
+
+## Invocation-safe transactional outbox — Prompt 374 (2026-10-15)
+
+`OutboxDispatcherService.dispatchOnce()` is the shared, transport-independent,
+awaited operation exported by `OutboxModule`. The reference worker's existing
+`dispatchOutboxOnce()` wrapper delegates to it and still serializes its timer;
+shutdown waits for an active dispatch before closing the queue. Timer failures
+are logged with a fixed safe message and remain recoverable. `VercelJobsModule`
+resolves the same provider without starting the reference worker, metrics
+listener, BullMQ sockets or any dispatch loop. Boot/resolve is covered in the
+real-database infrastructure suite. No queue-consumer/boot hook calls dispatch.
+
+Every invocation recovers at most `OUTBOX_CLAIM_BATCH_SIZE` exhausted rows,
+then claims at most that many eligible rows using `FOR UPDATE SKIP LOCKED`.
+Resolved defaults remain **25 rows**, **30,000 ms** claim lease, **5 dispatch
+attempts**, **30,000 ms** provider-retry backoff and **5 execution attempts**.
+Both queries materialize their locked candidate set before updating, preserving
+the batch bound under contention. Recovery has its own bound so exhausted rows
+do not starve eligible intent.
+Claims use fresh random tokens per operation and PostgreSQL `clock_timestamp()`
+for eligibility, expiry, backoff and completion. Every finalization requires the
+matching token, `retrying` state and an unexpired lease. A late publisher reports
+`lostClaims`; it cannot clear another invocation's lease or append a dead letter.
+Expired/unlocked nonterminal rows at the attempt limit transition and append one
+safe dead letter in the same transaction; failure rolls both writes back.
+Existing columns, unique identity, RLS, grants and indexes suffice; no migration.
+
+Dispatch validates persisted event name/aggregate type and identifier format,
+maps upload/export/ingestion explicitly and includes `outboxEventId` with the
+aggregate identifier. Unknown events fail closed with `outbox_event_invalid`.
+Ledger identity mismatch uses `outbox_job_mismatch`. Dead letters contain fixed
+messages and event identity, without copying raw payload/provider exceptions.
+`DurableJob` creation uses conflict-ignore insertion and validates tenant, job
+type and upload linkage; ingestion's upload/tenant comes from its committed run.
+Existing ledger rows retain every field, including terminal state, attempt
+budget, failure history and active execution lease. Dispatch and execution
+attempts remain separate. The queue's existing message/region/retention/topic
+and authentication contracts are unchanged.
+
+Ingestion creation, intent append and command idempotency commit atomically.
+No provider operation occurs inside SQL. The dispatcher rechecks ownership
+immediately before publish; successful enqueue precedes completion recording.
+Provider rejection records the existing bounded retry/exhaustion policy.
+Database/ledger failure rejects the invocation, including after accepted publish.
+This remains **at-least-once**: expiry or termination between ownership check,
+publish and completion can cause duplicates. Execution leases and aggregate publication guards remain authority. The leased
+executor now checks terminal ledger state and execution budget before processing;
+terminal aggregate state takes precedence over spent-budget classification.
+Already terminal jobs never re-enter processing. A spent nonterminal budget
+is durably dead-lettered without incrementing attempts; a recording failure
+remains retryable. The lease is released even when this preflight fails. A final-claim interruption is
+settled visibly by exhausted recovery, never stranded silently.
+
+This is a local runtime prerequisite, not hosted Queues application acceptance.
+Vercel still has **no automatic outbox trigger**. Protected after-commit
+invocation/Cron, reconciliation for already-dispatched work past queue retention,
+Services routing, first application preview and launch approval remain open.
+
+### Local reproduction and rollback
+
+Use Node **24.21.0** for both `node` and `npm` (the temporary launcher procedure
+above), then `npm run db:up` and ensure the existing migrations are applied to
+the isolated local `acres_test` database. Unset any hosted `DATABASE_URL`;
+`server/test/setup-env.ts` supplies the local test identity and refuses a role
+or database other than `acres_test`. Run:
+
+```bash
+npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000 outbox-dispatch
+```
+
+The suite uses real PostgreSQL and a mocked queue; no scanner/storage service
+or provider credentials are needed. For the full reference runtime, configure
+local `server/.env`, run `npm run deps:up` and `npm run garage:setup`, build,
+then run `npm run start:server`, `npm run start:worker` and `npm run dev:client`
+in separate terminals. The worker needs the separate Valkey/BullMQ transport,
+Garage and ClamAV; a database-only test is not full-worker acceptance.
+
+Rollback must pause/drain dispatch and account for pending `ingestion.run`
+intent before reverting to the previous dispatcher, which did not recognize
+that event. Preserve ledger/intent rows. No hosted resource, schema, deployment,
+environment or routing changed in this unit.
+
+### Verification — Prompt 374
+
+Checks ran sequentially with the temporary Node/npm launcher pair;
+`npm version --json` reported Node **24.21.0**, npm **12.0.2**. Actual runner
+output for the required commands (all exit zero):
+
+```text
+build-server: exit 0
+unit: exit 0
+e2e: exit 0
+contracts: exit 0
+lint: exit 0
+build: exit 0
+typecheck: exit 0
+probes: exit 0
+ops: exit 0
+diff: exit 0
+```
+
+These labels correspond, in order, to `npm run build:server`,
+`npm run test --workspace=@acres/server -- --runInBand`,
+`npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000`,
+`npm run contracts:check`, `npm run lint`, `npm run build`, `npm run typecheck`,
+`npm run vercel:probe-test`, `npm run ops:check`, and `git diff --check`.
+Actual broad test summaries:
+
+```text
+Test Suites: 134 passed, 134 total
+Tests:       2074 passed, 2074 total
+Snapshots:   1 passed, 1 total
+
+Test Suites: 9 passed, 9 total
+Tests:       187 passed, 187 total
+Snapshots:   0 total
+```
+
+After final test-context typing and assertion cleanup, focused reruns passed
+**4 suites / 72 unit tests** and **2 suites / 18 database/data-journey tests**;
+root lint, build and typecheck passed again. The root build generated **23/23**
+Next pages. Probe TAP summary: `tests 122`, `pass 122`, `fail 0`, `skipped 0`.
+Prettier reported `All matched files use Prettier code style!` for changed
+TypeScript and the prompt; only new documentation blocks were formatted.
+
+Initial runs exposed a real claim-bound regression under contention; replacing
+the re-evaluated candidate subquery with a materialized locked candidate set
+fixed it. Fixture corrections included the new API outbox method, real
+membership identities and the six actual durable-job enum states. A sandboxed
+unit run could not bind existing metrics test sockets; its authorized rerun
+passed. No assertions, database guards or timeouts were weakened. Tests use
+local `acres_test` PostgreSQL with mocked transport, not Neon or hosted Queues.
+
+The operational audit reported exactly:
+
+```text
+10 vulnerabilities (4 moderate, 6 high)
+Production dependency security audit passed (0 critical vulnerabilities)
+```
+
+This is the configured critical-only gate, not an advisory-free dependency tree.
+No dependency/lockfile changed. Operational tests do not approve a launch
+category, execute live production drills, or establish hosted acceptance.
+
+### Independent review and terminal replay correction — Prompt 374
+
+The first read-only review found no critical issues and one important issue:
+although dispatch preserved terminal ledgers, the existing leased upload executor
+could resume a `scanning` upload whose ledger was already dead-lettered after
+execution exhaustion. I verified the call chain and the existing final-attempt
+fixture; preserving dispatch fields alone did not establish end-to-end replay
+safety. The fix adds an execution preflight under the acquired lease, reuses the
+existing atomic safe exhaustion recording, and preserves aggregate terminal
+publication as authority before budget classification. Nonterminal work below
+budget retains its retry behavior. Upload duplicates now return the internal
+`already_terminal` outcome; queue acknowledgement behavior and HTTP contracts
+are unchanged. No new provider, schema, trigger or manual retry policy.
+
+The regression exercises the real processor and leased executor against local
+PostgreSQL: provider acceptance races exhausted storage failures and interrupted
+publisher completion recording, then outbox redelivery cannot restart scanning,
+increment execution attempts, clear failure history or append dead letters.
+The earlier infrastructure exhaustion fixture also verifies a subsequent replay.
+Focused post-fix results: **25 executor unit tests** and **42 PostgreSQL
+outbox/infrastructure tests** passed. Broad post-fix verification is recorded below; follow-up review closed the
+finding with no remaining issues. The earlier full operational check
+passed **27 TAP invocations / 5,457 tests / 0 failures / 0 skipped**; its
+critical-only audit limitation remains as recorded above.
+
+Post-fix broad verification completed on the same Node 24 launcher. Actual
+sequential runner output:
+
+```text
+review-build-server: exit 0
+review-unit-all: exit 0
+review-e2e-all: exit 0
+review-contracts: exit 0
+review-lint: exit 0
+review-build: exit 0
+review-typecheck: exit 0
+review-sast: exit 0
+review-diff: exit 0
+```
+
+These reran server build, the complete unit/acceptance suites, contract drift,
+root lint/build/typecheck, `npm run ops:sast`, and diff checking. Actual final
+broad test summaries:
+
+```text
+Test Suites: 134 passed, 134 total
+Tests:       2083 passed, 2083 total
+Snapshots:   1 passed, 1 total
+
+Test Suites: 9 passed, 9 total
+Tests:       188 passed, 188 total
+Snapshots:   0 total
+```
+
+Formatting passed again for every changed TypeScript file and the prompt.
+The fresh security scan reported `SAST Gate: PASSED (Zero unreviewed blockers
+and zero expired suppressions)`. The full operational/probe runs above preceded
+the review fix; unchanged operational suites and provider probe fixtures were
+not repeated. The changed executor path received the complete server regression
+and fresh static-security check. No operational, dependency or provider
+configuration changed.
+
+Follow-up independent read-only review inspected the final working diff against
+baseline `f283cd15a1ad3baf7168b884ad092308f644bd2a`, including the real
+processor/executor replay regression. It confirmed the important finding closed,
+with **no new critical, important or minor findings**, and approved the local
+Prompt 374 scope for completion. The feedback was evaluated against surrounding
+code and tests before applying the fix; no speculative changes were adopted.
+Automatic Vercel invocation/Cron, retention reconciliation, application deployment
+and all launch approvals remain open.

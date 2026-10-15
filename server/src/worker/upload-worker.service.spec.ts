@@ -2,10 +2,7 @@ import { Logger } from '@nestjs/common';
 import type { AcresConfigService } from '../config/acres-config.service';
 import type { IngestionProcessorService } from '../ingestion/ingestion-processor.service';
 import type { MetricsService } from '../metrics/metrics.service';
-import type {
-  OutboxService,
-  ClaimedOutboxEvent,
-} from '../outbox/outbox.service';
+import type { OutboxDispatcherService } from '../outbox/outbox-dispatcher.service';
 import type {
   TenantTransactionClient,
   TenantTransactionService,
@@ -25,7 +22,7 @@ describe('UploadWorkerService', () => {
   let service: UploadWorkerService;
   let fakeConfig: Partial<AcresConfigService>;
   let fakeTenants: Partial<TenantTransactionService>;
-  let fakeOutbox: Partial<OutboxService>;
+  let fakeOutbox: Partial<OutboxDispatcherService>;
   let fakeQueue: Partial<QueuePort>;
   let fakeScanner: Partial<MalwareScannerPort>;
   let fakeStorage: Partial<ObjectStoragePort>;
@@ -137,12 +134,7 @@ describe('UploadWorkerService', () => {
         ),
     };
 
-    fakeOutbox = {
-      claimReady: jest.fn().mockResolvedValue([]),
-      markDispatched: jest.fn().mockResolvedValue(undefined),
-      markRetry: jest.fn().mockResolvedValue(undefined),
-      markDeadLetter: jest.fn().mockResolvedValue(undefined),
-    };
+    fakeOutbox = { dispatchOnce: jest.fn().mockResolvedValue({}) };
 
     fakeQueue = {
       enqueue: jest.fn().mockResolvedValue(undefined),
@@ -173,8 +165,7 @@ describe('UploadWorkerService', () => {
 
     service = new UploadWorkerService(
       fakeConfig as AcresConfigService,
-      fakeTenants as TenantTransactionService,
-      fakeOutbox as OutboxService,
+      fakeOutbox as OutboxDispatcherService,
       fakeQueue as QueuePort,
       new JobProcessorService(
         fakeConfig as AcresConfigService,
@@ -189,142 +180,32 @@ describe('UploadWorkerService', () => {
   });
 
   describe('dispatchOutboxOnce', () => {
-    it('dispatches upload.completed events and enqueues durable jobs', async () => {
-      const event: ClaimedOutboxEvent = {
-        id: 'evt-1',
-        organizationId: 'org-123',
-        eventType: 'upload.completed',
-        aggregateId: 'upload-456',
-        payload: { uploadId: 'upload-456' },
-        attempts: 1,
-        maxAttempts: 3,
-      };
-      (fakeOutbox.claimReady as jest.Mock).mockResolvedValue([event]);
-
+    it('awaits the shared dispatcher and propagates recording failure', async () => {
       await service.dispatchOutboxOnce();
-
-      expect(mockWorkerTx.durableJob.upsert).toHaveBeenCalledWith({
-        where: { deterministicKey: 'upload.completed:upload-456' },
-        create: expect.objectContaining({
-          deterministicKey: 'upload.completed:upload-456',
-          organizationId: 'org-123',
-          uploadId: 'upload-456',
-          jobType: 'upload.completed',
-          state: 'queued',
-        }) as unknown,
-        update: expect.anything() as unknown,
-      });
-      expect(fakeQueue.enqueue).toHaveBeenCalledWith({
-        deterministicKey: 'upload.completed:upload-456',
-        jobName: 'upload.completed',
-        payload: {
-          uploadId: 'upload-456',
-          outboxEventId: 'evt-1',
-        },
-      });
-      expect(fakeOutbox.markDispatched).toHaveBeenCalledWith('evt-1');
-    });
-
-    it('dispatches export.requested events and enqueues durable export jobs', async () => {
-      const event: ClaimedOutboxEvent = {
-        id: 'evt-2',
-        organizationId: 'org-123',
-        eventType: 'export.requested',
-        aggregateId: 'export-789',
-        payload: { exportRequestId: 'export-789' },
-        attempts: 1,
-        maxAttempts: 3,
-      };
-      (fakeOutbox.claimReady as jest.Mock).mockResolvedValue([event]);
-
-      await service.dispatchOutboxOnce();
-
-      expect(mockWorkerTx.durableJob.upsert).toHaveBeenCalledWith({
-        where: { deterministicKey: 'export.requested:export-789' },
-        create: expect.objectContaining({
-          deterministicKey: 'export.requested:export-789',
-          organizationId: 'org-123',
-          uploadId: null,
-          jobType: 'export.requested',
-          state: 'queued',
-        }) as unknown,
-        update: expect.anything() as unknown,
-      });
-      expect(fakeQueue.enqueue).toHaveBeenCalledWith({
-        deterministicKey: 'export.requested:export-789',
-        jobName: 'export.requested',
-        payload: {
-          exportRequestId: 'export-789',
-          outboxEventId: 'evt-2',
-        },
-      });
-      expect(fakeOutbox.markDispatched).toHaveBeenCalledWith('evt-2');
-    });
-
-    it('schedules retry when enqueue fails and attempts < maxAttempts', async () => {
-      const event: ClaimedOutboxEvent = {
-        id: 'evt-3',
-        organizationId: 'org-123',
-        eventType: 'upload.completed',
-        aggregateId: 'upload-999',
-        payload: { uploadId: 'upload-999' },
-        attempts: 1,
-        maxAttempts: 3,
-      };
-      (fakeOutbox.claimReady as jest.Mock).mockResolvedValue([event]);
-      (fakeQueue.enqueue as jest.Mock).mockRejectedValueOnce(
-        new Error('Queue connection down'),
+      expect(fakeOutbox.dispatchOnce).toHaveBeenCalledTimes(1);
+      (fakeOutbox.dispatchOnce as jest.Mock).mockRejectedValueOnce(
+        new Error('database unavailable'),
       );
-
-      await service.dispatchOutboxOnce();
-
-      expect(fakeOutbox.markRetry).toHaveBeenCalledWith(
-        'evt-3',
-        'queue_unavailable',
+      await expect(service.dispatchOutboxOnce()).rejects.toThrow(
+        'database unavailable',
       );
-      expect(fakeOutbox.markDeadLetter).not.toHaveBeenCalled();
-      expect(fakeOutbox.markDispatched).not.toHaveBeenCalled();
-    });
-
-    it('dead letters event when enqueue fails and attempts >= maxAttempts', async () => {
-      const event: ClaimedOutboxEvent = {
-        id: 'evt-4',
-        organizationId: 'org-123',
-        eventType: 'upload.completed',
-        aggregateId: 'upload-999',
-        payload: { uploadId: 'upload-999' },
-        attempts: 3,
-        maxAttempts: 3,
-      };
-      (fakeOutbox.claimReady as jest.Mock).mockResolvedValue([event]);
-      (fakeQueue.enqueue as jest.Mock).mockRejectedValueOnce(
-        new Error('Queue permanent failure'),
-      );
-
       await service.dispatchOutboxOnce();
-
-      expect(fakeOutbox.markDeadLetter).toHaveBeenCalledWith('evt-4', {
-        organizationId: 'org-123',
-        reasonCode: 'queue_unavailable',
-        reasonMessage: 'Outbox dispatch attempts exhausted.',
-        payload: { uploadId: 'upload-999' },
-      });
-      expect(fakeOutbox.markRetry).not.toHaveBeenCalled();
+      expect(fakeOutbox.dispatchOnce).toHaveBeenCalledTimes(3);
     });
 
     it('skips dispatching if stopped or already dispatching', async () => {
-      (fakeOutbox.claimReady as jest.Mock).mockClear();
+      (fakeOutbox.dispatchOnce as jest.Mock).mockClear();
 
       // Simulate dispatching flag true
       (service as unknown as { dispatching: boolean }).dispatching = true;
       await service.dispatchOutboxOnce();
-      expect(fakeOutbox.claimReady).not.toHaveBeenCalled();
+      expect(fakeOutbox.dispatchOnce).not.toHaveBeenCalled();
 
       // Reset and simulate stopping true
       (service as unknown as { dispatching: boolean }).dispatching = false;
       (service as unknown as { stopping: boolean }).stopping = true;
       await service.dispatchOutboxOnce();
-      expect(fakeOutbox.claimReady).not.toHaveBeenCalled();
+      expect(fakeOutbox.dispatchOnce).not.toHaveBeenCalled();
     });
   });
 
@@ -793,6 +674,20 @@ describe('UploadWorkerService', () => {
   });
 
   describe('stop', () => {
+    it('drains active dispatch before closing its queue', async () => {
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      (fakeOutbox.dispatchOnce as jest.Mock).mockReturnValueOnce(pending);
+      const dispatch = service.dispatchOutboxOnce();
+      const stop = service.stop();
+      expect(fakeQueue.close).not.toHaveBeenCalled();
+      finish();
+      await Promise.all([dispatch, stop]);
+      expect(fakeQueue.close).toHaveBeenCalledTimes(1);
+    });
+
     it('sets stopping flag, closes worker and queue', async () => {
       await service.stop();
 

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type {
   DatasetState,
   DatasetSummary,
@@ -15,7 +15,7 @@ import { ApiException } from '../common/api-exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { OrganizationContext } from '../organizations/organization-context';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
-import { WORK_QUEUE, type QueuePort } from '../queue/work-queue.port';
+import { OutboxService } from '../outbox/outbox.service';
 import type { CreateDatasetDto } from './dto/create-dataset.dto';
 import type { CreateMappingDto } from './dto/create-mapping.dto';
 import type { StartIngestionRunDto } from './dto/start-ingestion-run.dto';
@@ -34,7 +34,7 @@ export class IngestionService {
   constructor(
     private readonly tenants: TenantTransactionService,
     private readonly idempotency: IdempotencyService,
-    @Inject(WORK_QUEUE) private readonly queue: QueuePort,
+    private readonly outbox: OutboxService,
   ) {}
 
   async listDatasets(
@@ -282,10 +282,9 @@ export class IngestionService {
                 stage: 'inspect',
               },
             });
-            await this.queue.enqueue({
-              deterministicKey: `ingestion.run:${run.id}`,
-              jobName: 'ingestion.run',
-              payload: { ingestionRunId: run.id },
+            await this.outbox.appendIngestionRun(tx, {
+              organizationId: organization.organizationId,
+              ingestionRunId: run.id,
             });
             return this.toRunSummary(run);
           },

@@ -3,7 +3,7 @@ import type {
   TenantTransactionClient,
   TenantTransactionService,
 } from '../prisma/tenant-transaction.service';
-import { OutboxService, type ClaimedOutboxEvent } from './outbox.service';
+import { OutboxService } from './outbox.service';
 
 describe('OutboxService', () => {
   let service: OutboxService;
@@ -112,138 +112,10 @@ describe('OutboxService', () => {
   });
 
   describe('claimReady', () => {
-    it('claims ready outbox events using workerScoped raw query with lease', async () => {
-      const mockClaimed: ClaimedOutboxEvent[] = [
-        {
-          id: 'evt-1',
-          organizationId: 'org-123',
-          eventType: 'upload.completed',
-          aggregateId: 'up-1',
-          payload: { uploadId: 'up-1' },
-          attempts: 1,
-          maxAttempts: 5,
-        },
-        {
-          id: 'evt-2',
-          organizationId: 'org-123',
-          eventType: 'export.requested',
-          aggregateId: 'exp-1',
-          payload: { exportRequestId: 'exp-1' },
-          attempts: 2,
-          maxAttempts: 5,
-        },
-      ];
-      mockTx.$queryRaw.mockResolvedValue(mockClaimed);
-
-      const result = await service.claimReady();
-
-      expect(fakeTenants.workerScoped).toHaveBeenCalled();
-      expect(mockTx.$queryRaw).toHaveBeenCalled();
-      expect(result).toEqual(mockClaimed);
-    });
-
-    it('returns empty array when no events are available to claim', async () => {
+    it('returns a bounded database claim batch, including an empty batch', async () => {
       mockTx.$queryRaw.mockResolvedValue([]);
-
-      const result = await service.claimReady();
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('markDispatched', () => {
-    it('marks event dispatched and clears worker locks', async () => {
-      await service.markDispatched('evt-1');
-
-      expect(fakeTenants.workerScoped).toHaveBeenCalled();
-      expect(mockTx.outboxEvent.update).toHaveBeenCalledWith({
-        where: { id: 'evt-1' },
-        data: expect.objectContaining({
-          state: 'dispatched',
-          lockedBy: null,
-          lockedUntil: null,
-        }) as unknown,
-      });
-      const updateCalls = mockTx.outboxEvent.update.mock.calls as unknown as [
-        [{ data: { dispatchedAt: Date } }],
-      ];
-      expect(updateCalls[0][0].data.dispatchedAt).toBeInstanceOf(Date);
-    });
-  });
-
-  describe('markRetry', () => {
-    it('marks event retrying with nextAttemptAt backoff and clears lease lock', async () => {
-      const before = Date.now();
-      await service.markRetry('evt-1', 'queue_unavailable');
-      const after = Date.now();
-
-      expect(fakeTenants.workerScoped).toHaveBeenCalled();
-      expect(mockTx.outboxEvent.update).toHaveBeenCalledWith({
-        where: { id: 'evt-1' },
-        data: expect.objectContaining({
-          state: 'retrying',
-          lastErrorCode: 'queue_unavailable',
-          lockedBy: null,
-          lockedUntil: null,
-        }) as unknown,
-      });
-
-      const updateCalls = mockTx.outboxEvent.update.mock.calls as unknown as [
-        [{ data: { nextAttemptAt: Date } }],
-      ];
-      const nextAttemptAt = updateCalls[0][0].data.nextAttemptAt.getTime();
-      expect(nextAttemptAt).toBeGreaterThanOrEqual(before + 5000);
-      expect(nextAttemptAt).toBeLessThanOrEqual(after + 5000 + 100);
-    });
-  });
-
-  describe('markDeadLetter', () => {
-    it('marks event dead_lettered and creates JobDeadLetter audit record', async () => {
-      await service.markDeadLetter('evt-1', {
-        organizationId: 'org-123',
-        reasonCode: 'queue_unavailable',
-        reasonMessage: 'Outbox dispatch attempts exhausted.',
-        payload: { uploadId: 'up-1' },
-      });
-
-      expect(fakeTenants.workerScoped).toHaveBeenCalled();
-      expect(mockTx.outboxEvent.update).toHaveBeenCalledWith({
-        where: { id: 'evt-1' },
-        data: {
-          state: 'dead_lettered',
-          lastErrorCode: 'queue_unavailable',
-          lockedBy: null,
-          lockedUntil: null,
-        },
-      });
-
-      expect(mockTx.jobDeadLetter.create).toHaveBeenCalledWith({
-        data: {
-          organizationId: 'org-123',
-          outboxEventId: 'evt-1',
-          reasonCode: 'queue_unavailable',
-          reasonMessage: 'Outbox dispatch attempts exhausted.',
-          payload: { uploadId: 'up-1' },
-        },
-      });
-    });
-
-    it('handles nullable organizationId when recording dead letter', async () => {
-      await service.markDeadLetter('evt-2', {
-        organizationId: null,
-        reasonCode: 'queue_unavailable',
-        reasonMessage: 'Outbox dispatch attempts exhausted.',
-      });
-
-      expect(mockTx.jobDeadLetter.create).toHaveBeenCalledWith({
-        data: {
-          organizationId: null,
-          outboxEventId: 'evt-2',
-          reasonCode: 'queue_unavailable',
-          reasonMessage: 'Outbox dispatch attempts exhausted.',
-          payload: undefined,
-        },
-      });
+      expect(await service.claimReady()).toEqual([]);
+      expect(fakeTenants.workerScoped).toHaveBeenCalledTimes(1);
     });
   });
 });

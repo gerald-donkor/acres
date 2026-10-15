@@ -1,3 +1,4 @@
+import { uuidV7 } from '../src/common/ids';
 import { JobProcessorService } from '../src/worker/job-processor.service';
 import { JobLeaseService } from '../src/worker/job-lease.service';
 import {
@@ -23,6 +24,7 @@ import {
   WORKER_EXCEPTION_MESSAGE,
   REJECTED_SCAN_MESSAGE,
 } from '../src/worker/upload-worker.service';
+import { OutboxDispatcherService } from '../src/outbox/outbox-dispatcher.service';
 import { OutboxService } from '../src/outbox/outbox.service';
 import { IngestionProcessorService } from '../src/ingestion/ingestion-processor.service';
 import { ReportsService } from '../src/reports/reports.service';
@@ -140,8 +142,7 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
     // Instantiate worker with the real PostgreSQL tenant transaction service and outbox
     worker = new UploadWorkerService(
       config,
-      tenants,
-      outbox,
+      new OutboxDispatcherService(config, tenants, outbox, mockQueue),
       mockQueue,
       new JobProcessorService(
         config,
@@ -540,7 +541,7 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
       const event = await tenants.workerScoped((tx) =>
         outbox.appendUploadCompleted(tx, {
           organizationId: org.id,
-          uploadId: 'upload-queue-test-1',
+          uploadId: uuidV7(),
           version: 1,
         }),
       );
@@ -580,7 +581,7 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
       const event = await tenants.workerScoped((tx) =>
         outbox.appendUploadCompleted(tx, {
           organizationId: org.id,
-          uploadId: 'upload-queue-exhaust-1',
+          uploadId: uuidV7(),
           version: 1,
         }),
       );
@@ -670,7 +671,8 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
       expect(reLeased.attempts).toBe(2);
 
       // Worker dispatches claimed event cleanly
-      await outbox.markDispatched(crashedEvent.id);
+      if (match === undefined) throw new Error('Missing recovered claim');
+      expect(await outbox.markDispatched(match)).toBe(true);
       const dispatched = await tenants.workerScoped((tx) =>
         tx.outboxEvent.findUniqueOrThrow({
           where: { id: crashedEvent.id },
@@ -1079,7 +1081,7 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
       expect(scans()).toBe(1);
 
       // A late duplicate after completion is a no-op and leaves no lease behind.
-      await expect(executor.execute(message)).resolves.toBe('processed');
+      await expect(executor.execute(message)).resolves.toBe('already_terminal');
       expect(scans()).toBe(1);
       const job = await tenants.workerScoped((tx) =>
         tx.durableJob.findUniqueOrThrow({
@@ -1157,6 +1159,25 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
       // Pre-existing processor behaviour: one dead letter per failed attempt;
       // the executor adds none when one already exists.
       expect(job.deadLetters).toHaveLength(config.queueDefaultAttempts);
+      // Regression: a duplicate must never resume the exhausted scanning upload.
+      const reads = mockStorage.getBuffer.mock.calls.length;
+      await expect(executor.execute(message)).resolves.toBe('already_terminal');
+      expect(mockStorage.getBuffer.mock.calls).toHaveLength(reads);
+      const afterReplay = await tenants.workerScoped((tx) =>
+        tx.durableJob.findUniqueOrThrow({
+          where: { id: job.id },
+          include: { deadLetters: true },
+        }),
+      );
+      expect(afterReplay).toMatchObject({
+        state: job.state,
+        attempts: job.attempts,
+        maxAttempts: job.maxAttempts,
+        finishedAt: job.finishedAt,
+        lastErrorCode: job.lastErrorCode,
+        lastErrorMessage: job.lastErrorMessage,
+        deadLetters: job.deadLetters,
+      });
       for (const letter of job.deadLetters) {
         expect(letter.reasonMessage).not.toContain('s3 outage detail');
       }
@@ -1174,6 +1195,7 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
           abortOnError: false,
           logger: false,
         });
+        expect(context.get(OutboxDispatcherService)).toBeDefined();
         await context.close();
       },
     );

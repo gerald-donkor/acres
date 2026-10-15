@@ -1991,3 +1991,36 @@ rows above are unchanged. TM-06's control for this profile:
   `docs/vercel-deployment.md`); app upload → scan through a deployed preview
   is unproven. Readiness reports configuration only, never a live VM.
   Signature rebuild cadence is an open production blocker.
+
+### Transactional outbox fencing — Prompt 374 (2026-10-15)
+
+The existing PostgreSQL → queue boundary now shares bounded dispatch across
+reference and managed compositions. Worker-scoped SQL still uses the runtime
+role and transaction-local context; tenant policies/grants are unchanged.
+Fresh per-operation tokens and database-clock expiry fence every completion,
+retry and dead-letter transition; stale publishers cannot release a new claim
+or append its audit record. Final-attempt crash recovery excludes active leases
+and terminal rows and atomically writes one safe dead letter. Unknown event
+names/type/identifier shape fail closed; ledger tenant/job/upload mismatches
+are rejected without rewriting ownership. No unvalidated event payload or raw
+provider exception is copied to the new durable failure records.
+
+Ingestion intent now commits atomically with run creation/idempotency; provider
+calls occur outside SQL. Existing terminal jobs, attempt budgets and live
+execution leases survive replay. Real PostgreSQL coverage includes two-org
+read/write denial, concurrent claims, stolen/expired claim finalization,
+exhausted recovery, transaction visibility/rollback and publish/recording
+interruption with leased duplicate execution. At-least-once delivery remains;
+this does not prove hosted queue acceptance or automatic managed dispatch.
+Protected invocation/Cron and retention reconciliation remain open. Verification
+and review are recorded in `docs/vercel-deployment.md`, Prompt 374.
+
+Independent review exposed a downstream terminal-upload replay gap. The leased
+executor now checks terminal ledger state and remaining execution budget before
+processing, respects terminal aggregate state first, and records spent-budget
+exhaustion durably without starting more work. Preflight recording failure is
+retryable; terminal replay preserves attempts, failure history and dead letters.
+The real processor/executor regression combines storage exhaustion, interrupted
+outbox completion recording and redelivery; follow-up review/check evidence is
+in the Prompt 374 migration record. This closes that concrete replay path without
+changing tenant policy, provider delivery guarantees or manual retry authority.

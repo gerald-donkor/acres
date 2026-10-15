@@ -269,10 +269,13 @@ true`); a `__proto__` key is preserved as an own enumerable property instead
 
 ## Worker publication flow
 
-`POST /api/v1/datasets/:datasetId/ingestion-runs` creates an `IngestionRun` and
-enqueues `ingestion.run:<runId>` through the existing `WORK_QUEUE` port. The
-BullMQ adapter is lazy: constructing the API or generating contracts no longer
-opens a Valkey connection; enqueue/readiness create the client when needed.
+`POST /api/v1/datasets/:datasetId/ingestion-runs` creates/resolves an
+`IngestionRun` and appends one `ingestion.run` outbox intent in the same
+transaction as command idempotency (Prompt 374). After commit the shared
+dispatcher enqueues `ingestion.run:<runId>` through `WORK_QUEUE`, carrying
+`ingestionRunId` and `outboxEventId`. Queue outage leaves a queued run and
+durable intent rather than aborting creation. The BullMQ adapter is lazy:
+constructing the API or generating contracts no longer opens a Valkey connection; enqueue/readiness create the client when needed.
 
 `UploadWorkerService` dispatches `ingestionRunId` jobs to
 `IngestionProcessorService`. The processor:
@@ -549,3 +552,29 @@ Overall result: ALL PLANS PASSED (2/2 passed)
   isolated unit test suites (`in-process-parser.executor.spec.ts` and
   `source-parser.service.spec.ts`).
 
+## Prompt 374 — transactional ingestion intent
+
+`OutboxService.appendIngestionRun()` uses `IngestionRun` aggregate identity,
+run id and version 1 with the existing unique event identity. Repeated commands
+and different idempotency keys for the same dataset/upload/mapping tuple keep
+one run and one event without resetting dispatched or dead-lettered intent.
+Run creation, append and idempotency reservation commit or roll back together.
+`IngestionService` no longer injects a queue; `IngestionModule` imports
+`OutboxModule` explicitly. RBAC/CSRF, 201 response shape and run cancellation,
+validation and immutable publication behavior remain unchanged.
+
+Real PostgreSQL tests hold an uncommitted transaction while another connection
+dispatches, then prove commit visibility and rollback isolation. They also
+exercise command replay, queue outage, append failure rollback and redelivery
+through the existing leased executor. The data journey now dispatches and
+asserts ingestion queue identity before processing successful and invalid runs.
+See [the Prompt 374 record](vercel-deployment.md#invocation-safe-transactional-outbox--prompt-374-2026-10-15)
+for actual checks, review and local reproduction. Rollback must pause/drain and
+account for pending ingestion intent before restoring code that cannot dispatch
+that event. Automatic Vercel dispatch remains follow-on work.
+
+Prompt 374 review hardening adds a shared leased-executor preflight: terminal
+ledger/aggregate replay never starts ingestion again, and a spent nonterminal
+execution budget is durably exhausted without a new attempt. Recording failure
+remains retryable and published aggregate state takes precedence over budget
+classification. This adds no automatic reset or manual retry policy.

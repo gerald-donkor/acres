@@ -2385,22 +2385,18 @@ guard; runtime values unchanged). The three rejected-scan message writes
 compile-time guard via the narrowed intermediate; runtime values unchanged;
 raw scanner signature/exception text never reaches the durable message
 columns via this producer; server-log line unchanged). No new semantics.
-Outbox dispatch attempts that exhaust their configured
-maximum are marked `dead_lettered` with visible `JobDeadLetter` evidence instead
-of remaining stuck in `retrying`. `OutboxService.markRetry` accepts only the
-fixed `queue_unavailable` code and `markDeadLetter` accepts only the fixed
-`queue_unavailable` / `'Outbox dispatch attempts exhausted.'` pair
-(compile-time guard; runtime values unchanged; raw queue text stays
-server-log-only). `ClaimedOutboxEvent.eventType` accepts only the closed
-`OutboxEventType` union (`'upload.completed' | 'export.requested'`), matching
-the concrete producer contracts (`appendUploadCompleted`, `appendExportRequested`)
-and worker dispatch branches (prompt 133 compile-time guard; runtime values unchanged).
-`QueuePort.enqueue` and `BullmqQueueAdapter.enqueue` accept only the closed
-`QueueJobName` union (`'upload.completed' | 'export.requested' | 'ingestion.run'`), backed by
-the canonical `QUEUE_JOB_NAMES` tuple in `work-queue.port.ts` and covered by a dedicated unit test
-suite in `bullmq-queue.adapter.spec.ts`, matching the outbox event dispatch (`UploadWorkerService`)
-and ingestion run (`IngestionService`) call sites (prompts 134 and 137 compile-time guard and unit
-test suite; runtime values unchanged).
+Outbox dispatch now lives in `OutboxDispatcherService` (Prompt 374); the
+worker delegates its bounded operation. All three jobs (`upload.completed`,
+`export.requested`, `ingestion.run`) use transactional intent. Persisted event
+names remain strings and are validated at dispatch; unknown names fail closed.
+Claims/finalization are fenced by fresh ownership tokens, nonterminal state and
+database-clock lease validity. A separate bounded recovery atomically records
+final-attempt crash exhaustion and its safe dead letter. Retry retains the
+fixed `queue_unavailable` code/message; invalid identity adds fixed
+`outbox_event_invalid` / `outbox_job_mismatch` classifications. Existing
+`DurableJob` rows are never reset by dispatch. `QueuePort` retains the closed
+`QueueJobName` union from `QUEUE_JOB_NAMES` and its existing wire format.
+See the Prompt 374 record below for verification and residual runtime gates.
 `JobRunsService.start()` accepts only the closed `ScheduledJobName` union
 (`'sessions.purge-expired' | 'uploads.purge-expired' | 'idempotency.purge-expired' | 'tokens.purge-expired' | 'exports.purge-expired'`), matching
 all five scheduled maintenance job producers (prompt 135 compile-time guard; runtime values unchanged).
@@ -3254,3 +3250,36 @@ fetch with redirect denial, a 10-second AbortSignal, successful receipt validati
 and a generic error. Existing templates and domain services are unchanged.
 No real mail was sent. Managed activation/proofs and verification results live
 in [vercel-deployment.md](vercel-deployment.md); Prompt 370 remains incomplete.
+
+## Prompt 374 — shared bounded outbox dispatcher
+
+The shared dispatcher is exported from `OutboxModule` with an explicit
+`QueueModule` import. It has no feature/worker dependency and starts no timer.
+Ingestion imports `OutboxModule` and appends `IngestionRun` version-1 intent in
+the run/idempotency transaction. Queue outage no longer aborts run creation
+once that database intent commits. Upload/export producers and route contracts
+are unchanged. `UploadWorkerService` retains listener/timer/metrics lifecycle
+and awaits active dispatch at stop; Vercel resolves the dispatcher without the
+reference worker. No schema, grant, RLS or provider configuration changed.
+
+Claims and all completion/retry/dead-letter writes use database-clock expiry
+and fresh per-operation tokens. Exhausted recovery is separately bounded and
+atomic with its dead letter. Dispatch creates only missing ledger rows and
+rejects tenant/job/upload mismatches; it preserves all existing execution
+fields. Only transport rejection is classified as queue failure. Database
+failure rejects, leaving recoverable intent; accepted publish plus failed
+recording may redeliver. There is no exactly-once transport guarantee.
+
+Actual checks, review, reproduction and rollback are recorded in
+[vercel-deployment.md, Prompt 374](vercel-deployment.md#invocation-safe-transactional-outbox--prompt-374-2026-10-15).
+Vercel automatic invocation/Cron and queue-retention reconciliation are still
+follow-on work; this does not complete Prompt 370 or deploy an application.
+
+Prompt 374 independent review also closed a downstream replay gap in
+`LeasedJobExecutorService`: terminal ledgers cannot re-enter processing, and a
+spent execution budget is durably exhausted before any new attempt starts.
+Terminal aggregate state, including accepted/rejected/cancelled/expired uploads,
+is honored before spent-budget classification. Preflight/recording failures
+remain retryable with lease release; existing retries below budget remain.
+The real outbox → exhausted scanning upload → interrupted publisher recording →
+redelivery regression and post-fix checks are in the Prompt 374 migration record.

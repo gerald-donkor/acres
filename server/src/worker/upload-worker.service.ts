@@ -3,8 +3,7 @@ import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { AcresConfigService } from '../config/acres-config.service';
 import { MetricsService } from '../metrics/metrics.service';
-import { OutboxService } from '../outbox/outbox.service';
-import { TenantTransactionService } from '../prisma/tenant-transaction.service';
+import { OutboxDispatcherService } from '../outbox/outbox-dispatcher.service';
 import {
   WORK_QUEUE,
   type QueueJobPayload,
@@ -26,12 +25,12 @@ export class UploadWorkerService {
   private connection?: IORedis;
   private outboxTimer?: NodeJS.Timeout;
   private dispatching = false;
+  private activeDispatch?: Promise<unknown>;
   private stopping = false;
 
   constructor(
     private readonly config: AcresConfigService,
-    private readonly tenants: TenantTransactionService,
-    private readonly outbox: OutboxService,
+    private readonly dispatcher: OutboxDispatcherService,
     @Inject(WORK_QUEUE) private readonly queue: QueuePort,
     private readonly processor: JobProcessorService,
     @Optional() private readonly metrics?: MetricsService,
@@ -59,7 +58,12 @@ export class UploadWorkerService {
     });
     await this.dispatchOutboxOnce();
     this.outboxTimer = setInterval(
-      () => void this.dispatchOutboxOnce(),
+      () =>
+        void this.dispatchOutboxOnce().catch(() => {
+          this.logger.error(
+            'Outbox dispatch failed; durable intent remains recoverable.',
+          );
+        }),
       this.config.uploadCleanupIntervalMs,
     );
     this.outboxTimer.unref();
@@ -69,63 +73,10 @@ export class UploadWorkerService {
     if (this.stopping || this.dispatching) return;
     this.dispatching = true;
     try {
-      const events = await this.outbox.claimReady();
-      for (const event of events) {
-        try {
-          const deterministicKey = `${event.eventType}:${event.aggregateId}`;
-          await this.tenants.workerScoped(async (tx) => {
-            const uploadId =
-              event.eventType === 'upload.completed' ? event.aggregateId : null;
-            await tx.durableJob.upsert({
-              where: {
-                deterministicKey,
-              },
-              update: {
-                state: 'queued',
-                organizationId: event.organizationId,
-                uploadId,
-                jobType: event.eventType,
-                maxAttempts: this.config.queueDefaultAttempts,
-                lastErrorCode: null,
-                lastErrorMessage: null,
-              },
-              create: {
-                deterministicKey,
-                organizationId: event.organizationId,
-                uploadId,
-                jobType: event.eventType,
-                state: 'queued',
-                maxAttempts: this.config.queueDefaultAttempts,
-              },
-            });
-          });
-          await this.queue.enqueue({
-            deterministicKey,
-            jobName: event.eventType,
-            payload:
-              event.eventType === 'export.requested'
-                ? {
-                    exportRequestId: event.aggregateId,
-                    outboxEventId: event.id,
-                  }
-                : { uploadId: event.aggregateId, outboxEventId: event.id },
-          });
-          await this.outbox.markDispatched(event.id);
-        } catch (error) {
-          this.logger.warn(`Outbox dispatch failed: ${String(error)}`);
-          if (event.attempts >= event.maxAttempts) {
-            await this.outbox.markDeadLetter(event.id, {
-              organizationId: event.organizationId,
-              reasonCode: 'queue_unavailable',
-              reasonMessage: 'Outbox dispatch attempts exhausted.',
-              payload: event.payload,
-            });
-          } else {
-            await this.outbox.markRetry(event.id, 'queue_unavailable');
-          }
-        }
-      }
+      this.activeDispatch = this.dispatcher.dispatchOnce();
+      await this.activeDispatch;
     } finally {
+      this.activeDispatch = undefined;
       this.dispatching = false;
     }
   }
@@ -138,6 +89,8 @@ export class UploadWorkerService {
   async stop(): Promise<void> {
     this.stopping = true;
     if (this.outboxTimer !== undefined) clearInterval(this.outboxTimer);
+    // Stop publishing before closing its transport, even on a recording failure.
+    await this.activeDispatch?.catch(() => undefined);
     await this.worker?.close();
     this.connection?.disconnect();
     await this.queue.close();

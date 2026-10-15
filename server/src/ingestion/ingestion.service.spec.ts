@@ -15,7 +15,7 @@ import type {
   TenantTransactionClient,
   TenantTransactionService,
 } from '../prisma/tenant-transaction.service';
-import type { QueuePort } from '../queue/work-queue.port';
+import type { OutboxService } from '../outbox/outbox.service';
 import type { CreateDatasetDto } from './dto/create-dataset.dto';
 import type { CreateMappingDto } from './dto/create-mapping.dto';
 import type { StartIngestionRunDto } from './dto/start-ingestion-run.dto';
@@ -111,7 +111,7 @@ describe('IngestionService', () => {
   let service: IngestionService;
   let mockTenants: Partial<TenantTransactionService>;
   let mockIdempotency: Partial<IdempotencyService>;
-  let mockQueue: Partial<QueuePort>;
+  let mockOutbox: Partial<OutboxService>;
 
   let mockTx: {
     dataset: {
@@ -199,14 +199,14 @@ describe('IngestionService', () => {
         ),
     };
 
-    mockQueue = {
-      enqueue: jest.fn().mockResolvedValue(undefined),
+    mockOutbox = {
+      appendIngestionRun: jest.fn().mockResolvedValue(undefined),
     };
 
     service = new IngestionService(
       mockTenants as TenantTransactionService,
       mockIdempotency as IdempotencyService,
-      mockQueue as QueuePort,
+      mockOutbox as OutboxService,
     );
   });
 
@@ -569,7 +569,7 @@ describe('IngestionService', () => {
   });
 
   describe('startRun', () => {
-    it('creates ingestion run, enqueues worker job, and returns summary', async () => {
+    it('creates ingestion run, appends transactional intent, and returns summary', async () => {
       const now = new Date();
       mockTx.dataset.findFirst.mockResolvedValue({ id: 'ds-1' });
       mockTx.upload.findFirst.mockResolvedValue({ state: 'accepted' });
@@ -621,10 +621,9 @@ describe('IngestionService', () => {
         },
       });
 
-      expect(mockQueue.enqueue).toHaveBeenCalledWith({
-        deterministicKey: 'ingestion.run:run-1',
-        jobName: 'ingestion.run',
-        payload: { ingestionRunId: 'run-1' },
+      expect(mockOutbox.appendIngestionRun).toHaveBeenCalledWith(mockTx, {
+        organizationId: 'org-456',
+        ingestionRunId: 'run-1',
       });
 
       expect(result.id).toBe('run-1');
@@ -646,7 +645,7 @@ describe('IngestionService', () => {
       await expect(
         service.startRun(orgContext, 'ds-1', undefined, missingMapBody),
       ).rejects.toThrow('Mapping not found.');
-      expect(mockQueue.enqueue).not.toHaveBeenCalled();
+      expect(mockOutbox.appendIngestionRun).not.toHaveBeenCalled();
     });
   });
 

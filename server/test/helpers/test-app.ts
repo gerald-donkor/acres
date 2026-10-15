@@ -182,6 +182,7 @@ export interface PrismaDouble {
     findMany: jest.Mock;
   };
   outboxEvent: {
+    upsert: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
   };
@@ -366,6 +367,7 @@ export function createPrismaDouble(): PrismaDouble {
       findMany: jest.fn(),
     },
     outboxEvent: {
+      upsert: jest.fn().mockResolvedValue({ id: 'outbox-ingestion-1' }),
       create: jest.fn(),
       update: jest.fn(),
     },

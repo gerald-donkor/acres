@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { QueueModule } from '../queue/queue.module';
+import { OutboxDispatcherService } from './outbox-dispatcher.service';
 import { OutboxService } from './outbox.service';
 
 @Module({
-  providers: [OutboxService],
-  exports: [OutboxService],
+  imports: [QueueModule],
+  providers: [OutboxService, OutboxDispatcherService],
+  exports: [OutboxService, OutboxDispatcherService],
 })
 export class OutboxModule {}

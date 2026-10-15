@@ -1,3 +1,5 @@
+import { OutboxDispatcherService } from '../src/outbox/outbox-dispatcher.service';
+import { WORK_QUEUE, type QueuePort } from '../src/queue/work-queue.port';
 import { createHash } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -402,7 +404,20 @@ describe('Acres End-to-End Data Journey — Real Database Acceptance', () => {
 
     const runId = (runRes.body as { data: { id: string } }).data.id;
 
-    // Process the run using the real ingestion pipeline against PostgreSQL/PostGIS
+    // Dispatch committed ingestion intent before invoking the real processor.
+    await app.get(OutboxDispatcherService).dispatchOnce();
+    expect(
+      app.get<jest.Mocked<QueuePort>>(WORK_QUEUE).enqueue.mock.calls,
+    ).toContainEqual([
+      {
+        deterministicKey: `ingestion.run:${runId}`,
+        jobName: 'ingestion.run',
+        payload: {
+          ingestionRunId: runId,
+          outboxEventId: expect.any(String) as unknown,
+        },
+      },
+    ]);
     await processor.processRun(runId);
 
     // Verify run completed and published
@@ -1007,7 +1022,20 @@ describe('Acres End-to-End Data Journey — Real Database Acceptance', () => {
 
     const badRunId = (badRunRes.body as { data: { id: string } }).data.id;
 
-    // Process the failing run
+    // Dispatch this intent through the same path before testing validation failure.
+    await app.get(OutboxDispatcherService).dispatchOnce();
+    expect(
+      app.get<jest.Mocked<QueuePort>>(WORK_QUEUE).enqueue.mock.calls,
+    ).toContainEqual([
+      {
+        deterministicKey: `ingestion.run:${badRunId}`,
+        jobName: 'ingestion.run',
+        payload: {
+          ingestionRunId: badRunId,
+          outboxEventId: expect.any(String) as unknown,
+        },
+      },
+    ]);
     await processor.processRun(badRunId);
 
     // Verify run failed validation

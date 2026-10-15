@@ -27,6 +27,19 @@ pooled RLS, private-upload, Sandbox scanning and durable-delivery proofs.
 The [migration record](vercel-deployment.md) distinguishes local preparation,
 account facts and hosted acceptance. No diagram below establishes deployment.
 
+## Current job dispatch boundary — Prompt 374
+
+Upload completion, export requests and ingestion runs all persist transactional
+outbox intent. A shared bounded dispatcher claims with per-operation database
+leases, inserts only missing execution-ledger rows, publishes outside SQL and
+fences completion/retry/dead-letter writes. Exhausted final claims are recovered
+atomically with a safe dead letter. Existing execution state/budget is preserved.
+The reference worker calls it from its existing timer; Vercel's job composition
+resolves it without a loop. No automatic managed invocation/Cron exists yet.
+At-least-once duplicate delivery remains possible; the leased executor checks
+terminal ledger state and execution budget before work, and terminal aggregate
+state remains authority. Detailed behavior/proof is in `docs/vercel-deployment.md`.
+
 ## Current provider boundary — geoBoundaries gbOpen
 
 The geography module has an operator-only `geoBoundaries` adapter behind a

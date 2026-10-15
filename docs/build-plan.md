@@ -3926,3 +3926,17 @@ selected-account proof, active managed provider profile, provisioned resource,
 preview or production deployment exists. Broad migration still depends on
 hosted seam proofs. This is a prerequisite commit, not Prompt 370 completion
 or Phase 12 exit; eleven launch responsibilities remain unresolved.
+
+## Phase 12 managed-target prerequisite — Prompt 374
+
+Shared bounded outbox dispatch and transactional `ingestion.run` intent are
+implemented locally. Fresh database-clock claims fence late finalization;
+separately bounded exhausted recovery records final-claim crashes atomically.
+Missing jobs are inserted without resetting execution history/budgets/leases.
+Reference worker and Vercel job compositions resolve the same dispatcher.
+Independent review also hardened leased execution against terminal/exhausted
+replay; full post-fix server regression and follow-up review passed.
+Actual tests/review and rollback are in `docs/vercel-deployment.md`, Prompt 374.
+Ordered steps 3–4 remain in progress: protected after-commit invocation/Cron,
+queue-retention reconciliation, Services routing and first application preview
+are still open. No parent/phase exit or launch category is approved.
