@@ -636,6 +636,107 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('storage provider selection', () => {
+    const BLOB_ENV = {
+      ...BASE_VALID_ENV,
+      STORAGE_PROVIDER: 'vercel-blob',
+      BLOB_STORE_ID: 'store_g2fmCH5CW7TJbkN3',
+    };
+
+    it('defaults to S3 and ignores Blob variables', () => {
+      const config = validateEnv({
+        ...BASE_VALID_ENV,
+        BLOB_STORE_ID: 'not-a-store',
+        BLOB_READ_WRITE_TOKEN: 'anything',
+      });
+      expect(config.storageProvider).toBe('s3');
+      expect(config.blobStoreId).toBeUndefined();
+      expect(config.blobReadWriteToken).toBeUndefined();
+      expect(config.storageBucket).toBe('acres-quarantine');
+    });
+
+    it('selects Vercel Blob with OIDC and records the store as the bucket', () => {
+      const config = validateEnv(BLOB_ENV);
+      expect(config.storageProvider).toBe('vercel-blob');
+      expect(config.blobStoreId).toBe('store_g2fmCH5CW7TJbkN3');
+      expect(config.blobReadWriteToken).toBeUndefined();
+      expect(config.storageBucket).toBe('store_g2fmCH5CW7TJbkN3');
+    });
+
+    it('accepts a read-write token fallback', () => {
+      const config = validateEnv({
+        ...BLOB_ENV,
+        BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_g2fmCH5CW7TJbkN3_secret',
+      });
+      expect(config.blobReadWriteToken).toBe(
+        'vercel_blob_rw_g2fmCH5CW7TJbkN3_secret',
+      );
+    });
+
+    it('rejects a token for a different store without echoing it', () => {
+      let message = '';
+      try {
+        validateEnv({
+          ...BLOB_ENV,
+          BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_otherStore1_secret',
+        });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toBe(
+        'BLOB_READ_WRITE_TOKEN belongs to a different store than BLOB_STORE_ID.',
+      );
+      expect(message).not.toContain('otherStore1');
+    });
+
+    it('skips the S3 placeholder check in a production Blob profile', () => {
+      const config = validateEnv({
+        ...BLOB_ENV,
+        NODE_ENV: 'production',
+        VALKEY_URL: 'redis://:production_password@prod-valkey:6379/0',
+      });
+      expect(config.storageProvider).toBe('vercel-blob');
+    });
+
+    it('rejects a malformed token without echoing it', () => {
+      let message = '';
+      try {
+        validateEnv({ ...BLOB_ENV, BLOB_READ_WRITE_TOKEN: 'secret-value-123' });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toBe(
+        'BLOB_READ_WRITE_TOKEN must be a Vercel Blob read-write token.',
+      );
+      expect(message).not.toContain('secret-value-123');
+    });
+
+    it.each([
+      'STORAGE_ENDPOINT',
+      'STORAGE_REGION',
+      'STORAGE_BUCKET',
+      'STORAGE_ACCESS_KEY_ID',
+      'STORAGE_SECRET_ACCESS_KEY',
+      'STORAGE_FORCE_PATH_STYLE',
+    ])('rejects a mixed profile that sets %s', (key) => {
+      expect(() => validateEnv({ ...BLOB_ENV, [key]: 'x' })).toThrow(
+        `${key} must be unset when STORAGE_PROVIDER="vercel-blob".`,
+      );
+    });
+
+    it.each([
+      [
+        { STORAGE_PROVIDER: 'gcs' },
+        'STORAGE_PROVIDER must be "s3" or "vercel-blob", received "gcs"',
+      ],
+      [{ BLOB_STORE_ID: undefined }, 'BLOB_STORE_ID must be'],
+      [{ BLOB_STORE_ID: 'g2fmCH5CW7TJbkN3' }, 'BLOB_STORE_ID must be'],
+      [{ BLOB_STORE_ID: 'store_bad-id' }, 'BLOB_STORE_ID must be'],
+    ])('rejects %o', (overrides, message) => {
+      expect(() => validateEnv({ ...BLOB_ENV, ...overrides })).toThrow(message);
+    });
+  });
+
   describe('parser isolation settings bounds', () => {
     it('enforces PARSER_CHILD_TIMEOUT_MS between 1000 and 60000 ms', () => {
       expect(() =>

@@ -1,14 +1,17 @@
 # Vercel migration — Prompt 370
 
-Status: implementation in progress. Preview Blob (server SDK) and Neon
-database/RLS seams are proven; no deployment, preview or production, exists.
+Status: implementation in progress. Preview Blob (server SDK and browser
+presigned upload) and Neon database/RLS seams are proven. Only synthetic probe
+deployments exist; the Acres application has not been deployed.
 Starting source: `a1350d0` on `main`.
 [ADR 0001](adr/0001-vercel-managed-production.md) records the accepted target.
 
 ## Resume here (new session)
 
-Prompt 370 is approved and still executing; do not write a new prompt for its
-remaining scope. A new session resumes it from this section and `git log`.
+Prompt 370 is approved and still executing. Remaining checklist items may be
+split into numbered sub-prompts (Prompt 371 = Blob browser upload); each
+inherits 370's approval limits. A new session resumes from this section and
+`git log`.
 
 **Fixed target.** Team `dgsloxx417's projects`
 (`team_zE3mp7nrEZ6a7cxRavwUMYC4`), project `acres`
@@ -46,7 +49,7 @@ scripts/vercel/neon-verify.sh               # harden + RLS/pooling evidence
   ACRES_VERCEL_PROBE=isolated-synthetic-preview \
   VERCEL_TEAM_ID=team_zE3mp7nrEZ6a7cxRavwUMYC4 \
   VERCEL_PROJECT_ID=prj_q9ApajZWDgdYZetnm5s5oakEjrUD \
-  node scripts/vercel/probe-platform.js blob)
+  node scripts/vercel/probe-platform.js blob)   # or blob-browser
 ```
 
 **Remaining work, in order** (each ends verified, reviewed, recorded here and
@@ -59,9 +62,10 @@ committed per AGENTS.md §2):
       `ingestion.run`, wiring `server/src/vercel/jobs.function.ts` into the
       real Services config with no `maxDeliveries` and pinned regions, and an
       application-level hosted job proof on the first preview deployment.
-- [ ] **Blob browser upload** — scoped client tokens, direct upload above the
-      function body limit, callback provenance, tenant authorization,
-      cancel/delete, download revocation (`vercel:vercel-storage`).
+- [ ] **Blob browser upload** — local implementation done (Prompt 371); the
+      presigned protocol is proven from a real browser on the preview store
+      (see "Blob browser upload — 2026-10-15" below). The hosted application
+      proof waits for the first preview deployment.
 - [ ] **Scanner image** — build and push a pinned VCR ClamAV image with
       checksum-bound `main.cvd`/`daily.cvd`, then run the scanner probe with
       `VERCEL_TOKEN`, `ACRES_VERCEL_PROBE_REGION=iad1`,
@@ -75,6 +79,13 @@ committed per AGENTS.md §2):
       sensitive the `NEON_OWNER_*` variables, migrations as a guarded
       non-runtime step, distributed throttling, protected endpoints
       (`vercel:vercel-services`, `vercel:deployments-cicd`, `vercel:env-vars`).
+      Add `BLOB_STORE_ID` (`store_g2fmCH5CW7TJbkN3` for preview; absent from
+      project env today) and `STORAGE_PROVIDER=vercel-blob`, and unset every
+      S3 `STORAGE_*` variable. **Remove `BLOB_READ_WRITE_TOKEN` from preview
+      env first**: a configured token always takes precedence over OIDC in the
+      SDK, so OIDC cannot be proven while it is set. Then prove app upload →
+      complete → scan through the deployed preview with
+      `STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID` set, OIDC.
 - [ ] **Production decision** — Cron proves only on production; Hobby is
       non-commercial. Needs the user's plan decision and the eleven launch
       categories before any promotion.
@@ -305,6 +316,209 @@ application context. The guard has been on those controllers since
 - Unobserved: the SDK's consumer-discovery error paths, and behaviour across a
   promotion while messages are in flight.
 
+### Blob browser upload — 2026-10-15
+
+Prompt 371, split out of Prompt 370 as checklist item 2.
+
+**Protocol decision.** Vercel Blob has two browser upload mechanisms.
+`handleUpload` hands the browser a client token (a bearer credential) and
+needs the long-lived `BLOB_READ_WRITE_TOKEN`. The newer one,
+`issueSignedToken` + `presignUrl` (`@vercel/blob` 2.8.2), works with OIDC and
+gives the browser one signed URL for one exact pathname, with the type, size,
+expiry and overwrite flags signed into it. Acres uses the presigned one.
+Sources, read 2026-10-15: [Vercel Signed URLs](https://vercel.com/docs/vercel-blob/vercel-signed-urls),
+[Client uploads](https://vercel.com/docs/vercel-blob/client-upload),
+[Private storage](https://vercel.com/docs/vercel-blob/private-storage).
+
+**Contract unchanged.** A presigned Blob PUT really is "PUT these bytes to this
+URL with this `content-type`". It fits the existing `InitiateUploadResult.upload
+= { url, method: 'PUT', headers, expiresAt }` and the existing browser code. So
+there is no new transport variant, no `packages/shared` change, no OpenAPI
+drift (`contracts:check` passed) and no client dependency. This knowingly
+departs from Prompt 370 §4 ("explicit discriminated upload transport"). That
+rule assumed the client-token protocol, which is not a signed PUT.
+
+**Hosted proof.** `npm run vercel:probe -- blob-browser` on Node 24.21.0
+against `acres-preview-probe`, from headless Chromium on an
+`http://127.0.0.1:<port>` origin. The table is from the final run, which exited
+0 with `gatePassed: true` and `cleanupSucceeded: true`:
+
+| #   | case                                                       | observed                                                                                              |
+| --- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1   | 12 MiB browser PUT, `content-type: text/csv` only          | 200, CORS readable; response keys `contentDisposition contentType pathname size uploadedAt url`       |
+| 2–3 | server `head` / bounded `get`                              | size 12 582 912, `text/csv`, SHA-256 match                                                            |
+| 4   | replay of the same URL with different bytes                | 400; stored bytes unchanged                                                                           |
+| 5a  | extensionless key (application shape), `content-type` only | 200, stored `text/csv`                                                                                |
+| 5   | extensionless key, `content-type: text/plain`              | 403, nothing written                                                                                  |
+| 6   | 1025 bytes against a 1024-byte signed limit                | 403, nothing written                                                                                  |
+| 7   | `pathname` query param swapped                             | 403, neither path written                                                                             |
+| 8   | URL valid 5 s, PUT after 8 s                               | 403, nothing written                                                                                  |
+| 9   | anonymous GET of the plain private URL                     | 403                                                                                                   |
+| 10  | signed GET (`get` token, `useCache: false`)                | 200, CORS readable, SHA-256 match, `content-type: text/csv`, `content-disposition` shape `attachment` |
+| 11  | read token used to presign another path                    | refused locally (scope mismatch)                                                                      |
+| 12  | `del`, then the still-valid case 10 URL                    | 404                                                                                                   |
+
+**Content-type finding, resolved with the user.** The first runs used
+`<case>.csv` pathnames, as the prompt specified. Case 5 then _accepted_ a
+`text/plain` PUT (200), but the store recorded `text/csv`. Diagnostics showed
+the API resolves the stored type in this order: `x-content-type` header, then
+the pathname extension, then `content-type`. It checks the resolved type
+against the signed allowlist: a wrong `x-content-type` on a `.csv` key got 403,
+and a wrong `content-type` on an extensionless key got 403. The stored type
+never left the allowlist. Application keys
+(`organizations/<id>/quarantine/<uuid>`) have no extension, so the user chose
+to move case 5 to an extensionless key, keep the `.csv` run as a recorded
+diagnostic (`diagnosticExtensionOverridesHeader`: 200, stored `text/csv`), and
+continue. No extra request header is needed.
+
+**Residue.** A `list` restricted to `acres-probes/` returned 0 objects after the
+runs. The store's aggregate metadata (Vercel MCP `get_storage_stores_by_id`)
+reported `count 1, size 12582912` right afterwards. A later read returned no
+`count`/`size` fields at all, so the figure stays unexplained; re-check it
+before the next probe or the first preview. No listing outside the probe
+prefix was made.
+
+**Re-run after review fixes: blocked by the environment.** Two later runs, after
+tightening cases 11 and 12, failed at case 1 with no response. A scratch
+diagnostic then showed this machine's upload throughput had fallen to about
+70 KB/s: 1 MiB took 15 s and 4 MiB took 63 s, both 200, while 12 MiB hit the
+probe's 120 s page timeout. The protocol code for cases 1–10 did not change.
+Neither the timeouts nor the payload were widened to fit the slow link, so the
+tightened cases 11 and 12 still await a hosted run on a normal connection.
+
+**Implementation.** `STORAGE_PROVIDER=s3|vercel-blob` (default `s3`). The Blob
+profile requires `BLOB_STORE_ID` and refuses any set S3 `STORAGE_*` variable.
+`BLOB_READ_WRITE_TOKEN` is optional, but whenever it is set the SDK uses it
+in preference to OIDC; OIDC is used only when it is absent. Validation refuses
+a token whose embedded store differs from `BLOB_STORE_ID`, and the adapter
+passes `storeId` from config explicitly. `StorageModule` constructs only the
+selected adapter. `VercelBlobStorageAdapter` behaves as
+follows:
+
+- `presignPut` signs the exact key, `[mediaType]`, `maxBytes` (the declared
+  size, a new port field), the upload TTL, `allowOverwrite: false` and
+  `addRandomSuffix: false`.
+- `presignGet` signs a `get`-only, uncached URL for the download TTL.
+- `stat`, `readiness` and `getBuffer` map `BlobNotFoundError`/`null` to the
+  port's not-found meaning. `getBuffer` stops reading at `UPLOAD_MAX_BYTES`.
+- `putBuffer` verifies the body's SHA-256 first. On the observed
+  `BlobError: This blob already exists…`, it reads the object back and treats
+  identical bytes as an idempotent retry.
+- `delete` treats a missing pathname as success: `del` succeeded for one
+  (observed), and a `BlobNotFoundError` is also caught.
+
+Every SDK call has an abort timeout. Nothing logs a URL, token or signature.
+`@vercel/blob` 2.8.2 moved to the server's runtime dependencies, at the same
+pin.
+
+**Callback provenance: no callback (decision).** No `onUploadCompleted`, no
+callback route, no `BLOB_WEBHOOK_PUBLIC_KEY`. The authenticated `complete`
+command already re-reads size, type and SHA-256 on the server. A callback would
+add an unauthenticated ingress and a sessionless path into tenant data, and
+Vercel Authentication would block it on previews anyway. No provider-originated
+request can change upload state.
+
+**Cancel/delete.** `cancel` from `pending_upload` deletes the object after the
+transaction commits, then marks the `StoredObject` `deleted`
+(`updateMany` guarded by organization and `state: 'pending_upload'`). This
+applies to both storage profiles: S3/Garage now deletes the object on cancel
+too. A failed delete logs the upload id only, still returns `cancelled`, and
+leaves the object `pending_upload` for the sweeper; a ledger-update failure
+after a successful delete is logged separately. Replays and already-cancelled
+uploads do not delete again. From `completed`/`scanning` nothing is deleted:
+the processor finishes the cancelled work.
+
+**Cancel/complete race (found by review, fixed).** Both commands used to read
+`pending_upload` and then update the row unguarded, at READ COMMITTED. A cancel
+and a complete racing on one upload could both pass the check, the later write
+overwriting the earlier. With the post-commit delete, that could have left a
+`completed` upload queued for scanning with its bytes gone. Both transitions
+are now compare-and-set (`updateMany` on the state just read, conflict when
+`count !== 1`). Under Postgres the loser re-checks its `WHERE` after the winner
+commits, matches nothing and returns 409, so it never deletes. Unit tests cover
+both losing sides. Real-database e2e section 8 covers delete-after-commit
+under RLS, the replay, a failed delete, complete-after-cancel (409) and
+cancel-after-complete (no delete).
+
+**Download revocation.** URLs are short-lived (`ACCEPTED_DOWNLOAD_TTL_SECONDS`,
+300 s default) and minted only after the accepted-state and permission
+recheck. Deleting the object makes outstanding URLs 404 (case 12). A minted URL
+cannot be revoked earlier any other way.
+
+**Known delta: download filename.** Presigned Blob GETs have no per-URL
+`Content-Disposition`. The response carries `attachment` and the stored type,
+but not `filename="<declared>"` as on S3, and the quarantine pathname is a UUID
+with no extension. Bytes come from a separate `*.private.blob.vercel-storage.com`
+origin. Streaming through a function to set the header is a later option.
+
+**Residuals, owned by the sweeper (Queues item, "Open"):**
+
+- A browser that keeps an unexpired PUT URL (at most
+  `PRESIGNED_UPLOAD_TTL_SECONDS`, 900 s default) can write once more after
+  `cancel` deleted the empty path. Nothing reads those bytes, because `complete`
+  returns 409 on a cancelled upload.
+- Quarantined bytes of uploads cancelled after completion, and of expired and
+  rejected uploads, are not deleted. The retention job only marks
+  `StoredObject` `deleted`.
+
+**Not proven.**
+
+- The application's upload → complete → scan through a deployed preview with
+  OIDC (owned by "First preview deployment").
+- OIDC itself: the probe ran off Vercel with the read-write token.
+- Booting the jobs module with `STORAGE_PROVIDER=vercel-blob`, which is
+  covered only by the `StorageModule` unit test.
+- Types other than `text/csv`. `complete` requires the stored type to equal
+  the declared one exactly. Whether XLSX, `application/geo+json` and
+  `application/json` survive on extensionless keys byte-for-byte (no added
+  `charset`) has not been observed.
+- A concurrent cancel/complete against a real database; the race is covered by
+  unit tests only.
+
+**Verification (Node 24.21.0, explicit `node`/`npm` pair, sequential), after
+the review fixes:**
+
+```text
+npm run vercel:probe-test        ℹ tests 46  ℹ pass 46  ℹ fail 0
+npm run contracts:check          exit 0 (no drift)
+npm run lint                     exit 0
+npm run typecheck                exit 0
+npm run build                    exit 0; Next 23/23 static pages
+npm run test --workspace=@acres/server -- --runInBand
+  Test Suites: 130 passed, 130 total
+  Tests:       2006 passed, 2006 total
+npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000
+  Test Suites: 8 passed, 8 total
+  Tests:       170 passed, 170 total
+npm run test:e2e --workspace=@acres/client -- --workers=1
+  9 skipped
+  92 passed (1.7m)
+npm run ops:check                exit 0; production audit passed (0 critical);
+                                 licences 100% compliant; SAST passed
+git diff --check                 clean
+```
+
+`ops:check` now counts 717 production components (702 before), because the
+Blob SDK is a runtime dependency. The advisory count is unchanged (10). The
+first post-fix server e2e run failed one case: `api.e2e-spec.ts` returned 500
+on upload `complete`, because the mocked Prisma in `test/helpers/test-app.ts`
+lacked `upload.updateMany`/`findFirstOrThrow`. Adding both fixed it.
+
+**Independent review.** The first review found three Important issues, all
+fixed:
+
+- the cancel/complete race (above);
+- docs that misstated token-versus-OIDC precedence, which made the planned
+  OIDC proof impossible as written;
+- no check that the token's store matches `BLOB_STORE_ID`.
+
+Its Minor items were also applied: a real-database cancel e2e, organization
+scoping on the ledger update, separate failure logs, not-found-tolerant
+`delete`, stricter probe cases 11 and 12, and a hidden-write probe test. The
+re-review found no Critical or Important issues. Its remaining notes are
+optional: an interleaved real-database race test, and that the S3 adapter's
+delete-on-cancel is unit-tested only.
+
 ## Target and gates
 
 Vercel Services is the candidate single-project arrangement, documented in Beta
@@ -315,7 +529,7 @@ require a preview proof before active configuration is added.
 | Gate              | Required evidence                                                                                                            | Current state                                                                                         |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Database          | Migrated isolated Neon/PostGIS; runtime cannot bypass forced RLS; pooled context reuse, concurrent transactions and rollback | Proven for preview at the database seam (2026-10-15); application-level pooled Prisma acceptance open |
-| Blob              | Private direct browser upload above function body limit; scoped token, authorized private read, checksum, cancel/delete      | Server SDK proof passed (2026-10-15); browser direct upload, scoped tokens and cancel still open      |
+| Blob              | Private direct browser upload above function body limit; scoped token, authorized private read, checksum, cancel/delete      | Seam proven: server SDK and browser presigned protocol (2026-10-15); deployed-app upload open         |
 | Scanner           | Pinned Sandbox scanner/signatures; clean/EICAR, missing/stale signatures, timeout/memory/byte limits and cleanup             | Blocked: account/plan and pinned scanner source/signatures absent                                     |
 | Durable execution | Same-project producer/consumer, forged request denial, duplicate/retry/interruption and preview isolation                    | Platform seams proven with a synthetic probe (2026-10-15); application job on a hosted preview open   |
 | Production        | Account-bound recovery, capacity, telemetry, security and eleven signed launch categories                                    | Open; no categories approved by local implementation                                                  |

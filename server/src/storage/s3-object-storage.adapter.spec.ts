@@ -115,6 +115,7 @@ describe('S3ObjectStorageAdapter', () => {
         key: 'uploads/dataset-1.csv',
         mediaType: 'text/csv',
         checksumHex: knownHex,
+        maxBytes: 1024,
       });
       const afterTime = Date.now();
 
@@ -151,6 +152,7 @@ describe('S3ObjectStorageAdapter', () => {
       const result = await adapter.presignPut({
         key: 'uploads/raw-data.bin',
         mediaType: 'application/octet-stream',
+        maxBytes: 1024,
       });
 
       expect(result.method).toBe('PUT');

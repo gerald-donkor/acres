@@ -2562,6 +2562,27 @@ longer reset their `DurableJob` to `running`. The managed-profile consumer,
 the `DurableJob` execution lease and their evidence are recorded in
 [`docs/vercel-deployment.md`](vercel-deployment.md).
 
+**Storage provider selection (prompt 371, 2026-10-15).** `StorageModule`
+builds only the adapter that `STORAGE_PROVIDER` selects: `s3` (the default,
+`S3ObjectStorageAdapter` over Garage/S3) or `vercel-blob`
+(`VercelBlobStorageAdapter`, private Vercel Blob through `@vercel/blob`
+**2.8.2**, now a runtime dependency). The Blob profile requires
+`BLOB_STORE_ID` (`store_…`), and every S3 `STORAGE_*` variable must be unset
+or boot fails as a mixed profile. `BLOB_READ_WRITE_TOKEN` is an optional
+fallback (`vercel_blob_rw_…`) that, when set, always takes precedence over
+OIDC and must belong to `BLOB_STORE_ID`; OIDC is used only without it.
+`storageBucket` resolves to the store id, so `StoredObject.bucket` names the
+store. `ObjectStoragePort.presignPut` now takes `maxBytes`, the declared
+upload size. The Blob URL signs it, and S3 ignores it. The public upload
+contract is unchanged. `cancel` from `pending_upload` now deletes the object
+after the commit, in both profiles, and marks the `StoredObject` `deleted`; a
+failed delete leaves it `pending_upload` for the sweeper. `complete` and
+`cancel` transitions are compare-and-set on the upload's state, so a racing
+pair cannot both win. A cancel that races a worker transition (for example
+`completed` → `scanning`) now returns 409 `Upload changed while cancelling;
+retry.` where it used to overwrite silently; a future cancel UI must retry. Protocol evidence is in
+[`docs/vercel-deployment.md`](vercel-deployment.md).
+
 ## 15. Phase 7A geography and ingestion foundation
 
 Implemented from `prompts/28-geography-ingestion-foundation.md`; the detailed

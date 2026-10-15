@@ -1891,3 +1891,39 @@ reported `installed: false`. No new public callback, upload protocol, tenant
 policy, schema or active managed profile is introduced by this preparation.
 Future queue, browser upload, shared throttling, ingress, recovery and managed
 readiness changes retain the approved negative-test gates.
+
+### Vercel Blob browser upload — Prompt 371 (2026-10-15)
+
+Applies only when `STORAGE_PROVIDER=vercel-blob`. The S3/Garage profile and its
+rows above are unchanged.
+
+- **Signed PUT scope.** The browser receives one presigned URL from
+  `issueSignedToken` + `presignUrl` (private store, OIDC on Vercel), never a
+  Blob bearer token. It is bound to the exact server-derived pathname, the
+  declared media type, the declared byte count, `PRESIGNED_UPLOAD_TTL_SECONDS`
+  and `allowOverwrite: false`. On the preview store a browser PUT was refused
+  for a swapped pathname, one byte over the size, an expired URL and a wrong
+  type on an extensionless key (all 403). A replay of a used URL was refused
+  (400). The API resolves the stored type from `x-content-type`, then the
+  pathname extension, then `content-type`. Application keys have no extension,
+  so the `content-type` the browser sends is the one checked.
+- **Overwrite window closed for this profile.** Overwrite denial means a
+  still-valid PUT URL cannot replace bytes between `complete` and the scan. The
+  S3 profile still has that window, until its presigned URL expires.
+- **No provider callback ingress.** No `onUploadCompleted` callback, route or
+  webhook key exists. Upload state changes only through the authenticated
+  `complete` command, which re-reads size, type and SHA-256 on the server.
+- **Signed GET.** Downloads are read-only, exact-path, uncached signed URLs
+  that live `ACCEPTED_DOWNLOAD_TTL_SECONDS`. Each is minted only after the
+  accepted-state and permission recheck. They are served from a separate
+  `*.private.blob.vercel-storage.com` origin with
+  `content-disposition: attachment` and the stored type, but **no declared
+  filename** (a known delta). A minted URL cannot be revoked before expiry
+  except by deleting the object, which makes it 404. An anonymous read of the
+  plain private URL returned 403.
+- **Residuals.** A browser holding an unexpired PUT URL can write once more
+  after `cancel` deleted the empty path. Nothing reads those bytes, because
+  `complete` returns 409 on a cancelled upload. Quarantined bytes of cancelled
+  (after completion), expired and rejected uploads stay until the reconciliation
+  sweeper exists. Hosted application acceptance through a deployed preview is
+  still open.

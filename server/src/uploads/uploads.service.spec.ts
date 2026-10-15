@@ -48,11 +48,14 @@ describe('UploadsService', () => {
     storedObject: {
       create: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
     upload: {
       create: jest.Mock;
       findFirst: jest.Mock;
+      findFirstOrThrow: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
     jobProgressEvent: {
       create: jest.Mock;
@@ -92,6 +95,7 @@ describe('UploadsService', () => {
           .mockImplementation((args: { data: unknown }) =>
             Promise.resolve({ id: 'so-1', ...(args.data as object) }),
           ),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       upload: {
         create: jest
@@ -100,6 +104,17 @@ describe('UploadsService', () => {
             Promise.resolve({ id: 'up-1', ...(args.data as object) }),
           ),
         findFirst: jest.fn(),
+        // Read-back after a compare-and-set returns the last written fields.
+        findFirstOrThrow: jest.fn().mockImplementation(() =>
+          Promise.resolve({
+            id: 'up-1',
+            ...((
+              mockTx.upload.updateMany.mock.calls.at(-1) as
+                [{ data: object }] | undefined
+            )?.[0].data ?? {}),
+          }),
+        ),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest
           .fn()
           .mockImplementation((args: { data: unknown }) =>
@@ -158,6 +173,7 @@ describe('UploadsService', () => {
       }),
       stat: jest.fn(),
       getBuffer: jest.fn(),
+      delete: jest.fn().mockResolvedValue(undefined),
     };
 
     service = new UploadsService(
@@ -213,6 +229,7 @@ describe('UploadsService', () => {
       expect(fakeStorage.presignPut).toHaveBeenCalledWith(
         expect.objectContaining({
           mediaType: validBody.mediaType,
+          maxBytes: validBody.byteCount,
           checksumHex: validBody.checksumHex,
         }) as unknown,
       );
@@ -476,6 +493,32 @@ describe('UploadsService', () => {
       });
     });
 
+    it('conflicts without touching the object when a concurrent cancel won the race', async () => {
+      mockTx.upload.findFirst
+        .mockResolvedValueOnce(mockReservedUpload)
+        .mockResolvedValueOnce(mockReservedUpload);
+      (fakeStorage.stat as jest.Mock).mockResolvedValue({
+        byteCount: BigInt(fileBytes.length),
+        mediaType: null,
+      });
+      (fakeStorage.getBuffer as jest.Mock).mockResolvedValue(fileBytes);
+      mockTx.upload.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(
+        service.complete(
+          testOrg,
+          'up-1',
+          validIdempotencyKey,
+          validCompleteBody,
+        ),
+      ).rejects.toMatchObject({
+        status: 409,
+        message: 'Upload is not awaiting completion.',
+      });
+      expect(mockTx.storedObject.update).not.toHaveBeenCalled();
+      expect(fakeOutbox.appendUploadCompleted).not.toHaveBeenCalled();
+    });
+
     it('successfully completes upload, updates stored object, creates progress event, and enqueues outbox event', async () => {
       mockTx.upload.findFirst
         .mockResolvedValueOnce(mockReservedUpload)
@@ -487,7 +530,7 @@ describe('UploadsService', () => {
       });
       (fakeStorage.getBuffer as jest.Mock).mockResolvedValue(fileBytes);
 
-      mockTx.upload.update.mockResolvedValueOnce({
+      mockTx.upload.findFirstOrThrow.mockResolvedValueOnce({
         id: 'up-1',
         state: 'completed',
         declaredFilename: 'data.csv',
@@ -510,8 +553,12 @@ describe('UploadsService', () => {
         validCompleteBody,
       );
 
-      expect(mockTx.upload.update).toHaveBeenCalledWith({
-        where: { id: 'up-1' },
+      expect(mockTx.upload.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'up-1',
+          organizationId: testOrg.organizationId,
+          state: 'pending_upload',
+        },
         data: expect.objectContaining({
           state: 'completed',
           completedByteCount: BigInt(fileBytes.length),
@@ -522,7 +569,7 @@ describe('UploadsService', () => {
           version: { increment: 1 },
         }) as unknown,
       });
-      const updateCalls = mockTx.upload.update.mock.calls as unknown as [
+      const updateCalls = mockTx.upload.updateMany.mock.calls as unknown as [
         [{ data: { completedAt: Date } }],
       ];
       expect(updateCalls[0][0].data.completedAt).toBeInstanceOf(Date);
@@ -670,7 +717,7 @@ describe('UploadsService', () => {
 
       const result = await service.cancel(testOrg, 'up-1', validIdempotencyKey);
       expect(result.state).toBe('cancelled');
-      expect(mockTx.upload.update).not.toHaveBeenCalled();
+      expect(mockTx.upload.updateMany).not.toHaveBeenCalled();
     });
 
     it('throws 409 conflict when upload is already accepted', async () => {
@@ -724,6 +771,10 @@ describe('UploadsService', () => {
     it('updates pending upload to cancelled state', async () => {
       mockTx.upload.findFirst.mockResolvedValue({
         id: 'up-1',
+        storedObject: {
+          id: 'so-1',
+          objectKey: 'organizations/org-123/quarantine/k',
+        },
         state: 'pending_upload',
         declaredFilename: 'file.csv',
         declaredMediaType: 'text/csv',
@@ -737,7 +788,7 @@ describe('UploadsService', () => {
         acceptedAt: null,
       });
 
-      mockTx.upload.update.mockResolvedValue({
+      mockTx.upload.findFirstOrThrow.mockResolvedValue({
         id: 'up-1',
         state: 'cancelled',
         declaredFilename: 'file.csv',
@@ -753,22 +804,173 @@ describe('UploadsService', () => {
       });
 
       const result = await service.cancel(testOrg, 'up-1', validIdempotencyKey);
-      expect(mockTx.upload.update).toHaveBeenCalledWith({
-        where: { id: 'up-1' },
+      expect(mockTx.upload.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'up-1',
+          organizationId: testOrg.organizationId,
+          state: 'pending_upload',
+        },
         data: expect.objectContaining({
           state: 'cancelled',
           progressStage: 'cancelled',
           progressPercent: 100,
         }) as unknown,
       });
-      const cancelUpdateCalls = mockTx.upload.update.mock.calls as unknown as [
-        [{ data: { cancelledAt: Date } }],
-      ];
+      const cancelUpdateCalls = mockTx.upload.updateMany.mock
+        .calls as unknown as [[{ data: { cancelledAt: Date } }]];
       expect(cancelUpdateCalls[0][0].data.cancelledAt).toBeInstanceOf(Date);
       expect(result.state).toBe('cancelled');
       expect(result.progress.stage).toBe('cancelled');
       expect(result.progress.percent).toBe(100);
     });
+
+    const uploadRow = (state: string) => ({
+      id: 'up-1',
+      storedObject: {
+        id: 'so-1',
+        objectKey: 'organizations/org-123/quarantine/k',
+      },
+      state,
+      declaredFilename: 'file.csv',
+      declaredMediaType: 'text/csv',
+      declaredByteCount: 1000n,
+      completedByteCount: null,
+      checksumHex: null,
+      progressStage: 'created',
+      progressPercent: 0,
+      failureCode: null,
+      failureMessage: null,
+      acceptedAt: null,
+    });
+
+    it('deletes never-quarantined bytes after commit and marks the object deleted', async () => {
+      const order: string[] = [];
+      (fakeTenants.organizationScoped as jest.Mock).mockImplementation(
+        async (
+          _acc: string,
+          _org: string,
+          callback: (tx: TenantTransactionClient) => Promise<unknown>,
+        ) => {
+          order.push('tx:start');
+          const result = await callback(
+            mockTx as unknown as TenantTransactionClient,
+          );
+          order.push('tx:commit');
+          return result;
+        },
+      );
+      (fakeStorage.delete as jest.Mock).mockImplementation(() => {
+        order.push('storage:delete');
+        return Promise.resolve();
+      });
+      mockTx.upload.findFirst.mockResolvedValue(uploadRow('pending_upload'));
+
+      const result = await service.cancel(testOrg, 'up-1', validIdempotencyKey);
+
+      expect(result.state).toBe('cancelled');
+      expect(fakeStorage.delete).toHaveBeenCalledWith(
+        'organizations/org-123/quarantine/k',
+      );
+      expect(order.slice(0, 3)).toEqual([
+        'tx:start',
+        'tx:commit',
+        'storage:delete',
+      ]);
+      expect(mockTx.storedObject.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'so-1',
+          organizationId: testOrg.organizationId,
+          state: 'pending_upload',
+        },
+        data: { state: 'deleted', deletedAt: expect.any(Date) as unknown },
+      });
+    });
+
+    it('still returns cancelled when the delete fails and keeps the object pending', async () => {
+      (fakeStorage.delete as jest.Mock).mockRejectedValue(
+        new Error('provider error with https://signed-url'),
+      );
+      const warn = jest
+        .spyOn(
+          (service as unknown as { logger: { warn: (m: string) => void } })
+            .logger,
+          'warn',
+        )
+        .mockImplementation(() => undefined);
+      mockTx.upload.findFirst.mockResolvedValue(uploadRow('pending_upload'));
+
+      const result = await service.cancel(testOrg, 'up-1', validIdempotencyKey);
+
+      expect(result.state).toBe('cancelled');
+      expect(mockTx.storedObject.updateMany).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = String(warn.mock.calls[0][0]);
+      expect(message).toContain('up-1');
+      expect(message).not.toContain('quarantine');
+      expect(message).not.toContain('https://');
+    });
+
+    it('does not delete again on an idempotent replay', async () => {
+      (fakeIdempotency.run as jest.Mock).mockResolvedValue({
+        uploadId: 'up-1',
+        state: 'cancelled',
+      });
+      await service.cancel(testOrg, 'up-1', validIdempotencyKey);
+      expect(fakeStorage.delete).not.toHaveBeenCalled();
+    });
+
+    it('does not delete when the upload is already cancelled', async () => {
+      mockTx.upload.findFirst.mockResolvedValue(uploadRow('cancelled'));
+      await service.cancel(testOrg, 'up-1', validIdempotencyKey);
+      expect(fakeStorage.delete).not.toHaveBeenCalled();
+    });
+
+    it('conflicts and deletes nothing when a concurrent complete won the race', async () => {
+      mockTx.upload.findFirst.mockResolvedValue(uploadRow('pending_upload'));
+      mockTx.upload.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(
+        service.cancel(testOrg, 'up-1', validIdempotencyKey),
+      ).rejects.toMatchObject({
+        status: 409,
+        message: 'Upload changed while cancelling; retry.',
+      });
+      expect(fakeStorage.delete).not.toHaveBeenCalled();
+    });
+
+    it('logs separately when the bytes are deleted but the ledger update fails', async () => {
+      mockTx.upload.findFirst.mockResolvedValue(uploadRow('pending_upload'));
+      mockTx.storedObject.updateMany.mockRejectedValueOnce(new Error('db'));
+      const warn = jest
+        .spyOn(
+          (service as unknown as { logger: { warn: (m: string) => void } })
+            .logger,
+          'warn',
+        )
+        .mockImplementation(() => undefined);
+
+      const result = await service.cancel(testOrg, 'up-1', validIdempotencyKey);
+
+      expect(result.state).toBe('cancelled');
+      expect(fakeStorage.delete).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain(
+        'deleted its object but kept the ledger row',
+      );
+    });
+
+    it.each(['completed', 'scanning'])(
+      'leaves quarantined bytes when cancelling from %s',
+      async (state) => {
+        mockTx.upload.findFirst.mockResolvedValue(uploadRow(state));
+        const result = await service.cancel(
+          testOrg,
+          'up-1',
+          validIdempotencyKey,
+        );
+        expect(result.state).toBe('cancelled');
+        expect(fakeStorage.delete).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('download', () => {

@@ -34,6 +34,8 @@ export class S3ObjectStorageAdapter implements ObjectStoragePort {
   async presignPut(input: {
     key: string;
     mediaType: string;
+    // An S3 presigned PUT carries no size cap here; complete() checks size.
+    maxBytes: number;
     checksumHex?: string;
   }): Promise<PresignedPut> {
     const expiresAt = new Date(

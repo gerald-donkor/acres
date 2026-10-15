@@ -1178,4 +1178,128 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
       },
     );
   });
+
+  // ===========================================================================
+  // 8. Cancel deletes never-quarantined bytes (Prompt 371)
+  // ===========================================================================
+  describe('8. Cancel deletes bytes that never reached quarantine', () => {
+    async function initiate(
+      owner: Awaited<ReturnType<typeof signedInAgent>>,
+      orgId: string,
+      keyPrefix: string,
+    ) {
+      const bytes = Buffer.from('a,b\n1,2\n', 'utf-8');
+      const checksum = createHash('sha256').update(bytes).digest('hex');
+      const res = await owner.agent
+        .post('/api/v1/uploads')
+        .set('x-acres-organization-id', orgId)
+        .set('Idempotency-Key', `${keyPrefix}-init-idempotency-key`)
+        .set('x-csrf-token', owner.token)
+        .send({
+          filename: `${keyPrefix}.csv`,
+          mediaType: 'text/csv',
+          byteCount: bytes.length,
+          checksumHex: checksum,
+        })
+        .expect(201);
+      const data = (
+        res.body as { data: { uploadId: string; object: { key: string } } }
+      ).data;
+      return { uploadId: data.uploadId, objectKey: data.object.key };
+    }
+
+    function cancel(
+      owner: Awaited<ReturnType<typeof signedInAgent>>,
+      orgId: string,
+      uploadId: string,
+      key: string,
+    ) {
+      return owner.agent
+        .delete(`/api/v1/uploads/${uploadId}`)
+        .set('x-acres-organization-id', orgId)
+        .set('Idempotency-Key', `${key}-cancel-idempotency-key`)
+        .set('x-csrf-token', owner.token);
+    }
+
+    const storedObjectOf = (uploadId: string) =>
+      tenants.workerScoped(async (tx) => {
+        const upload = await tx.upload.findUniqueOrThrow({
+          where: { id: uploadId },
+          include: { storedObject: true },
+        });
+        return { upload, object: upload.storedObject };
+      });
+
+    it('8A: deletes the object after commit and marks the StoredObject deleted under RLS', async () => {
+      const storage = app.get<jest.Mocked<ObjectStoragePort>>(OBJECT_STORAGE);
+      storage.delete.mockResolvedValue(undefined);
+      const owner = await signedInAgent('owner-cancel-1@example.com');
+      const org = await createOrganization(owner, 'org-cancel-1', 'Org C1');
+      const { uploadId, objectKey } = await initiate(owner, org.id, 'c1');
+
+      const res = await cancel(owner, org.id, uploadId, 'c1').expect(200);
+      expect((res.body as { data: { state: string } }).data.state).toBe(
+        'cancelled',
+      );
+      expect(storage.delete.mock.calls).toEqual([[objectKey]]);
+      const { upload, object } = await storedObjectOf(uploadId);
+      expect(upload.state).toBe('cancelled');
+      expect(object.state).toBe('deleted');
+      expect(object.deletedAt).toBeInstanceOf(Date);
+
+      // An idempotent replay returns the cached response and deletes nothing.
+      await cancel(owner, org.id, uploadId, 'c1').expect(200);
+      expect(storage.delete.mock.calls).toHaveLength(1);
+    });
+
+    it('8B: a failed delete still cancels and leaves the object pending for the sweeper', async () => {
+      const storage = app.get<jest.Mocked<ObjectStoragePort>>(OBJECT_STORAGE);
+      storage.delete.mockRejectedValueOnce(new Error('provider outage'));
+      const owner = await signedInAgent('owner-cancel-2@example.com');
+      const org = await createOrganization(owner, 'org-cancel-2', 'Org C2');
+      const { uploadId } = await initiate(owner, org.id, 'c2');
+
+      await cancel(owner, org.id, uploadId, 'c2').expect(200);
+      const { upload, object } = await storedObjectOf(uploadId);
+      expect(upload.state).toBe('cancelled');
+      expect(object.state).toBe('pending_upload');
+      expect(object.deletedAt).toBeNull();
+    });
+
+    it('8C: complete after cancel conflicts; cancel after complete deletes nothing', async () => {
+      const storage = app.get<jest.Mocked<ObjectStoragePort>>(OBJECT_STORAGE);
+      storage.delete.mockResolvedValue(undefined);
+      const owner = await signedInAgent('owner-cancel-3@example.com');
+      const org = await createOrganization(owner, 'org-cancel-3', 'Org C3');
+
+      const first = await initiate(owner, org.id, 'c3a');
+      const bytes = Buffer.from('a,b\n1,2\n', 'utf-8');
+      const checksum = createHash('sha256').update(bytes).digest('hex');
+      storageMap.set(first.objectKey, {
+        body: bytes,
+        mediaType: 'text/csv',
+        checksumHex: checksum,
+      });
+      await cancel(owner, org.id, first.uploadId, 'c3a').expect(200);
+      await owner.agent
+        .post(`/api/v1/uploads/${first.uploadId}/complete`)
+        .set('x-acres-organization-id', org.id)
+        .set('Idempotency-Key', 'c3a-comp-idempotency-key')
+        .set('x-csrf-token', owner.token)
+        .send({ byteCount: bytes.length, checksumHex: checksum })
+        .expect(409);
+
+      storage.delete.mockClear();
+      const { uploadId } = await createCompletedUpload(
+        owner,
+        org.id,
+        'c3b',
+        'a,b\n1,2\n',
+      );
+      await cancel(owner, org.id, uploadId, 'c3b').expect(200);
+      expect(storage.delete.mock.calls).toHaveLength(0);
+      const { object } = await storedObjectOf(uploadId);
+      expect(object.state).toBe('quarantined');
+    });
+  });
 });

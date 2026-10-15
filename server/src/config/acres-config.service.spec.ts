@@ -45,6 +45,7 @@ describe('AcresConfigService', () => {
     vercelQueueRegion: 'iad1',
     vercelQueueRetentionSeconds: 86400,
     jobLeaseMs: 330000,
+    storageProvider: 's3',
     storageEndpoint: 'http://localhost:3900',
     storageRegion: 'garage',
     storageBucket: 'acres-quarantine',
@@ -170,6 +171,9 @@ describe('AcresConfigService', () => {
       expect(service.vercelQueueRetentionSeconds).toBe(86400);
       expect(service.vercelDeploymentId).toBeUndefined();
       expect(service.jobLeaseMs).toBe(330000);
+      expect(service.storageProvider).toBe('s3');
+      expect(service.blobStoreId).toBeUndefined();
+      expect(service.blobReadWriteToken).toBeUndefined();
       expect(service.storageEndpoint).toBe('http://localhost:3900');
       expect(service.storageRegion).toBe('garage');
       expect(service.storageBucket).toBe('acres-quarantine');

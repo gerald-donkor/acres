@@ -323,7 +323,9 @@ describe('Acres API', () => {
           objectKey: 'organizations/org/quarantine/object',
         },
       });
-      prisma.upload.update.mockResolvedValue({
+      // complete() is a compare-and-set followed by a read-back.
+      prisma.upload.updateMany.mockResolvedValue({ count: 1 });
+      prisma.upload.findFirstOrThrow.mockResolvedValue({
         ...uploadRow,
         state: 'completed',
         completedByteCount: BigInt(12),

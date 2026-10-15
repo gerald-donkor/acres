@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
@@ -25,6 +25,8 @@ export type { InitiateUploadResult, UploadDownload, UploadState, UploadStatus };
 
 @Injectable()
 export class UploadsService {
+  private readonly logger = new Logger(UploadsService.name);
+
   constructor(
     private readonly tenants: TenantTransactionService,
     private readonly idempotency: IdempotencyService,
@@ -44,6 +46,7 @@ export class UploadsService {
     const signed = await this.storage.presignPut({
       key,
       mediaType: body.mediaType,
+      maxBytes: body.byteCount,
       checksumHex: body.checksumHex,
     });
     return this.tenants.organizationScoped(
@@ -196,8 +199,15 @@ export class UploadsService {
             if (upload.state !== 'pending_upload') {
               throw ApiException.conflict('Upload is not awaiting completion.');
             }
-            const updated = await tx.upload.update({
-              where: { id: upload.id },
+            // Compare-and-set: a concurrent cancel that committed first leaves
+            // no pending row to match, so this call conflicts instead of
+            // overwriting it (cancel deletes never-quarantined bytes).
+            const claimed = await tx.upload.updateMany({
+              where: {
+                id: upload.id,
+                organizationId: organization.organizationId,
+                state: 'pending_upload',
+              },
               data: {
                 state: 'completed',
                 completedByteCount: BigInt(body.byteCount),
@@ -207,6 +217,15 @@ export class UploadsService {
                 progressPercent: 20,
                 completedAt: new Date(),
                 version: { increment: 1 },
+              },
+            });
+            if (claimed.count !== 1) {
+              throw ApiException.conflict('Upload is not awaiting completion.');
+            }
+            const updated = await tx.upload.findFirstOrThrow({
+              where: {
+                id: upload.id,
+                organizationId: organization.organizationId,
               },
             });
             await tx.storedObject.update({
@@ -258,7 +277,15 @@ export class UploadsService {
     uploadId: string,
     idempotencyKey: string | undefined,
   ): Promise<UploadStatus> {
-    return this.tenants.organizationScoped(
+    // Set only when this call (not an idempotent replay) cancels an upload
+    // whose bytes never reached quarantine; deleted after the commit.
+    // (Typed by assertion: assignment happens inside the callback, which
+    // control-flow narrowing does not follow.)
+    let unclaimed = null as {
+      storedObjectId: string;
+      objectKey: string;
+    } | null;
+    const status = await this.tenants.organizationScoped(
       organization.accountId,
       organization.organizationId,
       (tx) =>
@@ -278,6 +305,9 @@ export class UploadsService {
                 id: uploadId,
                 organizationId: organization.organizationId,
               },
+              include: {
+                storedObject: { select: { id: true, objectKey: true } },
+              },
             });
             if (upload === null)
               throw ApiException.notFound('Upload not found.');
@@ -285,8 +315,15 @@ export class UploadsService {
             if (['accepted', 'rejected'].includes(upload.state)) {
               throw ApiException.conflict('Upload can no longer be cancelled.');
             }
-            const updated = await tx.upload.update({
-              where: { id: uploadId },
+            // Compare-and-set on the state just read: if a concurrent
+            // complete committed first, conflict rather than cancel (and
+            // later delete) an upload that has moved on.
+            const claimed = await tx.upload.updateMany({
+              where: {
+                id: uploadId,
+                organizationId: organization.organizationId,
+                state: upload.state,
+              },
               data: {
                 state: 'cancelled',
                 cancelledAt: new Date(),
@@ -294,10 +331,73 @@ export class UploadsService {
                 progressPercent: 100,
               },
             });
+            if (claimed.count !== 1) {
+              throw ApiException.conflict(
+                'Upload changed while cancelling; retry.',
+              );
+            }
+            const updated = await tx.upload.findFirstOrThrow({
+              where: {
+                id: uploadId,
+                organizationId: organization.organizationId,
+              },
+            });
+            // From completed/scanning the processor finishes the cancelled
+            // work; those quarantined bytes are left for the sweeper.
+            if (upload.state === 'pending_upload') {
+              unclaimed = {
+                storedObjectId: upload.storedObject.id,
+                objectKey: upload.storedObject.objectKey,
+              };
+            }
             return this.toStatus(updated);
           },
         ),
     );
+    if (unclaimed !== null)
+      await this.deleteUnclaimed(organization, uploadId, unclaimed);
+    return status;
+  }
+
+  /**
+   * Best-effort: a failed delete still returns the cancelled status and leaves
+   * the StoredObject `pending_upload` for the reconciliation sweeper. A
+   * still-valid PUT URL can write again until it expires; complete() then
+   * returns 409 and nothing reads those bytes.
+   */
+  private async deleteUnclaimed(
+    organization: OrganizationContext,
+    uploadId: string,
+    object: { storedObjectId: string; objectKey: string },
+  ): Promise<void> {
+    // The upload id only: object keys and provider errors stay out of logs.
+    try {
+      await this.storage.delete(object.objectKey);
+    } catch {
+      this.logger.warn(
+        `Cancelled upload ${uploadId} left its object for the sweeper.`,
+      );
+      return;
+    }
+    try {
+      await this.tenants.organizationScoped(
+        organization.accountId,
+        organization.organizationId,
+        (tx) =>
+          tx.storedObject.updateMany({
+            where: {
+              id: object.storedObjectId,
+              organizationId: organization.organizationId,
+              state: 'pending_upload',
+            },
+            data: { state: 'deleted', deletedAt: new Date() },
+          }),
+      );
+    } catch {
+      this.logger.warn(
+        `Cancelled upload ${uploadId} deleted its object but kept the ledger row pending_upload.`,
+      );
+    }
   }
 
   async download(

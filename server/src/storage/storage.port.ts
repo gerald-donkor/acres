@@ -26,6 +26,8 @@ export interface ObjectStoragePort {
   presignPut(input: {
     key: string;
     mediaType: string;
+    /** Declared upload size; adapters that can sign a size cap bind to it. */
+    maxBytes: number;
     checksumHex?: string;
   }): Promise<PresignedPut>;
   presignGet(input: {

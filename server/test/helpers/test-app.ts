@@ -77,8 +77,10 @@ export interface PrismaDouble {
   upload: {
     create: jest.Mock;
     findFirst: jest.Mock;
+    findFirstOrThrow: jest.Mock;
     findUnique: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
   };
   dataset: {
     create: jest.Mock;
@@ -259,8 +261,10 @@ export function createPrismaDouble(): PrismaDouble {
     upload: {
       create: jest.fn(),
       findFirst: jest.fn(),
+      findFirstOrThrow: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     dataset: {
       create: jest.fn(),

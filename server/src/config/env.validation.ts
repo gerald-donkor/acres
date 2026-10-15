@@ -50,6 +50,11 @@ export interface AcresEnv {
   vercelQueueRetentionSeconds: number;
   vercelDeploymentId?: string;
   jobLeaseMs: number;
+  storageProvider: StorageProvider;
+  /** Vercel Blob store id; required when `storageProvider` is `vercel-blob`. */
+  blobStoreId?: string;
+  /** Optional off-Vercel fallback; on Vercel the SDK uses OIDC. Never logged. */
+  blobReadWriteToken?: string;
   storageEndpoint: string;
   storageRegion: string;
   storageBucket: string;
@@ -96,6 +101,17 @@ export interface AcresEnv {
 
 export const QUEUE_PROVIDERS = ['bullmq', 'vercel'] as const;
 export type QueueProvider = (typeof QUEUE_PROVIDERS)[number];
+export const STORAGE_PROVIDERS = ['s3', 'vercel-blob'] as const;
+export type StorageProvider = (typeof STORAGE_PROVIDERS)[number];
+/** S3-only variables; a set value alongside `vercel-blob` is a mixed profile. */
+const S3_STORAGE_KEYS = [
+  'STORAGE_ENDPOINT',
+  'STORAGE_REGION',
+  'STORAGE_BUCKET',
+  'STORAGE_ACCESS_KEY_ID',
+  'STORAGE_SECRET_ACCESS_KEY',
+  'STORAGE_FORCE_PATH_STYLE',
+] as const;
 
 const SHARED_REQUIRED = ['DATABASE_URL'] as const;
 const API_REQUIRED = [
@@ -135,6 +151,7 @@ const DEFAULTS = {
   VERCEL_QUEUE_REGION: 'iad1',
   VERCEL_QUEUE_RETENTION_SECONDS: '86400',
   JOB_LEASE_MS: '330000',
+  STORAGE_PROVIDER: 's3',
   STORAGE_ENDPOINT: 'http://localhost:3900',
   STORAGE_REGION: 'garage',
   STORAGE_BUCKET: 'acres-quarantine',
@@ -337,10 +354,58 @@ export function validateEnv(
     throw new Error('VALKEY_URL must be unset when QUEUE_PROVIDER="vercel".');
   }
 
+  const rawStorageProvider = env.STORAGE_PROVIDER ?? DEFAULTS.STORAGE_PROVIDER;
+  if (!(STORAGE_PROVIDERS as readonly string[]).includes(rawStorageProvider)) {
+    throw new Error(
+      `STORAGE_PROVIDER must be "s3" or "vercel-blob", received "${rawStorageProvider}"`,
+    );
+  }
+  const storageProvider = rawStorageProvider as StorageProvider;
+  let blobStoreId: string | undefined;
+  let blobReadWriteToken: string | undefined;
+  if (storageProvider === 'vercel-blob') {
+    blobStoreId = env.BLOB_STORE_ID?.trim();
+    if (!blobStoreId || !/^store_[A-Za-z0-9]+$/.test(blobStoreId)) {
+      throw new Error(
+        'BLOB_STORE_ID must be a Vercel Blob store id (store_…) when STORAGE_PROVIDER="vercel-blob".',
+      );
+    }
+    for (const key of S3_STORAGE_KEYS) {
+      if (env[key] !== undefined) {
+        // A Blob profile never talks to S3; a set value means a mixed profile.
+        throw new Error(
+          `${key} must be unset when STORAGE_PROVIDER="vercel-blob".`,
+        );
+      }
+    }
+    blobReadWriteToken = env.BLOB_READ_WRITE_TOKEN?.trim() || undefined;
+    if (
+      blobReadWriteToken !== undefined &&
+      !blobReadWriteToken.startsWith('vercel_blob_rw_')
+    ) {
+      // Never echo the value: it is a credential.
+      throw new Error(
+        'BLOB_READ_WRITE_TOKEN must be a Vercel Blob read-write token.',
+      );
+    }
+    // The SDK takes the store from the token (vercel_blob_rw_<store>_<secret>)
+    // and lets an explicit token win over OIDC, so a token for another store
+    // would write there while StoredObject.bucket records BLOB_STORE_ID.
+    if (
+      blobReadWriteToken !== undefined &&
+      blobReadWriteToken.split('_')[3] !== blobStoreId.slice('store_'.length)
+    ) {
+      throw new Error(
+        'BLOB_READ_WRITE_TOKEN belongs to a different store than BLOB_STORE_ID.',
+      );
+    }
+  }
+
   if (
     nodeEnv === 'production' &&
-    ((env.STORAGE_ACCESS_KEY_ID ?? '').startsWith('change-me') ||
-      (env.STORAGE_SECRET_ACCESS_KEY ?? '').startsWith('change-me') ||
+    ((storageProvider === 's3' &&
+      ((env.STORAGE_ACCESS_KEY_ID ?? '').startsWith('change-me') ||
+        (env.STORAGE_SECRET_ACCESS_KEY ?? '').startsWith('change-me'))) ||
       (queueProvider === 'bullmq' &&
         (env.VALKEY_URL ?? DEFAULTS.VALKEY_URL).includes('dev_password')))
   ) {
@@ -544,9 +609,13 @@ export function validateEnv(
     vercelQueueRetentionSeconds,
     vercelDeploymentId,
     jobLeaseMs,
+    storageProvider,
+    blobStoreId,
+    blobReadWriteToken,
     storageEndpoint: env.STORAGE_ENDPOINT ?? DEFAULTS.STORAGE_ENDPOINT,
     storageRegion: env.STORAGE_REGION ?? DEFAULTS.STORAGE_REGION,
-    storageBucket: env.STORAGE_BUCKET ?? DEFAULTS.STORAGE_BUCKET,
+    // In the Blob profile this records which store holds each StoredObject.
+    storageBucket: blobStoreId ?? env.STORAGE_BUCKET ?? DEFAULTS.STORAGE_BUCKET,
     storageAccessKeyId:
       env.STORAGE_ACCESS_KEY_ID ?? DEFAULTS.STORAGE_ACCESS_KEY_ID,
     storageSecretAccessKey:

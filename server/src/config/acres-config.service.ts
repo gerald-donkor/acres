@@ -158,6 +158,19 @@ export class AcresConfigService {
     return this.get('jobLeaseMs');
   }
 
+  get storageProvider(): AcresEnv['storageProvider'] {
+    return this.get('storageProvider');
+  }
+
+  get blobStoreId(): string | undefined {
+    return this.get('blobStoreId');
+  }
+
+  /** Credential: never log or echo it. */
+  get blobReadWriteToken(): string | undefined {
+    return this.get('blobReadWriteToken');
+  }
+
   get queueDefaultAttempts(): number {
     return this.get('queueDefaultAttempts');
   }
