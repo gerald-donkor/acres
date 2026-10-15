@@ -3,6 +3,7 @@ import { STORED_OBJECT_STATES, UPLOAD_STATES } from '@acres/shared';
 import type { AcresConfigService } from '../config/acres-config.service';
 import type { IdempotencyService } from '../idempotency/idempotency.service';
 import type { OrganizationContext } from '../organizations/organization-context';
+import type { DispatchKickService } from '../outbox/dispatch-kick.service';
 import type { OutboxService } from '../outbox/outbox.service';
 import type {
   TenantTransactionClient,
@@ -42,6 +43,7 @@ describe('UploadsService', () => {
   let fakeTenants: Partial<TenantTransactionService>;
   let fakeIdempotency: Partial<IdempotencyService>;
   let fakeOutbox: Partial<OutboxService>;
+  let fakeDispatchKick: { afterCommit: jest.Mock };
   let fakeStorage: Partial<ObjectStoragePort>;
 
   let mockTx: {
@@ -158,6 +160,10 @@ describe('UploadsService', () => {
       appendUploadCompleted: jest.fn().mockResolvedValue(undefined),
     };
 
+    fakeDispatchKick = {
+      afterCommit: jest.fn(),
+    };
+
     fakeStorage = {
       presignPut: jest.fn().mockResolvedValue({
         url: 'https://storage.acres.local/quarantine/test-key?sig=put',
@@ -181,6 +187,7 @@ describe('UploadsService', () => {
       fakeIdempotency as IdempotencyService,
       fakeOutbox as OutboxService,
       fakeConfig as AcresConfigService,
+      fakeDispatchKick as unknown as DispatchKickService,
       fakeStorage as ObjectStoragePort,
     );
   });
@@ -615,6 +622,32 @@ describe('UploadsService', () => {
         failure: null,
         acceptedAt: null,
       });
+      expect(fakeDispatchKick.afterCommit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call dispatchKick.afterCommit() when the transaction rejects', async () => {
+      mockTx.upload.findFirst
+        .mockResolvedValueOnce(mockReservedUpload)
+        .mockResolvedValueOnce(mockReservedUpload);
+      (fakeStorage.stat as jest.Mock).mockResolvedValue({
+        byteCount: BigInt(fileBytes.length),
+        mediaType: null,
+      });
+      (fakeStorage.getBuffer as jest.Mock).mockResolvedValue(fileBytes);
+      mockTx.upload.updateMany.mockRejectedValueOnce(
+        new Error('database error'),
+      );
+
+      await expect(
+        service.complete(
+          testOrg,
+          'up-1',
+          validIdempotencyKey,
+          validCompleteBody,
+        ),
+      ).rejects.toThrow('database error');
+
+      expect(fakeDispatchKick.afterCommit).not.toHaveBeenCalled();
     });
   });
 

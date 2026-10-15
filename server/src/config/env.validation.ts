@@ -49,6 +49,8 @@ export interface AcresEnv {
   vercelQueueRegion: string;
   vercelQueueRetentionSeconds: number;
   vercelDeploymentId?: string;
+  /** Optional Vercel Cron secret (Authorization: Bearer); ≥32 chars. Never logged. */
+  cronSecret?: string;
   jobLeaseMs: number;
   storageProvider: StorageProvider;
   /** Vercel Blob store id; required when `storageProvider` is `vercel-blob`. */
@@ -249,6 +251,16 @@ function workerMetricsPort(raw: string): number {
   return port;
 }
 
+export function isUsableCronSecret(value: string | undefined): value is string {
+  if (typeof value !== 'string') return false;
+  if (value.trim() !== value) return false;
+  if (value.length < 32) return false;
+  if (value.startsWith('change-me') || value.startsWith('__REQUIRED_')) {
+    return false;
+  }
+  return true;
+}
+
 export function validateEnv(
   raw: Record<string, unknown>,
   worker = false,
@@ -364,6 +376,24 @@ export function validateEnv(
     throw new Error('JOB_LEASE_MS must be between 305000 and 3600000.');
   }
   const vercelDeploymentId = env.VERCEL_DEPLOYMENT_ID?.trim() || undefined;
+  let cronSecret: string | undefined;
+  if (env.CRON_SECRET !== undefined) {
+    if (!isUsableCronSecret(env.CRON_SECRET)) {
+      throw new Error(
+        'CRON_SECRET must be at least 32 characters and not a placeholder.',
+      );
+    }
+    if (
+      (env.SESSION_SECRET !== undefined &&
+        env.CRON_SECRET === env.SESSION_SECRET) ||
+      (env.CSRF_SECRET !== undefined && env.CRON_SECRET === env.CSRF_SECRET)
+    ) {
+      throw new Error(
+        'CRON_SECRET must differ from SESSION_SECRET and CSRF_SECRET.',
+      );
+    }
+    cronSecret = env.CRON_SECRET;
+  }
   if (queueProvider === 'vercel' && env.VALKEY_URL !== undefined) {
     // A Vercel profile never talks to Valkey; a set URL means a mixed profile.
     throw new Error('VALKEY_URL must be unset when QUEUE_PROVIDER="vercel".');
@@ -706,6 +736,7 @@ export function validateEnv(
     vercelQueueRegion,
     vercelQueueRetentionSeconds,
     vercelDeploymentId,
+    cronSecret,
     jobLeaseMs,
     storageProvider,
     blobStoreId,

@@ -13,7 +13,8 @@ Starting source: `a1350d0` on `main`.
 Prompt 370 is approved and still executing. Remaining checklist items may be
 split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
 scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
-outbox, Prompt 375 = queue-retention reconciliation); each
+outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
+managed outbox dispatch); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -1447,3 +1448,67 @@ acceptance, scanner freshness/rebuild cadence, and all launch approvals. Prompt
 370, Phase 12 and the eleven launch categories remain incomplete. No hosted
 resource/environment, route, queue schema/configuration or reference-worker
 lifecycle changed; nothing was deployed or pushed.
+
+## Protected managed outbox dispatch — Prompt 376 (2026-10-15)
+
+Protected managed outbox dispatch is implemented locally, providing both an
+after-commit kick mechanism for low-latency dispatch and a protected Vercel Cron
+endpoint for scheduled sweeps:
+
+1. **`ManagedDispatchRunnerService`:** Unifies queue-retention reconciliation
+   (`JobReconciliationService.reconcileOnce()`) and outbox dispatch
+   (`OutboxDispatcherService.dispatchOnce()`) into a single multi-pass loop:
+   - Maximum 8 passes per invocation (`SWEEP_MAX_PASSES`).
+   - 120-second execution budget (`SWEEP_BUDGET_MS`, injected clock supported).
+   - Loop drains when both reconciliation and dispatch claim fewer rows than
+     the configured batch size (`stoppedBy: 'drained'`).
+2. **`DispatchKickService` and after-commit kicks:**
+   - Injected into `UploadsService`, `IngestionService`, and `ReportsService`.
+   - Fires `afterCommit()` synchronously after successful transaction commits in
+     `complete`, `startRun`, and `createExport`.
+   - Checks `config.queueProvider === 'vercel'` at call time; no-ops under `'bullmq'`.
+   - Single-flight coalescing: concurrent kicks during an active run set `rerunRequested`
+     and attach to the current run, executing at most one trailing pass.
+   - Delegates background execution to `AfterResponseScheduler` (backed by
+     `@vercel/functions` `waitUntil()`), completing the HTTP client response without
+     delaying on outbox dispatch.
+3. **Protected Vercel Cron function endpoint:**
+   - Framework-free handler in `server/src/vercel/dispatch-handler.ts`.
+   - Exported as `GET` in `server/src/vercel/dispatch.function.ts`.
+   - Authorizes requests via `Authorization: Bearer <secret>`.
+   - Evaluates secrets using constant-time comparison (`crypto.timingSafeEqual` over
+     SHA-256 digests) to prevent timing side channels.
+   - Enforces `CRON_SECRET` validation (≥32 chars, untrimmed, distinct from session/csrf secrets).
+   - Status table:
+     - `200`: Success with JSON summary (`{ ok: true, passes, stoppedBy, reconciliation, dispatch }`).
+     - `401`: Missing, malformed, or invalid Authorization header.
+     - `503`: Unconfigured/unusable `CRON_SECRET`, or NestJS runtime resolution failure.
+     - `500`: Sweep execution failure (sanitized; no error text leaked).
+     - `Cache-Control: no-store` on all responses.
+4. **Lean Vercel dispatch module:**
+   - `VercelDispatchModule` imports only `[AcresWorkerConfigModule, PrismaModule, QueueModule, OutboxModule]`.
+   - Creates no BullMQ worker, timers, listeners, or Prometheus metrics registry.
+5. **Real PostgreSQL E2E suite (`server/test/managed-dispatch.e2e-spec.ts`):**
+   - 14 real-database test cases covering all 14 requirements from Prompt 376.
+   - Verifies command → kick → dispatch for upload, ingestion, export.
+   - Verifies failed commands leave no events and do not kick.
+   - Verifies `bullmq` profile disables kicking.
+   - Verifies sweep rearms stale dispatched events and dispatches them in the same pass.
+   - Verifies 60-event backlog drains across two organizations in 3 passes.
+   - Verifies concurrent sweeps + kicks deduplicate and enqueue canonical keys exactly once.
+   - Verifies enqueue failure retries with backoff and advances `nextAttemptAt`.
+   - Verifies Cron HTTP handler authorization and status table.
+
+All verification gates passed under Node 24:
+- `build:server`: passed
+- `test --workspace=@acres/server -- --runInBand`: 139 suites, 2141 tests passed
+- `test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000`: 11 suites, 238 tests passed
+- `contracts:check`: passed
+- `lint`: passed across all workspaces
+- `build`: passed across all workspaces
+- `typecheck`: passed across all workspaces
+- `vercel:probe-test`: 122 tests passed
+- `ops:check`: 182 tests passed
+- `git diff --check`: passed (clean)
+
+No `crons` entry was added to `vercel.json`; no code was deployed or pushed.

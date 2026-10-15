@@ -11,6 +11,10 @@ import {
 import { NestFactory } from '@nestjs/core';
 import { WorkerModule } from '../src/worker/worker.module';
 import { VercelJobsModule } from '../src/vercel/vercel-jobs.module';
+import { VercelDispatchModule } from '../src/vercel/vercel-dispatch.module';
+import { ManagedDispatchRunnerService } from '../src/outbox/managed-dispatch-runner.service';
+import { DispatchKickService } from '../src/outbox/dispatch-kick.service';
+import { MetricsService } from '../src/metrics/metrics.service';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -1187,6 +1191,7 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
     it.each([
       ['self-hosted worker', WorkerModule],
       ['Vercel jobs', VercelJobsModule],
+      ['Vercel dispatch', VercelDispatchModule],
     ])(
       '7G: the %s composition boots as an application context',
       async (_name, rootModule) => {
@@ -1198,9 +1203,18 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
         });
         expect(context.get(OutboxDispatcherService)).toBeDefined();
         expect(context.get(JobReconciliationService)).toBeDefined();
+        if (rootModule === VercelDispatchModule) {
+          expect(context.get(ManagedDispatchRunnerService)).toBeDefined();
+          expect(() => context.get(UploadWorkerService)).toThrow();
+          expect(() => context.get(MetricsService)).toThrow();
+        }
         await context.close();
       },
     );
+
+    it('7H: AppModule boots and resolves DispatchKickService', () => {
+      expect(app.get(DispatchKickService)).toBeDefined();
+    });
   });
 
   // ===========================================================================

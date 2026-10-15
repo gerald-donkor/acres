@@ -16,6 +16,7 @@ import type {
   TenantTransactionService,
 } from '../prisma/tenant-transaction.service';
 import type { OutboxService } from '../outbox/outbox.service';
+import type { DispatchKickService } from '../outbox/dispatch-kick.service';
 import type { CreateDatasetDto } from './dto/create-dataset.dto';
 import type { CreateMappingDto } from './dto/create-mapping.dto';
 import type { StartIngestionRunDto } from './dto/start-ingestion-run.dto';
@@ -112,6 +113,7 @@ describe('IngestionService', () => {
   let mockTenants: Partial<TenantTransactionService>;
   let mockIdempotency: Partial<IdempotencyService>;
   let mockOutbox: Partial<OutboxService>;
+  let mockDispatchKick: { afterCommit: jest.Mock };
 
   let mockTx: {
     dataset: {
@@ -203,10 +205,15 @@ describe('IngestionService', () => {
       appendIngestionRun: jest.fn().mockResolvedValue(undefined),
     };
 
+    mockDispatchKick = {
+      afterCommit: jest.fn(),
+    };
+
     service = new IngestionService(
       mockTenants as TenantTransactionService,
       mockIdempotency as IdempotencyService,
       mockOutbox as OutboxService,
+      mockDispatchKick as unknown as DispatchKickService,
     );
   });
 
@@ -630,6 +637,27 @@ describe('IngestionService', () => {
       expect(result.state).toBe('queued');
       expect(result.stage).toBe('inspect');
       expect(result.failure).toBeNull();
+      expect(mockDispatchKick.afterCommit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call dispatchKick.afterCommit() when the transaction rejects', async () => {
+      mockTx.dataset.findFirst.mockResolvedValue({ id: 'ds-1' });
+      mockTx.upload.findFirst.mockResolvedValue({ state: 'accepted' });
+      mockTx.columnMapping.findFirst.mockResolvedValue({ id: 'map-1' });
+      mockTx.ingestionRun.upsert.mockRejectedValueOnce(
+        new Error('database error'),
+      );
+
+      const body: StartIngestionRunDto = {
+        uploadId: 'up-1',
+        mappingId: 'map-1',
+      };
+
+      await expect(
+        service.startRun(orgContext, 'ds-1', 'idem-fail', body),
+      ).rejects.toThrow('database error');
+
+      expect(mockDispatchKick.afterCommit).not.toHaveBeenCalled();
     });
 
     it('throws notFound if mapping is missing', async () => {

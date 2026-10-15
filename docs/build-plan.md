@@ -3956,3 +3956,23 @@ actual output, the bounded local query plan and limitations are recorded in
 local retention-reconciliation prerequisite. Protected after-commit invocation/
 Cron, Services routing, distributed throttling and deployed preview acceptance
 remain open; no parent phase, Prompt 370 or launch category is approved.
+
+## Phase 12 managed-target prerequisite — Prompt 376
+
+Protected managed outbox dispatch is implemented locally, combining bounded
+queue-retention reconciliation with pending outbox event dispatch in a single
+atomic multi-pass sweep sequence (`ManagedDispatchRunnerService`). Three business
+commands (`UploadsService.complete`, `IngestionService.startRun`,
+`ReportsService.createExport`) trigger asynchronous after-commit kicks
+(`DispatchKickService`) via `@vercel/functions` `waitUntil()`, coalescing concurrent
+kicks into single-flight runs without delaying user HTTP responses. A dedicated
+Vercel Cron function endpoint (`server/src/vercel/dispatch.function.ts`,
+`dispatch-handler.ts`, `dispatch-runtime.ts`, `vercel-dispatch.module.ts`) exposes
+protected `GET` execution authorized via constant-time SHA-256 HMAC-safe comparison
+against `CRON_SECRET` (≥32 chars, validated at boot, unlogged). Real PostgreSQL E2E
+suite verifies upload, ingestion, export kick-and-dispatch flows, 60-event backlog
+drains across two organizations in 3 passes, concurrent deduplication, retry backoff
+on enqueue failure, and stale event rearm-and-dispatch in the same sweep. All gates
+passed under Node 24. Required checks and independent review passed; actual outputs
+and limitations recorded in `docs/vercel-deployment.md`. No `crons` entry added to
+`vercel.json`; no deploy, push, or cloud invocation.

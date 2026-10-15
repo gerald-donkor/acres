@@ -27,7 +27,7 @@ pooled RLS, private-upload, Sandbox scanning and durable-delivery proofs.
 The [migration record](vercel-deployment.md) distinguishes local preparation,
 account facts and hosted acceptance. No diagram below establishes deployment.
 
-## Current job dispatch boundary — Prompts 374–375
+## Current job dispatch boundary — Prompts 374–376
 
 Upload completion, export requests and ingestion runs all persist transactional
 outbox intent. A shared bounded dispatcher claims with per-operation database
@@ -35,21 +35,26 @@ leases, inserts only missing execution-ledger rows, publishes outside SQL and
 fences completion/retry/dead-letter writes. Exhausted final claims are recovered
 atomically with a safe dead letter. Existing execution state/budget is preserved.
 The reference worker calls it from its existing timer; Vercel's job composition
-resolves it without a loop. No automatic managed invocation/Cron exists yet.
-At-least-once duplicate delivery remains possible; the leased executor checks
-terminal ledger state and execution budget before work, and terminal aggregate
-state remains authority. Detailed behavior/proof is in `docs/vercel-deployment.md`.
+resolves it without a loop.
 
-A Vercel-only, database-only `JobReconciliationService.reconcileOnce()` now
+A Vercel-only, database-only `JobReconciliationService.reconcileOnce()`
 recovers stale dispatched intent after retention + execution lease + one minute.
 It locks/rechecks job and aggregate ownership, repairs terminal ledgers first,
 rearms the same intent below both original budgets, or atomically dead-letters
 recovery exhaustion. It neither calls the transport/processor nor changes an
 aggregate, schema, tenant policy or reference-worker lifecycle. Existing errors,
-attempts and immutable results survive. The operation has no automatic caller;
-protected after-commit invocation/Cron and hosted recovery acceptance remain
-open. The Prompt 375 record in `docs/vercel-deployment.md` owns state transitions,
-query-plan limits, actual checks and review.
+attempts and immutable results survive.
+
+Under Prompt 376, `ManagedDispatchRunnerService` unifies reconciliation and
+dispatch into a single bounded multi-pass sweep loop (up to 8 passes, 120s budget,
+stopping when drained). On Vercel, after-commit kicks (`DispatchKickService`) are
+triggered by `UploadsService.complete`, `IngestionService.startRun`, and
+`ReportsService.createExport` without delaying HTTP caller responses via
+`@vercel/functions` `waitUntil()`. Kicks coalesce in-flight executions to avoid
+thundering herds. A dedicated Vercel Cron function (`server/src/vercel/dispatch.function.ts`)
+provides a protected `GET` endpoint authenticated via constant-time SHA-256 HMAC-safe
+comparison against `CRON_SECRET` (≥32 chars, validated at boot, unlogged).
+Detailed behavior/proof is in `docs/vercel-deployment.md`.
 
 ## Current provider boundary — geoBoundaries gbOpen
 

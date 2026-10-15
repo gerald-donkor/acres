@@ -17,6 +17,7 @@ import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { OrganizationContext } from '../organizations/organization-context';
+import { DispatchKickService } from '../outbox/dispatch-kick.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { OBJECT_STORAGE } from '../storage/storage.port';
 import { ReportsRepository } from './reports.repository';
@@ -27,6 +28,7 @@ describe('ReportsService', () => {
   let mockReportsRepo: Partial<ReportsRepository>;
   let mockIdempotency: Partial<IdempotencyService>;
   let mockOutbox: Partial<OutboxService>;
+  let mockDispatchKick: { afterCommit: jest.Mock };
   let mockConfig: Partial<AcresConfigService>;
   let fakeStorage: {
     presignGet: jest.Mock;
@@ -439,12 +441,17 @@ describe('ReportsService', () => {
       deleteObject: jest.fn().mockResolvedValue(undefined),
     };
 
+    mockDispatchKick = {
+      afterCommit: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReportsService,
         { provide: ReportsRepository, useValue: mockReportsRepo },
         { provide: IdempotencyService, useValue: mockIdempotency },
         { provide: OutboxService, useValue: mockOutbox },
+        { provide: DispatchKickService, useValue: mockDispatchKick },
         { provide: AcresConfigService, useValue: mockConfig },
         { provide: OBJECT_STORAGE, useValue: fakeStorage },
       ],
@@ -1595,6 +1602,7 @@ describe('ReportsService', () => {
         exportRequestId: sampleExportRow.id,
       });
 
+      expect(mockDispatchKick.afterCommit).toHaveBeenCalledTimes(1);
       expect(result.id).toBe(sampleExportRow.id);
     });
 
@@ -1651,6 +1659,21 @@ describe('ReportsService', () => {
       ).rejects.toThrow(
         ApiException.notFound('Published report revision not found.'),
       );
+    });
+
+    it('does not call dispatchKick.afterCommit() when the transaction rejects', async () => {
+      (mockReportsRepo.findReport as jest.Mock).mockResolvedValueOnce(
+        samplePublishedReportRow,
+      );
+      mockTx.exportRequest.create.mockRejectedValueOnce(
+        new Error('database error'),
+      );
+
+      await expect(
+        service.createExport(orgContext, exportInput, 'idemp-exp-fail'),
+      ).rejects.toThrow('database error');
+
+      expect(mockDispatchKick.afterCommit).not.toHaveBeenCalled();
     });
   });
 

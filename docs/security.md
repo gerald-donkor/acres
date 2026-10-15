@@ -2058,3 +2058,26 @@ checks, race/rollback evidence and the least-privilege planner-statistics
 limitation are in `docs/vercel-deployment.md`, Prompt 375. This supersedes older
 notes that the local operation is missing; protected invocation/Cron and hosted
 recovery remain open.
+
+### Protected managed outbox dispatch — Prompt 376 (2026-10-15)
+
+The managed dispatch runner (`ManagedDispatchRunnerService`), after-commit kick
+service (`DispatchKickService`), and Vercel Cron handler (`dispatch-handler.ts`)
+establish the protected dispatch boundary for the serverless profile:
+
+- **Authentication and secret hygiene:** The cron HTTP endpoint requires `Authorization: Bearer <secret>`.
+  Authentication uses `timingSafeEqual` over SHA-256 digests of the actual and expected header values,
+  preventing timing side-channel attacks. `CRON_SECRET` must be at least 32 characters, untrimmed,
+  distinct from `SESSION_SECRET` and `CSRF_SECRET`, and never starts with placeholder prefixes (`replace-me`, etc.).
+  The secret value is never logged or echoed in HTTP error bodies; validation failures output sanitized error codes
+  (`unauthorized`, `dispatch_unavailable`, `dispatch_failed`).
+- **Least-privilege runtime:** `VercelDispatchModule` imports only `[AcresWorkerConfigModule, PrismaModule, QueueModule, OutboxModule]`.
+  It does not mount application routes, BullMQ workers, recurring timers, or Prometheus metrics registries.
+  All database operations run under forced RLS in worker context (`acres.worker_access = 'true'`).
+- **Denial of service and storm prevention:** After-commit kicks coalesce concurrent calls into single-flight runs
+  with a one-run re-trigger latch (`rerunRequested`), eliminating thundering herd issues under high traffic.
+  The sweep loop enforces strict bounds: at most 8 passes per invocation and a 120-second wall-clock budget.
+  Kicks use `@vercel/functions` `waitUntil()` to extend serverless function execution without delaying HTTP client responses.
+- **Fail-safe isolation:** A failed command (validation error, conflict, or rollback) never triggers a kick or creates
+  an outbox event. Transport publish failures during sweep increment attempt counters and apply exponential backoff
+  without throwing or crashing the sweep loop.

@@ -15,6 +15,7 @@ import { ApiException } from '../common/api-exception';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { OrganizationContext } from '../organizations/organization-context';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
+import { DispatchKickService } from '../outbox/dispatch-kick.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type { CreateDatasetDto } from './dto/create-dataset.dto';
 import type { CreateMappingDto } from './dto/create-mapping.dto';
@@ -35,6 +36,7 @@ export class IngestionService {
     private readonly tenants: TenantTransactionService,
     private readonly idempotency: IdempotencyService,
     private readonly outbox: OutboxService,
+    private readonly dispatchKick: DispatchKickService,
   ) {}
 
   async listDatasets(
@@ -226,7 +228,7 @@ export class IngestionService {
     idempotencyKey: string | undefined,
     body: StartIngestionRunDto,
   ): Promise<IngestionRunSummary> {
-    return this.tenants.organizationScoped(
+    const result = await this.tenants.organizationScoped(
       organization.accountId,
       organization.organizationId,
       (tx) =>
@@ -290,6 +292,8 @@ export class IngestionService {
           },
         ),
     );
+    this.dispatchKick.afterCommit();
+    return result;
   }
 
   async getRun(

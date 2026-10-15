@@ -1,5 +1,5 @@
 import { NODE_ENVS } from '@acres/shared';
-import { validateEnv } from './env.validation';
+import { isUsableCronSecret, validateEnv } from './env.validation';
 
 describe('validateEnv', () => {
   const BASE_VALID_ENV = {
@@ -941,5 +941,142 @@ describe('Resend environment', () => {
       validateEnv({ ...env, MAIL_TRANSPORT: 'memory', RESEND_API_KEY: '' })
         .mailTransport,
     ).toBe('memory');
+  });
+});
+
+describe('CRON_SECRET and isUsableCronSecret validation', () => {
+  const BASE_ENV = {
+    DATABASE_URL: 'postgresql://acres:acres@localhost:5432/acres?schema=public',
+    CLIENT_ORIGIN: 'http://localhost:3000',
+    SESSION_SECRET: 'test-session-secret-that-is-at-least-32-chars',
+    CSRF_SECRET: 'test-csrf-secret-that-is-at-least-32-chars',
+    INVITATION_TTL_HOURS: '24',
+    ACCOUNT_TOKEN_TTL_MINUTES: '30',
+  };
+
+  describe('isUsableCronSecret', () => {
+    it('returns false for undefined, empty string, and whitespace', () => {
+      expect(isUsableCronSecret(undefined)).toBe(false);
+      expect(isUsableCronSecret('')).toBe(false);
+      expect(isUsableCronSecret('   ')).toBe(false);
+    });
+
+    it('returns false for secrets shorter than 32 characters', () => {
+      expect(isUsableCronSecret('a'.repeat(31))).toBe(false);
+    });
+
+    it('returns true for exact untrimmed secrets of 32 or more characters', () => {
+      expect(isUsableCronSecret('a'.repeat(32))).toBe(true);
+      expect(isUsableCronSecret('a'.repeat(64))).toBe(true);
+    });
+
+    it('returns false for leading or trailing whitespace', () => {
+      expect(isUsableCronSecret(` ${'a'.repeat(32)}`)).toBe(false);
+      expect(isUsableCronSecret(`${'a'.repeat(32)} `)).toBe(false);
+      expect(isUsableCronSecret(`\n${'a'.repeat(32)}`)).toBe(false);
+    });
+
+    it('returns false for placeholder prefixes', () => {
+      expect(isUsableCronSecret(`change-me-${'a'.repeat(30)}`)).toBe(false);
+      expect(isUsableCronSecret(`__REQUIRED_${'a'.repeat(30)}`)).toBe(false);
+    });
+  });
+
+  describe('validateEnv CRON_SECRET handling', () => {
+    it('accepts unset CRON_SECRET in every profile', () => {
+      const config = validateEnv(BASE_ENV);
+      expect(config.cronSecret).toBeUndefined();
+    });
+
+    it('accepts valid CRON_SECRET of 32 or more characters', () => {
+      const validSecret = 'valid-cron-secret-32-characters-long!';
+      const config = validateEnv({
+        ...BASE_ENV,
+        CRON_SECRET: validSecret,
+      });
+      expect(config.cronSecret).toBe(validSecret);
+    });
+
+    it('rejects CRON_SECRET shorter than 32 characters and does not echo value in error', () => {
+      const shortSecret = 'too-short-secret-31-chars-long!';
+      expect(shortSecret.length).toBe(31);
+      let thrownError: Error | undefined;
+      try {
+        validateEnv({
+          ...BASE_ENV,
+          CRON_SECRET: shortSecret,
+        });
+      } catch (err) {
+        thrownError = err as Error;
+      }
+      expect(thrownError).toBeDefined();
+      expect(thrownError!.message).toBe(
+        'CRON_SECRET must be at least 32 characters and not a placeholder.',
+      );
+      expect(thrownError!.message).not.toContain(shortSecret);
+    });
+
+    it('rejects CRON_SECRET with leading or trailing whitespace', () => {
+      const valid = 'valid-cron-secret-32-characters-long!';
+      expect(() =>
+        validateEnv({
+          ...BASE_ENV,
+          CRON_SECRET: ` ${valid}`,
+        }),
+      ).toThrow(
+        'CRON_SECRET must be at least 32 characters and not a placeholder.',
+      );
+      expect(() =>
+        validateEnv({
+          ...BASE_ENV,
+          CRON_SECRET: `${valid} `,
+        }),
+      ).toThrow(
+        'CRON_SECRET must be at least 32 characters and not a placeholder.',
+      );
+    });
+
+    it('rejects placeholder prefixes and does not echo value in error', () => {
+      const p1 = `change-me-${'a'.repeat(30)}`;
+      const p2 = `__REQUIRED_${'a'.repeat(30)}`;
+      for (const placeholder of [p1, p2]) {
+        let thrownError: Error | undefined;
+        try {
+          validateEnv({
+            ...BASE_ENV,
+            CRON_SECRET: placeholder,
+          });
+        } catch (err) {
+          thrownError = err as Error;
+        }
+        expect(thrownError).toBeDefined();
+        expect(thrownError!.message).toBe(
+          'CRON_SECRET must be at least 32 characters and not a placeholder.',
+        );
+        expect(thrownError!.message).not.toContain(placeholder);
+      }
+    });
+
+    it('rejects CRON_SECRET equal to SESSION_SECRET or CSRF_SECRET and does not echo value in error', () => {
+      for (const secretToDuplicate of [
+        BASE_ENV.SESSION_SECRET,
+        BASE_ENV.CSRF_SECRET,
+      ]) {
+        let thrownError: Error | undefined;
+        try {
+          validateEnv({
+            ...BASE_ENV,
+            CRON_SECRET: secretToDuplicate,
+          });
+        } catch (err) {
+          thrownError = err as Error;
+        }
+        expect(thrownError).toBeDefined();
+        expect(thrownError!.message).toBe(
+          'CRON_SECRET must differ from SESSION_SECRET and CSRF_SECRET.',
+        );
+        expect(thrownError!.message).not.toContain(secretToDuplicate);
+      }
+    });
   });
 });

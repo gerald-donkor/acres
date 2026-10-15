@@ -3322,3 +3322,29 @@ independent review, state table and reproduction/rollback are recorded in
 [vercel-deployment.md, Prompt 375](vercel-deployment.md#queue-retention-job-reconciliation--prompt-375-2026-10-15).
 This supersedes Prompt 374's missing-local-retention-operation note; protected
 automatic invocation/Cron and hosted application acceptance remain follow-on work.
+
+## Prompt 376 — protected managed outbox dispatch
+
+`OutboxModule` exports `ManagedDispatchRunnerService` and `DispatchKickService`,
+along with `AFTER_RESPONSE_SCHEDULER`.
+
+`ManagedDispatchRunnerService.sweep()` unifies queue-retention reconciliation and
+outbox event dispatch:
+- Pass loop: bounded by `SWEEP_MAX_PASSES = 8` and `SWEEP_BUDGET_MS = 120_000` (injected clock supported).
+- Multi-pass reconciliation: runs pass 0 and continues whenever the previous pass found a full batch (`examined === batchSize`).
+- Multi-pass dispatch: calls `OutboxDispatcherService.dispatchOnce()` each pass.
+- Loop termination: stops when both reconciliation and dispatch claim fewer rows than `batchSize` (`stoppedBy: 'drained'`), or upon reaching pass cap or wall-clock budget.
+
+`DispatchKickService` manages after-commit background execution:
+- Invoked via `afterCommit()` in `UploadsService.complete`, `IngestionService.startRun`, and `ReportsService.createExport`.
+- Early exit: returns immediately when `queueProvider !== 'vercel'` (the BullMQ worker timer dispatches in self-hosted mode).
+- Single-flight coalescing: concurrent kicks while a sweep is running set `rerunRequested = true` and attach to the in-flight chain. At most one trailing run executes.
+- Background execution: passes the chain promise to `AfterResponseScheduler` (implemented with `@vercel/functions` `waitUntil()`), allowing HTTP responses to complete without waiting for dispatch.
+- Exception handling: dispatcher failures log a fixed sanitized warning message without crashing callers or leaking error details.
+
+Vercel Cron endpoint:
+- Lean composition: `VercelDispatchModule` imports only config, Prisma, Queue, and Outbox modules (no BullMQ worker, timers, or metrics).
+- Entrypoint: `server/src/vercel/dispatch.function.ts` exports only `GET`.
+- Authorization: timing-safe constant-time comparison against `CRON_SECRET` via SHA-256 digests.
+- Status table: 200 (success with JSON summary), 401 (unauthorized), 503 (unusable secret or runtime resolution error), 500 (sweep execution failure).
+- Real PostgreSQL E2E suite (`server/test/managed-dispatch.e2e-spec.ts`, 14 tests) covers command-kick-dispatch flows, 60-event backlog drainage across two organizations, concurrent deduplication, and retry backoff.

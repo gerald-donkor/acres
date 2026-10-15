@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { ApiException } from '../common/api-exception';
 import { AcresConfigService } from '../config/acres-config.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
+import { DispatchKickService } from '../outbox/dispatch-kick.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import {
@@ -32,6 +33,7 @@ export class UploadsService {
     private readonly idempotency: IdempotencyService,
     private readonly outbox: OutboxService,
     private readonly config: AcresConfigService,
+    private readonly dispatchKick: DispatchKickService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
 
@@ -173,7 +175,7 @@ export class UploadsService {
       ]);
     }
 
-    return this.tenants.organizationScoped(
+    const result = await this.tenants.organizationScoped(
       organization.accountId,
       organization.organizationId,
       (tx) =>
@@ -253,6 +255,8 @@ export class UploadsService {
           },
         ),
     );
+    this.dispatchKick.afterCommit();
+    return result;
   }
 
   async get(

@@ -154,6 +154,10 @@ export class AcresConfigService {
     return this.get('vercelDeploymentId');
   }
 
+  get cronSecret(): string | undefined {
+    return this.get('cronSecret');
+  }
+
   get jobLeaseMs(): number {
     return this.get('jobLeaseMs');
   }

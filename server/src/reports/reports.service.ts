@@ -15,6 +15,7 @@ import { AcresConfigService } from '../config/acres-config.service';
 import { CURRENT_DASHBOARD_VIEW_SCHEMA_VERSION } from '../dashboards/dashboards.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import type { OrganizationContext } from '../organizations/organization-context';
+import { DispatchKickService } from '../outbox/dispatch-kick.service';
 import { OutboxService } from '../outbox/outbox.service';
 import {
   OBJECT_STORAGE,
@@ -64,6 +65,7 @@ export class ReportsService {
     private readonly idempotency: IdempotencyService,
     private readonly outbox: OutboxService,
     private readonly config: AcresConfigService,
+    private readonly dispatchKick: DispatchKickService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStoragePort,
   ) {}
 
@@ -539,54 +541,59 @@ export class ReportsService {
         'reportId or revisionId is required.',
       ]);
     }
-    return this.reports.organizationScoped(organization, (tx) =>
-      this.idempotency.run(
-        tx,
-        {
-          key: idempotencyKey,
-          accountId: organization.accountId,
-          organizationId: organization.organizationId,
-          operation: 'exports.create',
-          requestBody: input,
-          responseStatus: 201,
-        },
-        async () => {
-          const target = await this.resolveExportTarget(
-            tx,
-            organization,
-            input,
-          );
-          const deterministicKey = `export:${target.revisionId}:${input.format}:${randomUUID()}`;
-          const row = await tx.exportRequest.create({
-            data: {
-              organizationId: organization.organizationId,
-              requestedByAccountId: organization.accountId,
-              reportId: target.reportId,
-              revisionId: target.revisionId,
-              format: input.format,
-              deterministicKey,
-              renderingVersion: RENDERING_VERSION,
-            },
-            include: { artifact: true },
-          });
-          await tx.auditEvent.create({
-            data: {
-              organizationId: organization.organizationId,
-              actorAccountId: organization.accountId,
-              action: 'export_requested',
-              targetType: 'ExportRequest',
-              targetId: row.id,
-              details: { format: input.format, reportId: target.reportId },
-            },
-          });
-          await this.outbox.appendExportRequested(tx, {
+    return this.reports
+      .organizationScoped(organization, (tx) =>
+        this.idempotency.run(
+          tx,
+          {
+            key: idempotencyKey,
+            accountId: organization.accountId,
             organizationId: organization.organizationId,
-            exportRequestId: row.id,
-          });
-          return toExport(row);
-        },
-      ),
-    );
+            operation: 'exports.create',
+            requestBody: input,
+            responseStatus: 201,
+          },
+          async () => {
+            const target = await this.resolveExportTarget(
+              tx,
+              organization,
+              input,
+            );
+            const deterministicKey = `export:${target.revisionId}:${input.format}:${randomUUID()}`;
+            const row = await tx.exportRequest.create({
+              data: {
+                organizationId: organization.organizationId,
+                requestedByAccountId: organization.accountId,
+                reportId: target.reportId,
+                revisionId: target.revisionId,
+                format: input.format,
+                deterministicKey,
+                renderingVersion: RENDERING_VERSION,
+              },
+              include: { artifact: true },
+            });
+            await tx.auditEvent.create({
+              data: {
+                organizationId: organization.organizationId,
+                actorAccountId: organization.accountId,
+                action: 'export_requested',
+                targetType: 'ExportRequest',
+                targetId: row.id,
+                details: { format: input.format, reportId: target.reportId },
+              },
+            });
+            await this.outbox.appendExportRequested(tx, {
+              organizationId: organization.organizationId,
+              exportRequestId: row.id,
+            });
+            return toExport(row);
+          },
+        ),
+      )
+      .then((result) => {
+        this.dispatchKick.afterCommit();
+        return result;
+      });
   }
 
   async downloadExport(organization: OrganizationContext, exportId: string) {
