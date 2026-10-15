@@ -415,6 +415,10 @@ model DurableJob {
   lastErrorMessage String?
   startedAt      DateTime?
   finishedAt     DateTime?
+  /// Execution lease for at-least-once transports (prompt 370). One live
+  /// executor per deterministic key; an expired lease marks a lost executor.
+  leaseOwner     String?
+  leaseUntil     DateTime?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)

@@ -52,11 +52,13 @@ scripts/vercel/neon-verify.sh               # harden + RLS/pooling evidence
 **Remaining work, in order** (each ends verified, reviewed, recorded here and
 committed per AGENTS.md §2):
 
-- [ ] **Queues consumer** — wire `@vercel/queue` behind the existing queue
-      port around `server/src/worker/job-processor.service.ts`: same-project
-      producer/consumer, forged-callback denial, duplicate/retry/interruption
-      idempotency, preview isolation. Load the `vercel:queues`,
-      `vercel:vercel-functions`, `nestjs-best-practices` skills first.
+- [x] **Queues consumer** — platform seams proven on previews and the
+      consumer/adapter/lease implemented locally (see "Queues — 2026-10-15"
+      below). Still open, owned by later items: a Vercel outbox dispatcher
+      (after-commit kick plus Cron reconciliation sweeper) that also carries
+      `ingestion.run`, wiring `server/src/vercel/jobs.function.ts` into the
+      real Services config with no `maxDeliveries` and pinned regions, and an
+      application-level hosted job proof on the first preview deployment.
 - [ ] **Blob browser upload** — scoped client tokens, direct upload above the
       function body limit, callback provenance, tenant authorization,
       cancel/delete, download revocation (`vercel:vercel-storage`).
@@ -173,6 +175,136 @@ the `NEON_OWNER_*` variables; move migration execution to a guarded,
 non-runtime step; decide whether to retire the `acres_test` placeholder from
 hosted migrations.
 
+### Queues — 2026-10-15
+
+**Probe.** [`infra/vercel/probes/queues/`](../infra/vercel/probes/queues/README.md)
+deployed two services sharing root `svc/`: a `producer` (plain Node, exposed
+only by a `/probe/(.*)` rewrite) and a `jobs` consumer (plain Node, a
+`queue/v2beta` trigger, no rewrite), with `@vercel/queue` **0.7.0** (the 0.8.0
+release was 10 days old; 0.7.0 is 20). Consumer group observed:
+`jobs_7Ejobs_Dmjs`. Results from runtime logs, preview A
+`dpl_2tbYQqPYyT8UrMYb8XgVrWk3TXEF` and preview B
+`dpl_9PEvqYt4fSSNC3jS1ED7RswcEjUn`:
+
+| case                    | observed                                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| delivery                | `ok` delivered once (deliveryCount 1) and acknowledged                                                                   |
+| thrown error            | `fail-once` delivery 1 threw; delivery 2 about 6 s later acknowledged (`retryAfterSeconds: 5`)                           |
+| lost instance           | `crash-once` ran delivery 1 twice in one request ID (platform re-invocation), then delivery 2 at +5 min 5 s acknowledged |
+| poison                  | `always-fail` deliveries 1–3, then the retry callback acknowledged; no 4th delivery                                      |
+| duplicate publish       | 3 sends with one `idempotencyKey` returned 3 message IDs; exactly one delivery                                           |
+| forged POST             | `/jobs.mjs`, `/jobs`, `/api/jobs`, `/api/queues/jobs`, `/` with CloudEvent headers: all **404**                          |
+| preview isolation       | B's message delivered only to B; A's only to A; every delivery's `deploymentId` matched its publisher                    |
+| unauthenticated publish | **404** on both previews and production (secret header required)                                                         |
+
+Findings that bind the real configuration: a plain Node service **can** host a
+trigger and two services **can** share a root; the platform lease after a
+hard crash is about 300 s regardless of the SDK's 30 s
+`visibilityTimeoutSeconds`; the producer function ran in **`cpt1`** although
+the project default is `iad1`, so the real config must pin regions
+explicitly; `handleCallback` trusts the pushed payload with only a receipt
+handle (it does not re-fetch the message), so the air-gapped trigger route is
+the access control and the application must still treat payloads as hints.
+
+**Incident, contained.** The project's first deployment
+(`dpl_J1QEvvPsKY1NFsjmkqoS89upDa6K`) became **production** despite
+`--target=preview`, and its public alias `acres-phi.vercel.app` exposed an
+unauthenticated synthetic publish endpoint (HTTP 200; Vercel Authentication
+does not cover that alias). Production held no environment variables. At the
+user's choice, production was redeployed with a fail-closed secret-header
+gate (`dpl_9v14VuLCzNdSxtNAQN56FJXBSdqQ`; unauthenticated publish now 404).
+`ACRES_QUEUE_PROBE_SECRET` is a **sensitive** project variable (production,
+preview) and its value lives only in
+`~/.config/acres/vercel-preview/queue-probe.env`. The first deployment's own
+URL stays behind Vercel Authentication (302). `vercel curl` created the
+project's Protection Bypass for Automation secret; it is needed for preview
+acceptance and can be revoked in Deployment Protection settings. One
+synthetic message was published through the open alias before containment.
+
+**Implementation.** `QUEUE_PROVIDER=bullmq|vercel` (default `bullmq`; a
+Vercel profile rejects a set `VALKEY_URL`, and the self-hosted `worker.ts`
+refuses to start unless the provider is `bullmq`), with `VERCEL_QUEUE_TOPIC`
+(`acres-jobs`), `VERCEL_QUEUE_REGION` (`iad1`),
+`VERCEL_QUEUE_RETENTION_SECONDS` (86400) and `JOB_LEASE_MS` (default 330000,
+minimum 305000: leases are not renewed, so one must outlive a whole 300 s
+invocation and the observed ~300 s crash redelivery). `VercelQueueAdapter`
+publishes the strict `{ v: 1, jobName, id, outboxEventId? }` message with the
+deterministic key as `idempotencyKey` (the BullMQ `jobId` semantics) and caps
+any delay a minute short of retention.
+
+`server/src/vercel/jobs.function.ts` is the consumer entry. It boots a cached
+Nest application context of `VercelJobsModule` (worker config, no BullMQ
+loop, timers, `listen()` or `MetricsModule`) with `abortOnError: false`, so a
+failed boot rejects and the next delivery retries it instead of aborting the
+instance. `LeasedJobExecutorService` resolves tenant ownership from
+PostgreSQL and claims a `DurableJob` execution lease. Migration
+`20261015000000_durable_job_execution_lease` adds nullable `leaseOwner` and
+`leaseUntil` plus a pair CHECK; its `GRANT` only restates the original
+`SELECT, INSERT, UPDATE`. The lease expiry is computed with the database
+clock. A finished ingestion run or export is never re-run: its ledger row is
+synchronised and the delivery acknowledged. Under a lease, an upload left
+`scanning` by a lost executor is rescanned; without a lease it is left alone.
+
+Retry and acknowledgement rules:
+
+| condition                                                 | consumer action                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| malformed message                                         | acknowledge (payload not logged)                             |
+| another executor holds the lease                          | retry after the remaining lease (5–900 s); never acknowledge |
+| aggregate not visible (publish before commit)             | retry 5 s doubling to 60 s; acknowledge after 5 deliveries   |
+| `DurableJob.attempts >= maxAttempts`, dead letter written | acknowledge                                                  |
+| any other failure, including ledger write failures        | exponential retry from `QUEUE_BACKOFF_MS`, capped at 900 s   |
+
+Attempts are counted in `DurableJob` when work actually starts, never from
+the provider's delivery count, so busy-lease redeliveries spend no budget. The
+trigger's `maxDeliveries` must stay unset, or the platform could drop a message
+the ledger has not recorded.
+
+**Review fixes and found defects.** The real-database lease tests found that a
+duplicate delivery for an accepted, rejected or cancelled upload reset its
+`DurableJob` from terminal back to `running`; the processor now returns before
+touching the ledger. The independent review found five more problems, all
+fixed: unrecorded failures were acknowledged at the budget; busy retries spent
+the budget; the executor reopened finished ingestion and export jobs; Nest
+aborted the instance on a boot error; and `MetricsModule` started collectors in
+a function. A new boot test then found a defect that predates this work:
+**both** the self-hosted `WorkerModule` and the jobs module failed DI at boot,
+because guarded feature controllers need the global `SessionsModule`. The
+compiled `dist/worker.js` reproduced it:
+
+```text
+Nest can't resolve dependencies of the SessionGuard (?, AcresConfigService) … in the AnalyticsModule module
+```
+
+Both compositions now import `SessionsModule`, and test 7G boots each as an
+application context. The guard has been on those controllers since
+`deb53f8`, so self-hosted worker boots since then are unverified.
+
+**Open, and owned by later items:**
+
+- No outbox dispatcher runs on Vercel yet; the BullMQ worker's timer is the
+  only one.
+- `ingestion.run` is still published inside its SQL transaction, before
+  commit. That holds a transaction across a remote publish. The bounded
+  not-visible retry covers the commit race, but the fix is to route the job
+  through the outbox with the dispatcher.
+- No reconciliation sweeper exists yet. It needs to find expired-lease and
+  stale `queued`/`running` jobs, including messages that outlive their
+  retention. Until it exists, a failure before any attempt is counted retries
+  every ≤900 s and, after an outage longer than retention (24 h default),
+  expires with no dead letter; the row stays `queued`/`running`. Raise
+  `VERCEL_QUEUE_RETENTION_SECONDS` for production and alert on rows stuck past
+  retention.
+- A key re-dispatched after it was dead-lettered exhausts on its first
+  failure (attempts are not reset); decide this when the dispatcher lands.
+- `jobs.function.ts` is not in any deployment config, and no application job
+  has run on a hosted preview.
+- Pre-existing behaviour kept: the upload processor writes a dead letter on
+  every failed attempt, and a crash between an upload's terminal state and its
+  ledger update leaves the row `running`.
+- Unobserved: the SDK's consumer-discovery error paths, and behaviour across a
+  promotion while messages are in flight.
+
 ## Target and gates
 
 Vercel Services is the candidate single-project arrangement, documented in Beta
@@ -185,7 +317,7 @@ require a preview proof before active configuration is added.
 | Database          | Migrated isolated Neon/PostGIS; runtime cannot bypass forced RLS; pooled context reuse, concurrent transactions and rollback | Proven for preview at the database seam (2026-10-15); application-level pooled Prisma acceptance open |
 | Blob              | Private direct browser upload above function body limit; scoped token, authorized private read, checksum, cancel/delete      | Server SDK proof passed (2026-10-15); browser direct upload, scoped tokens and cancel still open      |
 | Scanner           | Pinned Sandbox scanner/signatures; clean/EICAR, missing/stale signatures, timeout/memory/byte limits and cleanup             | Blocked: account/plan and pinned scanner source/signatures absent                                     |
-| Durable execution | Same-project producer/consumer, forged request denial, duplicate/retry/interruption and preview isolation                    | Blocked: selected project/layout and live access absent                                               |
+| Durable execution | Same-project producer/consumer, forged request denial, duplicate/retry/interruption and preview isolation                    | Platform seams proven with a synthetic probe (2026-10-15); application job on a hosted preview open   |
 | Production        | Account-bound recovery, capacity, telemetry, security and eleven signed launch categories                                    | Open; no categories approved by local implementation                                                  |
 
 ## Implementation record

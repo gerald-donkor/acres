@@ -1,0 +1,31 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "producer": {
+      "root": "svc/",
+      "runtime": "node",
+      "entrypoint": "producer.mjs"
+    },
+    "jobs": {
+      "root": "svc/",
+      "runtime": "node",
+      "entrypoint": "jobs.mjs",
+      "functions": {
+        "jobs.mjs": {
+          "maxDuration": 60,
+          "experimentalTriggers": [
+            {
+              "type": "queue/v2beta",
+              "topic": "acres-probe-jobs",
+              "retryAfterSeconds": 5,
+              "maxDeliveries": 4
+            }
+          ]
+        }
+      }
+    }
+  },
+  "rewrites": [
+    { "source": "/probe/(.*)", "destination": { "service": "producer" } }
+  ]
+}

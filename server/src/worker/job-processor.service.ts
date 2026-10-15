@@ -33,6 +33,22 @@ type RejectedScanMessage = typeof REJECTED_SCAN_MESSAGE;
 
 type RejectedScanCode = ScanErrorCode | ScanFailureStatus;
 
+export interface JobProcessOptions {
+  /**
+   * Set only by a caller holding the job's execution lease (`JobLeaseService`).
+   * A `scanning` upload then means the previous executor was lost mid-scan, so
+   * the scan is safely repeated instead of leaving the upload stuck.
+   */
+  readonly resumeInterrupted?: boolean;
+}
+
+function isProcessable(state: string, options: JobProcessOptions): boolean {
+  return (
+    state === 'completed' ||
+    (options.resumeInterrupted === true && state === 'scanning')
+  );
+}
+
 /** Request-independent processing. No listeners, timers or process bootstrap. */
 @Injectable()
 export class JobProcessorService {
@@ -47,7 +63,10 @@ export class JobProcessorService {
     private readonly reports: ReportsService,
   ) {}
 
-  async process(data: UploadJobData): Promise<void> {
+  async process(
+    data: UploadJobData,
+    options: JobProcessOptions = {},
+  ): Promise<void> {
     if (data.ingestionRunId !== undefined) {
       await this.ingestionProcessor.processRun(data.ingestionRunId);
       return;
@@ -64,6 +83,10 @@ export class JobProcessorService {
       });
     });
     if (upload === null || upload.organizationId === null) return;
+    // A duplicate delivery for a terminal upload must not touch the ledger
+    // (it would flip a finished DurableJob back to running). The scanning
+    // transaction below re-checks state for races.
+    if (!isProcessable(upload.state, options)) return;
     const deterministicKey = `upload.completed:${upload.id}`;
     const durableJob = await this.tenants.workerScoped((tx) =>
       tx.durableJob.upsert({
@@ -95,7 +118,8 @@ export class JobProcessorService {
           const fresh = await tx.upload.findFirst({
             where: { id: upload.id, organizationId: upload.organizationId },
           });
-          if (fresh === null || fresh.state !== 'completed') return false;
+          if (fresh === null || !isProcessable(fresh.state, options))
+            return false;
           await tx.upload.update({
             where: { id: upload.id },
             data: {

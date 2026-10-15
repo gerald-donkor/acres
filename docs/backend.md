@@ -2549,6 +2549,19 @@ Dedicated isolated unit testing in `server/src/uploads/uploads.service.spec.ts` 
 tenant-scoped and idempotent operations, storage stat and SHA-256 buffer checksum validation, state machine progression and conflict guards, cancellation handling,
 and GET presigning for accepted objects.
 
+**Worker composition and queue selection (prompt 370, 2026-10-15).**
+`WorkerModule` failed dependency resolution at boot (`Nest can't resolve
+dependencies of the SessionGuard … in the AnalyticsModule module`), because
+guarded feature controllers need the global `SessionsModule`, which only
+`AppModule` imported. `WorkerModule` now imports it, and test 7G in
+`server/test/infrastructure-failure.e2e-spec.ts` boots the worker as an
+application context. `QueueModule` selects `BullmqQueueAdapter` (default) or
+`VercelQueueAdapter` from `QUEUE_PROVIDER`, and `worker.ts` refuses to run
+unless the provider is `bullmq`. Duplicate deliveries for terminal uploads no
+longer reset their `DurableJob` to `running`. The managed-profile consumer,
+the `DurableJob` execution lease and their evidence are recorded in
+[`docs/vercel-deployment.md`](vercel-deployment.md).
+
 ## 15. Phase 7A geography and ingestion foundation
 
 Implemented from `prompts/28-geography-ingestion-foundation.md`; the detailed

@@ -7,6 +7,9 @@ application as if it were invocation-safe.
 
 ## Platform probes
 
+The Queues layout/delivery probe is a separately deployed synthetic project
+root: see [probes/queues](probes/queues/README.md).
+
 Run `npm run vercel:probe -- --help` without credentials. The SDKs are development-only dependencies; these probes are not bundled into serving code. Local behavior tests:
 `npm run vercel:probe-test`. These tests use doubles and approve no hosted gate.
 

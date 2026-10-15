@@ -1,0 +1,7 @@
+{
+  "name": "acres-queue-probe",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.x" },
+  "dependencies": { "@vercel/queue": "0.7.0" }
+}

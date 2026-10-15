@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SessionsModule } from '../sessions/sessions.module';
 import { AcresWorkerConfigModule } from '../config/config.module';
 import { IngestionModule } from '../ingestion/ingestion.module';
 import { MetricsModule } from '../metrics/metrics.module';
@@ -22,6 +23,10 @@ import { UploadWorkerService } from './upload-worker.service';
     IngestionModule,
     ReportsModule,
     MetricsModule,
+    // Feature modules declare controllers guarded by SessionGuard; Nest resolves
+    // those enhancers even in an application context, so the (global) sessions
+    // providers must be present. No route is ever served here.
+    SessionsModule,
   ],
   providers: [JobProcessorService, UploadWorkerService],
 })

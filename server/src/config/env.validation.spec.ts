@@ -569,6 +569,73 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('queue provider selection', () => {
+    it('defaults to the self-hosted BullMQ provider', () => {
+      const config = validateEnv(BASE_VALID_ENV);
+      expect(config.queueProvider).toBe('bullmq');
+      expect(config.vercelQueueTopic).toBe('acres-jobs');
+      expect(config.vercelQueueRegion).toBe('iad1');
+      expect(config.vercelQueueRetentionSeconds).toBe(86400);
+      expect(config.jobLeaseMs).toBe(330000);
+      expect(config.vercelDeploymentId).toBeUndefined();
+    });
+
+    it('selects Vercel Queues without any Valkey configuration', () => {
+      const withoutValkey: Record<string, string | undefined> = {
+        ...BASE_VALID_ENV,
+      };
+      delete withoutValkey.VALKEY_URL;
+      const config = validateEnv({
+        ...withoutValkey,
+        QUEUE_PROVIDER: 'vercel',
+        VERCEL_DEPLOYMENT_ID: ' dpl_abc ',
+      });
+      expect(config.queueProvider).toBe('vercel');
+      expect(config.vercelDeploymentId).toBe('dpl_abc');
+    });
+
+    it('rejects a mixed Vercel profile that still names Valkey', () => {
+      expect(() =>
+        validateEnv({
+          ...BASE_VALID_ENV,
+          QUEUE_PROVIDER: 'vercel',
+          VALKEY_URL: 'redis://valkey:6379/0',
+        }),
+      ).toThrow('VALKEY_URL must be unset when QUEUE_PROVIDER="vercel".');
+    });
+
+    it.each([
+      [
+        { QUEUE_PROVIDER: 'sqs' },
+        'QUEUE_PROVIDER must be "bullmq" or "vercel", received "sqs"',
+      ],
+      [
+        { VERCEL_QUEUE_TOPIC: 'Acres_Jobs' },
+        'VERCEL_QUEUE_TOPIC must be 1-63 lowercase letters, digits or hyphens.',
+      ],
+      [
+        { VERCEL_QUEUE_REGION: 'us-east-1' },
+        'VERCEL_QUEUE_REGION must be a Vercel region such as iad1.',
+      ],
+      [
+        { VERCEL_QUEUE_RETENTION_SECONDS: '59' },
+        'VERCEL_QUEUE_RETENTION_SECONDS must be between 60 and 604800.',
+      ],
+      [
+        { VERCEL_QUEUE_RETENTION_SECONDS: '604801' },
+        'VERCEL_QUEUE_RETENTION_SECONDS must be between 60 and 604800.',
+      ],
+      [
+        { JOB_LEASE_MS: '304999' },
+        'JOB_LEASE_MS must be between 305000 and 3600000.',
+      ],
+    ])('rejects %o', (overrides, message) => {
+      expect(() => validateEnv({ ...BASE_VALID_ENV, ...overrides })).toThrow(
+        message,
+      );
+    });
+  });
+
   describe('parser isolation settings bounds', () => {
     it('enforces PARSER_CHILD_TIMEOUT_MS between 1000 and 60000 ms', () => {
       expect(() =>

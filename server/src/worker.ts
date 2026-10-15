@@ -12,6 +12,12 @@ async function bootstrap(): Promise<void> {
   });
   const worker = app.get(UploadWorkerService);
   const config = app.get(AcresConfigService);
+  if (config.queueProvider !== 'bullmq') {
+    // The Vercel profile consumes through queue triggers; this loop would
+    // otherwise fall back to the default Valkey URL.
+    await app.close();
+    throw new Error('The self-hosted worker requires QUEUE_PROVIDER="bullmq".');
+  }
   const listener = new WorkerMetricsListener(app.get(MetricsService));
   let shuttingDown = false;
   const shutdown = async (): Promise<void> => {

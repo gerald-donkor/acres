@@ -134,6 +134,30 @@ export class AcresConfigService {
     return this.get('queuePrefix');
   }
 
+  get queueProvider(): AcresEnv['queueProvider'] {
+    return this.get('queueProvider');
+  }
+
+  get vercelQueueTopic(): string {
+    return this.get('vercelQueueTopic');
+  }
+
+  get vercelQueueRegion(): string {
+    return this.get('vercelQueueRegion');
+  }
+
+  get vercelQueueRetentionSeconds(): number {
+    return this.get('vercelQueueRetentionSeconds');
+  }
+
+  get vercelDeploymentId(): string | undefined {
+    return this.get('vercelDeploymentId');
+  }
+
+  get jobLeaseMs(): number {
+    return this.get('jobLeaseMs');
+  }
+
   get queueDefaultAttempts(): number {
     return this.get('queueDefaultAttempts');
   }

@@ -38,12 +38,18 @@ export interface AcresEnv {
   graphqlMaxNodes: number;
   graphqlTimeoutMs: number;
   idempotencyTtlHours: number;
+  queueProvider: QueueProvider;
   valkeyUrl: string;
   queueName: string;
   queuePrefix: string;
   queueDefaultAttempts: number;
   queueBackoffMs: number;
   queueShutdownMs: number;
+  vercelQueueTopic: string;
+  vercelQueueRegion: string;
+  vercelQueueRetentionSeconds: number;
+  vercelDeploymentId?: string;
+  jobLeaseMs: number;
   storageEndpoint: string;
   storageRegion: string;
   storageBucket: string;
@@ -88,6 +94,9 @@ export interface AcresEnv {
   mailFrom: string;
 }
 
+export const QUEUE_PROVIDERS = ['bullmq', 'vercel'] as const;
+export type QueueProvider = (typeof QUEUE_PROVIDERS)[number];
+
 const SHARED_REQUIRED = ['DATABASE_URL'] as const;
 const API_REQUIRED = [
   'CLIENT_ORIGIN',
@@ -121,6 +130,11 @@ const DEFAULTS = {
   QUEUE_DEFAULT_ATTEMPTS: '5',
   QUEUE_BACKOFF_MS: '30000',
   QUEUE_SHUTDOWN_MS: '15000',
+  QUEUE_PROVIDER: 'bullmq',
+  VERCEL_QUEUE_TOPIC: 'acres-jobs',
+  VERCEL_QUEUE_REGION: 'iad1',
+  VERCEL_QUEUE_RETENTION_SECONDS: '86400',
+  JOB_LEASE_MS: '330000',
   STORAGE_ENDPOINT: 'http://localhost:3900',
   STORAGE_REGION: 'garage',
   STORAGE_BUCKET: 'acres-quarantine',
@@ -274,11 +288,61 @@ export function validateEnv(
       );
     }
   }
+  const rawQueueProvider = env.QUEUE_PROVIDER ?? DEFAULTS.QUEUE_PROVIDER;
+  if (!(QUEUE_PROVIDERS as readonly string[]).includes(rawQueueProvider)) {
+    throw new Error(
+      `QUEUE_PROVIDER must be "bullmq" or "vercel", received "${rawQueueProvider}"`,
+    );
+  }
+  const queueProvider = rawQueueProvider as QueueProvider;
+  const vercelQueueTopic =
+    env.VERCEL_QUEUE_TOPIC ?? DEFAULTS.VERCEL_QUEUE_TOPIC;
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(vercelQueueTopic)) {
+    throw new Error(
+      'VERCEL_QUEUE_TOPIC must be 1-63 lowercase letters, digits or hyphens.',
+    );
+  }
+  const vercelQueueRegion =
+    env.VERCEL_QUEUE_REGION ?? DEFAULTS.VERCEL_QUEUE_REGION;
+  if (!/^[a-z]{2,5}[0-9]{1,2}$/.test(vercelQueueRegion)) {
+    throw new Error(
+      'VERCEL_QUEUE_REGION must be a Vercel region such as iad1.',
+    );
+  }
+  const vercelQueueRetentionSeconds = positiveInt(
+    'VERCEL_QUEUE_RETENTION_SECONDS',
+    env.VERCEL_QUEUE_RETENTION_SECONDS ??
+      DEFAULTS.VERCEL_QUEUE_RETENTION_SECONDS,
+  );
+  if (
+    vercelQueueRetentionSeconds < 60 ||
+    vercelQueueRetentionSeconds > 604800
+  ) {
+    throw new Error(
+      'VERCEL_QUEUE_RETENTION_SECONDS must be between 60 and 604800.',
+    );
+  }
+  const jobLeaseMs = positiveInt(
+    'JOB_LEASE_MS',
+    env.JOB_LEASE_MS ?? DEFAULTS.JOB_LEASE_MS,
+  );
+  // Leases are not renewed, so one must outlive a whole invocation (300 s
+  // Hobby maximum) plus the observed ~300 s crash redelivery.
+  if (jobLeaseMs < 305000 || jobLeaseMs > 3600000) {
+    throw new Error('JOB_LEASE_MS must be between 305000 and 3600000.');
+  }
+  const vercelDeploymentId = env.VERCEL_DEPLOYMENT_ID?.trim() || undefined;
+  if (queueProvider === 'vercel' && env.VALKEY_URL !== undefined) {
+    // A Vercel profile never talks to Valkey; a set URL means a mixed profile.
+    throw new Error('VALKEY_URL must be unset when QUEUE_PROVIDER="vercel".');
+  }
+
   if (
     nodeEnv === 'production' &&
     ((env.STORAGE_ACCESS_KEY_ID ?? '').startsWith('change-me') ||
       (env.STORAGE_SECRET_ACCESS_KEY ?? '').startsWith('change-me') ||
-      (env.VALKEY_URL ?? DEFAULTS.VALKEY_URL).includes('dev_password'))
+      (queueProvider === 'bullmq' &&
+        (env.VALKEY_URL ?? DEFAULTS.VALKEY_URL).includes('dev_password')))
   ) {
     throw new Error(
       'Storage/queue credentials still use development placeholders.',
@@ -459,6 +523,7 @@ export function validateEnv(
       'IDEMPOTENCY_TTL_HOURS',
       env.IDEMPOTENCY_TTL_HOURS ?? DEFAULTS.IDEMPOTENCY_TTL_HOURS,
     ),
+    queueProvider,
     valkeyUrl: env.VALKEY_URL ?? DEFAULTS.VALKEY_URL,
     queueName: env.QUEUE_NAME ?? DEFAULTS.QUEUE_NAME,
     queuePrefix: env.QUEUE_PREFIX ?? DEFAULTS.QUEUE_PREFIX,
@@ -474,6 +539,11 @@ export function validateEnv(
       'QUEUE_SHUTDOWN_MS',
       env.QUEUE_SHUTDOWN_MS ?? DEFAULTS.QUEUE_SHUTDOWN_MS,
     ),
+    vercelQueueTopic,
+    vercelQueueRegion,
+    vercelQueueRetentionSeconds,
+    vercelDeploymentId,
+    jobLeaseMs,
     storageEndpoint: env.STORAGE_ENDPOINT ?? DEFAULTS.STORAGE_ENDPOINT,
     storageRegion: env.STORAGE_REGION ?? DEFAULTS.STORAGE_REGION,
     storageBucket: env.STORAGE_BUCKET ?? DEFAULTS.STORAGE_BUCKET,

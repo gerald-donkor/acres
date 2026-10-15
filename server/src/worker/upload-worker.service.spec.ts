@@ -389,6 +389,79 @@ describe('UploadWorkerService', () => {
       expect(fakeScanner.scanBuffer).not.toHaveBeenCalled();
     });
 
+    it('does not reopen the ledger for a duplicate delivery of a finished upload', async () => {
+      for (const state of ['accepted', 'rejected', 'cancelled']) {
+        mockWorkerTx.upload.findUnique.mockResolvedValueOnce({
+          ...mockUpload,
+          state,
+        });
+        await service.process({ uploadId: 'upload-1' });
+      }
+      expect(mockWorkerTx.durableJob.upsert).not.toHaveBeenCalled();
+      expect(fakeScanner.scanBuffer).not.toHaveBeenCalled();
+    });
+
+    it('leaves a scanning upload alone without an execution lease', async () => {
+      mockWorkerTx.upload.findUnique.mockResolvedValueOnce(mockUpload);
+      mockOrgTx.upload.findFirst.mockResolvedValueOnce({
+        ...mockUpload,
+        state: 'scanning',
+      });
+
+      await service.process({ uploadId: 'upload-1' });
+
+      expect(fakeScanner.scanBuffer).not.toHaveBeenCalled();
+    });
+
+    it('repeats an interrupted scan only when the caller holds the lease', async () => {
+      const processor = new JobProcessorService(
+        fakeConfig as AcresConfigService,
+        fakeTenants as TenantTransactionService,
+        fakeScanner as MalwareScannerPort,
+        fakeStorage as ObjectStoragePort,
+        fakeIngestionProcessor as IngestionProcessorService,
+        fakeReports as ReportsService,
+      );
+      mockWorkerTx.upload.findUnique.mockResolvedValueOnce(mockUpload);
+      mockOrgTx.upload.findFirst
+        .mockResolvedValueOnce({ ...mockUpload, state: 'scanning' })
+        .mockResolvedValueOnce({ ...mockUpload, state: 'scanning' });
+
+      await processor.process(
+        { uploadId: 'upload-1' },
+        { resumeInterrupted: true },
+      );
+
+      expect(fakeScanner.scanBuffer).toHaveBeenCalledTimes(1);
+      expect(mockOrgTx.upload.update).toHaveBeenLastCalledWith({
+        where: { id: 'upload-1' },
+        data: expect.objectContaining({ state: 'accepted' }) as object,
+      });
+    });
+
+    it('never resumes a terminal upload even under a lease', async () => {
+      const processor = new JobProcessorService(
+        fakeConfig as AcresConfigService,
+        fakeTenants as TenantTransactionService,
+        fakeScanner as MalwareScannerPort,
+        fakeStorage as ObjectStoragePort,
+        fakeIngestionProcessor as IngestionProcessorService,
+        fakeReports as ReportsService,
+      );
+      for (const state of ['accepted', 'rejected', 'cancelled']) {
+        mockWorkerTx.upload.findUnique.mockResolvedValueOnce(mockUpload);
+        mockOrgTx.upload.findFirst.mockResolvedValueOnce({
+          ...mockUpload,
+          state,
+        });
+        await processor.process(
+          { uploadId: 'upload-1' },
+          { resumeInterrupted: true },
+        );
+      }
+      expect(fakeScanner.scanBuffer).not.toHaveBeenCalled();
+    });
+
     it('processes clean upload: transitions to scanning then accepted and succeeds durable job', async () => {
       mockWorkerTx.upload.findUnique.mockResolvedValueOnce(mockUpload);
       mockOrgTx.upload.findFirst

@@ -1,4 +1,14 @@
 import { JobProcessorService } from '../src/worker/job-processor.service';
+import { JobLeaseService } from '../src/worker/job-lease.service';
+import {
+  AggregateNotVisibleError,
+  JobAttemptsExhaustedError,
+  JobLeaseBusyError,
+  LeasedJobExecutorService,
+} from '../src/worker/leased-job-executor.service';
+import { NestFactory } from '@nestjs/core';
+import { WorkerModule } from '../src/worker/worker.module';
+import { VercelJobsModule } from '../src/vercel/vercel-jobs.module';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -905,5 +915,267 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
       expect(helpOutput).toContain('--rto-target-seconds <sec>');
       expect(helpOutput).toContain('--dry-run');
     });
+  });
+
+  // ===========================================================================
+  // 7. Vercel Queues at-least-once delivery: database execution lease
+  // ===========================================================================
+  describe('7. Execution Lease for At-Least-Once Queue Delivery', () => {
+    function services() {
+      const leases = new JobLeaseService(tenants, config);
+      const executor = new LeasedJobExecutorService(
+        tenants,
+        leases,
+        new JobProcessorService(
+          config,
+          tenants,
+          mockScanner,
+          mockStorage,
+          processor,
+          reportsService,
+        ),
+      );
+      return { leases, executor };
+    }
+
+    it('7A: concurrent claims on one job grant exactly one live lease', async () => {
+      const owner = await signedInAgent('owner-lease-1@example.com');
+      const org = await createOrganization(owner, 'org-lease-1', 'Org Lease 1');
+      const { leases } = services();
+      const target = {
+        deterministicKey: 'export.requested:lease-concurrency-1',
+        jobType: 'export.requested',
+        organizationId: org.id,
+        uploadId: null,
+      };
+
+      const claims = await Promise.all(
+        Array.from({ length: 6 }, () => leases.acquire(target)),
+      );
+      const granted = claims.filter((claim) => claim !== null);
+      expect(granted).toHaveLength(1);
+      expect(await leases.remainingMs(target.deterministicKey)).toBeGreaterThan(
+        config.jobLeaseMs - 10_000,
+      );
+
+      const row = await tenants.workerScoped((tx) =>
+        tx.durableJob.findUniqueOrThrow({
+          where: { deterministicKey: target.deterministicKey },
+        }),
+      );
+      // Tenant linkage comes from the resolved owner, never a null-org row.
+      expect(row.organizationId).toBe(org.id);
+      expect(row.leaseOwner).toBe(granted[0].owner);
+
+      await leases.release(granted[0]);
+      const reclaimed = await leases.acquire(target);
+      expect(reclaimed).not.toBeNull();
+      expect(reclaimed!.durableJobId).toBe(granted[0].durableJobId);
+    });
+
+    it('7B: an expired lease is reclaimable and a stale owner cannot release the new one', async () => {
+      const owner = await signedInAgent('owner-lease-2@example.com');
+      const org = await createOrganization(owner, 'org-lease-2', 'Org Lease 2');
+      const { leases } = services();
+      const target = {
+        deterministicKey: 'export.requested:lease-expiry-1',
+        jobType: 'export.requested',
+        organizationId: org.id,
+        uploadId: null,
+      };
+      const lost = await leases.acquire(target);
+      expect(lost).not.toBeNull();
+      expect(await leases.acquire(target)).toBeNull();
+
+      await tenants.workerScoped((tx) =>
+        tx.durableJob.update({
+          where: { id: lost!.durableJobId },
+          data: { leaseUntil: new Date(Date.now() - 1_000) },
+        }),
+      );
+      const successor = await leases.acquire(target);
+      expect(successor).not.toBeNull();
+      expect(successor!.owner).not.toBe(lost!.owner);
+
+      await leases.release(lost!);
+      const row = await tenants.workerScoped((tx) =>
+        tx.durableJob.findUniqueOrThrow({
+          where: { id: lost!.durableJobId },
+        }),
+      );
+      expect(row.leaseOwner).toBe(successor!.owner);
+    });
+
+    it('7C: rejects a half-written lease at the database', async () => {
+      const owner = await signedInAgent('owner-lease-3@example.com');
+      const org = await createOrganization(owner, 'org-lease-3', 'Org Lease 3');
+      await expect(
+        tenants.workerScoped((tx) =>
+          tx.durableJob.create({
+            data: {
+              deterministicKey: 'export.requested:lease-pair-1',
+              organizationId: org.id,
+              jobType: 'export.requested',
+              leaseOwner: 'lease-orphan',
+            },
+          }),
+        ),
+      ).rejects.toThrow(/DurableJob_lease_pair_check/);
+    });
+
+    it('7D: a scan interrupted by a lost executor is resumed once, and a live duplicate waits', async () => {
+      const owner = await signedInAgent('owner-lease-4@example.com');
+      const org = await createOrganization(owner, 'org-lease-4', 'Org Lease 4');
+      const { uploadId } = await createCompletedUpload(
+        owner,
+        org.id,
+        'lease-resume',
+        'col1,col2\nval1,val2\n',
+      );
+      const { leases, executor } = services();
+      const scans = () => mockScanner.scanBuffer.mock.calls.length;
+      const message = {
+        v: 1 as const,
+        jobName: 'upload.completed' as const,
+        id: uploadId,
+      };
+
+      // The first executor reached `scanning`, then its instance was lost.
+      const lost = await leases.acquire({
+        deterministicKey: `upload.completed:${uploadId}`,
+        jobType: 'upload.completed',
+        organizationId: org.id,
+        uploadId,
+      });
+      await tenants.workerScoped((tx) =>
+        tx.upload.update({
+          where: { id: uploadId },
+          data: { state: 'scanning', progressStage: 'scanning' },
+        }),
+      );
+
+      // Redelivery while the lease is still live must not run a second scan.
+      await expect(executor.execute(message)).rejects.toBeInstanceOf(
+        JobLeaseBusyError,
+      );
+      expect(scans()).toBe(0);
+
+      await tenants.workerScoped((tx) =>
+        tx.durableJob.update({
+          where: { id: lost!.durableJobId },
+          data: { leaseUntil: new Date(Date.now() - 1_000) },
+        }),
+      );
+      await expect(executor.execute(message)).resolves.toBe('processed');
+
+      const upload = await tenants.workerScoped((tx) =>
+        tx.upload.findUniqueOrThrow({
+          where: { id: uploadId },
+          include: { storedObject: true },
+        }),
+      );
+      expect(upload.state).toBe('accepted');
+      expect(upload.storedObject.state).toBe('accepted');
+      expect(scans()).toBe(1);
+
+      // A late duplicate after completion is a no-op and leaves no lease behind.
+      await expect(executor.execute(message)).resolves.toBe('processed');
+      expect(scans()).toBe(1);
+      const job = await tenants.workerScoped((tx) =>
+        tx.durableJob.findUniqueOrThrow({
+          where: { deterministicKey: `upload.completed:${uploadId}` },
+        }),
+      );
+      expect(job.state).toBe('succeeded');
+      expect(job.leaseOwner).toBeNull();
+      expect(job.leaseUntil).toBeNull();
+    });
+
+    it('7E: a message naming another aggregate type never borrows its tenant', async () => {
+      const owner = await signedInAgent('owner-lease-5@example.com');
+      const org = await createOrganization(owner, 'org-lease-5', 'Org Lease 5');
+      const { uploadId } = await createCompletedUpload(
+        owner,
+        org.id,
+        'lease-cross-type',
+        'col1,col2\nval1,val2\n',
+      );
+      const { executor } = services();
+      // An upload ID presented as an export resolves no export aggregate.
+      await expect(
+        executor.execute({ v: 1, jobName: 'export.requested', id: uploadId }),
+      ).rejects.toBeInstanceOf(AggregateNotVisibleError);
+      const rows = await tenants.workerScoped((tx) =>
+        tx.durableJob.count({
+          where: { deterministicKey: `export.requested:${uploadId}` },
+        }),
+      );
+      expect(rows).toBe(0);
+    });
+
+    it('7F: an infrastructure error on the final attempt is dead-lettered before it may be acknowledged', async () => {
+      const owner = await signedInAgent('owner-lease-6@example.com');
+      const org = await createOrganization(owner, 'org-lease-6', 'Org Lease 6');
+      const { uploadId } = await createCompletedUpload(
+        owner,
+        org.id,
+        'lease-exhausted',
+        'col1,col2\nval1,val2\n',
+      );
+      const { executor } = services();
+      const message = {
+        v: 1 as const,
+        jobName: 'upload.completed' as const,
+        id: uploadId,
+      };
+      mockStorage.getBuffer.mockRejectedValue(new Error('s3 outage detail'));
+
+      // Earlier attempts fail but stay retryable (not acknowledged); each
+      // leaves the upload `scanning`, which the next leased delivery resumes.
+      for (let attempt = 1; attempt < config.queueDefaultAttempts; attempt++) {
+        await expect(executor.execute(message)).rejects.toThrow(
+          's3 outage detail',
+        );
+      }
+      const stuck = await tenants.workerScoped((tx) =>
+        tx.upload.findUniqueOrThrow({ where: { id: uploadId } }),
+      );
+      expect(stuck.state).toBe('scanning');
+      await expect(executor.execute(message)).rejects.toBeInstanceOf(
+        JobAttemptsExhaustedError,
+      );
+
+      const job = await tenants.workerScoped((tx) =>
+        tx.durableJob.findUniqueOrThrow({
+          where: { deterministicKey: `upload.completed:${uploadId}` },
+          include: { deadLetters: true },
+        }),
+      );
+      expect(job.attempts).toBe(config.queueDefaultAttempts);
+      expect(job.state).toBe('dead_lettered');
+      expect(job.leaseOwner).toBeNull();
+      // Pre-existing processor behaviour: one dead letter per failed attempt;
+      // the executor adds none when one already exists.
+      expect(job.deadLetters).toHaveLength(config.queueDefaultAttempts);
+      for (const letter of job.deadLetters) {
+        expect(letter.reasonMessage).not.toContain('s3 outage detail');
+      }
+    });
+
+    it.each([
+      ['self-hosted worker', WorkerModule],
+      ['Vercel jobs', VercelJobsModule],
+    ])(
+      '7G: the %s composition boots as an application context',
+      async (_name, rootModule) => {
+        // Regression: guarded feature controllers once made the worker
+        // composition fail dependency resolution at boot.
+        const context = await NestFactory.createApplicationContext(rootModule, {
+          abortOnError: false,
+          logger: false,
+        });
+        await context.close();
+      },
+    );
   });
 });

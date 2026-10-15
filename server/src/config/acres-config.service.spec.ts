@@ -34,12 +34,17 @@ describe('AcresConfigService', () => {
     graphqlMaxNodes: 250,
     graphqlTimeoutMs: 5000,
     idempotencyTtlHours: 24,
+    queueProvider: 'bullmq',
     valkeyUrl: 'redis://localhost:6379/0',
     queueName: 'acres-ingestion',
     queuePrefix: 'acres',
     queueDefaultAttempts: 5,
     queueBackoffMs: 30000,
     queueShutdownMs: 15000,
+    vercelQueueTopic: 'acres-jobs',
+    vercelQueueRegion: 'iad1',
+    vercelQueueRetentionSeconds: 86400,
+    jobLeaseMs: 330000,
     storageEndpoint: 'http://localhost:3900',
     storageRegion: 'garage',
     storageBucket: 'acres-quarantine',
@@ -159,6 +164,12 @@ describe('AcresConfigService', () => {
       expect(service.queueDefaultAttempts).toBe(5);
       expect(service.queueBackoffMs).toBe(30000);
       expect(service.queueShutdownMs).toBe(15000);
+      expect(service.queueProvider).toBe('bullmq');
+      expect(service.vercelQueueTopic).toBe('acres-jobs');
+      expect(service.vercelQueueRegion).toBe('iad1');
+      expect(service.vercelQueueRetentionSeconds).toBe(86400);
+      expect(service.vercelDeploymentId).toBeUndefined();
+      expect(service.jobLeaseMs).toBe(330000);
       expect(service.storageEndpoint).toBe('http://localhost:3900');
       expect(service.storageRegion).toBe('garage');
       expect(service.storageBucket).toBe('acres-quarantine');
