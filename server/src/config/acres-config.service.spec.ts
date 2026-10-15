@@ -54,6 +54,12 @@ describe('AcresConfigService', () => {
     storageForcePathStyle: true,
     presignedUploadTtlSeconds: 900,
     acceptedDownloadTtlSeconds: 300,
+    scannerProvider: 'vercel-sandbox',
+    scannerSandboxImage: `vcr.vercel.com/t/acres/acres-scanner@sha256:${'a'.repeat(64)}`,
+    scannerMainSha256: 'b'.repeat(64),
+    scannerDailySha256: 'c'.repeat(64),
+    scannerMaxSignatureAgeHours: 48,
+    scannerSandboxTimeoutMs: 120000,
     clamavHost: 'localhost',
     clamavPort: 3310,
     clamavScanTimeoutMs: 10000,
@@ -185,6 +191,12 @@ describe('AcresConfigService', () => {
     });
 
     it('returns scanner, upload, parser, and outbox settings', () => {
+      expect(service.scannerProvider).toBe('vercel-sandbox');
+      expect(service.scannerSandboxImage).toMatch(/@sha256:a{64}$/);
+      expect(service.scannerMainSha256).toBe('b'.repeat(64));
+      expect(service.scannerDailySha256).toBe('c'.repeat(64));
+      expect(service.scannerMaxSignatureAgeHours).toBe(48);
+      expect(service.scannerSandboxTimeoutMs).toBe(120000);
       expect(service.clamavHost).toBe('localhost');
       expect(service.clamavPort).toBe(3310);
       expect(service.clamavScanTimeoutMs).toBe(10000);

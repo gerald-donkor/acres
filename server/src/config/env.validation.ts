@@ -63,6 +63,13 @@ export interface AcresEnv {
   storageForcePathStyle: boolean;
   presignedUploadTtlSeconds: number;
   acceptedDownloadTtlSeconds: number;
+  scannerProvider: ScannerProvider;
+  /** Digest-pinned VCR image; required when `scannerProvider` is `vercel-sandbox`. */
+  scannerSandboxImage?: string;
+  scannerMainSha256?: string;
+  scannerDailySha256?: string;
+  scannerMaxSignatureAgeHours?: number;
+  scannerSandboxTimeoutMs?: number;
   clamavHost: string;
   clamavPort: number;
   clamavScanTimeoutMs: number;
@@ -103,6 +110,13 @@ export const QUEUE_PROVIDERS = ['bullmq', 'vercel'] as const;
 export type QueueProvider = (typeof QUEUE_PROVIDERS)[number];
 export const STORAGE_PROVIDERS = ['s3', 'vercel-blob'] as const;
 export type StorageProvider = (typeof STORAGE_PROVIDERS)[number];
+export const SCANNER_PROVIDERS = ['clamav', 'vercel-sandbox'] as const;
+export type ScannerProvider = (typeof SCANNER_PROVIDERS)[number];
+/** The Sandbox scan flags cover 50 MiB; a larger upload limit is refused. */
+export const SCANNER_SANDBOX_MAX_BYTES = 50 * 1024 * 1024;
+/** Same form the probe accepts: a project VCR repository pinned by digest. */
+const SCANNER_SANDBOX_IMAGE =
+  /^vcr\.vercel\.com\/[a-zA-Z0-9_/-]+@sha256:[a-f0-9]{64}$/;
 /** S3-only variables; a set value alongside `vercel-blob` is a mixed profile. */
 const S3_STORAGE_KEYS = [
   'STORAGE_ENDPOINT',
@@ -152,6 +166,8 @@ const DEFAULTS = {
   VERCEL_QUEUE_RETENTION_SECONDS: '86400',
   JOB_LEASE_MS: '330000',
   STORAGE_PROVIDER: 's3',
+  SCANNER_PROVIDER: 'clamav',
+  SCANNER_SANDBOX_TIMEOUT_MS: '120000',
   STORAGE_ENDPOINT: 'http://localhost:3900',
   STORAGE_REGION: 'garage',
   STORAGE_BUCKET: 'acres-quarantine',
@@ -401,6 +417,89 @@ export function validateEnv(
     }
   }
 
+  const rawScannerProvider = env.SCANNER_PROVIDER ?? DEFAULTS.SCANNER_PROVIDER;
+  if (!(SCANNER_PROVIDERS as readonly string[]).includes(rawScannerProvider)) {
+    throw new Error(
+      `SCANNER_PROVIDER must be "clamav" or "vercel-sandbox", received "${rawScannerProvider}"`,
+    );
+  }
+  const scannerProvider = rawScannerProvider as ScannerProvider;
+  let scannerSandbox:
+    | Pick<
+        AcresEnv,
+        | 'scannerSandboxImage'
+        | 'scannerMainSha256'
+        | 'scannerDailySha256'
+        | 'scannerMaxSignatureAgeHours'
+        | 'scannerSandboxTimeoutMs'
+      >
+    | undefined;
+  if (scannerProvider === 'vercel-sandbox') {
+    for (const key of ['CLAMAV_HOST', 'CLAMAV_PORT'] as const) {
+      if (env[key] !== undefined) {
+        // A Sandbox profile never talks to clamd; a set value means a mixed profile.
+        throw new Error(
+          `${key} must be unset when SCANNER_PROVIDER="vercel-sandbox".`,
+        );
+      }
+    }
+    const image = env.SCANNER_SANDBOX_IMAGE?.trim() ?? '';
+    if (!SCANNER_SANDBOX_IMAGE.test(image)) {
+      throw new Error(
+        'SCANNER_SANDBOX_IMAGE must be a VCR image pinned by SHA-256 digest when SCANNER_PROVIDER="vercel-sandbox".',
+      );
+    }
+    const hashes = {} as Record<
+      'SCANNER_MAIN_SHA256' | 'SCANNER_DAILY_SHA256',
+      string
+    >;
+    for (const key of [
+      'SCANNER_MAIN_SHA256',
+      'SCANNER_DAILY_SHA256',
+    ] as const) {
+      const value = env[key]?.trim() ?? '';
+      if (!/^[a-f0-9]{64}$/.test(value)) {
+        throw new Error(`${key} must be a lowercase SHA-256 hex digest.`);
+      }
+      hashes[key] = value;
+    }
+    const rawAge = env.SCANNER_MAX_SIGNATURE_AGE_HOURS;
+    if (
+      rawAge === undefined ||
+      !/^[1-9][0-9]*$/.test(rawAge) ||
+      Number(rawAge) > 168
+    ) {
+      throw new Error(
+        'SCANNER_MAX_SIGNATURE_AGE_HOURS must be an integer from 1 to 168.',
+      );
+    }
+    const timeoutMs = positiveInt(
+      'SCANNER_SANDBOX_TIMEOUT_MS',
+      env.SCANNER_SANDBOX_TIMEOUT_MS ?? DEFAULTS.SCANNER_SANDBOX_TIMEOUT_MS,
+    );
+    if (timeoutMs < 30000 || timeoutMs > 600000) {
+      throw new Error(
+        'SCANNER_SANDBOX_TIMEOUT_MS must be between 30000 and 600000.',
+      );
+    }
+    const uploadMaxBytes = positiveInt(
+      'UPLOAD_MAX_BYTES',
+      env.UPLOAD_MAX_BYTES ?? DEFAULTS.UPLOAD_MAX_BYTES,
+    );
+    if (uploadMaxBytes > SCANNER_SANDBOX_MAX_BYTES) {
+      throw new Error(
+        `UPLOAD_MAX_BYTES must not exceed ${SCANNER_SANDBOX_MAX_BYTES} when SCANNER_PROVIDER="vercel-sandbox".`,
+      );
+    }
+    scannerSandbox = {
+      scannerSandboxImage: image,
+      scannerMainSha256: hashes.SCANNER_MAIN_SHA256,
+      scannerDailySha256: hashes.SCANNER_DAILY_SHA256,
+      scannerMaxSignatureAgeHours: Number(rawAge),
+      scannerSandboxTimeoutMs: timeoutMs,
+    };
+  }
+
   if (
     nodeEnv === 'production' &&
     ((storageProvider === 's3' &&
@@ -633,6 +732,8 @@ export function validateEnv(
       env.ACCEPTED_DOWNLOAD_TTL_SECONDS ??
         DEFAULTS.ACCEPTED_DOWNLOAD_TTL_SECONDS,
     ),
+    scannerProvider,
+    ...scannerSandbox,
     clamavHost: env.CLAMAV_HOST ?? DEFAULTS.CLAMAV_HOST,
     clamavPort: positiveInt(
       'CLAMAV_PORT',

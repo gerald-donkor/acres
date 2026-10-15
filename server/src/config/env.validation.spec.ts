@@ -737,6 +737,124 @@ describe('validateEnv', () => {
     });
   });
 
+  describe('scanner provider selection', () => {
+    const IMAGE = `vcr.vercel.com/dgsloxx417s-projects/acres/acres-scanner@sha256:${'a'.repeat(64)}`;
+    const SANDBOX_ENV = {
+      ...BASE_VALID_ENV,
+      SCANNER_PROVIDER: 'vercel-sandbox',
+      SCANNER_SANDBOX_IMAGE: IMAGE,
+      SCANNER_MAIN_SHA256: 'b'.repeat(64),
+      SCANNER_DAILY_SHA256: 'c'.repeat(64),
+      SCANNER_MAX_SIGNATURE_AGE_HOURS: '48',
+    };
+
+    it('defaults to clamd and leaves the Sandbox fields unset', () => {
+      const config = validateEnv({
+        ...BASE_VALID_ENV,
+        SCANNER_SANDBOX_IMAGE: 'ignored',
+        UPLOAD_MAX_BYTES: '104857600',
+      });
+      expect(config.scannerProvider).toBe('clamav');
+      expect(config.scannerSandboxImage).toBeUndefined();
+      expect(config.scannerMainSha256).toBeUndefined();
+      expect(config.scannerDailySha256).toBeUndefined();
+      expect(config.scannerMaxSignatureAgeHours).toBeUndefined();
+      expect(config.scannerSandboxTimeoutMs).toBeUndefined();
+      expect(config.clamavHost).toBe('localhost');
+    });
+
+    it('selects the Sandbox scanner with a 120 s default session', () => {
+      const config = validateEnv(SANDBOX_ENV);
+      expect(config.scannerProvider).toBe('vercel-sandbox');
+      expect(config.scannerSandboxImage).toBe(IMAGE);
+      expect(config.scannerMainSha256).toBe('b'.repeat(64));
+      expect(config.scannerDailySha256).toBe('c'.repeat(64));
+      expect(config.scannerMaxSignatureAgeHours).toBe(48);
+      expect(config.scannerSandboxTimeoutMs).toBe(120000);
+    });
+
+    it.each(['30000', '600000'])('accepts session timeout %s', (value) => {
+      expect(
+        validateEnv({ ...SANDBOX_ENV, SCANNER_SANDBOX_TIMEOUT_MS: value })
+          .scannerSandboxTimeoutMs,
+      ).toBe(Number(value));
+    });
+
+    it('accepts an upload limit at the 50 MiB scan bound', () => {
+      expect(
+        validateEnv({ ...SANDBOX_ENV, UPLOAD_MAX_BYTES: '52428800' })
+          .uploadMaxBytes,
+      ).toBe(52428800);
+    });
+
+    it.each(['CLAMAV_HOST', 'CLAMAV_PORT'])(
+      'rejects a mixed profile that sets %s',
+      (key) => {
+        expect(() => validateEnv({ ...SANDBOX_ENV, [key]: '1' })).toThrow(
+          `${key} must be unset when SCANNER_PROVIDER="vercel-sandbox".`,
+        );
+      },
+    );
+
+    it.each([
+      [
+        { SCANNER_PROVIDER: 'clamd' },
+        'SCANNER_PROVIDER must be "clamav" or "vercel-sandbox", received "clamd"',
+      ],
+      [{ SCANNER_SANDBOX_IMAGE: undefined }, 'SCANNER_SANDBOX_IMAGE must be'],
+      [
+        {
+          SCANNER_SANDBOX_IMAGE: 'vcr.vercel.com/t/acres/acres-scanner:latest',
+        },
+        'SCANNER_SANDBOX_IMAGE must be',
+      ],
+      [
+        {
+          SCANNER_SANDBOX_IMAGE: `docker.io/clamav/clamav@sha256:${'a'.repeat(64)}`,
+        },
+        'SCANNER_SANDBOX_IMAGE must be',
+      ],
+      [{ SCANNER_MAIN_SHA256: undefined }, 'SCANNER_MAIN_SHA256 must be'],
+      [{ SCANNER_MAIN_SHA256: 'B'.repeat(64) }, 'SCANNER_MAIN_SHA256 must be'],
+      [
+        { SCANNER_DAILY_SHA256: 'c'.repeat(63) },
+        'SCANNER_DAILY_SHA256 must be',
+      ],
+      [
+        { SCANNER_MAX_SIGNATURE_AGE_HOURS: undefined },
+        'SCANNER_MAX_SIGNATURE_AGE_HOURS must be an integer from 1 to 168.',
+      ],
+      [
+        { SCANNER_MAX_SIGNATURE_AGE_HOURS: '0' },
+        'SCANNER_MAX_SIGNATURE_AGE_HOURS must be an integer from 1 to 168.',
+      ],
+      [
+        { SCANNER_MAX_SIGNATURE_AGE_HOURS: '169' },
+        'SCANNER_MAX_SIGNATURE_AGE_HOURS must be an integer from 1 to 168.',
+      ],
+      [
+        { SCANNER_MAX_SIGNATURE_AGE_HOURS: '1.5' },
+        'SCANNER_MAX_SIGNATURE_AGE_HOURS must be an integer from 1 to 168.',
+      ],
+      [
+        { SCANNER_SANDBOX_TIMEOUT_MS: '29999' },
+        'SCANNER_SANDBOX_TIMEOUT_MS must be between 30000 and 600000.',
+      ],
+      [
+        { SCANNER_SANDBOX_TIMEOUT_MS: '600001' },
+        'SCANNER_SANDBOX_TIMEOUT_MS must be between 30000 and 600000.',
+      ],
+      [
+        { UPLOAD_MAX_BYTES: '52428801' },
+        'UPLOAD_MAX_BYTES must not exceed 52428800 when SCANNER_PROVIDER="vercel-sandbox".',
+      ],
+    ])('rejects %o', (overrides, message) => {
+      expect(() => validateEnv({ ...SANDBOX_ENV, ...overrides })).toThrow(
+        message,
+      );
+    });
+  });
+
   describe('parser isolation settings bounds', () => {
     it('enforces PARSER_CHILD_TIMEOUT_MS between 1000 and 60000 ms', () => {
       expect(() =>

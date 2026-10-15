@@ -171,6 +171,31 @@ export class AcresConfigService {
     return this.get('blobReadWriteToken');
   }
 
+  get scannerProvider(): AcresEnv['scannerProvider'] {
+    return this.get('scannerProvider');
+  }
+
+  /** Not a secret, but never logged: the adapter logs sandbox names only. */
+  get scannerSandboxImage(): string | undefined {
+    return this.get('scannerSandboxImage');
+  }
+
+  get scannerMainSha256(): string | undefined {
+    return this.get('scannerMainSha256');
+  }
+
+  get scannerDailySha256(): string | undefined {
+    return this.get('scannerDailySha256');
+  }
+
+  get scannerMaxSignatureAgeHours(): number | undefined {
+    return this.get('scannerMaxSignatureAgeHours');
+  }
+
+  get scannerSandboxTimeoutMs(): number | undefined {
+    return this.get('scannerSandboxTimeoutMs');
+  }
+
   get queueDefaultAttempts(): number {
     return this.get('queueDefaultAttempts');
   }
