@@ -40,7 +40,54 @@ Created:
 Neon creation through the Neon MCP was refused (`organization is managed by
 Vercel`); Vercel MCP exposes no Marketplace resource-provisioning call, so the
 Neon/PostGIS resource needs the dashboard or an authenticated Vercel CLI.
-No secret was decrypted or printed; no probe has run.
+No secret was decrypted or printed through MCP.
+
+### Hosted proofs — 2026-10-15
+
+The user provisioned Neon in the dashboard (Free, US East, `acres` project,
+Preview + Development only, no per-deployment branching, prefix
+`NEON_OWNER`, not sensitive so the owner URL could be pulled once) and signed
+the Vercel CLI in (64.1.0, via `npx`). `vercel link` targeted `acres`; the
+created `.env.local` and a `vercel env pull --environment=preview` file were
+moved to a 0700 session scratch directory outside the repository and only
+variable names were listed.
+
+**Blob (server SDK).** `npm run vercel:probe -- blob` on Node 24.21.0 against
+`acres-preview-probe` returned `bytes 5242880, checksumVerified true,
+anonymousReadDenied true, browserUploadProven false, cleanupSucceeded true,
+launchApproved false`; a follow-up store read showed no residue. The store's
+connection metadata still lists production, but the env var targets only
+preview/development.
+
+**Database.** Neon reports PostgreSQL **18.6** with PostGIS **3.6.4**
+available, matching the reference `postgis/postgis:18-3.6`. `neondb_owner` is a
+`neon_superuser` member with `BYPASSRLS`, so it is bootstrap-only. A session
+script mirrored `bootstrap-production-roles.sh`: `acres_migrator` (LOGIN,
+CREATEDB, BYPASSRLS), `acres_app` (LOGIN, NOBYPASSRLS, not in
+`neon_superuser`), `acres_test` as a **NOLOGIN placeholder** only because
+migrations grant to it, database `acres` owned by the migrator, PostGIS,
+default privileges, and `PUBLIC` connect revoked on `neondb`/`acres`.
+Generated passwords stayed in that scratch directory. `prisma migrate deploy`
+as the migrator over the direct host applied all **18** migrations; status
+reports the schema up to date. Hardening mirrored
+`harden-runtime-privileges.sh` for the `acres` database.
+
+Verification as `acres_app` over **both** the pooled and the direct host:
+42 tables, **30 RLS-enabled and all 30 forced**; the 12 non-RLS tables are
+exactly the reference database's set; no-context `Organization` read returns
+0 rows; insert into `AuditEvent` without context fails with the RLS policy
+error; `_prisma_migrations` read is permission-denied; PostGIS functions run;
+a transaction-local organization context is empty after commit. Pooled
+context reuse: 20 sequential sessions with 0 leaked contexts and 8 concurrent
+transactions each reading back only their own context. This proves the
+database role/RLS seam, not the application's pooled Prisma behaviour under
+real traffic.
+
+Follow-ups before any deployment: put the `acres_app` pooled URL (and never an
+owner/migrator URL) in project env as **sensitive**; remove or mark sensitive
+the `NEON_OWNER_*` variables; move migration execution to a guarded,
+non-runtime step; decide whether to retire the `acres_test` placeholder from
+hosted migrations.
 
 ## Target and gates
 
@@ -49,13 +96,13 @@ with internal bindings and explicit public routing. Nest uses native Function
 entrypoint detection. The account-specific arrangement and queue consumer layout
 require a preview proof before active configuration is added.
 
-| Gate              | Required evidence                                                                                                            | Current state                                                                          |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Database          | Migrated isolated Neon/PostGIS; runtime cannot bypass forced RLS; pooled context reuse, concurrent transactions and rollback | Blocked: selected Marketplace resource/access absent                                   |
-| Blob              | Private direct browser upload above function body limit; scoped token, authorized private read, checksum, cancel/delete      | Blocked: selected isolated store/access absent; server SDK probe alone is insufficient |
-| Scanner           | Pinned Sandbox scanner/signatures; clean/EICAR, missing/stale signatures, timeout/memory/byte limits and cleanup             | Blocked: account/plan and pinned scanner source/signatures absent                      |
-| Durable execution | Same-project producer/consumer, forged request denial, duplicate/retry/interruption and preview isolation                    | Blocked: selected project/layout and live access absent                                |
-| Production        | Account-bound recovery, capacity, telemetry, security and eleven signed launch categories                                    | Open; no categories approved by local implementation                                   |
+| Gate              | Required evidence                                                                                                            | Current state                                                                                         |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Database          | Migrated isolated Neon/PostGIS; runtime cannot bypass forced RLS; pooled context reuse, concurrent transactions and rollback | Proven for preview at the database seam (2026-10-15); application-level pooled Prisma acceptance open |
+| Blob              | Private direct browser upload above function body limit; scoped token, authorized private read, checksum, cancel/delete      | Server SDK proof passed (2026-10-15); browser direct upload, scoped tokens and cancel still open      |
+| Scanner           | Pinned Sandbox scanner/signatures; clean/EICAR, missing/stale signatures, timeout/memory/byte limits and cleanup             | Blocked: account/plan and pinned scanner source/signatures absent                                     |
+| Durable execution | Same-project producer/consumer, forged request denial, duplicate/retry/interruption and preview isolation                    | Blocked: selected project/layout and live access absent                                               |
+| Production        | Account-bound recovery, capacity, telemetry, security and eleven signed launch categories                                    | Open; no categories approved by local implementation                                                  |
 
 ## Implementation record
 
