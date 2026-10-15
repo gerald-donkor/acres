@@ -1,5 +1,10 @@
 # Acres scanner image (Vercel Sandbox)
 
+**Hosted scanning uses the Sandbox snapshot built by `npm run
+vercel:scanner-snapshot` (Prompt 373; VCR storage is not free on Hobby), not
+this image.** This Dockerfile is the local, reproducible mirror for Docker dry
+runs: same ClamAV release, `freshclam.conf` and `/var/lib/clamav` layout.
+
 ClamAV for the `vercel-sandbox` scanner adapter and the `scanner*` platform
 probes. Sandbox boots it as a VM and ignores `ENTRYPOINT`/`CMD`; the adapter
 runs `node` and `clamscan` itself, with all egress denied.

@@ -2589,12 +2589,17 @@ default, `ClamavScannerAdapter` over clamd) or `vercel-sandbox`
 (`VercelSandboxScannerAdapter`, one non-persistent deny-all Vercel Sandbox per
 scan through `@vercel/sandbox` **3.8.0**, now a runtime dependency loaded
 lazily on the first scan). The Sandbox profile requires
-`SCANNER_SANDBOX_IMAGE` (a digest-pinned `vcr.vercel.com` image),
+`SCANNER_SANDBOX_SNAPSHOT_ID` (the `snap_…` scanner snapshot built by
+`npm run vercel:scanner-snapshot`; it replaced `SCANNER_SANDBOX_IMAGE` in
+prompt 373, and the VM must report it as `sourceSnapshotId`),
 `SCANNER_MAIN_SHA256`, `SCANNER_DAILY_SHA256` and
 `SCANNER_MAX_SIGNATURE_AGE_HOURS` (1–168); `SCANNER_SANDBOX_TIMEOUT_MS`
 defaults to 120000 (30000–600000). `CLAMAV_HOST`/`CLAMAV_PORT` must be unset,
-and `UPLOAD_MAX_BYTES` may not exceed 52428800. The profile is not usable yet:
-no image is hosted (see [`docs/vercel-deployment.md`](vercel-deployment.md)).
+and `UPLOAD_MAX_BYTES` may not exceed 52428800. The scanner snapshot is
+hosted on the preview project and passed the hosted probe cases (prompt 373),
+but no deployment sets `SCANNER_PROVIDER` yet, so application scanning through
+a deployed preview is unproven (see
+[`docs/vercel-deployment.md`](vercel-deployment.md)).
 
 ## 15. Phase 7A geography and ingestion foundation
 

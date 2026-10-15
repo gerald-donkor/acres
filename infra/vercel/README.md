@@ -23,10 +23,10 @@ paste keys into chat, source, shell history or documentation):
 | `VERCEL_ENV=preview`                                      | Reject accidental production invocation                                               |
 | `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                     | Selected account identities; resolve and check them through MCP first                 |
 | `BLOB_READ_WRITE_TOKEN`                                   | Only for `blob`/`blob-browser`: token for the selected isolated private store         |
-| `VERCEL_TOKEN`                                            | `scanner*` modes only: restricted access to the selected preview project              |
+| `VERCEL_OIDC_TOKEN` or `VERCEL_TOKEN`                     | `scanner*` modes and the snapshot build: OIDC preferred (see below)                   |
 | `ACRES_VERCEL_PROBE_REGION`                               | `scanner*` modes only: explicit Vercel region (no implicit `iad1` fallback)           |
-| `ACRES_SCANNER_IMAGE`                                     | `scanner*` modes only: `vcr.vercel.com/...@sha256:<64 lowercase hex>` image           |
-| `ACRES_SCANNER_MAIN_SHA256`, `ACRES_SCANNER_DAILY_SHA256` | Reviewed digests of `/var/lib/clamav/main.cvd` and `daily.cvd` in that pinned image   |
+| `ACRES_SCANNER_SNAPSHOT_ID`                               | `scanner*` modes only: the scanner snapshot (`snap_…`) printed by the build           |
+| `ACRES_SCANNER_MAIN_SHA256`, `ACRES_SCANNER_DAILY_SHA256` | Digests of `/var/lib/clamav/main.cvd` and `daily.cvd` in that snapshot                |
 | `ACRES_SCANNER_MAX_SIGNATURE_AGE_HOURS`                   | Adopted freshness threshold, integer 1–168; probe bound, no default production policy |
 
 `npm run vercel:probe -- blob` uploads a fresh random-path **5 MiB** synthetic
@@ -62,11 +62,58 @@ carries statuses, booleans and header _shapes_ only, never a URL, token or
 signature. Exit code 1 means a gate case failed. This proves the storage seam,
 not application acceptance through a deployed preview.
 
-`npm run vercel:probe -- scanner` needs the pinned image built from
-[scanner/](scanner/README.md): `node`, `sigtool`, `clamscan` and the two
-checksum-bound CVD files. It creates **one** Sandbox with `persistent: false`,
-`deny-all` egress, one vCPU and a 120-second lifetime, and checks that the
-SDK's `sandbox.image` ends with the configured digest. A first command records
+**Authentication.** With `VERCEL_OIDC_TOKEN` set (`npx vercel@latest env pull
+~/.config/acres/vercel-preview/preview.env --environment=preview --yes`, valid
+about 12 hours), the scripts first decode the token's payload, without
+verifying it, and require its `project_id` and `owner_id` claims to equal
+`VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID` and at least 30 minutes left before
+`exp`. They then pass that token explicitly as `token`/`teamId`/`projectId`.
+Passed nothing, the SDK would refresh an expiring token for the working
+directory's `.vercel` link (`@vercel/oidc` `findProjectInfo`), not for the
+checked project. The token and its claims are never printed. OIDC wins when
+both are set; `VERCEL_TOKEN` is the fallback, passed the same way.
+
+**Scanner snapshot build.** `npm run vercel:scanner-snapshot -- --write-env
+~/.config/acres/vercel-preview/scanner.env` (same opt-in, target, region and
+auth variables) boots one `vercel/sandbox/node:24` builder with two vCPUs, a
+15-minute lifetime, `persistent: false` and egress limited to `github.com`,
+`release-assets.githubusercontent.com` and `database.clamav.net`. In the VM it:
+
+1. downloads the official `clamav-1.5.4.linux.x86_64.deb` with Node's
+   `fetch` and installs it with `dpkg` only if its SHA-256 equals the pinned
+   GitHub release digest;
+2. fetches whole CVDs with `freshclam` into `/var/lib/clamav`, using
+   [scanner/freshclam.conf](scanner/freshclam.conf) read from the repository,
+   with the same checks as the Dockerfile;
+3. records the OS, Node and ClamAV versions and each CVD's hash, version and
+   build time;
+4. runs the scan sandbox's own signature check, clean and EICAR scans as the
+   default user, then deletes `/tmp/acres-scan` and `/tmp/acres-build` and
+   checks they are gone;
+5. sets the builder's policy to `deny-all`, snapshots it with an 8-day
+   expiry (longer than the 168-hour age ceiling), and deletes the builder with
+   `deleteOrphanSnapshots: false` (`true` would delete the scanner).
+
+Every step needs exit 0 **and** a marker line. A failed step aborts before the
+snapshot and still deletes the builder. The summary JSON (snapshot id, size,
+expiry, versions, hashes, build times) goes to stdout. `--write-env <path>`
+writes `ACRES_SCANNER_SNAPSHOT_ID` and the two hashes to a 0600 file and
+refuses any path inside the repository or through a symlink. `--replace
+<snap_id>` deletes that one old snapshot after the new one reports `created`
+**and** its summary and env file are saved, so a failed replace loses nothing;
+nothing is ever deleted by listing. Deleting a snapshot that a deployment's
+`SCANNER_SANDBOX_SNAPSHOT_ID` still names makes every scan there fail closed
+(`scanner_unavailable`) until the variable is updated and redeployed. For a
+live deployment, build **without** `--replace`, switch the variables and
+redeploy, then delete the old one (`npx vercel@latest sandbox snapshots delete
+<snap_id>`). `--persistent-builder` is the
+documented fallback if `snapshot()` refuses a non-persistent sandbox.
+
+`npm run vercel:probe -- scanner` needs that snapshot: `node`, `sigtool`,
+`clamscan` and the two checksum-bound CVD files. It creates **one** Sandbox
+from it with `persistent: false`, `deny-all` egress, one vCPU and a
+120-second lifetime, and checks that the SDK's `sandbox.sourceSnapshotId` is
+the configured id. A first command records
 the VM's uid and whether it can read `/var/lib/clamav/daily.cvd` and write
 `/tmp/acres-scan`. The signature check (identical to the server's
 `sandbox-signature-check.ts`) verifies both hashes, non-future build dates and
@@ -78,15 +125,25 @@ flags; clean needs exit 0 **and** the file's `OK` line, EICAR exit 1 **and** a
 `npm run vercel:probe -- scanner-failures` runs nine cases, each in its own
 short-lived Sandbox with the same settings, and passes each only on its
 expected fail-closed result: a wrong `main.cvd` hash (exit 2); an empty
-database directory (the image has no `sudo`; non-zero exit); a 0.001-hour age
+database directory, so the real one is untouched (non-zero exit); a 0.001-hour age
 (exit 3); egress to `database.clamav.net` (the script's fetch-failed exit 7);
 a 3-second command `timeoutMs` (must reject or exit non-zero after 2.5–10 s); a
-15-second session (`sleep 60` must reject after 8–40 s; the lower bounds stop an
+15-second session (`sleep 60` must reject or exit non-zero after 8–40 s;
+hosted, it resolves with exit 143; the lower bounds stop an
 instant unrelated rejection from passing); a 7 MiB file under 6M limits, which reads `OK` without
 `--alert-exceeds-max=yes` and must report `Heuristics.Limits.Exceeded` with a
 non-zero exit with it (ClamAV 1.5.4 exits **2** there, measured locally); a
 malformed ZIP (any completed exit); and a memory measurement. The two modes
 together create at most **ten** Sandboxes. Exit code 1 means a case failed.
+
+Both modes end with one more gate, `baseSnapshotSurvived`: 30 seconds after
+the last scan sandbox is deleted (orphan deletion is asynchronous),
+`Snapshot.get` must still report the scanner snapshot `created`. Three
+diagnostics never affect a result: the raw `exitCode` of a killed command
+(`command-timeout`); the session-end error's type, HTTP status and stream
+code, plus the sandbox's session count, because `runCommand` resumes a
+stopped session (`session-timeout`; `listSessions` is not resume-wrapped);
+and whether `writeFiles` creates a missing parent directory (`size-limit`).
 
 Cleanup is `stop()` then `delete({ deleteOrphanSnapshots: true })`, each with a
 30-second timeout. Sandboxes are persistent by default and snapshot on stop, so

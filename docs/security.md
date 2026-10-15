@@ -1928,13 +1928,16 @@ rows above are unchanged.
   sweeper exists. Hosted application acceptance through a deployed preview is
   still open.
 
-### Vercel Sandbox scanner — Prompt 372 (2026-10-15)
+### Vercel Sandbox scanner — Prompts 372–373 (2026-10-15)
 
 Applies only when `SCANNER_PROVIDER=vercel-sandbox`. The clamd profile and its
 rows above are unchanged. TM-06's control for this profile:
 
-- **Isolation and egress.** Each scan boots its own Firecracker VM with
-  `networkPolicy: 'deny-all'`, one vCPU and no `env`, `source` or ports. No
+- **Isolation and egress.** Each scan boots its own Firecracker VM from the
+  scanner snapshot with `networkPolicy: 'deny-all'` passed at create, one
+  vCPU and no `env` or ports. The snapshot does not carry the builder's
+  allow-list: the hosted `egress-denied` case (fetch fails, exit 7) runs
+  from it. No
   credential enters the VM; the server authenticates to the Sandbox API with
   its own OIDC identity. The bytes go to the fixed path
   `/tmp/acres-scan-upload`, so no user filename reaches the VM.
@@ -1943,11 +1946,32 @@ rows above are unchanged. TM-06's control for this profile:
   `stop()` and `delete({ deleteOrphanSnapshots: true })`, each with a 30 s
   timeout. A `clean` result whose VM cannot be confirmed deleted becomes
   `failed`/`scanner_error`; `infected` stays infected.
-- **Pinned scanner.** The VM must report the configured image digest. Before
-  scanning, an in-VM check must match `main.cvd`/`daily.cvd` to pinned SHA-256
-  values and find `daily.cvd` within the adopted age, and print a marker.
+- **Pinned scanner (Prompt 373).** The VM must report
+  `sourceSnapshotId` equal to the configured `SCANNER_SANDBOX_SNAPSHOT_ID`.
+  The SDK has no API to modify a snapshot in place, but its id is not a
+  content hash, so the content pin is
+  the in-VM check: `main.cvd`/`daily.cvd` must match pinned SHA-256 values,
+  `daily.cvd` must be within the adopted age, and a marker must print.
   Anything else is `scanner_unavailable`. No signature download happens at
-  scan time and there is no fallback, so a stale image fails closed.
+  scan time and there is no fallback, so a stale snapshot fails closed.
+- **Snapshot build (Prompt 373).** `npm run vercel:scanner-snapshot` installs
+  the official ClamAV 1.5.4 `.deb` only if its SHA-256 equals the GitHub
+  release digest; the detached `.sig` is not verified because no Talos
+  signing-key source is pinned. The builder holds no customer bytes and its
+  egress is an allow-list of `github.com`,
+  `release-assets.githubusercontent.com` and `database.clamav.net` (SNI,
+  TLS only). Before snapshotting it removes `/tmp/acres-scan` (EICAR, the
+  clean CSV) and `/tmp/acres-build` (the `.deb`, scripts, config) and
+  checks they are gone, then sets its own policy to `deny-all`. A failed step
+  never snapshots. Credentials: OIDC preferred; the token's
+  `project_id`/`owner_id` claims must name the target; tokens and claims are
+  never printed, and nothing credential-bearing is written into the VM.
+- **The base snapshot is a high-value artifact.** Anyone who can replace it
+  and the configured id controls the scanner binaries. The builder is deleted
+  with `deleteOrphanSnapshots: false`, because `true` would delete the
+  scanner it just made. Scan VMs are deleted with `true`; the hosted
+  `baseSnapshotSurvived` gate shows that this does not remove the source
+  snapshot, which a scan VM does not own.
 - **Positive evidence only.** SDK 3.8.0 reports a missing exit code as 0, so
   `clean` needs exit 0 **and** the file's `OK` line. Exit 1 is `infected`.
   Any other exit, including ClamAV 1.5.4's exit 2 for
@@ -1956,7 +1980,14 @@ rows above are unchanged. TM-06's control for this profile:
 - **Archive expansion.** `--max-scansize=50M` caps decompressed bytes, so a
   small XLSX that expands past it fails as `scanner_error` and the upload is
   rejected. This fails closed but differs from the clamd profile.
-- **Residuals.** No image is hosted, so none of this is proven on the
-  platform yet (VCR storage is not free on Hobby; see
-  `docs/vercel-deployment.md`). Readiness reports configuration only, never
-  a live VM. Signature rebuild cadence is an open production blocker.
+- **Residuals.** The CVD hash check covers signatures, not binaries:
+  `clamscan`, `sigtool` and `node` are pinned only by the `.deb` digest
+  at build time and by the snapshot id afterwards. The managed image's
+  default user (uid 1000) has `sudo`, so a `clamscan` exploit could gain
+  root inside its one-off, deny-all VM; the VM is deleted after each scan.
+  The hosted probe saw a session end resolve the running command with exit
+  143; for a scan that maps to `scanner_error` rather than
+  `scanner_timeout` (still fail closed). Hosted evidence is from the probe only (see
+  `docs/vercel-deployment.md`); app upload → scan through a deployed preview
+  is unproven. Readiness reports configuration only, never a live VM.
+  Signature rebuild cadence is an open production blocker.

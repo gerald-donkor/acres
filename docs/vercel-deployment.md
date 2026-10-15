@@ -11,7 +11,7 @@ Starting source: `a1350d0` on `main`.
 
 Prompt 370 is approved and still executing. Remaining checklist items may be
 split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
-scanner image); each
+scanner image, Prompt 373 = scanner snapshot); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -52,6 +52,22 @@ scripts/vercel/neon-verify.sh               # harden + RLS/pooling evidence
   VERCEL_TEAM_ID=team_zE3mp7nrEZ6a7cxRavwUMYC4 \
   VERCEL_PROJECT_ID=prj_q9ApajZWDgdYZetnm5s5oakEjrUD \
   node scripts/vercel/probe-platform.js blob)   # or blob-browser
+# scanner: OIDC from preview.env; build first, then probe (Prompt 373)
+(set -a; . ~/.config/acres/vercel-preview/preview.env; set +a; \
+  export ACRES_VERCEL_PROBE=isolated-synthetic-preview VERCEL_ENV=preview \
+  VERCEL_TEAM_ID=team_zE3mp7nrEZ6a7cxRavwUMYC4 \
+  VERCEL_PROJECT_ID=prj_q9ApajZWDgdYZetnm5s5oakEjrUD \
+  ACRES_VERCEL_PROBE_REGION=iad1; \
+  node scripts/vercel/build-scanner-snapshot.js --replace <old snap_id> \
+    --write-env ~/.config/acres/vercel-preview/scanner.env)
+(set -a; . ~/.config/acres/vercel-preview/preview.env; \
+  . ~/.config/acres/vercel-preview/scanner.env; set +a; \
+  export ACRES_VERCEL_PROBE=isolated-synthetic-preview VERCEL_ENV=preview \
+  VERCEL_TEAM_ID=team_zE3mp7nrEZ6a7cxRavwUMYC4 \
+  VERCEL_PROJECT_ID=prj_q9ApajZWDgdYZetnm5s5oakEjrUD \
+  ACRES_VERCEL_PROBE_REGION=iad1 ACRES_SCANNER_MAX_SIGNATURE_AGE_HOURS=48; \
+  node scripts/vercel/probe-platform.js scanner && \
+  node scripts/vercel/probe-platform.js scanner-failures)
 ```
 
 **Remaining work, in order** (each ends verified, reviewed, recorded here and
@@ -68,13 +84,17 @@ committed per AGENTS.md §2):
       presigned protocol is proven from a real browser on the preview store
       (see "Blob browser upload — 2026-10-15" below). The hosted application
       proof waits for the first preview deployment.
-- [ ] **Scanner image** — **blocked on cost** (Prompt 372, see "Scanner
-      image — 2026-10-15" below). The image definition, the probe's
-      persistence fix and failure cases, and the `vercel-sandbox` adapter are
-      done locally. No official page shows VCR storage free on Hobby, and the
-      user ruled out any paid usage, so nothing was pushed and no hosted case
-      ran. Next: a snapshot-based scanner (Hobby includes 15 GB of Sandbox
-      snapshot storage and is never charged), as its own prompt.
+- [x] **Scanner source** — a Sandbox snapshot, built and proven on the
+      preview project (Prompt 373, see "Scanner snapshot — 2026-10-15"
+      below): `scanner` and all nine `scanner-failures` cases passed hosted,
+      with `baseSnapshotSurvived` in both modes and no residue. VCR stays
+      unused (not free on Hobby, Prompt 372). The secrets directory now also
+      holds `scanner.env` (`ACRES_SCANNER_SNAPSHOT_ID` and the two hashes,
+      0600). Still open, owned by later items: app upload → scan through a
+      deployed preview, and the rebuild cadence (a production blocker; the
+      snapshot expires **2026-10-23** and daily signatures pass a 48 h probe
+      threshold only until **2026-10-17 06:24 UTC**, so rebuild with
+      `--replace` before relying on it).
 - [ ] **First preview deployment** — Services/route config, only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, remove or mark
       sensitive the `NEON_OWNER_*` variables, migrations as a guarded
@@ -86,10 +106,12 @@ committed per AGENTS.md §2):
       env first**: a configured token always takes precedence over OIDC in the
       SDK, so OIDC cannot be proven while it is set. Then prove app upload →
       complete → scan through the deployed preview with
-      `STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID` set, OIDC. Once a
-      scanner source is hosted, set `SCANNER_PROVIDER=vercel-sandbox` and the
-      `SCANNER_*` variables, leave `CLAMAV_*` unset, and prove app upload →
-      scan through the deployed preview.
+      `STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID` set, OIDC. Then set
+      `SCANNER_PROVIDER=vercel-sandbox`, `SCANNER_SANDBOX_SNAPSHOT_ID`,
+      `SCANNER_MAIN_SHA256`, `SCANNER_DAILY_SHA256` and
+      `SCANNER_MAX_SIGNATURE_AGE_HOURS` from a fresh snapshot build, leave
+      `CLAMAV_*` unset, and prove app upload → scan through the deployed
+      preview.
 - [ ] **Production decision** — Cron proves only on production; Hobby is
       non-commercial. Needs the user's plan decision and the eleven launch
       categories before any promotion.
@@ -641,7 +663,8 @@ reads `VERCEL_TOKEN` from the environment.
 `VERCEL_OIDC_TOKEN`, takes team and project from its claims, and refreshes it
 through `@vercel/oidc`. A future hosted run can use a freshly pulled OIDC
 token instead of a long-lived `VERCEL_TOKEN`. The probe still requires
-`VERCEL_TOKEN` today, and this prompt does not change that.
+`VERCEL_TOKEN` today, and this prompt does not change that. _(Prompt 373
+changed it: OIDC is now preferred and `VERCEL_TOKEN` is the fallback.)_
 
 **Open blockers.**
 
@@ -666,9 +689,152 @@ token instead of a long-lived `VERCEL_TOKEN`. The probe still requires
   killed command (exit 137, or a missing code read as 0); whether a session-end
   rejection is a 410 that the SDK's `withResume` turns into a fresh session
   (`dist/sandbox.js`), including for `persistent: false`; and real timings.
+  _(Answered by Prompt 373's hosted runs; see "Scanner snapshot" below.)_
 - The `SCANNER_SANDBOX_IMAGE` contract (a `vcr.vercel.com` digest) may be
   replaced by a snapshot id in the snapshot-based scanner prompt. Don't treat it
-  as settled.
+  as settled. _(Superseded by Prompt 373: it is now
+  `SCANNER_SANDBOX_SNAPSHOT_ID`; see below.)_
+
+### Scanner snapshot — 2026-10-15
+
+Prompt 373. The hosted scanner source is a Vercel Sandbox **snapshot**, not a
+VCR image. Variables `SCANNER_SANDBOX_SNAPSHOT_ID` (server) and
+`ACRES_SCANNER_SNAPSHOT_ID` (probe) replace `SCANNER_SANDBOX_IMAGE` and
+`ACRES_SCANNER_IMAGE`; no hosted environment ever set the old names.
+
+**$0 basis.** [Sandbox pricing](https://vercel.com/docs/sandbox/pricing) (last
+updated 2026-09-10) includes for Hobby: Active CPU 5 h/month, Provisioned
+Memory 420 GB-h/month, Creations 5,000/month, Data Transfer 20 GB/month and
+**Snapshot Storage 15 GB (lifetime)**, and says Hobby "will not be charged for
+any additional usage" (creation pauses instead). Downloads into a sandbox are
+free. "(lifetime)" is undefined there, so it is read as a cumulative cap and at
+most **one** scanner snapshot is kept.
+
+**Package pin.** GitHub release `clamav-1.5.4` (published 2026-08-07), asset
+`clamav-1.5.4.linux.x86_64.deb`, 105,819,396 bytes,
+`sha256:28d6efc5b4423e7830c3559339552eb53870a9eac51ac4efb37d60530d329886`
+(re-read from the release API on 2026-10-15). It is installed only on a digest
+match. Its `.sig` is **not verified**: no Talos signing-key source is pinned, so
+the summary records `not-verified:no-pinned-signing-key`.
+
+**Builder egress.** `curl -sIL` on the release URL: `github.com` answers 302
+to `release-assets.githubusercontent.com`. The allow-list is those two hosts
+plus `database.clamav.net`; `allow-all` was not needed.
+
+**Build** (`npm run vercel:scanner-snapshot`, OIDC auth, `iad1`):
+
+| field             | value                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------- |
+| snapshot id       | `snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA` (not a secret)                                                   |
+| size              | 460,912,577 B (CLI: 440 MB); one snapshot stored                                                     |
+| expires           | 2026-10-23T15:00:52Z (8 days)                                                                        |
+| base image        | `vercel/sandbox/node:24`: **Ubuntu 26.04**, **Node v24.19.0**, uid 1000, `sudo` yes, no `curl`/`gpg` |
+| ClamAV            | 1.5.4 from the pinned `.deb`                                                                         |
+| `main.cvd`        | v63, 16 Dec 2025 23:18 +0000, `0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365`     |
+| `daily.cvd`       | v28154, 15 Oct 2026 06:24 +0000, `af003f6eb87905bc3044e90e489d5f79e4897f57c1930b8854672e649e72f3c3`  |
+| `bytecode.cvd`    | v339, 11 Sep 2025 08:29 -0400                                                                        |
+| `/var/lib/clamav` | the three `.cvd`, three `*.cvd.sign`, `freshclam.dat`; no `.cld`                                     |
+| egress            | allow-list while building; builder set to `deny-all` before `snapshot()`                             |
+| builder           | `persistent: false` (snapshot accepted; the persistent fallback was not needed)                      |
+
+The main and daily hashes equal Prompt 372's local Docker build byte for byte,
+which independently cross-checks the CVDs. ClamAV 1.5.4 also wrote detached
+`*.cvd.sign` files next to the CVDs.
+
+The **first build attempt failed** at `record-scanner` on a parser defect. The
+official `.deb`'s compiled-in database directory is empty, so
+`clamscan --version` prints `ClamAV 1.5.4` without the `/<daily>/<date>`
+suffix (confirmed against the local 1.5.4 image). The builder was deleted and
+left no residue. The parser was fixed and a test added, and the one allowed
+retry succeeded.
+
+**Hosted probe runs** (`ACRES_SCANNER_MAX_SIGNATURE_AGE_HOURS=48`):
+
+- `scanner`: **passed**. uid 1000, signatures readable, `/tmp/acres-scan`
+  writable, signature check `signatures-ok`, clean `OK`/0 (9,843 ms), EICAR
+  `Eicar-Test-Signature FOUND`/1 (9,989 ms), `baseSnapshotSurvived: true`.
+- `scanner-failures`, first run: 8 of 9 cases passed and
+  `baseSnapshotSurvived: true`; `session-timeout` failed (see below).
+- `scanner-failures`, rerun after the probe fix: **all 9 passed**,
+  `baseSnapshotSurvived: true`, `gatePassed: true`. wrong-hash exit 2;
+  missing (empty database directory) exit 1; stale exit 3; egress-denied
+  exit 7; command-timeout resolved 137 at 3,423 ms; session-timeout resolved
+  143 at 14,044 ms; size-limit `OK`/0 without the alert flag and
+  `Heuristics.Limits.Exceeded.MaxFileSize FOUND`/2 with it; malformed ZIP 0
+  `OK`; memory: `MemTotal` 2,287 MiB, `clamscan` peak RSS 967 MiB, exit 0,
+  14,429 ms.
+
+**Observed shapes** (the unknowns Prompt 372 named):
+
+- **Killed command** (`timeoutMs: 3000`): resolves with **exit 137** after
+  about 3.5 s. It does not reject and does not read as 0.
+- **Session end** (15 s session): the running command **resolves with exit
+  143** (SIGTERM) at about 14.9 s instead of rejecting. The first run's
+  `session-timeout` case assumed a rejection and failed. That was a probe
+  defect, not a security failure: the gate now accepts "rejected, or resolved
+  non-zero, inside 8–40 s" (the `command-timeout` rule), and a resolved exit 0
+  still fails. On the rerun the sandbox listed **one** session after
+  the session ended, so no second VM was resumed. For the adapter a session end is `scanner_error`
+  (fail closed), not `scanner_timeout`.
+- **`writeFiles` into a missing directory**: creates the parents
+  (`writeCreatesParents: true`). The adapter's `/tmp/acres-scan-upload` path
+  does not rely on this.
+
+**Orphan-deletion branch.** Scan sandboxes keep
+`delete({ deleteOrphanSnapshots: true })`. `baseSnapshotSurvived` held in
+both modes on every run, 30 s after the last delete, and the scanner snapshot
+was still `created` in the residue listing minutes later. Deleting a scan VM
+that was booted from the snapshot does not delete it. The builder alone uses
+`false`.
+
+**Residue check** (`npx vercel@latest sandbox list --all` and
+`npx vercel@latest sandbox snapshots list`, each with `--project
+prj_q9ApajZWDgdYZetnm5s5oakEjrUD --scope team_zE3mp7nrEZ6a7cxRavwUMYC4`):
+baseline before the work showed none of either. After every run: **no sandboxes**,
+and exactly **one** snapshot, `snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA` (`created`,
+440 MB, `iad1`). The failed first build also left nothing behind. Every
+sandbox name was printed to stderr; none needed manual deletion.
+
+**Usage.** 21 Sandbox creations (2 builds, 1 `scanner`, 2 × 9
+`scanner-failures`) out of a budget of 23 and 5,000/month included. `vercel
+usage` reports no billing cost data for this Hobby team ("does not mean usage
+was zero"), so CPU is an **estimate**, an upper bound from wall-clock time:
+about 20 vCPU-minutes of builders (2 vCPU) plus about 15 vCPU-minutes of probe
+VMs (1 vCPU), well under 1 h of the 5 h included. One stored snapshot of
+about 0.46 GB against 15 GB. No charge applies on Hobby.
+
+**Deltas from the plan (Prompt 373), each deliberate.**
+
+- **OIDC credentials are passed explicitly**, not omitted. Review found that
+  with no credentials, SDK 3.8.0 refreshes an expiring token through
+  `@vercel/oidc` 4.0.0 for the cwd's `.vercel` link (`findProjectInfo`), not
+  for the project whose claims were checked. The scripts now pass the checked
+  token with its team and project ids, and refuse a token with under 30 minutes
+  left, so no refresh happens. The hosted runs above used the earlier
+  no-credentials path against the same linked project. A read-only
+  `Snapshot.get` with the bound credentials then returned `created`. The
+  OIDC `environment` claim is not checked: a token pulled with
+  `--environment=preview` carries `environment: development`.
+- **`--replace` runs after the summary and env file are saved**, so a failed
+  replace cannot lose the new snapshot's hashes.
+- **The summary has `os`** (for example `ubuntu 26.04`) in place of
+  `ubuntuVersion`, and adds `baseImage`, `builderUid`, `tools`,
+  `databaseFiles`, `egressAtSnapshot` and `builderPersistent`.
+- **The session-timeout gate** accepts a resolved non-zero exit (see above).
+
+**Rebuild cadence (production blocker, now concrete).** At least every
+`SCANNER_MAX_SIGNATURE_AGE_HOURS / 2` hours: run
+`npm run vercel:scanner-snapshot -- --write-env …` **without** `--replace`,
+update `SCANNER_SANDBOX_SNAPSHOT_ID` and both hashes and redeploy, then delete
+the old snapshot by id. Deleting first (`--replace`) makes every scan fail
+closed with `scanner_unavailable` until the redeploy; `--replace` suits only
+targets no deployment uses, such as these probe runs. A protected Vercel Cron or a
+GitHub Actions job could run it, but Cron runs on production only, so on Hobby
+it waits for the production decision. Not built here.
+
+**Still open:** app upload → scan through a deployed preview (no deployment
+sets `SCANNER_PROVIDER` yet); the rebuild cadence above; the 50 MiB cap; the
+archive-expansion residual. None of this is production scanner acceptance.
 
 ## Target and gates
 
@@ -677,13 +843,13 @@ with internal bindings and explicit public routing. Nest uses native Function
 entrypoint detection. The account-specific arrangement and queue consumer layout
 require a preview proof before active configuration is added.
 
-| Gate              | Required evidence                                                                                                            | Current state                                                                                         |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Database          | Migrated isolated Neon/PostGIS; runtime cannot bypass forced RLS; pooled context reuse, concurrent transactions and rollback | Proven for preview at the database seam (2026-10-15); application-level pooled Prisma acceptance open |
-| Blob              | Private direct browser upload above function body limit; scoped token, authorized private read, checksum, cancel/delete      | Seam proven: server SDK and browser presigned protocol (2026-10-15); deployed-app upload open         |
-| Scanner           | Pinned Sandbox scanner/signatures; clean/EICAR, missing/stale signatures, timeout/memory/byte limits and cleanup             | Local only (Prompt 372): image, probe cases, adapter; VCR push blocked on cost; no hosted case run    |
-| Durable execution | Same-project producer/consumer, forged request denial, duplicate/retry/interruption and preview isolation                    | Platform seams proven with a synthetic probe (2026-10-15); application job on a hosted preview open   |
-| Production        | Account-bound recovery, capacity, telemetry, security and eleven signed launch categories                                    | Open; no categories approved by local implementation                                                  |
+| Gate              | Required evidence                                                                                                            | Current state                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Database          | Migrated isolated Neon/PostGIS; runtime cannot bypass forced RLS; pooled context reuse, concurrent transactions and rollback | Proven for preview at the database seam (2026-10-15); application-level pooled Prisma acceptance open      |
+| Blob              | Private direct browser upload above function body limit; scoped token, authorized private read, checksum, cancel/delete      | Seam proven: server SDK and browser presigned protocol (2026-10-15); deployed-app upload open              |
+| Scanner           | Pinned Sandbox scanner/signatures; clean/EICAR, missing/stale signatures, timeout/memory/byte limits and cleanup             | Seam proven on preview (Prompt 373): snapshot scanner, all probe cases, no residue; deployed-app scan open |
+| Durable execution | Same-project producer/consumer, forged request denial, duplicate/retry/interruption and preview isolation                    | Platform seams proven with a synthetic probe (2026-10-15); application job on a hosted preview open        |
+| Production        | Account-bound recovery, capacity, telemetry, security and eleven signed launch categories                                    | Open; no categories approved by local implementation                                                       |
 
 ## Implementation record
 
