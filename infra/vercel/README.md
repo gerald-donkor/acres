@@ -10,7 +10,7 @@ application as if it were invocation-safe.
 The Queues layout/delivery probe is a separately deployed synthetic project
 root: see [probes/queues](probes/queues/README.md).
 
-Run `npm run vercel:probe -- --help` without credentials. The SDKs are development-only dependencies; these probes are not bundled into serving code. Local behavior tests:
+Run `npm run vercel:probe -- --help` without credentials. `@vercel/sandbox` is a development-only dependency; `@vercel/blob` is a server runtime dependency since Prompt 371, and these probes are not bundled into serving code. Local behavior tests:
 `npm run vercel:probe-test`. These tests use doubles and approve no hosted gate.
 
 After selecting an isolated synthetic-only preview and permitted resource use
@@ -22,7 +22,7 @@ paste keys into chat, source, shell history or documentation):
 | `ACRES_VERCEL_PROBE=isolated-synthetic-preview`           | Explicit opt-in; does not establish target identity or permission by itself           |
 | `VERCEL_ENV=preview`                                      | Reject accidental production invocation                                               |
 | `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                     | Selected account identities; resolve and check them through MCP first                 |
-| `BLOB_READ_WRITE_TOKEN`                                   | Only for `blob`: token for the selected isolated private store                        |
+| `BLOB_READ_WRITE_TOKEN`                                   | Only for `blob`/`blob-browser`: token for the selected isolated private store         |
 | `VERCEL_TOKEN`                                            | Only for `scanner`: restricted access to the selected preview project                 |
 | `ACRES_VERCEL_PROBE_REGION`                               | Only for `scanner`: explicitly selected Vercel region (no implicit `iad1` fallback)   |
 | `ACRES_SCANNER_IMAGE`                                     | Only for `scanner`: approved `vcr.vercel.com/...@sha256:<64 lowercase hex>` image     |
@@ -37,6 +37,30 @@ that path in `finally`. Cleanup has a separate timeout. Success is only a
 callback provenance, tenant authorization, cancellation and download revocation
 still need real application acceptance. A failed put can leave ambiguous remote
 state; inspect only the test store if cleanup fails. No broad listing/deletion.
+
+`npm run vercel:probe -- blob-browser` proves the presigned protocol the
+`vercel-blob` storage adapter uses, from a real browser. It needs the same
+inputs as `blob`, plus the client workspace's Playwright Chromium. It serves a
+blank page on an ephemeral `127.0.0.1` port, so every request is cross-origin.
+The page generates a seeded **12 MiB** payload (above the 4.5 MB function body
+limit) and PUTs it to a URL from `issueSignedToken` + `presignUrl`, sending
+only `content-type`. The probe then checks:
+
+- server `head`/`get` size, type and SHA-256;
+- refusal of an overwrite replay, a wrong type on an extensionless key, one
+  byte over the signed size, a swapped `pathname` and an expired URL; each
+  refusal also confirms on the server that nothing was written;
+- anonymous denial of the plain private URL;
+- a signed browser GET (bytes, type and disposition shape);
+- that a read token cannot presign another path;
+- a 404 from a still-valid GET URL after deletion.
+
+Two diagnostics without a gate record that a `.csv` extension overrides a wrong
+`content-type`, and that a wrong `x-content-type` is refused. Every pathname
+lives under `acres-probes/<run>/` and is deleted in `finally`. The summary JSON
+carries statuses, booleans and header _shapes_ only, never a URL, token or
+signature. Exit code 1 means a gate case failed. This proves the storage seam,
+not application acceptance through a deployed preview.
 
 `npm run vercel:probe -- scanner` requires a prebuilt approved VCR image with
 `node`, `sigtool`, `clamscan` and the two checksum-bound CVD files. It provisions
