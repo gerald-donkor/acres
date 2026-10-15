@@ -55,7 +55,7 @@ describe('AcresConfigService', () => {
     presignedUploadTtlSeconds: 900,
     acceptedDownloadTtlSeconds: 300,
     scannerProvider: 'vercel-sandbox',
-    scannerSandboxImage: `vcr.vercel.com/t/acres/acres-scanner@sha256:${'a'.repeat(64)}`,
+    scannerSandboxSnapshotId: 'snap_Abc123',
     scannerMainSha256: 'b'.repeat(64),
     scannerDailySha256: 'c'.repeat(64),
     scannerMaxSignatureAgeHours: 48,
@@ -192,7 +192,7 @@ describe('AcresConfigService', () => {
 
     it('returns scanner, upload, parser, and outbox settings', () => {
       expect(service.scannerProvider).toBe('vercel-sandbox');
-      expect(service.scannerSandboxImage).toMatch(/@sha256:a{64}$/);
+      expect(service.scannerSandboxSnapshotId).toBe('snap_Abc123');
       expect(service.scannerMainSha256).toBe('b'.repeat(64));
       expect(service.scannerDailySha256).toBe('c'.repeat(64));
       expect(service.scannerMaxSignatureAgeHours).toBe(48);

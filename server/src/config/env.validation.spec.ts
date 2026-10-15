@@ -738,11 +738,11 @@ describe('validateEnv', () => {
   });
 
   describe('scanner provider selection', () => {
-    const IMAGE = `vcr.vercel.com/dgsloxx417s-projects/acres/acres-scanner@sha256:${'a'.repeat(64)}`;
+    const SNAPSHOT = 'snap_Abc123';
     const SANDBOX_ENV = {
       ...BASE_VALID_ENV,
       SCANNER_PROVIDER: 'vercel-sandbox',
-      SCANNER_SANDBOX_IMAGE: IMAGE,
+      SCANNER_SANDBOX_SNAPSHOT_ID: SNAPSHOT,
       SCANNER_MAIN_SHA256: 'b'.repeat(64),
       SCANNER_DAILY_SHA256: 'c'.repeat(64),
       SCANNER_MAX_SIGNATURE_AGE_HOURS: '48',
@@ -751,11 +751,11 @@ describe('validateEnv', () => {
     it('defaults to clamd and leaves the Sandbox fields unset', () => {
       const config = validateEnv({
         ...BASE_VALID_ENV,
-        SCANNER_SANDBOX_IMAGE: 'ignored',
+        SCANNER_SANDBOX_SNAPSHOT_ID: 'ignored',
         UPLOAD_MAX_BYTES: '104857600',
       });
       expect(config.scannerProvider).toBe('clamav');
-      expect(config.scannerSandboxImage).toBeUndefined();
+      expect(config.scannerSandboxSnapshotId).toBeUndefined();
       expect(config.scannerMainSha256).toBeUndefined();
       expect(config.scannerDailySha256).toBeUndefined();
       expect(config.scannerMaxSignatureAgeHours).toBeUndefined();
@@ -766,7 +766,7 @@ describe('validateEnv', () => {
     it('selects the Sandbox scanner with a 120 s default session', () => {
       const config = validateEnv(SANDBOX_ENV);
       expect(config.scannerProvider).toBe('vercel-sandbox');
-      expect(config.scannerSandboxImage).toBe(IMAGE);
+      expect(config.scannerSandboxSnapshotId).toBe(SNAPSHOT);
       expect(config.scannerMainSha256).toBe('b'.repeat(64));
       expect(config.scannerDailySha256).toBe('c'.repeat(64));
       expect(config.scannerMaxSignatureAgeHours).toBe(48);
@@ -801,18 +801,24 @@ describe('validateEnv', () => {
         { SCANNER_PROVIDER: 'clamd' },
         'SCANNER_PROVIDER must be "clamav" or "vercel-sandbox", received "clamd"',
       ],
-      [{ SCANNER_SANDBOX_IMAGE: undefined }, 'SCANNER_SANDBOX_IMAGE must be'],
       [
-        {
-          SCANNER_SANDBOX_IMAGE: 'vcr.vercel.com/t/acres/acres-scanner:latest',
-        },
-        'SCANNER_SANDBOX_IMAGE must be',
+        { SCANNER_SANDBOX_SNAPSHOT_ID: undefined },
+        'SCANNER_SANDBOX_SNAPSHOT_ID must be a Vercel Sandbox snapshot id (snap_…) when SCANNER_PROVIDER="vercel-sandbox".',
+      ],
+      [
+        { SCANNER_SANDBOX_SNAPSHOT_ID: 'snap_' },
+        'SCANNER_SANDBOX_SNAPSHOT_ID must be',
+      ],
+      [
+        { SCANNER_SANDBOX_SNAPSHOT_ID: 'snap_a/../b' },
+        'SCANNER_SANDBOX_SNAPSHOT_ID must be',
       ],
       [
         {
-          SCANNER_SANDBOX_IMAGE: `docker.io/clamav/clamav@sha256:${'a'.repeat(64)}`,
+          // The retired image contract is refused, not silently accepted.
+          SCANNER_SANDBOX_SNAPSHOT_ID: `vcr.vercel.com/t/acres/acres-scanner@sha256:${'a'.repeat(64)}`,
         },
-        'SCANNER_SANDBOX_IMAGE must be',
+        'SCANNER_SANDBOX_SNAPSHOT_ID must be',
       ],
       [{ SCANNER_MAIN_SHA256: undefined }, 'SCANNER_MAIN_SHA256 must be'],
       [{ SCANNER_MAIN_SHA256: 'B'.repeat(64) }, 'SCANNER_MAIN_SHA256 must be'],

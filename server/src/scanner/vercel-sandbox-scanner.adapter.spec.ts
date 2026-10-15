@@ -7,12 +7,11 @@ import {
   type ScanSandboxCreateParams,
 } from './vercel-sandbox-scanner.adapter';
 
-const DIGEST = `sha256:${'a'.repeat(64)}`;
-const IMAGE = `vcr.vercel.com/team/acres/acres-scanner@${DIGEST}`;
+const SNAPSHOT = 'snap_Abc123';
 const UPLOAD = '/tmp/acres-scan-upload';
 
 const config = {
-  scannerSandboxImage: IMAGE,
+  scannerSandboxSnapshotId: SNAPSHOT,
   scannerMainSha256: 'b'.repeat(64),
   scannerDailySha256: 'c'.repeat(64),
   scannerMaxSignatureAgeHours: 48,
@@ -24,7 +23,7 @@ type Answer = { exitCode: number; stdout: string } | Error;
 function sandboxDouble(
   answers: { check?: Answer; scan?: Answer } = {},
   options: {
-    image?: string | undefined;
+    sourceSnapshotId?: string | undefined;
     failWrite?: boolean;
     failStop?: boolean;
     failDelete?: boolean;
@@ -39,7 +38,8 @@ function sandboxDouble(
   };
   const sandbox: ScanSandbox = {
     name: 'sbx-test',
-    image: 'image' in options ? options.image : IMAGE,
+    sourceSnapshotId:
+      'sourceSnapshotId' in options ? options.sourceSnapshotId : SNAPSHOT,
     runCommand: (params) => {
       commands.push(params);
       events.push(`run:${params.cmd}`);
@@ -107,7 +107,7 @@ describe('VercelSandboxScannerAdapter', () => {
     expect(double.creates).toHaveLength(1);
     const [params] = double.creates;
     expect(params).toMatchObject({
-      image: IMAGE,
+      source: { type: 'snapshot', snapshotId: SNAPSHOT },
       persistent: false,
       networkPolicy: 'deny-all',
       resources: { vcpus: 1 },
@@ -116,11 +116,11 @@ describe('VercelSandboxScannerAdapter', () => {
     expect(params.signal).toBeInstanceOf(AbortSignal);
     expect(Object.keys(params).sort()).toEqual(
       [
-        'image',
         'networkPolicy',
         'persistent',
         'resources',
         'signal',
+        'source',
         'timeout',
       ].sort(),
     );
@@ -237,13 +237,10 @@ describe('VercelSandboxScannerAdapter', () => {
   );
 
   it.each([
-    [
-      'another digest',
-      `vcr.vercel.com/team/acres/acres-scanner@sha256:${'f'.repeat(64)}`,
-    ],
-    ['no image', undefined],
-  ])('refuses a VM booted from %s', async (_label, image) => {
-    const double = sandboxDouble({}, { image });
+    ['another snapshot', 'snap_Other1'],
+    ['no source snapshot', undefined],
+  ])('refuses a VM booted from %s', async (_label, sourceSnapshotId) => {
+    const double = sandboxDouble({}, { sourceSnapshotId });
     await expect(scan(double)).resolves.toEqual({
       status: 'failed',
       errorCode: 'scanner_unavailable',
@@ -299,7 +296,7 @@ describe('VercelSandboxScannerAdapter', () => {
     });
   });
 
-  it('never logs output, bytes or the image reference', async () => {
+  it('never logs output, bytes or the snapshot id', async () => {
     const double = sandboxDouble(
       { check: { exitCode: 2, stdout: 'leaked-output' } },
       { failDelete: true },
@@ -308,8 +305,8 @@ describe('VercelSandboxScannerAdapter', () => {
     const text = logs.join('\n');
     expect(text).not.toContain('leaked-output');
     expect(text).not.toContain('secret-bytes');
-    expect(text).not.toContain('vcr.vercel.com');
-    expect(text).not.toContain('a'.repeat(64));
+    expect(text).not.toContain(SNAPSHOT);
+    expect(text).not.toContain('b'.repeat(64));
   });
 
   it('reports readiness from configuration without booting a VM', async () => {
@@ -321,7 +318,7 @@ describe('VercelSandboxScannerAdapter', () => {
       new VercelSandboxScannerAdapter(
         {
           ...config,
-          scannerSandboxImage: undefined,
+          scannerSandboxSnapshotId: undefined,
         } as unknown as AcresConfigService,
         double.create,
       ).readiness(),

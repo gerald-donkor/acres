@@ -176,8 +176,8 @@ export class AcresConfigService {
   }
 
   /** Not a secret, but never logged: the adapter logs sandbox names only. */
-  get scannerSandboxImage(): string | undefined {
-    return this.get('scannerSandboxImage');
+  get scannerSandboxSnapshotId(): string | undefined {
+    return this.get('scannerSandboxSnapshotId');
   }
 
   get scannerMainSha256(): string | undefined {

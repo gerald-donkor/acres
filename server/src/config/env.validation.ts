@@ -64,8 +64,8 @@ export interface AcresEnv {
   presignedUploadTtlSeconds: number;
   acceptedDownloadTtlSeconds: number;
   scannerProvider: ScannerProvider;
-  /** Digest-pinned VCR image; required when `scannerProvider` is `vercel-sandbox`. */
-  scannerSandboxImage?: string;
+  /** Sandbox snapshot id (`snap_…`); required when `scannerProvider` is `vercel-sandbox`. */
+  scannerSandboxSnapshotId?: string;
   scannerMainSha256?: string;
   scannerDailySha256?: string;
   scannerMaxSignatureAgeHours?: number;
@@ -114,9 +114,8 @@ export const SCANNER_PROVIDERS = ['clamav', 'vercel-sandbox'] as const;
 export type ScannerProvider = (typeof SCANNER_PROVIDERS)[number];
 /** The Sandbox scan flags cover 50 MiB; a larger upload limit is refused. */
 export const SCANNER_SANDBOX_MAX_BYTES = 50 * 1024 * 1024;
-/** Same form the probe accepts: a project VCR repository pinned by digest. */
-const SCANNER_SANDBOX_IMAGE =
-  /^vcr\.vercel\.com\/[a-zA-Z0-9_/-]+@sha256:[a-f0-9]{64}$/;
+/** Same form the probe accepts. Not a content hash: the CVD hashes are the pin. */
+const SCANNER_SANDBOX_SNAPSHOT_ID = /^snap_[A-Za-z0-9]+$/;
 /** S3-only variables; a set value alongside `vercel-blob` is a mixed profile. */
 const S3_STORAGE_KEYS = [
   'STORAGE_ENDPOINT',
@@ -427,7 +426,7 @@ export function validateEnv(
   let scannerSandbox:
     | Pick<
         AcresEnv,
-        | 'scannerSandboxImage'
+        | 'scannerSandboxSnapshotId'
         | 'scannerMainSha256'
         | 'scannerDailySha256'
         | 'scannerMaxSignatureAgeHours'
@@ -443,10 +442,10 @@ export function validateEnv(
         );
       }
     }
-    const image = env.SCANNER_SANDBOX_IMAGE?.trim() ?? '';
-    if (!SCANNER_SANDBOX_IMAGE.test(image)) {
+    const snapshotId = env.SCANNER_SANDBOX_SNAPSHOT_ID?.trim() ?? '';
+    if (!SCANNER_SANDBOX_SNAPSHOT_ID.test(snapshotId)) {
       throw new Error(
-        'SCANNER_SANDBOX_IMAGE must be a VCR image pinned by SHA-256 digest when SCANNER_PROVIDER="vercel-sandbox".',
+        'SCANNER_SANDBOX_SNAPSHOT_ID must be a Vercel Sandbox snapshot id (snap_…) when SCANNER_PROVIDER="vercel-sandbox".',
       );
     }
     const hashes = {} as Record<
@@ -492,7 +491,7 @@ export function validateEnv(
       );
     }
     scannerSandbox = {
-      scannerSandboxImage: image,
+      scannerSandboxSnapshotId: snapshotId,
       scannerMainSha256: hashes.SCANNER_MAIN_SHA256,
       scannerDailySha256: hashes.SCANNER_DAILY_SHA256,
       scannerMaxSignatureAgeHours: Number(rawAge),

@@ -28,7 +28,7 @@ const SCAN_ARGS = [
 /** The parts of `@vercel/sandbox` 3.8.0 this adapter uses. */
 export interface ScanSandbox {
   readonly name: string;
-  readonly image: string | undefined;
+  readonly sourceSnapshotId: string | undefined;
   runCommand(params: {
     cmd: string;
     args: string[];
@@ -44,7 +44,7 @@ export interface ScanSandbox {
 
 // A type alias, not an interface, so it satisfies the SDK's index signature.
 export type ScanSandboxCreateParams = {
-  image: string;
+  source: { type: 'snapshot'; snapshotId: string };
   persistent: false;
   networkPolicy: 'deny-all';
   resources: { vcpus: 1 };
@@ -53,7 +53,7 @@ export type ScanSandboxCreateParams = {
 };
 
 interface ScanSettings {
-  image: string;
+  snapshotId: string;
   mainSha256: string;
   dailySha256: string;
   maxAgeHours: number;
@@ -77,12 +77,12 @@ const createWithSdk: CreateScanSandbox = async (params) => {
 /**
  * ClamAV in a one-off Vercel Sandbox (managed profile only).
  *
- * Each scan boots a non-persistent, deny-all VM from a digest-pinned image,
+ * Each scan boots a non-persistent, deny-all VM from the scanner snapshot,
  * verifies the baked signatures against pinned hashes and a maximum age, scans
  * the object, then stops and deletes the VM with its snapshots. Only positive
  * evidence is clean: exit 0 with the file's OK line. Anything uncertain fails
  * closed, and a clean result whose VM cannot be confirmed deleted is failed.
- * Never logs output, bytes, credentials or the image reference.
+ * Never logs output, bytes, credentials or the snapshot id.
  */
 @Injectable()
 export class VercelSandboxScannerAdapter implements MalwareScannerPort {
@@ -105,7 +105,7 @@ export class VercelSandboxScannerAdapter implements MalwareScannerPort {
     let sandbox: ScanSandbox;
     try {
       sandbox = await this.createSandbox({
-        image: settings.image,
+        source: { type: 'snapshot', snapshotId: settings.snapshotId },
         persistent: false,
         networkPolicy: 'deny-all',
         resources: { vcpus: 1 },
@@ -140,9 +140,10 @@ export class VercelSandboxScannerAdapter implements MalwareScannerPort {
     settings: ScanSettings,
     startedAt: number,
   ): Promise<ScanResult> {
-    const digest = settings.image.slice(settings.image.indexOf('@'));
-    if (typeof sandbox.image !== 'string' || !sandbox.image.endsWith(digest)) {
-      this.logger.warn(`Scanner sandbox ${sandbox.name} image mismatch.`);
+    // A snapshot id is not a content hash; the CVD hash check below is the
+    // content pin. This only proves the VM booted from the configured source.
+    if (sandbox.sourceSnapshotId !== settings.snapshotId) {
+      this.logger.warn(`Scanner sandbox ${sandbox.name} source mismatch.`);
       return { status: 'failed', errorCode: 'scanner_unavailable' };
     }
     let signaturesOk: boolean;
@@ -226,14 +227,20 @@ export class VercelSandboxScannerAdapter implements MalwareScannerPort {
   }
 
   private settings(): ScanSettings | undefined {
-    const image = this.config.scannerSandboxImage;
+    const snapshotId = this.config.scannerSandboxSnapshotId;
     const mainSha256 = this.config.scannerMainSha256;
     const dailySha256 = this.config.scannerDailySha256;
     const maxAgeHours = this.config.scannerMaxSignatureAgeHours;
     const timeoutMs = this.config.scannerSandboxTimeoutMs;
-    if (!image || !mainSha256 || !dailySha256 || !maxAgeHours || !timeoutMs) {
+    if (
+      !snapshotId ||
+      !mainSha256 ||
+      !dailySha256 ||
+      !maxAgeHours ||
+      !timeoutMs
+    ) {
       return undefined;
     }
-    return { image, mainSha256, dailySha256, maxAgeHours, timeoutMs };
+    return { snapshotId, mainSha256, dailySha256, maxAgeHours, timeoutMs };
   }
 }
