@@ -1927,3 +1927,36 @@ rows above are unchanged.
   (after completion), expired and rejected uploads stay until the reconciliation
   sweeper exists. Hosted application acceptance through a deployed preview is
   still open.
+
+### Vercel Sandbox scanner — Prompt 372 (2026-10-15)
+
+Applies only when `SCANNER_PROVIDER=vercel-sandbox`. The clamd profile and its
+rows above are unchanged. TM-06's control for this profile:
+
+- **Isolation and egress.** Each scan boots its own Firecracker VM with
+  `networkPolicy: 'deny-all'`, one vCPU and no `env`, `source` or ports. No
+  credential enters the VM; the server authenticates to the Sandbox API with
+  its own OIDC identity. The bytes go to the fixed path
+  `/tmp/acres-scan-upload`, so no user filename reaches the VM.
+- **No residue.** Sandboxes are persistent by default and snapshot their
+  filesystem on stop. The adapter creates with `persistent: false`, then calls
+  `stop()` and `delete({ deleteOrphanSnapshots: true })`, each with a 30 s
+  timeout. A `clean` result whose VM cannot be confirmed deleted becomes
+  `failed`/`scanner_error`; `infected` stays infected.
+- **Pinned scanner.** The VM must report the configured image digest. Before
+  scanning, an in-VM check must match `main.cvd`/`daily.cvd` to pinned SHA-256
+  values and find `daily.cvd` within the adopted age, and print a marker.
+  Anything else is `scanner_unavailable`. No signature download happens at
+  scan time and there is no fallback, so a stale image fails closed.
+- **Positive evidence only.** SDK 3.8.0 reports a missing exit code as 0, so
+  `clean` needs exit 0 **and** the file's `OK` line. Exit 1 is `infected`.
+  Any other exit, including ClamAV 1.5.4's exit 2 for
+  `--alert-exceeds-max=yes`, is `scanner_error`; a rejected command is
+  `scanner_timeout`. Objects above 50 MiB are refused before any VM boots.
+- **Archive expansion.** `--max-scansize=50M` caps decompressed bytes, so a
+  small XLSX that expands past it fails as `scanner_error` and the upload is
+  rejected. This fails closed but differs from the clamd profile.
+- **Residuals.** No image is hosted, so none of this is proven on the
+  platform yet (VCR storage is not free on Hobby; see
+  `docs/vercel-deployment.md`). Readiness reports configuration only, never
+  a live VM. Signature rebuild cadence is an open production blocker.

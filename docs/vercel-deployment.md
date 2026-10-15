@@ -1,7 +1,8 @@
 # Vercel migration — Prompt 370
 
 Status: implementation in progress. Preview Blob (server SDK and browser
-presigned upload) and Neon database/RLS seams are proven. Only synthetic probe
+presigned upload) and Neon database/RLS seams are proven. The Sandbox scanner
+exists locally only (VCR push blocked on cost). Only synthetic probe
 deployments exist; the Acres application has not been deployed.
 Starting source: `a1350d0` on `main`.
 [ADR 0001](adr/0001-vercel-managed-production.md) records the accepted target.
@@ -9,7 +10,8 @@ Starting source: `a1350d0` on `main`.
 ## Resume here (new session)
 
 Prompt 370 is approved and still executing. Remaining checklist items may be
-split into numbered sub-prompts (Prompt 371 = Blob browser upload); each
+split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
+scanner image); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -66,14 +68,13 @@ committed per AGENTS.md §2):
       presigned protocol is proven from a real browser on the preview store
       (see "Blob browser upload — 2026-10-15" below). The hosted application
       proof waits for the first preview deployment.
-- [ ] **Scanner image** — build and push a pinned VCR ClamAV image with
-      checksum-bound `main.cvd`/`daily.cvd`, then run the scanner probe with
-      `VERCEL_TOKEN`, `ACRES_VERCEL_PROBE_REGION=iad1`,
-      `ACRES_SCANNER_IMAGE` (digest-pinned), `ACRES_SCANNER_MAIN_SHA256`,
-      `ACRES_SCANNER_DAILY_SHA256` and `ACRES_SCANNER_MAX_SIGNATURE_AGE_HOURS`
-      (see [the probe guide](../infra/vercel/README.md)) plus the live failure
-      cases (`vercel:vercel-sandbox`). Hobby: 45-minute sessions, 5
-      CPU-hours/month.
+- [ ] **Scanner image** — **blocked on cost** (Prompt 372, see "Scanner
+      image — 2026-10-15" below). The image definition, the probe's
+      persistence fix and failure cases, and the `vercel-sandbox` adapter are
+      done locally. No official page shows VCR storage free on Hobby, and the
+      user ruled out any paid usage, so nothing was pushed and no hosted case
+      ran. Next: a snapshot-based scanner (Hobby includes 15 GB of Sandbox
+      snapshot storage and is never charged), as its own prompt.
 - [ ] **First preview deployment** — Services/route config, only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, remove or mark
       sensitive the `NEON_OWNER_*` variables, migrations as a guarded
@@ -85,7 +86,10 @@ committed per AGENTS.md §2):
       env first**: a configured token always takes precedence over OIDC in the
       SDK, so OIDC cannot be proven while it is set. Then prove app upload →
       complete → scan through the deployed preview with
-      `STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID` set, OIDC.
+      `STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID` set, OIDC. Once a
+      scanner source is hosted, set `SCANNER_PROVIDER=vercel-sandbox` and the
+      `SCANNER_*` variables, leave `CLAMAV_*` unset, and prove app upload →
+      scan through the deployed preview.
 - [ ] **Production decision** — Cron proves only on production; Hobby is
       non-commercial. Needs the user's plan decision and the eleven launch
       categories before any promotion.
@@ -519,6 +523,153 @@ re-review found no Critical or Important issues. Its remaining notes are
 optional: an interleaved real-database race test, and that the S3 adapter's
 delete-on-cancel is unit-tested only.
 
+### Scanner image — 2026-10-15
+
+Prompt 372. Local work is done. The VCR push and the hosted cases did not run,
+because of the cost gate.
+
+**Cost gate (stop condition).** The [VCR pricing page](https://vercel.com/docs/container-registry/limits-and-pricing)
+(last updated 2026-09-22) lists only "VCR image storage $0.10 per GB". It shows
+Hobby limits (10 repositories per project, 50 images per repository) but no
+included storage. The [Hobby plan page](https://vercel.com/docs/plans/hobby)
+(2026-09-14) has no VCR row in its included-usage table, and the
+[VCR announcement](https://vercel.com/changelog/introducing-vcr-vercel-container-registry)
+does not mention price. `vcr ls` on `acres` showed no repositories. The image is
+about 0.24 GB, so roughly $0.02–0.03 a month if billed. Asked on 2026-10-15,
+the user declined any paid usage. **Nothing was pushed.**
+
+The [Sandbox pricing page](https://vercel.com/docs/sandbox/pricing) (2026-09-10)
+gives the free route. Hobby includes **15 GB (lifetime) of Snapshot Storage**,
+downloads are free, and Hobby "**will not be charged** for any additional
+usage" (creation pauses instead). A scanner built as a Sandbox snapshot from a
+managed image therefore costs $0 on Hobby. The user chose to commit this
+prompt's local work and plan that route as a new prompt.
+
+**Licence finding (judgement, not a licence grant).** ClamAV is GPL-2.0. No
+official ClamAV page states usage terms for the CVD databases: the
+[FAQ](https://docs.clamav.net/faq/faq-cvd.html) and the
+[Docker page](https://docs.clamav.net/manual/Installing/Docker.html) are silent.
+The Docker page says Cisco's own `clamav/clamav:<version>` images ship "preloaded
+with signature databases". The user accepted that practice as the basis for
+private, non-redistributed use.
+
+**Pinned inputs** (resolved with `docker buildx imagetools inspect`; both index
+manifests list `linux/amd64`):
+
+| input  | reference                                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------ |
+| ClamAV | `clamav/clamav-debian:1.5.4_base@sha256:25420050b2b469d97990f074cf454d8a67e9c7c6013a11fa1f47ac6a11347ce6` (trixie) |
+| Node   | `node:24.21.0-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66`                 |
+
+Delta: the planned tag `1.5.4_base-debian13-slim` does not exist. Docker Hub
+lists only `1.5.4` and `1.5.4_base` (both updated 2026-10-12), and `_base` is
+Debian 13. The base image runs as root, ships `/var/lib/clamav` as
+`0700 clamav`, and has no `sudo` or `/usr/bin/time`. `freshclam.conf` uses only
+options its sample documents. `DNSDatabaseInfo` was dropped: the sample shows
+only a domain value and says "Do not touch it". During the build, freshclam's
+DNS query failed and it "Fall[s] back to HTTP mode"; the downloaded CVDs passed
+freshclam's own database test.
+
+**Local build, 2026-10-15 13:10 UTC** (signatures change on every rebuild):
+
+| file         | version | build time (sigtool)    | SHA-256                                                            |
+| ------------ | ------- | ----------------------- | ------------------------------------------------------------------ |
+| main.cvd     | 63      | 16 Dec 2025 23:18 +0000 | `0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365` |
+| daily.cvd    | 28154   | 15 Oct 2026 06:24 +0000 | `af003f6eb87905bc3044e90e489d5f79e4897f57c1930b8854672e649e72f3c3` |
+| bytecode.cvd | 339     | 11 Sep 2025 08:29 -0400 | `6d4aa01f219e988060fc419f495d07f27e0cdf1a2cccc065971da922c76f7ffb` |
+
+Image content size 239 MB (726 MB on disk). The local `--network none` smoke
+test gave `clean=0` and `eicar=1` (`Eicar-Test-Signature FOUND`).
+
+**Local measurements on this machine** (Docker, `--cpus 1`, not Sandbox
+capacity): about 6.7–7.5 s wall time per `clamscan`, almost all of it loading
+signatures; peak cgroup memory 1,044,459,520 B (≈996 MiB); peak `clamscan`
+RSS 969 MiB. One vCPU (2048 MB) is enough on this evidence.
+
+**Findings from local runs** (each changed the code):
+
+- **ClamAV 1.5.4 and `--alert-exceeds-max=yes`.** A 7 MiB file under 6M limits
+  reads `OK`/exit 0 without the flag. With the flag it prints
+  `Heuristics.Limits.Exceeded.MaxFileSize FOUND`, then
+  `Virus(es) detected ERROR`, and exits **2**, not 1 as Prompt 372 assumed. The probe gate is now
+  "non-zero exit with a `Heuristics.Limits.Exceeded` result". The adapter maps
+  exit 2 to `scanner_error`, which fails closed.
+- **SDK exit-code hazard.** In `@vercel/sandbox` 3.8.0, `CommandFinished` sets
+  `exitCode: finished.exitCode ?? 0`. A killed command with no exit code could
+  read as 0 (clean). The adapter therefore needs exit 0 **and** the file's
+  `OK` line for clean. The signature check must also print `signatures-ok`.
+  The probe's `command-timeout` case fails if a killed command resolves with
+  exit 0. The real platform shape is still to be observed.
+- **Persistence defect (fixed before any run).** The old probe created
+  sandboxes without `persistent` and cleaned up with `stop()` only. Persistence
+  is the SDK default, and stop snapshots the filesystem for 30 days, so EICAR,
+  and in production quarantined customer bytes, would have stayed in a
+  snapshot. The probe and adapter now create with `persistent: false`, then
+  call `stop()` and `delete({ deleteOrphanSnapshots: true })`.
+
+**Docker dry run (not a hosted proof).** A Docker-backed SDK double in the
+session scratchpad ran the probe's real in-VM commands against
+`acres-scanner:local`. `scanner` passed: uid 0, signatures readable, scan
+directory writable, signature check (including `Date.parse` of `sigtool`
+build times), clean `OK`, EICAR `FOUND`. In `scanner-failures`, wrong-hash
+(2), missing / empty directory (1), stale (3), egress-denied (7),
+session-timeout (rejected at 15.1 s), malformed (0, `ok`) and memory passed.
+size-limit led to the exit-2 finding above. command-timeout failed by design:
+the double copies the SDK's `?? 0`.
+
+**What changed in the repository.** `infra/vercel/scanner/` (Dockerfile,
+`freshclam.conf`, README). `scripts/vercel/probe-platform.js` gained the
+shared lifecycle, digest check, identity record, `scanner-failures` mode and a
+creation budget (1 + 9). Tests use doubles only. `SCANNER_PROVIDER` and
+`VercelSandboxScannerAdapter` are local only and not deployed (see
+`docs/backend.md` and `docs/security.md`). The adapter loads the SDK lazily: in
+the built server only `dist/scanner/vercel-sandbox-scanner.adapter.js`
+references `@vercel/sandbox`, inside an `await import()`, and requiring
+`dist/scanner/scanner.module.js` loads 0 SDK modules. `@vercel/sandbox` moved to
+server `dependencies` at the same 3.8.0.
+
+**Review follow-ups applied.** The `command-timeout` (2.5–10 s) and
+`session-timeout` (8–40 s) cases now need a lower bound too, so an instant
+unrelated rejection no longer passes. `egress-denied` needs the script's exact
+exit 7. Failure cases create `/tmp/acres-scan` before writing. The adapter writes
+to `/tmp/acres-scan-upload` (a delta from the prompt's
+`/tmp/acres-scan/upload`), so it doesn't depend on `writeFiles` creating parent
+directories. The adapter's credential comment was corrected: SDK 3.8.0 never
+reads `VERCEL_TOKEN` from the environment.
+
+**Probe authentication.** The SDK authenticates without a token: it reads
+`VERCEL_OIDC_TOKEN`, takes team and project from its claims, and refreshes it
+through `@vercel/oidc`. A future hosted run can use a freshly pulled OIDC
+token instead of a long-lived `VERCEL_TOKEN`. The probe still requires
+`VERCEL_TOKEN` today, and this prompt does not change that.
+
+**Open blockers.**
+
+- Hosted scanner source: VCR is paid, so a snapshot-based scanner is next, as
+  its own prompt.
+- **Image rebuild cadence (production blocker).** Signatures go stale past the
+  adopted age, and a stale scanner fails closed, so every upload is
+  `scanner_unavailable` until it is rebuilt. Candidates: a scheduled GitHub
+  Actions workflow, or a protected Vercel Cron that rebuilds the scanner
+  source. Neither is built.
+- App upload → scan through a deployed preview.
+- The 50 MiB cap: objects above it are refused rather than scanned in chunks.
+- **Archive expansion (product behaviour, from review).** `--max-scansize=50M`
+  limits the _decompressed_ data scanned. An XLSX (a ZIP) well under 50 MiB
+  can expand past it. The scan then reports
+  `Heuristics.Limits.Exceeded.MaxScanSize` and exits 2, and the worker marks
+  the upload terminal `rejected` (non-clean results are not retried). clamd's
+  defaults allow far more, so this profile rejects some spreadsheets that the
+  clamd profile accepts. Raising `--max-scansize` needs a memory/time
+  measurement at one vCPU first.
+- **Hosted unknowns to record on the first live run:** the real shape of a
+  killed command (exit 137, or a missing code read as 0); whether a session-end
+  rejection is a 410 that the SDK's `withResume` turns into a fresh session
+  (`dist/sandbox.js`), including for `persistent: false`; and real timings.
+- The `SCANNER_SANDBOX_IMAGE` contract (a `vcr.vercel.com` digest) may be
+  replaced by a snapshot id in the snapshot-based scanner prompt. Don't treat it
+  as settled.
+
 ## Target and gates
 
 Vercel Services is the candidate single-project arrangement, documented in Beta
@@ -530,7 +681,7 @@ require a preview proof before active configuration is added.
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Database          | Migrated isolated Neon/PostGIS; runtime cannot bypass forced RLS; pooled context reuse, concurrent transactions and rollback | Proven for preview at the database seam (2026-10-15); application-level pooled Prisma acceptance open |
 | Blob              | Private direct browser upload above function body limit; scoped token, authorized private read, checksum, cancel/delete      | Seam proven: server SDK and browser presigned protocol (2026-10-15); deployed-app upload open         |
-| Scanner           | Pinned Sandbox scanner/signatures; clean/EICAR, missing/stale signatures, timeout/memory/byte limits and cleanup             | Blocked: account/plan and pinned scanner source/signatures absent                                     |
+| Scanner           | Pinned Sandbox scanner/signatures; clean/EICAR, missing/stale signatures, timeout/memory/byte limits and cleanup             | Local only (Prompt 372): image, probe cases, adapter; VCR push blocked on cost; no hosted case run    |
 | Durable execution | Same-project producer/consumer, forged request denial, duplicate/retry/interruption and preview isolation                    | Platform seams proven with a synthetic probe (2026-10-15); application job on a hosted preview open   |
 | Production        | Account-bound recovery, capacity, telemetry, security and eleven signed launch categories                                    | Open; no categories approved by local implementation                                                  |
 
