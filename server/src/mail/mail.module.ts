@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AcresConfigService } from '../config/acres-config.service';
 import { MAIL_TRANSPORT } from './mail.interface';
+import { ResendMailAdapter } from './adapters/resend-mail.adapter';
 import { MailService } from './mail.service';
 import { SmtpMailAdapter } from './adapters/smtp-mail.adapter';
 import { MemoryMailAdapter } from './adapters/memory-mail.adapter';
@@ -16,6 +17,8 @@ import { MemoryMailAdapter } from './adapters/memory-mail.adapter';
         smtp: SmtpMailAdapter,
         memory: MemoryMailAdapter,
       ) => {
+        if (config.mailTransport === 'resend')
+          return new ResendMailAdapter(config);
         return config.mailTransport === 'memory' ? memory : smtp;
       },
       inject: [AcresConfigService, SmtpMailAdapter, MemoryMailAdapter],

@@ -82,6 +82,8 @@
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "8.23.1",
     "@types/supertest": "^7.0.0",
+    "@vercel/blob": "2.8.2",
+    "@vercel/sandbox": "3.8.0",
     "dotenv": "^17.0.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
@@ -121,5 +123,8 @@
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     }
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

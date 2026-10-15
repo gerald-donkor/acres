@@ -8,6 +8,17 @@ inspection;
 Prompt 201 and the [launch checklist](launch-checklist.md) govern launch evidence
 and sign-off. This form supplements their contracts and does not replace them.
 
+## Selected managed target — 2026-10-15
+
+Prompt 370 supersedes the reference hosting recommendation for the selected
+production target with Vercel compute/routing plus Marketplace Neon and Resend.
+Its [migration record](vercel-deployment.md) owns in-progress implementation and
+hosted proof gates. The reference procedure below remains useful only for the
+implemented Compose profile. Do not require fictional Compose images/mounts for
+Vercel or treat a Vercel receipt as accepted by the existing readiness schema.
+Account-bound managed intake, evidence validation, recovery and all eleven
+sign-offs remain open; this amendment supplies none of those facts.
+
 ## Recommended starting posture
 
 Retain the approved reference architecture: single-host Compose+Caddy, separate

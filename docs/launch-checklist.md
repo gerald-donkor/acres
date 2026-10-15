@@ -6,6 +6,15 @@ operator-approved launch checklist, reproducible promotion and rollback,
 restore drill within objectives, actionable alerts/runbooks, and no unresolved
 critical security/accessibility findings.
 
+## Selected managed profile — Prompt 370
+
+The [Vercel migration record](vercel-deployment.md) owns the selected future
+production profile. The checks below retain their reference Compose meaning;
+no managed topology/evidence revision or category approval is established by
+local prerequisites. Managed equivalent evidence, independent recovery and all
+eleven sign-offs must exist before promotion; do not relabel reference drills
+as Vercel acceptance.
+
 ## 1. Introduction & Launch Philosophy
 
 Acres launches fail-closed. `scripts/ops/check-launch-readiness.js` rejects the

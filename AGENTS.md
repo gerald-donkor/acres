@@ -61,6 +61,7 @@ the read will re-derive it by hand or silently break it.
 | `docs/ai.md` | the Phase 11A Gemini free-tier evidence-draft preview foundation — port/adapter architecture, data minimization/privacy contract, mandatory disclosure/acknowledgment, grounding verification, audit ledger, and evaluation suite | **written.** Read before touching AI draft integration, Gemini adapters, prompt templates, output validation, or AI evaluation fixtures |
 | `docs/operations.md` | the Phase 12A operations and launch-hardening foundation — production reference templates, operational preflights, CI gates, runbooks, launch blockers, no-AI posture and remaining operator-owned values | **written.** Read before touching production templates, ops scripts, deployment/runbook docs, launch checks, CI operations gates, backups, restore, alerting, or secret-rotation procedure |
 | `docs/launch-checklist.md` | the Phase 12K exit-gate checklist — unified drill orchestrator and evidence dossier, 11-category sign-off matrix, 11 Prometheus alert runbooks, rollback/DR procedures | **written.** Read before running `ops:launch-drill`, approving launch, or editing alert runbooks |
+| `docs/vercel-deployment.md` | the approved Vercel migration, local implementation, hosted proof gates and deployment evidence | **written.** Read before changing the managed production profile |
 | `docs/operator-handoff.md` | the operator intake form and completion procedure — target/release binding, named owners, restricted evidence access and action boundaries | **written.** Read before preparing or completing a production operator handoff; the template is not live evidence |
 | `docs/automation.md` | **read before measuring anything** — comp geometry, crop fitting, `magick` recipes, screenshotting, build diffing, port and worktree gotchas | **written.** Measurement and headless CDP verification recipes |
 | `docs/product.md` | the target B2B regional-analytics product — personas, fixed roles, journeys, V1 boundary, data classes, behavioral success criteria, open decisions and glossary | **written.** Read before changing product scope, roles, data meaning, or user journeys; target decisions are not proof of implementation |
@@ -739,6 +740,8 @@ declarative — "We've cracked the code.", "See the Big Picture", "Map Your
 Success". Never campaigning, never startup-cheerful, never padded. §4's
 `frontend-design` skill owns the writing rules; they apply to every string that
 ships.
+
+**Production target exception — 2026-10-15:** Prompt 370 selects Vercel compute/routing, private Blob, durable invocations and Cron, with Neon/PostGIS and Resend through Vercel Marketplace. Compose+Caddy remains the implemented reference profile; managed activation requires the proofs in `docs/vercel-deployment.md`. This changes hosting, not V1 behavior or launch gates.
 
 ## 8.1 What is already built
 

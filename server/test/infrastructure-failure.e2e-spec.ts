@@ -1,3 +1,4 @@
+import { JobProcessorService } from '../src/worker/job-processor.service';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -132,10 +133,14 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
       tenants,
       outbox,
       mockQueue,
-      mockScanner,
-      mockStorage,
-      processor,
-      reportsService,
+      new JobProcessorService(
+        config,
+        tenants,
+        mockScanner,
+        mockStorage,
+        processor,
+        reportsService,
+      ),
     );
   });
 

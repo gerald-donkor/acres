@@ -12,6 +12,6 @@ export interface MailTransport {
 
 export const MAIL_TRANSPORT = Symbol('MAIL_TRANSPORT');
 
-export const MAIL_TRANSPORTS = ['smtp', 'memory'] as const;
+export const MAIL_TRANSPORTS = ['smtp', 'memory', 'resend'] as const;
 
 export type MailTransportKind = (typeof MAIL_TRANSPORTS)[number];

@@ -19,6 +19,8 @@ import {
   WORKER_EXCEPTION_MESSAGE,
 } from './upload-worker.service';
 
+import { JobProcessorService } from './job-processor.service';
+
 describe('UploadWorkerService', () => {
   let service: UploadWorkerService;
   let fakeConfig: Partial<AcresConfigService>;
@@ -174,10 +176,14 @@ describe('UploadWorkerService', () => {
       fakeTenants as TenantTransactionService,
       fakeOutbox as OutboxService,
       fakeQueue as QueuePort,
-      fakeScanner as MalwareScannerPort,
-      fakeStorage as ObjectStoragePort,
-      fakeIngestionProcessor as IngestionProcessorService,
-      fakeReports as ReportsService,
+      new JobProcessorService(
+        fakeConfig as AcresConfigService,
+        fakeTenants as TenantTransactionService,
+        fakeScanner as MalwareScannerPort,
+        fakeStorage as ObjectStoragePort,
+        fakeIngestionProcessor as IngestionProcessorService,
+        fakeReports as ReportsService,
+      ),
       fakeMetrics as MetricsService,
     );
   });

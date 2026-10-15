@@ -79,6 +79,7 @@ export interface AcresEnv {
   aiDraftMaxContextBytes: number;
   aiDraftMaxOutputTokens: number;
   mailTransport: MailTransportKind;
+  resendApiKey?: string;
   smtpHost: string;
   smtpPort: number;
   smtpSecure: boolean;
@@ -344,7 +345,7 @@ export function validateEnv(
     (nodeEnv === 'test' ? 'memory' : DEFAULTS.MAIL_TRANSPORT);
   if (!(MAIL_TRANSPORTS as readonly string[]).includes(rawTransport)) {
     throw new Error(
-      `MAIL_TRANSPORT must be "smtp" or "memory", received "${rawTransport}"`,
+      `MAIL_TRANSPORT must be "smtp", "memory" or "resend", received "${rawTransport}"`,
     );
   }
   const mailTransport: MailTransportKind = rawTransport as MailTransportKind;
@@ -360,6 +361,23 @@ export function validateEnv(
   const smtpUser = env.SMTP_USER?.trim() || undefined;
   const smtpPass = env.SMTP_PASS?.trim() || undefined;
   const mailFrom = env.MAIL_FROM?.trim() || DEFAULTS.MAIL_FROM;
+  const resendApiKey = env.RESEND_API_KEY?.trim() || undefined;
+  if (mailTransport === 'resend') {
+    if (!resendApiKey || !/^re_[A-Za-z0-9_-]+$/.test(resendApiKey)) {
+      throw new Error(
+        'RESEND_API_KEY is required and must be a Resend API key when MAIL_TRANSPORT="resend".',
+      );
+    }
+    if (
+      !env.MAIL_FROM?.trim() ||
+      /[\r\n]/.test(env.MAIL_FROM) ||
+      mailFrom === DEFAULTS.MAIL_FROM
+    ) {
+      throw new Error(
+        'MAIL_FROM must explicitly name the verified sender when MAIL_TRANSPORT="resend".',
+      );
+    }
+  }
 
   return {
     nodeEnv: nodeEnv as NodeEnv,
@@ -572,6 +590,7 @@ export function validateEnv(
     aiDraftMaxContextBytes,
     aiDraftMaxOutputTokens,
     mailTransport,
+    resendApiKey,
     smtpHost,
     smtpPort,
     smtpSecure,

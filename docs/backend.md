@@ -3183,3 +3183,22 @@ build passed across @acres/client, @acres/shared, @acres/server (23/23 static/dy
 
 No database schema, API contracts, or production configurations were altered.
 Ordinary git revert restores prior test fixtures and documentation.
+
+## Prompt 370 — Vercel migration preparation (in progress)
+
+`JobProcessorService` owns the existing per-job upload scan, ingestion dispatch
+and export dispatch independently of the BullMQ listener/timer lifecycle.
+`UploadWorkerService` retains start/stop, outbox dispatch and metrics and
+forwards `process()` to this injected provider. Its stop guard remains at the
+transport. Existing failure constants are re-exported for compatibility. This
+extraction preserves processing behavior; it adds no lease/idempotency guarantee
+and does not make the complete worker module invocation-safe by itself.
+
+`MAIL_TRANSPORT=resend` adds an opt-in port adapter using the documented fixed
+HTTPS send API. It requires a server-only `RESEND_API_KEY` and explicit
+`MAIL_FROM`; defaults remain SMTP outside tests, memory in tests. The inspected
+Resend SDK logs provider errors in development, so this adapter uses native
+fetch with redirect denial, a 10-second AbortSignal, successful receipt validation
+and a generic error. Existing templates and domain services are unchanged.
+No real mail was sent. Managed activation/proofs and verification results live
+in [vercel-deployment.md](vercel-deployment.md); Prompt 370 remains incomplete.

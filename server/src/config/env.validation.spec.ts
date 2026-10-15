@@ -564,7 +564,7 @@ describe('validateEnv', () => {
           MAIL_TRANSPORT: 'sendgrid',
         }),
       ).toThrow(
-        'MAIL_TRANSPORT must be "smtp" or "memory", received "sendgrid"',
+        'MAIL_TRANSPORT must be "smtp", "memory" or "resend", received "sendgrid"',
       );
     });
   });
@@ -605,5 +605,49 @@ describe('validateEnv', () => {
         'PARSER_CHILD_MAX_OLD_SPACE_MB must be between 32 and 1024 MB.',
       );
     });
+  });
+});
+
+describe('Resend environment', () => {
+  const env = {
+    DATABASE_URL: 'postgresql://local/test',
+    CLIENT_ORIGIN: 'http://localhost:3000',
+    SESSION_SECRET: 'test-session-secret-that-is-at-least-32-chars',
+    CSRF_SECRET: 'test-csrf-secret-that-is-at-least-32-chars',
+    INVITATION_TTL_HOURS: '24',
+    ACCOUNT_TOKEN_TTL_MINUTES: '30',
+    MAIL_TRANSPORT: 'resend',
+    MAIL_FROM: 'Acres <verified@example.test>',
+    RESEND_API_KEY: 're_test_key',
+  };
+  it('selects Resend with explicit server-only key and sender', () => {
+    expect(validateEnv(env).mailTransport).toBe('resend');
+    expect(validateEnv(env).resendApiKey).toBe('re_test_key');
+  });
+  it.each(['', 'change-me', '__REQUIRED_KEY__', 're_bad key'])(
+    'rejects absent or invalid key %j',
+    (key) => {
+      expect(() => validateEnv({ ...env, RESEND_API_KEY: key })).toThrow(
+        'RESEND_API_KEY',
+      );
+    },
+  );
+  it.each(['', '  ', 'sender\r\nInjected: value'])(
+    'requires explicit safe sender %j',
+    (sender) => {
+      expect(() => validateEnv({ ...env, MAIL_FROM: sender })).toThrow(
+        'MAIL_FROM',
+      );
+    },
+  );
+  it('retains SMTP and memory without managed credentials', () => {
+    expect(
+      validateEnv({ ...env, MAIL_TRANSPORT: 'smtp', RESEND_API_KEY: '' })
+        .mailTransport,
+    ).toBe('smtp');
+    expect(
+      validateEnv({ ...env, MAIL_TRANSPORT: 'memory', RESEND_API_KEY: '' })
+        .mailTransport,
+    ).toBe('memory');
   });
 });

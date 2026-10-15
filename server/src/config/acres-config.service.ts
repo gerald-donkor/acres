@@ -286,6 +286,10 @@ export class AcresConfigService {
     return this.get('mailTransport');
   }
 
+  get resendApiKey(): string | undefined {
+    return this.get('resendApiKey');
+  }
+
   get smtpHost(): string {
     return this.get('smtpHost');
   }

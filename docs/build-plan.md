@@ -631,7 +631,11 @@ replacement for ClamAV. No separate continuously operated VM/container host is
 selected. This is the bounded exception to the original Phase 12 cloud-selection
 non-goal; it does not authorize unrelated provider or product changes.
 
-The next implementation sequence is owned by approved Prompt 370:
+The next implementation sequence is owned by approved Prompt 370. Its in-progress
+record is [vercel-deployment.md](vercel-deployment.md); no managed proof or
+deployment is established by local preparation.
+
+The ordered scope remains:
 
 1. Record the topology decision and confirm the selected Vercel account/project,
    environment, access, region and permitted plan/spend.
@@ -3910,3 +3914,15 @@ links resolve; all four cited commits exist; prompt headings and numbering match
 Independent read-only review found no Critical, Important or Minor findings;
 feedback was verified against the committed history and operations record.
 Application checks were not rerun for this documentation-only synchronization.
+
+**Prompt 370 — migration prerequisites in progress (2026-10-15):**
+Local implementation now extracts request-independent job processing, adds
+opt-in Resend mail and bounded progress recovery, pins Node 24 and adds
+isolated-preview Blob/Sandbox probe tooling. The owning record is
+[vercel-deployment.md](vercel-deployment.md), including verification, review,
+failed attempts and remaining gates. Vercel discovery still reports an
+unconnected plugin, including after the user directed MCP automation. No
+selected-account proof, active managed provider profile, provisioned resource,
+preview or production deployment exists. Broad migration still depends on
+hosted seam proofs. This is a prerequisite commit, not Prompt 370 completion
+or Phase 12 exit; eleven launch responsibilities remain unresolved.

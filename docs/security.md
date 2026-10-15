@@ -1870,3 +1870,24 @@ sandbox limits and ordinary-revert rollback are in
 evidence authenticity/completeness, bytes or atomic/live recovery. Prompt 201,
 Category 6 live sign-off and Phase 12 exit remain open. No live services,
 operator approval, deployment or push; no aggregate ops:check or fresh audit claim.
+
+## Managed migration preparation — Prompt 370 (2026-10-15)
+
+The selected future edge/processor boundary is Vercel plus Marketplace Neon and
+Resend, as recorded in [ADR 0001](adr/0001-vercel-managed-production.md).
+The runtime diagrams above remain the implemented Compose reference. A new
+opt-in Resend mail transport sends existing templates to a fixed HTTPS API with
+a server-only bearer key, redirects denied, a bounded request signal and a
+generic error. No provider error body, recipient, URL or token is logged by
+that adapter. Sender verification/delivery and account-bound evidence remain open.
+
+Synthetic Blob/Sandbox probes require explicit isolated-preview opt-in; their
+tokens stay in a restricted environment, scanner networking is denied, images
+and signature bytes are checksum-bound and cleanup failure rejects success.
+Probe receipts are diagnostics and do not approve launch. They do not implement
+browser token authorization or production scanner acceptance. User instruction
+to automate through Vercel MCP does not establish a connection: discovery still
+reported `installed: false`. No new public callback, upload protocol, tenant
+policy, schema or active managed profile is introduced by this preparation.
+Future queue, browser upload, shared throttling, ingress, recovery and managed
+readiness changes retain the approved negative-test gates.

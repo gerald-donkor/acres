@@ -18,6 +18,15 @@ The decisions in this document are the architecture record for the approved
 and migration, obtain user approval, and change this document and affected
 plans in the same commit. Superseded choices remain visible through git history.
 
+## Production target amendment — 2026-10-15
+
+The accepted future production target is the Vercel-managed profile in
+[ADR 0001](adr/0001-vercel-managed-production.md). The runtime diagrams below
+remain the implemented self-host reference. Managed activation depends on real
+pooled RLS, private-upload, Sandbox scanning and durable-delivery proofs.
+The [migration record](vercel-deployment.md) distinguishes local preparation,
+account facts and hosted acceptance. No diagram below establishes deployment.
+
 ## Current provider boundary — geoBoundaries gbOpen
 
 The geography module has an operator-only `geoBoundaries` adapter behind a

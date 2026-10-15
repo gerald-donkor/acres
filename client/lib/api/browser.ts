@@ -360,9 +360,11 @@ export async function createExport(
 export async function getExport(
   organizationId: string,
   exportId: string,
+  signal?: AbortSignal,
 ): Promise<ExportRequest> {
   return apiFetch<ExportRequest>(`/exports/${exportId}`, {
     method: "GET",
+    signal,
     organizationId,
   });
 }
@@ -381,7 +383,7 @@ export function streamExportProgress(
     signal: options.signal,
     onMessage: (data) => options.onUpdate(data),
     onError: options.onError,
-    fallbackPoll: () => getExport(organizationId, exportId),
+    fallbackPoll: (signal) => getExport(organizationId, exportId, signal),
     isTerminal: (data) =>
       data.status === "succeeded" ||
       data.status === "failed" ||
@@ -402,9 +404,11 @@ export async function getExportDownload(
 export async function getIngestionRun(
   organizationId: string,
   runId: string,
+  signal?: AbortSignal,
 ): Promise<IngestionRunSummary> {
   return apiFetch<IngestionRunSummary>(`/ingestion-runs/${runId}`, {
     method: "GET",
+    signal,
     organizationId,
   });
 }
@@ -423,7 +427,7 @@ export function streamIngestionRunProgress(
     signal: options.signal,
     onMessage: (data) => options.onUpdate(data),
     onError: options.onError,
-    fallbackPoll: () => getIngestionRun(organizationId, runId),
+    fallbackPoll: (signal) => getIngestionRun(organizationId, runId, signal),
     isTerminal: (data) =>
       data.state === "published" ||
       data.state === "failed" ||

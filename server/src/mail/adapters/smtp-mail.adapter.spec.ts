@@ -40,9 +40,9 @@ describe('SmtpMailAdapter', () => {
 
   describe('MAIL_TRANSPORTS contract', () => {
     it('defines the canonical closed tuple of mail transports', () => {
-      expect(MAIL_TRANSPORTS).toEqual(['smtp', 'memory']);
+      expect(MAIL_TRANSPORTS).toEqual(['smtp', 'memory', 'resend']);
       expect(Array.isArray(MAIL_TRANSPORTS)).toBe(true);
-      expect(MAIL_TRANSPORTS).toHaveLength(2);
+      expect(MAIL_TRANSPORTS).toHaveLength(3);
     });
   });
 

@@ -12427,3 +12427,26 @@ read-only review reported no Critical, Important or Minor findings and assessed
 the reorganization ready to commit. Feedback was checked against completed-work
 status, migration approval continuity, old-path removal and the bounded numbering
 exception; no implementation fixes were required. The next new prompt is 371.
+
+## Prompt 370 — managed migration prerequisites (2026-10-15)
+
+The approved target is Vercel compute/routing with Marketplace Neon/PostGIS and
+Resend. [ADR 0001](adr/0001-vercel-managed-production.md) and the owning
+[migration record](vercel-deployment.md) distinguish this target from the
+implemented Compose reference. Local code extracts job processing, adds optional
+mail, repairs bounded progress recovery and supplies development-only platform
+probes with explicit preview opt-in and cleanup. Node 24 is pinned and verified
+using explicit temporary node/npm launchers; initial mise-shim runs are not
+credited as Node 24 evidence.
+
+The migration record quotes actual unit/E2E/build/browser/probe/ops outputs,
+including sandbox restrictions, stale assertions fixed, a data-journey timeout,
+a transient concurrent audit-history failure and independent review/fix.
+`ops:check` passed the configured gate; its audit still reported four moderate
+and six high advisories (zero critical). No launch category, managed evidence
+schema, account configuration, hosted integration or deployment is approved.
+Vercel plugin discovery remains `installed: false`, blocking account inspection
+and required hosted proofs. MCP automation is selected; no deployment CLI or
+arbitrary-account fallback was used. Ordinary Git revert restores the local
+prerequisites; no hosted resources or schema were migrated. Prompt 370 and
+Phase 12 remain open.

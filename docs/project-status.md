@@ -6,6 +6,14 @@ operational recovery and release acceptance, rather than all conceivable future
 Acres features. It is a repository assessment, not an inspection of a deployed
 production environment or a restricted operator evidence store.
 
+## Managed target amendment — 2026-10-15
+
+The percentages below are the historical reference-profile assessment, not an
+assessment of the selected Vercel migration. Prompt 370 is in progress; its
+[migration record](vercel-deployment.md) distinguishes local prerequisites from
+missing account-bound proofs and deployment. Core product scope is unchanged.
+Do not increase completion or approve launch from SDK tests or templates.
+
 ## Completion estimate
 
 **Approximately 91% complete overall, with an estimated range of 90–95%.** The

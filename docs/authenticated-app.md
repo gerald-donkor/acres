@@ -89,7 +89,7 @@ server transaction establishes the target organization.
 - Standard browser `EventSource` cannot send custom headers. `streamSse` uses `fetch()` with `ReadableStream` to inject `x-acres-organization-id`, `accept: text/event-stream`, `credentials: "include"`, and `cache: "no-store"`.
 - The parser handles single and multiline `data:` frames, extracts `event` and `id` metadata, ignores heartbeat/comment lines starting with `:`, and cleans up listeners via `AbortSignal`.
 - Terminal predicates (`isTerminal`) cleanly close stream readers on terminal events (`succeeded`, `failed`, `cancelled`, `published`).
-- If stream connection fails or the server returns an initial non-200 status, `fallbackPoll` performs a single REST read to keep UI updated.
+- Prompt 370: a failed setup/read or normal EOF before terminal state starts bounded REST polling. Export/ingestion helpers pass the combined AbortSignal to each read. Defaults are a 2-second interval and 15-minute polling budget (implementation choices, not production capacity measurements). A terminal predicate continues until completion; callers without one retain a single fallback read. Read failure stops with the existing error callback, including access revocation. Cancellation suppresses stale updates, aborts reads/waits and releases the reader; frames after a terminal event are ignored. This keeps existing status announcements/layout unchanged.
 - `client/components/acres/app/export-status.tsx` uses `streamExportProgress` to stream queued/in-flight exports live and announces completion using `<div className="sr-only" aria-live="polite">`.
 
 ## 4. Auth behavior
