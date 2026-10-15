@@ -3283,3 +3283,42 @@ is honored before spent-budget classification. Preflight/recording failures
 remain retryable with lease release; existing retries below budget remain.
 The real outbox → exhausted scanning upload → interrupted publisher recording →
 redelivery regression and post-fix checks are in the Prompt 374 migration record.
+
+## Prompt 375 — callable queue-retention reconciliation
+
+`OutboxModule` exports `JobReconciliationService` alongside its dispatcher.
+`reconcileOnce()` is Vercel-only and database-only, with no automatic caller in
+API, worker or jobs compositions. It selects a materialized ordered batch of
+stale dispatched intent, locks/rechecks the related job and aggregate using
+`SKIP LOCKED`, validates database ownership, and repairs terminal ledger state,
+rearms the same intent, or durably exhausts recovery. Identity rejection changes
+only the event; a database fault rolls back the operation and rejects.
+
+Eligibility uses PostgreSQL `now()` and the maximum of successful dispatch,
+event/job update and job start/finish/lease timestamps, with a separate expired
+or absent execution-lease check. Cooldown is retention + job lease + 60 seconds
+(default **86,790,000 ms**). The extra minute is a conservative choice. Terminal
+aggregate mapping is shared with the leased executor; terminal state takes
+precedence over spent budgets. Existing errors, dead letters, attempts and
+non-null `finishedAt` survive repair. Already-reflected terminal failures are
+excluded to avoid filling the oldest batch indefinitely; retryable failures
+remain eligible.
+
+Rearm preserves original identity/version/payload/creation/dispatch history and
+both attempt budgets. Spent dispatch **or** execution budget dead-letters the
+job/event with one atomic `queue_recovery_exhausted` letter, retaining previous
+failure history. Recovery shares the original finite dispatch budget, so a
+long outage can exhaust delivery before any execution starts. The authoritative
+aggregate is unchanged; no immutable publication is regenerated. Counts describe
+selected candidates and committed transitions, and remain internal.
+
+No schema, index, grant, RLS, route or reference-worker lifecycle changed.
+The recovery and real-data-journey tests use the guarded `acres_test` runtime
+identity under forced RLS, not an owner/BYPASSRLS identity. The final 2,000-pair
+selection plan returned/locked 25 rows using existing statistics; the test role
+cannot refresh planner statistics, and this fixture establishes no production
+latency/index claim. Full commands, actual passing outputs, failed attempts,
+independent review, state table and reproduction/rollback are recorded in
+[vercel-deployment.md, Prompt 375](vercel-deployment.md#queue-retention-job-reconciliation--prompt-375-2026-10-15).
+This supersedes Prompt 374's missing-local-retention-operation note; protected
+automatic invocation/Cron and hosted application acceptance remain follow-on work.

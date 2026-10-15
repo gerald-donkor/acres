@@ -1,3 +1,9 @@
+import { AcresConfigService } from '../src/config/acres-config.service';
+import { JobReconciliationService } from '../src/outbox/job-reconciliation.service';
+import { JobLeaseService } from '../src/worker/job-lease.service';
+import { LeasedJobExecutorService } from '../src/worker/leased-job-executor.service';
+import { JobProcessorService } from '../src/worker/job-processor.service';
+import type { QueueJobName } from '../src/queue/work-queue.port';
 import { OutboxDispatcherService } from '../src/outbox/outbox-dispatcher.service';
 import { WORK_QUEUE, type QueuePort } from '../src/queue/work-queue.port';
 import { createHash } from 'node:crypto';
@@ -21,7 +27,6 @@ describe('Acres End-to-End Data Journey — Real Database Acceptance', () => {
   let prisma: PrismaService;
   let tenants: TenantTransactionService;
   let processor: IngestionProcessorService;
-  let reportsService: ReportsService;
   let geometryRepo: PostgisRegionGeometryRepository;
 
   // In-memory backing store for the OBJECT_STORAGE port double
@@ -35,7 +40,6 @@ describe('Acres End-to-End Data Journey — Real Database Acceptance', () => {
     server = app.getHttpServer() as App;
     tenants = app.get(TenantTransactionService);
     processor = app.get(IngestionProcessorService);
-    reportsService = app.get(ReportsService);
     geometryRepo = app.get(PostgisRegionGeometryRepository);
 
     // Verify PostGIS and connectivity
@@ -96,6 +100,47 @@ describe('Acres End-to-End Data Journey — Real Database Acceptance', () => {
   afterAll(async () => {
     await app?.close();
   });
+
+  /** Lose the initial delivery, age its persisted activity, then recover it. */
+  async function recoverAndExecute(jobName: QueueJobName, id: string) {
+    const config = app.get(AcresConfigService);
+    const provider = jest
+      .spyOn(config, 'queueProvider', 'get')
+      .mockReturnValue('vercel');
+    try {
+      const dispatcher = app.get(OutboxDispatcherService);
+      await dispatcher.dispatchOnce();
+      await tenants.workerScoped(async (tx) => {
+        await tx.$executeRaw`UPDATE "OutboxEvent" SET "dispatchedAt" = '2020-01-01'::timestamp, "updatedAt" = '2020-01-01'::timestamp WHERE "eventType" = ${jobName} AND "aggregateId" = ${id}`;
+        await tx.$executeRaw`UPDATE "DurableJob" SET "updatedAt" = '2020-01-01'::timestamp WHERE "deterministicKey" = ${`${jobName}:${id}`}`;
+      });
+      expect(
+        (await app.get(JobReconciliationService).reconcileOnce()).rearmed,
+      ).toBeGreaterThanOrEqual(1);
+      await dispatcher.dispatchOnce();
+      const processor = new JobProcessorService(
+        config,
+        tenants,
+        {
+          scanBuffer: () => Promise.resolve({ status: 'clean' as const }),
+          readiness: () => Promise.resolve(true),
+        },
+        app.get(OBJECT_STORAGE),
+        app.get(IngestionProcessorService),
+        app.get(ReportsService),
+      );
+      const executor = new LeasedJobExecutorService(
+        tenants,
+        new JobLeaseService(tenants, config),
+        processor,
+      );
+      const message = { v: 1 as const, jobName, id };
+      await executor.execute(message);
+      expect(await executor.execute(message)).toBe('already_terminal');
+    } finally {
+      provider.mockRestore();
+    }
+  }
 
   /** Fetches a CSRF token on an agent that preserves cookies across calls. */
   async function csrfAgent() {
@@ -324,27 +369,7 @@ describe('Acres End-to-End Data Journey — Real Database Acceptance', () => {
       'completed',
     );
 
-    // Worker scans and accepts the upload
-    await tenants.workerScoped(async (tx) => {
-      const upload = await tx.upload.findUniqueOrThrow({
-        where: { id: uploadId },
-      });
-      await tx.upload.update({
-        where: { id: uploadId },
-        data: {
-          state: 'accepted',
-          scanStatus: 'clean',
-          scanResult: 'clean',
-          progressStage: 'accepted',
-          progressPercent: 100,
-          acceptedAt: new Date(),
-        },
-      });
-      await tx.storedObject.update({
-        where: { id: upload.storedObjectId },
-        data: { state: 'accepted' },
-      });
-    });
+    await recoverAndExecute('upload.completed', uploadId);
 
     // -------------------------------------------------------------------------
     // Phase 4: Tenant A — Dataset creation, column mapping, and ingestion run
@@ -418,7 +443,7 @@ describe('Acres End-to-End Data Journey — Real Database Acceptance', () => {
         },
       },
     ]);
-    await processor.processRun(runId);
+    await recoverAndExecute('ingestion.run', runId);
 
     // Verify run completed and published
     const runStatusRes = await ownerA.agent
@@ -643,7 +668,7 @@ describe('Acres End-to-End Data Journey — Real Database Acceptance', () => {
     ).data.id;
 
     // Worker renders export and saves artifact buffer into object storage
-    await reportsService.processExport(exportRequestId);
+    await recoverAndExecute('export.requested', exportRequestId);
 
     const exportStatusRes = await ownerA.agent
       .get(`/api/v1/exports/${exportRequestId}`)

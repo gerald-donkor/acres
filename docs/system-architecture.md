@@ -27,7 +27,7 @@ pooled RLS, private-upload, Sandbox scanning and durable-delivery proofs.
 The [migration record](vercel-deployment.md) distinguishes local preparation,
 account facts and hosted acceptance. No diagram below establishes deployment.
 
-## Current job dispatch boundary — Prompt 374
+## Current job dispatch boundary — Prompts 374–375
 
 Upload completion, export requests and ingestion runs all persist transactional
 outbox intent. A shared bounded dispatcher claims with per-operation database
@@ -39,6 +39,17 @@ resolves it without a loop. No automatic managed invocation/Cron exists yet.
 At-least-once duplicate delivery remains possible; the leased executor checks
 terminal ledger state and execution budget before work, and terminal aggregate
 state remains authority. Detailed behavior/proof is in `docs/vercel-deployment.md`.
+
+A Vercel-only, database-only `JobReconciliationService.reconcileOnce()` now
+recovers stale dispatched intent after retention + execution lease + one minute.
+It locks/rechecks job and aggregate ownership, repairs terminal ledgers first,
+rearms the same intent below both original budgets, or atomically dead-letters
+recovery exhaustion. It neither calls the transport/processor nor changes an
+aggregate, schema, tenant policy or reference-worker lifecycle. Existing errors,
+attempts and immutable results survive. The operation has no automatic caller;
+protected after-commit invocation/Cron and hosted recovery acceptance remain
+open. The Prompt 375 record in `docs/vercel-deployment.md` owns state transitions,
+query-plan limits, actual checks and review.
 
 ## Current provider boundary — geoBoundaries gbOpen
 

@@ -3940,3 +3940,19 @@ Actual tests/review and rollback are in `docs/vercel-deployment.md`, Prompt 374.
 Ordered steps 3–4 remain in progress: protected after-commit invocation/Cron,
 queue-retention reconciliation, Services routing and first application preview
 are still open. No parent/phase exit or launch category is approved.
+
+## Phase 12 managed-target prerequisite — Prompt 375
+
+A callable, Vercel-only queue-retention reconciler is implemented locally. It
+locks/rechecks stale dispatched intent and database ownership, repairs terminal
+ledgers before checking budgets, rearms the original intent without fresh
+budgets, or atomically records safe recovery exhaustion. It performs no queue
+or business processing and has no automatic caller. Existing schema/grants and
+the reference-worker lifecycle are unchanged. The real data journey now covers
+reconciliation → dispatch → leased real processing and duplicate delivery for
+upload, ingestion and export. Required checks and independent review passed;
+actual output, the bounded local query plan and limitations are recorded in
+`docs/vercel-deployment.md`, Prompt 375. This supersedes Prompt 374's missing
+local retention-reconciliation prerequisite. Protected after-commit invocation/
+Cron, Services routing, distributed throttling and deployed preview acceptance
+remain open; no parent phase, Prompt 370 or launch category is approved.

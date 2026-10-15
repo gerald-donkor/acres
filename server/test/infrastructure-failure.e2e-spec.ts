@@ -1,3 +1,4 @@
+import { JobReconciliationService } from '../src/outbox/job-reconciliation.service';
 import { uuidV7 } from '../src/common/ids';
 import { JobProcessorService } from '../src/worker/job-processor.service';
 import { JobLeaseService } from '../src/worker/job-lease.service';
@@ -1196,6 +1197,7 @@ describe('Acres Infrastructure Failure and Outage Acceptance — Real Database E
           logger: false,
         });
         expect(context.get(OutboxDispatcherService)).toBeDefined();
+        expect(context.get(JobReconciliationService)).toBeDefined();
         await context.close();
       },
     );

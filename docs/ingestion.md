@@ -578,3 +578,18 @@ ledger/aggregate replay never starts ingestion again, and a spent nonterminal
 execution budget is durably exhausted without a new attempt. Recording failure
 remains retryable and published aggregate state takes precedence over budget
 classification. This adds no automatic reset or manual retry policy.
+
+## Prompt 375 — retention recovery without ingestion replay
+
+The new internal `JobReconciliationService` can rearm stale dispatched
+`ingestion.run` intent using its existing run/job/outbox identities and finite
+budgets. It resolves upload/organization linkage from the locked run, never the
+payload. Published/failed/validation-failed/cancelled aggregate state repairs the
+ledger before exhaustion classification; published versions and analytics are
+not regenerated. A cancelled job is never revived. The mapping is shared with
+the leased executor. Recovery does not change run state or process data and has
+no automatic caller. The real data journey now loses the first delivery, ages
+its durable activity, reconciles, dispatches and invokes the real leased
+processor, then verifies duplicate delivery is already terminal. Full results,
+review and remaining protected invocation/hosted gates are recorded in
+`docs/vercel-deployment.md`, Prompt 375.

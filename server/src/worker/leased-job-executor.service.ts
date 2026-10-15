@@ -1,3 +1,4 @@
+import { aggregateLedgerState } from './aggregate-ledger-state';
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantTransactionService } from '../prisma/tenant-transaction.service';
 import {
@@ -201,47 +202,20 @@ export class LeasedJobExecutorService {
           where: { id: message.id },
           select: { state: true },
         });
-        switch (upload?.state) {
-          case 'accepted':
-            return 'succeeded';
-          case 'rejected':
-            return 'failed';
-          case 'cancelled':
-          case 'expired':
-            return 'cancelled';
-          default:
-            return 'running';
-        }
+        return aggregateLedgerState(message.jobName, upload?.state ?? '');
       }
       if (message.jobName === 'ingestion.run') {
         const run = await tx.ingestionRun.findUnique({
           where: { id: message.id },
           select: { state: true },
         });
-        switch (run?.state) {
-          case 'published':
-            return 'succeeded';
-          case 'failed':
-          case 'validation_failed':
-            return 'failed';
-          case 'cancelled':
-            return 'cancelled';
-          default:
-            return 'running';
-        }
+        return aggregateLedgerState(message.jobName, run?.state ?? '');
       }
       const request = await tx.exportRequest.findUnique({
         where: { id: message.id },
         select: { status: true },
       });
-      switch (request?.status) {
-        case 'succeeded':
-        case 'failed':
-        case 'cancelled':
-          return request.status;
-        default:
-          return 'running';
-      }
+      return aggregateLedgerState(message.jobName, request?.status ?? '');
     });
   }
 

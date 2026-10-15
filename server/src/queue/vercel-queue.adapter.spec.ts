@@ -42,6 +42,26 @@ describe('VercelQueueAdapter', () => {
     );
   });
 
+  it('keeps the canonical key when retention recovery republishes', async () => {
+    const adapter = new VercelQueueAdapter(
+      config({ vercelQueueRetentionSeconds: 604800 }),
+      sender,
+    );
+    const input = {
+      deterministicKey: `ingestion.run:${ID}`,
+      jobName: 'ingestion.run' as const,
+      payload: { ingestionRunId: ID },
+    };
+    await adapter.enqueue(input);
+    await adapter.enqueue(input);
+    expect(send.mock.calls[0]).toEqual(send.mock.calls[1]);
+    expect(send.mock.calls[1][2]).toEqual({
+      idempotencyKey: input.deterministicKey,
+      retentionSeconds: 604800,
+    });
+    expect(input.deterministicKey.length).toBeLessThanOrEqual(256);
+  });
+
   it('converts delays to whole seconds, leaving a minute before expiry', async () => {
     const adapter = new VercelQueueAdapter(config(), sender);
     await adapter.enqueue({

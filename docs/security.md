@@ -2024,3 +2024,37 @@ The real processor/executor regression combines storage exhaustion, interrupted
 outbox completion recording and redelivery; follow-up review/check evidence is
 in the Prompt 374 migration record. This closes that concrete replay path without
 changing tenant policy, provider delivery guarantees or manual retry authority.
+
+### Queue-retention recovery boundary — Prompt 375 (2026-10-15)
+
+The existing internal worker boundary now has a database-only retention recovery
+operation in `server/src/outbox/job-reconciliation.service.ts`. There is no new
+operator/tenant endpoint, credential, caller or trust zone. Existing assumptions
+remain: tenant request data cannot grant worker authority; runtime roles are
+non-superuser/NOBYPASSRLS; managed jobs need separate protected invocation and
+hosted acceptance before activation.
+
+Availability abuse or an outage must not turn lost delivery into unlimited work
+or cross-tenant mutation. Recovery locks a bounded materialized stale-intent set,
+then locks/rechecks job and aggregate authority. Live/new execution leases,
+recent/future activity and downstream contention defer mutation. Fixed identity
+rejection settles only the event, never another tenant's job. Two-org negative
+read/write tests preserve forced RLS. Invalid payloads/provider errors are not
+copied into diagnostics or logs; global result counts have no public route.
+
+Terminal aggregate state wins over exhaustion and uses the same mapping as the
+executor, preventing regeneration of immutable results. Rearm retains both finite
+budgets and the original transport key. Exhaustion is a distinct fixed recovery
+classification with an atomic associated letter; old failures survive, rollback
+remains retryable, and concurrent calls cannot duplicate that transition. The
+conservative retention + lease + minute cooldown exceeds the SDK's documented
+deduplication window; hosted behavior is not proven by local adapter tests.
+
+Residual availability risk: recovery has no automatic caller yet, shared finite
+delivery budgets can exhaust during prolonged outages, and the synthetic query
+plan does not establish production scan cost. Manual reset authority is not
+introduced. Independent review found no critical/important/minor issues. Actual
+checks, race/rollback evidence and the least-privilege planner-statistics
+limitation are in `docs/vercel-deployment.md`, Prompt 375. This supersedes older
+notes that the local operation is missing; protected invocation/Cron and hosted
+recovery remain open.

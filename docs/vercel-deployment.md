@@ -13,7 +13,7 @@ Starting source: `a1350d0` on `main`.
 Prompt 370 is approved and still executing. Remaining checklist items may be
 split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
 scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
-outbox); each
+outbox, Prompt 375 = queue-retention reconciliation); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -1236,3 +1236,214 @@ Prompt 374 scope for completion. The feedback was evaluated against surrounding
 code and tests before applying the fix; no speculative changes were adopted.
 Automatic Vercel invocation/Cron, retention reconciliation, application deployment
 and all launch approvals remain open.
+
+## Queue-retention job reconciliation — Prompt 375 (2026-10-15)
+
+`JobReconciliationService.reconcileOnce()` is now exported by `OutboxModule`
+and resolves through `VercelJobsModule`. It is a bounded, awaited database-only
+operation. It has **no caller** in either runtime: no boot hook, timer, consumer
+callback, endpoint, after-commit kick or Cron was added. A future protected
+runner must separately await reconciliation and `dispatchOnce()`. This record
+supersedes earlier remaining-work statements that local retention reconciliation
+does not exist; automatic invocation and hosted recovery are still unproven.
+
+### Eligibility, authority and budgets
+
+The operation returns `enabled: false` and zero counts outside
+`QUEUE_PROVIDER=vercel`. It selects at most `OUTBOX_CLAIM_BATCH_SIZE` (default 25) dispatched events with a non-null successful dispatch timestamp and an
+existing canonical `eventType:aggregateId` durable job. It never fabricates
+legacy intent or a missing job. Pending/retrying/dead-lettered intent belongs
+to the existing dispatch/recovery operations.
+
+The inclusive stale cutoff is PostgreSQL transaction time `now()` minus:
+
+```text
+VERCEL_QUEUE_RETENTION_SECONDS * 1000 + JOB_LEASE_MS + 60000
+Default: 86,790,000 ms (24 hours, 6 minutes, 30 seconds)
+Maximum validated inputs: 608,460,000 ms (safe JS integer arithmetic)
+```
+
+The extra minute is a conservative engineering choice, not a provider guarantee.
+The maximum of `dispatchedAt`, event/job `updatedAt`, job `startedAt`,
+`finishedAt` and `leaseUntil` must be no newer than that cutoff; a lease must
+also independently be expired or absent. Future timestamps and recent failures
+or lease activity defer recovery. The installed queue SDK documents a
+`min(retention, 24h)` deduplication window and 256-character key limit; this
+cooldown exceeds that window while retaining the original canonical key.
+Adapter tests confirm the same key/options are sent again; only a hosted proof
+can establish actual provider recovery behavior.
+
+The ordered candidate set is materialized and locked with `SKIP LOCKED`.
+Recovery then locks/rechecks the job and locks/re-reads its aggregate. Downstream
+locks also skip contention, avoiding waits against aggregate-first API commands.
+A concurrent lease acquired after selection wins the recheck. Ownership comes
+from the database: event name/type/UUID, job key/type/tenant/upload and aggregate
+organization/linkage must agree. Ingestion's upload comes from its run; export
+jobs require null upload linkage. Invalid selected intent is durably rejected
+with a fixed existing identity classification, without changing the job.
+
+| Locked authority                                         | Recovery transition                                                                                                                                                             |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terminal job (`succeeded`, `cancelled`, `dead_lettered`) | Ignore; never revive it                                                                                                                                                         |
+| Terminal aggregate, stale nonterminal ledger             | Repair ledger to `succeeded`, `failed` or `cancelled` before budget classification; preserve attempts, prior errors/dead letters and existing `finishedAt`; clear expired lease |
+| Nonterminal aggregate, both budgets available            | Set the original event to `pending` with database-time `nextAttemptAt`; keep job, event identity/version/payload/creation/dispatch history and both budgets                     |
+| Nonterminal aggregate, either budget spent               | Set job and event to `dead_lettered`, clear stale locks, retain job failure history/budgets, and atomically append one associated recovery dead letter                          |
+| Invalid identity or missing aggregate                    | Dead-letter only the event with fixed `outbox_event_invalid` or `outbox_job_mismatch` diagnostic                                                                                |
+| Busy downstream lock or failed post-lock eligibility     | No mutation; a future operation may reconsider it                                                                                                                               |
+
+The shared `aggregateLedgerState()` helper preserves the executor's existing
+mapping: accepted upload/published ingestion/succeeded export → success;
+rejected upload/failed or validation-failed ingestion/failed export → failure;
+cancelled or expired upload/cancelled ingestion or export → cancellation.
+An already-reflected failed terminal aggregate is excluded from selection so
+old failures cannot repeatedly occupy the oldest batch. Retryable failed ledgers
+with nonterminal aggregates remain eligible. Aggregate state is never rewritten
+by reconciliation; published versions, exports and evidence remain immutable.
+
+Exhaustion records `queue_recovery_exhausted` with the fixed message
+`Queue retention recovery attempts exhausted.` on the event/dead letter; it is
+not a scanner rejection or a fabricated execution attempt. Previous dead letters
+and job error fields survive. The transition and new letter share one locked
+transaction, so insert failure rolls everything back and concurrent calls cannot
+append another letter for that transition. Dispatch and execution budgets remain
+separate, finite and unchanged. Recovery shares the **original dispatch budget**:
+an extended outage can visibly exhaust delivery with execution attempts left.
+There is no automatic manual-retry authority or new generation/budget.
+
+`examined` counts selected candidates (including subsequently deferred locks);
+`rearmed`, `repaired`, `exhausted` and `rejected` count committed transitions.
+The result is returned only after commit. Database failure rejects rather than
+returning success/counts after rollback. Global counts have no tenant route;
+raw payloads/provider exceptions are not logged or copied into failure records.
+
+### Verification, query plans and review
+
+Checks used Node **24.21.0**, npm **12.0.2**, with the explicit temporary Node/npm
+launcher pair. All required commands exited zero:
+
+```text
+npm run build:server: exit 0
+npm run test --workspace=@acres/server -- --runInBand: exit 0
+npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000: exit 0
+npm run contracts:check: exit 0
+npm run lint: exit 0
+npm run build: exit 0
+npm run typecheck: exit 0
+npm run vercel:probe-test: exit 0
+npm run ops:check: exit 0
+git diff --check: exit 0
+```
+
+Actual broad summaries:
+
+```text
+Test Suites: 135 passed, 135 total
+Tests:       2087 passed, 2087 total
+Snapshots:   1 passed, 1 total
+
+Test Suites: 10 passed, 10 total
+Tests:       220 passed, 220 total
+Snapshots:   0 total
+```
+
+After that broad database run, two additional race regressions passed in the
+focused recovery suite. Its final rerun, including removal of ineffective
+`ANALYZE` statements, reported:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       34 passed, 34 total
+Snapshots:   0 total
+```
+
+The latest focused unit rerun passed **3 suites / 34 tests**. Provider probe
+fixtures reported `pass 122`, `fail 0`. Changed source/test/prompt formatting
+reported `All matched files use Prettier code style!`. The operational preflight
+completed all configured stages; its final suite reported `tests 182`, `pass
+182`, `fail 0`. SAST reported `SAST Gate: PASSED (Zero unreviewed blockers and
+zero expired suppressions)`. The dependency audit passed its configured
+critical threshold with **0 critical, 6 high and 4 moderate findings**; this is
+not a zero-vulnerability claim, and dependencies were not upgraded in this unit.
+
+New database tests cover all three expired deliveries, never-started and
+expired-running jobs, terminal/history repair ahead of budgets, retryable failed
+ledgers, active/recent/future exclusions, exact cutoff, concurrent reconcilers,
+locked execution/cancellation, post-selection lease acquisition, both exhausted
+budgets, rejection/rollback, cross-organization RLS and interrupted completion
+recording after successful recovered publication. The existing data journey now
+uses reconciliation → real dispatch → leased real processor → duplicate delivery
+for upload scanning/acceptance, ingestion/analytics publication and export
+rendering, and retains its one-result/tenant/evidence assertions. Storage/scanner
+ports remain controlled test doubles; PostgreSQL and the business processors
+are real. Infrastructure boot tests resolve the provider in both compositions.
+
+The exact selection query is shared with `EXPLAIN (ANALYZE, BUFFERS, FORMAT
+JSON)` acceptance over **2,000 synthetic dispatched event/job pairs**. Final
+local plan excerpt (actual values):
+
+```text
+Limit -> LockRows -> Sort -> Hash Join
+OutboxEvent sequential scan: 2000 rows
+DurableJob sequential scan: 2000 rows
+Materialized candidates: 25 rows
+Final OutboxEvent primary-key fetches: 25
+Shared hit blocks: 221; temporary reads/writes: 0/0
+Planning Time: 0.694 ms; Execution Time: 3.701 ms
+```
+
+This all-eligible fixture measures bounded row locking/result size, not bounded
+scan work or production latency. The runtime/test role is non-superuser and
+`NOBYPASSRLS`; a direct privilege inspection also confirmed no `MAINTAIN`
+privilege. Two initial `ANALYZE` requests therefore could not refresh statistics
+and were removed. The final plan uses existing statistics under the runtime
+role. No index or schema/grant change was justified by this fixture; realistic
+production distributions/statistics and hosted measurements remain required
+before claiming an optimal plan or adding an index.
+
+Earlier attempts were not counted as passes: the initial unpinned server build
+used system Node 26; sandboxed database/listener access failed; Docker inspection
+approval timed out once and succeeded on the permitted retry; the first export
+fixture omitted its required report target; and lint found mock typing/unbound
+method assertions. Node 24 reruns, a valid report fixture and corrected assertions
+passed without weakening test or isolation checks. PostgreSQL also emitted the
+existing `pg@9.0` future query-concurrency deprecation warning in database runs.
+
+Independent read-only review against baseline
+`f1d9f6cd4b39d7ce3f55060701f7910834e19f8e` inspected the complete working diff
+and new files, traced selection through dispatch/leased execution, checked logs,
+and found **no critical, important or minor findings**. The feedback was verified
+against the implementation before recording completion. Removal of ineffective
+fixture `ANALYZE` calls changes no recovery behavior or privileges.
+Follow-up read-only review checked the completed records and final focused
+logs, confirmed the statistics limitation and test cleanup, and again found no
+critical, important or minor findings; the final scope was approved for completion.
+
+### Local reproduction, rollback and remaining gates
+
+Use Node 24 for both `node` and `npm`. With the existing local Compose environment
+and migrated isolated `acres_test` database:
+
+```bash
+npm run db:up
+env -u DATABASE_URL npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000 job-reconciliation data-journey
+```
+
+`server/test/setup-env.ts` supplies the local `acres_test` role/database and
+rejects another role/database; do not pass Neon preview credentials. A fresh
+local database first needs the role bootstrap, committed migrations and
+post-migration privilege hardening in `docs/backend.md` §8. This execution used
+an already migrated test database and introduced no migration. The focused suite
+prints the actual selection plan. No provider credentials, real scanner VM,
+email or application deployment are needed for these tests.
+
+Ordinary code revert removes this callable service. Already rearmed intent is
+valid for Prompt 374's dispatcher; retain pending intent, terminal repairs and
+exhaustion records. Once a future runner exists, stop/drain that caller before
+reverting. Do not reset budgets or delete evidence to make rollback look clean.
+
+**Still open:** protected after-commit invocation/Cron, Services routing,
+distributed throttling, first deployed application preview and hosted recovery
+acceptance, scanner freshness/rebuild cadence, and all launch approvals. Prompt
+370, Phase 12 and the eleven launch categories remain incomplete. No hosted
+resource/environment, route, queue schema/configuration or reference-worker
+lifecycle changed; nothing was deployed or pushed.
