@@ -10,6 +10,12 @@ open. This is not a declaration that all phase acceptance criteria pass. See
 [`project-status.md`](project-status.md) for the dated whole-project assessment;
 code, git history and the phase evidence below remain the implementation proof.
 
+**Production-target amendment — 2026-10-15:** the user selected the
+Vercel-managed migration in [Prompt 370](../prompts/370-vercel-managed-migration-and-deployment.md).
+It is approved, but runtime migration and deployment have not been implemented.
+Compose+Caddy remains the implemented reference profile. See Phase 12's amendment
+below for the new target, dependency gates and prompt-number mapping.
+
 ## 1. How every phase runs
 
 Each phase is a separately numbered, approved prompt and commit. Before code:
@@ -606,6 +612,61 @@ Status: implemented by `prompts/30-dashboards-optimized-graphql.md`.
   rollback; successful restore drill within selected objectives; actionable
   alerts/runbooks; no unresolved critical security/accessibility findings; all
   repository, integration, E2E, isolation, and failure tests passing.
+
+### Production-target amendment — 2026-10-15
+
+The user requested implementation and deployment through Vercel and approved
+[Prompt 370 — Vercel-managed migration and deployment](../prompts/370-vercel-managed-migration-and-deployment.md),
+originally numbered 371. This supersedes Compose+Caddy as the selected future
+production target; it does not assert a changed runtime, completed migration or
+deployed application. The Phase 12 bullets above describe the implemented
+self-host reference and its original acceptance tooling. Retain that profile
+and its tests while adding the explicitly selected managed profile.
+
+The managed target uses Vercel application compute/routing, private Blob,
+Queues/Workflows and Cron, with Neon PostgreSQL/PostGIS and Resend provisioned
+through Vercel Marketplace. Marketplace providers remain external processors.
+Per-job Sandbox malware scanning is a candidate requiring proof, not a shipped
+replacement for ClamAV. No separate continuously operated VM/container host is
+selected. This is the bounded exception to the original Phase 12 cloud-selection
+non-goal; it does not authorize unrelated provider or product changes.
+
+The next implementation sequence is owned by approved Prompt 370:
+
+1. Record the topology decision and confirm the selected Vercel account/project,
+   environment, access, region and permitted plan/spend.
+2. Prove pooled database/RLS compatibility, authenticated private Blob uploads,
+   fail-closed Sandbox scanning and isolated durable job delivery with synthetic
+   data before depending on them for production.
+3. Add explicit provider profiles and invocation-scoped Nest execution; retain
+   local/self-host adapters and eliminate perpetual worker/scheduler assumptions
+   from the Vercel profile.
+4. Implement the Blob upload/download contract, queue/workflow processing,
+   protected Cron dispatch, Resend transport, same-origin ingress, distributed
+   throttling and progress reconnection without weakening existing product rules.
+5. Define versioned, topology-specific launch evidence and managed recovery,
+   reconciliation, retention, telemetry and rollback procedures. Do not reinterpret
+   Compose mount/secret/image checks as successful Vercel evidence.
+6. Run repository and real-provider acceptance, independent review, and local
+   commits; deploy and verify an isolated preview, then promote only when the
+   selected production target and launch acceptance permit it.
+
+The migration must preserve forced tenant RLS, database-backed sessions/CSRF,
+durable outbox/job state, bounded retries and cancellation, quarantine scanning,
+atomic dataset/analytics publication, immutable report evidence and no-AI
+production. A mock or frontend-only deployment does not satisfy the request.
+Unknown account settings, provider capabilities, operator decisions and failed
+proofs remain explicit blockers; code or templates alone approve no category.
+The eleven launch responsibilities and Phase 12 exit remain open until equivalent
+managed evidence is implemented, independently verified and signed.
+
+**Prompt reorganization:** the user explicitly removed the unused, unexecuted
+`369-verify-operator-production-intake.md`, moved the completed handoff package
+370 → [369](../prompts/369-operator-handoff-package.md), and moved the approved
+Vercel migration 371 → [370](../prompts/370-vercel-managed-migration-and-deployment.md).
+Commit `cedaa3d` records this bounded numbering exception and reference updates.
+The handoff implementation remains commit `aff196a`; renumbering neither reruns
+it nor withdraws migration approval. The next new prompt number is 371.
 
 ## 14. Sequence gates
 
@@ -3814,3 +3875,38 @@ Reaffirms fail-closed posture: all 11 categories remain `unresolved` in `readine
 Next.js production build (23/23 routes), and full operations preflight (`ops:check` 33/33
 stages) verified. `docs/operations.md` records verification details. Prompt 201 and Phase 12
 operator sign-offs remain open. No deploy or push.
+
+
+**Prompts 367–368 — production activation plan and blocked intake (2026-10-14):**
+Commit `1102363` prepares the activation procedure; it does not deploy production.
+Commit `6a06864` records the missing target, release identities, named authorities
+and scoped evidence access. Those are historical Compose-reference intake results,
+not proof of an external environment. The Vercel target amendment above changes
+how future intake/evidence is implemented, without inventing the missing facts.
+
+**Prompt 369 (originally 370) — operator handoff package (2026-10-14):**
+Implemented in `aff196a`: the incomplete operator form, completion guide,
+checklist link, AGENTS.md index and actual verification record. The package covers
+five intake groups and eleven unresolved categories; it supplies no actual
+production identities or approvals. Recorded lint, typecheck, permitted production
+build and independent review passed; the unchanged readiness example exited 1
+with 11 required, 0 approved, 11 unresolved categories and 70 blockers. These are
+historical checks recorded in `docs/operations.md`, not fresh checks in this
+build-plan update.
+
+**Prompt 370 (originally 371) — Vercel migration approved; implementation pending (2026-10-15):**
+The user approved the full migration/deployment scope. Commit `cedaa3d` records
+its renumbered prompt and the removal of the unused intake prompt; it contains
+prompt/documentation changes only. No Vercel runtime adapters, managed-resource
+provisioning, hosted integration proof, preview deployment or production promotion
+have been recorded as implemented at this baseline. The ordered Phase 12 amendment
+above defines the next work. Existing application completion evidence remains
+historical; it does not prove the selected managed profile is ready to launch.
+
+
+**Build-plan synchronization verification — 2026-10-15:** `git diff --check`
+exited 0 with no output. The local reference check reported `PASS: new local
+links resolve; all four cited commits exist; prompt headings and numbering match.`
+Independent read-only review found no Critical, Important or Minor findings;
+feedback was verified against the committed history and operations record.
+Application checks were not rerun for this documentation-only synchronization.
