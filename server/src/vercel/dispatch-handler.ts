@@ -72,7 +72,8 @@ export function createDispatchHandler(deps: {
     const schedule = rawSchedule ? rawSchedule.slice(0, 64) : '';
     deps.logger?.log(
       `Managed outbox sweep completed: passes=${sweepResult.passes} stoppedBy=${sweepResult.stoppedBy} ` +
-        `dispatched=${sweepResult.dispatch.dispatched} rearmed=${sweepResult.reconciliation.rearmed}` +
+        `dispatched=${sweepResult.dispatch.dispatched} rearmed=${sweepResult.reconciliation.rearmed} ` +
+        `throttleDeleted=${sweepResult.throttleCleanup.deleted} throttleCleanupFailed=${sweepResult.throttleCleanup.failed}` +
         (schedule ? ` schedule=${schedule}` : ''),
     );
 
@@ -83,6 +84,7 @@ export function createDispatchHandler(deps: {
         stoppedBy: sweepResult.stoppedBy,
         reconciliation: sweepResult.reconciliation,
         dispatch: sweepResult.dispatch,
+        throttleCleanup: sweepResult.throttleCleanup,
       }),
       { status: 200, headers },
     );

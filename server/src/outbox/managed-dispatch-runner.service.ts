@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { PostgresThrottlerStorage } from '../security/postgres-throttler.storage';
 import { AcresConfigService } from '../config/acres-config.service';
 import {
   JobReconciliationService,
@@ -15,6 +16,7 @@ export interface ManagedSweepResult {
   stoppedBy: 'drained' | 'pass_cap' | 'budget' | 'disabled';
   reconciliation: Omit<JobReconciliationResult, 'enabled'>;
   dispatch: OutboxDispatchResult;
+  throttleCleanup: { deleted: number; failed: boolean };
 }
 
 export const SWEEP_MAX_PASSES = 8;
@@ -29,6 +31,7 @@ export class ManagedDispatchRunnerService {
     private readonly config: AcresConfigService,
     private readonly reconciler: JobReconciliationService,
     private readonly dispatcher: OutboxDispatcherService,
+    private readonly throttleStorage: PostgresThrottlerStorage,
     @Optional() @Inject(SWEEP_CLOCK) sweepClock?: () => number,
   ) {
     this.now = sweepClock ?? (() => Date.now());
@@ -51,6 +54,8 @@ export class ManagedDispatchRunnerService {
       lostClaims: 0,
     };
 
+    const throttleCleanup = { deleted: 0, failed: false };
+
     if (this.config.queueProvider !== 'vercel') {
       return {
         enabled: false,
@@ -58,7 +63,15 @@ export class ManagedDispatchRunnerService {
         stoppedBy: 'disabled',
         reconciliation,
         dispatch,
+        throttleCleanup,
       };
+    }
+
+    // One capped batch per invocation; cleanup failure never blocks dispatch.
+    try {
+      throttleCleanup.deleted = await this.throttleStorage.cleanupOnce();
+    } catch {
+      throttleCleanup.failed = true;
     }
 
     const batchSize = this.config.outboxClaimBatchSize;
@@ -107,6 +120,7 @@ export class ManagedDispatchRunnerService {
       stoppedBy,
       reconciliation,
       dispatch,
+      throttleCleanup,
     };
   }
 }

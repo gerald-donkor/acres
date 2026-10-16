@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AcresConfigService } from '../config/acres-config.service';
+import { ThrottleStorageModule } from './throttle-storage.module';
+import { PostgresThrottlerStorage } from './postgres-throttler.storage';
 import { CsrfService } from './csrf.service';
 import {
   AcresThrottlerGuard,
@@ -13,19 +15,26 @@ import {
 @Module({
   imports: [
     ThrottlerModule.forRootAsync({
-      inject: [AcresConfigService],
-      useFactory: (config: AcresConfigService) => [
-        {
-          name: DEFAULT_THROTTLER_NAME,
-          ttl: config.rateLimitTtlMs,
-          limit: config.rateLimitDefaultLimit,
-        },
-        {
-          name: STRICT_THROTTLER_NAME,
-          ttl: config.rateLimitTtlMs,
-          limit: config.rateLimitStrictLimit,
-        },
-      ],
+      imports: [ThrottleStorageModule],
+      inject: [AcresConfigService, PostgresThrottlerStorage],
+      useFactory: (
+        config: AcresConfigService,
+        storage: PostgresThrottlerStorage,
+      ) => ({
+        ...(config.queueProvider === 'vercel' ? { storage } : {}),
+        throttlers: [
+          {
+            name: DEFAULT_THROTTLER_NAME,
+            ttl: config.rateLimitTtlMs,
+            limit: config.rateLimitDefaultLimit,
+          },
+          {
+            name: STRICT_THROTTLER_NAME,
+            ttl: config.rateLimitTtlMs,
+            limit: config.rateLimitStrictLimit,
+          },
+        ],
+      }),
     }),
   ],
   providers: [

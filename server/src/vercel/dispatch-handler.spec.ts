@@ -19,6 +19,7 @@ describe('createDispatchHandler', () => {
     enabled: true,
     passes: 2,
     stoppedBy: 'drained',
+    throttleCleanup: { deleted: 0, failed: false },
     reconciliation: {
       examined: 20,
       rearmed: 5,
@@ -201,6 +202,7 @@ describe('createDispatchHandler', () => {
         ok: true,
         passes: 2,
         stoppedBy: 'drained',
+        throttleCleanup: { deleted: 0, failed: false },
         reconciliation: sampleSweepResult.reconciliation,
         dispatch: sampleSweepResult.dispatch,
       });
@@ -213,7 +215,7 @@ describe('createDispatchHandler', () => {
 
       expect(mockLogger.log).toHaveBeenCalledWith(
         expect.stringContaining(
-          'Managed outbox sweep completed: passes=2 stoppedBy=drained dispatched=14 rearmed=5 schedule=0 0 * * *',
+          'Managed outbox sweep completed: passes=2 stoppedBy=drained dispatched=14 rearmed=5 throttleDeleted=0 throttleCleanupFailed=false schedule=0 0 * * *',
         ),
       );
     });
@@ -226,7 +228,7 @@ describe('createDispatchHandler', () => {
 
       expect(response.status).toBe(200);
       expect(mockLogger.log).toHaveBeenCalledWith(
-        'Managed outbox sweep completed: passes=2 stoppedBy=drained dispatched=14 rearmed=5',
+        'Managed outbox sweep completed: passes=2 stoppedBy=drained dispatched=14 rearmed=5 throttleDeleted=0 throttleCleanupFailed=false',
       );
     });
   });

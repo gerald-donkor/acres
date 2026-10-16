@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ThrottleStorageModule } from '../security/throttle-storage.module';
 import { QueueModule } from '../queue/queue.module';
 import {
   AFTER_RESPONSE_SCHEDULER,
@@ -11,7 +12,7 @@ import { OutboxDispatcherService } from './outbox-dispatcher.service';
 import { OutboxService } from './outbox.service';
 
 @Module({
-  imports: [QueueModule],
+  imports: [QueueModule, ThrottleStorageModule],
   providers: [
     OutboxService,
     OutboxDispatcherService,

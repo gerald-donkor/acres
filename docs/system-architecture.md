@@ -56,6 +56,21 @@ provides a protected `GET` endpoint authenticated via constant-time SHA-256 HMAC
 comparison against `CRON_SECRET` (≥32 chars, validated at boot, unlogged).
 Detailed behavior/proof is in `docs/vercel-deployment.md`.
 
+## Current managed throttling boundary — Prompt 377
+
+Managed API instances automatically share rolling rate budgets through the
+existing PostgreSQL/Prisma port when `QUEUE_PROVIDER=vercel`. A dedicated
+persistence-only `ThrottleStorageModule` is shared by SecurityModule's async
+throttler wiring and OutboxModule's managed sweep, without importing API guards
+into jobs or creating another pool/listener/timer. The reference profile retains
+memory throttling. The additive global pre-auth `ThrottleBucket` table stores
+pseudonymous route/IP/tier digests and bounded per-hit expiry state under existing
+runtime DML grants; tenant RLS and context boundaries do not change. Row locks,
+database time, transaction-local waits, fail-closed 503 and one isolated capped
+cleanup batch preserve shared budgets across instances. This is local accepted
+implementation; [vercel-deployment.md](vercel-deployment.md) records proofs and
+rollback. Hosted migration, ingress identity and capacity gates remain open.
+
 ## Current provider boundary — geoBoundaries gbOpen
 
 The geography module has an operator-only `geoBoundaries` adapter behind a

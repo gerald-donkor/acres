@@ -1161,3 +1161,17 @@ enum ObservationQualityState {
   duplicate
   low_confidence
 }
+
+/// Pseudonymous global pre-auth abuse budgets, shared across managed instances.
+model ThrottleBucket {
+  key             String
+  tier            String
+  /// Expiration instant of each counted hit (not raw request timestamps).
+  hits            DateTime[] @default([]) @db.Timestamptz(3)
+  windowExpiresAt DateTime   @db.Timestamptz(3)
+  blockedUntil    DateTime?  @db.Timestamptz(3)
+  expiresAt       DateTime   @db.Timestamptz(3)
+
+  @@id([key, tier])
+  @@index([expiresAt])
+}

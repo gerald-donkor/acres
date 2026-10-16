@@ -3976,3 +3976,18 @@ on enqueue failure, and stale event rearm-and-dispatch in the same sweep. All ga
 passed under Node 24. Required checks and independent review passed; actual outputs
 and limitations recorded in `docs/vercel-deployment.md`. No `crons` entry added to
 `vercel.json`; no deploy, push, or cloud invocation.
+
+
+## Phase 12 managed-target prerequisite — Prompt 377
+
+Shared managed API throttling is implemented and accepted locally with an
+additive PostgreSQL global infrastructure bucket, automatic Vercel-profile
+selection and unchanged route/IP/tier policy. Serialized rolling increments,
+block reset, bounded waits, sanitized fail-closed 503, and one capped lock-safe
+cleanup batch in the managed sweep are verified. Reference memory storage,
+health exclusions, tenant RLS and lean job/dispatch compositions are retained.
+Full checks and independent review passed; exact evidence and rollback are in
+`docs/vercel-deployment.md`, Prompt 377. Only the isolated local test database
+was migrated. Services routing, protected function wiring, hosted migration and
+first application-preview ingress/upload/dispatch proofs are next. Prompt 370,
+Phase 12 and eleven launch categories remain open; completion is not increased.

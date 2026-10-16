@@ -3348,3 +3348,19 @@ Vercel Cron endpoint:
 - Authorization: timing-safe constant-time comparison against `CRON_SECRET` via SHA-256 digests.
 - Status table: 200 (success with JSON summary), 401 (unauthorized), 503 (unusable secret or runtime resolution error), 500 (sweep execution failure).
 - Real PostgreSQL E2E suite (`server/test/managed-dispatch.e2e-spec.ts`, 14 tests) covers command-kick-dispatch flows, 60-event backlog drainage across two organizations, concurrent deduplication, and retry backoff.
+
+
+## Shared managed throttling — Prompt 377 (2026-10-16)
+
+`QUEUE_PROVIDER=vercel` now selects PostgreSQL-backed rolling rate-limit storage;
+the reference profile retains Nest throttler 6.5.0 memory storage. Existing
+route/IP/tier key derivation, limits, strict opt-in, GraphQL extraction and health
+exclusions remain intact. Storage errors fail closed as sanitized 503/NOT_READY;
+exhaustion stays 429 with retry headers. The additive `ThrottleBucket` global
+pre-auth table uses existing runtime DML defaults without tenant-context or RLS
+bypass. One capped cleanup batch runs per managed sweep, isolated from dispatch
+failure handling. Local concurrency, expiry, lock waits, HTTP and runtime-role
+proofs pass; full E2E is 12 suites / 248 tests and unit is 140 suites / 2150 tests.
+Actual gates, limits, local reproduction and security-preserving rollback are
+recorded in [vercel-deployment.md](vercel-deployment.md), Prompt 377. Only isolated
+local test migration was applied; hosted activation and ingress proof remain open.

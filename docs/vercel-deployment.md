@@ -14,7 +14,7 @@ Prompt 370 is approved and still executing. Remaining checklist items may be
 split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
 scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
 outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
-managed outbox dispatch); each
+managed outbox dispatch, Prompt 377 = shared managed API throttling); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -78,10 +78,9 @@ committed per AGENTS.md §2):
 
 - [x] **Queues consumer** — platform seams proven on previews and the
       consumer/adapter/lease implemented locally (see "Queues — 2026-10-15"
-      below). Still open, owned by later items: a Vercel outbox dispatcher
-      (after-commit kick plus Cron reconciliation sweeper) that also carries
-      `ingestion.run` (the shared bounded dispatcher and transactional ingestion
-      intent are implemented locally in Prompt 374; automatic triggers remain open),
+      below). The Vercel outbox dispatcher, transactional `ingestion.run` intent,
+      retention reconciliation, after-commit kicks and protected Cron handler
+      are implemented locally in Prompts 374–376. Still open:
       wiring `server/src/vercel/jobs.function.ts` into the
       real Services config with no `maxDeliveries` and pinned regions, and an
       application-level hosted job proof on the first preview deployment.
@@ -103,7 +102,8 @@ committed per AGENTS.md §2):
 - [ ] **First preview deployment** — Services/route config, only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, remove or mark
       sensitive the `NEON_OWNER_*` variables, migrations as a guarded
-      non-runtime step, distributed throttling, protected endpoints
+      non-runtime step, deploy the Prompt 377 shared-throttling migration,
+      wire the locally implemented protected endpoints (Prompt 376)
       (`vercel:vercel-services`, `vercel:deployments-cicd`, `vercel:env-vars`).
       Add `BLOB_STORE_ID` (`store_g2fmCH5CW7TJbkN3` for preview; absent from
       project env today) and `STORAGE_PROVIDER=vercel-blob`, and unset every
@@ -1512,3 +1512,168 @@ All verification gates passed under Node 24:
 - `git diff --check`: passed (clean)
 
 No `crons` entry was added to `vercel.json`; no code was deployed or pushed.
+
+
+## Shared managed API throttling — Prompt 377 (2026-10-16)
+
+Local implementation based on `b3f145d`; no hosted migration, invocation,
+resource change, deployment or push. `QUEUE_PROVIDER=vercel` automatically selects
+`PostgresThrottlerStorage` through the installed Nest throttler 6.5.0 async
+storage contract. The reference profile still resolves its installed memory
+storage. Limits, strict opt-in, route/IP/tier key generation, GraphQL extraction,
+health exemptions and proxy trust are unchanged. Services routing and deployed
+ingress identity/spoofing acceptance are next; this does not close Prompt 370,
+Phase 12 or any launch category.
+
+### Persistence, concurrency and expiry
+
+Migration `20261016000000_shared_throttling` adds `ThrottleBucket` with composite
+SHA-256 key/named-tier identity, bounded per-hit expiry array, header-window
+expiry, optional block deadline and indexed cleanup expiry. No raw IP, email,
+query, cookie, bearer token or deployment identifier is stored. Digests are
+pseudonymous, **not anonymization**: predictable IP/route inputs can be guessed.
+The table is narrowly scoped global infrastructure before authentication, like
+Session. Existing migrator default privileges supply runtime DML; bootstrap and
+hardening scripts were inspected and require no blanket grant, worker-context
+setting, tenant-table change or RLS bypass.
+
+An explicit READ COMMITTED transaction acquires the row through INSERT ... ON
+CONFLICT DO UPDATE, covering initial creation races as well as existing rows.
+It reads database time after locking, prunes individually expired hits, appends
+one hit only when unblocked and blocks on `totalHits > limit`. Individual expiry
+instants survive a TTL configuration difference between releases. Repeated
+blocked requests do not extend the block; the first request after its deadline
+clears that bucket's old hits and counts itself as hit one. Header expiry resets
+independently of rolling counts; response seconds round upward and clamp at zero.
+This preserves the installed per-bucket behavior without reproducing the memory
+adapter's tier-wide timer-clearing side effect on unrelated keys when unblocking.
+
+Inputs require safe positive integers: TTL/block duration at most 2,147,483,647 ms,
+allowance at most 1,000,000; history is capped at allowance plus the triggering
+hit (and the SQL cardinality constraint caps it at 1,000,001). Existing configured
+limits are unchanged. Invalid bounds fail closed. Query/lock timeouts are local
+to each transaction (2 seconds / 1 second), Prisma transaction acquisition and
+execution are each bounded at 5 seconds, and the existing pool already has a
+5-second connection acquisition bound. There is no extra pool or per-hit timer.
+Protected requests receive sanitized 503/`NOT_READY` with
+`Request protection is temporarily unavailable.` on storage failure, with no raw
+error cause or diagnostic logging. Allowance exhaustion retains 429 and retry
+headers. Arbitrary non-storage guard failures are not caught or reclassified.
+
+### Cleanup and composition
+
+`ThrottleStorageModule` contains only Prisma and the adapter; outbox/dispatch
+compositions import it without importing the API/guard module. Each managed
+sweep makes one cleanup call capped at 250 expired buckets, using the expiry
+index, materialized selection and FOR UPDATE SKIP LOCKED, followed by a guarded
+delete under the same row locks. Increments cannot refresh a row between its
+locked selection and deletion. If cleanup wins, the next increment safely
+recreates expired state; if increment wins, cleanup skips/rechecks it. Expiry
+correctness does not depend on Cron running.
+
+Cleanup failure does not stop reconciliation/dispatch. The protected sweep
+summary and completion log add only `throttleCleanup: { deleted, failed }`
+(count/boolean; log labels `throttleDeleted` and `throttleCleanupFailed`). No key,
+tracker or SQL is included. Reference sweeps skip cleanup. No API listener,
+recurring scheduler or platform routing was added.
+
+### Actual verification and review
+
+All final checks below exited **0** under Node **v24.21.0**, using
+`PATH=/tmp/acres-node24/node_modules/node-linux-x64/bin:$PATH`. Long command
+outputs are excerpted verbatim. No full `ops:check` or hosted acceptance is
+claimed from these targeted checks.
+
+| Command | Actual output excerpt |
+| --- | --- |
+| Prettier `--check` on the ten changed/new TypeScript files | `All matched files use Prettier code style!` |
+| `npm run build:server` | `Generated Prisma Client (7.9.1)`; `prisma generate && nest build` completes |
+| `npm run test --workspace=@acres/server -- --runInBand` | `Test Suites: 140 passed, 140 total`; `Tests:       2150 passed, 2150 total`; `Snapshots:   1 passed, 1 total` |
+| `npm run db:up` | `Container acres-postgres-1 Running` |
+| `DATABASE_MIGRATION_URL=postgresql://acres_migrator:<local-password>@localhost:5432/acres_test npm run prisma:migrate:deploy --workspace=@acres/server` | `Applying migration` for `20261016000000_shared_throttling`; `All migrations have been successfully applied.` |
+| `env -u DATABASE_URL npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000` | `Test Suites: 12 passed, 12 total`; `Tests:       248 passed, 248 total` |
+| Same E2E command with trailing `shared-throttling` | `Test Suites: 1 passed, 1 total`; `Tests:       10 passed, 10 total` |
+| `npm run contracts:check` | `prisma generate && nest build && node dist/contracts/generate-contracts.js --check` completes with no drift diagnostics |
+| `npm run lint` | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`; no diagnostics |
+| `npm run build` | `Compiled successfully in 4.3s`; `Generating static pages using 7 workers (23/23) in 1285ms`; shared and Nest builds complete |
+| `npm run typecheck` | `tsc -p tsconfig.json --noEmit`, `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
+| `npm run vercel:probe-test` | `tests 2`, `pass 2`, `fail 0` (file-level results in this sandbox, not hosted probes) |
+| `npm run ops:templates-test` | `tests 451`, `pass 451`, `fail 0` |
+| `npm run ops:scan-secrets` | `secret/default scan passed` |
+| `npm run ops:scan-secrets-test` | `tests 1`, `pass 1`, `fail 0` (file-level result) |
+| `git diff --check` | no output |
+
+The ten focused real-database cases establish two independent connections
+sharing one budget (20 concurrent calls admit exactly five), adapter-visible
+blocks, key/tier independence, rolling-hit/header-boundary behavior, block reset,
+bounded cleanup/backlog/locking races, bounded lock failure, actual HTTP
+429/503 and health exemption, and managed/reference module selection.
+The narrow privilege fixture uses the local bootstrap identity inside one
+rollback-only transaction, grants DML **only on ThrottleBucket**, then executes
+the adapter SQL as actual `current_user=acres_app`, non-superuser/NOBYPASSRLS,
+without tenant context. It rolls back its grants and bucket changes; it does not
+open cross-database app connections. The full suite retains tenant RLS tests.
+
+Actual EXPLAIN (FORMAT JSON) on 10,000 synthetic rows (300 expired) selects:
+
+```text
+Limit (Plan Rows: 250)
+  LockRows
+    Index Scan: ThrottleBucket_expiresAt_idx
+      Index Cond: ("expiresAt" <= statement_timestamp())
+```
+
+The guarded delete also used a bitmap scan of the same expiry index and a hash
+join in this run. This is a real estimated plan, not ANALYZE or production load
+proof. Planner estimates reflected existing small-test statistics (3,172 eligible
+rows estimated against the fixture's 300); no production selectivity, latency,
+volume or sustained capacity claim follows.
+
+Earlier attempts are not credited as passes: sandbox Docker/loopback access
+failed, existing listener tests returned `listen EPERM`, template subprocess tests
+failed at file level, and Next could not parse its TypeScript subprocess output.
+The same gates passed with local subprocess/listener/network access permitted.
+Code verification caught a storage-record type absent from the package barrel
+(fixed by deriving the installed interface return type), old sweep-summary/log
+assertions (updated), and the migrator's inability to SET ROLE acres_app (the
+rollback-only local bootstrap fixture replaces it). The initial full database
+run was `1 failed, 247 passed`; the final full and focused runs above passed.
+The existing suites emit intentional outage logs, experimental VM warnings and
+a pg@9 future deprecation notice; no new provider failure details are logged by
+the throttler.
+
+Independent read-only review inspected tracked changes, new files and actual
+verification logs and reported no Critical, Important or Minor issues. Feedback
+was evaluated against the concurrency protocol, privileges and approved scope.
+Follow-up review found no issues in the schema-default consistency adjustment
+(`hits @default([])` matches SQL) or documentation. Prisma validation returned
+`The schema at prisma/schema.prisma is valid`; final root typecheck again
+completed with no diagnostics. Review never asserts hosted readiness.
+
+### Local reproduction and rollback
+
+Use Node 24.21.0 and the existing isolated development role bootstrap in
+`docs/backend.md` §8. Start PostgreSQL, apply only to the test database with its
+local migrator password, then run:
+
+```bash
+npm run db:up
+# DATABASE_MIGRATION_URL must explicitly target localhost/acres_test as acres_migrator.
+npm run prisma:migrate:deploy --workspace=@acres/server
+env -u DATABASE_URL npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000 shared-throttling
+```
+
+The suite validates its `acres_test` runtime target before execution and uses
+only local synthetic database/HTTP fixtures, including the known development
+bootstrap credential for its rollback-only runtime-role proof. Do not run it
+with hosted credentials. A normal API instance requires no new variable: the
+existing validated `QUEUE_PROVIDER=vercel` selects shared storage. This test
+composition isolates the throttle from queue/scanner provider calls.
+
+Rollback reverts adapter/wiring and sweep cleanup, retains the additive table
+and temporary state, and leaves any drop to a separately reviewed migration.
+Do not fall back to per-instance memory on an active managed deployment: stop
+protected traffic or restore a previously verified safe deployment first. That
+preserves abuse budgets at the cost of availability while storage is unavailable.
+Operator deployment must explicitly apply the migration before exposing managed
+API traffic; it was applied only to local `acres_test` in this execution.

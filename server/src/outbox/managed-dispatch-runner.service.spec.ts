@@ -1,3 +1,4 @@
+import type { PostgresThrottlerStorage } from '../security/postgres-throttler.storage';
 import type { AcresConfigService } from '../config/acres-config.service';
 import type {
   JobReconciliationResult,
@@ -24,6 +25,7 @@ describe('ManagedDispatchRunnerService', () => {
   let mockDispatcher: {
     dispatchOnce: jest.Mock;
   };
+  const cleanupOnce = jest.fn();
   let currentTime: number;
   let mockClock: jest.Mock;
 
@@ -46,6 +48,7 @@ describe('ManagedDispatchRunnerService', () => {
   };
 
   beforeEach(() => {
+    cleanupOnce.mockReset().mockResolvedValue(0);
     mockConfig = {
       queueProvider: 'vercel',
       outboxClaimBatchSize: 25,
@@ -65,6 +68,7 @@ describe('ManagedDispatchRunnerService', () => {
       mockConfig as unknown as AcresConfigService,
       mockReconciler as unknown as JobReconciliationService,
       mockDispatcher as unknown as OutboxDispatcherService,
+      { cleanupOnce } as unknown as PostgresThrottlerStorage,
       mockClock,
     );
   }
@@ -79,6 +83,7 @@ describe('ManagedDispatchRunnerService', () => {
       enabled: false,
       passes: 0,
       stoppedBy: 'disabled',
+      throttleCleanup: { deleted: 0, failed: false },
       reconciliation: {
         examined: 0,
         rearmed: 0,
@@ -97,6 +102,15 @@ describe('ManagedDispatchRunnerService', () => {
     });
     expect(mockReconciler.reconcileOnce).not.toHaveBeenCalled();
     expect(mockDispatcher.dispatchOnce).not.toHaveBeenCalled();
+    expect(cleanupOnce).not.toHaveBeenCalled();
+  });
+
+  it('continues dispatch when cleanup fails and exposes only bounded status', async () => {
+    cleanupOnce.mockRejectedValue(new Error('secret SQL tracker'));
+    const result = await createService().sweep();
+    expect(result.throttleCleanup).toEqual({ deleted: 0, failed: true });
+    expect(mockDispatcher.dispatchOnce).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).not.toContain('secret');
   });
 
   it('executes reconcile then dispatch in that exact order within a pass', async () => {
@@ -169,6 +183,7 @@ describe('ManagedDispatchRunnerService', () => {
     expect(result.passes).toBe(3);
     expect(result.stoppedBy).toBe('drained');
     expect(result.dispatch.claimed).toBe(60);
+    expect(cleanupOnce).toHaveBeenCalledTimes(1);
     expect(result.dispatch.dispatched).toBe(60);
     // Reconciliation only ran on pass 1 because examined was 0 (< batchSize 25)
     expect(mockReconciler.reconcileOnce).toHaveBeenCalledTimes(1);
