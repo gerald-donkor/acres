@@ -127,7 +127,9 @@ function normalizeComparisonOptions(options) {
   const invalid = () => new Error('Reconciliation options are invalid');
   if (!isInventoryRecord(options)) throw invalid();
   const {
-    bucket = null,
+    provider = null,
+    storeId = null,
+    bucket = provider === 'vercel-blob' ? (storeId || null) : null,
     excludeQuarantined = false,
     quarantineRetentionDays = 7,
     ignorePatterns = DEFAULT_IGNORE_PATTERNS,
@@ -138,7 +140,7 @@ function normalizeComparisonOptions(options) {
     execution_mode = 'simulation',
   } = options;
   if (
-    [bucket, organizationId, prefix].some(
+    [bucket, organizationId, prefix, provider, storeId].some(
       (filter) => filter !== null && typeof filter !== 'string',
     ) ||
     typeof excludeQuarantined !== 'boolean' ||
@@ -162,6 +164,8 @@ function normalizeComparisonOptions(options) {
   }
   return {
     bucket,
+    provider,
+    storeId,
     excludeQuarantined,
     quarantineRetentionDays,
     quarantineRetentionMs: quarantineRetentionDays * 86400000,
@@ -198,6 +202,8 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
   validateInventory(storageObjects, false);
   const {
     bucket,
+    provider,
+    storeId,
     excludeQuarantined,
     quarantineRetentionDays,
     quarantineRetentionMs,
@@ -347,7 +353,7 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
     exitCode = failOnOrphans ? 1 : 0;
   }
 
-  return {
+  const report = {
     execution_mode,
     drill_type: 'storage_reconciliation',
     timestamp: new Date(currentTime).toISOString(),
@@ -368,6 +374,15 @@ function reconcileObjects({ dbObjects = [], storageObjects = [], options = {} })
     orphans,
     mismatches,
   };
+
+  if (provider === 'vercel-blob') {
+    report.provider = 'vercel-blob';
+    if (storeId) {
+      report.storeId = storeId;
+    }
+  }
+
+  return report;
 }
 
 /**
@@ -541,6 +556,138 @@ async function listBucketObjects({ s3Client, bucket, prefix }) {
     seenTokens.add(next);
     continuationToken = next;
   } while (continuationToken);
+
+  return items;
+}
+
+/**
+ * Lists objects in a Vercel Blob store using @vercel/blob list() with pagination cursor handling.
+ */
+async function listBlobObjects({ blobClient, listFn, storeId, token, prefix } = {}) {
+  const items = [];
+  const seenCursors = new Set();
+  const seenKeys = new Set();
+  const invalidListing = () =>
+    new Error('Object storage listing is invalid or incomplete');
+
+  if (prefix !== undefined && typeof prefix !== 'string') {
+    throw invalidListing();
+  }
+
+  let list = listFn;
+  if (!list) {
+    if (blobClient && typeof blobClient.list === 'function') {
+      list = blobClient.list.bind(blobClient);
+    } else {
+      let blobSdk;
+      try {
+        blobSdk = require('@vercel/blob');
+      } catch (_err) {
+        try {
+          const { createRequire } = require('node:module');
+          const serverRequire = createRequire(
+            path.resolve(__dirname, '../../server/package.json'),
+          );
+          blobSdk = serverRequire('@vercel/blob');
+        } catch (_inner) {
+          throw new Error('Vercel Blob SDK (@vercel/blob) is not installed');
+        }
+      }
+      list = blobSdk.list;
+    }
+  }
+
+  if (typeof list !== 'function') {
+    throw invalidListing();
+  }
+
+  let cursor = undefined;
+
+  do {
+    const listOptions = {
+      limit: 1000,
+      mode: 'expanded',
+    };
+    if (cursor !== undefined) {
+      listOptions.cursor = cursor;
+    }
+    if (prefix !== undefined && prefix !== '') {
+      listOptions.prefix = prefix;
+    }
+    if (token !== undefined) {
+      listOptions.token = token;
+    }
+    if (storeId !== undefined) {
+      listOptions.storeId = storeId;
+    }
+
+    const response = await list(listOptions);
+    if (
+      !response ||
+      typeof response !== 'object' ||
+      Array.isArray(response) ||
+      !Array.isArray(response.blobs) ||
+      typeof response.hasMore !== 'boolean'
+    ) {
+      throw invalidListing();
+    }
+
+    if (
+      response.folders !== undefined &&
+      (!Array.isArray(response.folders) || response.folders.length > 0)
+    ) {
+      throw invalidListing();
+    }
+
+    for (const blob of response.blobs) {
+      if (
+        !blob ||
+        typeof blob !== 'object' ||
+        Array.isArray(blob) ||
+        typeof blob.pathname !== 'string' ||
+        blob.pathname.length === 0 ||
+        (prefix && !blob.pathname.startsWith(prefix)) ||
+        seenKeys.has(blob.pathname) ||
+        !Number.isSafeInteger(blob.size) ||
+        blob.size < 0
+      ) {
+        throw invalidListing();
+      }
+
+      let lastModified = null;
+      if (blob.uploadedAt !== undefined && blob.uploadedAt !== null) {
+        const date =
+          blob.uploadedAt instanceof Date
+            ? blob.uploadedAt
+            : new Date(blob.uploadedAt);
+        if (!Number.isFinite(date.getTime())) {
+          throw invalidListing();
+        }
+        lastModified = date.toISOString();
+      }
+
+      seenKeys.add(blob.pathname);
+      items.push({
+        key: blob.pathname,
+        byteCount: blob.size,
+        lastModified,
+        checksumHex: null,
+      });
+    }
+
+    if (!response.hasMore) break;
+
+    const nextCursor = response.cursor;
+    if (
+      typeof nextCursor !== 'string' ||
+      !nextCursor.trim() ||
+      seenCursors.has(nextCursor)
+    ) {
+      throw invalidListing();
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  } while (cursor);
 
   return items;
 }
@@ -748,6 +895,9 @@ Reconciliation drill: compares database metadata records against object storage 
 Local/dry-run receipts are simulation; does not attest live production storage integrity.
 
 Options:
+  --provider <provider>       Storage provider: s3, garage, or vercel-blob (default: STORAGE_PROVIDER or s3)
+  --store-id <storeId>        Vercel Blob store ID (default: BLOB_STORE_ID)
+  --token <token>             Vercel Blob token (default: BLOB_READ_WRITE_TOKEN)
   --bucket <bucket>           S3 / Garage bucket name (default: STORAGE_BUCKET or acres-quarantine)
   --endpoint <endpoint>       Storage endpoint URL (default: STORAGE_ENDPOINT or http://localhost:3900)
   --region <region>           Storage region (default: STORAGE_REGION or garage)
@@ -789,6 +939,9 @@ function parseCliArguments(argv = process.argv.slice(2), cwd = process.cwd()) {
   let showHelp = false;
   let customCwd;
   let outputFile;
+  let provider;
+  let storeId;
+  let token;
   let bucket;
   let endpoint;
   let region;
@@ -807,6 +960,52 @@ function parseCliArguments(argv = process.argv.slice(2), cwd = process.cwd()) {
 
     if (arg === '--help' || arg === '-h') {
       showHelp = true;
+      continue;
+    }
+
+    if (arg === '--provider' || arg.startsWith('--provider=')) {
+      if (provider !== undefined) {
+        throw new ReconcileUsageError('provider may be specified only once');
+      }
+      const val = arg === '--provider' ? argv[++i] : arg.slice(11);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('provider must be s3, garage, or vercel-blob');
+      }
+      const p = val.toLowerCase().trim();
+      if (['s3', 'garage'].includes(p)) {
+        provider = 's3';
+      } else if (['vercel-blob', 'blob', 'vercel'].includes(p)) {
+        provider = 'vercel-blob';
+      } else {
+        throw new ReconcileUsageError('provider must be s3, garage, or vercel-blob');
+      }
+      continue;
+    }
+
+    if (arg === '--store-id' || arg.startsWith('--store-id=')) {
+      if (storeId !== undefined) {
+        throw new ReconcileUsageError('store-id may be specified only once');
+      }
+      const val = arg === '--store-id' ? argv[++i] : arg.slice(11);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('store-id requires a non-empty store ID');
+      }
+      if (/[\x00-\x1f\x7f-\x9f]/.test(val)) {
+        throw new ReconcileUsageError('store-id must be control-free');
+      }
+      storeId = val;
+      continue;
+    }
+
+    if (arg === '--token' || arg.startsWith('--token=')) {
+      if (token !== undefined) {
+        throw new ReconcileUsageError('token may be specified only once');
+      }
+      const val = arg === '--token' ? argv[++i] : arg.slice(8);
+      if (typeof val !== 'string' || !val.trim() || val.startsWith('-')) {
+        throw new ReconcileUsageError('token requires a non-empty token string');
+      }
+      token = val;
       continue;
     }
 
@@ -980,6 +1179,9 @@ function parseCliArguments(argv = process.argv.slice(2), cwd = process.cwd()) {
     showHelp,
     cwd: effectiveCwd,
     output: resolvedOutput,
+    provider,
+    storeId,
+    token,
     bucket,
     endpoint,
     region,
@@ -1256,7 +1458,33 @@ async function main(
 
   const env = options.env !== undefined ? options.env : process.env;
 
-  const bucket = parsed.bucket || env.STORAGE_BUCKET || 'acres-quarantine';
+  let provider = parsed.provider;
+  if (!provider) {
+    const rawEnvProvider = env.STORAGE_PROVIDER;
+    if (rawEnvProvider) {
+      const p = rawEnvProvider.toLowerCase().trim();
+      if (['s3', 'garage'].includes(p)) {
+        provider = 's3';
+      } else if (['vercel-blob', 'blob', 'vercel'].includes(p)) {
+        provider = 'vercel-blob';
+      } else {
+        io.error(`Error: Unsupported STORAGE_PROVIDER: "${rawEnvProvider}"`);
+        setExitCode(1);
+        if (options.exitOnError === true) process.exit(1);
+        return 1;
+      }
+    } else {
+      provider = 's3';
+    }
+  }
+
+  const storeId = parsed.storeId || env.BLOB_STORE_ID;
+  const token = parsed.token || env.BLOB_READ_WRITE_TOKEN || env.VERCEL_OIDC_TOKEN;
+
+  const bucket =
+    parsed.bucket ||
+    env.STORAGE_BUCKET ||
+    (provider === 'vercel-blob' ? (storeId || null) : 'acres-quarantine');
   const endpoint = parsed.endpoint || env.STORAGE_ENDPOINT || 'http://localhost:3900';
   const region = parsed.region || env.STORAGE_REGION || 'garage';
   const accessKeyId = parsed.accessKey || env.STORAGE_ACCESS_KEY_ID || 'acres_garage_dev_key';
@@ -1349,36 +1577,70 @@ async function main(
 
   if (storageObjects === undefined) {
     let listingFailed = false;
-    try {
-      if (!s3Client) {
-        const { S3Client } = require('@aws-sdk/client-s3');
-        s3Client = new S3Client({
-          endpoint,
-          region,
-          forcePathStyle,
-          credentials: {
-            accessKeyId,
-            secretAccessKey,
-          },
-        });
-      }
-      storageObjects = await listBucketObjects({ s3Client, bucket, prefix });
-    } catch (_err) {
-      listingFailed = true;
-      if (pgClient && !options.pgClient) {
+    if (provider === 'vercel-blob') {
+      if (!options.blobClient && !options.blobListFn && !token && !storeId) {
+        listingFailed = true;
+        if (pgClient && !options.pgClient) {
+          try {
+            await pgClient.end();
+          } catch {
+            // Best-effort owned cleanup must preserve the primary outcome.
+          }
+        }
+        io.error('Error: Vercel Blob credentials required (set BLOB_READ_WRITE_TOKEN or BLOB_STORE_ID with VERCEL_OIDC_TOKEN)');
+      } else {
         try {
-          await pgClient.end();
-        } catch {
-          // Best-effort owned cleanup must preserve the primary outcome.
+          storageObjects = await listBlobObjects({
+            blobClient: options.blobClient,
+            listFn: options.blobListFn,
+            storeId,
+            token,
+            prefix,
+          });
+        } catch (_err) {
+          listingFailed = true;
+          if (pgClient && !options.pgClient) {
+            try {
+              await pgClient.end();
+            } catch {
+              // Best-effort owned cleanup must preserve the primary outcome.
+            }
+          }
+          io.error('Error: Object storage connection or listing failed');
         }
       }
-      io.error('Error: Object storage connection or listing failed');
-    } finally {
-      if (s3Client && !options.s3Client) {
-        try {
-          s3Client.destroy();
-        } catch {
-          // Best-effort owned cleanup must not replace the acquisition outcome.
+    } else {
+      try {
+        if (!s3Client) {
+          const { S3Client } = require('@aws-sdk/client-s3');
+          s3Client = new S3Client({
+            endpoint,
+            region,
+            forcePathStyle,
+            credentials: {
+              accessKeyId,
+              secretAccessKey,
+            },
+          });
+        }
+        storageObjects = await listBucketObjects({ s3Client, bucket, prefix });
+      } catch (_err) {
+        listingFailed = true;
+        if (pgClient && !options.pgClient) {
+          try {
+            await pgClient.end();
+          } catch {
+            // Best-effort owned cleanup must preserve the primary outcome.
+          }
+        }
+        io.error('Error: Object storage connection or listing failed');
+      } finally {
+        if (s3Client && !options.s3Client) {
+          try {
+            s3Client.destroy();
+          } catch {
+            // Best-effort owned cleanup must not replace the acquisition outcome.
+          }
         }
       }
     }
@@ -1395,6 +1657,8 @@ async function main(
       storageObjects,
       options: {
         bucket,
+        provider,
+        storeId,
         prefix,
         organizationId,
         failOnOrphans,
@@ -1455,6 +1719,7 @@ module.exports = {
   reconcileObjects,
   formatReconciliationSummary,
   listBucketObjects,
+  listBlobObjects,
   queryDatabaseStoredObjects,
   DEFAULT_IGNORE_PATTERNS,
   ReconcileUsageError,

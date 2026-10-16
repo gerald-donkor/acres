@@ -9188,3 +9188,234 @@ test('main: programmatic execution, usage errors, and exitCode contracts', () =>
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+function buildValidApprovedManagedRecord() {
+  return {
+    version: '1.0.0',
+    environment: 'production',
+    target_architecture: 'vercel-managed-production',
+    created_at: '2026-10-16T00:00:00Z',
+    notes: 'Approved test readiness fixture for vercel-managed-production.',
+    sections: {
+      production_domain_tls: {
+        status: 'approved',
+        domain: 'acres.example.com',
+        edge_tls_enabled: true,
+        custom_certificates: false,
+        hsts_approved: true,
+        tls_contact_email: 'ops@example.com',
+        approver: 'ops-lead',
+        evidence: ['Vercel edge TLS automatically provisioned with HSTS'],
+        notes: 'Verified production domain',
+      },
+      smtp_delivery: {
+        status: 'approved',
+        provider: 'resend',
+        verified_sender_domain: 'acres.example.com',
+        from_address: 'notifications@acres.example.com',
+        credentials_source_reference: 'vercel:acres/production#RESEND_API_KEY',
+        delivery_policy: 'Transactional notifications only',
+        bounce_abuse_handling: 'docs/ops/smtp-bounce.md',
+        approver: 'ops-lead',
+        evidence: ['Verified Resend DKIM and SPF alignment'],
+        notes: 'Verified SMTP delivery',
+      },
+      secrets_management: {
+        status: 'approved',
+        injection_mechanism: 'vercel-env',
+        masking_policy: 'All credentials masked in logs and telemetry',
+        rotation_cadence_days: 90,
+        compromise_response_plan: 'docs/runbooks/compromise-response.md',
+        approver: 'security-lead',
+        evidence: ['Verified Vercel secrets encryption and Neon role credential separation'],
+        notes: 'Verified secrets management',
+      },
+      secret_references: {
+        status: 'approved',
+        session_secret_source: 'vercel:acres/production#SESSION_SECRET',
+        csrf_secret_source: 'vercel:acres/production#CSRF_SECRET',
+        cron_secret_source: 'vercel:acres/production#CRON_SECRET',
+        db_migrator_secret_source: 'neon:roles#migrator',
+        db_app_secret_source: 'neon:roles#app',
+        blob_store_id: 'store_g2fmCH5CW7TJbkN3',
+        scanner_snapshot_source: 'vercel:acres/production#SCANNER_SNAPSHOT_ID',
+        approver: 'security-lead',
+        evidence: ['Verified indirect secret references in Vercel and Neon'],
+        notes: 'Verified indirect secret references',
+      },
+      slo_and_alerting: {
+        status: 'approved',
+        availability_target_percent: 99.9,
+        max_p95_latency_ms: 500,
+        capacity_target_rps: 100,
+        max_database_acquisition_p95_latency_ms: 50,
+        max_database_query_p95_latency_ms: 100,
+        alert_recipients: ['pagerduty:acres-production-alerts'],
+        alert_thresholds_defined: true,
+        escalation_runbook_ref: 'docs/runbooks/escalation.md',
+        approver: 'sre-lead',
+        evidence: [capacityAlertingFixturePath],
+        notes: 'Verified SLO and alerting',
+      },
+      backup_and_disaster_recovery: {
+        status: 'approved',
+        rpo_hours: 1,
+        rto_hours: 4,
+        pitr_recovery_window_days: 7,
+        backup_destination: 's3://acres-dr-backups-us-west-2/backups',
+        blob_store_durability: 'Vercel Blob 99.999999999% durability (AWS S3-backed)',
+        restore_drill_completed: true,
+        restore_drill_date: '2026-08-28T12:00:00Z',
+        db_object_reconciliation_tested: true,
+        approver: 'sre-lead',
+        evidence: [restoreFixturePath, reconciliationFixturePath],
+        notes: 'Verified disaster recovery',
+      },
+      data_retention_policy: {
+        status: 'approved',
+        account_retention_policy: '365d',
+        audit_retention_policy: '730d',
+        upload_quarantine_retention_policy: '7d',
+        rejected_object_retention_policy: '1d',
+        export_retention_policy: '30d',
+        report_retention_policy: 'indefinite_until_tenant_deletion',
+        telemetry_retention_policy: '15d',
+        backup_retention_policy: '30d',
+        approver: 'legal-lead',
+        evidence: [retentionPolicyFixturePath],
+        notes: 'Verified data retention policies',
+      },
+      volume_encryption: {
+        status: 'approved',
+        encryption_mechanism: 'aws_kms_managed',
+        cloud_storage_encrypted: true,
+        ephemeral_compute_isolated: true,
+        key_separation_confirmed: true,
+        key_recovery_owner: 'infra-security-team',
+        approver: 'security-lead',
+        evidence: ['Verified Neon AWS KMS AES-256 encryption at rest and Vercel ephemeral compute isolation'],
+        notes: 'Verified volume encryption',
+      },
+      graphql_introspection: {
+        status: 'approved',
+        production_introspection_enabled: false,
+        justification: 'Disabled for production attack surface reduction',
+        approver: 'security-lead',
+        evidence: [graphqlIntrospectionFixturePath],
+        notes: 'Verified GraphQL introspection policy',
+      },
+      deployment_and_rollback: {
+        status: 'approved',
+        target_platform: 'vercel_serverless',
+        deployment_approver: 'release-manager',
+        rollback_authority: 'on-call-sre',
+        immutable_deployment_policy: 'Vercel immutable preview deployments and instant rollback',
+        release: {
+          reviewed_source_commit: 'a'.repeat(40),
+          current: {
+            deployment_id: 'dpl_abc123456789012345678901',
+            deployment_url: 'https://acres-prod-abc.vercel.app',
+          },
+          previous: {
+            deployment_id: 'dpl_xyz987654321098765432109',
+            deployment_url: 'https://acres-prod-xyz.vercel.app',
+          },
+          provenance_evidence: 'artifact:vercel-deployment-audit',
+          live_drill_evidence: 'artifact:preview-rollback-drill',
+        },
+        live_readiness_drill_completed: true,
+        approver: 'release-manager',
+        evidence: ['Verified Vercel deployment rollback drill'],
+        notes: 'Verified deployment and rollback posture',
+      },
+      optional_ai_posture: {
+        status: 'approved',
+        ai_enabled: false,
+        no_ai_path_verified: true,
+        server_ai_draft_enabled_false: true,
+        no_gemini_api_key_provisioned: true,
+        unpaid_provider_excluded: true,
+        phase11_status: 'implemented_unpaid_preview_excluded_from_launch',
+        approver: 'security-lead',
+        evidence: [noAiFixturePath],
+        notes: 'Verified no-AI posture for launch',
+      },
+    },
+  };
+}
+
+test('managed readiness template reports unresolved categories without throwing schema or runtime crash', () => {
+  const vercelExamplePath = path.resolve(__dirname, '../../infra/launch/readiness.vercel.example.json');
+  const vercelRecord = JSON.parse(fs.readFileSync(vercelExamplePath, 'utf8'));
+  const result = validateReadiness(vercelRecord, vercelExamplePath, { now: fixedNow });
+
+  assert.strictEqual(result.totalApproved, 0);
+  assert.strictEqual(result.totalSections, 11);
+  assert.ok(Object.keys(result.categoryBlockers).length > 0);
+  for (const section of REQUIRED_SECTIONS) {
+    assert.ok(
+      result.categoryBlockers[section]?.length > 0,
+      `Expected section '${section}' to report blockers in unresolved template`
+    );
+  }
+});
+
+test('managed readiness passes when all categories in a managed record are resolved and approved with valid evidence', () => {
+  const managedRecord = buildValidApprovedManagedRecord();
+  const result = validateReadiness(managedRecord, 'managed-test.json', { now: fixedNow });
+
+  assert.strictEqual(Object.keys(result.categoryBlockers).length, 0, JSON.stringify(result.categoryBlockers));
+  assert.strictEqual(result.totalApproved, 11);
+  assert.strictEqual(result.totalSections, 11);
+});
+
+test('managed readiness rejects raw secrets and unmapped placeholders in secret references', () => {
+  const managedRecord = buildValidApprovedManagedRecord();
+  managedRecord.sections.secret_references.session_secret_source = 'raw-unencrypted-secret-value-123';
+  const result = validateReadiness(managedRecord, 'managed-test.json', { now: fixedNow });
+
+  assert.ok(result.categoryBlockers.secret_references?.some((b) => b.includes('must be an indirect secret-store reference')));
+});
+
+test('check-launch-readiness rejects unknown target architectures', () => {
+  const record = buildValidApprovedRecord();
+  record.target_architecture = 'unsupported-hybrid-cloud';
+  const blockers = [];
+  const valid = validateReadinessDocument(record, (cat, msg) => blockers.push({ cat, msg }));
+
+  assert.strictEqual(valid, true);
+  assert.ok(blockers.some((b) => b.cat === 'root' && b.msg.includes('Unknown target architecture: "unsupported-hybrid-cloud"')));
+});
+
+test('CLI supports --record flag for both compose and managed readiness records', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'readiness-flag-test-'));
+  try {
+    // 1. Compose with --record
+    const composeFile = path.join(tmpDir, 'compose.json');
+    const composeRecord = buildValidApprovedRecord();
+    fs.writeFileSync(composeFile, JSON.stringify(composeRecord));
+    const composeLogs = [];
+    const composeCode = main(
+      ['--record', composeFile],
+      { log: (l) => composeLogs.push(l) },
+      { now: fixedNow, env: expectedImageEnv(composeRecord) }
+    );
+    assert.strictEqual(composeCode, 0);
+    assert.ok(composeLogs.some((l) => l.includes('Result: PASSED')));
+
+    // 2. Managed with --record=file
+    const managedFile = path.join(tmpDir, 'managed.json');
+    const managedRecord = buildValidApprovedManagedRecord();
+    fs.writeFileSync(managedFile, JSON.stringify(managedRecord));
+    const managedLogs = [];
+    const managedCode = main(
+      [`--record=${managedFile}`],
+      { log: (l) => managedLogs.push(l) },
+      { now: fixedNow }
+    );
+    assert.strictEqual(managedCode, 0);
+    assert.ok(managedLogs.some((l) => l.includes('Result: PASSED')));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

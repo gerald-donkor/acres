@@ -1804,3 +1804,49 @@ acceptance proof across Gates A–E.
 - `npm run lint`: 0 errors.
 - `npm run typecheck`: 0 errors across `@acres/shared`, `@acres/client`, `@acres/server`.
 - `npm run test:server`: 12/12 test suites, 248/248 tests passing.
+
+## Managed launch readiness and storage reconciliation — Prompt 379 (2026-10-16)
+
+Operational tooling and launch readiness verification are extended to support the
+`vercel-managed-production` profile alongside the reference Compose topology:
+
+1. **Storage inventory reconciliation (`scripts/ops/reconcile-storage-objects.js`):**
+   - Implemented `--provider vercel-blob` and `STORAGE_PROVIDER=vercel-blob` targeting
+     `BLOB_STORE_ID=store_g2fmCH5CW7TJbkN3`.
+   - Uses `@vercel/blob` `list()` API with cursor-based pagination and `--prefix` support.
+   - Detects missing objects (in database as active/completed/quarantined, absent in Blob store),
+     orphan objects (in Blob store, untracked in database), and byte size mismatches.
+   - Emits structured, sanitized audit receipts (`provider: "vercel-blob"`, `storeId`, object counts,
+     duration) without logging credentials, tokens, or presigned URLs.
+   - Verified via unit test suite mocking multi-page `@vercel/blob` `list()` responses.
+
+2. **Topology-discriminated launch readiness schema (`infra/launch/readiness.schema.json`):**
+   - Added `target_architecture` enum: `["single-host-compose-caddy", "vercel-managed-production"]`.
+   - Conditional schema branches (`allOf` with `composeSections` and `managedSections`) enforce
+     all 11 canonical launch checklist categories for both architectures.
+   - Managed profile specifies Vercel edge domain/TLS, 90-day secret rotation cadence,
+     indirect secret references (`session_secret_source`, `csrf_secret_source`, `cron_secret_source`,
+     `db_migrator_secret_source`, `db_app_secret_source`, `blob_store_id`, `scanner_snapshot_source`),
+     Neon PITR recovery window (≥7 days), Blob store durability, Neon AWS KMS encryption at rest,
+     ephemeral compute isolation, and immutable Vercel deployment references (`dpl_*`).
+
+3. **Managed readiness template (`infra/launch/readiness.vercel.example.json`):**
+   - Valid template conforming to `readiness.schema.json` under `vercel-managed-production`.
+   - Deliberately unresolved (`status: "unresolved"`, placeholders `__REQUIRED_MANAGED_*__`)
+     failing closed until human operator values and live receipts are supplied.
+
+4. **Launch readiness validator (`scripts/ops/check-launch-readiness.js`):**
+   - Extended CLI to accept `--record <path>` in addition to positional arguments.
+   - Inspects `target_architecture` (defaults to `single-host-compose-caddy` when omitted for
+     backwards compatibility; rejects unknown values fail-closed).
+   - Validates managed sections without demanding Compose-specific host mounts, Caddy routing drills,
+     or container image digests.
+   - Enforces indirect secret store URIs (`vercel:...`, `neon:...`) and rejects raw values.
+   - Comprehensive test coverage in `check-launch-readiness.spec.js` (654 tests passing).
+
+5. **Managed operations runbook (`infra/vercel/runbooks/managed-operations.md`):**
+   - Secret inventory and 90-day rotation cadence (`npx vercel env add`).
+   - Out-of-band Prisma migrations against Neon direct migrator connection (`DIRECT_URL`).
+   - Storage reconciliation execution and missing/orphan triage.
+   - Disaster recovery (Neon PITR branch creation) and instant Vercel rollback.
+   - 48-hour ClamAV CVD sandbox snapshot rebuild cadence.

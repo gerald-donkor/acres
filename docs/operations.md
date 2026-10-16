@@ -12450,3 +12450,19 @@ and required hosted proofs. MCP automation is selected; no deployment CLI or
 arbitrary-account fallback was used. Ordinary Git revert restores the local
 prerequisites; no hosted resources or schema were migrated. Prompt 370 and
 Phase 12 remain open.
+
+## Prompt 379 — managed launch readiness and storage reconciliation (2026-10-16)
+
+Extended operations tooling and launch readiness verification for the `vercel-managed-production`
+target (`STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID=store_g2fmCH5CW7TJbkN3`):
+- Storage reconciliation (`scripts/ops/reconcile-storage-objects.js`) supports `--provider vercel-blob`
+  via `@vercel/blob` `list()` with cursor pagination, detecting missing, orphan, and size mismatches with
+  sanitized audit receipts.
+- Launch readiness schema (`infra/launch/readiness.schema.json`) discriminates `single-host-compose-caddy`
+  and `vercel-managed-production` topologies via `allOf` conditionals, preserving all 11 categories for both.
+- Created unresolved managed readiness template `infra/launch/readiness.vercel.example.json` failing closed.
+- Launch readiness validator (`scripts/ops/check-launch-readiness.js`) validates both topologies fail-closed,
+  supporting `--record <file>` and enforcing indirect secret store references (`vercel:...`, `neon:...`).
+- Documented complete operational procedures in `infra/vercel/runbooks/managed-operations.md` covering
+  secret inventory & rotation, out-of-band Prisma migrations against Neon direct connection, storage
+  reconciliation, disaster recovery (Neon PITR & Vercel instant rollback), and ClamAV CVD sandbox rebuilds.

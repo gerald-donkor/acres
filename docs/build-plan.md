@@ -4010,3 +4010,23 @@ passed with 100% verified evidence on deployment `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R96
 (`https://acres-nedhhjsg3-dgsloxx417s-projects.vercel.app`).
 Exact outputs and proofs recorded in `docs/vercel-deployment.md`. Production
 promotion, paid tiers, and Phase 12 sign-off remain open.
+
+
+## Phase 12 managed-target operations — Prompt 379
+
+Managed launch readiness verification and storage reconciliation tooling are
+implemented and accepted locally for the `vercel-managed-production` profile.
+Storage reconciliation (`scripts/ops/reconcile-storage-objects.js`) supports
+`--provider vercel-blob` via `@vercel/blob` `list()` cursor pagination, detecting
+missing, orphan, and size-mismatched objects with sanitized audit receipts.
+The launch readiness schema (`infra/launch/readiness.schema.json`) discriminates
+`single-host-compose-caddy` and `vercel-managed-production` via `allOf` conditionals,
+enforcing all 11 categories for both topologies. Template file
+`infra/launch/readiness.vercel.example.json` provides an auditable fail-closed
+baseline. The launch readiness checker (`scripts/ops/check-launch-readiness.js`)
+evaluates both topologies fail-closed, supports `--record <path>`, and enforces
+indirect secret-store references without weakening either architecture.
+The managed operations runbook (`infra/vercel/runbooks/managed-operations.md`)
+documents secret inventory, out-of-band migrations, storage reconciliation, and
+disaster recovery. All test suites pass. Prompt 370 and Phase 12 launch categories
+remain open until real operator values and live drills are recorded.

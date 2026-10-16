@@ -6,6 +6,7 @@ const os = require('node:os');
 const {
   reconcileObjects,
   listBucketObjects,
+  listBlobObjects,
   queryDatabaseStoredObjects,
   formatReconciliationSummary,
   DEFAULT_IGNORE_PATTERNS,
@@ -12865,4 +12866,443 @@ test("main database port validation: help bypasses configuration", async () => {
       "Usage: node scripts/ops/reconcile-storage-objects.js",
     ),
   );
+});
+
+// =========================================================================
+// Vercel Blob Reconciliation Tests (Prompt 379)
+// =========================================================================
+
+test("parseCliArguments: provider, store-id, and token parsing and validation", () => {
+  for (const [providerArg, expected] of [
+    ["--provider vercel-blob", "vercel-blob"],
+    ["--provider=vercel-blob", "vercel-blob"],
+    ["--provider blob", "vercel-blob"],
+    ["--provider=blob", "vercel-blob"],
+    ["--provider s3", "s3"],
+    ["--provider=s3", "s3"],
+    ["--provider garage", "s3"],
+    ["--provider=garage", "s3"],
+  ]) {
+    const parts = providerArg.split(" ");
+    const parsed = parseCliArguments(parts);
+    assert.strictEqual(parsed.provider, expected);
+  }
+
+  // store-id
+  const parsedStore = parseCliArguments(["--store-id", "store_g2fmCH5CW7TJbkN3"]);
+  assert.strictEqual(parsedStore.storeId, "store_g2fmCH5CW7TJbkN3");
+  const parsedStoreEq = parseCliArguments(["--store-id=store_g2fmCH5CW7TJbkN3"]);
+  assert.strictEqual(parsedStoreEq.storeId, "store_g2fmCH5CW7TJbkN3");
+
+  // token
+  const parsedToken = parseCliArguments(["--token", "blob_rw_test_token"]);
+  assert.strictEqual(parsedToken.token, "blob_rw_test_token");
+  const parsedTokenEq = parseCliArguments(["--token=blob_rw_test_token"]);
+  assert.strictEqual(parsedTokenEq.token, "blob_rw_test_token");
+
+  // Rejections
+  assert.throws(
+    () => parseCliArguments(["--provider", "unsupported-provider"]),
+    /provider must be s3, garage, or vercel-blob/,
+  );
+  assert.throws(
+    () => parseCliArguments(["--provider"]),
+    /provider must be s3, garage, or vercel-blob/,
+  );
+  assert.throws(
+    () => parseCliArguments(["--provider", "s3", "--provider", "vercel-blob"]),
+    /provider may be specified only once/,
+  );
+  assert.throws(
+    () => parseCliArguments(["--store-id"]),
+    /store-id requires a non-empty store ID/,
+  );
+  assert.throws(
+    () => parseCliArguments(["--store-id", "s1", "--store-id", "s2"]),
+    /store-id may be specified only once/,
+  );
+  assert.throws(
+    () => parseCliArguments(["--store-id", "bad\x00id"]),
+    /store-id must be control-free/,
+  );
+  assert.throws(
+    () => parseCliArguments(["--token"]),
+    /token requires a non-empty token string/,
+  );
+  assert.throws(
+    () => parseCliArguments(["--token", "t1", "--token", "t2"]),
+    /token may be specified only once/,
+  );
+});
+
+test("listBlobObjects: multi-page cursor pagination with token and storeId forwarding", async () => {
+  const calls = [];
+  const mockPages = [
+    {
+      blobs: [
+        {
+          pathname: "uploads/file-1.pdf",
+          size: 1024,
+          uploadedAt: new Date("2026-10-16T10:00:00Z"),
+        },
+      ],
+      cursor: "page-2-cursor",
+      hasMore: true,
+    },
+    {
+      blobs: [
+        {
+          pathname: "uploads/file-2.pdf",
+          size: 2048,
+          uploadedAt: "2026-10-16T10:05:00Z",
+        },
+      ],
+      cursor: null,
+      hasMore: false,
+    },
+  ];
+
+  let pageIndex = 0;
+  const listFn = async (options) => {
+    calls.push(options);
+    return mockPages[pageIndex++];
+  };
+
+  const items = await listBlobObjects({
+    listFn,
+    storeId: "store_g2fmCH5CW7TJbkN3",
+    token: "mock_blob_token",
+    prefix: "uploads/",
+  });
+
+  assert.strictEqual(items.length, 2);
+  assert.deepStrictEqual(items, [
+    {
+      key: "uploads/file-1.pdf",
+      byteCount: 1024,
+      lastModified: "2026-10-16T10:00:00.000Z",
+      checksumHex: null,
+    },
+    {
+      key: "uploads/file-2.pdf",
+      byteCount: 2048,
+      lastModified: "2026-10-16T10:05:00.000Z",
+      checksumHex: null,
+    },
+  ]);
+
+  assert.strictEqual(calls.length, 2);
+  assert.deepStrictEqual(calls[0], {
+    limit: 1000,
+    mode: "expanded",
+    prefix: "uploads/",
+    token: "mock_blob_token",
+    storeId: "store_g2fmCH5CW7TJbkN3",
+  });
+  assert.deepStrictEqual(calls[1], {
+    limit: 1000,
+    mode: "expanded",
+    cursor: "page-2-cursor",
+    prefix: "uploads/",
+    token: "mock_blob_token",
+    storeId: "store_g2fmCH5CW7TJbkN3",
+  });
+});
+
+test("listBlobObjects: rejects malformed responses and invalid keys", async () => {
+  // Rejects out of prefix
+  await assert.rejects(
+    listBlobObjects({
+      listFn: async () => ({
+        blobs: [{ pathname: "other/file.txt", size: 10 }],
+        hasMore: false,
+      }),
+      prefix: "scoped/",
+    }),
+    /Object storage listing is invalid or incomplete/,
+  );
+
+  // Rejects duplicate key across pages
+  await assert.rejects(
+    listBlobObjects({
+      listFn: (() => {
+        let count = 0;
+        return async () => ({
+          blobs: [{ pathname: "dup.txt", size: 10 }],
+          cursor: count === 0 ? "next" : null,
+          hasMore: count++ === 0,
+        });
+      })(),
+    }),
+    /Object storage listing is invalid or incomplete/,
+  );
+
+  // Rejects cyclic cursor
+  await assert.rejects(
+    listBlobObjects({
+      listFn: async () => ({
+        blobs: [{ pathname: "file.txt", size: 10 }],
+        cursor: "same-cursor",
+        hasMore: true,
+      }),
+    }),
+    /Object storage listing is invalid or incomplete/,
+  );
+
+  // Rejects negative size
+  await assert.rejects(
+    listBlobObjects({
+      listFn: async () => ({
+        blobs: [{ pathname: "file.txt", size: -1 }],
+        hasMore: false,
+      }),
+    }),
+    /Object storage listing is invalid or incomplete/,
+  );
+
+  // Rejects non-safe integer size
+  await assert.rejects(
+    listBlobObjects({
+      listFn: async () => ({
+        blobs: [{ pathname: "file.txt", size: 1.5 }],
+        hasMore: false,
+      }),
+    }),
+    /Object storage listing is invalid or incomplete/,
+  );
+
+  // Rejects invalid uploadedAt
+  await assert.rejects(
+    listBlobObjects({
+      listFn: async () => ({
+        blobs: [{ pathname: "file.txt", size: 10, uploadedAt: "not-a-date" }],
+        hasMore: false,
+      }),
+    }),
+    /Object storage listing is invalid or incomplete/,
+  );
+
+  // Rejects non-empty folders in expanded mode
+  await assert.rejects(
+    listBlobObjects({
+      listFn: async () => ({
+        blobs: [],
+        folders: ["folder/"],
+        hasMore: false,
+      }),
+    }),
+    /Object storage listing is invalid or incomplete/,
+  );
+});
+
+test("reconcileObjects with vercel-blob: detects missing, orphan, and size mismatches with provider receipt", () => {
+  const dbObjects = [
+    inventoryDbRecord({
+      id: "match-1",
+      bucket: "store_g2fmCH5CW7TJbkN3",
+      objectKey: "uploads/matched.pdf",
+      byteCount: 100,
+    }),
+    inventoryDbRecord({
+      id: "missing-1",
+      bucket: "store_g2fmCH5CW7TJbkN3",
+      objectKey: "uploads/missing.pdf",
+      byteCount: 200,
+    }),
+    inventoryDbRecord({
+      id: "mismatch-1",
+      bucket: "store_g2fmCH5CW7TJbkN3",
+      objectKey: "uploads/mismatch.pdf",
+      byteCount: 300,
+    }),
+  ];
+
+  const storageObjects = [
+    { key: "uploads/matched.pdf", byteCount: 100 },
+    { key: "uploads/mismatch.pdf", byteCount: 999 }, // size mismatch
+    { key: "uploads/orphan.pdf", byteCount: 400 },   // orphan
+  ];
+
+  const report = reconcileObjects({
+    dbObjects,
+    storageObjects,
+    options: {
+      provider: "vercel-blob",
+      storeId: "store_g2fmCH5CW7TJbkN3",
+      now: "2026-10-16T12:00:00.000Z",
+    },
+  });
+
+  assert.strictEqual(report.drill_type, "storage_reconciliation");
+  assert.strictEqual(report.provider, "vercel-blob");
+  assert.strictEqual(report.storeId, "store_g2fmCH5CW7TJbkN3");
+  assert.strictEqual(report.summary.status, "error");
+  assert.strictEqual(report.summary.exitCode, 1);
+  assert.strictEqual(report.summary.totalDatabaseObjects, 3);
+  assert.strictEqual(report.summary.activeDatabaseObjects, 3);
+  assert.strictEqual(report.summary.matchedObjects, 1);
+  assert.strictEqual(report.summary.missingObjects, 1);
+  assert.strictEqual(report.summary.orphanObjects, 1);
+  assert.strictEqual(report.summary.mismatchedObjects, 1);
+
+  assert.strictEqual(report.missing[0].id, "missing-1");
+  assert.strictEqual(report.missing[0].objectKey, "uploads/missing.pdf");
+  assert.strictEqual(report.orphans[0].key, "uploads/orphan.pdf");
+  assert.strictEqual(report.mismatches[0].id, "mismatch-1");
+  assert.ok(report.mismatches[0].issues[0].includes("size_mismatch"));
+});
+
+test("main with vercel-blob: executes cleanly and writes sanitized receipt", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acres-blob-reconcile-"));
+  const outputFile = path.join(dir, "blob-receipt.json");
+
+  try {
+    const dbObjects = [
+      inventoryDbRecord({
+        id: "obj-1",
+        bucket: "store_g2fmCH5CW7TJbkN3",
+        objectKey: "app/data.json",
+        byteCount: 50,
+      }),
+    ];
+
+    const mockBlobList = async () => ({
+      blobs: [
+        {
+          pathname: "app/data.json",
+          size: 50,
+          uploadedAt: new Date("2026-10-16T08:00:00Z"),
+        },
+      ],
+      hasMore: false,
+    });
+
+    const io = createIo();
+    const exitCode = await main(
+      [
+        "node",
+        "reconcile",
+        "--provider",
+        "vercel-blob",
+        "--store-id",
+        "store_g2fmCH5CW7TJbkN3",
+        "--output",
+        outputFile,
+      ],
+      io,
+      {
+        env: {
+          BLOB_READ_WRITE_TOKEN: "mock-secret-token",
+        },
+        dbObjects,
+        blobListFn: mockBlobList,
+      },
+    );
+
+    assert.strictEqual(exitCode, 0);
+    assert.strictEqual(fs.existsSync(outputFile), true);
+
+    const receipt = JSON.parse(fs.readFileSync(outputFile, "utf8"));
+    assert.strictEqual(receipt.drill_type, "storage_reconciliation");
+    assert.strictEqual(receipt.provider, "vercel-blob");
+    assert.strictEqual(receipt.storeId, "store_g2fmCH5CW7TJbkN3");
+    assert.strictEqual(receipt.summary.status, "clean");
+    assert.strictEqual(receipt.summary.missingObjects, 0);
+    assert.strictEqual(receipt.summary.orphanObjects, 0);
+
+    // Verify no secret tokens leaked into receipt JSON
+    const receiptRaw = JSON.stringify(receipt);
+    assert.strictEqual(receiptRaw.includes("mock-secret-token"), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("main with vercel-blob: fails cleanly on missing credentials or listing failure", async () => {
+  const io = createIo();
+  // Missing credentials when no client is passed and no env vars
+  const code1 = await main(
+    ["node", "reconcile", "--provider", "vercel-blob"],
+    io,
+    {
+      env: {},
+      dbObjects: [],
+    },
+  );
+  assert.strictEqual(code1, 1);
+  assert.ok(io.errors.some((e) => e.includes("Vercel Blob credentials required")));
+
+  // Listing failure
+  const io2 = createIo();
+  const code2 = await main(
+    ["node", "reconcile", "--provider", "vercel-blob"],
+    io2,
+    {
+      env: { BLOB_READ_WRITE_TOKEN: "test-token" },
+      dbObjects: [],
+      blobListFn: async () => {
+        throw new Error("Network timeout");
+      },
+    },
+  );
+  assert.strictEqual(code2, 1);
+  assert.ok(io2.errors.some((e) => e.includes("Object storage connection or listing failed")));
+
+  // Unsupported STORAGE_PROVIDER in env
+  const io3 = createIo();
+  const code3 = await main(
+    ["node", "reconcile"],
+    io3,
+    {
+      env: { STORAGE_PROVIDER: "azure_blob" },
+      dbObjects: [],
+      storageObjects: [],
+    },
+  );
+  assert.strictEqual(code3, 1);
+  assert.ok(io3.errors.some((e) => e.includes('Unsupported STORAGE_PROVIDER: "azure_blob"')));
+});
+
+test("reconcileObjects: matches storeId bucket by default when provider is vercel-blob", () => {
+  const storeId = "store_g2fmCH5CW7TJbkN3";
+  const dbObjects = [
+    inventoryDbRecord({
+      id: "blob-obj-1",
+      bucket: storeId,
+      objectKey: "uploads/blob.pdf",
+      byteCount: 150,
+      checksumHex: "abcd1234ef",
+    }),
+    inventoryDbRecord({
+      id: "garage-obj-1",
+      bucket: "acres-quarantine",
+      objectKey: "uploads/garage.pdf",
+      byteCount: 300,
+    }),
+  ];
+
+  const storageObjects = [
+    {
+      key: "uploads/blob.pdf",
+      byteCount: 150,
+      checksumHex: "abcd1234ef",
+    },
+  ];
+
+  const report = reconcileObjects({
+    dbObjects,
+    storageObjects,
+    options: {
+      provider: "vercel-blob",
+      storeId,
+    },
+  });
+
+  assert.strictEqual(report.summary.status, "clean");
+  assert.strictEqual(report.summary.totalDatabaseObjects, 2);
+  assert.strictEqual(report.summary.activeDatabaseObjects, 1);
+  assert.strictEqual(report.summary.matchedObjects, 1);
+  assert.strictEqual(report.summary.missingObjects, 0);
+  assert.strictEqual(report.summary.orphanObjects, 0);
+  assert.strictEqual(report.matched[0].id, "blob-obj-1");
 });

@@ -19,6 +19,11 @@ const { REQUIRED_ALERTS } = require('./verify-alert-rules');
 const { DEFAULT_SLO_TARGETS, evaluateSloCompliance } = require('./verify-capacity-load');
 const { validDatabaseTelemetry, validDosEvidence } = require('./launch-target-evidence');
 
+const VALID_TARGET_ARCHITECTURES = [
+  'single-host-compose-caddy',
+  'vercel-managed-production',
+];
+
 const REQUIRED_SECTIONS = [
   'production_domain_tls',
   'smtp_delivery',
@@ -46,6 +51,16 @@ const REQUIRED_SECRET_KEYS = [
   'garage_s3_secret_source',
   'smtp_secret_source',
   'grafana_admin_secret_source',
+];
+
+const MANAGED_SECRET_KEYS = [
+  'session_secret_source',
+  'csrf_secret_source',
+  'cron_secret_source',
+  'db_migrator_secret_source',
+  'db_app_secret_source',
+  'blob_store_id',
+  'scanner_snapshot_source',
 ];
 
 const REQUIRED_RETENTION_KEYS = [
@@ -1721,7 +1736,7 @@ function validSmtpEmail(value) {
 
 function validSmtpSecretReference(value) {
   if (!validSmtpText(value)) return false;
-  return /^(?:vault:[A-Za-z0-9_./-]+#[A-Za-z0-9_.-]+|aws-sm:[A-Za-z0-9_./-]+|env:[A-Z][A-Z0-9_]*|file:\/[A-Za-z0-9_./-]+)$/.test(value);
+  return /^(?:vault:[A-Za-z0-9_./-]+#[A-Za-z0-9_.-]+|vercel:[A-Za-z0-9_./-]+#[A-Za-z0-9_.-]+|neon:[A-Za-z0-9_./-]+#[A-Za-z0-9_.-]+|aws-sm:[A-Za-z0-9_./-]+|env:[A-Z][A-Z0-9_]*|file:\/[A-Za-z0-9_./-]+)$/.test(value);
 }
 
 function validSmtpReference(value) {
@@ -2628,6 +2643,7 @@ function validateProductionDomainTlsSection(domainSec, options = {}) {
   if (!domainSec || domainSec.status !== 'approved') {
     return blockers;
   }
+  const isManaged = options.targetArchitecture === 'vercel-managed-production';
   const now = options.now instanceof Date ? options.now : new Date();
   const caddyEvidence = Array.isArray(options.caddyEvidence) ? options.caddyEvidence : [];
   const rawDomain = typeof domainSec.domain === 'string' ? domainSec.domain.trim() : '';
@@ -2647,22 +2663,28 @@ function validateProductionDomainTlsSection(domainSec, options = {}) {
     addBlocker(category, 'HSTS approval must be explicitly confirmed (hsts_approved: true)');
   }
 
-  if (typeof domainSec.custom_certificates !== 'boolean') {
-    addBlocker(
-      category,
-      'Field "custom_certificates" must be explicitly defined as a boolean (true or false)'
-    );
-  }
-
-  const caddyCandidates = caddyEvidence.filter(isCaddyRoutingCandidate);
-  if (caddyCandidates.length === 0) {
-    addBlocker(category, 'A successful Caddy routing and TLS verification child JSON report is required');
-  } else {
-    if (caddyCandidates.some(({ parsed }) => !validateCaddyRoutingReport(parsed, now, rawDomain, { expectedSection: domainSec }))) {
-      addBlocker(category, 'A referenced Caddy routing report is invalid or failed');
+  if (isManaged) {
+    if (domainSec.edge_tls_enabled !== true) {
+      addBlocker(category, 'Managed edge TLS must be explicitly enabled (edge_tls_enabled: true)');
     }
-    if (!caddyCandidates.some(({ parsed }) => validateCaddyRoutingReport(parsed, now, rawDomain, { requireLive: true, expectedSection: domainSec }))) {
-      addBlocker(category, 'A live Caddy routing and TLS verification operator receipt is required');
+  } else {
+    if (typeof domainSec.custom_certificates !== 'boolean') {
+      addBlocker(
+        category,
+        'Field "custom_certificates" must be explicitly defined as a boolean (true or false)'
+      );
+    }
+
+    const caddyCandidates = caddyEvidence.filter(isCaddyRoutingCandidate);
+    if (caddyCandidates.length === 0) {
+      addBlocker(category, 'A successful Caddy routing and TLS verification child JSON report is required');
+    } else {
+      if (caddyCandidates.some(({ parsed }) => !validateCaddyRoutingReport(parsed, now, rawDomain, { expectedSection: domainSec }))) {
+        addBlocker(category, 'A referenced Caddy routing report is invalid or failed');
+      }
+      if (!caddyCandidates.some(({ parsed }) => validateCaddyRoutingReport(parsed, now, rawDomain, { requireLive: true, expectedSection: domainSec }))) {
+        addBlocker(category, 'A live Caddy routing and TLS verification operator receipt is required');
+      }
     }
   }
 
@@ -2681,6 +2703,7 @@ function validateSmtpDeliverySection(smtpSec, options = {}) {
   if (!smtpSec || smtpSec.status !== 'approved') {
     return blockers;
   }
+  const isManaged = options.targetArchitecture === 'vercel-managed-production';
   const now = options.now instanceof Date ? options.now : new Date();
   const smtpEvidence = Array.isArray(options.smtpEvidence) ? options.smtpEvidence : [];
   const secretReferencesSection = options.secretReferencesSection || options.sections?.secret_references;
@@ -2688,37 +2711,64 @@ function validateSmtpDeliverySection(smtpSec, options = {}) {
   if (!validSmtpText(smtpSec.provider)) {
     addBlocker(category, 'SMTP provider is required');
   }
-  if (!validSmtpText(smtpSec.host)) {
-    addBlocker(category, 'SMTP host is required');
-  }
-  if (!Number.isInteger(smtpSec.port) || smtpSec.port <= 0 || smtpSec.port > 65535) {
-    addBlocker(category, `SMTP port must be a valid port number (received: ${smtpSec.port})`);
-  }
-  if (!['STARTTLS', 'TLS'].includes(smtpSec.tls_mode)) {
-    addBlocker(category, 'SMTP tls_mode must be STARTTLS or TLS');
-  }
-  if (!validSmtpEmail(smtpSec.from_address)) {
-    addBlocker(category, `SMTP from_address is invalid: "${smtpSec.from_address}"`);
-  }
-  if (!validSmtpSecretReference(smtpSec.credentials_source_reference) ||
-      smtpSec.credentials_source_reference !== secretReferencesSection?.smtp_secret_source) {
-    addBlocker(category, 'SMTP credentials source reference must match the approved secret reference');
-  }
-  if (!validSmtpText(smtpSec.delivery_policy)) {
-    addBlocker(category, 'SMTP delivery policy description is required');
-  }
-  if (!validSmtpText(smtpSec.bounce_abuse_handling)) {
-    addBlocker(category, 'SMTP bounce/abuse handling procedure reference is required');
-  }
-  const smtpCandidates = smtpEvidence.filter(isSmtpDeliveryCandidate);
-  if (smtpCandidates.length === 0) {
-    addBlocker(category, 'A successful SMTP delivery and DNS verification child JSON report is required');
-  } else {
-    if (smtpCandidates.some(({ parsed }) => !validateSmtpDeliveryReport(parsed, now, smtpSec))) {
-      addBlocker(category, 'A referenced SMTP delivery report is invalid or failed');
+
+  if (isManaged) {
+    if (!validSmtpText(smtpSec.verified_sender_domain)) {
+      addBlocker(category, 'Verified sender domain is required');
     }
-    if (!smtpCandidates.some(({ parsed }) => validateSmtpDeliveryReport(parsed, now, smtpSec, { requireLive: true }))) {
-      addBlocker(category, 'A live SMTP delivery verification operator receipt is required');
+    if (!validSmtpEmail(smtpSec.from_address)) {
+      addBlocker(category, `SMTP from_address is invalid: "${smtpSec.from_address}"`);
+    }
+    if (!validSmtpSecretReference(smtpSec.credentials_source_reference)) {
+      addBlocker(category, 'SMTP credentials source reference must be an indirect secret-store reference');
+    } else if (secretReferencesSection?.smtp_secret_source && smtpSec.credentials_source_reference !== secretReferencesSection.smtp_secret_source) {
+      addBlocker(category, 'SMTP credentials source reference must match the approved secret reference');
+    }
+    if (!validSmtpText(smtpSec.delivery_policy)) {
+      addBlocker(category, 'SMTP delivery policy description is required');
+    }
+    if (!validSmtpText(smtpSec.bounce_abuse_handling)) {
+      addBlocker(category, 'SMTP bounce/abuse handling procedure reference is required');
+    }
+    const smtpCandidates = smtpEvidence.filter(isSmtpDeliveryCandidate);
+    if (smtpCandidates.length > 0) {
+      if (smtpCandidates.some(({ parsed }) => !validateSmtpDeliveryReport(parsed, now, smtpSec))) {
+        addBlocker(category, 'A referenced SMTP delivery report is invalid or failed');
+      }
+    }
+  } else {
+    if (!validSmtpText(smtpSec.host)) {
+      addBlocker(category, 'SMTP host is required');
+    }
+    if (!Number.isInteger(smtpSec.port) || smtpSec.port <= 0 || smtpSec.port > 65535) {
+      addBlocker(category, `SMTP port must be a valid port number (received: ${smtpSec.port})`);
+    }
+    if (!['STARTTLS', 'TLS'].includes(smtpSec.tls_mode)) {
+      addBlocker(category, 'SMTP tls_mode must be STARTTLS or TLS');
+    }
+    if (!validSmtpEmail(smtpSec.from_address)) {
+      addBlocker(category, `SMTP from_address is invalid: "${smtpSec.from_address}"`);
+    }
+    if (!validSmtpSecretReference(smtpSec.credentials_source_reference) ||
+        smtpSec.credentials_source_reference !== secretReferencesSection?.smtp_secret_source) {
+      addBlocker(category, 'SMTP credentials source reference must match the approved secret reference');
+    }
+    if (!validSmtpText(smtpSec.delivery_policy)) {
+      addBlocker(category, 'SMTP delivery policy description is required');
+    }
+    if (!validSmtpText(smtpSec.bounce_abuse_handling)) {
+      addBlocker(category, 'SMTP bounce/abuse handling procedure reference is required');
+    }
+    const smtpCandidates = smtpEvidence.filter(isSmtpDeliveryCandidate);
+    if (smtpCandidates.length === 0) {
+      addBlocker(category, 'A successful SMTP delivery and DNS verification child JSON report is required');
+    } else {
+      if (smtpCandidates.some(({ parsed }) => !validateSmtpDeliveryReport(parsed, now, smtpSec))) {
+        addBlocker(category, 'A referenced SMTP delivery report is invalid or failed');
+      }
+      if (!smtpCandidates.some(({ parsed }) => validateSmtpDeliveryReport(parsed, now, smtpSec, { requireLive: true }))) {
+        addBlocker(category, 'A live SMTP delivery verification operator receipt is required');
+      }
     }
   }
 
@@ -2737,6 +2787,7 @@ function validateSecretsManagementSection(secMgmt, options = {}) {
   if (!secMgmt || secMgmt.status !== 'approved') {
     return blockers;
   }
+  const isManaged = options.targetArchitecture === 'vercel-managed-production';
   const now = options.now instanceof Date ? options.now : new Date();
   const secretEvidence = Array.isArray(options.secretEvidence) ? options.secretEvidence : [];
 
@@ -2761,14 +2812,20 @@ function validateSecretsManagementSection(secMgmt, options = {}) {
     addBlocker(category, 'Compromise response runbook reference is required');
   }
   const secretCandidates = secretEvidence.filter(isSecretRotationCandidate);
-  if (secretCandidates.length === 0) {
-    addBlocker(category, 'A successful secret rotation child JSON report is required');
-  } else {
+  if (!isManaged) {
+    if (secretCandidates.length === 0) {
+      addBlocker(category, 'A successful secret rotation child JSON report is required');
+    } else {
+      if (secretCandidates.some(({ parsed }) => !validateSecretRotationReport(parsed, now))) {
+        addBlocker(category, 'A referenced secret rotation report is invalid or failed');
+      }
+      if (!secretCandidates.some(({ parsed }) => validateSecretRotationReport(parsed, now, { requireLive: true }))) {
+        addBlocker(category, 'A live production secret rotation operator receipt is required');
+      }
+    }
+  } else if (secretCandidates.length > 0) {
     if (secretCandidates.some(({ parsed }) => !validateSecretRotationReport(parsed, now))) {
       addBlocker(category, 'A referenced secret rotation report is invalid or failed');
-    }
-    if (!secretCandidates.some(({ parsed }) => validateSecretRotationReport(parsed, now, { requireLive: true }))) {
-      addBlocker(category, 'A live production secret rotation operator receipt is required');
     }
   }
 
@@ -2787,6 +2844,7 @@ function validateSecretReferencesSection(secRefs, options = {}) {
   if (!secRefs || typeof secRefs !== 'object') {
     return blockers;
   }
+  const isManaged = options.targetArchitecture === 'vercel-managed-production';
   const now = options.now instanceof Date ? options.now : new Date();
   const secretReferenceEvidence = Array.isArray(options.secretReferenceEvidence) ? options.secretReferenceEvidence : [];
 
@@ -2802,15 +2860,19 @@ function validateSecretReferencesSection(secRefs, options = {}) {
       );
     }
   }
-  for (const key of REQUIRED_SECRET_KEYS) {
+  const keysToCheck = isManaged ? MANAGED_SECRET_KEYS : REQUIRED_SECRET_KEYS;
+  for (const key of keysToCheck) {
     const val = secRefs[key];
     if (!val || typeof val !== 'string') {
       addBlocker(category, `Missing secret source reference for '${key}'`);
-    } else if (secRefs.status === 'approved' && !validSmtpSecretReference(val)) {
-      addBlocker(category, `Field '${key}' must be an indirect secret-store reference`);
+    } else if (secRefs.status === 'approved') {
+      const isStoreId = isManaged && key === 'blob_store_id' && /^store_[A-Za-z0-9]+$/.test(val);
+      if (!isStoreId && !validSmtpSecretReference(val)) {
+        addBlocker(category, `Field '${key}' must be an indirect secret-store reference`);
+      }
     }
   }
-  if (secRefs.status === 'approved') {
+  if (!isManaged && secRefs.status === 'approved') {
     const candidates = secretReferenceEvidence.filter(isSecretReferencePolicyCandidate);
     if (candidates.length === 0) {
       addBlocker(category, 'A successful secret-reference policy child JSON report is required');
@@ -2920,6 +2982,7 @@ function validateBackupAndDisasterRecoverySection(bdrSec, options = {}) {
   if (!bdrSec || bdrSec.status !== 'approved') {
     return blockers;
   }
+  const isManaged = options.targetArchitecture === 'vercel-managed-production';
   const now = options.now instanceof Date ? options.now : new Date();
   const recoveryEvidence = Array.isArray(options.recoveryEvidence) ? options.recoveryEvidence : [];
 
@@ -2946,12 +3009,31 @@ function validateBackupAndDisasterRecoverySection(bdrSec, options = {}) {
   ) {
     addBlocker(category, 'Off-host backup destination is required');
   }
-  const schedule = parseBackupScheduleCron(bdrSec.backup_schedule_cron);
-  if (!schedule.valid) {
-    addBlocker(category, 'Backup schedule must use a supported every-hour UTC cron expression');
-  } else if (!invalidRpo && schedule.maxGapMinutes > bdrSec.rpo_hours * 60) {
-    addBlocker(category, 'Backup schedule maximum start gap exceeds the declared RPO');
+
+  if (isManaged) {
+    if (
+      typeof bdrSec.pitr_recovery_window_days !== 'number' ||
+      !Number.isFinite(bdrSec.pitr_recovery_window_days) ||
+      bdrSec.pitr_recovery_window_days < 7
+    ) {
+      addBlocker(category, 'PITR recovery window must be at least 7 days (pitr_recovery_window_days >= 7)');
+    }
+    if (
+      !bdrSec.blob_store_durability ||
+      typeof bdrSec.blob_store_durability !== 'string' ||
+      !validRecoveryReference(bdrSec.blob_store_durability)
+    ) {
+      addBlocker(category, 'Blob store durability definition is required');
+    }
+  } else {
+    const schedule = parseBackupScheduleCron(bdrSec.backup_schedule_cron);
+    if (!schedule.valid) {
+      addBlocker(category, 'Backup schedule must use a supported every-hour UTC cron expression');
+    } else if (!invalidRpo && schedule.maxGapMinutes > bdrSec.rpo_hours * 60) {
+      addBlocker(category, 'Backup schedule maximum start gap exceeds the declared RPO');
+    }
   }
+
   if (bdrSec.restore_drill_completed !== true) {
     addBlocker(category, 'Restore drill must be verified and completed (restore_drill_completed: true)');
   }
@@ -3105,6 +3187,7 @@ function validateVolumeEncryptionSection(encSec, options = {}) {
   if (!encSec || encSec.status !== 'approved') {
     return blockers;
   }
+  const isManaged = options.targetArchitecture === 'vercel-managed-production';
   const now = options.now instanceof Date ? options.now : new Date();
   const volumeEvidence = Array.isArray(options.volumeEvidence) ? options.volumeEvidence : [];
 
@@ -3115,12 +3198,6 @@ function validateVolumeEncryptionSection(encSec, options = {}) {
     addBlocker(
       category,
       'Production volume encryption mechanism must be concrete and approved',
-    );
-  }
-  if (!validVolumePaths(encSec.encrypted_mount_paths)) {
-    addBlocker(
-      category,
-      'Encrypted mount paths must include at least 3 unique concrete absolute directory paths',
     );
   }
   if (encSec.key_separation_confirmed !== true) {
@@ -3135,32 +3212,54 @@ function validateVolumeEncryptionSection(encSec, options = {}) {
       'Key recovery owner must be concrete and designated',
     );
   }
-  const volumeCandidates = volumeEvidence.filter(isVolumeEncryptionCandidate);
-  if (
-    volumeCandidates.some(
-      ({ parsed }) =>
-        !validateVolumeEncryptionReport(parsed, now, {
+
+  if (isManaged) {
+    if (encSec.cloud_storage_encrypted !== true) {
+      addBlocker(
+        category,
+        'Cloud storage encryption must be explicitly confirmed (cloud_storage_encrypted: true)'
+      );
+    }
+    if (encSec.ephemeral_compute_isolated !== true) {
+      addBlocker(
+        category,
+        'Ephemeral compute isolation must be explicitly confirmed (ephemeral_compute_isolated: true)'
+      );
+    }
+  } else {
+    if (!validVolumePaths(encSec.encrypted_mount_paths)) {
+      addBlocker(
+        category,
+        'Encrypted mount paths must include at least 3 unique concrete absolute directory paths',
+      );
+    }
+    const volumeCandidates = volumeEvidence.filter(isVolumeEncryptionCandidate);
+    if (
+      volumeCandidates.some(
+        ({ parsed }) =>
+          !validateVolumeEncryptionReport(parsed, now, {
+            expectedSection: encSec,
+          }),
+      )
+    ) {
+      addBlocker(
+        category,
+        'A referenced volume encryption report is invalid or failed',
+      );
+    }
+    if (
+      !volumeCandidates.some(({ parsed }) =>
+        validateVolumeEncryptionReport(parsed, now, {
+          requireLive: true,
           expectedSection: encSec,
         }),
-    )
-  ) {
-    addBlocker(
-      category,
-      'A referenced volume encryption report is invalid or failed',
-    );
-  }
-  if (
-    !volumeCandidates.some(({ parsed }) =>
-      validateVolumeEncryptionReport(parsed, now, {
-        requireLive: true,
-        expectedSection: encSec,
-      }),
-    )
-  ) {
-    addBlocker(
-      category,
-      'A successful live volume encryption child JSON report matching the approved configuration is required',
-    );
+      )
+    ) {
+      addBlocker(
+        category,
+        'A successful live volume encryption child JSON report matching the approved configuration is required',
+      );
+    }
   }
 
   return blockers;
@@ -3214,109 +3313,159 @@ function validateDeploymentAndRollbackSection(depSec, options = {}) {
   if (!depSec || depSec.status !== 'approved') {
     return blockers;
   }
+  const isManaged = options.targetArchitecture === 'vercel-managed-production';
   const now = options.now instanceof Date ? options.now : new Date();
   const deploymentEvidence = Array.isArray(options.deploymentEvidence) ? options.deploymentEvidence : [];
   const filePath = typeof options.filePath === 'string' ? options.filePath : (typeof options._filePath === 'string' ? options._filePath : '');
   const env = options.env || (options.options && options.options.env) || {};
 
-  if (!depSec.target_host_profile || typeof depSec.target_host_profile !== 'string') {
-    addBlocker(category, 'Target host profile / spec is required');
-  }
-  if (!depSec.image_registry_path || typeof depSec.image_registry_path !== 'string') {
-    addBlocker(category, 'OCI image registry path is required');
-  }
-  if (!depSec.deployment_approver || typeof depSec.deployment_approver !== 'string') {
-    addBlocker(category, 'Deployment approver is required');
-  }
-  if (!depSec.rollback_authority || typeof depSec.rollback_authority !== 'string') {
-    addBlocker(category, 'Rollback authority is required');
-  }
-  if (!depSec.image_provenance_policy || typeof depSec.image_provenance_policy !== 'string') {
-    addBlocker(category, 'Image provenance policy is required');
-  }
-  if (depSec.live_readiness_drill_completed !== true) {
-    addBlocker(category, 'Live deployment & Caddy routing drill must be completed (live_readiness_drill_completed: true)');
-  }
-  const release = depSec.release;
-  if (!release || typeof release !== 'object' || Array.isArray(release)) {
-    addBlocker(category, 'Release record is required');
-  } else {
-    if (!isValidReleaseCommitSha(release.reviewed_source_commit)) {
-      addBlocker(category, 'release.reviewed_source_commit must be exactly 40 ASCII hex characters');
+  if (isManaged) {
+    if (depSec.target_platform !== 'vercel_serverless') {
+      addBlocker(category, "Target platform must be 'vercel_serverless'");
     }
-    const images = {};
-    for (const pair of ['current', 'previous']) {
-      images[pair] = {};
-      for (const role of ['client_image', 'server_image']) {
-        const value = release[pair]?.[role];
-        try {
-          validateImageReference(value, `release.${pair}.${role}`);
-          images[pair][role] = value;
-        } catch {
-          addBlocker(category, `release.${pair}.${role} must be a valid immutable image reference`);
-        }
-      }
-      if (images[pair].client_image && images[pair].client_image === images[pair].server_image) {
-        addBlocker(category, `release.${pair} must use distinct client and server images`);
-      }
+    if (!depSec.deployment_approver || typeof depSec.deployment_approver !== 'string') {
+      addBlocker(category, 'Deployment approver is required');
     }
-    if (images.current.client_image && images.current.server_image &&
-        images.current.client_image === images.previous.client_image &&
-        images.current.server_image === images.previous.server_image) {
-      addBlocker(category, 'release.current and release.previous must differ');
+    if (!depSec.rollback_authority || typeof depSec.rollback_authority !== 'string') {
+      addBlocker(category, 'Rollback authority is required');
     }
-    const prefix = depSec.image_registry_path;
-    const validPrefix = isValidImageRegistryPath(prefix);
-    if (!validPrefix) {
-      addBlocker(category, 'image_registry_path must be a registry host or repository prefix');
+    if (!depSec.immutable_deployment_policy || typeof depSec.immutable_deployment_policy !== 'string') {
+      addBlocker(category, 'Immutable deployment policy description is required');
+    }
+    if (depSec.live_readiness_drill_completed !== true) {
+      addBlocker(category, 'Live deployment rollback drill must be completed (live_readiness_drill_completed: true)');
+    }
+    const release = depSec.release;
+    if (!release || typeof release !== 'object' || Array.isArray(release)) {
+      addBlocker(category, 'Release record is required');
     } else {
-      for (const role of ['client_image', 'server_image']) {
-        if (images.current[role] && !images.current[role].startsWith(`${prefix}/`)) {
-          addBlocker(category, `release.current.${role} is outside image_registry_path`);
+      if (!isValidReleaseCommitSha(release.reviewed_source_commit)) {
+        addBlocker(category, 'release.reviewed_source_commit must be exactly 40 ASCII hex characters');
+      }
+      const currentDeploymentId = release.current?.deployment_id;
+      const previousDeploymentId = release.previous?.deployment_id;
+      if (!currentDeploymentId || typeof currentDeploymentId !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(currentDeploymentId)) {
+        addBlocker(category, 'release.current.deployment_id must match /^dpl_[A-Za-z0-9]+$/');
+      }
+      if (!previousDeploymentId || typeof previousDeploymentId !== 'string' || !/^dpl_[A-Za-z0-9]+$/.test(previousDeploymentId)) {
+        addBlocker(category, 'release.previous.deployment_id must match /^dpl_[A-Za-z0-9]+$/');
+      }
+      if (currentDeploymentId && previousDeploymentId && currentDeploymentId === previousDeploymentId) {
+        addBlocker(category, 'release.current and release.previous deployment IDs must differ');
+      }
+      if (!release.current?.deployment_url || typeof release.current.deployment_url !== 'string') {
+        addBlocker(category, 'release.current.deployment_url is required');
+      }
+      if (!release.previous?.deployment_url || typeof release.previous.deployment_url !== 'string') {
+        addBlocker(category, 'release.previous.deployment_url is required');
+      }
+      if (!release.provenance_evidence || typeof release.provenance_evidence !== 'string') {
+        addBlocker(category, 'release.provenance_evidence is required');
+      }
+      if (!release.live_drill_evidence || typeof release.live_drill_evidence !== 'string') {
+        addBlocker(category, 'release.live_drill_evidence is required');
+      }
+    }
+  } else {
+    if (!depSec.target_host_profile || typeof depSec.target_host_profile !== 'string') {
+      addBlocker(category, 'Target host profile / spec is required');
+    }
+    if (!depSec.image_registry_path || typeof depSec.image_registry_path !== 'string') {
+      addBlocker(category, 'OCI image registry path is required');
+    }
+    if (!depSec.deployment_approver || typeof depSec.deployment_approver !== 'string') {
+      addBlocker(category, 'Deployment approver is required');
+    }
+    if (!depSec.rollback_authority || typeof depSec.rollback_authority !== 'string') {
+      addBlocker(category, 'Rollback authority is required');
+    }
+    if (!depSec.image_provenance_policy || typeof depSec.image_provenance_policy !== 'string') {
+      addBlocker(category, 'Image provenance policy is required');
+    }
+    if (depSec.live_readiness_drill_completed !== true) {
+      addBlocker(category, 'Live deployment & Caddy routing drill must be completed (live_readiness_drill_completed: true)');
+    }
+    const release = depSec.release;
+    if (!release || typeof release !== 'object' || Array.isArray(release)) {
+      addBlocker(category, 'Release record is required');
+    } else {
+      if (!isValidReleaseCommitSha(release.reviewed_source_commit)) {
+        addBlocker(category, 'release.reviewed_source_commit must be exactly 40 ASCII hex characters');
+      }
+      const images = {};
+      for (const pair of ['current', 'previous']) {
+        images[pair] = {};
+        for (const role of ['client_image', 'server_image']) {
+          const value = release[pair]?.[role];
+          try {
+            validateImageReference(value, `release.${pair}.${role}`);
+            images[pair][role] = value;
+          } catch {
+            addBlocker(category, `release.${pair}.${role} must be a valid immutable image reference`);
+          }
+        }
+        if (images[pair].client_image && images[pair].client_image === images[pair].server_image) {
+          addBlocker(category, `release.${pair} must use distinct client and server images`);
+        }
+      }
+      if (images.current.client_image && images.current.server_image &&
+          images.current.client_image === images.previous.client_image &&
+          images.current.server_image === images.previous.server_image) {
+        addBlocker(category, 'release.current and release.previous must differ');
+      }
+      const prefix = depSec.image_registry_path;
+      const validPrefix = isValidImageRegistryPath(prefix);
+      if (!validPrefix) {
+        addBlocker(category, 'image_registry_path must be a registry host or repository prefix');
+      } else {
+        for (const role of ['client_image', 'server_image']) {
+          if (images.current[role] && !images.current[role].startsWith(`${prefix}/`)) {
+            addBlocker(category, `release.current.${role} is outside image_registry_path`);
+          }
+        }
+      }
+      const refs = [];
+      const baseDirs = [process.cwd()];
+      if (typeof filePath === 'string' && filePath.length > 0) {
+        const fileDir = path.dirname(path.resolve(process.cwd(), filePath));
+        if (!baseDirs.includes(fileDir)) baseDirs.push(fileDir);
+      }
+      for (const field of ['client_provenance_evidence', 'server_provenance_evidence', 'live_drill_evidence']) {
+        const ref = release[field];
+        const external = typeof ref === 'string' && /^[a-z][a-z0-9+.-]*:[^\s]+$/i.test(ref);
+        if (typeof ref !== 'string' || !ref.trim() || ref !== ref.trim() ||
+            ref.includes('__REQUIRED_') || ref.includes('*') ||
+            (!ref.endsWith('.json') && !external)) {
+          addBlocker(category, `release.${field} must be a local JSON path or stable external identifier`);
+          continue;
+        }
+        refs.push(ref);
+        if (!external) {
+          const parsedFiles = checkEvidenceFile(ref, category, addBlocker, baseDirs);
+          if (field === 'live_drill_evidence') {
+            deploymentEvidence.push(...parsedFiles);
+          }
+        }
+      }
+      if (new Set(refs).size !== refs.length) {
+        addBlocker(category, 'Release evidence references must be distinct');
+      }
+      for (const [role, envName] of [['client_image', 'ACRES_CLIENT_IMAGE'], ['server_image', 'ACRES_SERVER_IMAGE']]) {
+        if (typeof env?.[envName] !== 'string' || !env[envName]) {
+          addBlocker(category, `${envName} is required for approved deployment`);
+        } else if (env[envName] !== release.current?.[role]) {
+          addBlocker(category, `${envName} does not match release.current.${role}`);
         }
       }
     }
-    const refs = [];
-    const baseDirs = [process.cwd()];
-    if (typeof filePath === 'string' && filePath.length > 0) {
-      const fileDir = path.dirname(path.resolve(process.cwd(), filePath));
-      if (!baseDirs.includes(fileDir)) baseDirs.push(fileDir);
+    const deploymentCandidates = deploymentEvidence.filter(isDeploymentDrillCandidate);
+    if (deploymentCandidates.length === 0) {
+      addBlocker(category, 'A successful deployment drill child JSON report is required');
+    } else if (deploymentCandidates.some(({ parsed }) => !validateDeploymentDrillReport(parsed, now, { expectedRelease: release }))) {
+      addBlocker(category, 'A referenced deployment drill report is invalid or failed');
+    } else if (!deploymentCandidates.some(({ parsed }) => validateDeploymentDrillReport(parsed, now, { requireLive: true, expectedRelease: release }))) {
+      addBlocker(category, 'A live deployment drill child bound to the approved release is required');
     }
-    for (const field of ['client_provenance_evidence', 'server_provenance_evidence', 'live_drill_evidence']) {
-      const ref = release[field];
-      const external = typeof ref === 'string' && /^[a-z][a-z0-9+.-]*:[^\s]+$/i.test(ref);
-      if (typeof ref !== 'string' || !ref.trim() || ref !== ref.trim() ||
-          ref.includes('__REQUIRED_') || ref.includes('*') ||
-          (!ref.endsWith('.json') && !external)) {
-        addBlocker(category, `release.${field} must be a local JSON path or stable external identifier`);
-        continue;
-      }
-      refs.push(ref);
-      if (!external) {
-        const parsedFiles = checkEvidenceFile(ref, category, addBlocker, baseDirs);
-        if (field === 'live_drill_evidence') {
-          deploymentEvidence.push(...parsedFiles);
-        }
-      }
-    }
-    if (new Set(refs).size !== refs.length) {
-      addBlocker(category, 'Release evidence references must be distinct');
-    }
-    for (const [role, envName] of [['client_image', 'ACRES_CLIENT_IMAGE'], ['server_image', 'ACRES_SERVER_IMAGE']]) {
-      if (typeof env?.[envName] !== 'string' || !env[envName]) {
-        addBlocker(category, `${envName} is required for approved deployment`);
-      } else if (env[envName] !== release.current?.[role]) {
-        addBlocker(category, `${envName} does not match release.current.${role}`);
-      }
-    }
-  }
-  const deploymentCandidates = deploymentEvidence.filter(isDeploymentDrillCandidate);
-  if (deploymentCandidates.length === 0) {
-    addBlocker(category, 'A successful deployment drill child JSON report is required');
-  } else if (deploymentCandidates.some(({ parsed }) => !validateDeploymentDrillReport(parsed, now, { expectedRelease: release }))) {
-    addBlocker(category, 'A referenced deployment drill report is invalid or failed');
-  } else if (!deploymentCandidates.some(({ parsed }) => validateDeploymentDrillReport(parsed, now, { requireLive: true, expectedRelease: release }))) {
-    addBlocker(category, 'A live deployment drill child bound to the approved release is required');
   }
 
   return blockers;
@@ -3413,6 +3562,10 @@ function validateReadinessDocument(record, addBlocker) {
   if (!record || typeof record !== 'object' || Array.isArray(record)) {
     callAddBlocker('root', 'Invalid readiness document: root must be an object');
     return false;
+  }
+
+  if (record.target_architecture !== undefined && !VALID_TARGET_ARCHITECTURES.includes(record.target_architecture)) {
+    callAddBlocker('root', `Unknown target architecture: "${record.target_architecture}"`);
   }
 
   const sections = record.sections;
@@ -3527,6 +3680,7 @@ function validateReadiness(record, _filePath, options = {}) {
     return { categoryBlockers, totalApproved: 0, totalSections: REQUIRED_SECTIONS.length };
   }
 
+  const targetArchitecture = record.target_architecture;
   const sections = record.sections;
 
   // 1. Generic placeholder & dev secret scan across entire document
@@ -3551,6 +3705,7 @@ function validateReadiness(record, _filePath, options = {}) {
   validateProductionDomainTlsSection(sections.production_domain_tls, {
     now,
     caddyEvidence: evidenceBuckets.production_domain_tls,
+    targetArchitecture,
     addBlocker,
   });
 
@@ -3558,48 +3713,56 @@ function validateReadiness(record, _filePath, options = {}) {
     sections,
     now,
     smtpEvidence: evidenceBuckets.smtp_delivery,
+    targetArchitecture,
     addBlocker,
   });
 
   validateSecretsManagementSection(sections.secrets_management, {
     now,
     secretEvidence: evidenceBuckets.secrets_management,
+    targetArchitecture,
     addBlocker,
   });
 
   validateSecretReferencesSection(sections.secret_references, {
     now,
     secretReferenceEvidence: evidenceBuckets.secret_references,
+    targetArchitecture,
     addBlocker,
   });
 
   validateSloAndAlertingSection(sections.slo_and_alerting, {
     now,
     capacityEvidence: evidenceBuckets.slo_and_alerting,
+    targetArchitecture,
     addBlocker,
   });
 
   validateBackupAndDisasterRecoverySection(sections.backup_and_disaster_recovery, {
     now,
     recoveryEvidence: evidenceBuckets.backup_and_disaster_recovery,
+    targetArchitecture,
     addBlocker,
   });
 
   validateDataRetentionPolicySection(sections.data_retention_policy, {
     now,
     retentionEvidence: evidenceBuckets.data_retention_policy,
+    targetArchitecture,
     addBlocker,
   });
 
   validateVolumeEncryptionSection(sections.volume_encryption, {
     now,
     volumeEvidence: evidenceBuckets.volume_encryption,
+    targetArchitecture,
     addBlocker,
   });
 
   validateGraphqlIntrospectionSection(sections.graphql_introspection, {
     now,
     graphqlEvidence: evidenceBuckets.graphql_introspection,
+    targetArchitecture,
     addBlocker,
   });
 
@@ -3609,12 +3772,14 @@ function validateReadiness(record, _filePath, options = {}) {
     filePath: _filePath,
     env: options.env,
     options,
+    targetArchitecture,
     addBlocker,
   });
 
   validateOptionalAiPostureSection(sections.optional_ai_posture, {
     now,
     noAiEvidence: evidenceBuckets.optional_ai_posture,
+    targetArchitecture,
     addBlocker,
   });
 
@@ -3626,19 +3791,37 @@ function validateReadiness(record, _filePath, options = {}) {
 }
 
 function parseCliArguments(args = [], cwd = process.cwd()) {
-  if (
-    !Array.isArray(args) ||
-    args.length > 1 ||
-    args.some((arg) => typeof arg !== 'string' || arg.startsWith('--'))
-  ) {
+  if (!Array.isArray(args)) {
     return {
       valid: false,
       error: 'Usage: check-launch-readiness.js [readiness.json]',
     };
   }
-  const targetPath = args[0]
-    ? path.resolve(cwd, args[0])
-    : path.resolve(cwd, 'infra/launch/readiness.example.json');
+
+  let targetArg = null;
+  if (args.length === 0) {
+    targetArg = 'infra/launch/readiness.example.json';
+  } else if (args.length === 1) {
+    if (typeof args[0] !== 'string') {
+      return { valid: false, error: 'Usage: check-launch-readiness.js [readiness.json]' };
+    }
+    if (args[0].startsWith('--record=')) {
+      targetArg = args[0].slice(9);
+    } else if (args[0].startsWith('--')) {
+      return { valid: false, error: 'Usage: check-launch-readiness.js [readiness.json]' };
+    } else {
+      targetArg = args[0];
+    }
+  } else if (args.length === 2 && args[0] === '--record' && typeof args[1] === 'string' && !args[1].startsWith('--')) {
+    targetArg = args[1];
+  } else {
+    return {
+      valid: false,
+      error: 'Usage: check-launch-readiness.js [readiness.json]',
+    };
+  }
+
+  const targetPath = path.resolve(cwd, targetArg);
   return {
     valid: true,
     targetPath,
@@ -3902,4 +4085,6 @@ module.exports = {
   formatReadinessSummary,
   runReadinessCheck,
   main,
+  VALID_TARGET_ARCHITECTURES,
+  MANAGED_SECRET_KEYS,
 };

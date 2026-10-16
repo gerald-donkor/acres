@@ -3207,15 +3207,22 @@ bash scripts/ops/run-launch-drills.sh \
 ```
 
 The template's `$schema` now resolves to `infra/launch/readiness.schema.json`.
-The Draft 7 schema describes all eleven sections, twelve secret-source fields,
-eight retention-policy fields, and the nested release record. It accepts the
-unresolved template and rejects missing, misspelled, extra, or wrongly typed
-fields. New record fields require a schema revision. Run
-`npm run ops:readiness-schema-test` for this structural check. It does not
-approve a launch: `node scripts/ops/check-launch-readiness.js
-infra/launch/readiness.example.json` still fails closed. That validator owns
-placeholder and secret scans, evidence content and target binding, clocks,
-cross-category consistency, image environment checks, and approval gates;
+The schema defines conditional validation branches (`allOf`) discriminating
+`single-host-compose-caddy` and `vercel-managed-production` (`target_architecture`).
+For both topologies, all eleven canonical categories are required. Under
+`single-host-compose-caddy`, Compose host mounts, Caddy routing drills, and
+container image digests are checked; under `vercel-managed-production`, Vercel edge
+TLS, 90-day secret rotation, indirect secret-store URIs (`vercel:...`, `neon:...`),
+Neon PITR recovery (≥7 days), Vercel Blob store durability, Neon AWS KMS volume
+encryption, and immutable Vercel deployment IDs (`dpl_*`) are checked.
+Templates exist for both topologies (`infra/launch/readiness.example.json` and
+`infra/launch/readiness.vercel.example.json`). Run `npm run ops:readiness-schema-test`
+for this structural check. It does not approve a launch: `node scripts/ops/check-launch-readiness.js --record <readiness.json>`
+fails closed on unresolved placeholders and missing live receipts for both topologies.
+Storage reconciliation (`scripts/ops/reconcile-storage-objects.js`) supports both
+`--provider s3` (Garage) and `--provider vercel-blob` (`store_g2fmCH5CW7TJbkN3`).
+That validator owns placeholder and secret scans, evidence content and target
+binding, clocks, cross-category consistency, environment checks, and approval gates;
 operators own authentic live evidence and human sign-off.
 
 ## 7. Formal Pre-Launch Sign-off Matrix
