@@ -39,14 +39,32 @@ excluded. Deterministic no-AI journeys are the launch path.
 Pre-flight (all must pass before the checklist below):
 
 ```bash
+# 1. Self-contained integrity and tool validation
 npm run ops:check
-scripts/ops/launch-readiness.sh [--with-drills] [readiness.json]
+
+# 2. Launch readiness preflight orchestrator:
+# Reference Compose + Caddy:
+scripts/ops/launch-readiness.sh --target-architecture single-host-compose-caddy [--with-drills] [readiness.json]
+# Or via npm script:
+npm run ops:launch-readiness
+
+# Managed Vercel Production:
+scripts/ops/launch-readiness.sh --target-architecture vercel-managed-production [--with-drills] [readiness.json]
+# Or via npm script:
+npm run ops:launch-readiness:managed
+
+# 3. Direct drill runners and validators:
+# Reference single-host-compose-caddy:
 bash scripts/ops/run-launch-drills.sh --dry-run
 node scripts/ops/check-launch-readiness.js <operator-readiness.json>
+
+# Managed vercel-managed-production:
+bash scripts/ops/run-launch-drills.sh --dry-run --target-architecture vercel-managed-production
+node scripts/ops/check-launch-readiness.js <operator-readiness.vercel.json>
 ```
 
-Copy `infra/launch/readiness.example.json` to an operator-owned record, fill
-every `__REQUIRED_*__` placeholder, and never commit literal secrets into it —
+Copy `infra/launch/readiness.example.json` (or `infra/launch/readiness.vercel.example.json` for managed profile)
+to an operator-owned record, fill every `__REQUIRED_*__` placeholder, and never commit literal secrets into it —
 the validator fails closed on placeholders, client-exposed secret patterns,
 key literals, dev passwords, and raw connection strings with credentials.
 

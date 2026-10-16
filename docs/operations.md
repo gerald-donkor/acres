@@ -12471,3 +12471,38 @@ target (`STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID=store_g2fmCH5CW7TJbkN3`):
 - Documented complete operational procedures in `infra/vercel/runbooks/managed-operations.md` covering
   secret inventory & rotation, out-of-band Prisma migrations against Neon direct connection, storage
   reconciliation, disaster recovery (Neon PITR & Vercel instant rollback), and ClamAV CVD sandbox rebuilds.
+
+## Prompt 380 — managed operator handoff & drill reconciliation (2026-10-16)
+
+Operational handoff templates and the unified launch drill runner are reconciled to support
+the `vercel-managed-production` profile with full audit parity and zero Docker daemon / Caddyfile
+prerequisites:
+- Managed operator handoff template (`infra/launch/operator-handoff.vercel.example.md`) models complete
+  intake for all 11 categories with zero literal secrets.
+- Managed child verifiers (`verify-managed-ingress.js`, `verify-managed-volume-encryption.js`,
+  `verify-managed-secret-rotation.js`, `verify-managed-restore-drill.js`) emit standardized audit receipts.
+- Unified launch drill orchestrator (`scripts/ops/run-launch-drills.sh`) accepts `--target-architecture`
+  and executes managed stage sequence.
+- Launch dossier assembler (`scripts/ops/assemble-launch-dossier.js`) integrates `RECEIPTS_MANAGED` and
+  `TYPES_MANAGED`, emitting `target_architecture: "vercel-managed-production"`.
+
+## Prompt 381 — managed launch readiness and static integrity reconciliation (2026-10-16)
+
+Reconciled top-level launch readiness orchestration and static integrity verification for the
+`vercel-managed-production` target:
+- Secret scanner (`scripts/ops/scan-secrets.sh`) allowlists `scripts/ops/verify-managed-secret-rotation.js`,
+  passing `ops:scan-secrets` and `ops:scan-secrets-test` (42/42 tests pass).
+- Static integrity verification (`scripts/ops/run-static-integrity-checks.js`) accepts `--target-architecture`
+  (or `--target-arch`), discriminating between `single-host-compose-caddy` (running `production_templates`,
+  `docker_runtime`, and `secret_defaults`) and `vercel-managed-production` (running `vercel_config` and
+  `secret_defaults`, omitting Docker daemon and Compose templates). Emits `target_architecture` in receipt.
+- Updated `validateStaticEvidence(evidence, targetArchitecture)` in `run-static-integrity-checks.js` and
+  `assemble-launch-dossier.js` to evaluate static receipts according to target architecture.
+- Reconciled `scripts/ops/launch-readiness.sh` to accept `--target-architecture <arch>`, `--target-arch <arch>`,
+  `--record <file>`, and positional record path. Automatically inspects target readiness record to detect
+  target architecture if unspecified. In managed mode, executes `check-vercel-config.js`, `scan-secrets.sh`,
+  `check-launch-readiness.spec.js`, forwards `--target-architecture vercel-managed-production` to drills, and
+  evaluates `check-launch-readiness.js`.
+- Added `"ops:launch-readiness:managed"` script to `package.json`.
+- Unit and contract tests: `run-static-integrity-checks.spec.js` (76/76 passed), `launch-readiness.spec.js`
+  (37/37 passed), `run-launch-drills.spec.js` + `assemble-launch-dossier.spec.js` (191/191 passed).

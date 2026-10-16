@@ -6,6 +6,8 @@ const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 const {
   CHECKS,
+  CHECKS_BY_ARCHITECTURE,
+  VALID_TARGET_ARCHITECTURES,
   runChecks,
   validateStaticEvidence,
   parseArgs,
@@ -32,15 +34,38 @@ function fixture(t) {
   const bin = path.join(dir, 'bin');
   fs.mkdirSync(bin);
   fs.symlinkSync(BASH, path.join(bin, 'bash'));
+  fs.symlinkSync(process.execPath, path.join(bin, 'node'));
   const log = path.join(dir, 'calls');
   const marker = path.join(dir, 'marker');
   const release = path.join(dir, 'release');
   const output = path.join(dir, 'out/evidence.json');
   const env = { PATH: bin, CHILD_LOG: log, MARKER: marker, RELEASE: release };
-  for (const { id, script: child } of CHECKS) {
-    fs.writeFileSync(
-      path.join(dir, child),
-      `printf '%s|%s\\n' '${id}' "$PWD" >> "$CHILD_LOG"
+  const written = new Set();
+  for (const arch of Object.keys(CHECKS_BY_ARCHITECTURE)) {
+    for (const { id, script: child, runner } of CHECKS_BY_ARCHITECTURE[arch]) {
+      if (written.has(child)) continue;
+      written.add(child);
+      const childPath = path.join(dir, child);
+      fs.mkdirSync(path.dirname(childPath), { recursive: true });
+      if (runner === 'node') {
+        fs.writeFileSync(
+          childPath,
+          `const fs = require('node:fs');
+fs.appendFileSync(process.env.CHILD_LOG, '${id}|' + process.cwd() + '\\n');
+process.stdout.write('${CANARY}\\n');
+process.stderr.write('${CANARY}\\n');
+if (process.env.PAUSE === '${id}') {
+  fs.writeFileSync(process.env.MARKER, 'ready');
+  while (!fs.existsSync(process.env.RELEASE)) {}
+}
+if (process.env.FAIL === '${id}') process.exit(7);
+process.exit(0);
+`,
+        );
+      } else {
+        fs.writeFileSync(
+          childPath,
+          `printf '%s|%s\\n' '${id}' "$PWD" >> "$CHILD_LOG"
 printf '${CANARY}\\n'; printf '${CANARY}\\n' >&2
 if [[ "$PAUSE" == '${id}' ]]; then
   printf ready > "$MARKER"
@@ -49,7 +74,9 @@ fi
 [[ "$FAIL" == '${id}' ]] && exit 7
 exit 0
 `,
-    );
+        );
+      }
+    }
   }
   return {
     dir,
@@ -828,3 +855,139 @@ test(
     assert.equal(fs.existsSync(f.output), false);
   },
 );
+
+test('managed architecture static integrity checks and receipt validation', async (t) => {
+  await t.test(
+    'executes vercel_config and secret_defaults, omitting docker_runtime and production_templates',
+    () => {
+      const calls = [];
+      const receipt = runChecks(
+        (binary, args, options) => {
+          calls.push({ binary, args, options });
+          return { status: 0 };
+        },
+        'bash',
+        'vercel-managed-production',
+      );
+      assert.deepEqual(
+        calls.map((c) => c.args),
+        [['scripts/vercel/check-vercel-config.js'], ['scripts/ops/scan-secrets.sh']],
+      );
+      assert.equal(receipt.totalChecks, 2);
+      assert.equal(receipt.passedChecks, 2);
+      assert.equal(receipt.failedChecks, 0);
+      assert.equal(receipt.target_architecture, 'vercel-managed-production');
+      assert.equal(receipt.status, 'success');
+      assert.equal(receipt.valid, true);
+
+      // Validates successfully when target architecture matches or defaults
+      assert.equal(validateStaticEvidence(receipt).valid, true);
+      assert.equal(
+        validateStaticEvidence(receipt, 'vercel-managed-production').valid,
+        true,
+      );
+
+      // Rejects when evaluated against single-host-compose-caddy
+      const wrongArchValidation = validateStaticEvidence(
+        receipt,
+        'single-host-compose-caddy',
+      );
+      assert.equal(wrongArchValidation.valid, false);
+    },
+  );
+
+  await t.test(
+    'fails closed and identifies failed check when vercel_config fails',
+    () => {
+      let callCount = 0;
+      const receipt = runChecks(
+        (binary, args, options) => {
+          callCount++;
+          return callCount === 1 ? { status: 1 } : { status: 0 };
+        },
+        'bash',
+        'vercel-managed-production',
+      );
+      assert.equal(receipt.totalChecks, 2);
+      assert.equal(receipt.passedChecks, 1);
+      assert.equal(receipt.failedChecks, 1);
+      assert.equal(receipt.status, 'failed');
+      assert.equal(receipt.valid, false);
+      const validation = validateStaticEvidence(receipt, 'vercel-managed-production');
+      assert.equal(validation.valid, false);
+      assert.equal(validation.failedCheckId, 'vercel_config');
+    },
+  );
+
+  await t.test('parseArgs handles --target-architecture and --target-arch', () => {
+    const res1 = parseArgs([
+      '--output',
+      'out.json',
+      '--target-architecture',
+      'vercel-managed-production',
+    ]);
+    assert.equal(res1.targetArchitecture, 'vercel-managed-production');
+
+    const res2 = parseArgs([
+      '--output=out.json',
+      '--target-arch=vercel-managed-production',
+    ]);
+    assert.equal(res2.targetArchitecture, 'vercel-managed-production');
+
+    assert.throws(
+      () =>
+        parseArgs([
+          '--output',
+          'out.json',
+          '--target-architecture',
+          'unknown-arch',
+        ]),
+      /unknown target architecture/,
+    );
+
+    assert.throws(
+      () =>
+        parseArgs([
+          '--output',
+          'out.json',
+          '--target-architecture',
+          'vercel-managed-production',
+          '--target-arch',
+          'single-host-compose-caddy',
+        ]),
+      /duplicate target architecture/,
+    );
+  });
+
+  await t.test(
+    'CLI end-to-end execution with --target-architecture vercel-managed-production',
+    () => {
+      const f = fixture(t);
+      const r = f.run([
+        '-o',
+        f.output,
+        '--target-architecture',
+        'vercel-managed-production',
+      ]);
+      assert.equal(r.status, 0, r.stderr);
+      const receipt = JSON.parse(fs.readFileSync(f.output, 'utf8'));
+      assert.equal(receipt.target_architecture, 'vercel-managed-production');
+      assert.deepEqual(
+        receipt.checks.map((c) => c.id),
+        ['vercel_config', 'secret_defaults'],
+      );
+      assert.equal(receipt.totalChecks, 2);
+      assert.equal(receipt.passedChecks, 2);
+      assert.equal(receipt.failedChecks, 0);
+      assert.equal(receipt.status, 'success');
+      assert.equal(
+        validateStaticEvidence(receipt, 'vercel-managed-production').valid,
+        true,
+      );
+      assert.deepEqual(f.calls(), [
+        `vercel_config|${f.dir}`,
+        `secret_defaults|${f.dir}`,
+      ]);
+    },
+  );
+});

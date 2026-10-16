@@ -4053,3 +4053,32 @@ emitting `target_architecture: "vercel-managed-production"` and structured manag
 Full test coverage passes across `assemble-launch-dossier.spec.js` (33/33) and
 `run-launch-drills.spec.js` (158/158). Reference Compose drills retain 100% backward
 compatibility. Production promotion, cloud mutation, and Phase 12 approval remain separate.
+
+## Phase 12 managed launch readiness & static integrity reconciliation — Prompt 381
+
+Managed launch readiness orchestration, static integrity verification, and secret
+scanning allowlists are reconciled and verified locally for the
+`vercel-managed-production` profile.
+
+`scripts/ops/scan-secrets.sh` includes `scripts/ops/verify-managed-secret-rotation.js`
+in `is_allowed_path()`, passing all 42 secret-scanning tests. Static integrity
+checking (`scripts/ops/run-static-integrity-checks.js`) accepts `--target-architecture`
+(or `--target-arch`), executing `production_templates`, `docker_runtime`, and
+`secret_defaults` for `single-host-compose-caddy`, while executing `vercel_config`
+and `secret_defaults` for `vercel-managed-production`. The launch drill orchestrator
+(`scripts/ops/run-launch-drills.sh`) Stage 1 forwards `--target-architecture "$TARGET_ARCHITECTURE"`
+with `--output` immediately following the script name to satisfy template pattern
+invariants. The launch dossier assembler (`scripts/ops/assemble-launch-dossier.js`)
+passes `targetArchitecture` to `validateStaticEvidence()`.
+
+The top-level launch readiness shell orchestrator (`scripts/ops/launch-readiness.sh`)
+supports `--target-architecture <arch>`, `--target-arch <arch>`, `--record <file>`, and
+auto-detects target architecture from the provided readiness record. When running
+under `vercel-managed-production`, it executes `check-vercel-config.js` and `scan-secrets.sh`,
+omits Compose/Docker preflights, forwards `--target-architecture` to `run-launch-drills.sh`
+on `--with-drills`, and validates the managed record with `check-launch-readiness.js`.
+Package script `ops:launch-readiness:managed` was added to `package.json`.
+Full test coverage passes across `scan-secrets.spec.js` (42/42), `run-static-integrity-checks.spec.js` (76/76),
+`assemble-launch-dossier.spec.js` (33/33), `run-launch-drills.spec.js` (158/158), and
+`launch-readiness.spec.js` (37/37). Reference Compose workflows retain 100% backward
+compatibility. Production promotion, cloud mutation, and Phase 12 sign-off remain separate.

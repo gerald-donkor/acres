@@ -410,7 +410,7 @@ if [ "$TARGET_ARCHITECTURE" = "vercel-managed-production" ]; then
     node "$OPS"/verify-managed-restore-drill.js --output "${STAGE_DIR}/managed-restore-drill-receipt.json" &&
     node "$OPS"/reconcile-storage-objects.js --provider vercel-blob --dry-run --output "${STAGE_DIR}/reconcile-report-receipt.json"
   }
-  stage_static() { node "$OPS"/run-static-integrity-checks.js --output "${STAGE_DIR}/static-integrity-evidence-receipt.json"; }
+  stage_static() { node "$OPS"/run-static-integrity-checks.js --output "${STAGE_DIR}/static-integrity-evidence-receipt.json" --target-architecture "$TARGET_ARCHITECTURE"; }
   stage_volume() { node "$OPS"/verify-managed-volume-encryption.js --output "${STAGE_DIR}/managed-volume-encryption-receipt.json"; }
   stage_rotation() { node "$OPS"/verify-managed-secret-rotation.js --dry-run --output "${STAGE_DIR}/managed-secret-rotation-receipt.json"; }
   stage_capacity() { bash "$OPS"/run-capacity-alerting-drill.sh "${capacity_args[@]}" --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/capacity-alerting-drill-evidence-receipt.json"; }
@@ -430,7 +430,7 @@ else
     bash "$OPS"/run-restore-drill.sh "${child_dry[@]}" --backup-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/restore-drill-evidence-receipt.json" &&
     node "$OPS"/reconcile-storage-objects.js --dry-run --output "${STAGE_DIR}/reconcile-report-receipt.json"
   }
-  stage_static() { node "$OPS"/run-static-integrity-checks.js --output "${STAGE_DIR}/static-integrity-evidence-receipt.json"; }
+  stage_static() { node "$OPS"/run-static-integrity-checks.js --output "${STAGE_DIR}/static-integrity-evidence-receipt.json" --target-architecture "$TARGET_ARCHITECTURE"; }
   stage_volume() { node "$OPS"/verify-volume-encryption.js --output "${STAGE_DIR}/volume-encryption-evidence-receipt.json"; }
   stage_rotation() { bash "$OPS"/run-secret-rotation-drill.sh --dry-run --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/secret-rotation-evidence-receipt.json"; }
   stage_capacity() { bash "$OPS"/run-capacity-alerting-drill.sh "${capacity_args[@]}" --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/capacity-alerting-drill-evidence-receipt.json"; }

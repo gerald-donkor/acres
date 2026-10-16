@@ -7,19 +7,57 @@ const { randomUUID } = require('node:crypto');
 const { isDeepStrictEqual } = require('node:util');
 
 const ROOT = path.resolve(__dirname, '../..');
-const CHECKS = Object.freeze(
-  [
-    {
-      id: 'production_templates',
-      script: 'scripts/ops/check-production-templates.sh',
-    },
-    { id: 'docker_runtime', script: 'scripts/ops/check-docker-runtime.sh' },
-    { id: 'secret_defaults', script: 'scripts/ops/scan-secrets.sh' },
-  ].map(Object.freeze),
-);
-const USAGE = `Usage: node scripts/ops/run-static-integrity-checks.js --output <file> | -o <file> | --output=<file> | -o=<file>
-       node scripts/ops/run-static-integrity-checks.js --help | -h
-Checks: production_templates, docker_runtime, secret_defaults (in order).
+const VALID_TARGET_ARCHITECTURES = Object.freeze([
+  'single-host-compose-caddy',
+  'vercel-managed-production',
+]);
+const CHECKS_BY_ARCHITECTURE = Object.freeze({
+  'single-host-compose-caddy': Object.freeze(
+    [
+      {
+        id: 'production_templates',
+        script: 'scripts/ops/check-production-templates.sh',
+        runner: 'bash',
+      },
+      {
+        id: 'docker_runtime',
+        script: 'scripts/ops/check-docker-runtime.sh',
+        runner: 'bash',
+      },
+      {
+        id: 'secret_defaults',
+        script: 'scripts/ops/scan-secrets.sh',
+        runner: 'bash',
+      },
+    ].map(Object.freeze),
+  ),
+  'vercel-managed-production': Object.freeze(
+    [
+      {
+        id: 'vercel_config',
+        script: 'scripts/vercel/check-vercel-config.js',
+        runner: 'node',
+      },
+      {
+        id: 'secret_defaults',
+        script: 'scripts/ops/scan-secrets.sh',
+        runner: 'bash',
+      },
+    ].map(Object.freeze),
+  ),
+});
+const CHECKS = CHECKS_BY_ARCHITECTURE['single-host-compose-caddy'];
+
+const USAGE = `Usage: node scripts/ops/run-static-integrity-checks.js [options]
+Options:
+  --output, -o <file>                Path to output evidence receipt (required)
+  --target-architecture, --target-arch <arch>
+                                     Target architecture: single-host-compose-caddy (default)
+                                     or vercel-managed-production
+  --help, -h                         Show this help message
+Checks:
+  single-host-compose-caddy: production_templates, docker_runtime, secret_defaults (in order)
+  vercel-managed-production: vercel_config, secret_defaults (in order)
 Output resolves against caller cwd and must be absent; existing evidence is preserved.
 Child diagnostics are suppressed. Static evidence does not approve production launch.
 `;
@@ -28,12 +66,12 @@ function validExit(code) {
   return Number.isInteger(code) && code >= 0 && code <= 255;
 }
 
-function validCheck(check, index) {
+function validCheck(check, index, checksList = CHECKS) {
   if (
     !check ||
     typeof check !== 'object' ||
     Array.isArray(check) ||
-    check.id !== CHECKS[index].id ||
+    check.id !== checksList[index]?.id ||
     typeof check.passed !== 'boolean'
   )
     return false;
@@ -48,65 +86,108 @@ function validCheck(check, index) {
 }
 
 // General consistency includes truthful failed receipts; launch acceptance does not.
-function completeReceipt(evidence) {
+function completeReceipt(evidence, targetArchitecture) {
   try {
+    const arch =
+      targetArchitecture ||
+      evidence?.target_architecture ||
+      'single-host-compose-caddy';
+    const checksList = CHECKS_BY_ARCHITECTURE[arch];
+    if (!checksList) return false;
+    if (
+      evidence?.target_architecture !== undefined &&
+      evidence.target_architecture !== arch
+    ) {
+      return false;
+    }
     if (
       !evidence ||
       typeof evidence !== 'object' ||
       Array.isArray(evidence) ||
       !Array.isArray(evidence.checks) ||
-      evidence.checks.length !== CHECKS.length ||
-      !CHECKS.every((_check, index) =>
-        validCheck(evidence.checks[index], index),
+      evidence.checks.length !== checksList.length ||
+      !checksList.every((_check, index) =>
+        validCheck(evidence.checks[index], index, checksList),
       )
     )
       return false;
     const passed = evidence.checks.filter((check) => check.passed).length;
     return (
       evidence.drill_type === 'static_integrity_verification' &&
+      (evidence.target_architecture === undefined ||
+        evidence.target_architecture === arch) &&
       typeof evidence.timestamp === 'string' &&
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(
         evidence.timestamp,
       ) &&
       !Number.isNaN(Date.parse(evidence.timestamp)) &&
       new Date(evidence.timestamp).toISOString() === evidence.timestamp &&
-      evidence.totalChecks === CHECKS.length &&
+      evidence.totalChecks === checksList.length &&
       evidence.passedChecks === passed &&
-      evidence.failedChecks === CHECKS.length - passed &&
-      evidence.valid === (passed === CHECKS.length) &&
-      evidence.status === (passed === CHECKS.length ? 'success' : 'failed')
+      evidence.failedChecks === checksList.length - passed &&
+      evidence.valid === (passed === checksList.length) &&
+      evidence.status === (passed === checksList.length ? 'success' : 'failed')
     );
   } catch {
     return false;
   }
 }
 
-function validateStaticEvidence(evidence) {
+function validateStaticEvidence(evidence, targetArchitecture) {
   try {
+    const arch =
+      targetArchitecture ||
+      evidence?.target_architecture ||
+      'single-host-compose-caddy';
+    const checksList = CHECKS_BY_ARCHITECTURE[arch];
+    if (!checksList) {
+      return { valid: false, failedCheckId: null };
+    }
+    if (
+      evidence?.target_architecture !== undefined &&
+      targetArchitecture !== undefined &&
+      evidence.target_architecture !== targetArchitecture
+    ) {
+      return { valid: false, failedCheckId: null };
+    }
     if (
       !evidence ||
       typeof evidence !== 'object' ||
       Array.isArray(evidence) ||
       !Array.isArray(evidence.checks) ||
-      evidence.checks.length !== CHECKS.length
+      evidence.checks.length !== checksList.length
     ) {
       return { valid: false, failedCheckId: null };
     }
-    for (let i = 0; i < CHECKS.length; i++) {
-      if (!validCheck(evidence.checks[i], i) || !evidence.checks[i].passed) {
-        return { valid: false, failedCheckId: CHECKS[i].id };
+    for (let i = 0; i < checksList.length; i++) {
+      if (
+        !validCheck(evidence.checks[i], i, checksList) ||
+        !evidence.checks[i].passed
+      ) {
+        return { valid: false, failedCheckId: checksList[i].id };
       }
     }
-    return { valid: completeReceipt(evidence), failedCheckId: null };
+    return { valid: completeReceipt(evidence, arch), failedCheckId: null };
   } catch {
     return { valid: false, failedCheckId: null };
   }
 }
 
-function runChecks(execute = spawnSync, binary = 'bash') {
-  const checks = CHECKS.map(({ id, script }) => {
+function runChecks(
+  execute = spawnSync,
+  binary = 'bash',
+  targetArchitecture = 'single-host-compose-caddy',
+  binaries = {},
+) {
+  const checksList =
+    CHECKS_BY_ARCHITECTURE[targetArchitecture] || CHECKS;
+  const checks = checksList.map(({ id, script, runner }) => {
     try {
-      const result = execute(binary, [script], { cwd: ROOT, stdio: 'ignore' });
+      const bin =
+        runner === 'node'
+          ? binaries.node || process.execPath || 'node'
+          : binaries.bash || binary || 'bash';
+      const result = execute(bin, [script], { cwd: ROOT, stdio: 'ignore' });
       if (
         !result ||
         result.error != null ||
@@ -128,12 +209,13 @@ function runChecks(execute = spawnSync, binary = 'bash') {
   const passedChecks = checks.filter((check) => check.passed).length;
   return {
     drill_type: 'static_integrity_verification',
+    target_architecture: targetArchitecture,
     timestamp: new Date().toISOString(),
-    status: passedChecks === CHECKS.length ? 'success' : 'failed',
-    valid: passedChecks === CHECKS.length,
-    totalChecks: CHECKS.length,
+    status: passedChecks === checksList.length ? 'success' : 'failed',
+    valid: passedChecks === checksList.length,
+    totalChecks: checksList.length,
     passedChecks,
-    failedChecks: CHECKS.length - passedChecks,
+    failedChecks: checksList.length - passedChecks,
     checks,
   };
 }
@@ -152,6 +234,9 @@ function resolveOutput(value) {
 
 function parseArgs(args) {
   let output;
+  let targetArchitecture = 'single-host-compose-caddy';
+  let targetArchSpecified = false;
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     let value;
@@ -159,16 +244,47 @@ function parseArgs(args) {
       value = args[++i];
       if (typeof value !== 'string' || value.startsWith('-'))
         throw new Error('invalid output');
+      if (output !== undefined) throw new Error('duplicate output');
+      output = resolveOutput(value);
     } else if (typeof arg === 'string' && /^(--output|-o)=/.test(arg)) {
       value = arg.slice(arg.indexOf('=') + 1);
+      if (output !== undefined) throw new Error('duplicate output');
+      output = resolveOutput(value);
+    } else if (arg === '--target-architecture' || arg === '--target-arch') {
+      value = args[++i];
+      if (typeof value !== 'string' || value.startsWith('-'))
+        throw new Error('invalid target architecture');
+      if (targetArchSpecified) throw new Error('duplicate target architecture');
+      if (!VALID_TARGET_ARCHITECTURES.includes(value))
+        throw new Error('unknown target architecture');
+      targetArchitecture = value;
+      targetArchSpecified = true;
+    } else if (
+      typeof arg === 'string' &&
+      /^(--target-architecture|--target-arch)=/.test(arg)
+    ) {
+      value = arg.slice(arg.indexOf('=') + 1);
+      if (targetArchSpecified) throw new Error('duplicate target architecture');
+      if (!VALID_TARGET_ARCHITECTURES.includes(value))
+        throw new Error('unknown target architecture');
+      targetArchitecture = value;
+      targetArchSpecified = true;
     } else {
       throw new Error('unknown option');
     }
-    if (output !== undefined) throw new Error('duplicate output');
-    output = resolveOutput(value);
   }
   if (output === undefined) throw new Error('output required');
-  return output;
+  return {
+    output,
+    targetArchitecture,
+    toString() {
+      return this.output;
+    },
+    [Symbol.toPrimitive](hint) {
+      if (hint === 'number') return NaN;
+      return this.output;
+    },
+  };
 }
 
 function entry(file, io) {
@@ -205,31 +321,82 @@ function preflightOutput(output, io = fs) {
   return missing;
 }
 
-function installedBinary(io = fs, env = process.env) {
-  for (const { script } of CHECKS) {
+function installedBinary(
+  io = fs,
+  env = process.env,
+  targetArchitecture = 'single-host-compose-caddy',
+) {
+  const checks = CHECKS_BY_ARCHITECTURE[targetArchitecture] || CHECKS;
+  for (const { script } of checks) {
     const file = path.join(ROOT, script);
     const stat = io.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink())
       throw new Error('invalid child');
     io.accessSync(file, fs.constants.R_OK);
   }
-  for (const dir of (env.PATH ?? '/usr/bin:/bin').split(path.delimiter)) {
-    const file = path.resolve(dir || process.cwd(), 'bash');
-    try {
-      if (!io.statSync(file).isFile()) continue;
-      io.accessSync(file, fs.constants.X_OK);
-      return file;
-    } catch {
-      /* Try the next PATH entry without executing a probe. */
+  const binaries = {};
+  const needsBash = checks.some((c) => c.runner === 'bash');
+  const needsNode = checks.some((c) => c.runner === 'node');
+
+  if (needsBash) {
+    let foundBash = false;
+    for (const dir of (env.PATH ?? '/usr/bin:/bin').split(path.delimiter)) {
+      const file = path.resolve(dir || process.cwd(), 'bash');
+      try {
+        if (!io.statSync(file).isFile()) continue;
+        io.accessSync(file, fs.constants.X_OK);
+        binaries.bash = file;
+        foundBash = true;
+        break;
+      } catch {
+        /* Try the next PATH entry without executing a probe. */
+      }
     }
+    if (!foundBash) throw new Error('missing bash');
   }
-  throw new Error('missing bash');
+
+  if (needsNode) {
+    let foundNode = false;
+    if (process.execPath) {
+      try {
+        if (io.statSync(process.execPath).isFile()) {
+          io.accessSync(process.execPath, fs.constants.X_OK);
+          binaries.node = process.execPath;
+          foundNode = true;
+        }
+      } catch {}
+    }
+    if (!foundNode) {
+      for (const dir of (env.PATH ?? '/usr/bin:/bin').split(path.delimiter)) {
+        const file = path.resolve(dir || process.cwd(), 'node');
+        try {
+          if (!io.statSync(file).isFile()) continue;
+          io.accessSync(file, fs.constants.X_OK);
+          binaries.node = file;
+          foundNode = true;
+          break;
+        } catch {}
+      }
+    }
+    if (!foundNode) throw new Error('missing node');
+  }
+
+  const bashStr = binaries.bash || 'bash';
+  const nodeStr = binaries.node || process.execPath || 'node';
+  const res = new String(bashStr);
+  res.bash = bashStr;
+  res.node = nodeStr;
+  return res;
 }
 
 function projectReceipt(evidence) {
-  if (!completeReceipt(evidence)) throw new Error('invalid receipt');
+  const arch = evidence?.target_architecture || 'single-host-compose-caddy';
+  if (!completeReceipt(evidence, arch)) throw new Error('invalid receipt');
   const projected = {
     drill_type: evidence.drill_type,
+    ...(evidence.target_architecture
+      ? { target_architecture: evidence.target_architecture }
+      : {}),
     timestamp: evidence.timestamp,
     status: evidence.status,
     valid: evidence.valid,
@@ -243,7 +410,7 @@ function projectReceipt(evidence) {
       ...(failureKind === undefined ? {} : { failureKind }),
     })),
   };
-  if (!completeReceipt(projected)) throw new Error('invalid receipt');
+  if (!completeReceipt(projected, arch)) throw new Error('invalid receipt');
   return projected;
 }
 
@@ -283,7 +450,7 @@ function writeEvidence(output, evidence, dependencies = {}) {
     const receipt = JSON.parse(readBack);
     if (
       readBack !== serialized ||
-      !completeReceipt(receipt) ||
+      !completeReceipt(receipt, evidence?.target_architecture) ||
       !isDeepStrictEqual(receipt, projected)
     ) {
       throw new Error('invalid readback');
@@ -320,13 +487,19 @@ function main(args = process.argv.slice(2), dependencies = {}) {
       logger.log(USAGE);
       return 0;
     }
-    const output = parseArgs(args);
+    const { output, targetArchitecture } = parseArgs(args);
     preflightOutput(output, dependencies.fs || fs);
     const binary = installedBinary(
       dependencies.fs || fs,
       dependencies.env || process.env,
+      targetArchitecture,
     );
-    const evidence = runChecks(dependencies.execute || spawnSync, binary);
+    const evidence = runChecks(
+      dependencies.execute || spawnSync,
+      String(binary),
+      targetArchitecture,
+      binary,
+    );
     for (const check of evidence.checks) {
       logger.log(
         `static integrity: ${check.id} ${check.passed ? 'passed' : 'failed'}`,
@@ -358,6 +531,8 @@ if (require.main === module) {
 
 module.exports = {
   CHECKS,
+  CHECKS_BY_ARCHITECTURE,
+  VALID_TARGET_ARCHITECTURES,
   validateStaticEvidence,
   runChecks,
   parseArgs,

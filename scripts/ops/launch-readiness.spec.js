@@ -41,6 +41,24 @@ ${handlerContent}
   }
 
   // Preflight stubs
+  const vercelDir = path.join(tmpDir, 'scripts/vercel');
+  fs.mkdirSync(vercelDir, { recursive: true });
+
+  const vercelConfigExit = overrides.vercelConfigExit ?? 0;
+  const vercelConfigStubPath = path.join(vercelDir, 'check-vercel-config.js');
+  fs.writeFileSync(
+    vercelConfigStubPath,
+    `#!/usr/bin/env node
+const fs = require('node:fs');
+const log = ${JSON.stringify(callLog)};
+fs.appendFileSync(log, JSON.stringify({ name: "check-vercel-config.js", argv: process.argv.slice(2) }) + "\\n");
+if (${vercelConfigExit} !== 0) {
+  process.exit(${vercelConfigExit});
+}
+`,
+    { mode: 0o755 }
+  );
+
   const templatesExit = overrides.templatesExit ?? 0;
   makeStub(
     'check-production-templates.sh',
@@ -106,10 +124,17 @@ if (${checkReadinessExit} !== 0) {
     { mode: 0o755 }
   );
 
-  // Default readiness example file in fixture
+  // Default readiness example files in fixture
   fs.writeFileSync(
     path.join(infraDir, 'readiness.example.json'),
     JSON.stringify({ status: 'unresolved' })
+  );
+  fs.writeFileSync(
+    path.join(infraDir, 'readiness.vercel.example.json'),
+    JSON.stringify({
+      target_architecture: 'vercel-managed-production',
+      status: 'unresolved',
+    })
   );
 
   function runScript(args = [], runEnv = {}) {
@@ -195,6 +220,68 @@ test('launch-readiness.sh CLI flags and argument validation', async (t) => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Error: Too many arguments; expected single readiness JSON path/);
     assert.match(result.stderr, /Usage: scripts\/ops\/launch-readiness\.sh/);
+    assert.equal(result.calls.length, 0);
+  });
+
+  await t.test('invalid --target-architecture prints error and exits with 1', () => {
+    const { runScript } = makeTempFixture(t);
+    const result = runScript(['--target-architecture', 'invalid-arch']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Error: Invalid target architecture/);
+    assert.equal(result.calls.length, 0);
+  });
+
+  await t.test('--target-architecture without argument prints error and exits with 1', () => {
+    const { runScript } = makeTempFixture(t);
+    const result = runScript(['--target-architecture']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Error: --target-architecture requires an architecture argument/);
+    assert.equal(result.calls.length, 0);
+  });
+
+  await t.test('repeated --target-architecture prints error and exits with 1', () => {
+    const { runScript } = makeTempFixture(t);
+    const result = runScript([
+      '--target-architecture',
+      'vercel-managed-production',
+      '--target-arch',
+      'single-host-compose-caddy',
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Error: Repeated --target-architecture option/);
+    assert.equal(result.calls.length, 0);
+  });
+
+  await t.test('--record without argument prints error and exits with 1', () => {
+    const { runScript } = makeTempFixture(t);
+    const result = runScript(['--record']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Error: --record requires a non-empty file path/);
+    assert.equal(result.calls.length, 0);
+  });
+
+  await t.test('repeated --record prints error and exits with 1', () => {
+    const { runScript } = makeTempFixture(t);
+    const result = runScript([
+      '--record',
+      'infra/launch/readiness.example.json',
+      '--record',
+      'infra/launch/readiness.vercel.example.json',
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Error: Too many arguments; expected single readiness JSON path/);
+    assert.equal(result.calls.length, 0);
+  });
+
+  await t.test('--record combined with positional argument prints error and exits with 1', () => {
+    const { runScript } = makeTempFixture(t);
+    const result = runScript([
+      '--record',
+      'infra/launch/readiness.example.json',
+      'infra/launch/readiness.vercel.example.json',
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Error: Too many arguments; expected single readiness JSON path/);
     assert.equal(result.calls.length, 0);
   });
 });
@@ -328,6 +415,136 @@ test('launch-readiness.sh target file forwarding and exit code propagation', asy
   });
 });
 
+test('launch-readiness.sh managed architecture preflight and execution flow', async (t) => {
+  await t.test(
+    'preflight runs check-vercel-config.js, scan-secrets.sh, check-launch-readiness.spec.js, check-launch-readiness.js in order, omitting docker runtime and compose templates',
+    () => {
+      const { runScript } = makeTempFixture(t);
+      const result = runScript([
+        '--target-architecture',
+        'vercel-managed-production',
+        'infra/launch/readiness.vercel.example.json',
+      ]);
+      assert.equal(result.status, 0);
+      const callNames = result.calls.map((c) => c.name);
+      assert.deepEqual(callNames, [
+        'check-vercel-config.js',
+        'scan-secrets.sh',
+        'check-launch-readiness.spec.js',
+        'check-launch-readiness.js',
+      ]);
+      const readinessCall = result.calls.find(
+        (c) => c.name === 'check-launch-readiness.js',
+      );
+      assert.deepEqual(readinessCall.argv, [
+        'infra/launch/readiness.vercel.example.json',
+      ]);
+    },
+  );
+
+  await t.test('halts immediately when check-vercel-config.js fails', () => {
+    const { runScript } = makeTempFixture(t, { vercelConfigExit: 5 });
+    const result = runScript([
+      '--target-architecture',
+      'vercel-managed-production',
+    ]);
+    assert.equal(result.status, 5);
+    assert.equal(result.calls.length, 1);
+    assert.equal(result.calls[0].name, 'check-vercel-config.js');
+  });
+
+  await t.test(
+    'halts immediately when scan-secrets.sh fails under managed architecture',
+    () => {
+      const { runScript } = makeTempFixture(t, { secretsExit: 6 });
+      const result = runScript([
+        '--target-architecture',
+        'vercel-managed-production',
+      ]);
+      assert.equal(result.status, 6);
+      assert.equal(result.calls.length, 2);
+      assert.equal(result.calls[0].name, 'check-vercel-config.js');
+      assert.equal(result.calls[1].name, 'scan-secrets.sh');
+    },
+  );
+
+  await t.test(
+    'managed --with-drills forwards --target-architecture vercel-managed-production to run-launch-drills.sh',
+    () => {
+      const { runScript } = makeTempFixture(t);
+      const result = runScript([
+        '--target-architecture',
+        'vercel-managed-production',
+        '--with-drills',
+      ]);
+      assert.equal(result.status, 0);
+      const callNames = result.calls.map((c) => c.name);
+      assert.deepEqual(callNames, [
+        'check-vercel-config.js',
+        'scan-secrets.sh',
+        'check-launch-readiness.spec.js',
+        'run-launch-drills.sh',
+        'check-launch-readiness.js',
+      ]);
+      const drillCall = result.calls.find(
+        (c) => c.name === 'run-launch-drills.sh',
+      );
+      assert.equal(
+        drillCall.args[0].trim(),
+        '--dry-run --target-architecture vercel-managed-production',
+      );
+    },
+  );
+
+  await t.test(
+    'auto-detects vercel-managed-production from readiness.vercel.example.json when no architecture flag is passed',
+    () => {
+      const { runScript } = makeTempFixture(t);
+      const result = runScript(['infra/launch/readiness.vercel.example.json']);
+      assert.equal(result.status, 0);
+      const callNames = result.calls.map((c) => c.name);
+      assert.deepEqual(callNames, [
+        'check-vercel-config.js',
+        'scan-secrets.sh',
+        'check-launch-readiness.spec.js',
+        'check-launch-readiness.js',
+      ]);
+      const readinessCall = result.calls.find(
+        (c) => c.name === 'check-launch-readiness.js',
+      );
+      assert.deepEqual(readinessCall.argv, [
+        'infra/launch/readiness.vercel.example.json',
+      ]);
+    },
+  );
+
+  await t.test('supports --record and --record= flags', () => {
+    const { runScript } = makeTempFixture(t);
+    const result1 = runScript([
+      '--record',
+      'infra/launch/readiness.vercel.example.json',
+    ]);
+    assert.equal(result1.status, 0);
+    const readinessCall1 = result1.calls.find(
+      (c) => c.name === 'check-launch-readiness.js',
+    );
+    assert.deepEqual(readinessCall1.argv, [
+      'infra/launch/readiness.vercel.example.json',
+    ]);
+
+    const result2 = runScript([
+      '--record=infra/launch/readiness.vercel.example.json',
+    ]);
+    assert.equal(result2.status, 0);
+    const readinessCall2 = result2.calls.find(
+      (c) => c.name === 'check-launch-readiness.js',
+    );
+    assert.deepEqual(readinessCall2.argv, [
+      'infra/launch/readiness.vercel.example.json',
+    ]);
+  });
+});
+
 test('launch-readiness.sh real repository execution', async (t) => {
   await t.test('fails closed against default infra/launch/readiness.example.json with exit 1', () => {
     const cleanEnv = { ...process.env };
@@ -344,4 +561,32 @@ test('launch-readiness.sh real repository execution', async (t) => {
     assert.match(result.stdout, /Result: FAIL-CLOSED/);
     assert.match(result.stdout, /Total Blockers Detected:\s+70/);
   });
+
+  await t.test(
+    'fails closed against infra/launch/readiness.vercel.example.json with exit 1',
+    () => {
+      const cleanEnv = { ...process.env };
+      delete cleanEnv.NODE_TEST_CONTEXT;
+      delete cleanEnv.NODE_TEST_WORKER_ID;
+
+      const result = spawnSync(
+        'sh',
+        [
+          RUNNER,
+          '--target-architecture',
+          'vercel-managed-production',
+          'infra/launch/readiness.vercel.example.json',
+        ],
+        {
+          cwd: ROOT,
+          encoding: 'utf8',
+          env: cleanEnv,
+        },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stdout, /ACRES LAUNCH READINESS EVALUATION/);
+      assert.match(result.stdout, /Result: FAIL-CLOSED/);
+      assert.match(result.stdout, /Total Blockers Detected:\s+61/);
+    },
+  );
 });

@@ -744,7 +744,7 @@ function assemble(config) {
   const staticEvidence = load(staticStage, "static");
   const staticPassed =
     staticStage?.status === "PASSED" &&
-    validateStaticEvidence(staticEvidence).valid;
+    validateStaticEvidence(staticEvidence, targetArchitecture).valid;
   const staticIntegrityBaseline = staticPassed
     ? {
         status: "verified",

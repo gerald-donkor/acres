@@ -142,17 +142,37 @@ function stub(key, args) {
     csrfHandshakePassed: false,
     postHealthPassed: false,
   };
+  const isManagedStatic =
+    key === "static" &&
+    (args.includes("vercel-managed-production") ||
+      val("--target-architecture") === "vercel-managed-production");
   const reports = {
-    static: {
-      ...success,
-      drill_type: "static_integrity_verification",
-      totalChecks: 3,
-      passedChecks: 3,
-      failedChecks: 0,
-      checks: ["production_templates", "docker_runtime", "secret_defaults"].map(
-        (id) => ({ id, passed: true, exitCode: 0 }),
-      ),
-    },
+    static: isManagedStatic
+      ? {
+          ...success,
+          drill_type: "static_integrity_verification",
+          target_architecture: "vercel-managed-production",
+          totalChecks: 2,
+          passedChecks: 2,
+          failedChecks: 0,
+          checks: ["vercel_config", "secret_defaults"].map((id) => ({
+            id,
+            passed: true,
+            exitCode: 0,
+          })),
+        }
+      : {
+          ...success,
+          drill_type: "static_integrity_verification",
+          totalChecks: 3,
+          passedChecks: 3,
+          failedChecks: 0,
+          checks: [
+            "production_templates",
+            "docker_runtime",
+            "secret_defaults",
+          ].map((id) => ({ id, passed: true, exitCode: 0 })),
+        },
     sbom: {
       bomFormat: "CycloneDX",
       specVersion: "1.5",

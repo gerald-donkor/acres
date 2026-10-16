@@ -1891,3 +1891,30 @@ prerequisites:
 5. **Automated test coverage:**
    - `scripts/ops/assemble-launch-dossier.spec.js`: 33 tests verifying managed receipt mapping, validation, and dossier generation.
    - `scripts/ops/run-launch-drills.spec.js`: 158 tests verifying end-to-end dry-run execution, failure gating, and baseline verification across both architectures.
+
+## Managed launch readiness and static integrity reconciliation — Prompt 381 (2026-10-16)
+
+Top-level launch readiness preflight and static integrity verification are reconciled to support
+the `vercel-managed-production` profile with zero Docker daemon or Compose prerequisites:
+
+1. **Secret scanner allowlist (`scripts/ops/scan-secrets.sh`):**
+   - Added `scripts/ops/verify-managed-secret-rotation.js` to `is_allowed_path()`.
+   - `npm run ops:scan-secrets` and `npm run ops:scan-secrets-test` pass cleanly (42/42 tests pass).
+
+2. **Static integrity verification (`scripts/ops/run-static-integrity-checks.js`):**
+   - Accepts `--target-architecture <arch>` (or `--target-arch <arch>`), defaulting to `single-host-compose-caddy`.
+   - Check profiles:
+     - `single-host-compose-caddy`: runs `production_templates`, `docker_runtime`, and `secret_defaults` (3 checks).
+     - `vercel-managed-production`: runs `vercel_config` (`node scripts/vercel/check-vercel-config.js`) and `secret_defaults` (`scripts/ops/scan-secrets.sh`) (2 checks), safely omitting Docker runtime and Compose templates.
+   - Emits `target_architecture` in evidence receipt.
+   - `validateStaticEvidence(evidence, targetArchitecture)` validates receipts according to target architecture.
+   - Stage 1 in `scripts/ops/run-launch-drills.sh` passes `--target-architecture "$TARGET_ARCHITECTURE"` to `run-static-integrity-checks.js`.
+   - `scripts/ops/assemble-launch-dossier.js` passes `targetArchitecture` to `validateStaticEvidence`.
+   - Automated test suite `scripts/ops/run-static-integrity-checks.spec.js` covers both architectures (76/76 tests pass).
+
+3. **Top-level launch readiness orchestrator (`scripts/ops/launch-readiness.sh`):**
+   - Added CLI options `--target-architecture <arch>`, `--target-arch <arch>`, and `--record <file>`.
+   - Auto-detects target architecture from `target_architecture` in target readiness record if not explicitly passed.
+   - In `vercel-managed-production` mode, executes `scripts/vercel/check-vercel-config.js`, `scripts/ops/scan-secrets.sh`, `node --test scripts/ops/check-launch-readiness.spec.js`, forwards `--target-architecture vercel-managed-production` to `run-launch-drills.sh` when `--with-drills` is set, and runs `check-launch-readiness.js "$READINESS_FILE"`.
+   - Added `npm run ops:launch-readiness:managed` script to `package.json`.
+   - Automated test suite `scripts/ops/launch-readiness.spec.js` covers argument parsing, fail-closed preflight order, drill forwarding, auto-detection, and real repository execution across both architectures (37/37 tests pass).

@@ -494,6 +494,10 @@ test("scan-secrets allowed paths and exclusions", async (t) => {
         "scripts/ops/verify-volume-encryption.js",
         "acres_superuser_dev_password\n",
       );
+      fixture.trackFile(
+        "scripts/ops/verify-managed-secret-rotation.js",
+        "acres_superuser_dev_password\n",
+      );
 
       const res = fixture.run();
       assert.equal(res.status, 0);
