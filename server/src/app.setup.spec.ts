@@ -110,6 +110,7 @@ describe('app.setup', () => {
           { path: 'metrics', method: RequestMethod.GET },
           { path: 'graphql', method: RequestMethod.POST },
           { path: 'graphql', method: RequestMethod.GET },
+          { path: 'cron/dispatch', method: RequestMethod.GET },
         ],
       });
     });

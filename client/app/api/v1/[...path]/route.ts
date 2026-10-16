@@ -15,7 +15,14 @@ const SAFE_REQUEST_HEADERS = [
   ORGANIZATION_HEADER_NAME,
   CSRF_HEADER_NAME,
 ] as const;
-const SAFE_RESPONSE_HEADERS = ["content-type", REQUEST_ID_HEADER_NAME] as const;
+const SAFE_RESPONSE_HEADERS = [
+  "content-type",
+  REQUEST_ID_HEADER_NAME,
+  "retry-after",
+  "x-ratelimit-limit",
+  "x-ratelimit-remaining",
+  "x-ratelimit-reset",
+] as const;
 
 type RouteContext = {
   params: Promise<{
@@ -33,6 +40,12 @@ function requestHeaders(request: NextRequest): Headers {
   for (const name of SAFE_REQUEST_HEADERS) {
     const value = request.headers.get(name);
     if (value !== null) {
+      if (
+        name === "content-type" &&
+        value.toLowerCase().includes("cloudevents")
+      ) {
+        continue;
+      }
       headers.set(name, value);
     }
   }

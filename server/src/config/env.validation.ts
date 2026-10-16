@@ -147,6 +147,8 @@ const DEFAULTS = {
   RATE_LIMIT_DEFAULT_LIMIT: '120',
   RATE_LIMIT_STRICT_LIMIT: '10',
   TENANCY_ENABLED: 'false',
+  INVITATION_TTL_HOURS: '24',
+  ACCOUNT_TOKEN_TTL_MINUTES: '30',
   GRAPHQL_MAX_BYTES: '12000',
   GRAPHQL_MAX_DEPTH: '8',
   GRAPHQL_MAX_ALIASES: '12',
@@ -678,11 +680,11 @@ export function validateEnv(
     ),
     invitationTtlHours: positiveInt(
       'INVITATION_TTL_HOURS',
-      env.INVITATION_TTL_HOURS ?? '',
+      env.INVITATION_TTL_HOURS ?? DEFAULTS.INVITATION_TTL_HOURS,
     ),
     accountTokenTtlMinutes: positiveInt(
       'ACCOUNT_TOKEN_TTL_MINUTES',
-      env.ACCOUNT_TOKEN_TTL_MINUTES ?? '',
+      env.ACCOUNT_TOKEN_TTL_MINUTES ?? DEFAULTS.ACCOUNT_TOKEN_TTL_MINUTES,
     ),
     graphqlMaxBytes: positiveInt(
       'GRAPHQL_MAX_BYTES',

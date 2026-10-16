@@ -1,0 +1,80 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "client": {
+      "root": "client",
+      "framework": "nextjs",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url",
+          "env": "ACRES_API_ORIGIN"
+        }
+      ]
+    },
+    "api": {
+      "root": "server",
+      "framework": "nestjs",
+      "functions": {
+        "src/main.ts": {
+          "regions": ["iad1"],
+          "maxDuration": 30
+        },
+        "src/vercel/jobs.function.ts": {
+          "regions": ["iad1"],
+          "maxDuration": 60,
+          "experimentalTriggers": [
+            {
+              "type": "queue/v2beta",
+              "topic": "acres-jobs",
+              "retryAfterSeconds": 5
+            }
+          ]
+        },
+        "src/vercel/dispatch.function.ts": {
+          "regions": ["iad1"],
+          "maxDuration": 60
+        }
+      }
+    },
+    "jobs": {
+      "root": "server",
+      "entrypoint": "src/vercel/jobs.function.ts",
+      "functions": {
+        "src/vercel/jobs.function.ts": {
+          "regions": ["iad1"],
+          "maxDuration": 60,
+          "experimentalTriggers": [
+            {
+              "type": "queue/v2beta",
+              "topic": "acres-jobs",
+              "retryAfterSeconds": 5
+            }
+          ]
+        }
+      }
+    }
+  },
+  "crons": [
+    {
+      "path": "/cron/dispatch",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/cron/dispatch",
+      "destination": {
+        "service": "api",
+        "path": "/src/vercel/dispatch.function.ts"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "client"
+      }
+    }
+  ]
+}

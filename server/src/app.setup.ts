@@ -23,6 +23,7 @@ import {
 import { ResponseEnvelopeInterceptor } from './common/response-envelope.interceptor';
 import { AcresConfigService } from './config/acres-config.service';
 import { CsrfService } from './security/csrf.service';
+import { createVercelQueueMiddleware } from './vercel/queue-consumer.middleware';
 
 /**
  * Every cross-cutting concern the HTTP surface depends on, in one place, so
@@ -42,6 +43,7 @@ export function configureApp(app: INestApplication): void {
       { path: 'metrics', method: RequestMethod.GET },
       { path: 'graphql', method: RequestMethod.POST },
       { path: 'graphql', method: RequestMethod.GET },
+      { path: 'cron/dispatch', method: RequestMethod.GET },
     ],
   });
   app.enableVersioning({ type: VersioningType.URI });
@@ -82,12 +84,18 @@ export function configureApp(app: INestApplication): void {
       next();
     },
   );
-  app.use(express.json({ limit: config.graphqlMaxBytes }));
+  app.use(
+    express.json({
+      limit: config.graphqlMaxBytes,
+      type: ['application/json', 'application/*+json'],
+    }),
+  );
   app.use(
     express.urlencoded({ extended: false, limit: config.graphqlMaxBytes }),
   );
   app.use(bodyParserError);
   app.use(cookieParser());
+  app.use(createVercelQueueMiddleware(app));
   app.use(app.get(CsrfService).protection);
 
   app.useGlobalPipes(

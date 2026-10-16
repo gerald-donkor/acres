@@ -3991,3 +3991,22 @@ Full checks and independent review passed; exact evidence and rollback are in
 was migrated. Services routing, protected function wiring, hosted migration and
 first application-preview ingress/upload/dispatch proofs are next. Prompt 370,
 Phase 12 and eleven launch categories remain open; completion is not increased.
+
+
+## Phase 12 managed-target deployment — Prompt 378
+
+First application preview deployment of Acres on Vercel is implemented and
+proven. Root `vercel.json` defines Services architecture (`services.client`,
+`services.api`, `services.jobs`) with internal service binding `ACRES_API_ORIGIN`,
+region `iad1` pinning, `maxDuration` limits, and queue trigger without
+`maxDeliveries`. NestJS queue middleware intercepts CloudEvents before CSRF,
+while Next.js proxy strictly allowlists forwardable headers.
+
+Out-of-band migration `20261016000000_shared_throttling` was applied to the
+preview Neon database. All five hosted acceptance gates (A: ingress isolation,
+B: protected Cron execution, C: session & SSR over service binding, D: direct
+Blob upload, Queues trigger and Sandbox ClamAV scan, E: shared API throttling)
+passed with 100% verified evidence on deployment `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`
+(`https://acres-nedhhjsg3-dgsloxx417s-projects.vercel.app`).
+Exact outputs and proofs recorded in `docs/vercel-deployment.md`. Production
+promotion, paid tiers, and Phase 12 sign-off remain open.

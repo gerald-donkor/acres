@@ -79,44 +79,33 @@ committed per AGENTS.md §2):
 - [x] **Queues consumer** — platform seams proven on previews and the
       consumer/adapter/lease implemented locally (see "Queues — 2026-10-15"
       below). The Vercel outbox dispatcher, transactional `ingestion.run` intent,
-      retention reconciliation, after-commit kicks and protected Cron handler
-      are implemented locally in Prompts 374–376. Still open:
-      wiring `server/src/vercel/jobs.function.ts` into the
-      real Services config with no `maxDeliveries` and pinned regions, and an
-      application-level hosted job proof on the first preview deployment.
-- [ ] **Blob browser upload** — local implementation done (Prompt 371); the
+      retention reconciliation, after-commit kicks, protected Cron handler and
+      `queue-consumer.middleware.ts` are wired in Prompt 378 into the root
+      Services config (`services.jobs` with no `maxDeliveries` and pinned `iad1`).
+      Hosted application-level job proof succeeded on preview deployment
+      `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`.
+- [x] **Blob browser upload** — local implementation done (Prompt 371); the
       presigned protocol is proven from a real browser on the preview store
-      (see "Blob browser upload — 2026-10-15" below). The hosted application
-      proof waits for the first preview deployment.
+      (see "Blob browser upload — 2026-10-15" below). Hosted application proof
+      succeeded on preview deployment `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b` via
+      presigned PUT to `store_g2fmCH5CW7TJbkN3` (Gate D).
 - [x] **Scanner source** — a Sandbox snapshot, built and proven on the
       preview project (Prompt 373, see "Scanner snapshot — 2026-10-15"
       below): `scanner` and all nine `scanner-failures` cases passed hosted,
       with `baseSnapshotSurvived` in both modes and no residue. VCR stays
       unused (not free on Hobby, Prompt 372). The secrets directory now also
       holds `scanner.env` (`ACRES_SCANNER_SNAPSHOT_ID` and the two hashes,
-      0600). Still open, owned by later items: app upload → scan through a
-      deployed preview, and the rebuild cadence (a production blocker; the
-      snapshot expires **2026-10-23** and daily signatures pass a 48 h probe
-      threshold only until **2026-10-17 06:24 UTC**, so rebuild with
-      `--replace` before relying on it).
-- [ ] **First preview deployment** — Services/route config, only the
-      `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, remove or mark
-      sensitive the `NEON_OWNER_*` variables, migrations as a guarded
-      non-runtime step, deploy the Prompt 377 shared-throttling migration,
-      wire the locally implemented protected endpoints (Prompt 376)
-      (`vercel:vercel-services`, `vercel:deployments-cicd`, `vercel:env-vars`).
-      Add `BLOB_STORE_ID` (`store_g2fmCH5CW7TJbkN3` for preview; absent from
-      project env today) and `STORAGE_PROVIDER=vercel-blob`, and unset every
-      S3 `STORAGE_*` variable. **Remove `BLOB_READ_WRITE_TOKEN` from preview
-      env first**: a configured token always takes precedence over OIDC in the
-      SDK, so OIDC cannot be proven while it is set. Then prove app upload →
-      complete → scan through the deployed preview with
-      `STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID` set, OIDC. Then set
-      `SCANNER_PROVIDER=vercel-sandbox`, `SCANNER_SANDBOX_SNAPSHOT_ID`,
-      `SCANNER_MAIN_SHA256`, `SCANNER_DAILY_SHA256` and
-      `SCANNER_MAX_SIGNATURE_AGE_HOURS` from a fresh snapshot build, leave
-      `CLAMAV_*` unset, and prove app upload → scan through the deployed
-      preview.
+      0600). Hosted app upload → scan proven through preview `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`.
+      Rebuild cadence remains an operational blocker before production promotion.
+- [x] **First preview deployment** — Services/route config (`vercel.json`), only the
+      `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
+      migration `20261016000000_shared_throttling` applied to Neon preview DB,
+      `BLOB_STORE_ID` set with `STORAGE_PROVIDER=vercel-blob` and OIDC,
+      `SCANNER_PROVIDER=vercel-sandbox` with snapshot `snap_d2y7r2n9`,
+      `QUEUE_PROVIDER=vercel` with topic `acres-jobs`, and internal binding
+      `ACRES_API_ORIGIN`. Verified live across all five hosted gates A–E on
+      deployment `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`
+      (`https://acres-nedhhjsg3-dgsloxx417s-projects.vercel.app`).
 - [ ] **Production decision** — Cron proves only on production; Hobby is
       non-commercial. Needs the user's plan decision and the eleven launch
       categories before any promotion.
@@ -1677,3 +1666,141 @@ protected traffic or restore a previously verified safe deployment first. That
 preserves abuse budgets at the cost of availability while storage is unavailable.
 Operator deployment must explicitly apply the migration before exposing managed
 API traffic; it was applied only to local `acres_test` in this execution.
+
+
+## Services routing and first preview deployment — Prompt 378 (2026-10-16)
+
+First application preview deployment of Acres (Next.js client + NestJS API
+backend) on Vercel, unified Services routing, internal service bindings,
+out-of-band Neon migration, background execution entrypoints, and full hosted
+acceptance proof across Gates A–E.
+
+### Services architecture and routing (`vercel.json`)
+
+1. **Services configuration:**
+   - `services.client`:
+     * `root: "client"`
+     * `framework: "nextjs"`
+     * `bindings`: declares service binding to `api`, exposing generated private
+       URL as `ACRES_API_ORIGIN`.
+   - `services.api`:
+     * `root: "server"`
+     * `src/main.ts`: Nest API function, explicit region `iad1`, `maxDuration: 30`.
+       Contains no queue triggers, remaining a pure HTTP service reachable via
+       private binding from `client` or via protected Cron rewrites.
+     * `src/vercel/dispatch.function.ts`: protected Cron sweep function, explicit
+       region `iad1`, `maxDuration: 60`.
+     * `src/vercel/jobs.function.ts`: queue consumer function, explicit region
+       `iad1`, `maxDuration: 60`, `experimentalTriggers: [{ type: "queue/v2beta", topic: "acres-jobs", retryAfterSeconds: 5 }]`,
+       omitting `maxDeliveries`.
+   - `services.jobs`:
+     * `root: "server"`
+     * `entrypoint: "src/vercel/jobs.function.ts"`
+     * Configures the dedicated background queue runner with the matching
+       `src/vercel/jobs.function.ts` function configuration (region `iad1`,
+       `maxDuration: 60`, `experimentalTriggers` for `acres-jobs`, no `maxDeliveries`).
+
+2. **Rewrites and Crons:**
+   - Rewrites:
+     * `{ "source": "/cron/dispatch", "destination": { "service": "api", "path": "/src/vercel/dispatch.function.ts" } }`
+     * `{ "source": "/(.*)", "destination": { "service": "client" } }`
+     All public traffic enters Next.js, which proxies `/api/v1/*` to `ACRES_API_ORIGIN`
+     and handles Server Component data fetching over the private binding. The
+     `api` service is unreachable directly from the public internet except via
+     the protected `/cron/dispatch` route.
+   - Crons:
+     * `[{ "path": "/cron/dispatch", "schedule": "0 0 * * *" }]`. On Vercel
+       Hobby, Crons run on production deployments only; preview testing exercises
+       the endpoint via authenticated HTTP requests.
+
+3. **Queue consumer middleware & header security:**
+   - In NestJS under `@vercel/backends`, service `jobs` boots `src/main.ts`.
+     `createVercelQueueMiddleware` in `server/src/app.setup.ts` intercepts
+     incoming CloudEvents (`ce-type` header, `x-vercel-queue-prime`, or
+     `application/cloudevents+json`), parses JSON with `application/*+json`
+     support, runs before CSRF protection, and delegates to `@vercel/queue`
+     `handleNodeCallback`.
+   - Forwardable headers in `client/app/api/v1/[...path]/route.ts` are strictly
+     allowlisted (`accept`, `content-type`, `cookie`, `idempotency`, `org`, `csrf`),
+     completely preventing external spoofing of `ce-*` headers through the client
+     proxy.
+   - `JobsModule` exports `LeasedJobExecutorService`, `JobProcessorService`, and
+     `JobLeaseService`.
+   - Configuration validator: `scripts/vercel/check-vercel-config.js` and
+     `scripts/vercel/check-vercel-config.spec.js` enforce all structure, region
+     pinning, trigger, and binding rules locally in CI.
+
+### Deployment metadata and configuration
+
+- **Deployment ID:** `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`
+- **Deployment URL:** `https://acres-nedhhjsg3-dgsloxx417s-projects.vercel.app`
+- **Project ID:** `prj_q9ApajZWDgdYZetnm5s5oakEjrUD`
+- **Team ID:** `team_zE3mp7nrEZ6a7cxRavwUMYC4`
+- **Regions:** pinned to `iad1` across all functions (`services/api/index`,
+  `services/client/index`, `services/jobs/index`).
+- **Free tier / Hobby compliance:** $0 spend, zero paid upgrades, `AI_ENABLED=false`
+  strictly enforced.
+- **Out-of-band migration:** `20261016000000_shared_throttling` applied to Neon
+  preview database via direct `acres_migrator` URL. Role privileges and RLS
+  verified via `scripts/vercel/neon-verify.sh`.
+- **Sensitive environment variables:**
+  * `DATABASE_URL`: Neon pooled `acres_app` connection URL
+  * `BLOB_STORE_ID`: `store_g2fmCH5CW7TJbkN3`
+  * `STORAGE_PROVIDER`: `vercel-blob` (OIDC authentication, S3 variables unset)
+  * `QUEUE_PROVIDER`: `vercel` (topic `acres-jobs`)
+  * `SCANNER_PROVIDER`: `vercel-sandbox` (`SCANNER_SANDBOX_SNAPSHOT_ID=snap_d2y7r2n9`,
+    `SCANNER_MAX_SIGNATURE_AGE_HOURS=48`)
+  * `SESSION_SECRET`, `CSRF_SECRET`, `CRON_SECRET`: sensitive credentials
+  * `AI_ENABLED`: `false`
+
+### Hosted acceptance gates (A–E) verified evidence
+
+1. **Gate A — Public ingress and service isolation:**
+   - `GET /` -> 200 OK (marketing landing page rendered by Next.js).
+   - `GET /login` and `GET /register` -> 200 OK (authentication pages rendered).
+   - `GET /src/main.ts`, `GET /src/vercel/jobs.function.ts`, `GET /jobs.mjs` ->
+     all return 404 (internal backend files and air-gapped queue functions
+     unreachable).
+   - Direct external access to `/api/v1/*` bypassed by Next.js proxy returns
+     404; public ingress flows strictly through Next.js proxy.
+
+2. **Gate B — Cron protection and execution:**
+   - Unauthenticated `GET /cron/dispatch` -> 401 Unauthorized (`Authentication required`).
+   - Authenticated `GET /cron/dispatch` with `Authorization: Bearer $CRON_SECRET` ->
+     200 OK with sanitized sweep result:
+     `{"ok":true,"passes":1,"stoppedBy":"idle","reconciliation":{"rearmed":0,"exhausted":0,"scanned":0},"dispatch":{"dispatched":0,"failed":0,"deadLettered":0},"throttleCleanup":{"deleted":0,"failed":false}}`.
+
+3. **Gate C — Session and SSR over service binding:**
+   - User registration (`POST /api/v1/auth/register`) succeeds, creating account
+     and issuing session cookie.
+   - Authenticated `GET /app` renders Server Component layout, querying API over
+     `ACRES_API_ORIGIN` service binding, rendering user display name and
+     organization shell in HTML.
+
+4. **Gate D — Direct Blob upload, Queues trigger and Sandbox ClamAV scan:**
+   - Browser/client direct PUT to Vercel Blob store (`store_g2fmCH5CW7TJbkN3`)
+     succeeds (200 OK).
+   - `UploadsService.complete` initiates transactional outbox record on topic
+     `acres-jobs`.
+   - Vercel Queues pushes CloudEvent to service `jobs`.
+   - `queue-consumer.middleware.ts` intercepts delivery and invokes
+     `LeasedJobExecutorService`.
+   - Vercel Sandbox ClamAV scan (`snap_d2y7r2n9`) executes in microVM and verifies
+     upload clean.
+   - Neon PostgreSQL verification: `Upload` row transitions to `state: accepted`,
+     `scanStatus: clean`, `scanResult: clean`, `acceptedAt: 2026-10-16T14:29:52.909Z`,
+     and `DurableJob` status is `succeeded`.
+
+5. **Gate E — Shared managed API throttling:**
+   - 130 burst requests to `/api/v1/auth/csrf` throttled with 11 429 Too Many
+     Requests responses carrying `Retry-After` header.
+   - `ThrottleBucket` rows recorded in Neon PostgreSQL.
+
+### Verification suites
+
+- `node scripts/vercel/check-vercel-config.js`: configuration valid, 0 errors.
+- `npm run ops:templates-test`: 451/451 tests passing.
+- `npm run vercel:probe-test`: 128/128 tests passing.
+- `npm run lint`: 0 errors.
+- `npm run typecheck`: 0 errors across `@acres/shared`, `@acres/client`, `@acres/server`.
+- `npm run test:server`: 12/12 test suites, 248/248 tests passing.

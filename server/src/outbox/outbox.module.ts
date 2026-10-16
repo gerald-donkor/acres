@@ -5,6 +5,7 @@ import {
   AFTER_RESPONSE_SCHEDULER,
   defaultAfterResponseScheduler,
 } from './after-response.scheduler';
+import { CronDispatchController } from './cron-dispatch.controller';
 import { DispatchKickService } from './dispatch-kick.service';
 import { JobReconciliationService } from './job-reconciliation.service';
 import { ManagedDispatchRunnerService } from './managed-dispatch-runner.service';
@@ -13,6 +14,7 @@ import { OutboxService } from './outbox.service';
 
 @Module({
   imports: [QueueModule, ThrottleStorageModule],
+  controllers: [CronDispatchController],
   providers: [
     OutboxService,
     OutboxDispatcherService,

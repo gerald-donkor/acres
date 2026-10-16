@@ -38,7 +38,7 @@ expect app_role_super_bypass_createrole "$(q "$M" "select rolsuper||','||rolbypa
 expect app_in_neon_superuser "$(q "$M" "select pg_has_role('acres_app','neon_superuser','member')")" f
 expect rls_enabled_not_forced "$(q "$M" "select count(*) $TABLES and relrowsecurity and not relforcerowsecurity")" 0
 expect non_rls_tables "$(q "$M" "select string_agg(relname, ',' order by relname) $TABLES and not relrowsecurity")" \
-  "Account,AccountToken,ContactSubmission,InsightReport,JobRun,Region,RegionAlias,RegionCode,RegionGeometry,RegionSource,RegionalMetric,Session"
+  "Account,AccountToken,ContactSubmission,InsightReport,JobRun,Region,RegionAlias,RegionCode,RegionGeometry,RegionSource,RegionalMetric,Session,ThrottleBucket"
 echo "info tables/rls_forced: $(q "$M" "select count(*)||'/'||count(*) filter (where relforcerowsecurity) $TABLES")"
 echo "info postgis: $(q "$M" "select extversion from pg_extension where extname='postgis'")"
 
