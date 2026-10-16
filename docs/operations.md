@@ -141,10 +141,10 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `scripts/ops/launch-readiness.spec.js` | Subprocess unit and contract test specification covering CLI argument parsing, fail-closed preflights, and drill execution |
 | `.github/workflows/ci.yml` | Pinned GitHub Actions (full 40-char commit SHAs) running `npm run ops:check` and verification suite |
 | `infra/launch/operator-handoff.vercel.example.md` | Managed operator intake package and sign-off template for `vercel-managed-production` |
-| `scripts/ops/verify-managed-ingress.js` | Vercel multi-service routing and deployment rollback verification for managed production |
-| `scripts/ops/verify-managed-volume-encryption.js` | Managed Neon KMS AES-256 volume encryption and serverless compute isolation verification |
-| `scripts/ops/verify-managed-secret-rotation.js` | Managed zero-downtime secret rotation and indirect reference verification |
-| `scripts/ops/verify-managed-restore-drill.js` | Managed disaster recovery restore and Neon PITR branch recovery verification |
+| `scripts/ops/verify-managed-ingress.js` & `.spec.js` | Vercel multi-service routing and deployment rollback verification for managed production |
+| `scripts/ops/verify-managed-volume-encryption.js` & `.spec.js` | Managed Neon KMS AES-256 volume encryption and serverless compute isolation verification |
+| `scripts/ops/verify-managed-secret-rotation.js` & `.spec.js` | Managed zero-downtime secret rotation and indirect reference verification |
+| `scripts/ops/verify-managed-restore-drill.js` & `.spec.js` | Managed disaster recovery restore and Neon PITR branch recovery verification |
 | `scripts/db/bootstrap-production-roles.sh` | Production Postgres bootstrap for `acres_migrator`, `acres_app`, and `acres`; deliberately omits local `acres_test` database |
 
 Root scripts:
@@ -177,6 +177,7 @@ npm run ops:alert-drill
 npm run ops:dos-drill
 npm run ops:capacity-alerting-drill
 npm run ops:launch-readiness-test
+npm run ops:managed-drills-test
 npm run ops:check
 npm run ops:launch-readiness
 ```

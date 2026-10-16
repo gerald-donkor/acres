@@ -106,4 +106,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { evaluateManagedRestore };
+module.exports = { evaluateManagedRestore, parseArgs };

@@ -139,4 +139,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { evaluateManagedIngress };
+module.exports = { evaluateManagedIngress, parseArgs };

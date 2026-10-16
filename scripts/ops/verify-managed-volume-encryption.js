@@ -97,4 +97,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { evaluateManagedEncryption };
+module.exports = { evaluateManagedEncryption, parseArgs };

@@ -1918,3 +1918,24 @@ the `vercel-managed-production` profile with zero Docker daemon or Compose prere
    - In `vercel-managed-production` mode, executes `scripts/vercel/check-vercel-config.js`, `scripts/ops/scan-secrets.sh`, `node --test scripts/ops/check-launch-readiness.spec.js`, forwards `--target-architecture vercel-managed-production` to `run-launch-drills.sh` when `--with-drills` is set, and runs `check-launch-readiness.js "$READINESS_FILE"`.
    - Added `npm run ops:launch-readiness:managed` script to `package.json`.
    - Automated test suite `scripts/ops/launch-readiness.spec.js` covers argument parsing, fail-closed preflight order, drill forwarding, auto-detection, and real repository execution across both architectures (37/37 tests pass).
+
+## Managed drill verifiers unit test suite and preflight integration — Prompt 382 (2026-10-16)
+
+Comprehensive unit and contract test specifications are implemented for all four managed drill verifiers,
+closing the testing gap for `vercel-managed-production` offline simulation tooling:
+
+1. **Ingress and multi-service routing verification (`scripts/ops/verify-managed-ingress.spec.js`):**
+   - 11 unit and contract tests asserting CLI argument parsing (`--help`, missing `--output`, `--output <file>`, `-o`, `--vercel-config`), configuration validation (missing file, invalid JSON, missing `services.client` or `services.api`, missing or misordered `/cron/dispatch` rewrites), valid evaluation against root `vercel.json` (12 routes evaluated, 12 routes passed), and emission of compliant `managed-ingress-deployment-receipt.json`.
+
+2. **Volume encryption and compute isolation verification (`scripts/ops/verify-managed-volume-encryption.spec.js`):**
+   - 5 unit and contract tests asserting CLI flags, architectural assertions (Neon AWS KMS AES-256 envelope encryption, Vercel Blob encryption, AWS microVM/Firecracker compute isolation, key separation), and emission of compliant `managed-volume-encryption-receipt.json`.
+
+3. **Zero-downtime secret rotation and redaction verification (`scripts/ops/verify-managed-secret-rotation.spec.js`):**
+   - 7 unit and contract tests asserting CLI flags (`--help`, `-o`, `--dry-run`), rotation assertions (90-day cadence, indirect secret URIs, 7 rotation steps), fail-closed detection across all 5 known development password patterns (`DEV_PASSWORDS`), and emission of compliant `managed-secret-rotation-receipt.json`.
+
+4. **Disaster recovery restore and PITR verification (`scripts/ops/verify-managed-restore-drill.spec.js`):**
+   - 5 unit and contract tests asserting CLI flags, architectural assertions (Neon continuous WAL streaming, 7-day PITR window, RTO ≤ 4h, RPO ≤ 1h, Vercel Blob 11 9's durability), and emission of compliant `managed-restore-drill-receipt.json`.
+
+5. **Package script and pipeline integration:**
+   - Added `"ops:managed-drills-test"` to `package.json` executing all four spec files (28/28 tests passing).
+   - Integrated `"npm run ops:managed-drills-test"` into `"ops:check"`, ensuring automated enforcement across CI and local verification gates.

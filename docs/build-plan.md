@@ -4082,3 +4082,24 @@ Full test coverage passes across `scan-secrets.spec.js` (42/42), `run-static-int
 `assemble-launch-dossier.spec.js` (33/33), `run-launch-drills.spec.js` (158/158), and
 `launch-readiness.spec.js` (37/37). Reference Compose workflows retain 100% backward
 compatibility. Production promotion, cloud mutation, and Phase 12 sign-off remain separate.
+
+## Phase 12 managed verifier unit tests and operations preflight suite — Prompt 382
+
+Comprehensive unit and contract test specifications are implemented for all four managed drill
+verifiers (`verify-managed-ingress.spec.js`, `verify-managed-volume-encryption.spec.js`,
+`verify-managed-secret-rotation.spec.js`, and `verify-managed-restore-drill.spec.js`), closing
+the testing coverage gap for the `vercel-managed-production` offline simulation toolchain.
+
+The new test suites cover CLI flag parsing (`--help`, `-h`, missing `--output`, `--output <file>`,
+`-o`, `--dry-run`, `--vercel-config`), configuration validation (missing files, invalid JSON,
+service completeness, route ordering precedence), fail-closed detection across all 5 known
+development passwords (`DEV_PASSWORDS`), architectural assertions (Neon KMS AES-256 envelope
+encryption, Blob storage encryption and 11 9's durability, Firecracker microVM compute isolation,
+7-day PITR window, RTO ≤ 4h, RPO ≤ 1h, 90-day secret rotation cadence), and receipt generation
+conforming to `assemble-launch-dossier.js` schemas.
+
+Package script `ops:managed-drills-test` was added to `package.json` and integrated directly
+into `npm run ops:check`. Full test coverage passes across all 4 managed verifier specs (28/28 tests),
+launch drill test suites (191/191 tests), and the full `ops:check` preflight pipeline. Reference
+Compose workflows retain 100% backward compatibility. Production promotion, cloud mutation,
+and Phase 12 sign-off remain separate.

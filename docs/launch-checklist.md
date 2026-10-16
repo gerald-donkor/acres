@@ -61,6 +61,14 @@ node scripts/ops/check-launch-readiness.js <operator-readiness.json>
 # Managed vercel-managed-production:
 bash scripts/ops/run-launch-drills.sh --dry-run --target-architecture vercel-managed-production
 node scripts/ops/check-launch-readiness.js <operator-readiness.vercel.json>
+
+# Managed verifier unit and contract test suite:
+npm run ops:managed-drills-test
+# Individual managed verifier test specs:
+node --test scripts/ops/verify-managed-ingress.spec.js
+node --test scripts/ops/verify-managed-volume-encryption.spec.js
+node --test scripts/ops/verify-managed-secret-rotation.spec.js
+node --test scripts/ops/verify-managed-restore-drill.spec.js
 ```
 
 Copy `infra/launch/readiness.example.json` (or `infra/launch/readiness.vercel.example.json` for managed profile)

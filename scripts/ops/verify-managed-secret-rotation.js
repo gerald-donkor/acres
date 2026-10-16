@@ -121,4 +121,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { evaluateManagedSecretRotation };
+module.exports = { evaluateManagedSecretRotation, parseArgs, DEV_PASSWORDS };

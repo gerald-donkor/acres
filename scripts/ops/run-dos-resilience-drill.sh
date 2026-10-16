@@ -144,7 +144,7 @@ const layers = {
     ['health/health', 'metrics/metrics'].every(p => has(`server/src/${p}.controller.ts`, [/@SkipThrottle\(\)/])) &&
     has('server/src/common/api-exception.filter.ts', [/TOO_MANY_REQUESTS.*'RATE_LIMITED'/])},
   layer3_graphql_bounds: {passed:
-    has('server/src/app.setup.ts', [/express.json.*graphqlMaxBytes/]) &&
+    has('server/src/app.setup.ts', [/express\.json[\s\S]*graphqlMaxBytes/]) &&
     has('server/src/graphql/graphql-limits.ts', [/graphqlMaxDepth/, /graphqlMaxAliases/,
       /graphqlMaxCost/, /graphqlMaxNodes/, /operationCount !== 1/])},
   layer4_storage_bounds: {passed: has(env, [/UPLOAD_MAX_BYTES/, /52428800/, /CLAMAV_HOST/, /STORAGE_BUCKET.*quarantine/])},
