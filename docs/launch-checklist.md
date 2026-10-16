@@ -2648,13 +2648,14 @@ inventory evidence, not production sign-off.
 | --- | -------------------- | ----------------------------------------------------------------------------------------------- |
 | 1   | `static_templates`   | production templates, docker runtime, secret scan; `static-integrity-evidence-<timestamp>.json` |
 | 2   | `supply_chain_sast`  | SBOM + licenses, SAST scan, container security                                                  |
-| 3   | `ingress_deployment` | Caddy routing verify, deployment configuration preflight/rehearsal                              |
-| 4   | `volume_encryption`  | volume declarations + limited local filename scan preflight                                     |
-| 5   | `secret_rotation`    | secret rotation drill                                                                           |
+| 3   | `ingress_deployment` | Caddy routing verify, deployment configuration preflight/rehearsal (or Vercel multi-service routing and deployment rollback verification when targeting `vercel-managed-production`) |
+| 4   | `volume_encryption`  | volume declarations + limited local filename scan preflight (or Neon KMS AES-256 and serverless compute isolation when targeting `vercel-managed-production`) |
+| 5   | `secret_rotation`    | secret rotation drill (7-step Compose rollover or managed indirect reference cadence verification) |
 | 6   | `capacity_alerting`  | capacity benchmark, DoS resilience, alert simulation                                            |
-| 7   | `disaster_recovery`  | restore drill + storage reconciliation                                                          |
+| 7   | `disaster_recovery`  | restore drill + storage reconciliation (or Neon PITR branch recovery preflight + Vercel Blob reconciliation when targeting `vercel-managed-production`) |
 
 Flags: `--dry-run`, `--json`, `--verbose`, `--allow-hsts`, `--help`/`-h`,
+`--target-architecture <arch>` (or `--target-arch <arch>`, accepting `single-host-compose-caddy` [default] or `vercel-managed-production`),
 and value options `--output`, `--evidence-dir`, `--caddyfile`, `--compose-file`,
 `--target-url`, `--api-url`, `--database-telemetry-file`. Value options accept
 separate or attached `=` values once each. Duplicates, blanks, controls, unknown

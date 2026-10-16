@@ -4030,3 +4030,26 @@ The managed operations runbook (`infra/vercel/runbooks/managed-operations.md`)
 documents secret inventory, out-of-band migrations, storage reconciliation, and
 disaster recovery. All test suites pass. Prompt 370 and Phase 12 launch categories
 remain open until real operator values and live drills are recorded.
+
+## Phase 12 managed operator handoff & drill reconciliation — Prompt 380
+
+Managed operator handoff templates and unified launch drill runner reconciliation
+are implemented and verified locally for the `vercel-managed-production` profile.
+An intake package template (`infra/launch/operator-handoff.vercel.example.md`) models
+the complete intake for all 11 managed categories with zero literal secrets,
+opaque identifiers (`team_*`, `prj_*`, `store_*`, `snap_*`, `dpl_*`, SHA-256 digests),
+and fail-closed restricted evidence boundaries. `docs/operator-handoff.md` specifies
+explicit verification commands for both architectures.
+
+Four executable verification tools emit standardized audit receipts for managed stages:
+`verify-managed-ingress.js` (Stage 3), `verify-managed-volume-encryption.js` (Stage 4),
+`verify-managed-secret-rotation.js` (Stage 5), and `verify-managed-restore-drill.js` (Stage 7).
+The unified launch drill orchestrator (`scripts/ops/run-launch-drills.sh`) accepts
+`--target-architecture <arch>` (defaulting to `single-host-compose-caddy`), skips
+Docker daemon and Caddyfile preflights when targeting `vercel-managed-production`,
+and executes the managed stage sequence. The launch dossier assembler
+(`scripts/ops/assemble-launch-dossier.js`) integrates `RECEIPTS_MANAGED` and `TYPES_MANAGED`,
+emitting `target_architecture: "vercel-managed-production"` and structured managed baselines.
+Full test coverage passes across `assemble-launch-dossier.spec.js` (33/33) and
+`run-launch-drills.spec.js` (158/158). Reference Compose drills retain 100% backward
+compatibility. Production promotion, cloud mutation, and Phase 12 approval remain separate.

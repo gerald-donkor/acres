@@ -1,21 +1,24 @@
 # Operator handoff completion guide
 
-Use [the handoff form](../infra/launch/operator-handoff.example.md) to assemble
-Phase 12's shared prerequisites for one production environment and release.
-The package is prepared; the production intake remains missing until operators
-supply and independently verify its facts. The launch checklist governs intake
-inspection;
-Prompt 201 and the [launch checklist](launch-checklist.md) govern launch evidence
-and sign-off. This form supplements their contracts and does not replace them.
+Use the relevant handoff form to assemble Phase 12's shared prerequisites for
+one production environment and release:
+- For `single-host-compose-caddy`: [operator-handoff.example.md](../infra/launch/operator-handoff.example.md)
+- For `vercel-managed-production`: [operator-handoff.vercel.example.md](../infra/launch/operator-handoff.vercel.example.md)
+
+The packages are prepared; the production intake remains missing until operators
+supply and independently verify their facts. The launch checklist governs intake
+inspection; Prompt 201 and the [launch checklist](launch-checklist.md) govern launch
+evidence and sign-off. This form supplements their contracts and does not replace them.
 
 ## Selected managed target — 2026-10-15
 
 Prompt 370 supersedes the reference hosting recommendation for the selected
 production target with Vercel compute/routing plus Marketplace Neon and Resend.
 Its [migration record](vercel-deployment.md) owns in-progress implementation and
-hosted proof gates. The reference procedure below remains useful only for the
-implemented Compose profile. Do not require fictional Compose images/mounts for
-Vercel or treat a Vercel receipt as accepted by the existing readiness schema.
+hosted proof gates. Operators targeting Vercel must complete
+`infra/launch/operator-handoff.vercel.example.md` rather than the Compose template.
+Do not require fictional Compose images/mounts for Vercel or treat a Vercel receipt
+as accepted by the Compose readiness schema.
 Account-bound managed intake, evidence validation, recovery and all eleven
 sign-offs remain open; this amendment supplies none of those facts.
 
@@ -111,15 +114,30 @@ This request is provided for operator use; creating this guide sends no message.
 
 Compare the completed intake with the existing launch category contracts.
 The Markdown form has no automated validator and is not accepted as readiness JSON.
-For the actual restricted readiness record, use the existing command:
+For the actual restricted readiness record, validate against the appropriate schema:
 
+For `single-host-compose-caddy`:
 ```bash
+# Execute launch drill suite
+bash scripts/ops/run-launch-drills.sh --dry-run
+
+# Validate readiness record
 node scripts/ops/check-launch-readiness.js <restricted-operator-readiness.json>
+```
+
+For `vercel-managed-production`:
+```bash
+# Execute managed launch drill suite
+bash scripts/ops/run-launch-drills.sh --dry-run --target-architecture vercel-managed-production
+
+# Validate managed readiness record
+node scripts/ops/check-launch-readiness.js --record <restricted-operator-readiness.json>
 ```
 
 Run it only through the custodian's authorized access procedure. A passing validator
 does not replace independent source inspection, the unified dossier or human sign-off.
-The checked-in example remains deliberately unresolved. Return the non-sensitive
-intake disposition, blockers, responsible owners and one next safe action. Store
-the completed form, actual identities and signed evidence in the restricted store;
-only permitted opaque IDs and truthful summaries belong in repository records.
+The checked-in examples (`infra/launch/readiness.example.json` and `infra/launch/readiness.vercel.example.json`)
+remain deliberately unresolved. Return the non-sensitive intake disposition, blockers,
+responsible owners and one next safe action. Store the completed form, actual identities
+and signed evidence in the restricted store; only permitted opaque IDs and truthful
+summaries belong in repository records.

@@ -28,7 +28,7 @@ function liveTelemetry(target, timestamp = new Date().toISOString()) {
   };
 }
 
-const children = {
+const defaultChildren = {
   "run-static-integrity-checks.js": "static",
   "generate-sbom.js": "sbom",
   "run-sast-scan.js": "sast",
@@ -40,6 +40,18 @@ const children = {
   "run-capacity-alerting-drill.sh": "capacity",
   "run-restore-drill.sh": "restore",
   "reconcile-storage-objects.js": "reconcile",
+};
+
+const managedChildren = {
+  "verify-managed-ingress.js": "managed-ingress",
+  "verify-managed-volume-encryption.js": "managed-volume",
+  "verify-managed-secret-rotation.js": "managed-rotation",
+  "verify-managed-restore-drill.js": "managed-restore",
+};
+
+const children = {
+  ...defaultChildren,
+  ...managedChildren,
 };
 
 // This function is serialized into the disposable repository. All children are
@@ -305,6 +317,80 @@ function stub(key, args) {
         mismatchedObjects: 0,
       },
     },
+    "managed-ingress": {
+      ...success,
+      execution_mode: "simulation",
+      drill_type: "managed_ingress_deployment_verification",
+      target_architecture: "vercel-managed-production",
+      routing_verified: true,
+      services_verified: true,
+      rollback_procedure_verified: true,
+      preview_deployment_verified: true,
+      routes_evaluated: 12,
+      routes_passed: 12,
+      routesEvaluated: 12,
+      routesPassed: 12,
+      securityHeadersVerified: true,
+      deploymentProtectionVerified: true,
+      serverlessFunctionIsolationVerified: true,
+    },
+    "managed-volume": {
+      ...success,
+      execution_mode: "simulation",
+      drill_type: "managed_volume_encryption_and_compute_isolation",
+      target_architecture: "vercel-managed-production",
+      storage_encryption_verified: true,
+      neon_aws_kms_aes256: true,
+      ephemeral_compute_isolated: true,
+      key_separation_verified: true,
+      neonStorageEncrypted: true,
+      vercelBlobEncrypted: true,
+      computeIsolationVerified: true,
+      isolatedRuntimes: ["vercel_functions", "neon_serverless"],
+    },
+    "managed-rotation": {
+      ...success,
+      execution_mode: "simulation",
+      dry_run: true,
+      drill_type: "managed_zero_downtime_secret_rotation",
+      target_architecture: "vercel-managed-production",
+      rotation_cadence_days: 90,
+      cadence_compliant: true,
+      indirect_references_verified: true,
+      steps: {
+        session_rollover: { status: "passed", raw_secrets_masked: true },
+        csrf_rollover: { status: "passed", raw_secrets_masked: true },
+        cron_rollover: { status: "passed", raw_secrets_masked: true },
+        neon_role_rotation: { status: "passed", raw_secrets_masked: true },
+        blob_token_rotation: { status: "passed", raw_secrets_masked: true },
+        resend_key_rotation: { status: "passed", raw_secrets_masked: true },
+        compromise_response: { status: "passed", raw_secrets_masked: true },
+        redaction_audit: {
+          status: "passed",
+          raw_secrets_masked: true,
+          zero_dev_passwords_detected: true,
+        },
+      },
+    },
+    "managed-restore": {
+      ...success,
+      execution_mode: "simulation",
+      drill_type: "managed_disaster_recovery_restore",
+      drill_timestamp: now,
+      target_architecture: "vercel-managed-production",
+      duration_seconds: 1,
+      rto_target_seconds: 900,
+      rto_hours: 0.25,
+      rpo_hours: 0.0,
+      pitr_recovery_window_days: 7,
+      pitr_preflight_verified: true,
+      rto_compliant: true,
+      rpo_compliant: true,
+      blob_durability_verified: true,
+      point_in_time_recovery_verified: true,
+      branching_isolation_verified: true,
+      tables_restored: 3,
+    },
   };
   if (key === "capacity" && args.includes("--target-url")) {
     reports.capacity.mode = "live";
@@ -382,7 +468,7 @@ function stub(key, args) {
               Date.now() + (scenario === "stale" ? -120000 : 120000),
             ).toISOString();
       if (key === "sbom") e.metadata.timestamp = time;
-      else if (["deployment", "restore"].includes(key))
+      else if (["deployment", "restore", "managed-restore"].includes(key))
         e.drill_timestamp = time;
       else e.timestamp = time;
     }
@@ -405,6 +491,10 @@ function stub(key, args) {
       if (key === "capacity") e.summary.databaseBaselineCompliance = "failed";
       if (key === "restore") e.tables_restored = 2;
       if (key === "reconcile") e.summary.missingObjects = 1;
+      if (key === "managed-ingress") e.routing_verified = false;
+      if (key === "managed-volume") e.storage_encryption_verified = false;
+      if (key === "managed-rotation") e.steps.cron_rollover.status = "failed";
+      if (key === "managed-restore") e.rto_compliant = false;
     }
     if (scenario === "nested-missing") {
       delete e.alerts;
@@ -533,6 +623,7 @@ function fixture(t) {
     path.join(dir, "infra/compose/docker-compose.production.example.yml"),
     "fixture",
   );
+  fs.writeFileSync(path.join(dir, "vercel.json"), "{}");
   const log = path.join(dir, "child-calls.jsonl");
   const output = path.join(dir, "evidence/dossier.json");
   // Allow-list environment: no inherited service credentials, NODE_OPTIONS or test context.
@@ -755,7 +846,7 @@ test("full fixture publishes consistent private evidence, ordered calls and iden
   assert.equal(capacityChild.execution_mode, "simulation");
   assert.deepEqual(
     f.calls().map((c) => c.key),
-    Object.values(children),
+    Object.values(defaultChildren),
   );
   const printed = JSON.parse(
     r.stdout.slice(r.stdout.indexOf("{"), r.stdout.lastIndexOf("}") + 1),
@@ -801,7 +892,7 @@ const stageFor = {
   restore: 6,
   reconcile: 6,
 };
-for (const key of Object.values(children)) {
+for (const key of Object.values(defaultChildren)) {
   test(`${key} baseline breach fails its stage and overall verdict`, (t) => {
     const r = fixture(t).execute(`${key}:baseline`);
     assert.equal(r.status, 1, r.stderr);
@@ -2150,5 +2241,95 @@ for (const scenario of [
         f.calls().some((c) => c.key === "deployment"),
         false,
       );
+  });
+}
+
+test("run-launch-drills rejects unknown target architecture", (t) => {
+  const f = fixture(t);
+  const r1 = f.run(["--target-architecture", "kubernetes-cluster"]);
+  assert.notEqual(r1.status, 0);
+  assert.match(r1.stderr, /Unknown target architecture/);
+
+  const r2 = f.run(["--target-arch", "invalid-arch"]);
+  assert.notEqual(r2.status, 0);
+  assert.match(r2.stderr, /Unknown target architecture/);
+});
+
+test("run-launch-drills fails preflight if vercel.json is missing when targeting vercel-managed-production", (t) => {
+  const f = fixture(t);
+  fs.rmSync(path.join(f.dir, "vercel.json"));
+  const r = f.execute("", ["--target-architecture", "vercel-managed-production"]);
+  assert.notEqual(r.status, 0);
+  assert.equal(f.calls().length, 0);
+});
+
+test("run-launch-drills executes managed stages and produces valid dossier for vercel-managed-production", (t) => {
+  const f = fixture(t);
+  const r = f.execute("", ["--target-architecture", "vercel-managed-production"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.dossier);
+  invariant(r.dossier);
+  assert.equal(r.dossier.target_architecture, "vercel-managed-production");
+  assert.equal(r.dossier.overall_status, "PASSED");
+
+  const calledKeys = f.calls().map((c) => c.key);
+  // Managed child stubs were called
+  assert.ok(calledKeys.includes("managed-ingress"));
+  assert.ok(calledKeys.includes("managed-volume"));
+  assert.ok(calledKeys.includes("managed-rotation"));
+  assert.ok(calledKeys.includes("managed-restore"));
+  assert.ok(calledKeys.includes("reconcile"));
+
+  // Compose/Caddy children were NOT called
+  assert.ok(!calledKeys.includes("caddy"));
+  assert.ok(!calledKeys.includes("deployment"));
+  assert.ok(!calledKeys.includes("volume"));
+  assert.ok(!calledKeys.includes("rotation"));
+  assert.ok(!calledKeys.includes("restore"));
+
+  // Receipts in stages
+  const stageIngress = r.dossier.stages[2];
+  assert.equal(stageIngress.stage_id, "ingress_deployment");
+  assert.equal(stageIngress.status, "PASSED");
+  assert.ok(stageIngress.artifacts.some((p) => path.basename(p) === "managed-ingress-deployment-receipt.json"));
+
+  const stageVolume = r.dossier.stages[3];
+  assert.equal(stageVolume.stage_id, "volume_encryption");
+  assert.equal(stageVolume.status, "PASSED");
+  assert.ok(stageVolume.artifacts.some((p) => path.basename(p) === "managed-volume-encryption-receipt.json"));
+
+  const stageRotation = r.dossier.stages[4];
+  assert.equal(stageRotation.stage_id, "secret_rotation");
+  assert.equal(stageRotation.status, "PASSED");
+  assert.ok(stageRotation.artifacts.some((p) => path.basename(p) === "managed-secret-rotation-receipt.json"));
+
+  const stageDR = r.dossier.stages[6];
+  assert.equal(stageDR.stage_id, "disaster_recovery");
+  assert.equal(stageDR.status, "PASSED");
+  assert.ok(stageDR.artifacts.some((p) => path.basename(p) === "managed-restore-drill-receipt.json"));
+  assert.ok(stageDR.artifacts.some((p) => path.basename(p) === "reconcile-report-receipt.json"));
+
+  // Reconcile was called with --provider vercel-blob
+  const reconcileCall = f.calls().find((c) => c.key === "reconcile");
+  assert.ok(reconcileCall);
+  assert.ok(reconcileCall.args.includes("--provider"));
+  assert.equal(reconcileCall.args[reconcileCall.args.indexOf("--provider") + 1], "vercel-blob");
+});
+
+for (const [stageIndex, childKey, stageId] of [
+  [2, "managed-ingress", "ingress_deployment"],
+  [3, "managed-volume", "volume_encryption"],
+  [4, "managed-rotation", "secret_rotation"],
+  [6, "managed-restore", "disaster_recovery"],
+]) {
+  test(`run-launch-drills fails on baseline violation in managed child: ${childKey}`, (t) => {
+    const f = fixture(t);
+    const r = f.execute(`${childKey}:baseline`, ["--target-architecture", "vercel-managed-production"]);
+    assert.equal(r.status, 1, r.stderr);
+    assert.ok(r.dossier);
+    assert.equal(r.dossier.target_architecture, "vercel-managed-production");
+    assert.equal(r.dossier.overall_status, "FAILED");
+    assert.equal(r.dossier.stages[stageIndex].stage_id, stageId);
+    assert.equal(r.dossier.stages[stageIndex].status, "FAILED");
   });
 }

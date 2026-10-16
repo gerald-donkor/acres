@@ -43,6 +43,7 @@ TARGET_URL=""
 API_URL=""
 DATABASE_TELEMETRY_FILE=""
 ALLOW_HSTS=0
+TARGET_ARCHITECTURE="single-host-compose-caddy"
 
 usage() {
   cat <<'EOF'
@@ -62,6 +63,9 @@ Options:
   --evidence-dir <dir>     Directory for the dossier, stage logs, and child
                            evidence (default: backups)
   --verbose                Print each stage ID before executing it
+  --target-architecture <arch>  Target architecture (single-host-compose-caddy [default]
+                                or vercel-managed-production)
+  --target-arch <arch>     Alias for --target-architecture
   --caddyfile <file>       Caddyfile to verify in both stage 3 children
   --compose-file <file>    Compose file for the deployment drill
   --target-url <url>      Live capacity benchmark target
@@ -84,6 +88,21 @@ while (($#)); do
     --json) JSON_OUT=1; shift ;;
     --verbose) VERBOSE=1; shift ;;
     --allow-hsts) ALLOW_HSTS=1; shift ;;
+    --target-architecture|--target-architecture=*|--target-arch|--target-arch=*)
+      opt="--target-architecture"
+      [[ -z "${SEEN[$opt]:-}" ]] || fail "Repeated $opt option"
+      if [[ "$1" == *=* ]]; then val="${1#*=}"; shift
+      else
+        (($# >= 2)) && [[ "$2" != -* ]] || fail "$opt requires a value"
+        val="$2"; shift 2
+      fi
+      [[ "$val" =~ [^[:space:]] && ! "$val" =~ [[:cntrl:]] ]] || fail "$opt requires a valid value"
+      if [[ "$val" != "single-host-compose-caddy" && "$val" != "vercel-managed-production" ]]; then
+        fail "Unknown target architecture: $val"
+      fi
+      SEEN[$opt]=1
+      TARGET_ARCHITECTURE="$val"
+      ;;
     --output|--output=*|--evidence-dir|--evidence-dir=*|--caddyfile|--caddyfile=*|--compose-file|--compose-file=*|--target-url|--target-url=*|--api-url|--api-url=*|--database-telemetry-file|--database-telemetry-file=*)
       opt="${1%%=*}"
       [[ -z "${SEEN[$opt]:-}" ]] || fail "Repeated $opt option"
@@ -109,11 +128,11 @@ done
 for tool in node bash date dirname mkdir mktemp sleep cat rm; do
   command -v "$tool" >/dev/null 2>&1 || fail "Required utility unavailable: $tool"
 done
-for file in assemble-launch-dossier.js launch-target-evidence.js run-static-integrity-checks.js generate-sbom.js run-sast-scan.js verify-container-security.js verify-caddy-routing.js run-deployment-drill.sh verify-volume-encryption.js run-secret-rotation-drill.sh run-capacity-alerting-drill.sh run-restore-drill.sh reconcile-storage-objects.js; do
+for file in assemble-launch-dossier.js launch-target-evidence.js run-static-integrity-checks.js generate-sbom.js run-sast-scan.js verify-container-security.js verify-caddy-routing.js run-deployment-drill.sh verify-volume-encryption.js run-secret-rotation-drill.sh run-capacity-alerting-drill.sh run-restore-drill.sh reconcile-storage-objects.js verify-managed-ingress.js verify-managed-volume-encryption.js verify-managed-secret-rotation.js verify-managed-restore-drill.js; do
   [[ -f "$OPS/$file" && -r "$OPS/$file" ]] || fail 'Required installed child or helper unavailable'
 done
 # Read-only preflight; helper/runtime diagnostics cannot expose rejected input.
-PREFLIGHT="$(node - "$OPS" "$DRY_RUN" "$ALLOW_HSTS" "$TARGET_URL" "$API_URL" "$DATABASE_TELEMETRY_FILE" "$CADDYFILE" "$COMPOSE_FILE" "$EVIDENCE_DIR" "$OUTPUT_PATH" 2>/dev/null <<'NODE'
+PREFLIGHT="$(node - "$OPS" "$DRY_RUN" "$ALLOW_HSTS" "$TARGET_URL" "$API_URL" "$DATABASE_TELEMETRY_FILE" "$CADDYFILE" "$COMPOSE_FILE" "$EVIDENCE_DIR" "$OUTPUT_PATH" "$TARGET_ARCHITECTURE" 2>/dev/null <<'NODE'
 try {
   const fs = require('node:fs'),
     path = require('node:path');
@@ -128,6 +147,7 @@ try {
     composeRaw,
     dirRaw,
     outputRaw,
+    targetArchRaw,
   ] = process.argv.slice(2);
   const helper = require(ops + '/assemble-launch-dossier');
   // Process supervision requires Linux procfs, including visible group states.
@@ -159,6 +179,9 @@ try {
     throw Error();
   const value = (v) =>
     typeof v === 'string' && v.trim() && !/[\x00-\x1f\x7f-\x9f]/.test(v);
+  const targetArch = targetArchRaw || 'single-host-compose-caddy';
+  if (!['single-host-compose-caddy', 'vercel-managed-production'].includes(targetArch))
+    throw Error();
   if (
     ![process.cwd(), caddyRaw, composeRaw, dirRaw].every(value) ||
     [outputRaw, targetRaw, apiRaw, telemetryRaw].some((v) => v && !value(v))
@@ -186,9 +209,15 @@ try {
   }
   const caddy = path.resolve(caddyRaw),
     compose = path.resolve(composeRaw);
-  for (const file of [caddy, compose]) {
-    if (!fs.statSync(file).isFile()) throw Error();
-    fs.accessSync(file, fs.constants.R_OK);
+  if (targetArch === 'vercel-managed-production') {
+    const vercelConfig = path.resolve('vercel.json');
+    if (!fs.statSync(vercelConfig).isFile()) throw Error();
+    fs.accessSync(vercelConfig, fs.constants.R_OK);
+  } else {
+    for (const file of [caddy, compose]) {
+      if (!fs.statSync(file).isFile()) throw Error();
+      fs.accessSync(file, fs.constants.R_OK);
+    }
   }
   if (outputRaw.endsWith(path.sep)) throw Error();
   const dir = path.resolve(dirRaw);
@@ -210,6 +239,7 @@ try {
       compose,
       dir,
       output,
+      targetArch,
     ].join('\n'),
   );
 } catch {
@@ -218,11 +248,12 @@ try {
 NODE
 )" || fail 'Invalid invocation, prerequisite, telemetry or evidence destination'
 mapfile -t PREFLIGHT_VALUES <<< "$PREFLIGHT"
-((${#PREFLIGHT_VALUES[@]} == 7)) || fail 'Incomplete invocation preflight'
+((${#PREFLIGHT_VALUES[@]} == 8)) || fail 'Incomplete invocation preflight'
 TARGET_URL="${PREFLIGHT_VALUES[0]}"; API_URL="${PREFLIGHT_VALUES[1]}"
 DATABASE_TELEMETRY_FILE="${PREFLIGHT_VALUES[2]}"
 CADDYFILE="${PREFLIGHT_VALUES[3]}"; COMPOSE_FILE="${PREFLIGHT_VALUES[4]}"
 EVIDENCE_DIR="${PREFLIGHT_VALUES[5]}"; OUTPUT_PATH="${PREFLIGHT_VALUES[6]}"
+TARGET_ARCHITECTURE="${PREFLIGHT_VALUES[7]}"
 
 get_time_ms() {
   local ms
@@ -356,34 +387,54 @@ run_stage() {
 }
 
 printf '%s\n' '================================================================='
-printf 'Acres Unified Launch Drill Orchestrator (Phase 12K)'
+printf 'Acres Unified Launch Drill Orchestrator (Phase 12K)\n'
 printf '%s\n' '================================================================='
 printf 'Mode:                 %s\n' "$([ "$DRY_RUN" -eq 1 ] && echo 'dry-run (service-dependent)' || echo 'live')"
+printf 'Architecture:         %s\n' "$TARGET_ARCHITECTURE"
 printf 'Dossier destination:  %s\n' "$OUTPUT_PATH"
 printf 'Timestamp:            %s\n\n' "$TIMESTAMP"
 
 child_dry=()
 if [ "$DRY_RUN" -eq 1 ]; then child_dry=(--dry-run); fi
-stage_supply_chain() {
-  node "$OPS"/generate-sbom.js --verify-licenses --output "${STAGE_DIR}/sbom-inventory-receipt.json" &&
-  node "$OPS"/run-sast-scan.js --output "${STAGE_DIR}/sast-scan-evidence-receipt.json" &&
-  node "$OPS"/verify-container-security.js --output "${STAGE_DIR}/container-security-evidence-receipt.json"
-}
-stage_ingress() {
-  local hsts=()
-  if [ "$ALLOW_HSTS" -eq 1 ]; then hsts=(--allow-hsts); fi
-  node "$OPS"/verify-caddy-routing.js "$CADDYFILE" "${hsts[@]}" --output "${STAGE_DIR}/caddy-routing-evidence-receipt.json" &&
-  bash "$OPS"/run-deployment-drill.sh "${child_dry[@]}" "${hsts[@]}" --caddyfile "$CADDYFILE" --compose-file "$COMPOSE_FILE" --api-url "${API_URL:-http://localhost:3001}" --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/deployment-drill-evidence-receipt.json"
-}
-stage_disaster_recovery() {
-  bash "$OPS"/run-restore-drill.sh "${child_dry[@]}" --backup-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/restore-drill-evidence-receipt.json" &&
-  node "$OPS"/reconcile-storage-objects.js --dry-run --output "${STAGE_DIR}/reconcile-report-receipt.json"
-}
 
-stage_static() { node "$OPS"/run-static-integrity-checks.js --output "${STAGE_DIR}/static-integrity-evidence-receipt.json"; }
-stage_volume() { node "$OPS"/verify-volume-encryption.js --output "${STAGE_DIR}/volume-encryption-evidence-receipt.json"; }
-stage_rotation() { bash "$OPS"/run-secret-rotation-drill.sh --dry-run --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/secret-rotation-evidence-receipt.json"; }
-stage_capacity() { bash "$OPS"/run-capacity-alerting-drill.sh "${capacity_args[@]}" --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/capacity-alerting-drill-evidence-receipt.json"; }
+if [ "$TARGET_ARCHITECTURE" = "vercel-managed-production" ]; then
+  stage_supply_chain() {
+    node "$OPS"/generate-sbom.js --verify-licenses --output "${STAGE_DIR}/sbom-inventory-receipt.json" &&
+    node "$OPS"/run-sast-scan.js --output "${STAGE_DIR}/sast-scan-evidence-receipt.json" &&
+    node "$OPS"/verify-container-security.js --output "${STAGE_DIR}/container-security-evidence-receipt.json"
+  }
+  stage_ingress() {
+    node "$OPS"/verify-managed-ingress.js --output "${STAGE_DIR}/managed-ingress-deployment-receipt.json"
+  }
+  stage_disaster_recovery() {
+    node "$OPS"/verify-managed-restore-drill.js --output "${STAGE_DIR}/managed-restore-drill-receipt.json" &&
+    node "$OPS"/reconcile-storage-objects.js --provider vercel-blob --dry-run --output "${STAGE_DIR}/reconcile-report-receipt.json"
+  }
+  stage_static() { node "$OPS"/run-static-integrity-checks.js --output "${STAGE_DIR}/static-integrity-evidence-receipt.json"; }
+  stage_volume() { node "$OPS"/verify-managed-volume-encryption.js --output "${STAGE_DIR}/managed-volume-encryption-receipt.json"; }
+  stage_rotation() { node "$OPS"/verify-managed-secret-rotation.js --dry-run --output "${STAGE_DIR}/managed-secret-rotation-receipt.json"; }
+  stage_capacity() { bash "$OPS"/run-capacity-alerting-drill.sh "${capacity_args[@]}" --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/capacity-alerting-drill-evidence-receipt.json"; }
+else
+  stage_supply_chain() {
+    node "$OPS"/generate-sbom.js --verify-licenses --output "${STAGE_DIR}/sbom-inventory-receipt.json" &&
+    node "$OPS"/run-sast-scan.js --output "${STAGE_DIR}/sast-scan-evidence-receipt.json" &&
+    node "$OPS"/verify-container-security.js --output "${STAGE_DIR}/container-security-evidence-receipt.json"
+  }
+  stage_ingress() {
+    local hsts=()
+    if [ "$ALLOW_HSTS" -eq 1 ]; then hsts=(--allow-hsts); fi
+    node "$OPS"/verify-caddy-routing.js "$CADDYFILE" "${hsts[@]}" --output "${STAGE_DIR}/caddy-routing-evidence-receipt.json" &&
+    bash "$OPS"/run-deployment-drill.sh "${child_dry[@]}" "${hsts[@]}" --caddyfile "$CADDYFILE" --compose-file "$COMPOSE_FILE" --api-url "${API_URL:-http://localhost:3001}" --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/deployment-drill-evidence-receipt.json"
+  }
+  stage_disaster_recovery() {
+    bash "$OPS"/run-restore-drill.sh "${child_dry[@]}" --backup-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/restore-drill-evidence-receipt.json" &&
+    node "$OPS"/reconcile-storage-objects.js --dry-run --output "${STAGE_DIR}/reconcile-report-receipt.json"
+  }
+  stage_static() { node "$OPS"/run-static-integrity-checks.js --output "${STAGE_DIR}/static-integrity-evidence-receipt.json"; }
+  stage_volume() { node "$OPS"/verify-volume-encryption.js --output "${STAGE_DIR}/volume-encryption-evidence-receipt.json"; }
+  stage_rotation() { bash "$OPS"/run-secret-rotation-drill.sh --dry-run --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/secret-rotation-evidence-receipt.json"; }
+  stage_capacity() { bash "$OPS"/run-capacity-alerting-drill.sh "${capacity_args[@]}" --evidence-dir "$STAGE_DIR" --evidence-file "${STAGE_DIR}/capacity-alerting-drill-evidence-receipt.json"; }
+fi
 
 # Stage 1: static templates & container runtime integrity
 run_stage "static_templates" "Templates, runtime, secret scan" \
@@ -393,12 +444,12 @@ run_stage "static_templates" "Templates, runtime, secret scan" \
 run_stage "supply_chain_sast" "SBOM, SAST, container security" \
   stage_supply_chain
 
-# Stage 3: Caddy ingress routing & deployment rollback preflight
-run_stage "ingress_deployment" "Caddy routing + deployment drill" \
+# Stage 3: ingress routing & deployment rollback preflight
+run_stage "ingress_deployment" "$([ "$TARGET_ARCHITECTURE" = "vercel-managed-production" ] && echo 'Vercel routing + deployment verification' || echo 'Caddy routing + deployment drill')" \
   stage_ingress
 
 # Stage 4: volume configuration/local-scan preflight (always simulation)
-run_stage "volume_encryption" "Volume configuration preflight + local filename scan" \
+run_stage "volume_encryption" "$([ "$TARGET_ARCHITECTURE" = "vercel-managed-production" ] && echo 'Managed volume encryption + compute isolation' || echo 'Volume configuration preflight + local filename scan')" \
   stage_volume
 
 # Stage 5: zero-downtime secret rotation & compromise drill.
@@ -435,7 +486,7 @@ ASSEMBLY_ARGS=("$TIMESTAMP" "$DURATION_S"
   "$(node -e 'console.log(JSON.stringify(process.argv.slice(1).map(Number)))' "${STAGE_MS[@]}")"
   "$(node -e 'console.log(JSON.stringify(process.argv.slice(1)))' "${STAGE_ERRORS[@]}")"
   "$(node -e 'console.log(JSON.stringify(process.argv.slice(1)))' "${STAGE_ARTIFACTS[@]}")"
-  "$CADDYFILE" "$COMPOSE_FILE" "$TARGET_URL" "$API_URL" "$ALLOW_HSTS" "$DRY_RUN" "$START_MS" "$END_MS" "$RUN_DIR")
+  "$CADDYFILE" "$COMPOSE_FILE" "$TARGET_URL" "$API_URL" "$ALLOW_HSTS" "$DRY_RUN" "$START_MS" "$END_MS" "$RUN_DIR" "$TARGET_ARCHITECTURE")
 node "$OPS"/assemble-launch-dossier.js assemble "$OUTPUT_PATH" "${ASSEMBLY_ARGS[@]}" >"$VIEW_PATH" 2>/dev/null || fail 'Dossier assembly or publication failed'
 VERDICT="$(node "$ASSEMBLER" verify "$OUTPUT_PATH" "$VIEW_PATH" "${ASSEMBLY_ARGS[@]}" 2>/dev/null)" || fail 'Dossier verification failed'
 [[ "$VERDICT" =~ ^(PASSED|FAILED)\ ([0-7])$ ]] || fail 'Incomplete dossier verdict'

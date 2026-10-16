@@ -1850,3 +1850,44 @@ Operational tooling and launch readiness verification are extended to support th
    - Storage reconciliation execution and missing/orphan triage.
    - Disaster recovery (Neon PITR branch creation) and instant Vercel rollback.
    - 48-hour ClamAV CVD sandbox snapshot rebuild cadence.
+
+## Managed operator handoff and drill reconciliation — Prompt 380 (2026-10-16)
+
+Operational handoff templates and the unified launch drill runner are reconciled to support
+the `vercel-managed-production` profile with full audit parity and zero Docker daemon / Caddyfile
+prerequisites:
+
+1. **Managed operator handoff template (`infra/launch/operator-handoff.vercel.example.md`):**
+   - Models complete intake for all 11 managed categories alongside deployment targets, release candidates,
+     and named roles (`operations_lead`, `release_manager`, `deployment_approver`, `rollback_authority`, `evidence_custodian`).
+   - Zero-secret guarantee: enforces opaque references (`team_*`, `prj_*`, `store_*`, `snap_*`, `dpl_*`, SHA-256 digests)
+     and fails closed on plaintext credentials, passwords, or tokens.
+   - Restricts evidence access to named custodian with TTL-bounded access and mandatory pre-authorization.
+   - Updated `docs/operator-handoff.md` with explicit intake verification commands for both architectures.
+
+2. **Managed launch verification tools:**
+   - `scripts/ops/verify-managed-ingress.js`: verifies multi-service routing precedence, security headers,
+     and preview isolation; emits `managed-ingress-deployment-receipt.json`.
+   - `scripts/ops/verify-managed-volume-encryption.js`: verifies Neon AWS KMS AES-256 encryption at rest,
+     Vercel Blob encryption, and ephemeral serverless compute isolation; emits `managed-volume-encryption-receipt.json`.
+   - `scripts/ops/verify-managed-secret-rotation.js`: verifies indirect secret references (`vercel:...`, `neon:...`)
+     and 90-day rotation runbook compliance in `--dry-run` mode; emits `managed-secret-rotation-receipt.json`.
+   - `scripts/ops/verify-managed-restore-drill.js`: verifies Neon PITR point-in-time recovery window, RTO/RPO objectives,
+     and isolated branch recovery preflight; emits `managed-restore-drill-receipt.json`.
+
+3. **Unified launch drill runner reconciliation (`scripts/ops/run-launch-drills.sh`):**
+   - Added `--target-architecture <arch>` (or `--target-arch <arch>`), defaulting to `single-host-compose-caddy`.
+   - In `vercel-managed-production` mode, verifies `vercel.json` and skips Caddyfile / Compose / Docker daemon checks.
+   - Branches stage execution: runs managed child verifiers across stages 3, 4, 5, and 7, while preserving
+     shared supply-chain, SAST, container, and capacity/alerting stages.
+   - Forwards target architecture to the dossier assembler.
+
+4. **Launch dossier assembler reconciliation (`scripts/ops/assemble-launch-dossier.js`):**
+   - Added `RECEIPTS_MANAGED` and `TYPES_MANAGED` mapping managed stage receipts and validation rules.
+   - Emits `target_architecture: "vercel-managed-production"` and structured managed baselines
+     (`deploymentBaseline`, `volumeEncryptionBaseline`, `secretRotationBaseline`, `disasterRecoveryBaseline`).
+   - Retains 100% backward compatibility for `single-host-compose-caddy`.
+
+5. **Automated test coverage:**
+   - `scripts/ops/assemble-launch-dossier.spec.js`: 33 tests verifying managed receipt mapping, validation, and dossier generation.
+   - `scripts/ops/run-launch-drills.spec.js`: 158 tests verifying end-to-end dry-run execution, failure gating, and baseline verification across both architectures.

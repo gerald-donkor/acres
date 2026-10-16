@@ -37,6 +37,32 @@ const RECEIPTS = {
     reconcile: "reconcile-report-receipt.json",
   },
 };
+
+const RECEIPTS_MANAGED = {
+  static_templates: { static: "static-integrity-evidence-receipt.json" },
+  supply_chain_sast: {
+    sbom: "sbom-inventory-receipt.json",
+    sast: "sast-scan-evidence-receipt.json",
+    container: "container-security-evidence-receipt.json",
+  },
+  ingress_deployment: {
+    deployment: "managed-ingress-deployment-receipt.json",
+  },
+  volume_encryption: { volume: "managed-volume-encryption-receipt.json" },
+  secret_rotation: { rotation: "managed-secret-rotation-receipt.json" },
+  capacity_alerting: {
+    capacity: "capacity-alerting-drill-evidence-receipt.json",
+  },
+  disaster_recovery: {
+    restore: "managed-restore-drill-receipt.json",
+    reconcile: "reconcile-report-receipt.json",
+  },
+};
+
+function getReceipts(arch) {
+  return arch === "vercel-managed-production" ? RECEIPTS_MANAGED : RECEIPTS;
+}
+
 const TYPES = {
   static: "static_integrity_verification",
   sast: "sast_security_scan",
@@ -44,6 +70,24 @@ const TYPES = {
   caddy: "caddy_routing_and_tls_verification",
   volume: "production_volume_encryption_and_key_separation",
   rotation: "zero_downtime_secret_rotation_and_compromise_response",
+};
+
+const TYPES_MANAGED = {
+  deployment: [
+    "managed_ingress_deployment_verification",
+  ],
+  volume: [
+    "managed_volume_encryption_verification",
+    "managed_volume_encryption_and_compute_isolation",
+  ],
+  rotation: [
+    "managed_secret_rotation_verification",
+    "managed_zero_downtime_secret_rotation",
+  ],
+  restore: [
+    "managed_restore_drill_verification",
+    "managed_disaster_recovery_restore",
+  ],
 };
 
 // Reject symlinks in all path components, including operator-supplied parents.
@@ -355,15 +399,43 @@ function validSummaryFields(key, e) {
       e.passedChecks === e.checks.length &&
       e.failedChecks === 0
     );
-  if (key === "volume")
+  if (key === "volume") {
+    if (e.target_architecture === "vercel-managed-production") {
+      return (
+        e.storage_encryption_verified === true &&
+        e.neon_aws_kms_aes256 === true &&
+        e.ephemeral_compute_isolated === true &&
+        e.key_separation_verified === true
+      );
+    }
     return (
       Array.isArray(e.evaluatedMounts) &&
       e.totalRequiredMounts === e.evaluatedMounts.length &&
       e.validMountsCount === e.totalRequiredMounts
     );
-  if (key === "deployment")
+  }
+  if (key === "deployment") {
+    if (e.target_architecture === "vercel-managed-production") {
+      return (
+        e.routing_verified === true &&
+        e.services_verified === true &&
+        e.rollback_procedure_verified === true &&
+        count(e.routes_passed) &&
+        e.routes_passed >= 12
+      );
+    }
     return count(e.migration_count) && count(e.caddy_routes_tested);
-  if (key === "restore")
+  }
+  if (key === "restore") {
+    if (e.target_architecture === "vercel-managed-production") {
+      return (
+        e.pitr_preflight_verified === true &&
+        e.rto_compliant === true &&
+        e.rpo_compliant === true &&
+        finite(e.rto_hours) &&
+        finite(e.rpo_hours)
+      );
+    }
     return (
       [
         "tables_source",
@@ -376,18 +448,27 @@ function validSummaryFields(key, e) {
       e.rto_target_seconds > 0 &&
       e.duration_seconds <= e.rto_target_seconds
     );
-  if (key === "reconcile")
-    return (
-      [
-        "totalDatabaseObjects",
-        "totalBucketObjects",
-        "matchedObjects",
-        "missingObjects",
-        "orphanObjects",
-        "mismatchedObjects",
-      ].every((k) => count(e.summary?.[k])) &&
-      ["clean", "warning"].includes(e.summary?.status)
-    );
+  }
+  if (key === "reconcile") {
+    const valid = [
+      "totalDatabaseObjects",
+      "totalBucketObjects",
+      "matchedObjects",
+      "missingObjects",
+      "orphanObjects",
+      "mismatchedObjects",
+    ].every((k) => count(e.summary?.[k])) &&
+    ["clean", "warning"].includes(e.summary?.status);
+    if (!valid) return false;
+    if (e.provider === "vercel-blob" || e.summary?.provider === "vercel-blob") {
+      return (
+        e.summary?.missingObjects === 0 &&
+        e.summary?.mismatchedObjects === 0 &&
+        e.summary?.exitCode === 0
+      );
+    }
+    return true;
+  }
   return true;
 }
 function databaseBaseline(e, targetUrl, startedAt, endedAt, dryRun) {
@@ -571,7 +652,9 @@ function assemble(config) {
     dryRun,
     startedAt,
     endedAt,
+    targetArchitecture = "single-host-compose-caddy",
   } = config;
+  const isManaged = targetArchitecture === "vercel-managed-production";
   if (
     ![startedAt, endedAt, durationS].every(
       (n) => Number.isFinite(n) && n >= 0,
@@ -586,11 +669,12 @@ function assemble(config) {
     ...s,
     artifacts: [...s.artifacts, outputPath],
   }));
+  const receiptMap = getReceipts(targetArchitecture);
   if (
     stages.length !== total ||
     stages.some(
       (s, i) =>
-        s.stage_id !== Object.keys(RECEIPTS)[i] ||
+        s.stage_id !== Object.keys(receiptMap)[i] ||
         !["PASSED", "FAILED"].includes(s.status) ||
         !Number.isFinite(s.duration_ms) ||
         s.duration_ms < 0,
@@ -610,10 +694,13 @@ function assemble(config) {
     stage.error_message = reason;
   };
   const load = (stage, key) => {
+    const receiptsMap = getReceipts(targetArchitecture);
+    const receiptFile = receiptsMap[stage.stage_id]?.[key];
+    if (!receiptFile) return null;
     const file = path.join(
       config.runDir,
       stage.stage_id,
-      RECEIPTS[stage.stage_id][key],
+      receiptFile,
     );
     try {
       const e = readReceipt(
@@ -629,12 +716,20 @@ function assemble(config) {
         key === "sbom"
           ? e.metadata?.timestamp
           : ["deployment", "restore"].includes(key)
-            ? e.drill_timestamp
+            ? (e.drill_timestamp || e.timestamp)
             : e.timestamp;
+      const expectedType = TYPES[key];
+      const expectedManagedType = TYPES_MANAGED[key];
+      const matchesManaged = Array.isArray(expectedManagedType)
+        ? expectedManagedType.includes(e.drill_type)
+        : e.drill_type === expectedManagedType;
+      const validDrillType = isManaged
+        ? (expectedManagedType ? matchesManaged : (!expectedType || e.drill_type === expectedType))
+        : (!expectedType || e.drill_type === expectedType);
       if (
         !validSummaryFields(key, e) ||
         !freshTimestamp(time, startedAt, endedAt) ||
-        (TYPES[key] && e.drill_type !== TYPES[key]) ||
+        !validDrillType ||
         (key === "sbom" &&
           (e.bomFormat !== "CycloneDX" || e.specVersion !== "1.5"))
       )
@@ -744,15 +839,23 @@ function assemble(config) {
     drStage?.status === "PASSED" &&
     restoreEvidence &&
     restoreEvidence.execution_mode === "simulation" &&
-    restoreEvidence.rto_compliant === true &&
-    restoreEvidence.record_parity_verified === true &&
-    restoreEvidence.postgis_verified === true &&
-    restoreEvidence.foreign_keys_verified === true &&
-    typeof restoreEvidence.tables_source === "number" &&
-    restoreEvidence.tables_source === restoreEvidence.tables_restored &&
-    typeof restoreEvidence.migrations_source === "number" &&
-    restoreEvidence.migrations_source === restoreEvidence.migrations_restored &&
-    restoreEvidence.status === "success",
+    restoreEvidence.status === "success" &&
+    (isManaged
+      ? restoreEvidence.target_architecture === "vercel-managed-production" &&
+        restoreEvidence.pitr_preflight_verified === true &&
+        restoreEvidence.rto_compliant === true &&
+        restoreEvidence.rpo_compliant === true &&
+        restoreEvidence.blob_durability_verified === true &&
+        Array.isArray(restoreEvidence.errors) &&
+        restoreEvidence.errors.length === 0
+      : restoreEvidence.rto_compliant === true &&
+        restoreEvidence.record_parity_verified === true &&
+        restoreEvidence.postgis_verified === true &&
+        restoreEvidence.foreign_keys_verified === true &&
+        typeof restoreEvidence.tables_source === "number" &&
+        restoreEvidence.tables_source === restoreEvidence.tables_restored &&
+        typeof restoreEvidence.migrations_source === "number" &&
+        restoreEvidence.migrations_source === restoreEvidence.migrations_restored),
   );
 
   const reconcilePassed = Boolean(
@@ -769,32 +872,60 @@ function assemble(config) {
   // Compatibility fields summarize disaster recovery drill rehearsal, not live operator restore sign-off.
   let disasterRecoveryBaseline;
   if (restorePassed && reconcilePassed) {
-    disasterRecoveryBaseline = {
-      status: "verified",
-      restorePreflight: "simulation",
-      reconciliationPreflight: "simulation",
-      restoreDrill: {
-        rtoSeconds: restoreEvidence.duration_seconds,
-        rtoTargetSeconds: restoreEvidence.rto_target_seconds,
-        rtoCompliant: restoreEvidence.rto_compliant,
-        tablesSource: restoreEvidence.tables_source,
-        tablesRestored: restoreEvidence.tables_restored,
-        migrationsSource: restoreEvidence.migrations_source,
-        migrationsRestored: restoreEvidence.migrations_restored,
-        postgisVerified: restoreEvidence.postgis_verified,
-        foreignKeysVerified: restoreEvidence.foreign_keys_verified,
-        recordParityVerified: restoreEvidence.record_parity_verified,
-      },
-      storageReconciliation: {
-        totalDatabaseObjects: reconcileEvidence.summary.totalDatabaseObjects,
-        totalBucketObjects: reconcileEvidence.summary.totalBucketObjects,
-        matchedObjects: reconcileEvidence.summary.matchedObjects,
-        missingObjects: reconcileEvidence.summary.missingObjects,
-        orphanObjects: reconcileEvidence.summary.orphanObjects,
-        mismatchedObjects: reconcileEvidence.summary.mismatchedObjects,
-        status: reconcileEvidence.summary.status,
-      },
-    };
+    if (isManaged) {
+      disasterRecoveryBaseline = {
+        status: "verified",
+        targetArchitecture: "vercel-managed-production",
+        restorePreflight: "simulation",
+        reconciliationPreflight: "simulation",
+        restoreDrill: {
+          pitrRecoveryWindowDays: restoreEvidence.pitr_recovery_window_days || 7,
+          pitrPreflightVerified: true,
+          rtoHours: restoreEvidence.rto_hours || 4,
+          rtoCompliant: true,
+          rpoHours: restoreEvidence.rpo_hours || 1,
+          rpoCompliant: true,
+          blobDurabilityVerified: true,
+        },
+        storageReconciliation: {
+          provider: reconcileEvidence.provider || reconcileEvidence.summary?.provider || "vercel-blob",
+          totalDatabaseObjects: reconcileEvidence.summary.totalDatabaseObjects,
+          totalBucketObjects: reconcileEvidence.summary.totalBucketObjects,
+          matchedObjects: reconcileEvidence.summary.matchedObjects,
+          missingObjects: reconcileEvidence.summary.missingObjects,
+          orphanObjects: reconcileEvidence.summary.orphanObjects,
+          mismatchedObjects: reconcileEvidence.summary.mismatchedObjects,
+          status: reconcileEvidence.summary.status,
+        },
+      };
+    } else {
+      disasterRecoveryBaseline = {
+        status: "verified",
+        restorePreflight: "simulation",
+        reconciliationPreflight: "simulation",
+        restoreDrill: {
+          rtoSeconds: restoreEvidence.duration_seconds,
+          rtoTargetSeconds: restoreEvidence.rto_target_seconds,
+          rtoCompliant: restoreEvidence.rto_compliant,
+          tablesSource: restoreEvidence.tables_source,
+          tablesRestored: restoreEvidence.tables_restored,
+          migrationsSource: restoreEvidence.migrations_source,
+          migrationsRestored: restoreEvidence.migrations_restored,
+          postgisVerified: restoreEvidence.postgis_verified,
+          foreignKeysVerified: restoreEvidence.foreign_keys_verified,
+          recordParityVerified: restoreEvidence.record_parity_verified,
+        },
+        storageReconciliation: {
+          totalDatabaseObjects: reconcileEvidence.summary.totalDatabaseObjects,
+          totalBucketObjects: reconcileEvidence.summary.totalBucketObjects,
+          matchedObjects: reconcileEvidence.summary.matchedObjects,
+          missingObjects: reconcileEvidence.summary.missingObjects,
+          orphanObjects: reconcileEvidence.summary.orphanObjects,
+          mismatchedObjects: reconcileEvidence.summary.mismatchedObjects,
+          status: reconcileEvidence.summary.status,
+        },
+      };
+    }
   } else {
     disasterRecoveryBaseline = {
       status: "breached",
@@ -811,96 +942,135 @@ function assemble(config) {
 
   const depStage = stages.find((s) => s.stage_id === "ingress_deployment");
   const depEvidence = load(depStage, "deployment");
-  const caddyEvidence = load(depStage, "caddy");
+  const caddyEvidence = isManaged ? null : load(depStage, "caddy");
 
-  const caddyIsExample = path.basename(caddyfile) === "Caddyfile.example";
-  const targetBound = Boolean(
-    caddyEvidence &&
-    depEvidence &&
-    sameFile(caddyEvidence.targetPath, caddyfile) &&
-    sameFile(depEvidence.caddyfile, caddyfile) &&
-    sameFile(depEvidence.compose_file, composeFile),
-  );
-  const productionCandidate =
-    explicitLiveTargets || !caddyIsExample || allowHsts === "1";
-  const liveIngressValid =
-    !productionCandidate ||
-    Boolean(
-      explicitLiveTargets &&
-      !caddyIsExample &&
-      allowHsts === "1" &&
-      caddyEvidence?.hstsApproved === true &&
-      typeof caddyEvidence.domain === "string" &&
-      caddyEvidence.domain.includes(".") &&
-      caddyEvidence.domain !== "example.com" &&
-      caddyEvidence.domain.toLowerCase() ===
-        new URL(targetUrl).hostname.toLowerCase() &&
-      depEvidence?.probe_live_tested === true &&
-      depEvidence.dry_run === false &&
-      depEvidence.api_target_id === targetId(new URL(apiUrl).href),
-    );
-  const routesValid = Boolean(
-    caddyEvidence &&
-    Array.isArray(caddyEvidence.errors) &&
-    caddyEvidence.errors.length === 0 &&
-    Number.isInteger(caddyEvidence.routesPassed) &&
-    caddyEvidence.routesPassed >= 12 &&
-    caddyEvidence.routesPassed === caddyEvidence.routesEvaluated &&
-    depEvidence?.caddy_routes_tested >= 12,
-  );
-  if (!targetBound || !routesValid || !liveIngressValid) {
-    failStage(
-      depStage,
-      "stage 3 child missing, mismatched config, insufficient routes, or unverified live ingress",
-    );
-  }
-
-  const caddyPassed = Boolean(
-    caddyEvidence &&
-    caddyEvidence.execution_mode === "simulation" &&
-    caddyEvidence.status === "success" &&
-    caddyEvidence.valid === true &&
-    caddyEvidence.securityHeadersVerified === true &&
-    caddyEvidence.s3SigV4HostPreserved === true &&
-    caddyEvidence.proxyHeadersVerified === true,
-  );
-
-  const depPassed = Boolean(
-    depStage?.status === "PASSED" &&
-    depEvidence &&
-    depEvidence.execution_mode === "simulation" &&
-    depEvidence.status === "success" &&
-    depEvidence.schema_backward_compatible === true &&
-    depEvidence.caddy_routing_verified === true &&
-    depEvidence.rollback_procedure_verified === true &&
-    depEvidence.network_isolation_verified === true &&
-    caddyPassed &&
-    targetBound &&
-    routesValid &&
-    liveIngressValid,
-  );
-
-  // Stage 3 baseline fields summarize configuration/routing preflight, not live domain/TLS sign-off.
+  let depPassed = false;
   let deploymentBaseline;
-  if (depPassed) {
-    deploymentBaseline = {
-      status: "verified",
-      schemaBackwardCompatible: depEvidence.schema_backward_compatible,
-      caddyRoutingVerified: depEvidence.caddy_routing_verified,
-      caddyRoutingPreflight: "simulation",
-      deploymentPreflight: "simulation",
-      rollbackProcedureVerified: depEvidence.rollback_procedure_verified,
-      networkIsolationVerified: depEvidence.network_isolation_verified,
-      migrationCount: depEvidence.migration_count,
-      routesTested: depEvidence.caddy_routes_tested,
-    };
+
+  if (isManaged) {
+    depPassed = Boolean(
+      depStage?.status === "PASSED" &&
+      depEvidence &&
+      depEvidence.execution_mode === "simulation" &&
+      depEvidence.status === "success" &&
+      depEvidence.valid === true &&
+      depEvidence.target_architecture === "vercel-managed-production" &&
+      depEvidence.routing_verified === true &&
+      depEvidence.services_verified === true &&
+      depEvidence.rollback_procedure_verified === true &&
+      depEvidence.preview_deployment_verified === true &&
+      Array.isArray(depEvidence.errors) &&
+      depEvidence.errors.length === 0 &&
+      Number.isInteger(depEvidence.routes_passed) &&
+      depEvidence.routes_passed >= 12,
+    );
+    if (depPassed) {
+      deploymentBaseline = {
+        status: "verified",
+        targetArchitecture: "vercel-managed-production",
+        ingressRoutingVerified: true,
+        servicesVerified: true,
+        deploymentPreflight: "simulation",
+        rollbackProcedureVerified: true,
+        previewDeploymentVerified: true,
+        routesTested: depEvidence.routes_passed,
+      };
+    } else {
+      deploymentBaseline = {
+        status: "breached",
+        error_message:
+          depStage?.error_message ||
+          "stage 3 failed or child deployment evidence failed verification",
+      };
+    }
   } else {
-    deploymentBaseline = {
-      status: "breached",
-      error_message:
-        depStage?.error_message ||
-        "stage 3 failed or child deployment evidence failed verification",
-    };
+    const caddyIsExample = path.basename(caddyfile) === "Caddyfile.example";
+    const targetBound = Boolean(
+      caddyEvidence &&
+      depEvidence &&
+      sameFile(caddyEvidence.targetPath, caddyfile) &&
+      sameFile(depEvidence.caddyfile, caddyfile) &&
+      sameFile(depEvidence.compose_file, composeFile),
+    );
+    const productionCandidate =
+      explicitLiveTargets || !caddyIsExample || allowHsts === "1";
+    const liveIngressValid =
+      !productionCandidate ||
+      Boolean(
+        explicitLiveTargets &&
+        !caddyIsExample &&
+        allowHsts === "1" &&
+        caddyEvidence?.hstsApproved === true &&
+        typeof caddyEvidence.domain === "string" &&
+        caddyEvidence.domain.includes(".") &&
+        caddyEvidence.domain !== "example.com" &&
+        caddyEvidence.domain.toLowerCase() ===
+          new URL(targetUrl).hostname.toLowerCase() &&
+        depEvidence?.probe_live_tested === true &&
+        depEvidence.dry_run === false &&
+        depEvidence.api_target_id === targetId(new URL(apiUrl).href),
+      );
+    const routesValid = Boolean(
+      caddyEvidence &&
+      Array.isArray(caddyEvidence.errors) &&
+      caddyEvidence.errors.length === 0 &&
+      Number.isInteger(caddyEvidence.routesPassed) &&
+      caddyEvidence.routesPassed >= 12 &&
+      caddyEvidence.routesPassed === caddyEvidence.routesEvaluated &&
+      depEvidence?.caddy_routes_tested >= 12,
+    );
+    if (!targetBound || !routesValid || !liveIngressValid) {
+      failStage(
+        depStage,
+        "stage 3 child missing, mismatched config, insufficient routes, or unverified live ingress",
+      );
+    }
+
+    const caddyPassed = Boolean(
+      caddyEvidence &&
+      caddyEvidence.execution_mode === "simulation" &&
+      caddyEvidence.status === "success" &&
+      caddyEvidence.valid === true &&
+      caddyEvidence.securityHeadersVerified === true &&
+      caddyEvidence.s3SigV4HostPreserved === true &&
+      caddyEvidence.proxyHeadersVerified === true,
+    );
+
+    depPassed = Boolean(
+      depStage?.status === "PASSED" &&
+      depEvidence &&
+      depEvidence.execution_mode === "simulation" &&
+      depEvidence.status === "success" &&
+      depEvidence.schema_backward_compatible === true &&
+      depEvidence.caddy_routing_verified === true &&
+      depEvidence.rollback_procedure_verified === true &&
+      depEvidence.network_isolation_verified === true &&
+      caddyPassed &&
+      targetBound &&
+      routesValid &&
+      liveIngressValid,
+    );
+
+    if (depPassed) {
+      deploymentBaseline = {
+        status: "verified",
+        schemaBackwardCompatible: depEvidence.schema_backward_compatible,
+        caddyRoutingVerified: depEvidence.caddy_routing_verified,
+        caddyRoutingPreflight: "simulation",
+        deploymentPreflight: "simulation",
+        rollbackProcedureVerified: depEvidence.rollback_procedure_verified,
+        networkIsolationVerified: depEvidence.network_isolation_verified,
+        migrationCount: depEvidence.migration_count,
+        routesTested: depEvidence.caddy_routes_tested,
+      };
+    } else {
+      deploymentBaseline = {
+        status: "breached",
+        error_message:
+          depStage?.error_message ||
+          "stage 3 failed or child deployment evidence failed verification",
+      };
+    }
   }
 
   if (!depPassed)
@@ -914,51 +1084,109 @@ function assemble(config) {
   const secStage = stages.find((s) => s.stage_id === "secret_rotation");
   const secEvidence = load(secStage, "rotation");
 
-  const secPassed = Boolean(
-    secStage?.status === "PASSED" &&
-    secEvidence &&
-    secEvidence.execution_mode === "simulation" &&
-    secEvidence.status === "success" &&
-    Array.isArray(secEvidence.errors) &&
-    secEvidence.errors.length === 0 &&
-    secEvidence.steps?.session_rollover?.status === "passed" &&
-    secEvidence.steps?.csrf_rollover?.status === "passed" &&
-    secEvidence.steps?.database_rotation?.status === "passed" &&
-    secEvidence.steps?.valkey_rotation?.status === "passed" &&
-    secEvidence.steps?.storage_rotation?.status === "passed" &&
-    secEvidence.steps?.compromise_response?.status === "passed" &&
-    secEvidence.steps?.redaction_audit?.status === "passed" &&
-    secEvidence.steps?.redaction_audit?.raw_secrets_masked === true &&
-    secEvidence.steps?.redaction_audit?.zero_dev_passwords_detected === true,
-  );
-
+  let secPassed = false;
   let secretRotationBaseline;
-  if (secPassed) {
-    secretRotationBaseline = {
-      status: "verified",
-      rotationPreflight: "simulation",
-      steps: {
-        sessionRollover: secEvidence.steps.session_rollover.status,
-        csrfRollover: secEvidence.steps.csrf_rollover.status,
-        databaseRotation: secEvidence.steps.database_rotation.status,
-        valkeyRotation: secEvidence.steps.valkey_rotation.status,
-        storageRotation: secEvidence.steps.storage_rotation.status,
-        compromiseResponse: secEvidence.steps.compromise_response.status,
-        redactionAudit: secEvidence.steps.redaction_audit.status,
-      },
-      redactionAudit: {
-        rawSecretsMasked: secEvidence.steps.redaction_audit.raw_secrets_masked,
-        zeroDevPasswordsDetected:
-          secEvidence.steps.redaction_audit.zero_dev_passwords_detected,
-      },
-    };
+
+  if (isManaged) {
+    secPassed = Boolean(
+      secStage?.status === "PASSED" &&
+      secEvidence &&
+      secEvidence.execution_mode === "simulation" &&
+      secEvidence.status === "success" &&
+      secEvidence.valid === true &&
+      secEvidence.target_architecture === "vercel-managed-production" &&
+      secEvidence.cadence_compliant === true &&
+      secEvidence.indirect_references_verified === true &&
+      Array.isArray(secEvidence.errors) &&
+      secEvidence.errors.length === 0 &&
+      secEvidence.steps?.session_rollover?.status === "passed" &&
+      secEvidence.steps?.csrf_rollover?.status === "passed" &&
+      secEvidence.steps?.cron_rollover?.status === "passed" &&
+      secEvidence.steps?.neon_role_rotation?.status === "passed" &&
+      secEvidence.steps?.blob_token_rotation?.status === "passed" &&
+      secEvidence.steps?.resend_key_rotation?.status === "passed" &&
+      secEvidence.steps?.compromise_response?.status === "passed" &&
+      secEvidence.steps?.redaction_audit?.status === "passed" &&
+      secEvidence.steps?.redaction_audit?.raw_secrets_masked === true &&
+      secEvidence.steps?.redaction_audit?.zero_dev_passwords_detected === true,
+    );
+    if (secPassed) {
+      secretRotationBaseline = {
+        status: "verified",
+        targetArchitecture: "vercel-managed-production",
+        rotationPreflight: "simulation",
+        rotationCadenceDays: secEvidence.rotation_cadence_days || 90,
+        cadenceCompliant: true,
+        indirectReferencesVerified: true,
+        steps: {
+          sessionRollover: secEvidence.steps.session_rollover.status,
+          csrfRollover: secEvidence.steps.csrf_rollover.status,
+          cronRollover: secEvidence.steps.cron_rollover.status,
+          neonRoleRotation: secEvidence.steps.neon_role_rotation.status,
+          blobTokenRotation: secEvidence.steps.blob_token_rotation.status,
+          resendKeyRotation: secEvidence.steps.resend_key_rotation.status,
+          compromiseResponse: secEvidence.steps.compromise_response.status,
+          redactionAudit: secEvidence.steps.redaction_audit.status,
+        },
+        redactionAudit: {
+          rawSecretsMasked: true,
+          zeroDevPasswordsDetected: true,
+        },
+      };
+    } else {
+      secretRotationBaseline = {
+        status: "breached",
+        error_message:
+          secStage?.error_message ||
+          "stage 5 failed or child secret rotation evidence failed verification",
+      };
+    }
   } else {
-    secretRotationBaseline = {
-      status: "breached",
-      error_message:
-        secStage?.error_message ||
-        "stage 5 failed or child secret rotation evidence failed verification",
-    };
+    secPassed = Boolean(
+      secStage?.status === "PASSED" &&
+      secEvidence &&
+      secEvidence.execution_mode === "simulation" &&
+      secEvidence.status === "success" &&
+      Array.isArray(secEvidence.errors) &&
+      secEvidence.errors.length === 0 &&
+      secEvidence.steps?.session_rollover?.status === "passed" &&
+      secEvidence.steps?.csrf_rollover?.status === "passed" &&
+      secEvidence.steps?.database_rotation?.status === "passed" &&
+      secEvidence.steps?.valkey_rotation?.status === "passed" &&
+      secEvidence.steps?.storage_rotation?.status === "passed" &&
+      secEvidence.steps?.compromise_response?.status === "passed" &&
+      secEvidence.steps?.redaction_audit?.status === "passed" &&
+      secEvidence.steps?.redaction_audit?.raw_secrets_masked === true &&
+      secEvidence.steps?.redaction_audit?.zero_dev_passwords_detected === true,
+    );
+
+    if (secPassed) {
+      secretRotationBaseline = {
+        status: "verified",
+        rotationPreflight: "simulation",
+        steps: {
+          sessionRollover: secEvidence.steps.session_rollover.status,
+          csrfRollover: secEvidence.steps.csrf_rollover.status,
+          databaseRotation: secEvidence.steps.database_rotation.status,
+          valkeyRotation: secEvidence.steps.valkey_rotation.status,
+          storageRotation: secEvidence.steps.storage_rotation.status,
+          compromiseResponse: secEvidence.steps.compromise_response.status,
+          redactionAudit: secEvidence.steps.redaction_audit.status,
+        },
+        redactionAudit: {
+          rawSecretsMasked: secEvidence.steps.redaction_audit.raw_secrets_masked,
+          zeroDevPasswordsDetected:
+            secEvidence.steps.redaction_audit.zero_dev_passwords_detected,
+        },
+      };
+    } else {
+      secretRotationBaseline = {
+        status: "breached",
+        error_message:
+          secStage?.error_message ||
+          "stage 5 failed or child secret rotation evidence failed verification",
+      };
+    }
   }
 
   if (!secPassed) failStage(secStage, "rotation receipt failed verification");
@@ -967,43 +1195,79 @@ function assemble(config) {
   const volStage = stages.find((s) => s.stage_id === "volume_encryption");
   const volEvidence = load(volStage, "volume");
 
-  const volPassed = Boolean(
-    volStage?.status === "PASSED" &&
-    volEvidence &&
-    volEvidence.execution_mode === "simulation" &&
-    volEvidence.status === "success" &&
-    volEvidence.valid === true &&
-    Array.isArray(volEvidence.errors) &&
-    volEvidence.errors.length === 0 &&
-    Array.isArray(volEvidence.evaluatedMounts) &&
-    volEvidence.evaluatedMounts.length >= 9 &&
-    volEvidence.evaluatedMounts.every((m) => m?.passed === true) &&
-    volEvidence.keySeparation?.verified === true &&
-    Array.isArray(volEvidence.keySeparation?.detectedViolations) &&
-    volEvidence.keySeparation.detectedViolations.length === 0,
-  );
-
-  // Compatibility fields summarize declaration/local-scan preflight, not live inspection.
+  let volPassed = false;
   let volumeEncryptionBaseline;
-  if (volPassed) {
-    volumeEncryptionBaseline = {
-      status: "verified",
-      volumePreflight: "simulation",
-      totalRequiredMounts: volEvidence.totalRequiredMounts,
-      validMountsCount: volEvidence.validMountsCount,
-      keySeparationVerified: volEvidence.keySeparation.verified,
-      violationsDetected: volEvidence.keySeparation.detectedViolations.length,
-      scannedPathsCount: Array.isArray(volEvidence.keySeparation.scannedPaths)
-        ? volEvidence.keySeparation.scannedPaths.length
-        : 0,
-    };
+
+  if (isManaged) {
+    volPassed = Boolean(
+      volStage?.status === "PASSED" &&
+      volEvidence &&
+      volEvidence.execution_mode === "simulation" &&
+      volEvidence.status === "success" &&
+      volEvidence.valid === true &&
+      volEvidence.target_architecture === "vercel-managed-production" &&
+      volEvidence.storage_encryption_verified === true &&
+      volEvidence.neon_aws_kms_aes256 === true &&
+      volEvidence.ephemeral_compute_isolated === true &&
+      volEvidence.key_separation_verified === true &&
+      Array.isArray(volEvidence.errors) &&
+      volEvidence.errors.length === 0,
+    );
+    if (volPassed) {
+      volumeEncryptionBaseline = {
+        status: "verified",
+        targetArchitecture: "vercel-managed-production",
+        volumePreflight: "simulation",
+        storageEncryptionVerified: true,
+        neonKmsAes256Verified: true,
+        ephemeralComputeIsolated: true,
+        keySeparationVerified: true,
+      };
+    } else {
+      volumeEncryptionBaseline = {
+        status: "breached",
+        error_message:
+          volStage?.error_message ||
+          "stage 4 failed or child volume encryption evidence failed verification",
+      };
+    }
   } else {
-    volumeEncryptionBaseline = {
-      status: "breached",
-      error_message:
-        volStage?.error_message ||
-        "stage 4 failed or child volume encryption evidence failed verification",
-    };
+    volPassed = Boolean(
+      volStage?.status === "PASSED" &&
+      volEvidence &&
+      volEvidence.execution_mode === "simulation" &&
+      volEvidence.status === "success" &&
+      volEvidence.valid === true &&
+      Array.isArray(volEvidence.errors) &&
+      volEvidence.errors.length === 0 &&
+      Array.isArray(volEvidence.evaluatedMounts) &&
+      volEvidence.evaluatedMounts.length >= 9 &&
+      volEvidence.evaluatedMounts.every((m) => m?.passed === true) &&
+      volEvidence.keySeparation?.verified === true &&
+      Array.isArray(volEvidence.keySeparation?.detectedViolations) &&
+      volEvidence.keySeparation.detectedViolations.length === 0,
+    );
+
+    if (volPassed) {
+      volumeEncryptionBaseline = {
+        status: "verified",
+        volumePreflight: "simulation",
+        totalRequiredMounts: volEvidence.totalRequiredMounts,
+        validMountsCount: volEvidence.validMountsCount,
+        keySeparationVerified: volEvidence.keySeparation.verified,
+        violationsDetected: volEvidence.keySeparation.detectedViolations.length,
+        scannedPathsCount: Array.isArray(volEvidence.keySeparation.scannedPaths)
+          ? volEvidence.keySeparation.scannedPaths.length
+          : 0,
+      };
+    } else {
+      volumeEncryptionBaseline = {
+        status: "breached",
+        error_message:
+          volStage?.error_message ||
+          "stage 4 failed or child volume encryption evidence failed verification",
+      };
+    }
   }
 
   if (!volPassed) failStage(volStage, "volume receipt failed verification");
@@ -1102,6 +1366,7 @@ function assemble(config) {
     version,
     timestamp,
     environment,
+    target_architecture: targetArchitecture,
     execution_mode: "simulation",
     overall_status: stages.every((s) => s.status === "PASSED")
       ? "PASSED"
@@ -1112,8 +1377,9 @@ function assemble(config) {
     duration_seconds: Number(durationS),
     stages,
     targets: {
-      caddyfile: fileId(caddyfile),
-      composeFile: fileId(composeFile),
+      targetArchitecture,
+      caddyfile: isManaged ? null : fileId(caddyfile),
+      composeFile: isManaged ? null : fileId(composeFile),
       capacity: targetUrl ? targetId(new URL(targetUrl).href) : null,
       api: apiUrl ? targetId(new URL(apiUrl).href) : null,
       mode:
@@ -1138,7 +1404,11 @@ function assemble(config) {
       sastCompliance,
       containerSecurityCompliance,
       ingressDeployment: depStage.status === "PASSED" ? "passed" : "failed",
-      caddyRoutingPreflight: depStage.status === "PASSED" ? "simulation" : "failed",
+      caddyRoutingPreflight: isManaged
+        ? "not_applicable"
+        : depStage.status === "PASSED"
+          ? "simulation"
+          : "failed",
       deploymentPreflight: depStage.status === "PASSED" ? "simulation" : "failed",
       volumeEncryption: stages[3].status === "PASSED" ? "passed" : "failed",
       volumePreflight: stages[3].status === "PASSED" ? "simulation" : "failed",
@@ -1196,11 +1466,12 @@ function validateDossier(dossier, config) {
     dossier.overall_status !== (dossier.failed_stages ? "FAILED" : "PASSED")
   )
     throw Error("incomplete dossier");
+  const receiptMap = getReceipts(config.targetArchitecture);
   for (const stage of dossier.stages) {
     const dir = path.join(config.runDir, stage.stage_id);
     const registered = [
       path.join(dir, `launch-drill-stage-${stage.stage_id}.log`),
-      ...Object.values(RECEIPTS[stage.stage_id]).map((name) =>
+      ...Object.values(receiptMap[stage.stage_id]).map((name) =>
         path.join(dir, name),
       ),
       config.outputPath,
@@ -1211,7 +1482,7 @@ function validateDossier(dossier, config) {
 }
 
 function assemblyConfig(outputPath, args) {
-  if (args.length !== 17) throw Error("invalid arguments");
+  if (args.length !== 17 && args.length !== 18) throw Error("invalid arguments");
   const [
     timestamp,
     seconds,
@@ -1230,6 +1501,7 @@ function assemblyConfig(outputPath, args) {
     start,
     end,
     runDir,
+    targetArchitecture = "single-host-compose-caddy",
   ] = args;
   const [ids, descriptions, statuses, durations, errors, logs] = [
     idsRaw,
@@ -1245,6 +1517,7 @@ function assemblyConfig(outputPath, args) {
     )
   )
     throw Error("invalid manifest");
+  const receiptMap = getReceipts(targetArchitecture);
   const stages = ids.map((id, i) => ({
     stage_id: id,
     description: descriptions[i],
@@ -1253,7 +1526,7 @@ function assemblyConfig(outputPath, args) {
     error_message: errors[i] || null,
     artifacts: [
       logs[i],
-      ...Object.values(RECEIPTS[id]).map((name) => path.join(runDir, id, name)),
+      ...Object.values(receiptMap[id]).map((name) => path.join(runDir, id, name)),
     ],
   }));
   return {
@@ -1269,12 +1542,27 @@ function assemblyConfig(outputPath, args) {
     startedAt: Number(start),
     endedAt: Number(end),
     runDir,
+    targetArchitecture,
     stages,
   };
 }
 
 function main(args) {
-  const [command, outputPath, ...rest] = args;
+  let targetArchitecture = "single-host-compose-caddy";
+  const filteredArgs = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--target-architecture" || args[i] === "--target-arch") {
+      targetArchitecture = args[++i];
+    } else if (args[i].startsWith("--target-architecture=") || args[i].startsWith("--target-arch=")) {
+      targetArchitecture = args[i].split("=")[1];
+    } else {
+      filteredArgs.push(args[i]);
+    }
+  }
+  const [command, outputPath, ...rest] = filteredArgs;
+  if (rest.length === 17 && targetArchitecture !== "single-host-compose-caddy") {
+    rest.push(targetArchitecture);
+  }
   try {
     if (command === "prepare") prepareOutput(outputPath, rest[0]);
     else if (command === "release") releaseOutput(outputPath, rest[0]);
@@ -1304,6 +1592,10 @@ function main(args) {
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
 module.exports = {
   RECEIPTS,
+  RECEIPTS_MANAGED,
+  getReceipts,
+  TYPES,
+  TYPES_MANAGED,
   directory,
   outputPreflight,
   validateDossier,
@@ -1314,4 +1606,5 @@ module.exports = {
   releaseOutput,
   publish,
   assemble,
+  assemblyConfig,
 };

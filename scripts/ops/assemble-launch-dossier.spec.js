@@ -5,12 +5,16 @@ const os = require("node:os");
 const path = require("node:path");
 const {
   RECEIPTS,
+  RECEIPTS_MANAGED,
+  getReceipts,
   freshTimestamp,
   readReceipt,
   publish,
   prepareOutput,
   releaseOutput,
   outputPreflight,
+  assemble,
+  validateDossier,
   main,
 } = require("./assemble-launch-dossier");
 function fixture(t) {
@@ -361,4 +365,386 @@ test("publication with a colliding token basename cannot consume the reservation
   assert.ok(!fs.existsSync(output));
   releaseOutput(output, first);
   assert.deepEqual(fs.readdirSync(root), []);
+});
+
+test("RECEIPTS_MANAGED includes managed receipts and getReceipts discriminates", () => {
+  assert.equal(
+    RECEIPTS_MANAGED.ingress_deployment.deployment,
+    "managed-ingress-deployment-receipt.json",
+  );
+  assert.equal(
+    RECEIPTS_MANAGED.volume_encryption.volume,
+    "managed-volume-encryption-receipt.json",
+  );
+  assert.equal(
+    RECEIPTS_MANAGED.secret_rotation.rotation,
+    "managed-secret-rotation-receipt.json",
+  );
+  assert.equal(
+    RECEIPTS_MANAGED.disaster_recovery.restore,
+    "managed-restore-drill-receipt.json",
+  );
+  assert.equal(
+    RECEIPTS_MANAGED.disaster_recovery.reconcile,
+    "reconcile-report-receipt.json",
+  );
+  assert.equal(getReceipts("vercel-managed-production"), RECEIPTS_MANAGED);
+  assert.equal(getReceipts("single-host-compose-caddy"), RECEIPTS);
+  assert.equal(getReceipts(), RECEIPTS);
+});
+
+test("assemble and validateDossier succeed for vercel-managed-production", (t) => {
+  const root = fixture(t);
+  const runDir = path.join(root, "run");
+  fs.mkdirSync(runDir);
+  const outputPath = path.join(root, "dossier.json");
+  const now = new Date();
+  const startedAt = now.getTime() - 10000;
+  const endedAt = now.getTime();
+  const timestamp = now.toISOString();
+
+  const receiptMap = getReceipts("vercel-managed-production");
+  const stageIds = Object.keys(receiptMap);
+
+  for (const id of stageIds) {
+    fs.mkdirSync(path.join(runDir, id));
+  }
+
+  // 1. static_templates
+  fs.writeFileSync(
+    path.join(runDir, "static_templates", receiptMap.static_templates.static),
+    JSON.stringify({
+      drill_type: "static_integrity_verification",
+      timestamp,
+      status: "success",
+      valid: true,
+      totalChecks: 3,
+      passedChecks: 3,
+      failedChecks: 0,
+      checks: [
+        { id: "production_templates", passed: true, exitCode: 0 },
+        { id: "docker_runtime", passed: true, exitCode: 0 },
+        { id: "secret_defaults", passed: true, exitCode: 0 },
+      ],
+    }),
+  );
+
+  // 2. supply_chain_sast
+  fs.writeFileSync(
+    path.join(runDir, "supply_chain_sast", receiptMap.supply_chain_sast.sbom),
+    JSON.stringify({
+      bomFormat: "CycloneDX",
+      specVersion: "1.5",
+      metadata: { timestamp },
+      components: [{ name: "acres-api", version: "1.0.0" }],
+      licenseCompliance: { compliant: true, violations: [] },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(runDir, "supply_chain_sast", receiptMap.supply_chain_sast.sast),
+    JSON.stringify({
+      drill_type: "sast_security_scan",
+      timestamp,
+      status: "success",
+      valid: true,
+      passed: true,
+      scannedFilesCount: 50,
+      totalFindingsCount: 0,
+      triagedFindings: [],
+      expiredFindings: [],
+      blockingActiveFindings: [],
+    }),
+  );
+  fs.writeFileSync(
+    path.join(runDir, "supply_chain_sast", receiptMap.supply_chain_sast.container),
+    JSON.stringify({
+      drill_type: "container_security_verification",
+      timestamp,
+      status: "success",
+      valid: true,
+      checks: [{ passed: true }],
+      totalChecks: 1,
+      passedChecks: 1,
+      failedChecks: 0,
+      errors: [],
+    }),
+  );
+
+  // 3. ingress_deployment
+  fs.writeFileSync(
+    path.join(runDir, "ingress_deployment", receiptMap.ingress_deployment.deployment),
+    JSON.stringify({
+      drill_type: "managed_ingress_deployment_verification",
+      drill_timestamp: timestamp,
+      timestamp,
+      status: "success",
+      valid: true,
+      target_architecture: "vercel-managed-production",
+      execution_mode: "simulation",
+      routing_verified: true,
+      services_verified: true,
+      rollback_procedure_verified: true,
+      preview_deployment_verified: true,
+      routes_evaluated: 12,
+      routes_passed: 12,
+      errors: [],
+    }),
+  );
+
+  // 4. volume_encryption
+  fs.writeFileSync(
+    path.join(runDir, "volume_encryption", receiptMap.volume_encryption.volume),
+    JSON.stringify({
+      drill_type: "managed_volume_encryption_verification",
+      timestamp,
+      status: "success",
+      valid: true,
+      target_architecture: "vercel-managed-production",
+      execution_mode: "simulation",
+      storage_encryption_verified: true,
+      neon_aws_kms_aes256: true,
+      ephemeral_compute_isolated: true,
+      key_separation_verified: true,
+      cloud_storage_encrypted: true,
+      errors: [],
+    }),
+  );
+
+  // 5. secret_rotation
+  fs.writeFileSync(
+    path.join(runDir, "secret_rotation", receiptMap.secret_rotation.rotation),
+    JSON.stringify({
+      drill_type: "managed_secret_rotation_verification",
+      timestamp,
+      status: "success",
+      valid: true,
+      target_architecture: "vercel-managed-production",
+      execution_mode: "simulation",
+      rotation_cadence_days: 90,
+      cadence_compliant: true,
+      indirect_references_verified: true,
+      steps: {
+        session_rollover: { status: "passed" },
+        csrf_rollover: { status: "passed" },
+        cron_rollover: { status: "passed" },
+        neon_role_rotation: { status: "passed" },
+        blob_token_rotation: { status: "passed" },
+        resend_key_rotation: { status: "passed" },
+        compromise_response: { status: "passed" },
+        redaction_audit: {
+          status: "passed",
+          raw_secrets_masked: true,
+          zero_dev_passwords_detected: true,
+        },
+      },
+      errors: [],
+    }),
+  );
+
+  // 6. capacity_alerting
+  const { REQUIRED_ALERTS } = require("./verify-alert-rules");
+  const { DEFAULT_SLO_TARGETS, evaluateSloCompliance } = require("./verify-capacity-load");
+  const distribution = {
+    availabilityPercent: 100,
+    throughputRps: 150,
+    latencyMs: { min: 1, p50: 2, p90: 3, p95: 4, p99: 5, max: 6 },
+    databaseLatency: {
+      acquisitionLatencyMs: { min: 0, p50: 1, p90: 1.5, p95: 2, p99: 3, max: 4 },
+      queryLatencyMs: { min: 0, p50: 1, p90: 1.5, p95: 2, p99: 3, max: 4 },
+    },
+  };
+  const simulatedDos = {
+    drill_type: "dos_resilience_drill",
+    timestamp,
+    durationMs: 0,
+    status: "success",
+    mode: "simulated",
+    apiTargetId: null,
+    failures: [],
+    layers: {
+      layer1_edge_ingress: { passed: true },
+      layer2_in_process_throttling: { passed: true },
+      layer3_graphql_bounds: { passed: true },
+      layer4_storage_bounds: { passed: true },
+      layer5_anti_enumeration: { passed: true },
+      layer6_rate_limiter_burst: {
+        passed: null,
+        burstTestMode: "skipped",
+        attemptedRequests: 0,
+        throttledRequests: 0,
+        authRejectedRequests: 0,
+        unexpectedResponses: 0,
+        transportFailures: 0,
+        preHealthPassed: false,
+        csrfHandshakePassed: false,
+        postHealthPassed: false,
+      },
+    },
+  };
+  const pool = { totalConnections: 2, idleConnections: 1, maxConnections: 10, requestsWaiting: 0 };
+  const latency = { p50Ms: 1, p95Ms: 2, p99Ms: 3 };
+  fs.writeFileSync(
+    path.join(runDir, "capacity_alerting", receiptMap.capacity_alerting.capacity),
+    JSON.stringify({
+      timestamp,
+      status: "success",
+      valid: true,
+      execution_mode: "simulation",
+      mode: "synthetic",
+      durationMs: 0,
+      alerts: {
+        valid: true,
+        errors: [],
+        checks: [{ passed: true }],
+        requiredRulesCount: REQUIRED_ALERTS.length,
+        totalRulesCount: REQUIRED_ALERTS.length,
+        alerts: REQUIRED_ALERTS.map((alert) => ({ alert, valid: true, errors: [] })),
+        simulations: REQUIRED_ALERTS.map((alert) => ({
+          alert,
+          passed: true,
+          firesOnBreach: true,
+          clearsOnNormal: true,
+          ignoresOther4xx: true,
+        })),
+      },
+      capacity: {
+        mode: "synthetic",
+        targets: DEFAULT_SLO_TARGETS,
+        distribution,
+        compliance: evaluateSloCompliance(distribution),
+      },
+      dosResilience: simulatedDos,
+      failures: [],
+      summary: {
+        capacitySloCompliance: "passed",
+        alertVerification: "passed",
+        dosResilience: "passed",
+        databaseBaselineCompliance: "passed",
+      },
+      databaseTelemetryBaseline: {
+        status: "verified",
+        source: "synthetic",
+        postgresExporter: { up: 1, lastScrapeError: 0 },
+        postgresServer: { pgUp: 1, maxConnections: 100, activeConnections: 2 },
+        connectionPool: { api: pool, worker: pool },
+        poolAcquisitionLatency: { api: latency, worker: latency },
+        queryExecutionDuration: { api: latency, worker: latency },
+        serverActivity: { lockWaits: 0, maxTransactionDurationSec: 0 },
+      },
+    }),
+  );
+
+  // 7. disaster_recovery
+  fs.writeFileSync(
+    path.join(runDir, "disaster_recovery", receiptMap.disaster_recovery.restore),
+    JSON.stringify({
+      drill_type: "managed_restore_drill_verification",
+      drill_timestamp: timestamp,
+      timestamp,
+      status: "success",
+      valid: true,
+      target_architecture: "vercel-managed-production",
+      execution_mode: "simulation",
+      pitr_recovery_window_days: 7,
+      pitr_preflight_verified: true,
+      rto_hours: 4,
+      rto_compliant: true,
+      rpo_hours: 1,
+      rpo_compliant: true,
+      blob_durability_verified: true,
+      duration_seconds: 120,
+      rto_target_seconds: 14400,
+      errors: [],
+    }),
+  );
+  fs.writeFileSync(
+    path.join(runDir, "disaster_recovery", receiptMap.disaster_recovery.reconcile),
+    JSON.stringify({
+      execution_mode: "simulation",
+      drill_type: "storage_reconciliation",
+      timestamp,
+      provider: "vercel-blob",
+      summary: {
+        status: "clean",
+        exitCode: 0,
+        provider: "vercel-blob",
+        totalDatabaseObjects: 1,
+        totalBucketObjects: 1,
+        matchedObjects: 1,
+        missingObjects: 0,
+        orphanObjects: 0,
+        mismatchedObjects: 0,
+      },
+    }),
+  );
+
+  const stages = stageIds.map((id) => {
+    const log = path.join(runDir, id, `launch-drill-stage-${id}.log`);
+    fs.writeFileSync(log, "stage log\n");
+    return {
+      stage_id: id,
+      description: `Stage ${id}`,
+      status: "PASSED",
+      duration_ms: 100,
+      error_message: null,
+      artifacts: [
+        log,
+        ...Object.values(receiptMap[id]).map((name) => path.join(runDir, id, name)),
+      ],
+    };
+  });
+
+  const config = {
+    outputPath,
+    timestamp,
+    durationS: 5.0,
+    caddyfile: "infra/caddy/Caddyfile.example",
+    composeFile: "infra/compose/docker-compose.production.example.yml",
+    targetUrl: null,
+    apiUrl: null,
+    allowHsts: 0,
+    dryRun: "1",
+    startedAt,
+    endedAt,
+    runDir,
+    targetArchitecture: "vercel-managed-production",
+    stages,
+  };
+
+  const dossier = assemble(config);
+  assert.equal(dossier.target_architecture, "vercel-managed-production");
+  assert.equal(dossier.overall_status, "PASSED");
+  assert.equal(dossier.total_stages, 7);
+  assert.equal(dossier.passed_stages, 7);
+  assert.equal(dossier.failed_stages, 0);
+
+  assert.equal(dossier.deploymentBaseline.status, "verified");
+  assert.equal(dossier.deploymentBaseline.targetArchitecture, "vercel-managed-production");
+  assert.equal(dossier.deploymentBaseline.ingressRoutingVerified, true);
+  assert.equal(dossier.deploymentBaseline.servicesVerified, true);
+
+  assert.equal(dossier.volumeEncryptionBaseline.status, "verified");
+  assert.equal(dossier.volumeEncryptionBaseline.targetArchitecture, "vercel-managed-production");
+  assert.equal(dossier.volumeEncryptionBaseline.storageEncryptionVerified, true);
+  assert.equal(dossier.volumeEncryptionBaseline.neonKmsAes256Verified, true);
+
+  assert.equal(dossier.secretRotationBaseline.status, "verified");
+  assert.equal(dossier.secretRotationBaseline.targetArchitecture, "vercel-managed-production");
+  assert.equal(dossier.secretRotationBaseline.rotationCadenceDays, 90);
+  assert.equal(dossier.secretRotationBaseline.cadenceCompliant, true);
+
+  assert.equal(dossier.disasterRecoveryBaseline.status, "verified");
+  assert.equal(dossier.disasterRecoveryBaseline.targetArchitecture, "vercel-managed-production");
+  assert.equal(dossier.disasterRecoveryBaseline.restoreDrill.pitrRecoveryWindowDays, 7);
+  assert.equal(dossier.disasterRecoveryBaseline.storageReconciliation.provider, "vercel-blob");
+
+  assert.equal(dossier.summary.caddyRoutingPreflight, "not_applicable");
+  assert.equal(dossier.summary.deploymentCompliance, "passed");
+  assert.equal(dossier.summary.volumeEncryptionCompliance, "passed");
+  assert.equal(dossier.summary.secretRotationCompliance, "passed");
+  assert.equal(dossier.summary.restoreCompliance, "passed");
+  assert.equal(dossier.summary.reconcileCompliance, "passed");
+
+  // Validate dossier against invocation config
+  assert.doesNotThrow(() => validateDossier(dossier, config));
 });
