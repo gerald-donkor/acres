@@ -99,6 +99,8 @@ committed per AGENTS.md §2):
       0600). Hosted app upload → scan proven through preview `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`.
       Rebuild lifecycle remains open: Prompt 384 supersedes Prompt 383's
       closure claim. Candidate preparation does not activate or retire snapshots.
+      Next scanner gate (Prompt 388): owner checks the Hobby Sandbox allowance
+      and create-path cause; then a separately authorized single rebuild.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -2086,3 +2088,24 @@ using these diagnostics, followed only on success by separately scoped preview
 adoption/deployed application proof. The old failed receipt cannot be salvaged.
 Hosted cadence, dependency-aware retirement/resource budget, production plan,
 Phase 12 exit and all eleven category sign-offs remain open.
+
+## Scanner candidate rebuild — Prompt 388 (2026-10-17)
+
+The single authorized live preparation failed safely: receipt
+`candidate_build_failed` with `build_failure` `step: "builder-create"`,
+`kind: "provider_failed"`, `builder_cleanup: "not_requested"`,
+`snapshot_confirmed: false` (window `2026-10-17T22:04:06Z`–`22:04:40Z`). The
+builder `Sandbox.create` threw before returning a handle (a provider
+rejection or a client-side transport/authorization failure; the cause is
+unrecorded); no sandbox, candidate,
+hashes, smoke or `candidate.env` exist, and offline handoff rejected the
+receipt. Baseline `snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA` and Prompt 386
+candidate `snap_rz0cs8Nnw1RObI3ZDS5WRKDSUR2y` remain `created` in `iad1`;
+no sandbox residue. Sandbox allowance was not visible from the CLI this session.
+See [the execution record](operations.md#prompt-388--bounded-scanner-candidate-rebuild-2026-10-17).
+
+Next gate: an owner-side read-only check of the Hobby Sandbox allowance and
+any create-path cause in the dashboard, then only if allowance remains, a separately authorized single rebuild. Adoption
+and deployed application proof still require a successful receipt. The
+baseline expires `2026-10-24T14:29:39.778Z`; hosted cadence, retirement,
+production plan, Phase 12 exit and the eleven sign-offs remain open.

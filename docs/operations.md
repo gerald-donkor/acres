@@ -12964,3 +12964,162 @@ preservation, confirmed-ID callback, failed-handoff rejection and source/test
 coverage against the approved prompt. No valid defect or architectural change
 required a fix or re-review. Only this approved work is committed locally;
 nothing is pushed and no additional hosted authorization is implied.
+
+## Prompt 388 — bounded scanner candidate rebuild (2026-10-17)
+
+Baseline: `34667e73c7de828e5b547b9d433f0145a4247d38` on `main`; only the
+approved Prompt 388 was untracked. **The single authorized live preparation
+failed at `builder-create` with `provider_failed`; no candidate exists and
+nothing was adopted.** No retry, configuration write, deployment, browser
+acceptance, snapshot deletion, workflow dispatch or push occurred. No launch
+gate or sign-off closed.
+
+### Target and pre-run state
+
+Node `v24.21.0` (both `node` and `npm exec -- node`) via the documented
+`/tmp/acres-node24` launcher; Vercel CLI 64.5.0 from the local npx cache,
+because `npx vercel@latest` hung resolving the package (killed; no command
+ran). `whoami --format json` returned team `team_zE3mp7nrEZ6a7cxRavwUMYC4`
+(`dgsloxx417s-projects`), plan `hobby`; `project inspect --non-interactive`
+returned `prj_q9ApajZWDgdYZetnm5s5oakEjrUD` (`acres`), Sandbox region `iad1`,
+no failover regions. The `preview.env` OIDC token had expired at
+`2026-10-16T02:52:20Z`; one `env pull --environment=preview --yes` refreshed it
+(file stays 0600; new `exp` `2026-10-18T10:00:24Z`, owner/project claims match).
+Only names were listed. No decrypt or unrelated variable read occurred.
+
+Read-only inspection at `2026-10-17T22:01:41.586Z` (installed SDK 3.8.0, exact
+IDs, allowlisted fields): baseline `snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA` and
+Prompt 386 candidate `snap_rz0cs8Nnw1RObI3ZDS5WRKDSUR2y` both `created` in
+`iad1` (expiry `2026-10-24T14:29:39.778Z` and `2026-10-25T18:03:20.241Z`);
+the project sandbox listing was empty. Sandbox allowance was not visible.
+`vercel usage --json` first hit a 90 s timeout (exit 124), then exited 1 with
+"Billing cost data is unavailable … This does not mean usage was zero", so
+quota is recorded as **not visible**, not as available or exhausted.
+
+Preflight: `--help` exit 0; `--dry-run` exit 0 with
+`"execution_mode":"simulation"` and no `build_failure`; focused
+scanner/cadence/handoff suite `tests 187`, `pass 187`, `fail 0`. Installed
+`@vercel/sandbox` is 3.8.0, with `persistent` and `deleteOrphanSnapshots`
+semantics matching this record; builder still uses `persistent: false` and
+`deleteOrphanSnapshots: false`.
+
+### The single live invocation
+
+Custody: `~/.config/acres/vercel-preview/prompt388-20261017T220154Z/` (0700;
+all files 0600). `prompt386-*` was not touched. Only the OIDC token was
+extracted from `preview.env`, with the fixed target variables; `scanner.env`
+was not loaded. One invocation, network-enabled from the start:
+`rebuild-scanner-cadence.js --force --current-snapshot-id
+snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA --output <run>/receipt.json --write-env
+<run>/candidate.env`, under a 1800 s watchdog (builder session 900 s + snapshot 300 s + smoke
+120 s + 30 s control calls ≈ 23 min).
+
+Window `2026-10-17T22:04:06Z`–`22:04:40Z` (34 s); exit 1. Stderr was only the
+fixed `Scanner candidate preparation failed; activation not performed. Check
+restricted provider state and retained snapshots.` Stdout equals the receipt.
+Receipt SHA-256
+`e71e0d0704bcfaa14d2a2df18689c270dbbd996828de967427e55e67fca521f4`; schema
+1, timestamp `2026-10-17T22:04:07.118Z`, target preview/team/project/`iad1`,
+`execution_mode: "live"`, `status: "failed"`, `reason: "stale_or_forced"`,
+`error: "candidate_build_failed"`, `new_snapshot_id`/hashes/smoke `null`,
+`prune_status: "retained"`, `activation_status` and `configuration_export`
+`"not_performed"`, and:
+
+| field                | value             |
+| -------------------- | ----------------- |
+| `step`               | `builder-create`  |
+| `kind`               | `provider_failed` |
+| `builder_cleanup`    | `not_requested`   |
+| `snapshot_confirmed` | `false`           |
+
+No `candidate.env` was created. Offline handoff once against the receipt:
+exit 1, `handoff_receipt_invalid`, no bundle directory.
+
+Post-run inspection at `2026-10-17T22:08:47.630Z`: both snapshots unchanged
+(`created`, `iad1`, same expiry); sandbox listing still empty; no owned
+sandbox, candidate or residue to report. Nothing was stopped or deleted.
+
+### Interpretation
+
+`builder-create` / `provider_failed` means `Sandbox.create` for the builder
+threw before returning a handle, so no install, signature, snapshot or cleanup
+step ran. `buildStep` labels any exception there `provider_failed`: a provider
+rejection and a client-side transport or authentication failure look the
+same. This is a new failure, not a row of the Prompt
+387 table, which still describes the unresolved Prompt 386 receipt. The create
+request (image, `iad1`, 2 vCPU, 900 s timeout, builder egress,
+`persistent: false`) is unchanged since `5247e37` apart from Prompt 387's
+`buildStep` wrapper, and the same request
+succeeded at about `18:03Z` when Prompt 386 obtained a builder. A code
+regression in the create call is therefore unlikely. **What remains unknown**
+is the cause. A Hobby Sandbox allowance or rate limit, a plan-limit
+rejection, a transient provider error, a network/transport failure, or an
+OIDC authorization rejection specific to sandbox creation are all consistent
+with the safe projection, which deliberately carries no provider message. The
+same token passed `sandboxTarget`'s claim/expiry validation and served the
+read-only `Snapshot.get`/`Sandbox.list` calls before and after the run, so an
+expired or mis-bound token is excluded, but a create-specific permission
+rejection is not. Quota was not visible from the CLI this session.
+
+Proposed next bounded scope (not executed): a read-only allowance check in
+the Vercel dashboard by the account owner (Sandbox usage for the current
+Hobby period) and a look for any create-path cause the dashboard shows; then,
+only if allowance remains, a separately authorized single rebuild. A coarse,
+source-owned sub-classification of `builder-create` (HTTP status class versus
+transport error, no provider message) would remove this ambiguity and needs
+its own prompt and tests. If the dashboard shows the allowance exhausted, wait for the
+period reset or make an explicit plan decision; this target is free-tier only.
+The deployed preview scanner is expected to fail closed as
+`scanner_unavailable` while the baseline's signatures stay older than 48
+hours; the baseline itself expires `2026-10-24T14:29:39.778Z`.
+
+### Verification and review
+
+All checks ran on Node `v24.21.0`, sequentially, with subprocess and network
+permission from the start (no restricted-sandbox attempt this time). Logs are
+local scratch only.
+
+- `node scripts/vercel/check-vercel-config.js`: exit 0,
+  `vercel.json configuration valid`.
+- `npm run vercel:probe-test`: exit 0, `tests 285`, `pass 285`, `fail 0`.
+- `npm run ops:check`: exit 0 through all stages, ending with managed-drill
+  `tests 28`, `pass 28`, `fail 0`. The audit printed
+  `Production dependency security audit passed (0 critical vulnerabilities)`;
+  `10 vulnerabilities (4 moderate, 6 high)` remain outside this scope. This
+  aggregate is local/synthetic and static, not hosted acceptance.
+- `npm run lint`: exit 0 across all workspaces, ending with
+  `eslint "{src,test}/**/*.ts"` and no diagnostics.
+- `npm run build`: exit 0; Next `16.3.8`,
+  `Generating static pages using 7 workers (23/23)`, then
+  `Generated Prisma Client (7.9.1)` and the Nest build.
+- `npm run typecheck` (after build): exit 0, ending with
+  `Generated Prisma Client (7.9.1)` and no type diagnostics.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- `git diff --check`: exit 0, no output.
+- Installed Prettier on the prompt (whitespace-only fixes applied) and on the
+  new documentation fragments: `All matched files use Prettier code style!`.
+  Historical records were not reformatted.
+
+No source, test, dependency or workflow file changed. Tracked records contain
+only public target IDs, snapshot IDs, timestamps, the receipt digest and fixed
+status fields; tokens, env contents, stdout/stderr captures and raw provider
+responses stay in the restricted run directory or scratch.
+
+Independent read-only review used baseline/HEAD
+`34667e73c7de828e5b547b9d433f0145a4247d38` plus this working diff, the approved
+prompt and sanitized evidence only; it opened no restricted file and made no
+provider call. It confirmed the records against that evidence and the code:
+`builder-create` / `provider_failed` comes only from the wrapped
+`Sandbox.create`, cleanup stays `not_requested` without a handle, `--force`
+skips the pre-build snapshot lookup, the create parameters are unchanged since
+`5247e37` apart from the wrapper, and the anchors resolve. It reported
+`Critical: none`, one Important and four Minor findings, with the verdict "With fixes".
+Receiving-review verification against `buildStep` confirmed the Important
+finding: any exception there becomes `provider_failed`, so transport and
+create-specific authorization failures are indistinguishable from provider
+rejection. The cause list, the "Resume here" line and the next gate were
+widened accordingly. The single-session `vercel usage` observation, the
+cached-CLI version caveat and the watchdog arithmetic were also corrected; the
+memory update was confirmed. These were wording-only record changes, so no
+re-review was needed. Only this approved work is committed locally; nothing is
+pushed and no further hosted authorization is implied.

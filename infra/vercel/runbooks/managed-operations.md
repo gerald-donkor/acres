@@ -209,6 +209,18 @@ returns 404. Keep that failed receipt ineligible even if the snapshot reports
 separate bounded authorization; no retry is implicit in investigation or failure
 diagnostics. See [the investigation record](../../../docs/operations.md#prompt-387--scanner-build-failure-investigation-2026-10-17).
 
+Prompt 388 lessons: check the `preview.env` OIDC `exp` claim locally before
+any live call and re-pull it when expired (it lasts about 12 hours). Pass only
+`VERCEL_OIDC_TOKEN` and the fixed target variables to the producer, not the
+whole pulled file. If `npx vercel@latest` hangs resolving the package, run the
+cached CLI under the npx cache directly; record its version (64.5.0 here) and
+re-check its help before relying on flags. A `builder-create` /
+`provider_failed` receipt means no builder handle existed: there is nothing to
+clean up, but the cause (provider, transport or authorization) is not
+recorded. `vercel usage` returned no billing data for this Hobby team on
+2026-10-17, so check Sandbox allowance in the dashboard before authorizing
+another rebuild. See [the record](../../../docs/operations.md#prompt-388--bounded-scanner-candidate-rebuild-2026-10-17).
+
 ### 5.2 Workflow and handoff
 
 The daily 04:00 UTC schedule and default manual dispatch perform credential-free

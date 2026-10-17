@@ -4212,3 +4212,14 @@ using these diagnostics, followed only on success by separately scoped preview
 adoption/deployed application proof. The old failed receipt cannot be salvaged.
 Hosted cadence, dependency-aware retirement/resource budget, production plan,
 Phase 12 exit and all eleven category sign-offs remain open.
+
+## Scanner candidate rebuild — Prompt 388 (2026-10-17)
+
+The one authorized live preparation failed at `builder-create` with
+`provider_failed` before any builder existed; no candidate, cleanup need or
+residue. Handoff rejected the receipt and nothing was adopted. See
+[the execution record](operations.md#prompt-388--bounded-scanner-candidate-rebuild-2026-10-17).
+Remaining: owner-side Sandbox allowance check, a separately authorized
+rebuild, then preview adoption/application proof, hosted cadence,
+retirement/resource budget, production plan, Phase 12 exit and all eleven
+category sign-offs.

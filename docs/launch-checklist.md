@@ -3339,3 +3339,9 @@ using these diagnostics, followed only on success by separately scoped preview
 adoption/deployed application proof. The old failed receipt cannot be salvaged.
 Hosted cadence, dependency-aware retirement/resource budget, production plan,
 Phase 12 exit and all eleven category sign-offs remain open.
+
+## Prompt 388 — scanner rebuild failed at builder create (2026-10-17)
+
+The single bounded live rebuild failed safely at `builder-create`
+(`provider_failed`); no candidate or adoption. No category is approved. See
+[the execution record](operations.md#prompt-388--bounded-scanner-candidate-rebuild-2026-10-17).
