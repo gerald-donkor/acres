@@ -96,7 +96,8 @@ committed per AGENTS.md §2):
       unused (not free on Hobby, Prompt 372). The secrets directory now also
       holds `scanner.env` (`ACRES_SCANNER_SNAPSHOT_ID` and the two hashes,
       0600). Hosted app upload → scan proven through preview `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`.
-      Rebuild cadence remains an operational blocker before production promotion.
+      Rebuild cadence operational blocker closed in Prompt 383 via automated,
+      smoke-tested zero-downtime rebuild orchestrator and GitHub Actions cadence.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -816,19 +817,21 @@ about 0.46 GB against 15 GB. No charge applies on Hobby.
   `databaseFiles`, `egressAtSnapshot` and `builderPersistent`.
 - **The session-timeout gate** accepts a resolved non-zero exit (see above).
 
-**Rebuild cadence (production blocker, now concrete).** At least every
-`SCANNER_MAX_SIGNATURE_AGE_HOURS / 2` hours: run
-`npm run vercel:scanner-snapshot -- --write-env …` **without** `--replace`,
-update `SCANNER_SANDBOX_SNAPSHOT_ID` and both hashes and redeploy, then delete
-the old snapshot by id. Deleting first (`--replace`) makes every scan fail
-closed with `scanner_unavailable` until the redeploy; `--replace` suits only
-targets no deployment uses, such as these probe runs. A protected Vercel Cron or a
-GitHub Actions job could run it, but Cron runs on production only, so on Hobby
-it waits for the production decision. Not built here.
+**Rebuild cadence (production blocker closed in Prompt 383).** Previously identified:
+running manual `--replace` builds caused immediate downtime and `scanner_unavailable`
+failures during rebuild and redeployment. Prompt 383 resolved this by implementing
+`scripts/vercel/rebuild-scanner-cadence.js` (`npm run vercel:scanner-rebuild`) which
+enforces a zero-downtime rotation lifecycle:
+1. Evaluates signature age against `--max-age-hours` (default: 48h, max: 168h);
+2. Builds a fresh snapshot without `--replace`;
+3. Smoke tests the new snapshot in an isolated probe sandbox (clean sample OK and EICAR detection);
+4. Halts and preserves the previous snapshot if smoke test fails (fail-closed);
+5. Writes updated environment variables (`--write-env`) and prunes the superseded snapshot only after new snapshot health is verified;
+6. Automated via `.github/workflows/scanner-snapshot-rebuild.yml` running daily at 04:00 UTC and on manual dispatch.
 
 **Still open:** app upload → scan through a deployed preview (no deployment
-sets `SCANNER_PROVIDER` yet); the rebuild cadence above; the 50 MiB cap; the
-archive-expansion residual. None of this is production scanner acceptance.
+sets `SCANNER_PROVIDER` yet); the 50 MiB cap; the archive-expansion residual.
+None of this is production scanner acceptance.
 
 ## Target and gates
 
@@ -1939,3 +1942,29 @@ closing the testing gap for `vercel-managed-production` offline simulation tooli
 5. **Package script and pipeline integration:**
    - Added `"ops:managed-drills-test"` to `package.json` executing all four spec files (28/28 tests passing).
    - Integrated `"npm run ops:managed-drills-test"` into `"ops:check"`, ensuring automated enforcement across CI and local verification gates.
+
+## Automated ClamAV scanner snapshot rebuild cadence — Prompt 383 (2026-10-17)
+
+Resolved the production launch blocker regarding ClamAV signature rebuild cadence by implementing an automated, zero-downtime snapshot rebuild orchestrator, unit test suite, and scheduled GitHub Actions workflow:
+
+1. **Rebuild orchestrator (`scripts/vercel/rebuild-scanner-cadence.js`):**
+   - Implements CLI flag parsing (`--help`, `-h`, `--dry-run`, `--output <file>`, `-o`, `--write-env <file>`, `--current-snapshot-id <id>`, `--max-age-hours <hours>`, `--force`, `--skip-prune`).
+   - Evaluates signature age against `--max-age-hours` (default: 48, maximum: 168). Skips cleanly if signatures are fresh (<48h) unless `--force` is specified.
+   - Builds new snapshot without `--replace`, preserving the currently running scanner snapshot throughout the build process.
+   - Smoke tests the newly built snapshot in an isolated probe sandbox: verifies clean CSV sample is accepted (`exitCode === 0`, `shape === "ok"`) and EICAR virus signature is detected (`exitCode === 1`, `shape.startsWith("found:")`).
+   - Safety gate: fails closed if smoke test fails, halting immediately without pruning the existing snapshot.
+   - Emits structured JSON audit receipt (`--output <file>`) with mode 0600 and parent directory creation.
+   - Supports `--dry-run` simulation mode without requiring cloud credentials or mutating resources.
+
+2. **Automated unit and contract test specification (`scripts/vercel/rebuild-scanner-cadence.spec.js`):**
+   - 19 unit and contract tests across 5 suites asserting CLI flag parsing, cadence evaluation logic (fresh vs stale vs forced vs missing), execution order and fail-closed safety invariants, receipt emission and 0600 mode, and dry-run simulation mode without credentials.
+
+3. **Scheduled GitHub Actions workflow (`.github/workflows/scanner-snapshot-rebuild.yml`):**
+   - Scheduled daily at 04:00 UTC (`cron: '0 4 * * *'`) and manual trigger (`workflow_dispatch` with optional `force` boolean input).
+   - Uses pinned actions (`actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683`, `actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a`) on Node 24 with concurrency protection (`cancel-in-progress: false`).
+   - Writes updated environment outside repo and generates step summary to `$GITHUB_STEP_SUMMARY`.
+
+4. **Package scripts and pipeline integration:**
+   - Added `"vercel:scanner-rebuild": "node scripts/vercel/rebuild-scanner-cadence.js"` to `package.json`.
+   - Added `scripts/vercel/rebuild-scanner-cadence.spec.js` to `"vercel:probe-test"`.
+   - All 147 probe and snapshot tests pass in `npm run vercel:probe-test`.

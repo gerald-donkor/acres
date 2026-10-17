@@ -1,0 +1,64 @@
+name: ClamAV Scanner Snapshot Rebuild
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force rebuild regardless of signature age'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scanner-snapshot-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Rebuild ClamAV scanner snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Create isolated runtime directory
+        run: mkdir -p /tmp/acres-scanner-rebuild
+      - name: Run scanner rebuild cadence
+        env:
+          ACRES_VERCEL_PROBE: ${{ vars.ACRES_VERCEL_PROBE || 'isolated-synthetic-preview' }}
+          VERCEL_ENV: 'preview'
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          ACRES_VERCEL_PROBE_REGION: ${{ vars.ACRES_VERCEL_PROBE_REGION || 'iad1' }}
+          ACRES_SCANNER_SNAPSHOT_ID: ${{ vars.ACRES_SCANNER_SNAPSHOT_ID || secrets.ACRES_SCANNER_SNAPSHOT_ID }}
+          FORCE_INPUT: ${{ github.event.inputs.force }}
+        run: |
+          FORCE_FLAG=""
+          if [ "$FORCE_INPUT" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+          npm run vercel:scanner-rebuild -- \
+            --write-env /tmp/acres-scanner-rebuild/scanner.env \
+            --output /tmp/acres-scanner-rebuild/receipt.json \
+            $FORCE_FLAG
+      - name: Generate step summary
+        if: always()
+        run: |
+          if [ -f /tmp/acres-scanner-rebuild/receipt.json ]; then
+            echo "### ClamAV Scanner Snapshot Rebuild Summary" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/acres-scanner-rebuild/receipt.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Clean up temporary files
+        if: always()
+        run: rm -rf /tmp/acres-scanner-rebuild

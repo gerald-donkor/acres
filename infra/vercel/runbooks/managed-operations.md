@@ -165,24 +165,56 @@ If an application defect or regression is introduced in a new deployment:
 
 ## 5. ClamAV Scanner Sandbox Snapshot Rebuild
 
-Because virus definition signatures update continuously, the ClamAV CVD snapshot must be rebuilt on an automated 48-hour cadence to prevent signature staleness (maximum allowable age is 168 hours).
+Because virus definition signatures update continuously, the ClamAV CVD snapshot must be rebuilt on an automated 48-hour cadence to prevent signature staleness (maximum allowable age is 168 hours). Stale signatures fail closed in production, rejecting uploads as `scanner_unavailable`.
 
-### 5.1 Snapshot Build Command
+### 5.1 Automated Zero-Downtime Rebuild Cadence
+
+The orchestrator `scripts/vercel/rebuild-scanner-cadence.js` (`npm run vercel:scanner-rebuild`) enforces a zero-downtime lifecycle:
+1. **Cadence Evaluation**: Checks current snapshot age against `--max-age-hours` (default: 48h, max: 168h). Skips rebuild cleanly if signatures are fresh unless `--force` is specified.
+2. **Safe Build**: Invokes `buildSnapshot` without `--replace`, preserving the active snapshot during the build window.
+3. **Smoke Verification**: Launches an isolated probe sandbox from the new snapshot, verifying both clean sample acceptance and EICAR detection.
+4. **Safety Gate**: If smoke tests fail, the rebuild fails closed immediately; the previous snapshot is preserved untouched.
+5. **Configuration Export**: Writes updated snapshot ID and SHA-256 digests outside the repo (0600 mode) if `--write-env` is provided.
+6. **Prune Old Snapshot**: Prunes the superseded snapshot only after new snapshot health is proven (unless `--skip-prune` is passed).
+7. **Audit Receipt**: Emits a structured JSON audit receipt (`--output <file>`).
+
+### 5.2 Scheduled GitHub Actions Workflow
+
+The automated rebuild runs via `.github/workflows/scanner-snapshot-rebuild.yml`:
+- **Schedule**: `cron: '0 4 * * *'` (runs daily at 04:00 UTC).
+- **Manual Dispatch**: `workflow_dispatch` with optional `force: true` boolean input.
+- **Concurrency**: `scanner-snapshot-rebuild` with `cancel-in-progress: false` to prevent overlapping builds.
+- **Fail-Closed Gate**: Rebuild failure fails the job, keeping the previous snapshot intact.
+
+### 5.3 Manual Execution and Dry-Run
 
 ```bash
-npm run vercel:scanner-snapshot -- \
+# Dry-run simulation (no cloud mutations or credentials required)
+npm run vercel:scanner-rebuild -- --dry-run
+
+# Live rebuild with outside-repo env output and audit receipt
+npm run vercel:scanner-rebuild -- \
+  --current-snapshot-id snap_ACTIVE_ID \
+  --write-env ~/.config/acres/scanner.env \
+  --output /tmp/acres-scanner-rebuild/receipt.json
+
+# Force rebuild bypassing signature age check
+npm run vercel:scanner-rebuild -- --force \
+  --current-snapshot-id snap_ACTIVE_ID \
   --write-env ~/.config/acres/scanner.env
 ```
 
-### 5.2 Post-Build Update Procedure
+### 5.4 Post-Build Deployment Update
 
-1. Read the newly generated `ACRES_SCANNER_SNAPSHOT_ID` from the output or `~/.config/acres/scanner.env`.
-2. Update the Vercel production environment variable:
+1. Read the newly generated `ACRES_SCANNER_SNAPSHOT_ID`, `ACRES_SCANNER_MAIN_SHA256`, and `ACRES_SCANNER_DAILY_SHA256` from `~/.config/acres/scanner.env`.
+2. Update the Vercel production environment variables:
    ```bash
    npx vercel env add SCANNER_SANDBOX_SNAPSHOT_ID production
+   npx vercel env add SCANNER_SANDBOX_MAIN_SHA256 production
+   npx vercel env add SCANNER_SANDBOX_DAILY_SHA256 production
    ```
 3. Trigger a deployment promotion or redeployment to activate the new snapshot.
-4. Verify sandbox health with:
+4. Verify hosted sandbox health:
    ```bash
-   npm run vercel:probe -- scanner-eicar
+   npm run vercel:probe -- scanner
    ```

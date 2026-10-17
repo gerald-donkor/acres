@@ -4103,3 +4103,25 @@ into `npm run ops:check`. Full test coverage passes across all 4 managed verifie
 launch drill test suites (191/191 tests), and the full `ops:check` preflight pipeline. Reference
 Compose workflows retain 100% backward compatibility. Production promotion, cloud mutation,
 and Phase 12 sign-off remain separate.
+
+## Phase 12 automated scanner snapshot rebuild cadence and preflight suite — Prompt 383
+
+Resolves the operational launch blocker identified in `docs/vercel-deployment.md` regarding ClamAV
+signature snapshot rebuild cadence by implementing an automated, zero-downtime rebuild orchestrator,
+unit test suite, and scheduled GitHub Actions workflow:
+
+The new toolchain provides:
+1. `scripts/vercel/rebuild-scanner-cadence.js`: orchestrates signature age inspection (`--max-age-hours`,
+   default 48h, max 168h), safe snapshot creation without `--replace`, smoke verification of clean
+   and EICAR samples in an isolated probe sandbox, fail-closed protection (previous snapshot is NEVER
+   pruned if smoke test fails), environment variable export (`--write-env`), and `--dry-run` simulation mode.
+2. `scripts/vercel/rebuild-scanner-cadence.spec.js`: 19 unit and contract tests across 5 suites asserting
+   CLI flag parsing, cadence evaluation logic, execution order, fail-closed safety, receipt emission
+   with 0600 file modes, and credential-less simulation mode.
+3. `.github/workflows/scanner-snapshot-rebuild.yml`: scheduled automated rebuild running daily at 04:00 UTC
+   (`cron: '0 4 * * *'`) and manual `workflow_dispatch` with concurrency protection and step summaries.
+4. Package scripts and pipeline integration: added `"vercel:scanner-rebuild"` and integrated
+   `rebuild-scanner-cadence.spec.js` into `"vercel:probe-test"`. Full test coverage passes across
+   `vercel:probe-test` (147/147 tests) and `npm run ops:check` (33 stages, 28 test suites). Reference
+   Compose workflows retain 100% backward compatibility. Production promotion, cloud mutation, and Phase 12
+   sign-off remain separate.

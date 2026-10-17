@@ -145,6 +145,8 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 | `scripts/ops/verify-managed-volume-encryption.js` & `.spec.js` | Managed Neon KMS AES-256 volume encryption and serverless compute isolation verification |
 | `scripts/ops/verify-managed-secret-rotation.js` & `.spec.js` | Managed zero-downtime secret rotation and indirect reference verification |
 | `scripts/ops/verify-managed-restore-drill.js` & `.spec.js` | Managed disaster recovery restore and Neon PITR branch recovery verification |
+| `scripts/vercel/rebuild-scanner-cadence.js` & `.spec.js` | Automated zero-downtime ClamAV scanner snapshot rebuild orchestrator with smoke verification |
+| `.github/workflows/scanner-snapshot-rebuild.yml` | Scheduled and manual GitHub Actions workflow for automated ClamAV scanner rebuild cadence |
 | `scripts/db/bootstrap-production-roles.sh` | Production Postgres bootstrap for `acres_migrator`, `acres_app`, and `acres`; deliberately omits local `acres_test` database |
 
 Root scripts:
@@ -180,6 +182,8 @@ npm run ops:launch-readiness-test
 npm run ops:managed-drills-test
 npm run ops:check
 npm run ops:launch-readiness
+npm run vercel:scanner-rebuild
+npm run vercel:probe-test
 ```
 
 `ops:check` passes in CI. `ops:launch-readiness` is expected to fail until the
@@ -12507,3 +12511,15 @@ Reconciled top-level launch readiness orchestration and static integrity verific
 - Added `"ops:launch-readiness:managed"` script to `package.json`.
 - Unit and contract tests: `run-static-integrity-checks.spec.js` (76/76 passed), `launch-readiness.spec.js`
   (37/37 passed), `run-launch-drills.spec.js` + `assemble-launch-dossier.spec.js` (191/191 passed).
+
+## Prompt 383 — automated ClamAV scanner snapshot rebuild cadence (2026-10-17)
+
+Resolved the production launch blocker regarding ClamAV signature rebuild cadence by implementing an automated, zero-downtime snapshot rebuild orchestrator, unit test suite, and scheduled GitHub Actions workflow:
+- Automated rebuild orchestrator (`scripts/vercel/rebuild-scanner-cadence.js`):
+  Evaluates snapshot signature age against `--max-age-hours` (default: 48h, max: 168h); builds a fresh snapshot without `--replace`; verifies the new snapshot with clean and EICAR scans in an isolated probe sandbox; writes updated environment variables (`--write-env`) outside repo (0600 mode); prunes superseded snapshot only after new snapshot passes smoke tests; supports `--dry-run` simulation mode without credentials.
+- Unit and contract test specification (`scripts/vercel/rebuild-scanner-cadence.spec.js`):
+  19 tests covering CLI flag parsing, cadence evaluation logic (fresh vs stale vs forced vs missing), execution order and fail-closed safety invariants, receipt emission and 0600 mode, and dry-run simulation mode without credentials.
+- Scheduled GitHub Actions workflow (`.github/workflows/scanner-snapshot-rebuild.yml`):
+  Runs daily at 04:00 UTC (`cron: '0 4 * * *'`) and manual `workflow_dispatch` with optional `force` input.
+- Package scripts and pipeline integration:
+  Added `"vercel:scanner-rebuild": "node scripts/vercel/rebuild-scanner-cadence.js"` and integrated `rebuild-scanner-cadence.spec.js` into `"vercel:probe-test"`.

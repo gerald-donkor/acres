@@ -15,6 +15,15 @@ local prerequisites. Managed equivalent evidence, independent recovery and all
 eleven sign-offs must exist before promotion; do not relabel reference drills
 as Vercel acceptance.
 
+In Prompt 383, the production launch blocker on ClamAV scanner snapshot rebuild
+cadence is closed. The automated rebuild orchestrator
+(`scripts/vercel/rebuild-scanner-cadence.js` / `npm run vercel:scanner-rebuild`)
+and scheduled workflow (`.github/workflows/scanner-snapshot-rebuild.yml`)
+enforce a zero-downtime rotation: new snapshots are built without `--replace`,
+smoke-tested for clean and EICAR samples in an isolated probe sandbox, and
+only pruned after the new snapshot is proven healthy. Run `npm run vercel:probe-test`
+and `npm run vercel:scanner-rebuild -- --dry-run` to verify locally without cloud mutations.
+
 ## 1. Introduction & Launch Philosophy
 
 Acres launches fail-closed. `scripts/ops/check-launch-readiness.js` rejects the
@@ -69,6 +78,10 @@ node --test scripts/ops/verify-managed-ingress.spec.js
 node --test scripts/ops/verify-managed-volume-encryption.spec.js
 node --test scripts/ops/verify-managed-secret-rotation.spec.js
 node --test scripts/ops/verify-managed-restore-drill.spec.js
+
+# Managed ClamAV scanner snapshot rebuild cadence:
+npm run vercel:scanner-rebuild -- --dry-run
+npm run vercel:probe-test
 ```
 
 Copy `infra/launch/readiness.example.json` (or `infra/launch/readiness.vercel.example.json` for managed profile)
