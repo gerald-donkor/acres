@@ -3,8 +3,9 @@
 Status: implementation in progress. Preview Blob (server SDK and browser
 presigned upload) and Neon database/RLS seams are proven. The Sandbox scanner
 is built from a Sandbox snapshot and its hosted seam is proven (Prompt 373);
-VCR remains unused because it is not free on Hobby. Only synthetic probe
-deployments exist; the Acres application has not been deployed.
+VCR remains unused because it is not free on Hobby. The first Acres application
+preview was deployed in Prompt 378 (see its record below); production activation
+and launch approvals remain open.
 Starting source: `a1350d0` on `main`.
 [ADR 0001](adr/0001-vercel-managed-production.md) records the accepted target.
 
@@ -96,8 +97,8 @@ committed per AGENTS.md §2):
       unused (not free on Hobby, Prompt 372). The secrets directory now also
       holds `scanner.env` (`ACRES_SCANNER_SNAPSHOT_ID` and the two hashes,
       0600). Hosted app upload → scan proven through preview `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`.
-      Rebuild cadence operational blocker closed in Prompt 383 via automated,
-      smoke-tested zero-downtime rebuild orchestrator and GitHub Actions cadence.
+      Rebuild lifecycle remains open: Prompt 384 supersedes Prompt 383's
+      closure claim. Candidate preparation does not activate or retire snapshots.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -817,20 +818,16 @@ about 0.46 GB against 15 GB. No charge applies on Hobby.
   `databaseFiles`, `egressAtSnapshot` and `builderPersistent`.
 - **The session-timeout gate** accepts a resolved non-zero exit (see above).
 
-**Rebuild cadence (production blocker closed in Prompt 383).** Previously identified:
-running manual `--replace` builds caused immediate downtime and `scanner_unavailable`
-failures during rebuild and redeployment. Prompt 383 resolved this by implementing
-`scripts/vercel/rebuild-scanner-cadence.js` (`npm run vercel:scanner-rebuild`) which
-enforces a zero-downtime rotation lifecycle:
-1. Evaluates signature age against `--max-age-hours` (default: 48h, max: 168h);
-2. Builds a fresh snapshot without `--replace`;
-3. Smoke tests the new snapshot in an isolated probe sandbox (clean sample OK and EICAR detection);
-4. Halts and preserves the previous snapshot if smoke test fails (fail-closed);
-5. Writes updated environment variables (`--write-env`) and prunes the superseded snapshot only after new snapshot health is verified;
-6. Automated via `.github/workflows/scanner-snapshot-rebuild.yml` running daily at 04:00 UTC and on manual dispatch.
+**Rebuild cadence — Prompt 384 supersedes Prompt 383.** Candidate preparation
+retains every snapshot, smoke-tests a new candidate and optionally creates a
+new configuration file. No activation or retirement occurs. Snapshot metadata
+age (48-hour default, 168-hour CLI maximum) is not CVD freshness evidence.
+Scheduled/default manual workflow runs are credential-free simulation; explicit
+manual `prepare_candidate: true` prepares an isolated preview candidate only.
 
-**Still open:** app upload → scan through a deployed preview (no deployment
-sets `SCANNER_PROVIDER` yet); the 50 MiB cap; the archive-expansion residual.
+The deployed-app upload/scan proof subsequently recorded in Prompt 378 supersedes
+the earlier open preview item here. Automated durable adoption, deployment
+verification, bounded retirement and hosted cadence evidence remain open.
 None of this is production scanner acceptance.
 
 ## Target and gates
@@ -1945,6 +1942,10 @@ closing the testing gap for `vercel-managed-production` offline simulation tooli
 
 ## Automated ClamAV scanner snapshot rebuild cadence — Prompt 383 (2026-10-17)
 
+> Historical implementation record. Prompt 384 below supersedes all closure,
+> zero-downtime, signature-age, output-overwrite and scheduled-live claims here.
+> Original test results remain attributed to the Prompt 383 run.
+
 Resolved the production launch blocker regarding ClamAV signature rebuild cadence by implementing an automated, zero-downtime snapshot rebuild orchestrator, unit test suite, and scheduled GitHub Actions workflow:
 
 1. **Rebuild orchestrator (`scripts/vercel/rebuild-scanner-cadence.js`):**
@@ -1968,3 +1969,41 @@ Resolved the production launch blocker regarding ClamAV signature rebuild cadenc
    - Added `"vercel:scanner-rebuild": "node scripts/vercel/rebuild-scanner-cadence.js"` to `package.json`.
    - Added `scripts/vercel/rebuild-scanner-cadence.spec.js` to `"vercel:probe-test"`.
    - All 147 probe and snapshot tests pass in `npm run vercel:probe-test`.
+
+## Scanner candidate lifecycle safety — Prompt 384 (2026-10-17)
+
+Prompt 384 supersedes Prompt 383's closed-blocker/zero-downtime claims. The
+cadence tool retains all snapshots, performs no activation, preserves active
+configuration during simulation, creates only new exclusive 0600 live outputs,
+and sanitizes errors/receipts. Snapshot age is explicitly metadata evidence;
+`snapshot_recent` replaces `signatures_fresh`, equality requests rebuilding and
+invalid/future metadata cannot certify recency. `--skip-prune` is a harmless
+deprecated option. The standalone builder's `--replace` behavior is unchanged.
+
+Scheduled/default manual workflow runs are credential-free simulation; only
+explicit manual `prepare_candidate: true` enables preview candidate preparation.
+Target/team/iad1 guards run before SDK work; credentials are live-step-only.
+Unique 0700 temporary directories and an allowlisted summary preserve handoff
+ID/hash information before local cleanup. No deployment or automatic retirement
+controller was introduced. The runbook separates preparation, activation,
+application verification and dependency-aware retirement.
+
+Actual Node 24.21.0 checks: focused suite `tests 62`, `pass 62`, `fail 0`;
+`vercel:probe-test` `tests 190`, `pass 190`, `fail 0`; `ops:check`, lint,
+post-build typecheck and build all exited 0. Help/dry-run exited 0 with
+`"activation_status":"not_performed"` and `"execution_mode":"simulation"` on the
+latter. Prettier reported `All matched files use Prettier code style!` for the
+changed JS/spec/YAML; diff check was silent (exit 0). Secret scan:
+`secret/default scan passed`. Audit gate passed with zero critical findings;
+4 moderate and 6 high findings remain outside this scope. The initial concurrent
+build/typecheck race was resolved by sequential typecheck after build.
+Independent read-only review found no issues and independently passed all 62
+focused tests. Full verification details and compatibility changes are recorded
+in [operations.md](operations.md#prompt-384--scanner-candidate-lifecycle-safety-2026-10-17).
+
+Durable candidate configuration adoption, a verified deployment using it,
+old-deployment/in-flight/rollback dependencies, bounded retirement/resource
+budget and hosted scheduled-execution evidence remain open. Local SDK doubles
+and workflow shell tests do not supply hosted proof. The commercial hosting-plan decision,
+all eleven sign-offs and Phase 12 exit remain open; no percentage change,
+production promotion or cloud mutation was performed.

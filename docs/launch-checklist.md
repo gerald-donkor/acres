@@ -15,14 +15,14 @@ local prerequisites. Managed equivalent evidence, independent recovery and all
 eleven sign-offs must exist before promotion; do not relabel reference drills
 as Vercel acceptance.
 
-In Prompt 383, the production launch blocker on ClamAV scanner snapshot rebuild
-cadence is closed. The automated rebuild orchestrator
-(`scripts/vercel/rebuild-scanner-cadence.js` / `npm run vercel:scanner-rebuild`)
-and scheduled workflow (`.github/workflows/scanner-snapshot-rebuild.yml`)
-enforce a zero-downtime rotation: new snapshots are built without `--replace`,
-smoke-tested for clean and EICAR samples in an isolated probe sandbox, and
-only pruned after the new snapshot is proven healthy. Run `npm run vercel:probe-test`
-and `npm run vercel:scanner-rebuild -- --dry-run` to verify locally without cloud mutations.
+Prompt 384 supersedes Prompt 383's scanner launch-blocker closure claim. The
+cadence CLI prepares retained candidates only; scheduled/default manual runs
+simulate without credentials. Explicit manual candidate preparation is bound to
+the isolated Acres preview target. New candidate health does not prove runtime
+activation. Durable configuration adoption, deployed application verification,
+rollback/in-flight dependency review, bounded retirement/resource budget and
+hosted scheduled-execution evidence remain open. All eleven sign-offs remain
+required. Run `npm run vercel:scanner-rebuild -- --dry-run` for local simulation.
 
 ## 1. Introduction & Launch Philosophy
 
@@ -3289,3 +3289,21 @@ Category 5 (`slo_and_alerting`) approval requires operator confirmation of all
 throughput ≥ 100 RPS, database connection pool acquisition p95 latency ceiling ≤ 50ms,
 database query execution p95 latency ceiling ≤ 100ms, and verified database baseline
 telemetry evidence (`summary.databaseBaselineCompliance: "passed"`).
+
+## Prompt 384 — candidate safety verification (2026-10-17)
+
+Prompt 383's scanner lifecycle launch-blocker closure is superseded, as stated
+in the selected-profile section above. Prompt 384 implements retained candidate
+preparation with safe new output files and credential-free scheduled simulation;
+manual activation/application verification and dependency-aware retirement remain
+separate operator work. No category or production promotion is approved.
+
+Actual local verification on Node 24.21.0: focused suite `tests 62`, `pass 62`,
+`fail 0`; platform suite `tests 190`, `pass 190`, `fail 0`; `ops:check`, lint,
+sequential post-build typecheck and build exited 0. Prettier reported
+`All matched files use Prettier code style!`; diff check exited 0 silently.
+Audit passed the zero-critical gate but reported 4 moderate and 6 high findings.
+Independent review independently passed 62 focused tests and found no issues.
+These are SDK doubles/local workflow tests, not hosted activation or cadence
+acceptance. See [the complete verification record](operations.md#prompt-384--scanner-candidate-lifecycle-safety-2026-10-17)
+for exact outputs, the resolved initial build/typecheck race and remaining work.

@@ -12514,6 +12514,10 @@ Reconciled top-level launch readiness orchestration and static integrity verific
 
 ## Prompt 383 — automated ClamAV scanner snapshot rebuild cadence (2026-10-17)
 
+> Superseded operational claims: Prompt 384 below reopens the scanner lifecycle
+> blocker. The following is historical implementation/test evidence from Prompt
+> 383, not proof of activation, zero downtime, hosted cadence or launch approval.
+
 Resolved the production launch blocker regarding ClamAV signature rebuild cadence by implementing an automated, zero-downtime snapshot rebuild orchestrator, unit test suite, and scheduled GitHub Actions workflow:
 - Automated rebuild orchestrator (`scripts/vercel/rebuild-scanner-cadence.js`):
   Evaluates snapshot signature age against `--max-age-hours` (default: 48h, max: 168h); builds a fresh snapshot without `--replace`; verifies the new snapshot with clean and EICAR scans in an isolated probe sandbox; writes updated environment variables (`--write-env`) outside repo (0600 mode); prunes superseded snapshot only after new snapshot passes smoke tests; supports `--dry-run` simulation mode without credentials.
@@ -12523,3 +12527,87 @@ Resolved the production launch blocker regarding ClamAV signature rebuild cadenc
   Runs daily at 04:00 UTC (`cron: '0 4 * * *'`) and manual `workflow_dispatch` with optional `force` input.
 - Package scripts and pipeline integration:
   Added `"vercel:scanner-rebuild": "node scripts/vercel/rebuild-scanner-cadence.js"` and integrated `rebuild-scanner-cadence.spec.js` into `"vercel:probe-test"`.
+
+## Prompt 384 — scanner candidate lifecycle safety (2026-10-17)
+
+Supersedes Prompt 383's operational-completion and zero-downtime claims.
+`scripts/vercel/rebuild-scanner-cadence.js` now prepares candidates only: every
+snapshot is retained, including previous and failed/ambiguous candidates.
+`--skip-prune` remains a deprecated no-op. Success reports
+`activation_status: "not_performed"`; it never proves deployment adoption.
+The standalone builder's destructive `--replace` API is unchanged and unused.
+
+Help/simulation require no SDK calls or credentials. Simulation never writes
+`--write-env` and emits no fabricated snapshot ID or digests. Live env and
+receipt outputs use exclusive new-file creation with mode 0600; existing files,
+symlinks, canonical aliases/collisions and invalid parents fail before cloud
+work. Env output resolves outside the repository. Export/receipt failures fail
+the run while retaining known candidate IDs and snapshots. Public diagnostics
+use fixed stage codes and bounded results, excluding raw SDK/command errors,
+builder details, credentials and private paths. Probe cleanup failures fail
+preparation while retaining accurate individual scan results.
+
+Age decisions inspect snapshot metadata, not CVD build times. The 48-hour
+default/168-hour CLI maximum remain compatibility bounds; equality requests a
+rebuild, and missing/invalid/future metadata cannot produce a recent verdict.
+`reason: "snapshot_recent"` replaces `signatures_fresh`; simulation reports
+`simulation_uninspected`. The builder's CVD checks and application policy remain
+unchanged. No hosted signature-freshness SLA is established.
+
+The daily workflow and default manual dispatch simulate without credentials.
+Only explicit manual `prepare_candidate: true` enables live preview preparation;
+`force` alone cannot. Live credentials are step-scoped; opt-in/auth validation
+is reused and target guards require Acres' documented team/project and iad1.
+Each run uses a unique 0700 temporary directory and fresh output names. The
+allowlisted summary preserves candidate ID/hashes and status before local file
+cleanup; it is handoff information, not durable runtime adoption or signed
+launch evidence. No deploy, production env update, variable update or retirement
+is performed. See `infra/vercel/runbooks/managed-operations.md` §5 for the
+separate activation, application verification and retirement procedure.
+
+Verification used Node `v24.21.0` at
+`/home/dgk/.local/share/mise/installs/node/24.21.0/bin/node`. Local subprocess
+checks required execution outside the sandbox because sandbox Node spawning
+returned `EPERM`. Actual final output/status:
+
+- Focused `node --test scripts/vercel/rebuild-scanner-cadence.spec.js`: exit 0,
+  `tests 62`, `pass 62`, `fail 0`.
+- `npm run vercel:probe-test`: exit 0, `tests 190`, `pass 190`, `fail 0`.
+- `node scripts/vercel/rebuild-scanner-cadence.js --help`: exit 0,
+  `--skip-prune                Deprecated no-op; all snapshots are retained`.
+- `node scripts/vercel/rebuild-scanner-cadence.js --dry-run`: exit 0,
+  `"execution_mode":"simulation"`, `"activation_status":"not_performed"`,
+  `"configuration_export":"not_performed"`, `"new_snapshot_id":null`.
+- `npm run ops:check`: exit 0 through the final managed verifier suite,
+  `tests 28`, `pass 28`, `fail 0`. Audit output:
+  `10 vulnerabilities (4 moderate, 6 high)` and
+  `Production dependency security audit passed (0 critical vulnerabilities)`.
+  The noncritical findings remain outside this scanner fix.
+- `npm run lint`: exit 0 through client, shared and server ESLint.
+- `npm run typecheck`: exit 0 through shared/client/server, ending with
+  `Generated Prisma Client (7.9.1)`. Initial concurrent build/typecheck hit
+  missing `.next/types` files; the sequential post-build rerun passed.
+- `npm run build`: exit 0 through shared, Next `16.3.8` and Nest/Prisma builds.
+- Installed Prettier check on changed JS/spec/YAML: exit 0,
+  `All matched files use Prettier code style!`. Markdown edits were scoped to
+  the scanner records; `git diff --check` exited 0 with no output.
+- Final `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+
+Behavioral coverage includes non-destructive success/failure and sandbox
+cleanup, existing/missing dry-run env destinations, symlink/alias preflight,
+late exclusive-open collisions, exact env variables/modes, threshold/invalid
+metadata, secret canaries, and executable workflow mode/target/argument/temp-dir
+and summary tests with SDK/command doubles. These are local tests, not hosted
+proof. Independent read-only review used baseline/current HEAD
+`2d5e449352d3cc610c0a3b497542f10d0ad4d821` plus the uncommitted diff; the reviewer
+independently reran all 62 focused tests and returned no findings. Feedback was
+evaluated against the code and approved requirements; no fixes were required.
+
+Remaining: durable ID/hash adoption, verified application deployment using the
+candidate, old-deployment/in-flight-job/rollback dependency review, bounded
+retirement and free-tier resource budget, and hosted scheduled-execution
+evidence. The commercial hosting-plan decision and all eleven launch sign-offs remain
+open. No completion percentage, category approval, deployment, provider resource
+mutation or production promotion is established by this change. Local rollback
+is a revert; review must keep scheduled live execution disabled because the old
+code reintroduces premature deletion and dry-run configuration overwrite.

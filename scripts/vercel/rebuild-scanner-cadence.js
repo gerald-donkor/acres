@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// Automated, zero-downtime ClamAV scanner snapshot rebuild cadence tool.
+// Candidate-only ClamAV scanner snapshot preparation; never activates or retires.
 // Never imported by application boot. See infra/vercel/README.md.
 const fs = require("node:fs");
 const path = require("node:path");
@@ -16,10 +16,7 @@ const {
 } = require("./probe-platform");
 const {
   buildSnapshot,
-  replaceSnapshot,
   assertOutsideRepo,
-  writeScannerEnv,
-  BuildError,
   SNAPSHOT_EXPIRATION_MS,
 } = require("./build-scanner-snapshot");
 
@@ -64,7 +61,8 @@ function parseArgs(args) {
     } else if (arg.startsWith("--write-env=")) {
       options.writeEnv = arg.slice("--write-env=".length);
     } else if (arg === "--current-snapshot-id") {
-      if (!args[i + 1]) throw new Error("Missing value for --current-snapshot-id");
+      if (!args[i + 1])
+        throw new Error("Missing value for --current-snapshot-id");
       const id = args[++i];
       if (!SNAPSHOT_ID.test(id)) {
         throw new Error("--current-snapshot-id must be a Sandbox snapshot id.");
@@ -101,133 +99,101 @@ function parseArgs(args) {
       throw new Error("Unknown argument.");
     }
   }
+  if (options.output === "" || options.writeEnv === "") {
+    throw new Error("Scanner output path must not be empty.");
+  }
   return options;
 }
 
-/**
- * Writes structured audit receipt to disk with 0600 mode.
- */
-function writeReceipt(filePath, receipt) {
-  const target = path.resolve(filePath);
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, JSON.stringify(receipt, null, 2) + "\n", {
-    mode: 0o600,
-  });
-  fs.chmodSync(target, 0o600);
+// Canonicalize parents before cloud work and again at exclusive creation.
+// Existing outputs (including dangling symlinks) are never overwritten.
+function outputPath(file, { outside = false, allowExisting = false } = {}) {
+  try {
+    const resolved = outside
+      ? assertOutsideRepo(file)
+      : path.join(
+          fs.realpathSync(path.dirname(path.resolve(file))),
+          path.basename(file),
+        );
+    if (!allowExisting && fs.lstatSync(resolved, { throwIfNoEntry: false })) {
+      throw new Error();
+    }
+    return resolved;
+  } catch {
+    throw new Error("Scanner output path unavailable or already exists.");
+  }
 }
 
-/**
- * Evaluates whether signature rebuild is needed based on age threshold or flags.
- */
+function writeExclusive(file, body, outside = false) {
+  const target = outputPath(file, { outside });
+  let fd;
+  try {
+    fd = fs.openSync(target, "wx", 0o600);
+    fs.writeFileSync(fd, body);
+  } catch {
+    throw new Error("Scanner output creation failed.");
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+function writeReceipt(filePath, receipt) {
+  writeExclusive(filePath, JSON.stringify(receipt, null, 2) + "\n");
+}
+
+// This inspects snapshot metadata, never the CVD build date.
 async function evaluateCadence(config, sdk, options = {}) {
-  const currentTime = options.now ?? Date.now();
-
-  if (options.dryRun) {
-    if (options.force) {
-      return { rebuildNeeded: true, reason: "stale_or_forced", ageHours: 0 };
-    }
-    if (!options.currentSnapshotId) {
-      return { rebuildNeeded: true, reason: "stale_or_forced", ageHours: null };
-    }
-    const simulatedAgeHours = 12;
-    if (simulatedAgeHours <= options.maxAgeHours) {
-      return {
-        rebuildNeeded: false,
-        reason: "signatures_fresh",
-        ageHours: simulatedAgeHours,
-      };
-    }
-    return {
-      rebuildNeeded: true,
-      reason: "stale_or_forced",
-      ageHours: simulatedAgeHours,
-    };
-  }
-
-  if (options.force) {
-    let ageHours = null;
-    if (options.currentSnapshotId) {
-      try {
-        const credentials = credentialsFor(config);
-        const stored = await sdk.Snapshot.get({
-          ...credentials,
-          snapshotId: options.currentSnapshotId,
-          signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
-        });
-        const created = stored.createdAt
-          ? new Date(stored.createdAt).getTime()
-          : stored.expiresAt
-            ? new Date(stored.expiresAt).getTime() - SNAPSHOT_EXPIRATION_MS
-            : null;
-        if (created && Number.isFinite(created)) {
-          ageHours = Math.max(0, (currentTime - created) / 3600000);
-        }
-      } catch {
-        // Ignored under force
-      }
-    }
-    return { rebuildNeeded: true, reason: "stale_or_forced", ageHours };
-  }
-
-  if (!options.currentSnapshotId) {
-    return { rebuildNeeded: true, reason: "stale_or_forced", ageHours: null };
-  }
-
+  const unknown = {
+    rebuildNeeded: true,
+    reason: "stale_or_forced",
+    ageHours: null,
+  };
+  if (options.dryRun) return { ...unknown, reason: "simulation_uninspected" };
+  if (options.force || !options.currentSnapshotId) return unknown;
   let stored;
   try {
-    const credentials = credentialsFor(config);
     stored = await sdk.Snapshot.get({
-      ...credentials,
+      ...credentialsFor(config),
       snapshotId: options.currentSnapshotId,
       signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
     });
   } catch {
-    return { rebuildNeeded: true, reason: "stale_or_forced", ageHours: null };
+    return unknown;
   }
-
-  if (stored.status !== "created") {
-    return { rebuildNeeded: true, reason: "stale_or_forced", ageHours: null };
-  }
-
-  const created = stored.createdAt
-    ? new Date(stored.createdAt).getTime()
-    : stored.expiresAt
-      ? new Date(stored.expiresAt).getTime() - SNAPSHOT_EXPIRATION_MS
-      : null;
-
-  if (!created || !Number.isFinite(created)) {
-    return { rebuildNeeded: true, reason: "stale_or_forced", ageHours: null };
-  }
-
-  const ageHours = Math.max(0, (currentTime - created) / 3600000);
-  if (ageHours <= options.maxAgeHours) {
-    return {
-      rebuildNeeded: false,
-      reason: "signatures_fresh",
-      ageHours,
-    };
-  }
-
-  return {
-    rebuildNeeded: true,
-    reason: "stale_or_forced",
-    ageHours,
-  };
+  if (stored.status !== "created") return unknown;
+  const created =
+    stored.createdAt != null
+      ? new Date(stored.createdAt).getTime()
+      : stored.expiresAt != null
+        ? new Date(stored.expiresAt).getTime() - SNAPSHOT_EXPIRATION_MS
+        : NaN;
+  const now = options.now ?? Date.now();
+  if (!Number.isFinite(created) || created > now) return unknown;
+  const ageHours = (now - created) / 3600000;
+  return ageHours < (options.maxAgeHours ?? 48)
+    ? { rebuildNeeded: false, reason: "snapshot_recent", ageHours }
+    : { ...unknown, ageHours };
 }
 
 /**
- * Smoke tests a newly built snapshot via clean and EICAR scans before pruning.
+ * Smoke tests a newly built snapshot via clean and EICAR scans without activating it.
  */
 async function smokeTestSnapshot(config, sdk, snapshotId) {
-  const credentials = credentialsFor(config);
-  const sandbox = await sdk.Sandbox.create({
-    ...credentials,
-    snapshotId,
-    region: config.region,
-    timeout: 120_000,
-    networkPolicy: "deny-all",
-  });
+  const result = {
+    clean_sample: "untested",
+    eicar_sample: "untested",
+    cleanup: "not_requested",
+  };
+  let sandbox;
+  let failed = false;
   try {
+    sandbox = await sdk.Sandbox.create({
+      ...credentialsFor(config),
+      snapshotId,
+      region: config.region,
+      timeout: 120_000,
+      networkPolicy: "deny-all",
+    });
     await sandbox.writeFiles([
       {
         path: `${SCAN_DIR}/clean.csv`,
@@ -241,238 +207,157 @@ async function smokeTestSnapshot(config, sdk, snapshotId) {
         args: [...ADAPTER_SCAN_FLAGS, file],
         timeoutMs: 60_000,
       });
-      const stdout = await r.stdout();
-      return { exitCode: r.exitCode, stdout, shape: scanShape(stdout, file) };
+      return { exitCode: r.exitCode, shape: scanShape(await r.stdout(), file) };
     };
     const clean = await scan(`${SCAN_DIR}/clean.csv`);
+    result.clean_sample =
+      clean.exitCode === 0 && clean.shape === "ok" ? "passed" : "failed";
     const infected = await scan(`${SCAN_DIR}/eicar.txt`);
-    if (
-      clean.exitCode !== 0 ||
-      clean.shape !== "ok" ||
-      infected.exitCode !== 1 ||
-      !infected.shape.startsWith("found:")
-    ) {
-      throw new BuildError(
-        "smoke-test-failed",
-        `clean(exit=${clean.exitCode}, shape=${clean.shape}), eicar(exit=${infected.exitCode}, shape=${infected.shape})`,
-      );
-    }
-    return { clean_sample: "passed", eicar_sample: "passed" };
+    result.eicar_sample =
+      infected.exitCode === 1 && infected.shape.startsWith("found:")
+        ? "passed"
+        : "failed";
+    failed =
+      result.clean_sample !== "passed" || result.eicar_sample !== "passed";
+  } catch {
+    failed = true;
   } finally {
-    try {
-      await sandbox.delete({
-        deleteOrphanSnapshots: false,
-        signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
-      });
-    } catch {
-      // Best-effort probe cleanup
-    }
-  }
-}
-
-/**
- * Rebuild cadence orchestrator: build new -> verify healthy -> switch -> prune old.
- */
-async function rebuildCadence(config, sdk, options = {}) {
-  const opts = {
-    dryRun: false,
-    output: null,
-    writeEnv: null,
-    currentSnapshotId: null,
-    maxAgeHours: 48,
-    force: false,
-    skipPrune: false,
-    log: () => {},
-    ...options,
-  };
-
-  if (opts.writeEnv) {
-    assertOutsideRepo(opts.writeEnv);
-  }
-
-  const cadence = await evaluateCadence(config, sdk, opts);
-
-  if (!cadence.rebuildNeeded) {
-    const skippedReceipt = {
-      tool: "rebuild-scanner-cadence",
-      timestamp: new Date().toISOString(),
-      status: "skipped",
-      rebuild_needed: false,
-      reason: cadence.reason,
-      age_hours: cadence.ageHours,
-      previous_snapshot_id: opts.currentSnapshotId,
-      new_snapshot_id: null,
-      main_sha256: null,
-      daily_sha256: null,
-      smoke_test: null,
-      prune_status: "none",
-      execution_mode: opts.dryRun ? "simulation" : "live",
-    };
-    if (opts.output) {
-      writeReceipt(opts.output, skippedReceipt);
-    }
-    return skippedReceipt;
-  }
-
-  if (opts.dryRun) {
-    const simulatedSnapshotId = `snap_simulated_${Date.now()}`;
-    const simulatedSummary = {
-      snapshotId: simulatedSnapshotId,
-      main: { sha256: "0".repeat(64) },
-      daily: { sha256: "1".repeat(64) },
-    };
-    if (opts.writeEnv) {
-      writeScannerEnv(opts.writeEnv, simulatedSummary);
-    }
-    const pruneStatus = opts.skipPrune
-      ? "skipped"
-      : opts.currentSnapshotId
-        ? "pruned"
-        : "none";
-    const receipt = {
-      tool: "rebuild-scanner-cadence",
-      timestamp: new Date().toISOString(),
-      status: "success",
-      rebuild_needed: true,
-      reason: cadence.reason,
-      age_hours: cadence.ageHours,
-      previous_snapshot_id: opts.currentSnapshotId,
-      new_snapshot_id: simulatedSnapshotId,
-      main_sha256: simulatedSummary.main.sha256,
-      daily_sha256: simulatedSummary.daily.sha256,
-      smoke_test: { clean_sample: "passed", eicar_sample: "passed" },
-      prune_status: pruneStatus,
-      execution_mode: "simulation",
-    };
-    if (opts.output) {
-      writeReceipt(opts.output, receipt);
-    }
-    return receipt;
-  }
-
-  let summary;
-  let smokeTest;
-  try {
-    summary = await buildSnapshot(config, sdk, {
-      persistentBuilder: false,
-      freshclamConf: fs.readFileSync(FRESHCLAM_CONF, "utf8"),
-      log: opts.log,
-    });
-    smokeTest = await smokeTestSnapshot(config, sdk, summary.snapshotId);
-  } catch (error) {
-    const failedReceipt = {
-      tool: "rebuild-scanner-cadence",
-      timestamp: new Date().toISOString(),
-      status: "failed",
-      rebuild_needed: true,
-      reason: cadence.reason,
-      age_hours: cadence.ageHours,
-      previous_snapshot_id: opts.currentSnapshotId,
-      new_snapshot_id: summary?.snapshotId ?? null,
-      main_sha256: summary?.main?.sha256 ?? null,
-      daily_sha256: summary?.daily?.sha256 ?? null,
-      smoke_test: smokeTest ?? {
-        clean_sample: "failed",
-        eicar_sample: "untested",
-      },
-      prune_status: "none",
-      execution_mode: "live",
-      error:
-        error instanceof BuildError
-          ? error.message
-          : "Scanner snapshot build failed.",
-    };
-    if (opts.output) {
+    if (sandbox) {
       try {
-        writeReceipt(opts.output, failedReceipt);
+        await sandbox.delete({
+          deleteOrphanSnapshots: false,
+          signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
+        });
+        result.cleanup = "passed";
       } catch {
-        // Secondary write error ignored
+        result.cleanup = "failed";
+        failed = true;
       }
     }
+  }
+  if (failed) {
+    const error = new Error("candidate_smoke_failed");
+    error.smokeTest = result;
     throw error;
   }
+  return result;
+}
 
-  if (opts.writeEnv) {
-    writeScannerEnv(opts.writeEnv, summary);
+/** Candidate preparation only. Every snapshot is retained, including failed candidates. */
+async function rebuildCadence(config, sdk, options = {}) {
+  const opts = { dryRun: false, maxAgeHours: 48, ...options };
+  // Simulation may inspect a real env destination but must never write it.
+  const envPath = opts.writeEnv
+    ? outputPath(opts.writeEnv, { outside: true, allowExisting: opts.dryRun })
+    : null;
+  const receiptPath = opts.output ? outputPath(opts.output) : null;
+  if (envPath && envPath === receiptPath) {
+    throw new Error("Scanner output paths collide.");
   }
-
-  let pruneStatus = "none";
-  if (opts.currentSnapshotId && !opts.skipPrune) {
-    try {
-      await replaceSnapshot(
-        config,
-        sdk,
-        opts.currentSnapshotId,
-        summary.snapshotId,
-      );
-      pruneStatus = "pruned";
-    } catch (pruneError) {
-      pruneStatus = "failed";
-      const pruneFailedReceipt = {
-        tool: "rebuild-scanner-cadence",
-        timestamp: new Date().toISOString(),
-        status: "failed",
-        rebuild_needed: true,
-        reason: cadence.reason,
-        age_hours: cadence.ageHours,
-        previous_snapshot_id: opts.currentSnapshotId,
-        new_snapshot_id: summary.snapshotId,
-        main_sha256: summary.main.sha256,
-        daily_sha256: summary.daily.sha256,
-        smoke_test: smokeTest,
-        prune_status: "failed",
-        execution_mode: "live",
-        error:
-          pruneError instanceof BuildError
-            ? pruneError.message
-            : "Prune of previous snapshot failed.",
-      };
-      if (opts.output) {
-        try {
-          writeReceipt(opts.output, pruneFailedReceipt);
-        } catch {
-          // Secondary write error ignored
-        }
-      }
-      throw pruneError;
-    }
-  } else if (opts.skipPrune) {
-    pruneStatus = "skipped";
-  }
-
+  const cadence = await evaluateCadence(config, sdk, opts);
   const receipt = {
     tool: "rebuild-scanner-cadence",
     timestamp: new Date().toISOString(),
-    status: "success",
-    rebuild_needed: true,
+    status: cadence.rebuildNeeded ? "success" : "skipped",
+    rebuild_needed: cadence.rebuildNeeded,
     reason: cadence.reason,
     age_hours: cadence.ageHours,
-    previous_snapshot_id: opts.currentSnapshotId,
-    new_snapshot_id: summary.snapshotId,
-    main_sha256: summary.main.sha256,
-    daily_sha256: summary.daily.sha256,
-    smoke_test: smokeTest,
-    prune_status: pruneStatus,
-    execution_mode: "live",
+    previous_snapshot_id: SNAPSHOT_ID.test(opts.currentSnapshotId ?? "")
+      ? opts.currentSnapshotId
+      : null,
+    new_snapshot_id: null,
+    main_sha256: null,
+    daily_sha256: null,
+    smoke_test: null,
+    prune_status: opts.currentSnapshotId ? "retained" : "not_requested",
+    activation_status: "not_performed",
+    configuration_export: "not_performed",
+    execution_mode: opts.dryRun ? "simulation" : "live",
   };
-
-  if (opts.output) {
-    writeReceipt(opts.output, receipt);
+  let stage = "build";
+  try {
+    if (!opts.dryRun && cadence.rebuildNeeded) {
+      // Observe the builder's confirmed ID even if later metadata/cleanup fails.
+      const trackedSdk = {
+        ...sdk,
+        Sandbox: {
+          ...sdk.Sandbox,
+          async create(params) {
+            const builder = await sdk.Sandbox.create(params);
+            return new Proxy(builder, {
+              get(target, prop) {
+                if (prop === "snapshot")
+                  return async (...args) => {
+                    const result = await target.snapshot(...args);
+                    if (SNAPSHOT_ID.test(result.snapshotId))
+                      receipt.new_snapshot_id = result.snapshotId;
+                    return result;
+                  };
+                const value = Reflect.get(target, prop);
+                return typeof value === "function" ? value.bind(target) : value;
+              },
+            });
+          },
+        },
+      };
+      const summary = await buildSnapshot(config, trackedSdk, {
+        persistentBuilder: false,
+        freshclamConf: fs.readFileSync(FRESHCLAM_CONF, "utf8"),
+        log: () => {}, // Builder diagnostics can contain provider response text.
+      });
+      if (
+        !SNAPSHOT_ID.test(summary.snapshotId) ||
+        !/^[a-f0-9]{64}$/.test(summary.main?.sha256 ?? "") ||
+        !/^[a-f0-9]{64}$/.test(summary.daily?.sha256 ?? "")
+      )
+        throw new Error();
+      receipt.new_snapshot_id = summary.snapshotId;
+      receipt.main_sha256 = summary.main.sha256;
+      receipt.daily_sha256 = summary.daily.sha256;
+      stage = "smoke";
+      receipt.smoke_test = await smokeTestSnapshot(
+        config,
+        sdk,
+        summary.snapshotId,
+      );
+      if (envPath) {
+        stage = "configuration_export";
+        writeExclusive(
+          envPath,
+          `ACRES_SCANNER_SNAPSHOT_ID=${summary.snapshotId}\n` +
+            `ACRES_SCANNER_MAIN_SHA256=${summary.main.sha256}\n` +
+            `ACRES_SCANNER_DAILY_SHA256=${summary.daily.sha256}\n`,
+          true,
+        );
+        receipt.configuration_export = "exported";
+      }
+    }
+  } catch (error) {
+    receipt.status = "failed";
+    receipt.error = `candidate_${stage}_failed`;
+    if (stage === "smoke") receipt.smoke_test = error.smokeTest ?? null;
   }
-
+  if (receiptPath) {
+    try {
+      writeReceipt(receiptPath, receipt);
+    } catch {
+      receipt.status = "failed";
+      receipt.receipt_status = "failed";
+      receipt.error ??= "candidate_receipt_failed";
+    }
+  }
+  if (receipt.status === "failed") {
+    const error = new Error(receipt.error);
+    error.receipt = receipt;
+    throw error;
+  }
   return receipt;
 }
 
 /**
  * Main entry point.
  */
-async function main(
-  args = process.argv.slice(2),
-  env = process.env,
-  sdk = createRequire(path.resolve(__dirname, "../../server/package.json"))(
-    "@vercel/sandbox",
-  ),
-) {
+async function main(args = process.argv.slice(2), env = process.env, sdk) {
   const options = parseArgs(args);
   if (options.help) {
     console.log(
@@ -481,17 +366,13 @@ async function main(
         "  --help, -h                  Show this help message\n" +
         "  --dry-run                   Simulate without cloud mutations\n" +
         "  --output, -o <file>         Write JSON audit receipt to file\n" +
-        "  --write-env <file>          Write updated scanner.env to outside-repo path\n" +
-        "  --current-snapshot-id <id>  Active snapshot ID to evaluate or prune\n" +
-        "  --max-age-hours <hours>     Threshold age in hours (default: 48, max: 168)\n" +
-        "  --force                     Force rebuild regardless of signature age\n" +
-        "  --skip-prune                Do not prune previous snapshot after rebuild",
+        "  --write-env <file>          Create new candidate env outside repo (live only)\n" +
+        "  --current-snapshot-id <id>  Snapshot ID for age inspection only\n" +
+        "  --max-age-hours <hours>     Snapshot age in hours (default: 48, max: 168)\n" +
+        "  --force                     Force candidate build regardless of snapshot age\n" +
+        "  --skip-prune                Deprecated no-op; all snapshots are retained",
     );
     return;
-  }
-
-  if (options.writeEnv) {
-    assertOutsideRepo(options.writeEnv);
   }
 
   if (!options.currentSnapshotId && env.ACRES_SCANNER_SNAPSHOT_ID?.trim()) {
@@ -511,9 +392,15 @@ async function main(
       }
     : sandboxTarget(env);
 
-  const receipt = await rebuildCadence(config, sdk, {
+  const provider = options.dryRun
+    ? undefined
+    : (sdk ??
+      createRequire(path.resolve(__dirname, "../../server/package.json"))(
+        "@vercel/sandbox",
+      ));
+  const receipt = await rebuildCadence(config, provider, {
     ...options,
-    log: (line) => console.error(line),
+    log: () => {},
   });
 
   console.log(JSON.stringify(receipt));
@@ -534,17 +421,10 @@ module.exports = {
 
 if (require.main === module) {
   main().catch((error) => {
-    if (error instanceof BuildError) {
-      console.error(error.message);
-      if (error.detail) console.error(error.detail);
-    } else {
-      const status = error?.response?.status;
-      const name = error?.constructor?.name;
-      console.error(
-        "Scanner snapshot rebuild failed or lacks required configuration.",
-        `(${/^\w{1,40}$/.test(name ?? "") ? name : "Error"}${Number.isInteger(status) ? `, HTTP ${status}` : ""})`,
-      );
-    }
+    if (error.receipt) console.log(JSON.stringify(error.receipt));
+    console.error(
+      "Scanner candidate preparation failed; activation not performed. Check restricted provider state and retained snapshots.",
+    );
     process.exitCode = 1;
   });
 }

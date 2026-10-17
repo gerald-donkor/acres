@@ -4106,6 +4106,10 @@ and Phase 12 sign-off remain separate.
 
 ## Phase 12 automated scanner snapshot rebuild cadence and preflight suite — Prompt 383
 
+> Superseded operational claims: Prompt 384 below reopens the scanner lifecycle
+> blocker. The following is historical implementation/test evidence from Prompt
+> 383, not proof of activation, zero downtime, hosted cadence or launch approval.
+
 Resolves the operational launch blocker identified in `docs/vercel-deployment.md` regarding ClamAV
 signature snapshot rebuild cadence by implementing an automated, zero-downtime rebuild orchestrator,
 unit test suite, and scheduled GitHub Actions workflow:
@@ -4125,3 +4129,41 @@ The new toolchain provides:
    `vercel:probe-test` (147/147 tests) and `npm run ops:check` (33 stages, 28 test suites). Reference
    Compose workflows retain 100% backward compatibility. Production promotion, cloud mutation, and Phase 12
    sign-off remain separate.
+
+## Scanner candidate lifecycle safety — Prompt 384 (2026-10-17)
+
+Prompt 384 supersedes Prompt 383's closed-blocker/zero-downtime claims. The
+cadence tool retains all snapshots, performs no activation, preserves active
+configuration during simulation, creates only new exclusive 0600 live outputs,
+and sanitizes errors/receipts. Snapshot age is explicitly metadata evidence;
+`snapshot_recent` replaces `signatures_fresh`, equality requests rebuilding and
+invalid/future metadata cannot certify recency. `--skip-prune` is a harmless
+deprecated option. The standalone builder's `--replace` behavior is unchanged.
+
+Scheduled/default manual workflow runs are credential-free simulation; only
+explicit manual `prepare_candidate: true` enables preview candidate preparation.
+Target/team/iad1 guards run before SDK work; credentials are live-step-only.
+Unique 0700 temporary directories and an allowlisted summary preserve handoff
+ID/hash information before local cleanup. No deployment or automatic retirement
+controller was introduced. The runbook separates preparation, activation,
+application verification and dependency-aware retirement.
+
+Actual Node 24.21.0 checks: focused suite `tests 62`, `pass 62`, `fail 0`;
+`vercel:probe-test` `tests 190`, `pass 190`, `fail 0`; `ops:check`, lint,
+post-build typecheck and build all exited 0. Help/dry-run exited 0 with
+`"activation_status":"not_performed"` and `"execution_mode":"simulation"` on the
+latter. Prettier reported `All matched files use Prettier code style!` for the
+changed JS/spec/YAML; diff check was silent (exit 0). Secret scan:
+`secret/default scan passed`. Audit gate passed with zero critical findings;
+4 moderate and 6 high findings remain outside this scope. The initial concurrent
+build/typecheck race was resolved by sequential typecheck after build.
+Independent read-only review found no issues and independently passed all 62
+focused tests. Full verification details and compatibility changes are recorded
+in [operations.md](operations.md#prompt-384--scanner-candidate-lifecycle-safety-2026-10-17).
+
+Durable candidate configuration adoption, a verified deployment using it,
+old-deployment/in-flight/rollback dependencies, bounded retirement/resource
+budget and hosted scheduled-execution evidence remain open. Local SDK doubles
+and workflow shell tests do not supply hosted proof. The commercial hosting-plan decision,
+all eleven sign-offs and Phase 12 exit remain open; no percentage change,
+production promotion or cloud mutation was performed.

@@ -2,11 +2,16 @@ name: ClamAV Scanner Snapshot Rebuild
 
 on:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
+      prepare_candidate:
+        description: "Prepare retained preview candidate; activation remains manual"
+        required: false
+        type: boolean
+        default: false
       force:
-        description: 'Force rebuild regardless of signature age'
+        description: "Force rebuild regardless of snapshot age"
         required: false
         type: boolean
         default: false
@@ -26,39 +31,80 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
       - run: npm ci
-      - name: Create isolated runtime directory
-        run: mkdir -p /tmp/acres-scanner-rebuild
-      - name: Run scanner rebuild cadence
+      - name: Select execution mode
+        id: mode
         env:
-          ACRES_VERCEL_PROBE: ${{ vars.ACRES_VERCEL_PROBE || 'isolated-synthetic-preview' }}
-          VERCEL_ENV: 'preview'
+          EVENT_NAME: ${{ github.event_name }}
+          PREPARE_CANDIDATE: ${{ inputs.prepare_candidate }}
+        run: |
+          mode=simulation
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$PREPARE_CANDIDATE" = "true" ]; then
+            mode=live
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+      - name: Create isolated runtime directory
+        run: |
+          umask 077
+          task_dir=$(mktemp -d "$RUNNER_TEMP/acres-scanner.XXXXXXXX")
+          chmod 700 "$task_dir"
+          echo "SCANNER_TASK_DIR=$task_dir" >> "$GITHUB_ENV"
+      - name: Simulate candidate preparation
+        if: steps.mode.outputs.mode == 'simulation'
+        run: node scripts/vercel/rebuild-scanner-cadence.js --dry-run --output "$SCANNER_TASK_DIR/receipt.json"
+      - name: Prepare retained preview candidate
+        if: steps.mode.outputs.mode == 'live'
+        env:
+          ACRES_VERCEL_PROBE: ${{ vars.ACRES_VERCEL_PROBE }}
+          VERCEL_ENV: "preview"
           VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          ACRES_VERCEL_PROBE_REGION: ${{ vars.ACRES_VERCEL_PROBE_REGION || 'iad1' }}
-          ACRES_SCANNER_SNAPSHOT_ID: ${{ vars.ACRES_SCANNER_SNAPSHOT_ID || secrets.ACRES_SCANNER_SNAPSHOT_ID }}
-          FORCE_INPUT: ${{ github.event.inputs.force }}
+          ACRES_VERCEL_PROBE_REGION: ${{ vars.ACRES_VERCEL_PROBE_REGION }}
+          ACRES_SCANNER_SNAPSHOT_ID: ${{ vars.ACRES_SCANNER_SNAPSHOT_ID }}
+          FORCE_INPUT: ${{ inputs.force }}
         run: |
-          FORCE_FLAG=""
-          if [ "$FORCE_INPUT" = "true" ]; then
-            FORCE_FLAG="--force"
+          if [ "$VERCEL_TEAM_ID" != "team_zE3mp7nrEZ6a7cxRavwUMYC4" ] ||
+             [ "$VERCEL_PROJECT_ID" != "prj_q9ApajZWDgdYZetnm5s5oakEjrUD" ] ||
+             [ "$ACRES_VERCEL_PROBE_REGION" != "iad1" ]; then
+            echo "Scanner preview target mismatch." >&2
+            exit 1
           fi
-          npm run vercel:scanner-rebuild -- \
-            --write-env /tmp/acres-scanner-rebuild/scanner.env \
-            --output /tmp/acres-scanner-rebuild/receipt.json \
-            $FORCE_FLAG
-      - name: Generate step summary
+          args=()
+          if [ "$FORCE_INPUT" = "true" ]; then args+=(--force); fi
+          node scripts/vercel/rebuild-scanner-cadence.js \
+            --write-env "$SCANNER_TASK_DIR/candidate.env" \
+            --output "$SCANNER_TASK_DIR/receipt.json" "${args[@]}"
+      - name: Generate sanitized candidate handoff summary
         if: always()
         run: |
-          if [ -f /tmp/acres-scanner-rebuild/receipt.json ]; then
-            echo "### ClamAV Scanner Snapshot Rebuild Summary" >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat /tmp/acres-scanner-rebuild/receipt.json >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          if (!process.env.SCANNER_TASK_DIR) process.exit(0);
+          const file = path.join(process.env.SCANNER_TASK_DIR, 'receipt.json');
+          if (!fs.existsSync(file)) process.exit(0);
+          const r = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const safe = {};
+          for (const [key, pattern] of Object.entries({
+            execution_mode: /^(simulation|live)$/,
+            status: /^(success|failed|skipped)$/,
+            new_snapshot_id: /^snap_[A-Za-z0-9]+$/,
+            main_sha256: /^[a-f0-9]{64}$/,
+            daily_sha256: /^[a-f0-9]{64}$/,
+            activation_status: /^not_performed$/,
+            configuration_export: /^(exported|not_performed)$/,
+            error: /^candidate_(build|smoke|configuration_export|receipt)_failed$/,
+          })) {
+            if (typeof r[key] === 'string' && pattern.test(r[key])) safe[key] = r[key];
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            '### Scanner candidate only — manual activation pending\n```json\n' +
+            JSON.stringify(safe, null, 2) + '\n```\n');
+          NODE
       - name: Clean up temporary files
         if: always()
-        run: rm -rf /tmp/acres-scanner-rebuild
+        run: |
+          if [ -n "$SCANNER_TASK_DIR" ]; then rm -rf -- "$SCANNER_TASK_DIR"; fi

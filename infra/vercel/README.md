@@ -184,3 +184,23 @@ throttling, service ingress, versioned managed launch evidence and recovery are
 still required before activating a Vercel deployment. Preserve reference Compose
 checks with their original meaning. Review source/runtime/job compatibility,
 first-deployment disable/recovery and all eleven categories before promotion.
+
+## Candidate cadence safety — Prompt 384
+
+`npm run vercel:scanner-rebuild -- --help` and `--dry-run` require no credentials
+or SDK calls. Simulation never writes scanner configuration. Live preparation
+builds/smoke-tests a retained candidate and optionally creates a **new** outside-repo
+0600 env file; it never activates or deletes snapshots. `--skip-prune` is a
+deprecated no-op. Existing env/receipt files and symlinks are rejected, including
+colliding paths, before cloud work. Parent directories must exist. Use fresh
+per-run filenames, then preserve restricted configuration for manual handoff.
+
+Scheduled/default manual workflow runs simulate; only explicit manual
+`prepare_candidate: true` runs live against the documented Acres preview target
+in iad1. `force` alone cannot enable live execution. The sanitized summary retains
+candidate ID/hashes before local cleanup, but does not persist runtime adoption.
+See [managed operations §5](runbooks/managed-operations.md#5-clamav-scanner-sandbox-snapshot-rebuild)
+for separate activation, application verification and retirement requirements.
+The standalone builder's destructive `--replace` warning above still applies.
+Snapshot age is not CVD freshness; receipt reason `snapshot_recent` supersedes
+`signatures_fresh`. No hosted freshness, zero downtime or launch claim follows.

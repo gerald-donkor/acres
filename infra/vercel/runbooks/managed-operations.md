@@ -165,56 +165,92 @@ If an application defect or regression is introduced in a new deployment:
 
 ## 5. ClamAV Scanner Sandbox Snapshot Rebuild
 
-Because virus definition signatures update continuously, the ClamAV CVD snapshot must be rebuilt on an automated 48-hour cadence to prevent signature staleness (maximum allowable age is 168 hours). Stale signatures fail closed in production, rejecting uploads as `scanner_unavailable`.
+Prompt 384 supersedes the Prompt 383 zero-downtime/closed-blocker claims.
+Preparation, activation, application verification and retirement are separate
+operator stages. This tool never activates a candidate or deletes any snapshot.
 
-### 5.1 Automated Zero-Downtime Rebuild Cadence
+### 5.1 Candidate preparation and snapshot age
 
-The orchestrator `scripts/vercel/rebuild-scanner-cadence.js` (`npm run vercel:scanner-rebuild`) enforces a zero-downtime lifecycle:
-1. **Cadence Evaluation**: Checks current snapshot age against `--max-age-hours` (default: 48h, max: 168h). Skips rebuild cleanly if signatures are fresh unless `--force` is specified.
-2. **Safe Build**: Invokes `buildSnapshot` without `--replace`, preserving the active snapshot during the build window.
-3. **Smoke Verification**: Launches an isolated probe sandbox from the new snapshot, verifying both clean sample acceptance and EICAR detection.
-4. **Safety Gate**: If smoke tests fail, the rebuild fails closed immediately; the previous snapshot is preserved untouched.
-5. **Configuration Export**: Writes updated snapshot ID and SHA-256 digests outside the repo (0600 mode) if `--write-env` is provided.
-6. **Prune Old Snapshot**: Prunes the superseded snapshot only after new snapshot health is proven (unless `--skip-prune` is passed).
-7. **Audit Receipt**: Emits a structured JSON audit receipt (`--output <file>`).
+`npm run vercel:scanner-rebuild` inspects snapshot creation/expiry metadata,
+using a 48-hour default and 168-hour CLI maximum. These are compatibility bounds,
+not an inspection of CVD build times or a hosted freshness SLA. The builder
+retains its CVD validation; the application retains its own signature policy and
+fails closed as `scanner_unavailable` when scanning cannot proceed.
 
-### 5.2 Scheduled GitHub Actions Workflow
+Live preparation builds without `--replace`, smoke-tests clean/EICAR samples and
+optionally creates a new candidate env file. All previous and candidate snapshots
+are retained on success and failure. Builder/probe sandbox cleanup uses
+`deleteOrphanSnapshots: false`; a cleanup failure cannot certify preparation.
+`--skip-prune` is a deprecated no-op. The standalone builder's `--replace` API
+still deletes snapshots and must not be used for this lifecycle.
 
-The automated rebuild runs via `.github/workflows/scanner-snapshot-rebuild.yml`:
-- **Schedule**: `cron: '0 4 * * *'` (runs daily at 04:00 UTC).
-- **Manual Dispatch**: `workflow_dispatch` with optional `force: true` boolean input.
-- **Concurrency**: `scanner-snapshot-rebuild` with `cancel-in-progress: false` to prevent overlapping builds.
-- **Fail-Closed Gate**: Rebuild failure fails the job, keeping the previous snapshot intact.
+A successful receipt means candidate preparation only, with
+`activation_status: "not_performed"`. `prune_status` is `retained` or
+`not_requested`. `snapshot_recent` replaces `signatures_fresh` in receipts;
+snapshot age cannot certify CVD freshness. Missing, invalid or future metadata
+requests a rebuild; age equal to the threshold requests a rebuild too.
 
-### 5.3 Manual Execution and Dry-Run
+### 5.2 Workflow and handoff
+
+The daily 04:00 UTC schedule and default manual dispatch perform credential-free
+simulation. Only manual `prepare_candidate: true` enables live preparation;
+`force` alone does not. Credentials exist only on the live step, which requires
+explicit opt-in, preview environment, configured region `iad1`, team
+`team_zE3mp7nrEZ6a7cxRavwUMYC4` and project
+`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`. Target mismatches fail before SDK work.
+Pinned actions, Node 24 and non-cancelling concurrency remain in place.
+
+Each run creates a unique 0700 temporary directory and new 0600 outputs. The
+allowlisted summary preserves candidate ID/hashes, execution mode and status
+before local files are deleted. It is handoff information, not a deployment
+receipt or signed launch evidence. The workflow does not persist runtime env
+configuration or update the configured current snapshot ID for the next run.
+
+### 5.3 Local inspection and manual preparation
 
 ```bash
-# Dry-run simulation (no cloud mutations or credentials required)
+npm run vercel:scanner-rebuild -- --help
 npm run vercel:scanner-rebuild -- --dry-run
 
-# Live rebuild with outside-repo env output and audit receipt
+# With existing approved preview credentials/opt-in in the environment:
+# Use a fresh restricted directory and filenames for every live preparation.
+candidate_dir=$(mktemp -d /tmp/acres-scanner-candidate.XXXXXXXX)
+chmod 700 "$candidate_dir"
 npm run vercel:scanner-rebuild -- \
-  --current-snapshot-id snap_ACTIVE_ID \
-  --write-env ~/.config/acres/scanner.env \
-  --output /tmp/acres-scanner-rebuild/receipt.json
-
-# Force rebuild bypassing signature age check
-npm run vercel:scanner-rebuild -- --force \
-  --current-snapshot-id snap_ACTIVE_ID \
-  --write-env ~/.config/acres/scanner.env
+  --current-snapshot-id snap_ACTIVEID \
+  --write-env "$candidate_dir/candidate.env" \
+  --output "$candidate_dir/receipt.json"
 ```
 
-### 5.4 Post-Build Deployment Update
+Dry runs never create/modify `--write-env`, even when it names an existing file;
+an optional receipt is explicitly simulation and contains no fabricated ID or
+hashes. Live output destinations must be new, their parent directories must
+already exist, and env destinations must resolve outside the repository.
+Existing files/symlinks, normalized aliases and env/receipt collisions are
+rejected before cloud work. Exclusive creation prevents later overwrite races.
+Use fresh per-run receipt paths. Failures expose fixed stage codes, never raw
+provider diagnostics, secret values or private absolute paths. When a snapshot
+ID was confirmed it remains in the failure receipt for restricted inspection;
+ambiguous candidates must be reconciled manually, never automatically deleted.
 
-1. Read the newly generated `ACRES_SCANNER_SNAPSHOT_ID`, `ACRES_SCANNER_MAIN_SHA256`, and `ACRES_SCANNER_DAILY_SHA256` from `~/.config/acres/scanner.env`.
-2. Update the Vercel production environment variables:
-   ```bash
-   npx vercel env add SCANNER_SANDBOX_SNAPSHOT_ID production
-   npx vercel env add SCANNER_SANDBOX_MAIN_SHA256 production
-   npx vercel env add SCANNER_SANDBOX_DAILY_SHA256 production
-   ```
-3. Trigger a deployment promotion or redeployment to activate the new snapshot.
-4. Verify hosted sandbox health:
-   ```bash
-   npm run vercel:probe -- scanner
-   ```
+### 5.4 Manual activation, verification and retirement
+
+1. Preserve the candidate ID and both SHA-256 hashes in the approved restricted
+   configuration inventory. Map the exported `ACRES_SCANNER_*` variables to the
+   runtime `SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_SANDBOX_MAIN_SHA256` and
+   `SCANNER_SANDBOX_DAILY_SHA256` configuration using the existing target-bound
+   operator procedure. The cadence tool does not perform this step.
+2. With separate target authorization, update configuration and redeploy the
+   application using that exact candidate. Keep previous configuration for
+   rollback. No production mutation is authorized by candidate preparation.
+3. Verify the deployed application's upload → scan flow and runtime identity.
+   `npm run vercel:probe -- scanner` is a synthetic seam check, not application
+   acceptance or proof that deployments use the new configuration.
+4. Retain old snapshots while old deployments, queued/in-flight invocations or
+   rollback dependencies can use them. No fixed safe retirement interval has
+   been established. Retirement requires account-bound inspection, dependency
+   review and an explicit bounded cleanup/resource-budget plan outside this CLI.
+
+Durable adoption, verified deployment, retirement within a free-tier resource
+budget and hosted scheduled-execution evidence remain unproved by local tests.
+The production plan decision and eleven launch sign-offs remain open.
