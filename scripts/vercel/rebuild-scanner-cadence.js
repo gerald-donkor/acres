@@ -16,6 +16,7 @@ const {
 } = require("./probe-platform");
 const {
   buildSnapshot,
+  projectBuildFailure,
   assertOutsideRepo,
   SNAPSHOT_EXPIRATION_MS,
 } = require("./build-scanner-snapshot");
@@ -287,32 +288,13 @@ async function rebuildCadence(config, sdk, options = {}) {
   try {
     if (!opts.dryRun && cadence.rebuildNeeded) {
       // Observe the builder's confirmed ID even if later metadata/cleanup fails.
-      const trackedSdk = {
-        ...sdk,
-        Sandbox: {
-          ...sdk.Sandbox,
-          async create(params) {
-            const builder = await sdk.Sandbox.create(params);
-            return new Proxy(builder, {
-              get(target, prop) {
-                if (prop === "snapshot")
-                  return async (...args) => {
-                    const result = await target.snapshot(...args);
-                    if (SNAPSHOT_ID.test(result.snapshotId))
-                      receipt.new_snapshot_id = result.snapshotId;
-                    return result;
-                  };
-                const value = Reflect.get(target, prop);
-                return typeof value === "function" ? value.bind(target) : value;
-              },
-            });
-          },
+      const summary = await buildSnapshot(config, sdk, {
+        onSnapshot: (id) => {
+          receipt.new_snapshot_id = id;
         },
-      };
-      const summary = await buildSnapshot(config, trackedSdk, {
         persistentBuilder: false,
         freshclamConf: fs.readFileSync(FRESHCLAM_CONF, "utf8"),
-        log: () => {}, // Builder diagnostics can contain provider response text.
+        log: () => {},
       });
       if (
         !SNAPSHOT_ID.test(summary.snapshotId) ||
@@ -344,6 +326,11 @@ async function rebuildCadence(config, sdk, options = {}) {
   } catch (error) {
     receipt.status = "failed";
     receipt.error = `candidate_${stage}_failed`;
+    if (stage === "build")
+      receipt.build_failure = projectBuildFailure(
+        error,
+        receipt.new_snapshot_id,
+      );
     if (stage === "smoke") receipt.smoke_test = error.smokeTest ?? null;
   }
   if (receiptPath) {

@@ -190,6 +190,25 @@ A successful receipt means candidate preparation only, with
 snapshot age cannot certify CVD freshness. Missing, invalid or future metadata
 requests a rebuild; age equal to the threshold requests a rebuild too.
 
+On a build-stage failure, schema-v1 receipts retain
+`error: "candidate_build_failed"` and add `build_failure` with fixed `step`,
+`kind`, `builder_cleanup` and boolean `snapshot_confirmed`. Step names distinguish
+`builder-create`, existing command steps, `snapshot-request`, `builder-delete`,
+`snapshot-metadata`, `snapshot-status` and `summary` (with `unknown` fallback).
+Kinds are `command_failed`, `provider_failed`, `validation_failed` or `unknown`;
+cleanup is `not_requested`, `passed`, `failed` or `unknown`. A failed delete never
+becomes passed because stop was attempted. Primary failure and cleanup outcomes
+remain independent. The standalone builder emits the same safe fields; raw
+command/provider errors are suppressed. These fields do not certify signatures,
+preparation success, deployment or historical cleanup.
+
+Prompt 387 verified Prompt 386's receipt and later snapshot metadata but could
+not establish its historical exception; the exact source-session metadata now
+returns 404. Keep that failed receipt ineligible even if the snapshot reports
+`created`. Never rewrite it or bypass offline handoff. A new live rebuild needs
+separate bounded authorization; no retry is implicit in investigation or failure
+diagnostics. See [the investigation record](../../../docs/operations.md#prompt-387--scanner-build-failure-investigation-2026-10-17).
+
 ### 5.2 Workflow and handoff
 
 The daily 04:00 UTC schedule and default manual dispatch perform credential-free

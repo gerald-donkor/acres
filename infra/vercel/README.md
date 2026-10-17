@@ -94,6 +94,12 @@ auth variables) boots one `vercel/sandbox/node:24` builder with two vCPUs, a
    expiry (longer than the 168-hour age ceiling), and deletes the builder with
    `deleteOrphanSnapshots: false` (`true` would delete the scanner).
 
+Build failures emit only fixed diagnostic fields: `step`, `kind`,
+`builder_cleanup` and `snapshot_confirmed`. Raw command/provider errors are never
+printed. The cadence wrapper adds these as `build_failure` only to failed
+build-stage receipts; failed receipts cannot be adopted. See
+[managed operations §5](runbooks/managed-operations.md#5-clamav-scanner-sandbox-snapshot-rebuild).
+
 Every step needs exit 0 **and** a marker line. A failed step aborts before the
 snapshot and still deletes the builder. The summary JSON (snapshot id, size,
 expiry, versions, hashes, build times) goes to stdout. `--write-env <path>`

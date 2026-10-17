@@ -4196,3 +4196,19 @@ and [actual checks](operations.md#prompt-386--scanner-preview-adoption-attempt-2
 A separately bounded failure investigation precedes any new rebuild attempt;
 retirement, hosted cadence, free-tier budget, production plan and eleven
 sign-offs remain open.
+
+## Scanner failure investigation — Prompt 387 (2026-10-17)
+
+The bounded investigation verified the retained failure receipt and current
+snapshot metadata; the historical failed substep remains unresolved. Local
+builder/cadence diagnostics now preserve fixed safe step/kind, independent
+builder cleanup and confirmed-ID state. Both CLIs suppress raw provider/command
+errors; failed receipts remain ineligible for handoff. No new live rebuild,
+adoption, configuration write, scan, deployment or snapshot deletion occurred.
+See [investigation and actual checks](operations.md#prompt-387--scanner-build-failure-investigation-2026-10-17).
+
+The next hosted gate requires a separately authorized, bounded candidate rebuild
+using these diagnostics, followed only on success by separately scoped preview
+adoption/deployed application proof. The old failed receipt cannot be salvaged.
+Hosted cadence, dependency-aware retirement/resource budget, production plan,
+Phase 12 exit and all eleven category sign-offs remain open.

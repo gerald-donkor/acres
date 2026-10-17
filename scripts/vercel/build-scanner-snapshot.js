@@ -69,14 +69,84 @@ const [url, out, want] = process.argv.slice(2);
 })().catch(() => process.exit(4));
 `;
 
-/** A failed build step. The message names the step only; it is safe to print. */
+// Only source-owned classifications cross the CLI/receipt boundary. Never inspect
+// arbitrary exception properties (even getters may throw or disclose secrets).
+const FAILURE_STEPS = new Set([
+  "builder-create",
+  "record-environment",
+  "prepare",
+  "write-build-inputs",
+  "deb-download",
+  "deb-digest-mismatch",
+  "dpkg-install",
+  "database-owner",
+  "freshclam",
+  "record-scanner",
+  "smoke-prepare",
+  "smoke-signatures",
+  "write-smoke-inputs",
+  "smoke-scan",
+  "scrub",
+  "snapshot-request",
+  "builder-delete",
+  "snapshot-metadata",
+  "snapshot-status",
+  "summary",
+  "replace-same-id",
+  "replace-lookup",
+  "replace-confirm",
+]);
+const FAILURE_KINDS = new Set([
+  "command_failed",
+  "provider_failed",
+  "validation_failed",
+]);
+const failures = new WeakMap();
+
 class BuildError extends Error {
-  constructor(step, detail = "") {
-    super(`Snapshot build failed at step: ${step}.`);
+  constructor(step, _detail = "", kind = "command_failed") {
+    const safeStep = FAILURE_STEPS.has(step) ? step : "unknown";
+    super(`Snapshot build failed at step: ${safeStep}.`);
     this.name = "BuildError";
-    // Builder output (dpkg, freshclam). The VM holds no secrets or customer bytes.
-    this.detail = detail.slice(-2000);
+    failures.set(this, {
+      step: safeStep,
+      kind: FAILURE_KINDS.has(kind) ? kind : "unknown",
+      builder_cleanup: "unknown",
+      snapshot_confirmed: false,
+    });
   }
+}
+
+function projectBuildFailure(error, confirmedId = undefined) {
+  const state = failures.get(error);
+  return {
+    step: state?.step ?? "unknown",
+    kind: state?.kind ?? "unknown",
+    builder_cleanup: state?.builder_cleanup ?? "unknown",
+    snapshot_confirmed:
+      confirmedId === undefined
+        ? (state?.snapshot_confirmed ?? false)
+        : typeof confirmedId === "string" && SNAPSHOT_ID.test(confirmedId),
+  };
+}
+
+async function buildStep(step, kind, action) {
+  try {
+    return await action();
+  } catch (error) {
+    throw failures.has(error) ? error : new BuildError(step, "", kind);
+  }
+}
+
+// Execute and read command output inside the same classified boundary.
+async function command(sandbox, step, options) {
+  return buildStep(step, "provider_failed", async () => {
+    const result = await sandbox.runCommand(options);
+    const stdout = await result.stdout();
+    if (typeof stdout !== "string")
+      throw new BuildError(step, "", "validation_failed");
+    return { exitCode: result.exitCode, stdout };
+  });
 }
 
 /**
@@ -84,16 +154,15 @@ class BuildError extends Error {
  * 3.8.0 reports a missing exit code as 0.
  */
 async function must(sandbox, step, script, { sudo = false, timeoutMs }) {
-  const result = await sandbox.runCommand({
+  const result = await command(sandbox, step, {
     cmd: "bash",
     args: ["-c", `set -euo pipefail\n${script}\necho ${STEP_OK}`],
     ...(sudo ? { sudo: true } : {}),
     timeoutMs,
   });
-  const stdout = await result.stdout();
+  const stdout = result.stdout;
   if (result.exitCode !== 0 || !stdout.includes(STEP_OK)) {
-    const stderr = await result.stderr?.().catch(() => "");
-    throw new BuildError(step, `${stdout}\n${stderr ?? ""}`);
+    throw new BuildError(step);
   }
   return stdout;
 }
@@ -125,14 +194,16 @@ async function installAndVerify(sandbox, freshclamConf) {
   await must(sandbox, "prepare", `mkdir -p ${BUILD_DIR}`, {
     timeoutMs: 10_000,
   });
-  await sandbox.writeFiles([
-    { path: `${BUILD_DIR}/fetch.js`, content: Buffer.from(FETCH_SCRIPT) },
-    {
-      path: `${BUILD_DIR}/freshclam.conf`,
-      content: Buffer.from(freshclamConf),
-    },
-  ]);
-  const fetched = await sandbox.runCommand({
+  await buildStep("write-build-inputs", "provider_failed", () =>
+    sandbox.writeFiles([
+      { path: `${BUILD_DIR}/fetch.js`, content: Buffer.from(FETCH_SCRIPT) },
+      {
+        path: `${BUILD_DIR}/freshclam.conf`,
+        content: Buffer.from(freshclamConf),
+      },
+    ]),
+  );
+  const fetched = await command(sandbox, "deb-download", {
     cmd: "node",
     args: [
       `${BUILD_DIR}/fetch.js`,
@@ -142,7 +213,7 @@ async function installAndVerify(sandbox, freshclamConf) {
     ],
     timeoutMs: 330_000,
   });
-  const fetchOut = await fetched.stdout();
+  const fetchOut = fetched.stdout;
   if (fetched.exitCode === 2) throw new BuildError("deb-digest-mismatch");
   if (fetched.exitCode !== 0 || !fetchOut.includes("deb-sha256-ok"))
     throw new BuildError("deb-download");
@@ -218,7 +289,7 @@ async function smokeTestAndScrub(sandbox, recorded) {
   await must(sandbox, "smoke-prepare", `mkdir -p ${SCAN_DIR}`, {
     timeoutMs: 10_000,
   });
-  const check = await sandbox.runCommand({
+  const check = await command(sandbox, "smoke-signatures", {
     cmd: "node",
     args: [
       "-e",
@@ -229,22 +300,24 @@ async function smokeTestAndScrub(sandbox, recorded) {
     ],
     timeoutMs: 30_000,
   });
-  if (!signaturesOk({ exitCode: check.exitCode, stdout: await check.stdout() }))
+  if (!signaturesOk({ exitCode: check.exitCode, stdout: check.stdout }))
     throw new BuildError("smoke-signatures");
-  await sandbox.writeFiles([
-    {
-      path: `${SCAN_DIR}/clean.csv`,
-      content: Buffer.from("region,value\nsynthetic,1\n"),
-    },
-    { path: `${SCAN_DIR}/eicar.txt`, content: EICAR },
-  ]);
+  await buildStep("write-smoke-inputs", "provider_failed", () =>
+    sandbox.writeFiles([
+      {
+        path: `${SCAN_DIR}/clean.csv`,
+        content: Buffer.from("region,value\nsynthetic,1\n"),
+      },
+      { path: `${SCAN_DIR}/eicar.txt`, content: EICAR },
+    ]),
+  );
   const scan = async (file) => {
-    const r = await sandbox.runCommand({
+    const r = await command(sandbox, "smoke-scan", {
       cmd: "clamscan",
       args: [...ADAPTER_SCAN_FLAGS, file],
       timeoutMs: 60_000,
     });
-    return { exitCode: r.exitCode, shape: scanShape(await r.stdout(), file) };
+    return { exitCode: r.exitCode, shape: scanShape(r.stdout, file) };
   };
   const clean = await scan(`${SCAN_DIR}/clean.csv`);
   const infected = await scan(`${SCAN_DIR}/eicar.txt`);
@@ -267,101 +340,144 @@ async function smokeTestAndScrub(sandbox, recorded) {
 async function buildSnapshot(
   config,
   sdk,
-  { persistentBuilder = false, freshclamConf, log = () => {} },
+  {
+    persistentBuilder = false,
+    freshclamConf,
+    log = () => {},
+    onSnapshot = () => {},
+  },
 ) {
   const credentials = credentialsFor(config);
-  const builder = await sdk.Sandbox.create({
-    ...credentials,
-    image: BASE_IMAGE,
-    region: config.region,
-    resources: { vcpus: 2 },
-    timeout: BUILDER_TIMEOUT_MS,
-    networkPolicy: BUILDER_EGRESS,
-    // Fallback only if snapshot() refuses a non-persistent sandbox.
-    ...(persistentBuilder
-      ? { persistent: true, keepLastSnapshots: { count: 1 } }
-      : { persistent: false }),
-  });
-  log(`builder sandbox: ${builder.name}`);
-  let snapshot;
+  // Logging is advisory; a broken output sink must not skip owned cleanup.
+  const progress = (line) => {
+    try {
+      log(line);
+    } catch {
+      /* Cleanup and the primary outcome take precedence. */
+    }
+  };
+  let builder;
+  let snapshotId = null;
   let snapshotRequested = false;
+  let cleanup = "not_requested";
+  let primaryFailed = false;
   let recorded;
   let egressAtSnapshot = "unchanged";
   try {
-    recorded = await installAndVerify(builder, freshclamConf);
-    await smokeTestAndScrub(builder, recorded);
     try {
-      // Scan sandboxes pass deny-all at create anyway; this keeps the
-      // builder's allow-list from being the sandbox's last recorded policy.
-      await builder.update(
-        { networkPolicy: "deny-all" },
-        { signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS) },
+      builder = await buildStep("builder-create", "provider_failed", () =>
+        sdk.Sandbox.create({
+          ...credentials,
+          image: BASE_IMAGE,
+          region: config.region,
+          resources: { vcpus: 2 },
+          timeout: BUILDER_TIMEOUT_MS,
+          networkPolicy: BUILDER_EGRESS,
+          // Fallback only if snapshot() refuses a non-persistent sandbox.
+          ...(persistentBuilder
+            ? { persistent: true, keepLastSnapshots: { count: 1 } }
+            : { persistent: false }),
+        }),
       );
-      egressAtSnapshot = "deny-all";
-    } catch {
-      egressAtSnapshot = "unchanged";
-    }
-    snapshotRequested = true;
-    snapshot = await builder.snapshot({
-      expiration: SNAPSHOT_EXPIRATION_MS,
-      signal: AbortSignal.timeout(SNAPSHOT_TIMEOUT_MS),
-    });
-    log(`scanner snapshot: ${snapshot.snapshotId}`);
-  } finally {
-    if (!snapshot) {
-      // A timed-out snapshot() may still have been created server-side.
-      if (snapshotRequested)
-        log(
-          "snapshot() did not confirm: check `vercel sandbox snapshots list` for an orphan",
-        );
+      progress("builder sandbox created");
+      recorded = await installAndVerify(builder, freshclamConf);
+      await smokeTestAndScrub(builder, recorded);
       try {
-        await builder.stop({ signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS) });
+        await builder.update(
+          { networkPolicy: "deny-all" },
+          { signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS) },
+        );
+        egressAtSnapshot = "deny-all";
       } catch {
-        // Delete below is what must succeed.
+        egressAtSnapshot = "unchanged";
+      }
+      snapshotRequested = true;
+      await buildStep("snapshot-request", "provider_failed", async () => {
+        const snapshot = await builder.snapshot({
+          expiration: SNAPSHOT_EXPIRATION_MS,
+          signal: AbortSignal.timeout(SNAPSHOT_TIMEOUT_MS),
+        });
+        const id = snapshot.snapshotId;
+        if (typeof id !== "string" || !SNAPSHOT_ID.test(id))
+          throw new BuildError("snapshot-request", "", "validation_failed");
+        snapshotId = id;
+        onSnapshot(id);
+        progress(`scanner snapshot: ${id}`);
+      });
+    } catch (error) {
+      primaryFailed = true;
+      throw error;
+    } finally {
+      if (builder) {
+        if (!snapshotId) {
+          if (snapshotRequested)
+            progress("snapshot request unconfirmed; inspect provider state");
+          try {
+            await builder.stop({
+              signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
+            });
+          } catch {
+            // Stop does not certify deletion.
+          }
+        }
+        try {
+          await builder.delete({
+            deleteOrphanSnapshots: false,
+            signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
+          });
+          cleanup = "passed";
+        } catch {
+          cleanup = "failed";
+          if (!primaryFailed)
+            throw new BuildError("builder-delete", "", "provider_failed");
+        }
       }
     }
-    try {
-      // Never true: the scanner snapshot belongs to this sandbox and would be
-      // deleted with it as an orphan.
-      await builder.delete({
-        deleteOrphanSnapshots: false,
+    const stored = await buildStep("snapshot-metadata", "provider_failed", () =>
+      sdk.Snapshot.get({
+        ...credentials,
+        snapshotId,
         signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
-      });
-    } catch {
-      // Reported after the build outcome, so a build error is not masked.
-      if (snapshot) throw new BuildError("builder-delete");
-      log("builder delete failed: remove it by the name above");
-    }
+      }),
+    );
+    await buildStep("snapshot-status", "validation_failed", () => {
+      if (stored.status !== "created")
+        throw new BuildError("snapshot-status", "", "validation_failed");
+    });
+    return await buildStep("summary", "validation_failed", () => {
+      const summary = {
+        snapshotId,
+        sizeBytes: stored.sizeBytes,
+        expiresAt: stored.expiresAt ? stored.expiresAt.toISOString() : null,
+        baseImage: BASE_IMAGE,
+        os: recorded.os,
+        nodeVersion: recorded.nodeVersion,
+        builderUid: recorded.builderUid,
+        tools: recorded.tools,
+        clamavVersion: recorded.clamavVersion,
+        debSha256Verified: true,
+        signature: recorded.signature,
+        databaseFiles: recorded.databaseFiles,
+        main: recorded.main,
+        daily: recorded.daily,
+        bytecode: recorded.bytecode,
+        egress: "allow-list",
+        egressAtSnapshot,
+        builderPersistent: persistentBuilder,
+        sandboxCreations: 1,
+      };
+      JSON.stringify(summary);
+      return summary;
+    });
+  } catch (error) {
+    const safe = failures.has(error)
+      ? error
+      : new BuildError("unknown", "", "unknown");
+    const state = failures.get(safe);
+    state.builder_cleanup = cleanup;
+    state.snapshot_confirmed = snapshotId !== null;
+    throw safe;
   }
-
-  const stored = await sdk.Snapshot.get({
-    ...credentials,
-    snapshotId: snapshot.snapshotId,
-    signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
-  });
-  if (stored.status !== "created") throw new BuildError("snapshot-status");
-
-  return {
-    snapshotId: snapshot.snapshotId,
-    sizeBytes: stored.sizeBytes,
-    expiresAt: stored.expiresAt ? stored.expiresAt.toISOString() : null,
-    baseImage: BASE_IMAGE,
-    os: recorded.os,
-    nodeVersion: recorded.nodeVersion,
-    builderUid: recorded.builderUid,
-    tools: recorded.tools,
-    clamavVersion: recorded.clamavVersion,
-    debSha256Verified: true,
-    signature: recorded.signature,
-    databaseFiles: recorded.databaseFiles,
-    main: recorded.main,
-    daily: recorded.daily,
-    bytecode: recorded.bytecode,
-    egress: "allow-list",
-    egressAtSnapshot,
-    builderPersistent: persistentBuilder,
-    sandboxCreations: 1,
-  };
 }
 
 /**
@@ -477,6 +593,7 @@ module.exports = {
   BUILDER_EGRESS,
   FETCH_SCRIPT,
   BuildError,
+  projectBuildFailure,
   buildSnapshot,
   replaceSnapshot,
   assertOutsideRepo,
@@ -486,17 +603,9 @@ module.exports = {
 };
 if (require.main === module)
   main().catch((error) => {
-    // SDK exceptions may carry credentials; only BuildError text is fixed.
-    if (error instanceof BuildError) {
-      console.error(error.message);
-      if (error.detail) console.error(error.detail);
-    } else {
-      const status = error?.response?.status;
-      const name = error?.constructor?.name;
-      console.error(
-        "Scanner snapshot build failed or lacks required isolated-target configuration. Verify cleanup in the provider console.",
-        `(${/^\w{1,40}$/.test(name ?? "") ? name : "Error"}${Number.isInteger(status) ? `, HTTP ${status}` : ""})`,
-      );
-    }
+    console.error(
+      "Scanner snapshot preparation failed.",
+      JSON.stringify(projectBuildFailure(error)),
+    );
     process.exitCode = 1;
   });

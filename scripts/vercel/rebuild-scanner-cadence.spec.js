@@ -1226,3 +1226,330 @@ test("new live preparation receipt flows through offline handoff subprocess", ()
     assert.equal(simulated.schema_version, 1);
     assert.equal(simulated.target, null);
   }));
+
+const FAILURE_SENTINEL =
+  "credential-canary /private/operator/key https://private.invalid\nsecret-line";
+const providerFailure = () =>
+  Object.assign(new Error(FAILURE_SENTINEL), {
+    cause: { token: FAILURE_SENTINEL },
+    response: { headers: { authorization: FAILURE_SENTINEL } },
+  });
+
+for (const scenario of [
+  {
+    name: "create rejection",
+    step: "builder-create",
+    kind: "provider_failed",
+    cleanup: "not_requested",
+    confirmed: false,
+    create: true,
+  },
+  {
+    name: "command rejection",
+    step: "record-environment",
+    kind: "provider_failed",
+    confirmed: false,
+    command: "reject",
+  },
+  {
+    name: "command nonzero",
+    step: "record-environment",
+    kind: "command_failed",
+    confirmed: false,
+    command: "nonzero",
+  },
+  {
+    name: "output reader rejection",
+    step: "record-environment",
+    kind: "provider_failed",
+    confirmed: false,
+    command: "reader",
+  },
+  {
+    name: "malformed output",
+    step: "record-environment",
+    kind: "validation_failed",
+    confirmed: false,
+    command: "malformed",
+  },
+  {
+    name: "primary and cleanup rejection",
+    step: "record-environment",
+    kind: "command_failed",
+    cleanup: "failed",
+    confirmed: false,
+    command: "nonzero",
+    delete: true,
+  },
+  {
+    name: "snapshot rejection",
+    step: "snapshot-request",
+    kind: "provider_failed",
+    confirmed: false,
+    snapshot: "reject",
+  },
+  {
+    name: "invalid snapshot ID",
+    step: "snapshot-request",
+    kind: "validation_failed",
+    confirmed: false,
+    snapshot: "invalid",
+  },
+  {
+    name: "snapshot getter rejection",
+    step: "snapshot-request",
+    kind: "provider_failed",
+    confirmed: false,
+    snapshot: "getter",
+  },
+  {
+    name: "delete rejection",
+    step: "builder-delete",
+    kind: "provider_failed",
+    cleanup: "failed",
+    confirmed: true,
+    delete: true,
+  },
+  {
+    name: "metadata rejection",
+    step: "snapshot-metadata",
+    kind: "provider_failed",
+    confirmed: true,
+    metadata: "reject",
+  },
+  {
+    name: "metadata timeout",
+    step: "snapshot-metadata",
+    kind: "provider_failed",
+    confirmed: true,
+    metadata: "timeout",
+  },
+  {
+    name: "non-created metadata",
+    step: "snapshot-status",
+    kind: "validation_failed",
+    confirmed: true,
+    metadata: "failed",
+  },
+  {
+    name: "missing metadata",
+    step: "snapshot-status",
+    kind: "validation_failed",
+    confirmed: true,
+    metadata: "null",
+  },
+  {
+    name: "throwing status getter",
+    step: "snapshot-status",
+    kind: "validation_failed",
+    confirmed: true,
+    metadata: "status-getter",
+  },
+  {
+    name: "throwing expiry getter",
+    step: "summary",
+    kind: "validation_failed",
+    confirmed: true,
+    metadata: "expiry-getter",
+  },
+  {
+    name: "invalid expiry date",
+    step: "summary",
+    kind: "validation_failed",
+    confirmed: true,
+    metadata: "invalid-date",
+  },
+  {
+    name: "summary serialization failure",
+    step: "summary",
+    kind: "validation_failed",
+    confirmed: true,
+    metadata: "serialization",
+  },
+]) {
+  test(`safe build diagnostics across cadence: ${scenario.name}`, () =>
+    temporary(async (dir) => {
+      const fake = fakeSdk();
+      const create = fake.sdk.Sandbox.create;
+      fake.sdk.Sandbox.create = async (params) => {
+        if (scenario.create) throw providerFailure();
+        const builder = await create(params);
+        if (params.snapshotId) return builder;
+        if (scenario.command)
+          builder.runCommand = async () => {
+            if (scenario.command === "reject") throw providerFailure();
+            return {
+              exitCode: scenario.command === "nonzero" ? 2 : 0,
+              stdout: async () => {
+                if (scenario.command === "reader") throw providerFailure();
+                return scenario.command === "malformed"
+                  ? null
+                  : FAILURE_SENTINEL;
+              },
+              stderr: async () => {
+                throw providerFailure();
+              },
+            };
+          };
+        if (scenario.delete)
+          builder.delete = async (opts) => {
+            fake.events.push(`delete:${opts.deleteOrphanSnapshots}`);
+            throw providerFailure();
+          };
+        if (scenario.snapshot)
+          builder.snapshot = async () => {
+            if (scenario.snapshot === "reject") throw providerFailure();
+            if (scenario.snapshot === "getter")
+              return {
+                get snapshotId() {
+                  throw providerFailure();
+                },
+              };
+            return { snapshotId: FAILURE_SENTINEL };
+          };
+        return builder;
+      };
+      const get = fake.sdk.Snapshot.get;
+      fake.sdk.Snapshot.get = async (params) => {
+        if (scenario.metadata === "reject") throw providerFailure();
+        if (scenario.metadata === "timeout")
+          throw new DOMException(FAILURE_SENTINEL, "TimeoutError");
+        if (scenario.metadata === "null") return null;
+        const stored = await get(params);
+        if (scenario.metadata === "failed") stored.status = "failed";
+        if (scenario.metadata === "status-getter")
+          Object.defineProperty(stored, "status", {
+            get() {
+              throw providerFailure();
+            },
+          });
+        if (scenario.metadata === "expiry-getter")
+          Object.defineProperty(stored, "expiresAt", {
+            get() {
+              throw providerFailure();
+            },
+          });
+        if (scenario.metadata === "invalid-date")
+          stored.expiresAt = new Date(NaN);
+        if (scenario.metadata === "serialization")
+          stored.sizeBytes = {
+            toJSON() {
+              throw providerFailure();
+            },
+          };
+        return stored;
+      };
+      const output = path.join(dir, "failure.json");
+      const env = path.join(dir, "never.env");
+      await assert.rejects(
+        rebuildCadence(config, fake.sdk, {
+          force: true,
+          output,
+          writeEnv: env,
+        }),
+        (error) => {
+          const r = error.receipt;
+          assert.equal(r.error, "candidate_build_failed");
+          assert.equal(r.schema_version, 1);
+          assert.equal(
+            r.new_snapshot_id,
+            scenario.confirmed ? "snap_new" : null,
+          );
+          assert.deepEqual(r.build_failure, {
+            step: scenario.step,
+            kind: scenario.kind,
+            builder_cleanup: scenario.cleanup ?? "passed",
+            snapshot_confirmed: scenario.confirmed,
+          });
+          assert.equal(r.main_sha256, null);
+          assert.equal(r.daily_sha256, null);
+          assert.equal(r.smoke_test, null);
+          assert.equal(r.configuration_export, "not_performed");
+          assert.doesNotMatch(
+            error.stack + JSON.stringify(r),
+            /credential-canary|private\/operator|private.invalid|secret-line/,
+          );
+          // A later provider status cannot make a failed producer receipt eligible.
+          const { validateReceipt } = require("./prepare-scanner-handoff");
+          assert.throws(() => validateReceipt(r));
+          return true;
+        },
+      );
+      assert.equal(fs.existsSync(env), false);
+      assert.equal(fake.creates.length, scenario.create ? 0 : 1);
+      assert.equal(fake.events.includes("smoke:clean"), false);
+      if (!scenario.create) assert.ok(fake.events.includes("delete:false"));
+      assert.doesNotMatch(
+        fs.readFileSync(output, "utf8"),
+        /credential-canary|private\/operator|private.invalid|secret-line/,
+      );
+      retained(fake);
+    }));
+}
+
+test("successful, skipped and simulated receipts do not gain build_failure", async () => {
+  const fake = fakeSdk();
+  for (const receipt of [
+    await rebuildCadence(config, fake.sdk, { force: true }),
+    await rebuildCadence(config, fake.sdk, { currentSnapshotId: "snap_new" }),
+    await rebuildCadence({}, undefined, { dryRun: true }),
+  ])
+    assert.equal(Object.hasOwn(receipt, "build_failure"), false);
+});
+
+for (const cli of ["build-scanner-snapshot.js", "rebuild-scanner-cadence.js"]) {
+  for (const fault of ["provider", "command", "reader"]) {
+    test(`${cli} executable suppresses ${fault} diagnostics and exits nonzero`, () =>
+      temporary((dir) => {
+        const preload = path.join(dir, "inject.cjs");
+        const sdkPath = require.resolve("@vercel/sandbox");
+        fs.writeFileSync(
+          preload,
+          `
+        const sdk = require(${JSON.stringify(sdkPath)});
+        const sentinel = ${JSON.stringify(FAILURE_SENTINEL)};
+        const failure = () => Object.assign(new Error(sentinel), {cause: {token: sentinel}});
+        sdk.Sandbox.create = async () => {
+          if (${JSON.stringify(fault)} === 'provider') throw failure();
+          return {
+            name: sentinel,
+            runCommand: async () => ({exitCode: 2, stdout: async () => {
+              if (${JSON.stringify(fault)} === 'reader') throw failure();
+              return sentinel;
+            }}),
+            stop: async () => {}, delete: async () => {},
+          };
+        };
+      `,
+        );
+        const r = spawnSync(
+          process.execPath,
+          [
+            "--require",
+            preload,
+            path.join(__dirname, cli),
+            ...(cli.startsWith("rebuild") ? ["--force"] : []),
+          ],
+          {
+            encoding: "utf8",
+            env: {
+              PATH: process.env.PATH,
+              ACRES_VERCEL_PROBE: "isolated-synthetic-preview",
+              VERCEL_ENV: "preview",
+              VERCEL_TEAM_ID: "team-test",
+              VERCEL_PROJECT_ID: "prj-test",
+              ACRES_VERCEL_PROBE_REGION: "iad1",
+              VERCEL_TOKEN: "test-token",
+            },
+          },
+        );
+        assert.equal(r.error, undefined);
+        assert.equal(r.status, 1);
+        assert.doesNotMatch(
+          r.stdout + r.stderr,
+          /credential-canary|private\/operator|private.invalid|secret-line/,
+        );
+        assert.match(r.stdout + r.stderr, /builder-create|record-environment/);
+      }));
+  }
+}

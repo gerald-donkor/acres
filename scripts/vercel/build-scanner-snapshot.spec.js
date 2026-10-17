@@ -309,7 +309,7 @@ for (const [label, override] of [
 
 test("a refused snapshot still deletes the builder", async () => {
   const fake = fakeSdk({ failSnapshot: true });
-  await assert.rejects(build(fake), /snapshot refused/);
+  await assert.rejects(build(fake), /snapshot-request/);
   assert.deepEqual(fake.events.slice(-2), ["stop", "delete:false"]);
 });
 
@@ -504,4 +504,69 @@ test("the summary never carries the token, the package URL or EICAR", async () =
   // Nothing in the VM receives a credential either.
   for (const f of fake.written)
     assert.ok(!f.content.toString().includes("test-token"));
+});
+
+test("failure projection never reads arbitrary exception properties", () => {
+  const {
+    projectBuildFailure,
+    BuildError,
+  } = require("./build-scanner-snapshot");
+  const poison = new Proxy(
+    {},
+    {
+      get() {
+        throw new Error("private-canary");
+      },
+    },
+  );
+  for (const error of [
+    poison,
+    null,
+    undefined,
+    "private-canary",
+    new BuildError("private-canary", "private-canary", "private-canary"),
+  ]) {
+    assert.deepEqual(projectBuildFailure(error, "not-a-snapshot"), {
+      step: "unknown",
+      kind: "unknown",
+      builder_cleanup: "unknown",
+      snapshot_confirmed: false,
+    });
+  }
+});
+
+test("standalone failure projection preserves confirmed snapshot and cleanup", async () => {
+  const { projectBuildFailure } = require("./build-scanner-snapshot");
+  await assert.rejects(build(fakeSdk({ failDelete: true })), (error) => {
+    assert.deepEqual(projectBuildFailure(error), {
+      step: "builder-delete",
+      kind: "provider_failed",
+      builder_cleanup: "failed",
+      snapshot_confirmed: true,
+    });
+    return true;
+  });
+});
+
+test("broken progress logging does not replace primary failure or prevent cleanup", async () => {
+  const { projectBuildFailure } = require("./build-scanner-snapshot");
+  const fake = fakeSdk({ failSnapshot: true, failDelete: true });
+  await assert.rejects(
+    buildSnapshot(config, fake.sdk, {
+      freshclamConf: "synthetic",
+      log: () => {
+        throw new Error("private-sink");
+      },
+    }),
+    (error) => {
+      assert.deepEqual(projectBuildFailure(error), {
+        step: "snapshot-request",
+        kind: "provider_failed",
+        builder_cleanup: "failed",
+        snapshot_confirmed: false,
+      });
+      return true;
+    },
+  );
+  assert.deepEqual(fake.events.slice(-2), ["stop", "delete:false"]);
 });

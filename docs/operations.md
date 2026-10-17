@@ -12812,3 +12812,155 @@ confirmed the findings against the producer and recorded evidence; no source
 fix, additional hosted action or re-review was required. No source, dependency, schema or workflow was changed to make
 this blocked hosted gate appear successful. Production promotion, plan decision,
 retirement/resource budget, hosted cadence and eleven sign-offs remain open.
+
+## Prompt 387 — scanner build failure investigation (2026-10-17)
+
+Baseline: `ae13d37d5517cda434bed13e395e0c74a51b3702` on `main`; only the
+approved Prompt 387 was untracked. **Historical root cause remains unresolved.**
+The investigation added local diagnostics and deterministic regressions; it did
+not perform another rebuild, scan, configuration write, deployment, deletion,
+workflow dispatch or push. No launch gate or sign-off closed.
+
+### Evidence and limits
+
+The designated Prompt 386 receipt was read without modifying it. Its byte
+SHA-256 matches
+`1dd5a4bff056409185d6307c817fc7de8862e1c01f65bdf527a1e48283f25557`.
+Allowlisted fields confirm `candidate_build_failed`, candidate
+`snap_rz0cs8Nnw1RObI3ZDS5WRKDSUR2y`, null hashes/smoke and no activation/export.
+The current implementation at that baseline records hashes only after the
+builder returns. Null hashes therefore do not establish failed CVD acquisition.
+
+Read-only provider inspection used the installed SDK 3.8.0 auth reader and exact
+snapshot IDs, after matching project metadata to preview team
+`team_zE3mp7nrEZ6a7cxRavwUMYC4` and project
+`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`. No environment endpoint or secret retrieval
+was used. At `2026-10-17T19:07:54.291Z`, the candidate remained `created` in
+`iad1`, created/updated `2026-10-17T18:03:20.242Z`, expiring
+`2026-10-25T18:03:20.241Z`. At `19:07:54.940Z`, baseline
+`snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA` remained `created` in `iad1`, created/updated
+`2026-10-15T15:00:52.668Z`, expiring `2026-10-24T14:29:39.778Z`.
+An earlier observation at `19:06:33.993Z` / `19:06:34.605Z` agreed.
+
+The candidate identifies source session `sbx_gECDAwMa84EN5rNkmxxwdb80Q7ci`.
+Its exact metadata-only GET, verified from the installed SDK implementation,
+returned HTTP 404 at `2026-10-17T19:07:55.650Z`. It was never resumed and no
+command logs/customer files were fetched. The unavailable session supplies no
+historical exception or deletion outcome. No new inventory claim is made; the
+Prompt 386 inventory observation retains its original timestamp and limits.
+
+Inspection scratch is outside git at `/tmp/acres387-inspection-1GhDBP/metadata.json`
+(and the earlier `/tmp/acres387-inspection-7tFE8O/metadata.json`), with directories
+0700 and files 0600. This is temporary local scratch, not durable production
+custody. The initial restricted-network attempt returned only
+`Read-only provider metadata unavailable; no raw error disclosed.` (exit 1);
+the approved network-enabled read succeeded. Neither tokens nor raw provider
+responses were printed or committed.
+
+| Candidate path at baseline                                         | Source branch / available observation                                | Reproduced locally                                           | Historical conclusion                                                                          |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Builder delete rejects after snapshot resolves                     | `buildSnapshot` finally; wrapper has confirmed ID; no delete receipt | Yes, including ID retention and no later smoke               | Unresolved; today's 404 is not proof of the old delete result                                  |
+| Snapshot metadata lookup rejects or times out                      | `Snapshot.get` after delete; no exception retained                   | Yes, rejection and timeout doubles                           | Unresolved; later `created` does not establish the earlier lookup response                     |
+| Metadata status is not `created`                                   | Explicit status check after lookup                                   | Yes, failed/null metadata and throwing status getter         | Unresolved; current `created` does not establish status at the failed call                     |
+| Summary construction/serialization/getter fails                    | Size/expiry access and expiry `toISOString()` after status           | Yes, throwing getter, invalid Date and serialization failure | Unresolved; no historical metadata object or stack retained                                    |
+| Earlier install/signature/snapshot request fails before resolution | Wrapper records the confirmed ID only after resolved snapshot result | Yes, pre-resolution failures do not invent an ID             | Excluded as the sole immediate failure by the confirmed-ID receipt; no CVD health is certified |
+
+### Safe diagnostic contract
+
+Only failed build-stage cadence receipts gain `build_failure`; schema version 1,
+`error: "candidate_build_failed"`, target binding, retained confirmed ID and
+nonzero exit remain. Its fields are `step` (fixed tool-owned names or `unknown`),
+`kind` (`command_failed`, `provider_failed`, `validation_failed` or `unknown`),
+`builder_cleanup` (`not_requested`, `passed`, `failed` or `unknown`) and boolean
+`snapshot_confirmed`. Successful, skipped and simulation receipts are unchanged.
+No error messages, stacks, causes, output, URLs, paths, provider class names,
+headers or response bodies enter the projection. Private WeakMap state avoids
+reading arbitrary error getters. Provider calls and command output readers are
+classified at their operation boundary. Fixed progress logging cannot interrupt
+cleanup, and no provider-owned builder name is logged.
+
+Creation, command steps, build/smoke file writes, snapshot request, builder
+deletion, metadata lookup, status validation and summary construction have
+separate fixed steps. A primary error plus delete failure retains the primary
+step and `builder_cleanup: "failed"`; successful work followed by failed delete
+still fails. Stop never certifies delete. Snapshot IDs are confirmed once and
+reported through an explicit callback instead of proxying provider objects.
+Deadlines, package pin, egress, CVD validation, scrub order and
+`deleteOrphanSnapshots: false` remain. No retries or snapshot retirement were
+added. The standalone builder uses the same projection and discards its former
+raw `BuildError.detail` output. Failure receipts still cannot pass offline
+handoff, regardless of later snapshot metadata.
+
+SDK-double regressions cover each table row, create rejection, primary plus
+cleanup failure, output rejection/malformed output, invalid snapshot IDs,
+throwing getters, fixed fallback projection, broken log sinks and both CLI
+executables. Canary credentials, private paths, URLs, multiline text and nested
+errors are suppressed in stdout/stderr/receipts. Existing success-to-handoff,
+exclusive writes, active-env preservation and no-snapshot-deletion tests remain.
+These are local tooling tests, not hosted scanner/application acceptance.
+
+### Verification and review
+
+Checks used Node `v24.21.0`; `npm exec -- node --version` also returned
+`v24.21.0`. Logs are local scratch at `/tmp/acres387-*.log`.
+
+- Focused scanner/cadence/handoff suite: exit 0, `tests 187`, `pass 187`,
+  `fail 0`. Final `npm run vercel:probe-test`: exit 0, `tests 285`, `pass 285`,
+  `fail 0`.
+- The first restricted subprocess run failed at file level (`tests 2`, `pass 0`,
+  `fail 2`). A no-isolation diagnostic run still could not execute CLI
+  subprocesses reliably; it is not a suite pass. The first permitted normal
+  run reported `tests 93`, `pass 92`, `fail 1`: an old assertion expected raw
+  `snapshot refused` text. It was updated to the required fixed
+  `snapshot-request` step; subsequent final focused/probe results above passed.
+- `npm run vercel:scanner-rebuild -- --help`: exit 0, including
+  `Deprecated no-op; all snapshots are retained`. `--dry-run`: exit 0 with
+  `"execution_mode":"simulation"`, `"target":null`,
+  `"activation_status":"not_performed"` and
+  `"configuration_export":"not_performed"`; no `build_failure` field.
+- `npm run lint`: exit 0 across all workspaces, ending with
+  `eslint "{src,test}/**/*.ts"` and no diagnostics.
+- Initial restricted `npm run build`: exit 1,
+  `Error: Could not parse output from TypeScript's --showConfig.`
+  The permitted subprocess-enabled rerun exited 0 across all workspaces:
+  Next `16.3.8`, `Generating static pages using 7 workers (23/23)`, then
+  `Generated Prisma Client (7.9.1)` and successful Nest build.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- Changed JS/spec files and the approved prompt passed installed Prettier:
+  `All matched files use Prettier code style!` (exit 0).
+  Existing historical documentation is formatted only in the new fragments.
+- `git diff --check`: exit 0, no output.
+- Sequential post-build `npm run typecheck`: exit 0 across shared/client/server,
+  ending with `Generated Prisma Client (7.9.1)` and no type diagnostics.
+- The added documentation fragments passed installed Prettier independently:
+  `All matched files use Prettier code style!` (exit 0); unrelated historical
+  records were not reformatted.
+- `npm run ops:check`: exit 0 through all stages, ending with managed-drill
+  output `tests 28`, `pass 28`, `fail 0`. The audit printed
+  `Production dependency security audit passed (0 critical vulnerabilities)`;
+  `10 vulnerabilities (4 moderate, 6 high)` remain outside this scope. This
+  aggregate exercises local/synthetic fixtures and static checks, not hosted
+  launch acceptance.
+
+Local inspection: use Node 24.21.0, then run
+`npm run vercel:scanner-rebuild -- --dry-run` for credential-free simulation,
+and `node --test scripts/vercel/build-scanner-snapshot.spec.js scripts/vercel/rebuild-scanner-cadence.spec.js scripts/vercel/prepare-scanner-handoff.spec.js`
+for the synthetic failure and handoff regressions. Do not run a live CLI to
+inspect this result. A separately authorized bounded rebuild with these new
+diagnostics is the next hosted preparation gate; only a successful new receipt
+can support subsequent preview adoption and application proof. The old receipt
+remains ineligible. Hosted cadence, dependency-aware retirement/resource budget,
+production plan and eleven sign-offs remain open.
+
+Independent read-only review used baseline/current HEAD
+`ae13d37d5517cda434bed13e395e0c74a51b3702` plus this working diff and the approved
+prompt. It reported `Critical: none`, `Important: none`, `Minor: none` and
+`Ready to commit: Yes`. The reviewer independently passed 22 targeted diagnostic
+tests and `git diff --check`; its normal focused rerun encountered restricted
+CLI subprocess failures, which do not replace the successful permitted runs
+recorded above. It accessed no private artifacts or provider operations.
+Receiving-review evaluation checked the WeakMap projection, primary/cleanup
+preservation, confirmed-ID callback, failed-handoff rejection and source/test
+coverage against the approved prompt. No valid defect or architectural change
+required a fix or re-review. Only this approved work is committed locally;
+nothing is pushed and no additional hosted authorization is implied.
