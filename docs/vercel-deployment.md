@@ -2026,3 +2026,47 @@ was performed here. Hosted cadence, rollback/in-flight dependency review,
 retirement budget, plan decision and all eleven sign-offs remain open. See
 [the handoff procedure](../infra/vercel/runbooks/managed-operations.md#54-offline-runtime-configuration-handoff)
 and [verification record](operations.md#prompt-385--scanner-runtime-configuration-handoff-2026-10-17).
+
+## Scanner preview adoption attempt — Prompt 386 (2026-10-17)
+
+Status: **blocked before adoption**. Starting source was
+`5247e3754a2eb222a47b0bc31932911fef5cb8ef` on `main`; only the approved prompt
+was untracked. Provider inspection confirmed the expected team/project, active
+Hobby plan, Node `24.x`, basic fixed build machine and `iad1`. Remaining free
+quota was not exposed by the inspected metadata; no paid feature was enabled.
+Preview settings confirmed private Blob store `store_g2fmCH5CW7TJbkN3`,
+`STORAGE_PROVIDER=vercel-blob`, `QUEUE_PROVIDER=vercel`, and a sensitive
+preview-only `DATABASE_URL` record without branch override. Its value and live
+Neon identity were not reverified; no database connection or migration occurred.
+
+The current project preview scanner records had no branch overrides and used
+`SCANNER_PROVIDER=vercel-sandbox`, maximum signature age `48`, snapshot
+`snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA`, main hash
+`0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365` and daily hash
+`af003f6eb87905bc3044e90e489d5f79e4897f57c1930b8854672e649e72f3c3`.
+The provider returned that snapshot as `created`. These project settings differ
+from the historical Prompt 378 snapshot. The latest Ready preview remained
+`dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`
+(`https://acres-nedhhjsg3-dgsloxx417s-projects.vercel.app`), with the three
+Services and `iad1`. Its metadata enumerates scanner variable names, not their
+resolved values; this inspection does **not** prove that old deployment uses the
+current project settings.
+
+The one authorized live cadence attempt started at `2026-10-17T18:02:15.443Z`
+and returned `candidate_build_failed` (exit 1), after confirming candidate
+`snap_rz0cs8Nnw1RObI3ZDS5WRKDSUR2y`. The receipt contains null CVD hashes and
+null smoke results, with `activation_status=not_performed` and
+`configuration_export=not_performed`. It is ineligible for handoff/adoption.
+Follow-up provider inspection at `2026-10-17T18:08:10.018Z` returned both
+baseline and candidate `created` in `iad1`; no attempt-period sandbox remained
+in the project inventory. That observation does not repair the failed receipt,
+certify hashes/smoke cleanup or identify the failed builder substep.
+No second rebuild, variable write, deployment, browser journey, synthetic
+account/upload, queue dispatch, ingestion or snapshot deletion was performed.
+No runtime identity, quarantine denial or new consumer acceptance gate closed.
+There was no configuration mutation to restore.
+
+See [the execution and verification record](operations.md#prompt-386--scanner-preview-adoption-attempt-2026-10-17)
+for restricted receipt custody, inspection limits and local check failures.
+Preview adoption/application proof, dependency-aware retirement, hosted cadence,
+resource budget, production plan and eleven sign-offs remain open.

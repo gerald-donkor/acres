@@ -322,6 +322,18 @@ Those doubles do not establish a hosted candidate or activation authority.
    been established. Retirement requires account-bound inspection, dependency
    review and an explicit bounded cleanup/resource-budget plan outside this CLI.
 
+Prompt 386's authorized preview attempt (2026-10-17) stopped before step 2:
+the cadence producer returned `candidate_build_failed` after confirming a
+candidate ID, but without verified hashes or smoke/cleanup results. Preserve
+that failed receipt and candidate; do not fabricate a successful handoff or
+retry a bounded live attempt automatically. A failed receipt is ineligible even
+if its snapshot later reports `created`. No preview variables were changed and
+no recovery write or new deployment was required. Project env values are not
+proof of an existing immutable deployment's configuration; metadata listing
+variable names establishes only presence. Investigate the retained provider
+state before separately authorizing another candidate attempt. See
+[the execution record](../../../docs/operations.md#prompt-386--scanner-preview-adoption-attempt-2026-10-17).
+
 Durable adoption, verified deployment, retirement within a free-tier resource
 budget and hosted scheduled-execution evidence remain unproved by local tests.
 The production plan decision and eleven launch sign-offs remain open.

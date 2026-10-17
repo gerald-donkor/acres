@@ -3316,3 +3316,10 @@ preparation receipt, using the correct runtime hash variable names. It supplies
 byte consistency only; activation, deployment verification and retirement remain
 `not_performed`. See [actual local checks](operations.md#prompt-385--scanner-runtime-configuration-handoff-2026-10-17).
 All open scanner/launch gates and eleven-category sign-offs remain unchanged.
+
+## Prompt 386 — preview adoption blocked (2026-10-17)
+
+The approved single live candidate attempt failed before verified handoff,
+configuration adoption or deployment. No application acceptance was performed
+and no category is approved. See [the execution record](operations.md#prompt-386--scanner-preview-adoption-attempt-2026-10-17).
+All scanner lifecycle and eleven-category launch gates remain open.

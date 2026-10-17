@@ -4184,3 +4184,15 @@ bounded snapshot retirement/resource budget and hosted scheduled-execution proof
 remain open. No hosted configuration mutation, production promotion, percentage
 change or category approval is established. Phase 12 exit and eleven sign-offs
 remain open.
+
+## Scanner preview adoption attempt — Prompt 386 (2026-10-17)
+
+The one approved live rebuild returned `candidate_build_failed` after confirming
+a retained candidate ID; no verified CVD hashes or smoke result were produced.
+The attempt stopped before handoff/adoption, configuration writes, deployment
+and application acceptance. No scanner or launch gate closed. See
+[the hosted record](vercel-deployment.md#scanner-preview-adoption-attempt--prompt-386-2026-10-17)
+and [actual checks](operations.md#prompt-386--scanner-preview-adoption-attempt-2026-10-17).
+A separately bounded failure investigation precedes any new rebuild attempt;
+retirement, hosted cadence, free-tier budget, production plan and eleven
+sign-offs remain open.

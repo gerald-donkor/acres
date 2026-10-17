@@ -12704,3 +12704,111 @@ Focused independent re-review resolved the Important finding and returned
 `Ready to merge: Yes`, with no additional issues. Review confirmed descriptor
 cleanup, inode/device ownership checking, incomplete-output retention and foreign
 sentinel preservation. No hosted evidence or launch approval was inferred.
+
+## Prompt 386 — scanner preview adoption attempt (2026-10-17)
+
+**Outcome: blocked before adoption.** Execution started from
+`5247e3754a2eb222a47b0bc31932911fef5cb8ef` on `main`, with only the approved
+Prompt 386 untracked. Hosted inspection began at `2026-10-17T18:00:51Z`;
+the one live rebuild ran from receipt timestamp `18:02:15.443Z` to receipt
+file completion `18:04:13.955Z`. Follow-up provider inspection at
+`18:08:10.018Z` confirmed both snapshots `created` in `iad1`. No new
+application source/deployment exists for this attempt; the eventual record
+commit must not be attributed to the old deployment.
+
+Authenticated CLI 64.3.1 on Node 24.21.0 confirmed the selected team/project,
+active Hobby plan, Node 24.x, basic fixed build machine and default `iad1`.
+Remaining free allowance was not visible in inspected metadata; no upgrade or
+paid feature was enabled. Scoped preview reads verified Blob store
+`store_g2fmCH5CW7TJbkN3`, Blob/queue providers and scanner settings. Database
+scope was verified from metadata only; no database secret retrieval or live
+Neon identity proof occurred. The historical deployment was still the latest
+Ready preview; its metadata lists scanner keys, not resolved values. See
+[the full baseline](vercel-deployment.md#scanner-preview-adoption-attempt--prompt-386-2026-10-17).
+
+A new 0700 run directory `prompt386-20261017T180051Z` under the designated
+`~/.config/acres/vercel-preview/` parent retains 0600 baseline scanner records,
+provider metadata, the failure receipt and post-failure inspection. The existing
+CLI identity was used through its verified auth reader, without printing or
+copying its token. This is local preview custody, not an approved production
+evidence store. No passwords, cookies, database URLs or raw provider responses
+are committed. Receipt byte SHA-256:
+`1dd5a4bff056409185d6307c817fc7de8862e1c01f65bdf527a1e48283f25557`.
+
+Automatic approval review rejected the initial proposed all-variable
+`decrypt=true` inventory because it could retrieve unrelated secrets; that
+command did not execute. The narrower approved inspection used metadata and
+individual scanner record reads. A later read-only snapshot/cleanup inspection
+approval timed out; its one permitted retry succeeded. Neither event supplied
+permission to read unrelated credentials or perform extra hosted mutations.
+
+The existing cadence producer was invoked once with `--force`, the inspected
+baseline `snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA`, and fresh restricted receipt/env
+paths. It returned exit 1 with `candidate_build_failed`, confirming retained
+candidate `snap_rz0cs8Nnw1RObI3ZDS5WRKDSUR2y` but no hashes or smoke result.
+`activation_status` and `configuration_export` remained `not_performed`.
+The producer suppresses builder diagnostics and collapses this stage's failures;
+the precise failing substep is **unknown**. A confirmed ID does not distinguish
+builder deletion, metadata/status lookup or another post-snapshot failure.
+No failed receipt was rewritten. Offline handoff validation returned
+`handoff_receipt_invalid` (exit 1); no bundle was created.
+
+Follow-up SDK reads confirmed baseline and candidate `created`, with expirations
+`2026-10-24T14:29:39.778Z` and `2026-10-25T18:03:20.241Z`, respectively.
+The candidate's provider creation time was `2026-10-17T18:03:20.242Z`.
+A project-scoped sandbox inventory contained no sandboxes created since the
+attempt began (with a ten-second margin), supporting no currently listed builder
+residue. This is inventory evidence at that time, not a successful producer
+cleanup receipt or proof of CVD freshness. No separate cadence smoke sandbox was
+certified. Existing snapshots were preserved; no retirement/deletion was called.
+
+No configuration writes occurred, so no restoration was necessary. There was
+no deployment attempt, browser sign-in, synthetic account/organization/upload,
+application clean/EICAR acceptance, queue invocation correlation, tenant denial
+or quarantine-access proof. No runtime/launch gate closed. Do not repurpose the
+created but ineligible snapshot as a successful handoff. Investigate the failed
+stage in a separate bounded scope before authorizing another rebuild. Old
+snapshot expiration does not establish old signature health or rollback health.
+
+Local checks used Node `v24.21.0`; `npm exec -- node --version` also returned
+`v24.21.0`. Logs are in local `/tmp/acres386-checks/` (verification scratch,
+not durable hosted evidence). Actual outputs/exits:
+
+- `node scripts/vercel/check-vercel-config.js`: exit 0,
+  `vercel.json configuration valid`.
+- Initial sandboxed `npm run vercel:probe-test`: exit 1, file-level failures in
+  the two subprocess-based suites (`tests 5`, `pass 3`, `fail 2`). The approved
+  unsandboxed rerun exited 0: `tests 257`, `pass 257`, `fail 0`.
+- `npm run ops:check`: exit 1 at `ops:audit` after preceding stages passed.
+  Actual network diagnostic: `Client network socket disconnected before secure
+TLS connection was established`, followed by `npm error audit endpoint
+returned an error`. The wrapper printed `audit error: critical vulnerabilities
+detected in production dependencies`; this network failure establishes no
+  vulnerability count. Later aggregate stages did not run; no aggregate pass
+  or refreshed audit result is claimed.
+- `npm run lint`: exit 0 across client/shared/server, ending with
+  `eslint "{src,test}/**/*.ts"` and no diagnostics.
+- `npm run build`: exit 0 across all workspaces; Next `16.3.8` reported
+  `Generating static pages using 7 workers (23/23)` and Nest completed after
+  `Generated Prisma Client (7.9.1)`.
+- Sequential post-build `npm run typecheck`: exit 0 across all workspaces,
+  ending with `Generated Prisma Client (7.9.1)` and no type diagnostics.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+
+The initial whole-file Prettier check exited 1 with `Code style issues found in
+6 files`. All five tracked documentation owners also fail Prettier at baseline
+`HEAD` (verified against temporary `git show` copies). The new record fragments
+and approved prompt were formatted with installed Prettier without reformatting
+unrelated historical records. `git diff --check` exited 0 with no output.
+Final fragment/prompt Prettier verification exited 0:
+`All matched files use Prettier code style!`. Final secret scan returned
+`secret/default scan passed` (exit 0).
+
+Independent read-only review used base/current HEAD
+`5247e3754a2eb222a47b0bc31932911fef5cb8ef` plus this diff and the new prompt.
+It checked the source failure semantics and local logs and found no Critical,
+Important or Minor issues: `Ready to commit: Yes`. Receiving-review evaluation
+confirmed the findings against the producer and recorded evidence; no source
+fix, additional hosted action or re-review was required. No source, dependency, schema or workflow was changed to make
+this blocked hosted gate appear successful. Production promotion, plan decision,
+retirement/resource budget, hosted cadence and eleven sign-offs remain open.
