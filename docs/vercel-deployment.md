@@ -2007,3 +2007,22 @@ budget and hosted scheduled-execution evidence remain open. Local SDK doubles
 and workflow shell tests do not supply hosted proof. The commercial hosting-plan decision,
 all eleven sign-offs and Phase 12 exit remain open; no percentage change,
 production promotion or cloud mutation was performed.
+
+## Scanner runtime configuration handoff — Prompt 385 (2026-10-17)
+
+New live cadence receipts bind schema version 1 to actual preview target identity;
+simulation has a null target. The offline handoff CLI validates the fixed Acres
+preview team/project/iad1 target and successful preparation/smoke/cleanup, then
+creates a fresh restricted outside-repo runtime bundle. Legacy receipts are
+rejected. `runtime.env` uses `SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_MAIN_SHA256`
+and `SCANNER_DAILY_SHA256`; existing `ACRES_SCANNER_*` probe exports are unchanged.
+The allowlisted manifest hashes original receipt and env bytes for consistency,
+not provider attestation or deployed identity. Linux/procfs anchors output writes;
+partial output remains incomplete for local inspection.
+
+This is an implemented local configuration gate only. No durable operator
+bundle, Vercel env adoption, redeployment, application acceptance or retirement
+was performed here. Hosted cadence, rollback/in-flight dependency review,
+retirement budget, plan decision and all eleven sign-offs remain open. See
+[the handoff procedure](../infra/vercel/runbooks/managed-operations.md#54-offline-runtime-configuration-handoff)
+and [verification record](operations.md#prompt-385--scanner-runtime-configuration-handoff-2026-10-17).

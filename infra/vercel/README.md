@@ -204,3 +204,26 @@ for separate activation, application verification and retirement requirements.
 The standalone builder's destructive `--replace` warning above still applies.
 Snapshot age is not CVD freshness; receipt reason `snapshot_recent` supersedes
 `signatures_fresh`. No hosted freshness, zero downtime or launch claim follows.
+
+## Offline runtime handoff — Prompt 385
+
+`node scripts/vercel/prepare-scanner-handoff.js --help` describes the offline
+receipt-to-bundle interface. Supply `--receipt <file>` and `--output-dir <new
+outside-repo directory>` under an existing writable parent on Linux with procfs.
+Use operator-selected durable restricted storage; `/tmp` is an inspection fixture.
+The new directory is 0700 and its `runtime.env` and `handoff.json` are 0600.
+Only successful live v1 cadence receipts bound to the fixed Acres preview
+team/project/iad1 target with passing clean/EICAR/cleanup are accepted. Simulation
+has a null target. Legacy receipts are rejected without an override.
+
+Probe/builder `ACRES_SCANNER_*` exports remain unchanged. The runtime bundle uses
+exactly `SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_MAIN_SHA256` and
+`SCANNER_DAILY_SHA256`; it adds no credentials, provider or freshness defaults.
+The allowlisted manifest binds original receipt and runtime bytes by SHA-256.
+It is consistency evidence from operator input, not authentication, provider
+attestation or deployed identity. All activation/verification/retirement statuses
+remain `not_performed`. Failed output is retained as incomplete for inspection;
+retry into a new directory. No SDK or network operation occurs. The workflow
+remains unchanged and does not persist this bundle. See [the handoff and later
+activation procedure](runbooks/managed-operations.md#54-offline-runtime-configuration-handoff),
+including separate previous-configuration retention for rollback.

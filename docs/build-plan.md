@@ -4167,3 +4167,20 @@ budget and hosted scheduled-execution evidence remain open. Local SDK doubles
 and workflow shell tests do not supply hosted proof. The commercial hosting-plan decision,
 all eleven sign-offs and Phase 12 exit remain open; no percentage change,
 production promotion or cloud mutation was performed.
+
+## Scanner runtime configuration handoff — Prompt 385 (2026-10-17)
+
+Implements the next local scanner gate after Prompt 384: versioned target-bound
+preparation receipts and a strictly offline receipt-to-runtime bundle CLI. The
+consumer rejects legacy/simulation/failed/mismatched receipts and creates only
+new restricted outside-repo output. Correct runtime hash names replace the
+runbook transcription error. Byte digests establish consistency, not provider
+authentication, deployed identity or launch evidence. The workflow is unchanged.
+See [operations verification](operations.md#prompt-385--scanner-runtime-configuration-handoff-2026-10-17)
+and [operator procedure](../infra/vercel/runbooks/managed-operations.md#54-offline-runtime-configuration-handoff).
+
+Preview adoption/deployment verification, rollback/in-flight dependencies,
+bounded snapshot retirement/resource budget and hosted scheduled-execution proof
+remain open. No hosted configuration mutation, production promotion, percentage
+change or category approval is established. Phase 12 exit and eleven sign-offs
+remain open.

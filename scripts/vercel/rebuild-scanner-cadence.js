@@ -256,6 +256,15 @@ async function rebuildCadence(config, sdk, options = {}) {
   }
   const cadence = await evaluateCadence(config, sdk, opts);
   const receipt = {
+    schema_version: 1,
+    target: opts.dryRun
+      ? null
+      : {
+          environment: "preview",
+          team_id: config.teamId,
+          project_id: config.projectId,
+          region: config.region,
+        },
     tool: "rebuild-scanner-cadence",
     timestamp: new Date().toISOString(),
     status: cadence.rebuildNeeded ? "success" : "skipped",

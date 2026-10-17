@@ -214,7 +214,9 @@ npm run vercel:scanner-rebuild -- --dry-run
 
 # With existing approved preview credentials/opt-in in the environment:
 # Use a fresh restricted directory and filenames for every live preparation.
-candidate_dir=$(mktemp -d /tmp/acres-scanner-candidate.XXXXXXXX)
+# SCANNER_PREPARATION_PARENT: operator-selected existing durable directory
+# outside the repository (restricted access); /tmp is for inspection only.
+candidate_dir=$(mktemp -d "${SCANNER_PREPARATION_PARENT:?select durable preparation parent}/candidate.XXXXXXXX")
 chmod 700 "$candidate_dir"
 npm run vercel:scanner-rebuild -- \
   --current-snapshot-id snap_ACTIVEID \
@@ -233,13 +235,82 @@ provider diagnostics, secret values or private absolute paths. When a snapshot
 ID was confirmed it remains in the failure receipt for restricted inspection;
 ambiguous candidates must be reconciled manually, never automatically deleted.
 
-### 5.4 Manual activation, verification and retirement
+### 5.4 Offline runtime configuration handoff
 
-1. Preserve the candidate ID and both SHA-256 hashes in the approved restricted
-   configuration inventory. Map the exported `ACRES_SCANNER_*` variables to the
-   runtime `SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_SANDBOX_MAIN_SHA256` and
-   `SCANNER_SANDBOX_DAILY_SHA256` configuration using the existing target-bound
-   operator procedure. The cadence tool does not perform this step.
+New preparation receipts include `schema_version: 1` and the actual preview
+team/project/region. Simulation uses `target: null`. Legacy receipts without
+version/target are rejected; prepare a new candidate with this producer rather
+than asserting a legacy target. A successful live receipt, all three passing
+smoke/cleanup statuses and the exact Acres preview target are required.
+
+After preparation, create a fresh local bundle (no credentials or SDK required):
+
+```bash
+node scripts/vercel/prepare-scanner-handoff.js --help
+# SCANNER_HANDOFF_DIR: a NEW directory under an existing writable, durable,
+# restricted parent outside the repo. Select it separately for each handoff.
+node scripts/vercel/prepare-scanner-handoff.js \
+  --receipt "$candidate_dir/receipt.json" \
+  --output-dir "${SCANNER_HANDOFF_DIR:?select new durable handoff directory}"
+```
+
+The CLI requires Linux with procfs to anchor output writes to the owned directory.
+It exclusively creates a 0700 directory and 0600 `runtime.env`/`handoff.json`.
+It reads at most 64 KiB of a regular JSON receipt, refuses symlink inputs,
+existing destinations, repository aliases and overlapping paths. It never sources
+an env file or uses current credentials to infer identity. Help is offline.
+
+`runtime.env` contains exactly `SCANNER_SANDBOX_SNAPSHOT_ID`,
+`SCANNER_MAIN_SHA256` and `SCANNER_DAILY_SHA256`. The cadence/builder exports
+`ACRES_SCANNER_*` for probes; those are different from runtime variable names.
+No provider selection, credentials or signature-age defaults are added.
+Preserve the previous runtime configuration separately in the restricted rollback
+inventory before any later adoption.
+
+The versioned allowlisted manifest binds receipt bytes and generated env bytes
+with SHA-256 and records preparation time, target and previous/candidate identity.
+These hashes establish consistency, not authenticity, provider attestation,
+signing or deployed identity. The receipt is untrusted operator input. Preparation
+time is neither CVD freshness nor a safe activation deadline. Activation,
+deployment verification and retirement remain explicitly `not_performed`.
+
+On failure the CLI returns nonzero with a fixed diagnostic; it retains incomplete
+owned output for inspection and never recursively deletes a caller path. A
+pending manifest is closed before exclusive publication; output failures do not
+certify success. If local filesystem interference makes cleanup inaccessible,
+treat all retained output as incomplete regardless of filenames. Preserve
+pre-existing data. Resolve the failure and choose a new directory for a retry.
+Temporary `/tmp` bundles are test/inspection fixtures, not durable storage.
+The CI workflow still only retains an allowlisted summary and deletes temporary
+files; it does not call this CLI or persist/adopt runtime configuration.
+
+Credential-free local fixture inspection (not durable operator evidence):
+
+```bash
+inspection_dir=$(mktemp -d /tmp/acres-scanner-inspection.XXXXXXXX)
+node scripts/vercel/rebuild-scanner-cadence.js --dry-run \
+  --output "$inspection_dir/simulation.json"
+cat "$inspection_dir/simulation.json"
+# Expected exit 1: handoff_receipt_invalid; no bundle directory is created.
+node scripts/vercel/prepare-scanner-handoff.js \
+  --receipt "$inspection_dir/simulation.json" \
+  --output-dir "$inspection_dir/rejected-bundle"
+```
+
+A simulated receipt is never eligible for handoff or activation. To inspect a
+successful path without hosted calls, run `node --test
+scripts/vercel/prepare-scanner-handoff.spec.js
+scripts/vercel/rebuild-scanner-cadence.spec.js`; these tests create and remove
+isolated local fixtures, including the live-mode receipt produced by SDK doubles.
+Those doubles do not establish a hosted candidate or activation authority.
+
+### 5.5 Manual activation, verification and retirement
+
+1. Preserve and review the §5.4 bundle in the approved restricted configuration
+   inventory. Its runtime names are `SCANNER_SANDBOX_SNAPSHOT_ID`,
+   `SCANNER_MAIN_SHA256` and `SCANNER_DAILY_SHA256`. Verify the selected preview
+   target and preserve previous configuration separately. Local bundle preparation
+   does not update any Vercel environment.
 2. With separate target authorization, update configuration and redeploy the
    application using that exact candidate. Keep previous configuration for
    rollback. No production mutation is authorized by candidate preparation.

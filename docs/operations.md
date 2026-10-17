@@ -12611,3 +12611,96 @@ open. No completion percentage, category approval, deployment, provider resource
 mutation or production promotion is established by this change. Local rollback
 is a revert; review must keep scheduled live execution disabled because the old
 code reintroduces premature deletion and dry-run configuration overwrite.
+
+## Prompt 385 — scanner runtime configuration handoff (2026-10-17)
+
+New cadence receipts add schema version 1 and the live preview target from the
+validated execution configuration; simulation has a null target. Existing
+candidate retention and probe env exports are unchanged. The offline
+`scripts/vercel/prepare-scanner-handoff.js` consumes only successful target-bound
+live receipts with passed clean/EICAR/cleanup and no failure/activation markers.
+Legacy receipts cannot be overridden. Receipt input is regular-file/inode checked,
+bounded to 64 KiB, validated and reconstructed into allowlisted output.
+
+On Linux with procfs, a fresh outside-repo directory (0700) receives exclusive
+0600 `runtime.env` and `handoff.json`. Descriptor-anchored writes resist path
+replacement after acquisition. The manifest is closed before exclusive hardlink
+publication; incomplete output is retained for inspection, with owned publication
+removed on post-publication failure when accessible. No recursive deletion of
+caller paths occurs. Diagnostics use fixed codes without paths or input bodies.
+
+The runtime assignments are exactly `SCANNER_SANDBOX_SNAPSHOT_ID`,
+`SCANNER_MAIN_SHA256`, `SCANNER_DAILY_SHA256`; the runbook's incorrect hash names
+are corrected. Byte hashes bind original receipt/runtime content, not provider
+authenticity or deployed identity. All activation/verification/retirement statuses
+remain `not_performed`. Preparation time cannot certify CVD freshness. No SDK,
+network, workflow change, credential propagation or hosted mutation is involved.
+See [managed operations §5.4](../infra/vercel/runbooks/managed-operations.md#54-offline-runtime-configuration-handoff)
+for durable restricted storage selection, separate rollback configuration and
+later activation boundaries. `/tmp` outputs are inspection fixtures only.
+
+Remaining gates: operator adoption into the authorized preview environment,
+application deployment identity and upload/scan verification, old-deployment,
+in-flight and rollback dependencies, bounded retirement/resource budget and
+hosted scheduled execution. CI summary retention is unchanged and does not
+persist this bundle. The hosting-plan decision and all eleven sign-offs remain
+open. No completion percentage or launch approval changes. Rollback is a local
+revert; preserve corrected runtime variable instructions.
+
+Verification used Node `v24.21.0` from
+`/home/dgk/.local/share/mise/installs/node/24.21.0/bin/node`. Subprocess test
+execution required permission outside the sandbox: the initial sandbox run
+reported file-level `test failed` without running the test cases. The permitted
+local rerun used temporary files and SDK doubles, without hosted actions.
+Actual output/status:
+
+- `node --test scripts/vercel/prepare-scanner-handoff.spec.js`: exit 0,
+  `tests 65`, `pass 65`, `fail 0`.
+- `node --test scripts/vercel/rebuild-scanner-cadence.spec.js`: exit 0,
+  `tests 63`, `pass 63`, `fail 0`. This includes a genuine producer receipt
+  from SDK doubles consumed by the handoff subprocess without a probe env export.
+- `npm run vercel:probe-test`: exit 0, `tests 256`, `pass 256`, `fail 0`.
+- `node scripts/vercel/prepare-scanner-handoff.js --help`: exit 0,
+  `Local bundle only; activation, deployment verification and retirement not performed.`
+- `npm run lint`: exit 0 through client, shared and server ESLint.
+- `npm run build`: exit 0 through shared, Next `16.3.8` and Nest, ending with
+  `Generated Prisma Client (7.9.1)`.
+- Sequential post-build `npm run typecheck`: exit 0 through shared/client/server,
+  ending with `Generated Prisma Client (7.9.1)`; no build/typecheck race.
+- Installed Prettier on changed JS/spec/JSON: exit 0,
+  `All matched files use Prettier code style!`. Markdown diff reviewed manually.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- `git diff --check`: exit 0, no output.
+- `npm run ops:check`: exit 0 through its final managed verifier suite,
+  `tests 28`, `pass 28`, `fail 0`. Audit output:
+  `10 vulnerabilities (4 moderate, 6 high)` and
+  `Production dependency security audit passed (0 critical vulnerabilities)`.
+  These noncritical findings were already recorded in Prompt 384 and remain
+  outside this handoff scope; no aggregate stage was skipped for audit/network failure.
+- Credential-free simulation inspection: `"schema_version":1`, `"target":null`,
+  `"execution_mode":"simulation"`; consumer returned
+  `handoff_receipt_invalid`, exit 1, and `bundle exists: false`.
+
+Independent read-only review used base/current HEAD
+`2faafcb74c5e5fe821b33eb62fc03f559888e818` plus the uncommitted diff and new files.
+It identified one important issue: post-publication cleanup used the original
+pathname, leaving a completed manifest after a directory rename plus pending
+unlink failure even though the owned descriptor remained accessible. The
+coordinator reproduced that result with temporary fixtures, then changed cleanup
+to use the open directory descriptor and retained inode/device ownership checks.
+A regression now renames the owned directory, creates a foreign manifest sentinel
+at the original path, injects cleanup failure, and verifies removal of the moved
+owned manifest while preserving both incomplete runtime output and foreign data.
+
+After this fix, actual Node 24.21.0 focused output was `tests 66`, `pass 66`,
+`fail 0` (exit 0); `npm run vercel:probe-test` was `tests 257`, `pass 257`,
+`fail 0` (exit 0). Prettier again reported
+`All matched files use Prettier code style!`; secret scan again reported
+`secret/default scan passed`; final diff check exited 0 silently. The earlier
+full build, post-build typecheck, lint and operations checks cover the unchanged
+application surface; the fix only changes the standalone CLI and its regression.
+
+Focused independent re-review resolved the Important finding and returned
+`Ready to merge: Yes`, with no additional issues. Review confirmed descriptor
+cleanup, inode/device ownership checking, incomplete-output retention and foreign
+sentinel preservation. No hosted evidence or launch approval was inferred.

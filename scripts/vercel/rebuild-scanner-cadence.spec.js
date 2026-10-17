@@ -1186,3 +1186,43 @@ test("exclusive open rejects a collision after the final path check", () =>
     assert.equal(fs.statSync(file).mode & 0o777, 0o640);
     retained(fake);
   }));
+
+test("new live preparation receipt flows through offline handoff subprocess", () =>
+  temporary(async (dir) => {
+    const { spawnSync } = require("node:child_process");
+    const { TARGET } = require("./prepare-scanner-handoff");
+    const fake = fakeSdk();
+    const output = path.join(dir, "receipt.json");
+    const receipt = await rebuildCadence(
+      { ...config, teamId: TARGET.team_id, projectId: TARGET.project_id },
+      fake.sdk,
+      { force: true, output },
+    );
+    assert.equal(receipt.schema_version, 1);
+    assert.deepEqual(receipt.target, TARGET);
+    assert.equal(receipt.configuration_export, "not_performed");
+    const before = [...fake.events];
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(__dirname, "prepare-scanner-handoff.js"),
+        "--receipt",
+        output,
+        "--output-dir",
+        path.join(dir, "bundle"),
+      ],
+      { encoding: "utf8", env: { PATH: process.env.PATH } },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(fake.events, before);
+    assert.equal(JSON.parse(result.stdout).status, "prepared");
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(dir, "bundle/handoff.json"), "utf8"),
+    );
+    assert.equal(manifest.candidate_snapshot_id, receipt.new_snapshot_id);
+    assert.deepEqual(manifest.target, receipt.target);
+    retained(fake);
+    const simulated = await rebuildCadence(config, undefined, { dryRun: true });
+    assert.equal(simulated.schema_version, 1);
+    assert.equal(simulated.target, null);
+  }));

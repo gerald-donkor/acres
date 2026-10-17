@@ -3307,3 +3307,12 @@ Independent review independently passed 62 focused tests and found no issues.
 These are SDK doubles/local workflow tests, not hosted activation or cadence
 acceptance. See [the complete verification record](operations.md#prompt-384--scanner-candidate-lifecycle-safety-2026-10-17)
 for exact outputs, the resolved initial build/typecheck race and remaining work.
+
+## Prompt 385 — local scanner handoff (2026-10-17)
+
+The offline [runtime handoff procedure](../infra/vercel/runbooks/managed-operations.md#54-offline-runtime-configuration-handoff)
+now produces a versioned restricted local bundle from a valid target-bound
+preparation receipt, using the correct runtime hash variable names. It supplies
+byte consistency only; activation, deployment verification and retirement remain
+`not_performed`. See [actual local checks](operations.md#prompt-385--scanner-runtime-configuration-handoff-2026-10-17).
+All open scanner/launch gates and eleven-category sign-offs remain unchanged.
