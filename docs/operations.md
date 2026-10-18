@@ -13546,3 +13546,40 @@ signatures are long past 48 h.
 Local checks do not stand in for the hosted proof above. Two findings are
 open (CLI deploys upload gitignored files; `/app` `dashboardSummary` SSR
 failure); see the hosted record.
+
+## Prompt 392 — deploy upload allowlist (2026-10-18)
+
+Baseline `d2606b3`; implementation commit `feb6d9e`. Node `v24.21.0`
+directly and inside `npm run`; cached Vercel CLI 64.5.0; project inspect →
+`acres`, owner `dgsloxx417's projects`.
+
+### Checks (Node 24.21.0)
+
+- `npm run vercel:probe-test` → `tests 337`, `pass 337`, `fail 0`
+- `npm run lint` → exit 0; `npm run typecheck` → exit 0; `npm run build` →
+  exit 0
+- dry run + `vercel:deploy-manifest` with secrets on disk → `deploy manifest
+  ok: 654 files`; negative controls and the dirty-scope failure as recorded
+  in the hosted record
+
+### Review
+
+Stage 1 found no Critical issues and one Important: the path-set check let
+staged or modified content through, so a recorded SHA could be wrong. Fixed
+with the clean-scope gate. Also accepted: repo-top-level resolution for
+`--cwd`, exit 2 on git failure, no `SECRET:` label on `.env.example`,
+rejecting flag-like values, `*.key`/`.npmrc`/`*.log` excludes, and four
+tests. Declined: a unit test of `.vercelignore` through the `ignore` package
+(the CLI bundles its own matcher; the real dry run is the faithful test) and
+a truncation test. The re-review returned "ready" with one Minor
+(rename/copy source parsing in porcelain `-z`), which was fixed.
+
+### Hosted
+
+`vercel deploy --target=preview` from the working tree at `15:00:52Z`: exit
+0, `dpl_7JR8wLUt14fPRdD7SHPmy6gM4QTC`, Ready `15:02:45Z`. Stored source equal
+to the manifest; smoke `/` 200, `/api/v1/auth/csrf` 200. The inventory of
+earlier deployments found nine previews storing `.env`, `server/.env` and
+`backups/`; deletion and rotation are pending owner decisions (see
+[the hosted record](vercel-deployment.md#deploy-upload-allowlist--prompt-392-2026-10-18)).
+

@@ -43,6 +43,12 @@ whoami`; if signed out, the user runs `! npx vercel@latest login`.
    `/tmp/acres-node24/node_modules/node-linux-x64/bin` first on `PATH`
    (the npm shim must also resolve to that Node; check `node --version`
    inside `npm run`).
+4. Before **every** CLI deploy (Prompt 392): from the repo root on a clean
+   `main`, `vercel deploy --dry --target=preview < /dev/null > <tmp>/dry.json`
+   then `npm run vercel:deploy-manifest -- --manifest <tmp>/dry.json`. Deploy
+   only on `deploy manifest ok`. `.vercelignore` keeps secrets and build
+   outputs out of the upload; a working-tree deploy is safe once the check
+   passes, so the `git archive` workaround is no longer needed.
 
 **Re-run the proofs (idempotent, preview only).**
 
@@ -113,10 +119,13 @@ committed per AGENTS.md §2):
       Prompt 391 (2026-10-18) **adopted** it on preview and proved clean and
       EICAR uploads through deployment `dpl_2aajXYcFj2FDoGA9Gbbu5HqyFtBT`
       (`https://acres-7azesfi2c-dgsloxx417s-projects.vercel.app`). Its
-      signatures leave the 48 h window no later than about 2026-10-20T01:00Z. Next
-      (own prompts): a `.vercelignore` for CLI deploys, the `/app`
-      `dashboardSummary` SSR failure, then a fresh rebuild/adoption or the
-      dependency-aware retirement of superseded snapshots.
+      signatures leave the 48 h window no later than about 2026-10-20T01:00Z.
+      Prompt 392 (2026-10-18) added the deploy upload allowlist
+      (`.vercelignore` + `vercel:deploy-manifest`). Next (own prompts): the
+      `/app` `dashboardSummary` SSR failure, then a fresh rebuild/adoption or
+      the dependency-aware retirement of superseded snapshots; the owner's
+      decision on deleting the nine preview deployments that stored `.env`
+      files (see Prompt 392) is pending.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -2313,9 +2322,11 @@ metadata exposes scanner variable names, not resolved values, so the
 per-service value comparison was not possible; identity rests on the
 inference above.
 
-Findings (open, own prompts):
+Findings (finding 1 resolved by Prompt 392; finding 2 open):
 
-1. **Deploy uploads gitignored files.** There is no `.vercelignore`, and a
+1. **Deploy uploads gitignored files.** *Resolved by Prompt 392:*
+   `.vercelignore` allowlist plus `vercel:deploy-manifest`, proven on
+   `dpl_7JR8wLUt14fPRdD7SHPmy6gM4QTC`; old deployments inventoried there. There is no `.vercelignore`, and a
    working-tree `vercel deploy --dry` lists `.env`, `backups/`, `ref/` and
    other ignored paths. `dpl_Hr9…`'s stored source contains `src/.env` and
    `src/backups/…`. These are local-development values (localhost Postgres
@@ -2336,3 +2347,91 @@ later than about `2026-10-20T01:00Z`, after which scans on this deployment fail 
 until the next rebuild and adoption), the two findings, the production plan
 decision and the eleven sign-offs. See
 [the execution record](operations.md#prompt-391--scanner-preview-adoption-2026-10-18).
+
+## Deploy upload allowlist — Prompt 392 (2026-10-18)
+
+Status: **implemented and hosted-proven on preview.** Source `feb6d9e` on
+`main`. The Vercel CLI does not read `.gitignore`; its built-in ignores
+(`getVercelIgnore2` in CLI 64.5.0) omit `.env`, so working-tree deploys
+uploaded `/.env`, `server/.env`, `backups/`, `ref/`, build outputs and more
+(2,828 files).
+
+- **`.vercelignore`** (repo root; the project has no root directory, so this
+  file is the one that applies). Allowlist form from
+  <https://vercel.com/docs/deployments/vercel-ignore>: `/*`, then `!` for
+  `client`, `server`, `packages`, `package.json`, `package-lock.json`,
+  `vercel.json`, `.node-version`. Inside those: `.env*` (re-admitting only
+  `/client/.env.example` and `/server/.env.example`), `*.pem`, `*.key`,
+  `.npmrc`, `*.log`, `*.dump`, `*.tsbuildinfo`, `node_modules`, `coverage`,
+  `dist`, `test-results`, `playwright-report`, `server/src/generated`,
+  `client/next-env.d.ts`, `client/out`, `client/build`. No tracked in-scope
+  file matches an exclude except the two placeholders.
+- **Correction to the prompt.** Its unanchored `!.env.example` also re-admits
+  the root `/.env.example` over `/*`; the first dry run failed the check with
+  `out-of-scope file in upload: .env.example`. The two anchored entries
+  replace it.
+- **`scripts/vercel/check-deploy-manifest.js`** (`npm run
+  vercel:deploy-manifest -- --manifest <dry.json> [--cwd <dir>]`). Reads a
+  `vercel deploy --dry` manifest (never runs the CLI) and requires the upload
+  to equal the git-tracked files in that scope exactly. It also requires a
+  clean scope (`git status --porcelain`), so the upload is HEAD's content and
+  the recorded SHA is true. Errors: `untracked or ignored file in upload`,
+  `out-of-scope file in upload`, `build input missing from upload`,
+  `uncommitted change in deploy scope`, `duplicate`/`invalid path`; `.env`
+  paths other than `.env.example` get a `SECRET:` prefix. Exit 0 ok, 1
+  violation, 2 usage or git error. Paths only, never contents. Eleven
+  `node:test` cases in `check-deploy-manifest.spec.js`, run by
+  `vercel:probe-test`. The check is a manual preflight: nothing forces it
+  before `vercel deploy`.
+- **Local evidence** (Node 24.21.0, `.env`, `server/.env`, `backups/`,
+  `server/dist` on disk). Dry run: `fileCount 654`, `totalSize 152722837`,
+  `ignoredCount 37` (ignored list includes `.env`, `.env.example`,
+  `backups`, `server/.env`, `server/dist`, `server/coverage`,
+  `server/src/generated`, `packages/shared/dist`) → `deploy manifest ok: 654
+  files`, equal to `git ls-files` over the scope. Negative controls:
+  `client/.env.check-392` was ignored (check exit 0); `client/untracked-392.txt`
+  failed with `untracked or ignored file in upload` (exit 1). Before commit,
+  the check failed on the modified `package.json` (`uncommitted change in
+  deploy scope`), as designed.
+- **Deployment.** `dpl_7JR8wLUt14fPRdD7SHPmy6gM4QTC`
+  (`https://acres-fuq15llmn-dgsloxx417s-projects.vercel.app`), deployed from
+  the **working tree** after the check passed on `feb6d9e`. Created
+  `15:00:55Z`, Ready `15:02:45Z`, `target: null`, no aliases, `iad1`, basic
+  build machine, Vercel Authentication. Stored source: 654 files under `src/`,
+  identical to the manifest; no `.env` (other than the two placeholders), no
+  root `backups/`, `ref/`, `scratch/`, `output/`, `.claude`; no `dist/`,
+  `coverage/` or `generated/` path. One pattern hit was the tracked
+  `client/public/assets/ui/ref/acres-design-system.pdf`, a §0 reference, not
+  the gitignored root `ref/`. Smoke through `vercel curl --deployment`: `/`
+  200, `/api/v1/auth/csrf` 200 (client → `ACRES_API_ORIGIN` → api). Health is
+  `VERSION_NEUTRAL` `/health` on the api service, and every public path
+  rewrites to `client`, so `/health` is 404 publicly; the CSRF GET stands in
+  as the API smoke.
+
+**Earlier deployments (inventory, read-only, 2026-10-18).** All fifteen
+earlier `acres` deployments (one page), stored source read through
+`/v6/deployments/<id>/files`:
+
+| deployment | created (UTC) | target | `src/.env` | `src/server/.env` | `src/backups/` files |
+| --- | --- | --- | --- | --- | --- |
+| `dpl_6L5ZspwDq331ophkaxojsDZDaKPP` (ERROR) | 2026-10-16 12:44 | preview | yes | yes | 92 |
+| `dpl_3giXPYQmYVsxWg5De5U5aZrCaNwZ` | 2026-10-16 12:45 | preview | yes | yes | 92 |
+| `dpl_4MguFfnKXsb4QHU3ayvKf4RdCRQK` | 2026-10-16 12:51 | preview | yes | yes | 92 |
+| `dpl_9k1JSzXmroDuaJs1MnnTVcDe6kH1` | 2026-10-16 13:13 | preview | yes | yes | 92 |
+| `dpl_DHaBK6oVM7YmKZEafMVCdYFqK4fp` | 2026-10-16 13:18 | preview | yes | yes | 92 |
+| `dpl_DjXH5qAkKYFEkBY8NaBFGzqS9NuU` | 2026-10-16 13:26 | preview | yes | yes | 92 |
+| `dpl_Bf9WCk6n117FjRQsvh5NDaZDVro8` | 2026-10-16 13:51 | preview | yes | yes | 92 |
+| `dpl_71bAS64vss2XjM817FXATvhZDj5s` | 2026-10-16 14:17 | preview | yes | yes | 92 |
+| `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b` | 2026-10-16 14:25 | preview | yes | yes | 92 |
+
+Clean: the two production deployments (`dpl_J1QE…`, `dpl_9v14…`, the
+seven-file queue probe) and previews `dpl_2tbY…`, `dpl_9PEv…` (seven files
+each), `dpl_CZ3j…` (5,429 files, no `.env` or `backups/`) and `dpl_2aaj…`
+(the Prompt 391 archive deploy). The exposed values are local-development
+Postgres role passwords and drill receipts, visible to team members with
+source access, not preview or production secrets. **Open owner decisions:**
+whether to delete the nine affected preview deployments (irreversible;
+`dpl_Hr9…` is Prompt 378's gate evidence), and whether to rotate the local
+Postgres role passwords if they are reused anywhere. Nothing was deleted or
+rotated. See
+[the execution record](operations.md#prompt-392--deploy-upload-allowlist-2026-10-18).
