@@ -13374,3 +13374,104 @@ runbook limits were added: orphan deletion is asynchronous, so the post-delete
 means "within the cadence `--max-age-hours` window". Not changed:
 `runChecked` calling `stdout()` unguarded. SDK 3.8.0 `CommandFinished` always
 provides it, and the helper is shared with the hosted-proven probe.
+
+### Stage B — the single confirmed rebuild (2026-10-18)
+
+The owner answered yes to the exact §B question. Procedure: Prompt 388 §§1–4b
+with Prompt 389 §C's and Prompt 390 §B's differences.
+
+- Preconditions (read-only, 01:41–01:43Z): `HEAD`
+  `bc3afe07b5c6ec91febd5c91f42793ef9d918880` (stage A), clean `main`. Node
+  `v24.21.0` for both `node` and `npm exec -- node`. Cached Vercel CLI 64.1.0,
+  `whoami` → `dgsloxx417`; `.vercel` link bound to the fixed team/project.
+  `@vercel/sandbox` 3.8.0. SDK listing: baseline, `snap_rz0cs…` and `snap_KtLd…`
+  all `created` in `iad1`; no sandboxes. OIDC `exp` `2026-10-18T13:01:05Z`
+  (680 min left), owner and project claims matched. No `env pull` was needed.
+  The token was read into a variable and never printed; only `exp` and the
+  claim booleans were.
+- Pre-flight at `bc3afe0`: `--help` exit 0; `--dry-run` exit 0, `simulation`,
+  no `build_failure` or `smoke_failure`; builder/cadence/handoff suites
+  `tests 226`, `pass 226`, `fail 0`.
+- Custody: `~/.config/acres/vercel-preview/prompt390-20261018T014336Z/`
+  (0700; every file 0600). `prompt386-*`, `prompt388-*` and `prompt389-*` are
+  untouched: the newest file in each predates this run (latest `01:02:52Z`).
+- The single invocation passed only the OIDC token and the fixed target
+  variables through `env -i`, under a 2,100 s outer deadline, with
+  `--force --current-snapshot-id snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA`, `--output`
+  and `--write-env` in the custody directory. Window
+  `2026-10-18T01:43:47Z`–`01:45:22Z`, exit 0, empty stderr. Receipt SHA-256
+  `617255e056dc708802a7fd0363baa8fc4d918f2ffab10510ec70cc2b7e9ff084`; stdout
+  equals the receipt.
+
+Receipt: `status: "success"`, `execution_mode: "live"`, schema 1, target
+preview/team/project/`iad1`, `reason: "stale_or_forced"`,
+`previous_snapshot_id` the baseline, `new_snapshot_id`
+`snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN`, `main_sha256`
+`0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365`,
+`daily_sha256`
+`f9cb69a8e39dd86a25b828c1177cbd2935ee03250b4a79324c46bc8a44a2a2d5`,
+`smoke_test` `{ signatures, clean_sample, eicar_sample, cleanup }` all
+`"passed"`, `prune_status: "retained"`, `activation_status: "not_performed"`,
+`configuration_export: "exported"`. There is no `build_failure` or
+`smoke_failure`. This is the first receipt whose smoke stage passed.
+
+Handoff (offline, Prompt 388 §4a): `prepare-scanner-handoff.js` exit 0,
+`status: "prepared"`, writing `handoff/handoff.json` and `handoff/runtime.env`
+(0600). `runtime_env_sha256`
+`632f4634ebdd574eb67a01a3e42c439f46ca5b1f7c78ac14476a5e7d92a4ad1e` (the bundle
+digest). Local recomputation matched the manifest's `receipt_sha256` and
+`runtime_env_sha256`. The three runtime assignments
+(`SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_MAIN_SHA256`,
+`SCANNER_DAILY_SHA256`) equal the receipt and `candidate.env`
+(`ACRES_SCANNER_*`). The manifest records `activation_status`,
+`deployment_verification` and `retirement_status` as `not_performed`.
+
+Post-run (01:45:54Z, read-only SDK listing): four snapshots, all `created` in
+`iad1`. The new candidate was created `2026-10-18T01:44:52Z`, expires
+`2026-10-26T01:44:56Z`, and is 461,065,087 bytes. The three earlier snapshots
+are unchanged. No sandboxes remain. Snapshot Storage is 1,844,065,677 B
+(≈ 1.84 GB of 15 GB), as predicted.
+
+**Interpretation.** With the corrected create shape, the smoke VM booted from
+the candidate (implied: the `sourceSnapshotId` check precedes the signature
+check). The adapter's signature check
+passed against the exported hashes, ClamAV accepted the clean sample and
+flagged EICAR, and the post-delete `Snapshot.get` still reported `created`.
+This supports, though it does not certify, the stage A reading that the old
+top-level `snapshotId` caused Prompt 389's smoke failure. Both candidates carry
+**identical** `main`/`daily` hashes: the two builds, about 42 minutes apart,
+fetched the same `daily.cvd`. So `snap_CARv…`'s 48 h signature window is bounded
+by that file's `sigtool` build time. The passing check proves the window was
+still open at about 01:44Z. It closes no later than about `2026-10-20T01:02Z`:
+the 389 candidate, which already held this file, was snapshotted at 01:02:47Z,
+plus 48 h. This refines the earlier ≈ `01:00Z` bound. The receipt does not
+record the exact build time.
+
+The candidate is **prepared, not adopted**. Nothing was written to project
+env vars or `scanner.env`, nothing was deployed or retired, and nothing was
+retried. `snap_KtLd…` is now superseded but retained; its failed receipt stays
+ineligible. Next gate (proposed, needs its own prompt and approval): preview
+adoption of `snap_CARv…` and the deployed application upload → scan proof,
+before the signature window closes. Retirement of superseded snapshots
+remains a separate, dependency-aware decision.
+
+### Stage B checks and review
+
+Records only; no source changed after `bc3afe0`. `git diff --check` exit 0;
+`ops:scan-secrets` → `secret/default scan passed`; `npm run vercel:probe-test`
+→ `tests 326`, `pass 326`, `fail 0`. The first `npm run ops:check` exited 1:
+two `run-launch-drills.spec.js` tests (`mandatory receipt rejects
+container:null-check`, `… caddy:legacy-mode`) failed with `spawnSync bash
+ETIMEDOUT` after 16.6 s and 19.0 s. That spec alone then passed (`tests 158`,
+`pass 158`, `fail 0`), and a second full `ops:check` exited 0 with no failing
+test. Reading: subprocess timeouts under full-suite load, unrelated to this
+records-only change.
+
+Independent review confirmed every recorded ID, hash, size and timestamp
+against the run evidence. It found the signature-window reasoning sound and
+the scope within §B. Applied: this checks paragraph, including the first
+`ops:check` failure; the custody claim, widened to `prompt389-*` and verified
+by file times; the token statement made specific; the window sentence, which
+no longer conflates snapshot time and file build time and notes the refined
+bound; named digests; the source match marked as implied; and "own prompt and
+approval" on the Resume-here gate.

@@ -106,8 +106,13 @@ committed per AGENTS.md §2):
       source: the smoke VM was created with a top-level `snapshotId`, which
       SDK 3.8.0 does not accept, so it most likely booted the default image.
       The fix boots the smoke VM from the snapshot `source`, checks source and
-      signatures, and classifies failures as `smoke_failure`. Next scanner
-      gate: one confirmed rebuild (Prompt 390 stage B).
+      signatures, and classifies failures as `smoke_failure`. Its stage B
+      rebuild (2026-10-18) **passed** every smoke check and produced candidate
+      `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` (expires 2026-10-26T01:44:56Z) plus
+      an offline handoff bundle in `prompt390-20261018T014336Z/handoff/`. It
+      is prepared, not adopted. Next scanner gate (own prompt and approval):
+      preview adoption and the deployed upload → scan proof, before about
+      2026-10-20T01:02Z.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -2214,3 +2219,21 @@ read-only post-delete `Snapshot.get` that must report `created`. Receipts gain
 Handoff now also requires `signatures: "passed"`. No earlier receipt had it,
 and none had passed smoke. The fake SDK now throws on a top-level `snapshotId`.
 Schema stays v1. See [the record](operations.md#prompt-390--scanner-smoke-source-fix-2026-10-18).
+
+Stage B (2026-10-18, one confirmed live run, `01:43:47Z`–`01:45:22Z`, exit 0)
+**succeeded**. Candidate `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` (`created`,
+`iad1`, 461,065,087 B, expires `2026-10-26T01:44:56Z`), `main_sha256`
+`0b2182d2…8d302365`, `daily_sha256` `f9cb69a8…44a2a2d5`. `smoke_test`:
+`signatures`, `clean_sample`, `eicar_sample` and `cleanup` all `passed`, the
+first passing smoke on record. Receipt SHA-256 `617255e0…2b7e9ff084`.
+`prepare-scanner-handoff.js` produced a bundle (`runtime_env_sha256`
+`632f4634…92a4ad1e`) whose digests and three assignments verified locally.
+No sandboxes remain. Four snapshots are retained (≈ 1.84 GB of 15 GB).
+
+The hashes equal Prompt 389's candidate, because both builds fetched the same
+`daily.cvd`. The 48 h signature window therefore closes **no later than**
+about `2026-10-20T01:02Z`. The candidate is **prepared, not adopted**; nothing
+was written to env, deployed or retired. Next gate (needs its own prompt and
+approval): preview adoption of `snap_CARv…` and the deployed upload → scan
+proof inside that window. Snapshot retirement stays separate. See
+[the record](operations.md#stage-b--the-single-confirmed-rebuild-2026-10-18).
