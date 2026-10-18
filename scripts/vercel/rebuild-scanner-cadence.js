@@ -8,6 +8,7 @@ const path = require("node:path");
 const { createRequire } = require("node:module");
 const {
   sandboxTarget,
+  LIVE_BUILD_OIDC_MIN_REMAINING_MS,
   credentialsFor,
   scanShape,
   EICAR,
@@ -386,7 +387,9 @@ async function main(args = process.argv.slice(2), env = process.env, sdk) {
         auth: "token",
         token: "dry-run",
       }
-    : sandboxTarget(env);
+    : sandboxTarget(env, {
+        minRemainingMs: LIVE_BUILD_OIDC_MIN_REMAINING_MS,
+      });
 
   const provider = options.dryRun
     ? undefined

@@ -119,6 +119,25 @@ for (const [label, exp] of [
       /expires too soon/,
     ));
 }
+test("the live-build OIDC floor is stricter than the probe floor", () => {
+  const {
+    sandboxTarget,
+    LIVE_BUILD_OIDC_MIN_REMAINING_MS,
+  } = require("./probe-platform");
+  assert.equal(LIVE_BUILD_OIDC_MIN_REMAINING_MS, 75 * 60_000);
+  const env = (hours) => ({
+    ...base,
+    VERCEL_OIDC_TOKEN: jwt({
+      owner_id: "team-test",
+      project_id: "prj-test",
+      exp: inHours(hours),
+    }),
+  });
+  const live = { minRemainingMs: LIVE_BUILD_OIDC_MIN_REMAINING_MS };
+  assert.equal(sandboxTarget(env(70 / 60)).auth, "oidc");
+  assert.throws(() => sandboxTarget(env(70 / 60), live), /expires too soon/);
+  assert.equal(sandboxTarget(env(80 / 60), live).auth, "oidc");
+});
 for (const claims of [
   { owner_id: "team-other", project_id: "prj-test", exp: inHours(12) },
   { owner_id: "team-test", project_id: "prj-other", exp: inHours(12) },

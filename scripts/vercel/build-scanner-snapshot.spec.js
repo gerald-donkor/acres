@@ -531,6 +531,9 @@ test("failure projection never reads arbitrary exception properties", () => {
       kind: "unknown",
       builder_cleanup: "unknown",
       snapshot_confirmed: false,
+      provider_error: null,
+      provider_status: null,
+      provider_code: null,
     });
   }
 });
@@ -543,6 +546,9 @@ test("standalone failure projection preserves confirmed snapshot and cleanup", a
       kind: "provider_failed",
       builder_cleanup: "failed",
       snapshot_confirmed: true,
+      provider_error: null,
+      provider_status: null,
+      provider_code: null,
     });
     return true;
   });
@@ -564,9 +570,193 @@ test("broken progress logging does not replace primary failure or prevent cleanu
         kind: "provider_failed",
         builder_cleanup: "failed",
         snapshot_confirmed: false,
+        provider_error: "other",
+        provider_status: null,
+        provider_code: null,
       });
       return true;
     },
   );
   assert.deepEqual(fake.events.slice(-2), ["stop", "delete:false"]);
+});
+
+// Real SDK classes, so `instanceof` is exercised as in a live run.
+const { APIError, StreamError } = require("@vercel/sandbox");
+const CANARY = "credential-canary https://private.invalid/key";
+const apiError = (status, json) =>
+  new APIError(
+    { status, statusText: CANARY, headers: { authorization: CANARY } },
+    { message: CANARY, text: CANARY, ...(json ? { json } : {}) },
+  );
+
+for (const [name, thrown, expected] of [
+  [
+    "429 with a provider code",
+    () => apiError(429, { error: { code: "rate_limited", message: CANARY } }),
+    ["api_error", 429, "rate_limited"],
+  ],
+  [
+    "402 with a provider code",
+    () =>
+      apiError(402, { error: { code: "payment_required", message: CANARY } }),
+    ["api_error", 402, "payment_required"],
+  ],
+  ["401 without a body", () => apiError(401), ["api_error", 401, null]],
+  [
+    "503 with an unsafe code",
+    () => apiError(503, { error: { code: "Bad Code!", message: CANARY } }),
+    ["api_error", 503, null],
+  ],
+  [
+    "a string status",
+    () => apiError("429", { error: { code: "rate_limited" } }),
+    ["api_error", null, "rate_limited"],
+  ],
+  [
+    "an out-of-range status",
+    () => apiError(99, { error: { code: CANARY } }),
+    ["api_error", null, null],
+  ],
+  [
+    "a throwing response getter",
+    () => {
+      const error = apiError(429);
+      Object.defineProperty(error, "response", {
+        get() {
+          throw new Error(CANARY);
+        },
+      });
+      return error;
+    },
+    ["api_error", null, null],
+  ],
+  [
+    "a stream error",
+    () => new StreamError("sandbox_stopped", CANARY, "session-canary"),
+    ["stream_error", null, "sandbox_stopped"],
+  ],
+  ["a fetch failure", () => new TypeError(CANARY), ["transport", null, null]],
+  [
+    "a timeout",
+    () => new DOMException(CANARY, "TimeoutError"),
+    ["timeout", null, null],
+  ],
+  [
+    "an abort",
+    () => new DOMException(CANARY, "AbortError"),
+    ["timeout", null, null],
+  ],
+  ["a plain object", () => ({ message: CANARY }), ["other", null, null]],
+  ["a string", () => CANARY, ["other", null, null]],
+]) {
+  test(`builder-create classifies ${name} without its message`, async () => {
+    const { projectBuildFailure } = require("./build-scanner-snapshot");
+    const fake = fakeSdk();
+    Object.assign(fake.sdk, { APIError, StreamError });
+    fake.sdk.Sandbox.create = async () => {
+      throw thrown();
+    };
+    await assert.rejects(build(fake), (error) => {
+      const projected = projectBuildFailure(error);
+      assert.deepEqual(projected, {
+        step: "builder-create",
+        kind: "provider_failed",
+        builder_cleanup: "not_requested",
+        snapshot_confirmed: false,
+        provider_error: expected[0],
+        provider_status: expected[1],
+        provider_code: expected[2],
+      });
+      assert.doesNotMatch(
+        error.message + error.stack + JSON.stringify(projected),
+        /credential-canary|private\.invalid|session-canary/,
+      );
+      return true;
+    });
+  });
+}
+
+test("without SDK error classes, provider errors classify without throwing", async () => {
+  const { classifyProviderError } = require("./build-scanner-snapshot");
+  const poison = new Proxy(
+    {},
+    {
+      get() {
+        throw new Error(CANARY);
+      },
+      getPrototypeOf() {
+        throw new Error(CANARY);
+      },
+    },
+  );
+  for (const classes of [undefined, {}, { APIError: "x", StreamError: 1 }])
+    assert.deepEqual(classifyProviderError(apiError(429), classes), {
+      provider_error: "other",
+      provider_status: null,
+      provider_code: null,
+    });
+  assert.deepEqual(
+    classifyProviderError(poison, { APIError, StreamError }).provider_error,
+    "other",
+  );
+});
+
+test("command and validation failures carry no provider shape", async () => {
+  const { projectBuildFailure } = require("./build-scanner-snapshot");
+  for (const [fake, kind] of [
+    [
+      fakeSdk({
+        override: (step) =>
+          step === "dpkg-install" ? { exitCode: 1, stdout: "" } : undefined,
+      }),
+      "command_failed",
+    ],
+    [fakeSdk({ snapshotStatus: "failed" }), "validation_failed"],
+  ]) {
+    Object.assign(fake.sdk, { APIError, StreamError });
+    await assert.rejects(build(fake), (error) => {
+      const projected = projectBuildFailure(error);
+      assert.equal(projected.kind, kind);
+      assert.equal(projected.provider_error, null);
+      assert.equal(projected.provider_status, null);
+      assert.equal(projected.provider_code, null);
+      return true;
+    });
+  }
+});
+
+test("the standalone builder refuses an OIDC token with under 75 minutes left", async () => {
+  const jwt = (minutes) =>
+    [
+      Buffer.from('{"alg":"RS256"}').toString("base64url"),
+      Buffer.from(
+        JSON.stringify({
+          owner_id: "team-test",
+          project_id: "prj-test",
+          exp: Math.floor(Date.now() / 1000) + minutes * 60,
+        }),
+      ).toString("base64url"),
+      "signature",
+    ].join(".");
+  const env = {
+    ACRES_VERCEL_PROBE: "isolated-synthetic-preview",
+    VERCEL_ENV: "preview",
+    VERCEL_TEAM_ID: "team-test",
+    VERCEL_PROJECT_ID: "prj-test",
+    ACRES_VERCEL_PROBE_REGION: "iad1",
+  };
+  const fake = fakeSdk();
+  await assert.rejects(
+    main([], { ...env, VERCEL_OIDC_TOKEN: jwt(70) }, fake.sdk),
+    /expires too soon/,
+  );
+  assert.equal(fake.creates.length, 0);
+  const log = console.log;
+  console.log = () => {};
+  try {
+    await main([], { ...env, VERCEL_OIDC_TOKEN: jwt(80) }, fake.sdk);
+  } finally {
+    console.log = log;
+  }
+  assert.equal(fake.creates.length, 1);
 });

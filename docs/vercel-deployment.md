@@ -99,8 +99,10 @@ committed per AGENTS.md §2):
       0600). Hosted app upload → scan proven through preview `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`.
       Rebuild lifecycle remains open: Prompt 384 supersedes Prompt 383's
       closure claim. Candidate preparation does not activate or retire snapshots.
-      Next scanner gate (Prompt 388): owner checks the Hobby Sandbox allowance
-      and create-path cause; then a separately authorized single rebuild.
+      Prompt 389 classifies provider failures (`provider_error`/`_status`/
+      `_code`) and raises the live OIDC floor to 75 min. Next scanner gate:
+      the owner reports Hobby Sandbox usage from the dashboard; only with
+      headroom on every quota, one confirmed rebuild (Prompt 389 §C).
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -135,7 +137,11 @@ User decisions: new project, **iad1 / aws-us-east-1**, **free tiers only**
 
 Official pricing pages read this session: Sandbox on Hobby is free within
 5 active-CPU hours, 5,000 creations, 10 concurrent and 45-minute sessions per
-month, pausing (not billing) past quota; Queues (Beta) is available on all
+month, pausing (not billing) past quota (re-read 2026-10-18, page dated
+2026-09-10: also 420 GB-hours Provisioned Memory and 20 GB Data Transfer per
+month, a 20–40 vCPU/min allocation rate, and the pause lasts "until 30 days
+have passed since you first used the feature"; `/docs/sandbox/limits` now
+returns 404 and its tables live on the pricing page); Queues (Beta) is available on all
 plans; Cron invokes production deployments only, so the Cron gate cannot be
 proven on a preview. Hobby is a non-commercial plan — a launch-time plan
 decision, not a proof blocker.
@@ -2109,3 +2115,39 @@ any create-path cause in the dashboard, then only if allowance remains, a separa
 and deployed application proof still require a successful receipt. The
 baseline expires `2026-10-24T14:29:39.778Z`; hosted cadence, retirement,
 production plan, Phase 12 exit and the eleven sign-offs remain open.
+
+## Scanner create diagnostics — Prompt 389 (2026-10-18)
+
+Prompt 388's receipt could not say why `Sandbox.create` failed, because every
+exception at a `provider_failed` step projected identically. Stage A of
+Prompt 389 adds three allowlisted fields to `build_failure`:
+
+| field             | values                                                                      |
+| ----------------- | --------------------------------------------------------------------------- |
+| `provider_error`  | `api_error`, `stream_error`, `timeout`, `transport`, `other`; else `null`   |
+| `provider_status` | `api_error` only: integer 100–599 from `response.status`, else `null`        |
+| `provider_code`   | `error.code` from an API error body, or a stream error's `code`, if it matches `^[a-z][a-z0-9_]{0,59}$`; else `null` |
+
+Classification happens when `buildStep` wraps a raw error at a
+`provider_failed` step; the raw error is then dropped. The SDK's `APIError`
+and `StreamError` classes reach the module-level `buildStep` through an
+`AsyncLocalStorage` scope opened by `buildSnapshot`, so CLI loading of the SDK
+is unchanged. Errors raised directly by the tooling (validation, command,
+`builder-delete`) carry `null` in all three. Installed SDK 3.8.0 builds an
+`APIError` with the parsed body as `json` for every non-ok response, including
+the last 429/5xx after its two internal retries, so `provider_code` is
+populated whenever the API sends `{ error: { code } }`. That body shape is
+conventional, not documented by the SDK, so the code path is a judgement.
+Schema stays v1: the fields exist only inside `build_failure`, which only
+failed receipts carry.
+
+`sandboxTarget(env, { minRemainingMs })` now takes the OIDC floor. Probes keep
+30 minutes; the live cadence producer and the standalone builder require
+**75 minutes** (`LIVE_BUILD_OIDC_MIN_REMAINING_MS`, the 30-minute run watchdog
+plus inspection margin, a judgement). Dry-run needs no token.
+
+Reading guide (a reading of the classification, never a certified cause):
+`api_error` 429 = rate limited; 402 = plan or quota; 401/403 = authorization;
+5xx = provider; `transport` = client network; `timeout` = client deadline.
+Next: the owner reports Sandbox usage (stage B), then at most one confirmed
+rebuild (stage C). Record: [operations](operations.md#prompt-389--scanner-create-diagnostics-2026-10-18).

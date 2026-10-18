@@ -6,8 +6,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createRequire } = require("node:module");
+const { AsyncLocalStorage } = require("node:async_hooks");
 const {
   sandboxTarget,
+  LIVE_BUILD_OIDC_MIN_REMAINING_MS,
   credentialsFor,
   SIGNATURE_CHECK,
   SNAPSHOT_ID,
@@ -102,9 +104,21 @@ const FAILURE_KINDS = new Set([
   "validation_failed",
 ]);
 const failures = new WeakMap();
+const NO_PROVIDER_ERROR = Object.freeze({
+  provider_error: null,
+  provider_status: null,
+  provider_code: null,
+});
+// The SDK's error classes for the build in progress; see buildSnapshot.
+const providerClasses = new AsyncLocalStorage();
 
 class BuildError extends Error {
-  constructor(step, _detail = "", kind = "command_failed") {
+  constructor(
+    step,
+    _detail = "",
+    kind = "command_failed",
+    provider = NO_PROVIDER_ERROR,
+  ) {
     const safeStep = FAILURE_STEPS.has(step) ? step : "unknown";
     super(`Snapshot build failed at step: ${safeStep}.`);
     this.name = "BuildError";
@@ -113,8 +127,63 @@ class BuildError extends Error {
       kind: FAILURE_KINDS.has(kind) ? kind : "unknown",
       builder_cleanup: "unknown",
       snapshot_confirmed: false,
+      ...provider,
     });
   }
+}
+
+// A getter may throw: every read is isolated and falls back to null.
+function safeRead(read) {
+  try {
+    return read();
+  } catch {
+    return null;
+  }
+}
+
+function instanceOf(error, type) {
+  return (
+    typeof type === "function" && safeRead(() => error instanceof type) === true
+  );
+}
+
+const PROVIDER_CODE = /^[a-z][a-z0-9_]{0,59}$/;
+const providerCode = (code) =>
+  typeof code === "string" && PROVIDER_CODE.test(code) ? code : null;
+
+/**
+ * Error class, HTTP status and a lower-snake provider code only. Never reads
+ * message, stack, text, cause or headers: they can carry tokens or bodies.
+ * A reading of the error's shape, never a certified cause.
+ */
+function classifyProviderError(error, classes = {}) {
+  if (instanceOf(error, classes.APIError)) {
+    const status = safeRead(() => error.response.status);
+    return {
+      provider_error: "api_error",
+      provider_status:
+        Number.isInteger(status) && status >= 100 && status <= 599
+          ? status
+          : null,
+      provider_code: providerCode(safeRead(() => error.json?.error?.code)),
+    };
+  }
+  if (instanceOf(error, classes.StreamError))
+    return {
+      provider_error: "stream_error",
+      provider_status: null,
+      provider_code: providerCode(safeRead(() => error.code)),
+    };
+  const name = safeRead(() => error?.name);
+  return {
+    provider_error: ["AbortError", "TimeoutError"].includes(name)
+      ? "timeout"
+      : instanceOf(error, TypeError)
+        ? "transport"
+        : "other",
+    provider_status: null,
+    provider_code: null,
+  };
 }
 
 function projectBuildFailure(error, confirmedId = undefined) {
@@ -127,14 +196,26 @@ function projectBuildFailure(error, confirmedId = undefined) {
       confirmedId === undefined
         ? (state?.snapshot_confirmed ?? false)
         : typeof confirmedId === "string" && SNAPSHOT_ID.test(confirmedId),
+    provider_error: state?.provider_error ?? null,
+    provider_status: state?.provider_status ?? null,
+    provider_code: state?.provider_code ?? null,
   };
 }
 
+// The raw error is classified here and then dropped.
 async function buildStep(step, kind, action) {
   try {
     return await action();
   } catch (error) {
-    throw failures.has(error) ? error : new BuildError(step, "", kind);
+    if (failures.has(error)) throw error;
+    throw new BuildError(
+      step,
+      "",
+      kind,
+      kind === "provider_failed"
+        ? classifyProviderError(error, providerClasses.getStore())
+        : NO_PROVIDER_ERROR,
+    );
   }
 }
 
@@ -337,7 +418,15 @@ async function smokeTestAndScrub(sandbox, recorded) {
   );
 }
 
-async function buildSnapshot(
+function buildSnapshot(config, sdk, options) {
+  const classes = {
+    APIError: safeRead(() => sdk?.APIError),
+    StreamError: safeRead(() => sdk?.StreamError),
+  };
+  return providerClasses.run(classes, () => runBuild(config, sdk, options));
+}
+
+async function runBuild(
   config,
   sdk,
   {
@@ -567,7 +656,9 @@ async function main(
     );
     return;
   }
-  const config = sandboxTarget(env);
+  const config = sandboxTarget(env, {
+    minRemainingMs: LIVE_BUILD_OIDC_MIN_REMAINING_MS,
+  });
   // Checked before any sandbox is created, so a bad path costs nothing.
   if (options.writeEnv) assertOutsideRepo(options.writeEnv);
   const summary = await buildSnapshot(config, sdk, {
@@ -593,6 +684,7 @@ module.exports = {
   BUILDER_EGRESS,
   FETCH_SCRIPT,
   BuildError,
+  classifyProviderError,
   projectBuildFailure,
   buildSnapshot,
   replaceSnapshot,

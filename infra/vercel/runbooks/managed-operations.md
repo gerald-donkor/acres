@@ -221,6 +221,20 @@ recorded. `vercel usage` returned no billing data for this Hobby team on
 2026-10-17, so check Sandbox allowance in the dashboard before authorizing
 another rebuild. See [the record](../../../docs/operations.md#prompt-388--bounded-scanner-candidate-rebuild-2026-10-17).
 
+Prompt 389 adds three fields to `build_failure`, after the four above:
+`provider_error` (`api_error`, `stream_error`, `timeout`, `transport`, `other`),
+`provider_status` (integer 100–599 for `api_error`, else `null`) and
+`provider_code` (lower-snake `^[a-z][a-z0-9_]{0,59}$` from an API error body's
+`error.code` or a stream error's `code`, else `null`). They are set only when
+the classified step's kind is `provider_failed` and the raw SDK error reached
+the classifier; errors raised directly by the tooling (validation, command,
+`builder-delete`) carry all three as `null`. Only the error class, HTTP status
+and that code are read — never message, stack, body text, cause or headers.
+They are a reading of the error's shape, not a certified cause, and never
+certify success, cleanup or signatures. Live producer and standalone builder
+runs now refuse an OIDC token with under **75 minutes** left (probes keep 30);
+dry-run needs no token. See [the record](../../../docs/operations.md#prompt-389--scanner-create-diagnostics-2026-10-18).
+
 ### 5.2 Workflow and handoff
 
 The daily 04:00 UTC schedule and default manual dispatch perform credential-free

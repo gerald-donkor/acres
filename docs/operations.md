@@ -13123,3 +13123,63 @@ cached-CLI version caveat and the watchdog arithmetic were also corrected; the
 memory update was confirmed. These were wording-only record changes, so no
 re-review was needed. Only this approved work is committed locally; nothing is
 pushed and no further hosted authorization is implied.
+
+## Prompt 389 — scanner create diagnostics (2026-10-18)
+
+Baseline: `45519882c833845c025bbbd12460f2392d13c4e5` on `main`; only the
+approved Prompt 389 was untracked. Stage A (local, no cloud calls) is recorded
+here. Stages B (owner-reported Sandbox usage) and C (at most one confirmed
+rebuild) are recorded below when they happen. No configuration write,
+deployment, snapshot change, workflow dispatch or push occurred in stage A.
+
+### What changed
+
+- `scripts/vercel/build-scanner-snapshot.js`: `classifyProviderError` and
+  three `build_failure` fields (`provider_error`, `provider_status`,
+  `provider_code`), set only for errors wrapped at a `provider_failed` step;
+  the SDK classes reach `buildStep` through an `AsyncLocalStorage` scope
+  opened by `buildSnapshot`. Contract: [runbook §5](../infra/vercel/runbooks/managed-operations.md)
+  and [Vercel record](vercel-deployment.md#scanner-create-diagnostics--prompt-389-2026-10-18).
+- `scripts/vercel/probe-platform.js`: `sandboxTarget(env, { minRemainingMs })`,
+  `LIVE_BUILD_OIDC_MIN_REMAINING_MS` (75 min); the cadence producer's live
+  mode and the standalone builder use it, probes keep 30 min.
+- Specs: the real SDK `APIError`/`StreamError` classes with a canary in the
+  status text, message, body text, headers and body message (429, 402, 401
+  without a body, an unsafe code, a string or out-of-range status, a throwing
+  `response` getter, a stream error, `TypeError`, `TimeoutError`,
+  `AbortError`, a plain object, a string); a Proxy whose prototype read
+  throws; command/validation failures with no provider shape; both CLIs'
+  stdout/stderr for an `APIError` 429; the 70/80-minute token floor in the
+  probe, the cadence producer and the standalone builder; dry-run ignoring the
+  token. The cadence scenario table now asserts the seven-key `build_failure`.
+
+### Checks (Node `v24.21.0` via `/tmp/acres-node24`; `npm exec -- node --version` → `v24.21.0`)
+
+- Focused suites (builder, cadence, handoff, probe): `tests 299`, `pass 299`,
+  `fail 0`. `npm run vercel:probe-test`: `tests 305`, `pass 305`, `fail 0`.
+- `npm run lint` exit 0; `npm run typecheck` exit 0; `git diff --check` clean;
+  Prettier clean on every changed script (the three markdown records were
+  already non-conforming at the baseline and were not reformatted).
+- `rebuild-scanner-cadence.js --help` exit 0; `--dry-run` exit 0 with
+  `"execution_mode":"simulation"` and no `build_failure`.
+- `npm run build` skipped: no workspace source changed (only
+  `scripts/vercel/*` and docs).
+
+### Review
+
+Independent review against §A found no critical or important issues and no
+leak path. Two minor items were applied: `instanceOf` now returns a strict
+boolean, and the standalone builder test also accepts an 80-minute token.
+Not changed: the dry-run case only proves the token is ignored (as A.4
+intends), and `classifyProviderError` is exported for tests like the module's
+other helpers. Checks above were re-run after the fixes.
+
+### Stage B preparation
+
+The Sandbox pricing page (dated 2026-09-10) was re-read on 2026-10-18. The
+Hobby figures match the record. The page adds 420 GB-hours of Provisioned
+Memory and 20 GB of Data Transfer per month, plus a 20–40 vCPU/min allocation
+rate. It says creation pauses "until 30 days have passed since you first used
+the feature". `/docs/sandbox/limits` returns 404; its tables now sit on the
+pricing page. Sandbox usage is still not visible to the agent; the owner
+reports it.

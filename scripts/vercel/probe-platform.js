@@ -46,9 +46,11 @@ function oidcClaims(token) {
   throw new Error("VERCEL_OIDC_TOKEN is not a JWT.");
 }
 
-// Longer than any run (the builder lives up to 15 minutes), so the token is
-// never refreshed mid-run.
+// Longer than any probe run, so the token is never refreshed mid-run.
 const OIDC_MIN_REMAINING_MS = 30 * 60_000;
+// Live snapshot builds: the 30-minute run watchdog (builder 15 + snapshot 5 +
+// smoke 2 min + control calls) plus inspection margin. A judgement.
+const LIVE_BUILD_OIDC_MIN_REMAINING_MS = 75 * 60_000;
 
 /**
  * Sandbox target and credentials, shared by the probe and the snapshot build.
@@ -57,7 +59,7 @@ const OIDC_MIN_REMAINING_MS = 30 * 60_000;
  * the cwd's `.vercel` link (`@vercel/oidc` `findProjectInfo`), not for the
  * project its claims were checked against.
  */
-function sandboxTarget(env) {
+function sandboxTarget(env, { minRemainingMs = OIDC_MIN_REMAINING_MS } = {}) {
   const common = isolatedTarget(env);
   const region = required(env, "ACRES_VERCEL_PROBE_REGION");
   if (!/^[a-z]{3}[1-9][0-9]?$/.test(region))
@@ -72,7 +74,7 @@ function sandboxTarget(env) {
       throw new Error("OIDC token is for a different project or team.");
     if (
       !Number.isFinite(claims.exp) ||
-      claims.exp * 1000 < Date.now() + OIDC_MIN_REMAINING_MS
+      claims.exp * 1000 < Date.now() + minRemainingMs
     )
       throw new Error(
         "VERCEL_OIDC_TOKEN expires too soon; pull a fresh one with vercel env pull.",
@@ -1313,6 +1315,7 @@ module.exports = {
   SIGNATURE_CHECK,
   SNAPSHOT_ID,
   sandboxTarget,
+  LIVE_BUILD_OIDC_MIN_REMAINING_MS,
   credentialsFor,
   scanShape,
   signaturesOk,

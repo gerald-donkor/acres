@@ -1306,6 +1306,8 @@ for (const scenario of [
     name: "delete rejection",
     step: "builder-delete",
     kind: "provider_failed",
+    // Raised directly after cleanup; the delete error is never classified.
+    providerError: null,
     cleanup: "failed",
     confirmed: true,
     delete: true,
@@ -1321,6 +1323,7 @@ for (const scenario of [
     name: "metadata timeout",
     step: "snapshot-metadata",
     kind: "provider_failed",
+    providerError: "timeout",
     confirmed: true,
     metadata: "timeout",
   },
@@ -1460,6 +1463,14 @@ for (const scenario of [
             kind: scenario.kind,
             builder_cleanup: scenario.cleanup ?? "passed",
             snapshot_confirmed: scenario.confirmed,
+            // The fake SDK has no APIError/StreamError: plain errors are "other".
+            provider_error:
+              scenario.kind === "provider_failed" &&
+              scenario.providerError !== null
+                ? (scenario.providerError ?? "other")
+                : null,
+            provider_status: null,
+            provider_code: null,
           });
           assert.equal(r.main_sha256, null);
           assert.equal(r.daily_sha256, null);
@@ -1498,7 +1509,7 @@ test("successful, skipped and simulated receipts do not gain build_failure", asy
 });
 
 for (const cli of ["build-scanner-snapshot.js", "rebuild-scanner-cadence.js"]) {
-  for (const fault of ["provider", "command", "reader"]) {
+  for (const fault of ["provider", "api", "command", "reader"]) {
     test(`${cli} executable suppresses ${fault} diagnostics and exits nonzero`, () =>
       temporary((dir) => {
         const preload = path.join(dir, "inject.cjs");
@@ -1511,6 +1522,11 @@ for (const cli of ["build-scanner-snapshot.js", "rebuild-scanner-cadence.js"]) {
         const failure = () => Object.assign(new Error(sentinel), {cause: {token: sentinel}});
         sdk.Sandbox.create = async () => {
           if (${JSON.stringify(fault)} === 'provider') throw failure();
+          if (${JSON.stringify(fault)} === 'api')
+            throw new sdk.APIError(
+              {status: 429, statusText: sentinel, headers: {authorization: sentinel}},
+              {message: sentinel, text: sentinel, json: {error: {code: 'rate_limited', message: sentinel}}},
+            );
           return {
             name: sentinel,
             runCommand: async () => ({exitCode: 2, stdout: async () => {
@@ -1550,6 +1566,53 @@ for (const cli of ["build-scanner-snapshot.js", "rebuild-scanner-cadence.js"]) {
           /credential-canary|private\/operator|private.invalid|secret-line/,
         );
         assert.match(r.stdout + r.stderr, /builder-create|record-environment/);
+        if (fault === "api")
+          assert.match(
+            r.stdout + r.stderr,
+            /"provider_error":"api_error","provider_status":429,"provider_code":"rate_limited"/,
+          );
       }));
   }
 }
+
+test("live mode needs 75 minutes of OIDC lifetime; dry-run needs none", async () => {
+  const { main } = require("./rebuild-scanner-cadence");
+  const jwt = (minutes) =>
+    [
+      Buffer.from('{"alg":"RS256"}').toString("base64url"),
+      Buffer.from(
+        JSON.stringify({
+          owner_id: "team-test",
+          project_id: "prj-test",
+          exp: Math.floor(Date.now() / 1000) + minutes * 60,
+        }),
+      ).toString("base64url"),
+      "signature",
+    ].join(".");
+  const env = (minutes) => ({
+    ACRES_VERCEL_PROBE: "isolated-synthetic-preview",
+    VERCEL_ENV: "preview",
+    VERCEL_TEAM_ID: "team-test",
+    VERCEL_PROJECT_ID: "prj-test",
+    ACRES_VERCEL_PROBE_REGION: "iad1",
+    VERCEL_OIDC_TOKEN: jwt(minutes),
+  });
+  const log = console.log;
+  const lines = [];
+  console.log = (line) => lines.push(line);
+  try {
+    const refused = fakeSdk();
+    await assert.rejects(
+      main(["--force"], env(70), refused.sdk),
+      /expires too soon/,
+    );
+    assert.equal(refused.creates.length, 0);
+    const accepted = fakeSdk();
+    await main(["--force"], env(80), accepted.sdk);
+    assert.ok(accepted.creates.length > 0);
+    await main(["--dry-run", "--force"], env(70));
+  } finally {
+    console.log = log;
+  }
+  assert.equal(JSON.parse(lines.at(-1)).execution_mode, "simulation");
+});
