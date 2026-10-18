@@ -13183,3 +13183,115 @@ rate. It says creation pauses "until 30 days have passed since you first used
 the feature". `/docs/sandbox/limits` returns 404; its tables now sit on the
 pricing page. Sandbox usage is still not visible to the agent; the owner
 reports it.
+
+### Stage B — owner-reported Sandbox usage (2026-10-18)
+
+The Vercel MCP (reconnected this session) cannot read Hobby allowance usage:
+`list_billing_charges` for the team returned `404 costs_not_found`, and no
+other MCP tool exposes usage meters. It did measure, read-only, the project's
+snapshots at about 00:50Z: baseline `snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA` and
+Prompt 386 candidate `snap_rz0cs8Nnw1RObI3ZDS5WRKDSUR2y`, both `created` in
+`iad1`, 921,876,890 bytes together, and no named sandboxes.
+
+The owner then reported two dashboard Usage screenshots (taken 00:55Z and
+00:57Z, after Prompt 388's 22:04Z attempt). Owner-reported, not measured:
+
+| Sandbox metric     | used      | Hobby limit | share |
+| ------------------ | --------- | ----------- | ----- |
+| Creations          | 28        | 5,000       | 0.6 % |
+| Active CPU         | 7 m 2 s   | 5 h         | 2.3 % |
+| Provisioned Memory | 1.2 GB-h  | 420 GB-h    | 0.3 % |
+| Data Transfer      | 37.75 MB  | 20 GB       | 0.2 % |
+| Snapshot Storage   | 921.88 MB | 15 GB       | 6 %   |
+
+Drive and Images Storage read 0 B. The team-wide Snapshot Storage figure
+matches the MCP's byte count for the two `acres` snapshots, which indicates
+no other project holds snapshots. The screenshots did not show the top of the page; the
+owner answered yes to the §C question after being told to do so only if no
+pause or limit banner was present. The usage window's reset date was not shown.
+
+Reading: Prompt 388's `builder-create` failure was not monthly-quota
+exhaustion. A short-window rate limit or a provider fault remain possible and
+unproven.
+
+### Stage C — the single confirmed rebuild (2026-10-18)
+
+The owner answered yes to the exact §C question. Procedure: Prompt 388 §§1–4b
+with Prompt 389's differences.
+
+- `HEAD` `f7acaa92a283d7d6846efc5dd01abb88ae33bb99`, clean worktree, `main`.
+  Node `v24.21.0` for both `node` and `npm exec -- node`. Cached Vercel CLI
+  64.5.0, `whoami` → `dgsloxx417`; `.vercel` link bound to the fixed
+  team/project. `@vercel/sandbox` 3.8.0.
+- One `env pull --environment=preview --yes` refreshed `preview.env` (0600).
+  The CLI wrote `[SENSITIVE]` placeholders for six sensitive values it cannot
+  pull; the run uses none of them. OIDC `exp` `2026-10-18T13:01:05Z` (719 min
+  left, over the 75-minute floor); owner and project claims matched. The
+  token was never printed.
+- Pre-flight: `--help` exit 0; `--dry-run` exit 0, `simulation`, no
+  `build_failure`; builder/cadence/handoff suites `tests 206`, `pass 206`,
+  `fail 0`.
+- Pre-run provider state (MCP, ~01:01Z): the same two snapshots `created`, no
+  named sandboxes.
+- Custody: `~/.config/acres/vercel-preview/prompt389-20261018T010113Z/`
+  (0700; every file 0600). `prompt386-*` and `prompt388-*` untouched.
+- The single invocation passed only the OIDC token and the fixed target
+  variables through `env -i`, under a 2,100 s outer deadline (the 30-minute
+  watchdog plus five minutes). Window `2026-10-18T01:02:02Z`–`01:02:52Z`,
+  exit 1. Receipt SHA-256
+  `1fd4d2df1a796601054d961f6aa9099585e3a1ab07bea51d4ca1dda40e766e36`.
+
+Receipt (allowlisted fields): `status: "failed"`,
+`error: "candidate_smoke_failed"`, `execution_mode: "live"`, target
+preview/team/project/`iad1`, `reason: "stale_or_forced"`,
+`previous_snapshot_id` the baseline, `new_snapshot_id`
+`snap_KtLdaJeG4SaLAwi4mI8G8XzURZat`, `main_sha256`
+`0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365`,
+`daily_sha256`
+`f9cb69a8e39dd86a25b828c1177cbd2935ee03250b4a79324c46bc8a44a2a2d5`,
+`smoke_test` `{ clean_sample: "untested", eicar_sample: "untested",
+cleanup: "passed" }`, `prune_status: "retained"`,
+`activation_status: "not_performed"`,
+`configuration_export: "not_performed"`, no `build_failure`. No
+`candidate.env` was written. stderr carried only the fixed failure line.
+
+Post-run (01:03Z, read-only MCP): three snapshots `created` in `iad1`. The new
+candidate was created `2026-10-18T01:02:47Z`, expires
+`2026-10-26T01:02:47Z`, and is 461,123,700 bytes. No named sandboxes remain.
+The handoff validator rejected the receipt with `handoff_receipt_invalid`,
+exit 1, and wrote no bundle.
+
+**Interpretation.** For the first time the builder path completed:
+`Sandbox.create`, ClamAV setup, signature download, hashing and snapshot all
+succeeded. So the create rejection seen in Prompt 388 did not recur. The
+failure moved to the smoke stage. `smokeTestSnapshot`
+(`scripts/vercel/rebuild-scanner-cadence.js`) left both samples `untested`
+and reported `cleanup: "passed"`. That means its `Sandbox.create` returned a
+handle, which was later deleted, and an exception was thrown before the
+first scan's result was assigned. By the code path, it came from `writeFiles`, the first
+`runCommand`, or reading its stdout. A clamscan that ran and returned a wrong
+answer would read `failed`, not `untested`. The smoke step's catch drops the
+error with no classification, so which call failed and why is **unknown**.
+Stage A's `provider_*` fields cover only `build_failure`, not the smoke stage.
+
+Nothing was retried, adopted, deleted or written to project settings. The
+candidate is retained, unadopted and ineligible: a failed receipt never
+passes handoff. Proposed next scope, not executed: extend the safe
+provider-error classification to the smoke stage (which call, class, status,
+code), with tests. Then decide, with separate approval, whether to run the
+existing `probe-platform.js scanner` against `snap_KtLd…` (one probe) or one
+more rebuild. The baseline expires `2026-10-24T14:29:39.778Z`.
+
+### Stage B–C checks and review
+
+Node `v24.21.0`: `check-vercel-config.js` → `vercel.json configuration valid`;
+`npm run vercel:probe-test` → `tests 305`, `pass 305`, `fail 0`;
+`npm run ops:check`, `lint`, `build`, `typecheck` exit 0;
+`ops:scan-secrets` → `secret/default scan passed`; `git diff --check` clean.
+Records only; no source changed.
+
+Independent review found no critical issues. One important correction was
+applied: the 48 h policy reads the `daily.cvd` build time, so the candidate's
+signature window ends **no later than** about `2026-10-20T01:00Z`. Wording
+fixes were also applied: owner-derived conclusions are framed as readings, and
+"before any scan result" replaces "before any scan".

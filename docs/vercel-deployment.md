@@ -100,9 +100,10 @@ committed per AGENTS.md §2):
       Rebuild lifecycle remains open: Prompt 384 supersedes Prompt 383's
       closure claim. Candidate preparation does not activate or retire snapshots.
       Prompt 389 classifies provider failures (`provider_error`/`_status`/
-      `_code`) and raises the live OIDC floor to 75 min. Next scanner gate:
-      the owner reports Hobby Sandbox usage from the dashboard; only with
-      headroom on every quota, one confirmed rebuild (Prompt 389 §C).
+      `_code`) and raises the live OIDC floor to 75 min. Its stage C rebuild
+      (2026-10-18) built `snap_KtLdaJeG4SaLAwi4mI8G8XzURZat` but failed the
+      smoke stage before any scan result (cause unclassified). Next scanner gate:
+      smoke-stage diagnostics, then a separately approved probe or rebuild.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -2151,3 +2152,32 @@ Reading guide (a reading of the classification, never a certified cause):
 5xx = provider; `transport` = client network; `timeout` = client deadline.
 Next: the owner reports Sandbox usage (stage B), then at most one confirmed
 rebuild (stage C). Record: [operations](operations.md#prompt-389--scanner-create-diagnostics-2026-10-18).
+
+## Scanner rebuild — Prompt 389 stages B–C (2026-10-18)
+
+Stage B: the owner's dashboard screenshots show Sandbox usage far inside
+Hobby (28/5,000 creations, 7 m 2 s/5 h Active CPU, 1.2/420 GB-h memory,
+37.75 MB/20 GB transfer, 921.88 MB/15 GB Snapshot Storage). These figures are
+owner-reported. The Vercel MCP cannot read allowance usage
+(`list_billing_charges` → `404 costs_not_found`), but its snapshot listing
+matched the storage figure (921,876,890 B ≈ 921.88 MB). Reading: Prompt 388's
+create failure was not monthly-quota exhaustion.
+
+Stage C: the one confirmed live preparation (`2026-10-18T01:02:02Z`–`01:02:52Z`)
+**built** candidate `snap_KtLdaJeG4SaLAwi4mI8G8XzURZat` (`created`, `iad1`,
+expires `2026-10-26T01:02:47Z`) with `main_sha256`
+`0b2182d2…8d302365` and `daily_sha256` `f9cb69a8…44a2a2d5`. It then failed with
+`candidate_smoke_failed`: both samples `untested`, `cleanup: "passed"`. The
+smoke sandbox was created and deleted, but `writeFiles`, the first
+`runCommand` or its stdout read threw before any scan result was recorded.
+Which call failed, and why, is unknown: the smoke step does not classify its
+errors. Handoff rejected the receipt; no `candidate.env`; nothing adopted,
+deleted or configured; no sandbox residue. See
+[the execution record](operations.md#stage-c--the-single-confirmed-rebuild-2026-10-18).
+
+Next gate (proposed, needs its own approval): classify smoke-stage provider
+errors the way Prompt 389 classifies build errors. Then either one
+`probe-platform.js scanner` run against the new candidate, or one more
+rebuild. The baseline expires `2026-10-24T14:29:39.778Z`. The candidate's
+signatures pass the 48 h policy no later than about `2026-10-20T01:00Z`; the
+true limit is the `daily.cvd` build time + 48 h, which the receipt does not record.

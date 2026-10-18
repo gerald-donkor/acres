@@ -4223,3 +4223,15 @@ Remaining: owner-side Sandbox allowance check, a separately authorized
 rebuild, then preview adoption/application proof, hosted cadence,
 retirement/resource budget, production plan, Phase 12 exit and all eleven
 category sign-offs.
+
+## Scanner rebuild — Prompt 389 stages B–C (2026-10-18)
+
+Owner-reported Sandbox usage was far inside Hobby. The one confirmed rebuild
+built candidate `snap_KtLdaJeG4SaLAwi4mI8G8XzURZat` but failed its smoke
+stage before any scan result (`candidate_smoke_failed`, samples `untested`, cleanup
+passed). The cause is unclassified. The receipt was rejected and nothing was
+adopted. See
+[the execution record](operations.md#stage-c--the-single-confirmed-rebuild-2026-10-18).
+Remaining: smoke-stage diagnostics, a separately approved probe or rebuild,
+preview adoption/application proof, hosted cadence, retirement/resource
+budget, production plan, Phase 12 exit and all eleven category sign-offs.

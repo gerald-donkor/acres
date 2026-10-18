@@ -235,6 +235,16 @@ certify success, cleanup or signatures. Live producer and standalone builder
 runs now refuse an OIDC token with under **75 minutes** left (probes keep 30);
 dry-run needs no token. See [the record](../../../docs/operations.md#prompt-389--scanner-create-diagnostics-2026-10-18).
 
+Prompt 389 stage B–C lessons: on Hobby, neither `vercel usage` nor the MCP
+`list_billing_charges` (`404 costs_not_found`) shows Sandbox allowance usage.
+The owner reads it from the dashboard Usage page. The MCP snapshot listing
+gives exact snapshot bytes to cross-check Snapshot Storage. `env pull` writes
+`[SENSITIVE]` placeholders for sensitive variables; the producer needs only
+`VERCEL_OIDC_TOKEN`. A `candidate_smoke_failed` receipt with both samples
+`untested` and `cleanup: "passed"` means the smoke sandbox existed and the
+failure came before any scan result. The smoke step does not yet classify
+that error. See [the record](../../../docs/operations.md#stage-c--the-single-confirmed-rebuild-2026-10-18).
+
 ### 5.2 Workflow and handoff
 
 The daily 04:00 UTC schedule and default manual dispatch perform credential-free

@@ -3345,3 +3345,9 @@ Phase 12 exit and all eleven category sign-offs remain open.
 The single bounded live rebuild failed safely at `builder-create`
 (`provider_failed`); no candidate or adoption. No category is approved. See
 [the execution record](operations.md#prompt-388--bounded-scanner-candidate-rebuild-2026-10-17).
+
+## Prompt 389 — scanner rebuild failed at smoke (2026-10-18)
+
+The single confirmed rebuild built a candidate but failed its smoke stage
+(`candidate_smoke_failed`); no adoption. No category is approved. See
+[the execution record](operations.md#stage-c--the-single-confirmed-rebuild-2026-10-18).
