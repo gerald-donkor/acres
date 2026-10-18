@@ -15,7 +15,8 @@ Prompt 370 is approved and still executing. Remaining checklist items may be
 split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
 scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
 outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
-managed outbox dispatch, Prompt 377 = shared managed API throttling); each
+managed outbox dispatch, Prompt 377 = shared managed API throttling, Prompt
+393 = named dashboard GraphQL operation); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -121,9 +122,12 @@ committed per AGENTS.md §2):
       (`https://acres-7azesfi2c-dgsloxx417s-projects.vercel.app`). Its
       signatures leave the 48 h window no later than about 2026-10-20T01:00Z.
       Prompt 392 (2026-10-18) added the deploy upload allowlist
-      (`.vercelignore` + `vercel:deploy-manifest`). Next (own prompts): the
-      `/app` `dashboardSummary` SSR failure, then a fresh rebuild/adoption or
-      the dependency-aware retirement of superseded snapshots; the owner's
+      (`.vercelignore` + `vercel:deploy-manifest`). Prompt 393 (2026-10-18)
+      fixed the `/app` `dashboardSummary` SSR failure (unnamed GraphQL
+      operation), proven on `dpl_1S2xiZKz6HogdM3d4QgSsKsBqf6X`. Next (own
+      prompts): a fresh rebuild/adoption before the signature window closes
+      (≈2026-10-20T01:00Z) or the dependency-aware retirement of superseded
+      snapshots; the owner's
       decision on deleting the nine preview deployments that stored `.env`
       files (see Prompt 392) is pending.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
@@ -2322,7 +2326,7 @@ metadata exposes scanner variable names, not resolved values, so the
 per-service value comparison was not possible; identity rests on the
 inference above.
 
-Findings (finding 1 resolved by Prompt 392; finding 2 open):
+Findings (finding 1 resolved by Prompt 392; finding 2 resolved by Prompt 393):
 
 1. **Deploy uploads gitignored files.** *Resolved by Prompt 392:*
    `.vercelignore` allowlist plus `vercel:deploy-manifest`, proven on
@@ -2338,7 +2342,10 @@ Findings (finding 1 resolved by Prompt 392; finding 2 open):
    organization listing work, then `dashboardSummary` GraphQL fails and the
    page renders `AppError` (request ID `db4e1e74-9af1-483c-9685-cec384d681b3`).
    Runtime logs for that window returned no records, so the cause is unknown.
-   Prompt 378's Gate C did not require an active organization.
+   Prompt 378's Gate C did not require an active organization. *Resolved by
+   Prompt 393:* the client sent `dashboardSummary` without an operation name,
+   which the API rejects outside development (see
+   [Prompt 393](#dashboard-summary-operation-name--prompt-393-2026-10-18)).
 
 Remaining: retirement of `snap_KtLd…`, `snap_rz0cs…` and baseline `snap_Feg5…`
 (dependency-aware; `dpl_Hr9…` and earlier previews may still name older
@@ -2347,6 +2354,40 @@ later than about `2026-10-20T01:00Z`, after which scans on this deployment fail 
 until the next rebuild and adoption), the two findings, the production plan
 decision and the eleven sign-offs. See
 [the execution record](operations.md#prompt-391--scanner-preview-adoption-2026-10-18).
+
+## Dashboard summary operation name — Prompt 393 (2026-10-18)
+
+Status: **fixed and hosted-proven on preview.** Source `23f6378` on `main`.
+
+- **Reproduced** on `dpl_7JR8wLUt14fPRdD7SHPmy6gM4QTC` (`feb6d9e`) through
+  `vercel curl --deployment`: register 201, organization 201, `/app` 200 with
+  `AppError` (request ID `94d1255c-ce74-4184-9af7-d0673401d9cd`). Runtime logs
+  grouped by path held no `/graphql` record, and a `vercel curl --trace`
+  session trace showed no subrequest spans. Custody:
+  `prompt393-diag-20261018T151547Z/`.
+- **Cause, found locally.** With the API in development mode the same flow
+  rendered the dashboard. In `NODE_ENV=test` the client's query returned HTTP
+  200 with `QUERY_LIMIT_EXCEEDED` "GraphQL operationName is required."
+  `server/src/graphql/graphql-limits.ts` enforces this outside development;
+  preview runs `production`. `getDashboardSummary` passed no
+  `operationName`; the audit query already did. The rejection is expected,
+  so nothing is logged, and the client renders the generic copy.
+- **Fix.** The dashboard document moved to
+  `client/lib/api/dashboard-summary.ts` with `DASHBOARD_SUMMARY_OPERATION`.
+  `audit-history.ts` gained `AUDIT_HISTORY_OPERATION`. `graphqlPost` requires
+  `operationName`. A new `client/tests/graphql-operations.spec.ts` checks each
+  document declares exactly its named operation. The server is unchanged.
+  Residuals are in [dashboards](dashboards.md#graphql-read-model).
+- **Deployment.** `dpl_1S2xiZKz6HogdM3d4QgSsKsBqf6X`
+  (`https://acres-frdn23tfw-dgsloxx417s-projects.vercel.app`), deployed from
+  the working tree after `deploy manifest ok: 656 files` (Prompt 392's 654 plus
+  the two new client files). Started `15:27:17Z`, `READY` by `15:29:29Z`,
+  `target: null`, basic build machine, Vercel Authentication.
+- **Acceptance** (fresh synthetic account and organization, custody
+  `prompt393-20261018T152709Z/accept/`): `/app` 200 with
+  `id="dashboard-title"` and no `AppError`; `/app/audit` 200 with
+  `id="audit-title"` and no `AppError`. The deployment's error/warning
+  runtime logs over the window held only the known `pg` SSL-mode warning.
 
 ## Deploy upload allowlist — Prompt 392 (2026-10-18)
 

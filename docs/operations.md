@@ -13583,3 +13583,34 @@ earlier deployments found nine previews storing `.env`, `server/.env` and
 `backups/`; deletion and rotation are pending owner decisions (see
 [the hosted record](vercel-deployment.md#deploy-upload-allowlist--prompt-392-2026-10-18)).
 
+
+## Prompt 393 — dashboard summary operation name (2026-10-18)
+
+Baseline `324b1b3`; implementation commit `23f6378`. Node `v24.21.0`;
+cached Vercel CLI 64.5.0.
+
+### Checks (Node 24.21.0)
+
+- `npm run lint` → exit 0; `npm run typecheck` → exit 0; `npm run build` →
+  exit 0
+- `playwright test tests/graphql-operations.spec.ts tests/audit-history.spec.ts
+  tests/api-helpers.spec.ts` → `17 passed`
+- SSR behaviour check (API `NODE_ENV=test`, `next dev`, register →
+  organization → `/app`): before the fix "Request Failed" and no
+  `dashboard-title`; after it no alert and `id="dashboard-title"` present
+- dry run + `vercel:deploy-manifest` → `deploy manifest ok: 656 files`
+
+### Review
+
+Stage 1 found no Critical or Important issues. It confirmed the query moved
+byte for byte and that no other client `/graphql` caller is unnamed. Accepted:
+retitle the spec to what it asserts. Declined: replacing `graphqlPost`'s
+query/operation pair with one document object (two correct call sites;
+recorded as a residual instead). Recorded: the hand-kept document list in
+the spec. No re-review: the only change after review was a test title.
+
+### Hosted
+
+`dpl_1S2xiZKz6HogdM3d4QgSsKsBqf6X`: `/app` and `/app/audit` render for a
+fresh organization member (see
+[the hosted record](vercel-deployment.md#dashboard-summary-operation-name--prompt-393-2026-10-18)).
