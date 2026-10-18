@@ -143,6 +143,29 @@ fetches `/api/v1/auth/csrf`, forwards the issued CSRF cookie into the server-sid
 cookie header, and sends `x-csrf-token` with the GraphQL request. This path is
 covered by the authenticated Playwright flow.
 
+Every request also names its operation. Outside `NODE_ENV=development` the
+API's limit plugin rejects an unnamed operation with `QUERY_LIMIT_EXCEEDED`
+("GraphQL operationName is required."), and the Playwright API runs in
+development, where the gate is off. Prompt 393 found `getDashboardSummary`
+sending none, which broke `/app` on every hosted deployment. The documents
+and their operation names now live together in
+`client/lib/api/dashboard-summary.ts` and `client/lib/api/audit-history.ts`,
+`graphqlPost` requires `operationName`, and
+`client/tests/graphql-operations.spec.ts` checks each document names exactly
+that operation.
+
+Residuals from Prompt 393:
+
+- `getApiErrorCopy` has no `QUERY_LIMIT_EXCEEDED` case, so the rejection
+  rendered the generic "Request Failed" copy.
+- The rejection is an expected error and is not logged by the API or by
+  Next, so hosted runtime logs carried no trace of it.
+- The Playwright API runs without `NODE_ENV`, i.e. development, so end-to-end
+  tests cannot see the gate.
+- Nothing ties a call site to the matching document's operation constant:
+  passing the wrong constant still type-checks. The spec's document list is
+  maintained by hand.
+
 ## Client UI
 
 `/app` now renders the dashboard workspace when an active organization exists;

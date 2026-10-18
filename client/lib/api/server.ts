@@ -25,9 +25,14 @@ import type {
 import { parseApiResponse } from "@/lib/api/envelope";
 import { parseGraphqlResponse } from "@/lib/api/graphql-response";
 import {
+  AUDIT_HISTORY_OPERATION,
   AUDIT_HISTORY_QUERY,
   type AuditEventConnection,
 } from "@/lib/api/audit-history";
+import {
+  DASHBOARD_SUMMARY_OPERATION,
+  DASHBOARD_SUMMARY_QUERY,
+} from "@/lib/api/dashboard-summary";
 
 const API_ORIGIN =
   process.env.ACRES_API_ORIGIN?.trim() || "http://localhost:3001";
@@ -104,7 +109,7 @@ export async function graphqlPost<TData>(
   query: string,
   variables: Record<string, unknown>,
   organizationId: string,
-  operationName?: string,
+  operationName: string,
 ): Promise<TData> {
   const headers = new Headers(await authenticatedHeaders(organizationId));
   const csrf = await csrfTokenForServer(headers);
@@ -129,7 +134,7 @@ export async function listOrganizationAuditEvents(
     AUDIT_HISTORY_QUERY,
     { after },
     organizationId,
-    "OrganizationAuditHistory",
+    AUDIT_HISTORY_OPERATION,
   );
   return data.organizationAuditEvents;
 }
@@ -180,91 +185,6 @@ function mergeCookieHeader(
       }) ?? [];
   return [...retained, ...replacements].join("; ");
 }
-
-const DASHBOARD_SUMMARY_QUERY = /* GraphQL */ `
-  query DashboardSummary(
-    $metricId: String
-    $regionId: String
-    $datasetVersionId: String
-    $dimensionHash: String
-    $periodStart: String
-    $periodEnd: String
-  ) {
-    dashboardSummary(
-      metricId: $metricId
-      regionId: $regionId
-      datasetVersionId: $datasetVersionId
-      dimensionHash: $dimensionHash
-      periodStart: $periodStart
-      periodEnd: $periodEnd
-    ) {
-      metrics {
-        id
-        key
-        label
-        description
-        valueType
-        canonicalUnit
-        allowedAggregation
-        calculationVersion
-        status
-        createdAt
-        updatedAt
-      }
-      aggregates {
-        id
-        datasetVersionId
-        regionId
-        metric {
-          id
-          key
-          label
-          description
-          valueType
-          canonicalUnit
-          allowedAggregation
-          calculationVersion
-          status
-          createdAt
-          updatedAt
-        }
-        aggregateType
-        periodStart
-        periodEnd
-        value {
-          type
-          value
-        }
-        unit
-        dimensionHash
-        observationCount
-        datasetVersionIds
-        createdAt
-      }
-      savedViews {
-        id
-        name
-        description
-        ownerAccountId
-        status
-        createdAt
-        updatedAt
-        filters {
-          metricId
-          regionId
-          datasetVersionId
-          dimensionHash
-          periodStart
-          periodEnd
-        }
-        presentation {
-          chart
-          compareBy
-        }
-      }
-    }
-  }
-`;
 
 async function getTestHarnessState(): Promise<{
   enabled: boolean;
@@ -317,6 +237,7 @@ export async function getDashboardSummary(
     DASHBOARD_SUMMARY_QUERY,
     filters,
     organizationId,
+    DASHBOARD_SUMMARY_OPERATION,
   );
   return data.dashboardSummary;
 }

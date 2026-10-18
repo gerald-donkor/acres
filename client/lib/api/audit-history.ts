@@ -5,6 +5,8 @@ export type AuditEventConnection = {
   pageInfo: { hasNextPage: boolean; endCursor: string | null };
 };
 
+export const AUDIT_HISTORY_OPERATION = "OrganizationAuditHistory";
+
 export const AUDIT_HISTORY_QUERY = /* GraphQL */ `
   query OrganizationAuditHistory($after: String) {
     organizationAuditEvents(after: $after) {
