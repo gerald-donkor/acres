@@ -16,7 +16,8 @@ split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
 scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
 outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
 managed outbox dispatch, Prompt 377 = shared managed API throttling, Prompt
-393 = named dashboard GraphQL operation); each
+393 = named dashboard GraphQL operation, Prompt 394 = scanner signature
+refresh); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -124,12 +125,22 @@ committed per AGENTS.md §2):
       Prompt 392 (2026-10-18) added the deploy upload allowlist
       (`.vercelignore` + `vercel:deploy-manifest`). Prompt 393 (2026-10-18)
       fixed the `/app` `dashboardSummary` SSR failure (unnamed GraphQL
-      operation), proven on `dpl_1S2xiZKz6HogdM3d4QgSsKsBqf6X`. Next (own
-      prompts): a fresh rebuild/adoption before the signature window closes
-      (≈2026-10-20T01:00Z) or the dependency-aware retirement of superseded
-      snapshots; the owner's
-      decision on deleting the nine preview deployments that stored `.env`
-      files (see Prompt 392) is pending.
+      operation), proven on `dpl_1S2xiZKz6HogdM3d4QgSsKsBqf6X`. Prompt 394
+      (2026-10-18) rebuilt with **fresh** signatures (`daily` `489f6083…`,
+      not `f9cb69a8…`), adopted `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` on
+      preview and proved clean and EICAR uploads through
+      `dpl_A5H3fnpSx59XyfKqmKJQLywVf85j`. Its signatures leave the 48 h
+      window no later than about **2026-10-20T16:01Z** (rebuild end + 48 h;
+      the `daily.cvd` build time is not recorded, so the bound may be
+      earlier; plan the refresh before about 15:59Z). The local
+      `preview.env` keeps stale development-only lines
+      (`BLOB_READ_WRITE_TOKEN`, `NEON_OWNER_*`); compare against a fresh
+      pull. Until a hosted cadence exists, a manual refresh is needed
+      about every two days. Next (own prompts): the next refresh before that
+      bound (compare `daily_sha256` first, see Prompt 394), the
+      dependency-aware retirement of superseded snapshots (five retained);
+      the owner's decision on deleting the nine preview deployments that
+      stored `.env` files (see Prompt 392) is pending.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -2476,3 +2487,90 @@ whether to delete the nine affected preview deployments (irreversible;
 Postgres role passwords if they are reused anywhere. Nothing was deleted or
 rotated. See
 [the execution record](operations.md#prompt-392--deploy-upload-allowlist-2026-10-18).
+
+## Scanner signature refresh — Prompt 394 (2026-10-18)
+
+Status: **fresh candidate adopted on preview; deployed upload → scan
+proven.** Source `22c6300` on `main` (working-tree deploy after the Prompt
+392 gate). Window check at `2026-10-18T15:58Z`, about 33 h before the
+Prompt 391 bound (~`2026-10-20T01:00Z`).
+
+- **Target, read-only.** As fixed above. `Snapshot.get`: `snap_Feg5…`,
+  `snap_rz0cs…`, `snap_KtLd…` and the active `snap_CARv…` all `created`;
+  `Sandbox.list` empty. The five `SCANNER_*` records are preview-only
+  (`encrypted`) with no git branch override.
+- **Rebuild, one invocation** (`15:59:12–16:00:39Z`, exit 0, empty stderr).
+  `rebuild-scanner-cadence.js --force --current-snapshot-id snap_CARv…`
+  under `env -i`: `status: "success"`, `execution_mode: "live"`, all four
+  smoke checks `passed`, `prune_status: "retained"`,
+  `activation_status: "not_performed"`. Candidate `snap_ngIwnQplocPoUR0A6cewfCGrFAbX`
+  (`created`, `iad1`, 461,101,901 bytes), main `0b2182d2…` (unchanged),
+  daily `489f6083…`.
+- **Freshness gate: passed.** The daily hash differs from `snap_CARv…`'s
+  `f9cb69a8…`, so a different (presumably newer) `daily.cvd` was fetched
+  than in Prompt 390.
+- **Bundle.** Receipt `6e53dcd0…632b082b70` and `runtime.env`
+  `db7391f7…21c77fcd` matched `handoff.json`. `runtime.env` held the three
+  names, with valid patterns, equal to the receipt.
+- **Seam probe, one run** (`16:01:36–16:02:35Z`, exit 0): `gatePassed`,
+  `signaturesVerified` under 48 h, clean accepted, EICAR rejected,
+  `deny-all`, `persistent: false`, `baseSnapshotSurvived`, one creation,
+  cleanup succeeded.
+- **Adoption** (`16:09:16–16:09:20Z`). The owner ran the prepared
+  `adopt.sh` (stdin, names and exit codes only): three `rc=0`. A private
+  re-pull matched all three to the bundle. Of the keys present in both
+  pulls, only `SCANNER_SANDBOX_SNAPSHOT_ID` and `SCANNER_DAILY_SHA256`
+  changed; provider `vercel-sandbox` and max age `48` were unchanged (see the
+  pull artefact in the execution record).
+- **Deployment.** `dpl_A5H3fnpSx59XyfKqmKJQLywVf85j`
+  (`https://acres-6jv6uozpa-dgsloxx417s-projects.vercel.app`), after
+  `deploy manifest ok: 656 files`. Created `16:10:41Z`, Ready `16:12:41Z`,
+  git meta `22c6300`, `target: null`, no aliases, `iad1`, basic build
+  machine, Vercel Authentication. The build log shows the `client` Next
+  build and the `api` (`src/main.ts`) and `jobs`
+  (`src/vercel/jobs.function.ts`) entrypoints.
+- **Acceptance** (`16:13:25–16:15:13Z`), through `vercel curl --deployment`
+  with a cookie jar. Fresh synthetic account and organization, selected
+  through the `acres_active_organization` cookie as the browser client sets
+  it.
+  - `/app`: 200, `id="dashboard-title"`, no `role="alert"` (the hard gate).
+  - Clean CSV: private Blob PUT 200, complete 200, `accepted` 15 s after
+    completion. DB: `scanStatus=clean`, outbox `dispatched` (1 attempt),
+    `DurableJob` `succeeded` (1 attempt).
+  - EICAR CSV (probe fixture, real checksum): `rejected`/`infected`.
+    `DurableJob` `failed`/`infected` (1 attempt), download 404, no dataset
+    version. This deployment's logs carry the `JobProcessorService` "Upload
+    rejected by malware scan … infected/Eicar-Test-Signature" line at
+    `16:14:38Z`. The only other warning/error record is the known `pg`
+    SSL-mode warning.
+  - Anonymous GET of both Blob objects: 403. A second synthetic organization
+    got 404 for both uploads, with its own and a forged organization header.
+    The RLS-scoped read saw only this organization's two uploads.
+- **Scanner identity (inference).** The writes finished before the
+  deployment was created. The adapter rejects a VM whose `sourceSnapshotId`
+  or signature hashes differ from its configuration before a clean verdict.
+  `snap_ngIw…`'s expiry moved from `2026-10-26T16:01:38Z` (set by the seam
+  probe) to `2026-10-26T16:14:25Z`, eight days after the scan VM boots. In
+  the same window `snap_CARv…` stayed at `2026-10-26T14:08:18Z`. This rests
+  on the expiry-on-use behaviour, not a provider attestation.
+  `Sandbox.list` was empty after the run.
+- **Owned artifacts** (custody only): two accounts, two organizations, two
+  uploads and their Blob objects, under
+  `~/.config/acres/vercel-preview/prompt394-20261018T155715Z/`. Nothing was
+  deleted and no snapshot was retired. Five snapshots are retained (about
+  2.3 GB).
+
+**New bound.** The fetch happened inside the `15:59:12–16:00:39Z` rebuild,
+so these signatures fail the 48 h policy no later than about
+`2026-10-20T16:01Z`; plan the next refresh before about `15:59Z`. The
+`daily.cvd` build time is not in the receipt, so the bound may be earlier.
+Restoring `snap_CARv…` (values in custody `previous-scanner.env`) would
+restore identity only, since its signatures fail closed after about
+`2026-10-20T01:00Z`.
+
+Remaining: the next refresh before the new bound, a hosted cadence (until it
+exists, a manual refresh about every two days), dependency-aware retirement
+of the four superseded snapshots (`snap_Feg5…` expires
+`2026-10-24T14:29:39Z`), the owner's decision on the nine leaky previews,
+the production plan decision and the eleven sign-offs. See
+[the execution record](operations.md#prompt-394--scanner-signature-refresh-2026-10-18).

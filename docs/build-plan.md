@@ -4244,3 +4244,13 @@ through `dpl_2aajXYcFj2FDoGA9Gbbu5HqyFtBT`. See
 Open: `.vercelignore` for CLI deploys, the `/app` `dashboardSummary` SSR
 failure, hosted cadence, dependency-aware retirement, production plan,
 Phase 12 exit and all eleven category sign-offs.
+
+## Scanner signature refresh — Prompt 394 (2026-10-18)
+
+A fresh candidate, `snap_ngIw…`, was adopted on preview, and clean and
+EICAR uploads were proven through `dpl_A5H3fnpSx59XyfKqmKJQLywVf85j`. See
+[the hosted record](vercel-deployment.md#scanner-signature-refresh--prompt-394-2026-10-18).
+Open: a hosted cadence (a manual refresh about every two days until it
+exists), dependency-aware retirement, the production plan, the Phase 12 exit
+and all eleven category sign-offs. The 391 entry's `.vercelignore` and
+`/app` items were closed by Prompts 392 and 393.

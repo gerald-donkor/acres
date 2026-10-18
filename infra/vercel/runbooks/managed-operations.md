@@ -437,15 +437,26 @@ procedure:
 
 1. Check the signature window first; stop if too little remains for one
    build and two scans.
+   - **Freshness gate (Prompt 394).** Before adopting, compare the new
+     receipt's `daily_sha256` with the active configuration's, privately.
+     If they are equal, the fetched `daily.cvd` is unchanged and adoption
+     gives no window extension. Record the candidate as prepared and stop.
+     A changed `main_sha256` is recorded but does not change the decision.
+     The bound is at most fetch time + 48 h, because the receipt does not
+     record the `daily.cvd` build time. Prompts 389 and 390, about 40 min
+     apart, fetched the same file; Prompt 394, about 14 h after Prompt 390,
+     fetched a different one. See
+     [the record](../../../docs/operations.md#prompt-394--scanner-signature-refresh-2026-10-18).
 2. Capture the previous `SCANNER_*` values and scopes privately; recompute
    the bundle digests; parse `runtime.env` as data, never `source` it.
 3. Run one `probe-platform.js scanner` against the candidate as the seam
    check. A signature-age rejection means the window has closed.
 4. `vercel env update <NAME> preview` with the value on stdin, for the three
-   names only; re-pull privately and compare to the bundle.
-5. Deploy from a `git archive` of the reviewed SHA plus
-   `.vercel/project.json`, never from the working tree: without a
-   `.vercelignore` the CLI uploads gitignored files, `.env` included.
+   names only; re-pull into a fresh file and compare to the bundle.
+5. Deploy from the clean working tree once `vercel deploy --dry` plus
+   `npm run vercel:deploy-manifest` reports `deploy manifest ok` (Prompt
+   392). Prompt 391 deployed from a `git archive` instead, because without
+   `.vercelignore` the CLI uploaded gitignored files, `.env` included.
 6. Prove one clean and one EICAR upload through the immutable deployment
    (`vercel curl --deployment`), correlate outbox, `DurableJob` and this
    deployment's logs, and check anonymous Blob reads and cross-organization

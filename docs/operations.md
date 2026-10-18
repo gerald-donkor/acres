@@ -13614,3 +13614,108 @@ the spec. No re-review: the only change after review was a test title.
 `dpl_1S2xiZKz6HogdM3d4QgSsKsBqf6X`: `/app` and `/app/audit` render for a
 fresh organization member (see
 [the hosted record](vercel-deployment.md#dashboard-summary-operation-name--prompt-393-2026-10-18)).
+
+## Prompt 394 — scanner signature refresh (2026-10-18)
+
+Baseline `22c6300`, clean `main` except the approved prompt. Node
+`v24.21.0` directly and inside `npm run`; cached Vercel CLI 64.5.0, `whoami`
+→ `dgsloxx417`; `@vercel/sandbox` 3.8.0. UTC window `15:54:59Z`–`16:16:13Z`.
+
+### Inputs and custody
+
+Run directory `~/.config/acres/vercel-preview/prompt394-20261018T155715Z/`
+(0700, files 0600):
+
+- the private pulls `preview-before.env` and `preview-after.env`;
+- `previous-scanner.env` and `previous-scanner-scopes.json`;
+- `receipt.json`, `candidate.env` and `handoff/`;
+- probe output;
+- `adopt.sh` and `restore.sh` (the restore script was not run);
+- `writes.log`, deployment output and inspection;
+- `acceptance.json`, `accept/` and `sql-correlation.txt`;
+- the `Snapshot.get`/`Sandbox.list` snapshots `inspect-*.json`.
+
+Earlier `prompt3xx-*` directories were read, never rewritten.
+
+The preview OIDC token had expired (`13:01Z`), so the one authorized
+`env pull` refreshed `preview.env`.
+
+**Pull artefact.** Pulling into the existing file kept older lines:
+`BLOB_READ_WRITE_TOKEN` and the `NEON_OWNER_*` set, which are now
+**development-only** records. The fresh `preview-after.env` omits them. The
+before/after comparison is therefore restricted to keys present in both.
+
+### Sequence and sanitized outputs
+
+1. Pre-flight: `--help` exit 0, `--dry-run` exit 0 with
+   `execution_mode: "simulation"`, the three scanner specs `pass 226`, `fail 0`.
+2. One cadence rebuild (`15:59:12–16:00:39Z`), exit 0: `status: "success"`,
+   candidate `snap_ngIwnQplocPoUR0A6cewfCGrFAbX`, `daily_sha256`
+   `489f6083…` ≠ the active `f9cb69a8…`, so the freshness gate passed.
+   Handoff: receipt
+   `6e53dcd0fa80950280d35b52d1bfb5c5e9fed7724f501a94dea953632b082b70`, and
+   `runtime.env`
+   `db7391f7e8ca223394d6de8cab7899a73964a509e8e89973ad44b7ca21c77fcd`, both
+   equal to `handoff.json`. `Snapshot.get`: `created`, expiry
+   `2026-10-26T16:00:15.185Z`. `Sandbox.list`: none.
+3. `probe-platform.js scanner` with `candidate.env` and max age 48: exit 0,
+   `gatePassed: true`, `signaturesVerified: true`, clean 10.9 s, EICAR
+   10.2 s, `sandboxCreations: 1`, `cleanupSucceeded: true`.
+4. The owner ran `adopt.sh`: three `rc=0`. The private re-pull equals the
+   bundle. Changed keys: `SCANNER_DAILY_SHA256` and
+   `SCANNER_SANDBOX_SNAPSHOT_ID`.
+5. `vercel deploy --dry --target=preview` and `vercel:deploy-manifest` →
+   `deploy manifest ok: 656 files`. Then
+   `vercel deploy --target=preview --scope dgsloxx417s-projects` from the working tree: exit 0,
+   `dpl_A5H3fnpSx59XyfKqmKJQLywVf85j`, Ready in 2.0 min.
+6. Acceptance through `vercel curl --deployment`. The results are in
+   [the hosted record](vercel-deployment.md#scanner-signature-refresh--prompt-394-2026-10-18).
+   RLS-scoped read-only SQL (`acres_app` direct URL, `BEGIN READ ONLY`,
+   transaction-local `acres.organization_id`, `ROLLBACK`) confirmed the
+   upload, outbox and `DurableJob` states and zero EICAR dataset versions.
+7. Post-run `Snapshot.get`: candidate expiry `2026-10-26T16:14:25.251Z`,
+   `snap_CARv…` unchanged at `2026-10-26T14:08:18.638Z`. `Sandbox.list`:
+   none.
+
+No recovery action was needed.
+
+**Disclosure.** While diagnosing the pull artefact, one `head`/`cut`
+command printed the first 17 characters of the `BLOB_READ_WRITE_TOKEN` line
+into the agent session. That is the fixed `vercel_blob_rw_` prefix and two
+characters of the public store ID, not the secret part. No other value was
+printed.
+
+### Checks (Node 24.21.0, sequential)
+
+- `node scripts/vercel/check-vercel-config.js` → `vercel.json configuration valid`, exit 0
+- `npm run vercel:probe-test` → `tests 337`, `pass 337`, `fail 0`, exit 0
+- `npm run ops:check` → every suite `fail 0`, exit 0
+- `npm run lint` → exit 0; `npm run build` → exit 0; `npm run typecheck` → exit 0
+- `npm run ops:scan-secrets` → `secret/default scan passed`, exit 0
+- `git diff --check` → exit 0
+
+Local checks do not stand in for the hosted proof above.
+
+### Review
+
+Stage 1 found no Critical issues. It confirmed every recorded fact against
+the sanitized evidence, the links and the absence of secrets. Two Important
+findings, both accepted:
+
+- The runbook freshness gate sat after the deploy step and split the list;
+  it is now a sub-item of step 1, and step 5 states the current deploy
+  method first.
+- The hosted record's changed-keys claim lacked the both-pulls caveat; it
+  now has it.
+
+Minor findings accepted:
+
+- the bound is now rebuild end + 48 h (about 16:01Z), with planning before
+  15:59Z;
+- "newer" `daily.cvd` is now "different (presumably newer)";
+- the new entries are re-wrapped;
+- this review line was added.
+
+The reviewer could not check the pre-flight `pass 226` and the UTC window
+against its evidence; both come from captured output. No re-review: the
+changes were wording and placement in documentation.
