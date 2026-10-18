@@ -13475,3 +13475,74 @@ by file times; the token statement made specific; the window sentence, which
 no longer conflates snapshot time and file build time and notes the refined
 bound; named digests; the source match marked as implied; and "own prompt and
 approval" on the Resume-here gate.
+
+## Prompt 391 — scanner preview adoption (2026-10-18)
+
+Baseline `73c7047`, clean `main` except the approved prompt. Node `v24.21.0`
+directly and inside `npm run`; cached Vercel CLI 64.5.0, `whoami` →
+`dgsloxx417` (Hobby). UTC window `13:38:11Z`–`14:11:28Z`.
+
+### Inputs and custody
+
+Run directory `~/.config/acres/vercel-preview/prompt391-20261018T133907Z/`
+(0700, files 0600): `preview-before.env` / `preview-after.env` (private
+pulls), `previous-scanner.env` and `previous-scanner-scopes.json` (the five
+`SCANNER_*` records: `encrypted`, `preview`, no git branch), probe output, the
+three write logs, deployment inspection, `acceptance.json`, the
+`accept/` request/response bodies and cookie jars, synthetic identities and
+runtime logs. Inputs from `prompt390-20261018T014336Z/` were read, never
+rewritten.
+
+Bundle digests recomputed: receipt
+`617255e056dc708802a7fd0363baa8fc4d918f2ffab10510ec70cc2b7e9ff084`,
+`runtime.env`
+`632f4634ebdd574eb67a01a3e42c439f46ca5b1f7c78ac14476a5e7d92a4ad1e`, both equal
+to `handoff.json`. `runtime.env` parsed as data: three lines, names
+`SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_MAIN_SHA256`, `SCANNER_DAILY_SHA256`,
+patterns valid, snapshot `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN`.
+
+### Sequence and sanitized outputs
+
+1. `Snapshot.get`: candidate `created`, `iad1`, expiry
+   `2026-10-26T01:44:56.125Z`; baseline `created`, `2026-10-24T14:29:39.778Z`.
+2. `probe-platform.js scanner` with `candidate.env` and max age 48: exit 0,
+   `gatePassed: true`, `signaturesVerified: true`, clean 9.2 s, EICAR 9.0 s,
+   `sandboxCreations: 1`, `cleanupSucceeded: true`.
+3. Env writes: the agent's `vercel env update` call was refused by the
+   auto-mode classifier before running; the owner ran
+   `adopt.sh` (stdin, names and exit codes only): three `rc=0`. Private
+   re-pull: all three equal to the bundle; changed keys vs before:
+   `SCANNER_DAILY_SHA256`, `SCANNER_SANDBOX_SNAPSHOT_ID`.
+4. `vercel deploy --dry --json` from the working tree listed `.env`,
+   `backups/`, `ref/` among 2,828 files; from a `git archive` of `73c7047`
+   plus `.vercel/project.json` it listed 1,503 tracked files and none of
+   them. `vercel deploy --target=preview --scope dgsloxx417s-projects` from
+   the archive: exit 0, `dpl_2aajXYcFj2FDoGA9Gbbu5HqyFtBT`, Ready in 4.6 min.
+5. Acceptance via `vercel curl --deployment` (results in
+   [the hosted record](vercel-deployment.md#scanner-preview-adoption--prompt-391-2026-10-18)).
+   RLS-scoped read-only SQL (`acres_app` direct URL, `BEGIN READ ONLY`,
+   transaction-local `acres.organization_id`) confirmed the upload, outbox and
+   `DurableJob` states quoted there.
+6. Post-run `Snapshot.get`: candidate expiry `2026-10-26T14:08:18.638Z`;
+   `Sandbox.list`: none.
+
+No recovery action was needed: no write failed, the build succeeded and both
+uploads reached terminal states. The previous values remain in custody for a
+rollback; restoring them restores identity only, since the baseline's
+signatures are long past 48 h.
+
+### Checks (Node 24.21.0, sequential)
+
+- `node scripts/vercel/check-vercel-config.js` → `vercel.json configuration valid`, exit 0
+- `npm run vercel:probe-test` → `pass 326`, `fail 0`, exit 0
+- `npm run ops:check` → `pass 28`, `fail 0`, exit 0
+- `npm run lint` exit 0; `npm run build` exit 0; `npm run typecheck` exit 0
+- `npm run ops:scan-secrets` → `secret/default scan passed`, exit 0
+- `git diff --check` exit 0
+- Prettier: the five changed docs were already unformatted at the
+  baseline, so whole files were not rewritten; each new section was checked
+  Prettier-stable instead.
+
+Local checks do not stand in for the hosted proof above. Two findings are
+open (CLI deploys upload gitignored files; `/app` `dashboardSummary` SSR
+failure); see the hosted record.

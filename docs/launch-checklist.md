@@ -3351,3 +3351,9 @@ The single bounded live rebuild failed safely at `builder-create`
 The single confirmed rebuild built a candidate but failed its smoke stage
 (`candidate_smoke_failed`); no adoption. No category is approved. See
 [the execution record](operations.md#stage-c--the-single-confirmed-rebuild-2026-10-18).
+
+## Prompt 391 — scanner adopted on preview (2026-10-18)
+
+Preview adoption and the deployed upload → scan proof passed; two findings
+are open. No category is approved. See
+[the execution record](operations.md#prompt-391--scanner-preview-adoption-2026-10-18).

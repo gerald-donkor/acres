@@ -431,6 +431,31 @@ variable names establishes only presence. Investigate the retained provider
 state before separately authorizing another candidate attempt. See
 [the execution record](../../../docs/operations.md#prompt-386--scanner-preview-adoption-attempt-2026-10-17).
 
+Prompt 391 (2026-10-18) is the first completed adoption of a rebuilt
+candidate. The verified
+procedure:
+
+1. Check the signature window first; stop if too little remains for one
+   build and two scans.
+2. Capture the previous `SCANNER_*` values and scopes privately; recompute
+   the bundle digests; parse `runtime.env` as data, never `source` it.
+3. Run one `probe-platform.js scanner` against the candidate as the seam
+   check. A signature-age rejection means the window has closed.
+4. `vercel env update <NAME> preview` with the value on stdin, for the three
+   names only; re-pull privately and compare to the bundle.
+5. Deploy from a `git archive` of the reviewed SHA plus
+   `.vercel/project.json`, never from the working tree: without a
+   `.vercelignore` the CLI uploads gitignored files, `.env` included.
+6. Prove one clean and one EICAR upload through the immutable deployment
+   (`vercel curl --deployment`), correlate outbox, `DurableJob` and this
+   deployment's logs, and check anonymous Blob reads and cross-organization
+   reads fail.
+
+Deployment metadata names the scanner variables but not their values;
+identity remains an inference from write-before-create ordering, the
+adapter's source and hash checks, and the snapshot's expiry moving at scan
+time. See [the record](../../../docs/operations.md#prompt-391--scanner-preview-adoption-2026-10-18).
+
 Durable adoption, verified deployment, retirement within a free-tier resource
 budget and hosted scheduled-execution evidence remain unproved by local tests.
 The production plan decision and eleven launch sign-offs remain open.

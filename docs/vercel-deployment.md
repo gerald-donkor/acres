@@ -109,10 +109,14 @@ committed per AGENTS.md §2):
       signatures, and classifies failures as `smoke_failure`. Its stage B
       rebuild (2026-10-18) **passed** every smoke check and produced candidate
       `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` (expires 2026-10-26T01:44:56Z) plus
-      an offline handoff bundle in `prompt390-20261018T014336Z/handoff/`. It
-      is prepared, not adopted. Next scanner gate (own prompt and approval):
-      preview adoption and the deployed upload → scan proof, before about
-      2026-10-20T01:02Z.
+      an offline handoff bundle in `prompt390-20261018T014336Z/handoff/`.
+      Prompt 391 (2026-10-18) **adopted** it on preview and proved clean and
+      EICAR uploads through deployment `dpl_2aajXYcFj2FDoGA9Gbbu5HqyFtBT`
+      (`https://acres-7azesfi2c-dgsloxx417s-projects.vercel.app`). Its
+      signatures leave the 48 h window no later than about 2026-10-20T01:00Z. Next
+      (own prompts): a `.vercelignore` for CLI deploys, the `/app`
+      `dashboardSummary` SSR failure, then a fresh rebuild/adoption or the
+      dependency-aware retirement of superseded snapshots.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -2237,3 +2241,98 @@ was written to env, deployed or retired. Next gate (needs its own prompt and
 approval): preview adoption of `snap_CARv…` and the deployed upload → scan
 proof inside that window. Snapshot retirement stays separate. See
 [the record](operations.md#stage-b--the-single-confirmed-rebuild-2026-10-18).
+
+## Scanner preview adoption — Prompt 391 (2026-10-18)
+
+Status: **adopted on preview; deployed upload → scan proven.** Source
+`73c704794b3e1a068d4d02f9fcccf3c2a963dd2f` on `main` (by procedure; a CLI
+deploy from an archive carries no git metadata). Window check at
+`2026-10-18T13:38Z`, about 35 h before the ~`2026-10-20T01:00Z` signature
+bound.
+
+- **Target, read-only.** Hobby team/project as fixed above, Node `24.x`,
+  Sandbox region `iad1`. Preview `BLOB_STORE_ID=store_g2fmCH5CW7TJbkN3`,
+  `STORAGE_PROVIDER=vercel-blob`, `QUEUE_PROVIDER=vercel`, sensitive
+  `DATABASE_URL`. All five `SCANNER_*` records are preview-only with no git
+  branch override. Before: `snap_Feg5…`, main `0b2182d2…`, daily `af003f6e…`,
+  max age `48`, provider `vercel-sandbox`.
+- **Bundle.** Receipt `617255e0…2b7e9ff084` and `runtime.env`
+  `632f4634…92a4ad1e` matched `handoff.json`; three names; the receipt's
+  success string is `"success"` (the prompt's placeholder was `candidate_ready`); all four
+  smoke statuses `passed`. `Snapshot.get`: `created`, `iad1`.
+- **Seam probe, one run** (`13:40–13:41Z`, exit 0): signatures verified under
+  48 h, clean accepted, EICAR rejected, `deny-all`, `persistent: false`,
+  `baseSnapshotSurvived`, one creation, cleanup succeeded. Synthetic only.
+- **Adoption** (`13:56Z`). `vercel env update <name> preview` with stdin for
+  `SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_MAIN_SHA256`, `SCANNER_DAILY_SHA256`;
+  all exit 0. The auto-mode classifier refused the agent's env write, so the
+  owner ran the prepared script (names and exit codes only). A private
+  re-pull matched all three to the bundle; only the snapshot ID and daily hash
+  changed (the main hash was already equal). Type, scope and max age unchanged.
+- **Deployment.** `dpl_2aajXYcFj2FDoGA9Gbbu5HqyFtBT`
+  (`https://acres-7azesfi2c-dgsloxx417s-projects.vercel.app`), created
+  `14:00:01Z`, Ready `14:04:36Z`, `target: null`, no aliases, `iad1`, basic
+  build machine, Vercel Authentication. Services `client`, `api`, `jobs`.
+  Uploaded from a `git archive` of the source SHA plus only
+  `.vercel/project.json` (1,503 tracked files); see finding 1.
+- **Acceptance** (`14:07:20–14:09:22Z`), through `vercel curl --deployment`
+  on the immutable URL with a cookie jar (see deviation). Synthetic account,
+  organization and CSRF; SSR `/app` 200 but see finding 2.
+  - Clean CSV: private Blob PUT 200, complete 200, `accepted`; DB
+    `scanStatus=clean`, outbox `dispatched` (1 attempt), `DurableJob`
+    `succeeded` (1 attempt), accepted 15 s after completion.
+  - EICAR CSV (probe fixture, real checksum): `rejected`, `infected`;
+    `DurableJob` `failed`/`infected` (1 attempt); download 404; no dataset
+    version. This deployment's logs (`deploymentId` filter) carry the
+    `JobProcessorService` "Upload rejected by malware scan" line for it.
+    The clean upload has no consumer log line (the success path logs
+    nothing); its correlation rests on the outbox and `DurableJob` rows.
+  - Anonymous GET of both Blob objects: 403. A second synthetic organization
+    got 404 for both uploads, with its own and a forged organization header
+    (`Tenant context rejected: no active membership`).
+- **Scanner identity (inference).** The deployment metadata lists the scanner
+  variable names only. The writes finished before deployment creation, and
+  the adapter rejects a VM whose `sourceSnapshotId` or signature hashes differ
+  from its configuration before a clean verdict. Provider evidence agrees:
+  after the run, `snap_CARv…` reported expiry `2026-10-26T14:08:18.638Z`,
+  eight days after the EICAR scan VM boot, where it was `…01:44:56Z` before.
+  This is read from the expiry-on-use behaviour, not a provider attestation.
+  `Sandbox.list` returned no sandboxes after the run.
+- **Owned artifacts** (custody only): two accounts, two organizations, two
+  uploads and their Blob objects, under
+  `~/.config/acres/vercel-preview/prompt391-20261018T133907Z/`. Nothing was
+  deleted; no snapshot was retired.
+
+Deviation: the prompt asked for a Playwright browser. Driving the protected
+preview from a browser needs the automation bypass secret, and reading it was
+refused as credential materialization. `vercel curl` applies the bypass
+without exposing it; the request sequence is the browser client's
+(`/auth/csrf`, `/auth/register`, `/organizations`, `/uploads`, direct PUT,
+`/complete`, status polling). Second deviation (§3.3): the deployment
+metadata exposes scanner variable names, not resolved values, so the
+per-service value comparison was not possible; identity rests on the
+inference above.
+
+Findings (open, own prompts):
+
+1. **Deploy uploads gitignored files.** There is no `.vercelignore`, and a
+   working-tree `vercel deploy --dry` lists `.env`, `backups/`, `ref/` and
+   other ignored paths. `dpl_Hr9…`'s stored source contains `src/.env` and
+   `src/backups/…`. These are local-development values (localhost Postgres
+   role passwords) and drill evidence, readable only by team members with
+   source access, not preview or production secrets. Proposed fix: a
+   `.vercelignore` (or archive-only deploys), then decide on old deployments
+   and local credential rotation.
+2. **`/app` dashboard SSR fails for an organization member.** Session and
+   organization listing work, then `dashboardSummary` GraphQL fails and the
+   page renders `AppError` (request ID `db4e1e74-9af1-483c-9685-cec384d681b3`).
+   Runtime logs for that window returned no records, so the cause is unknown.
+   Prompt 378's Gate C did not require an active organization.
+
+Remaining: retirement of `snap_KtLd…`, `snap_rz0cs…` and baseline `snap_Feg5…`
+(dependency-aware; `dpl_Hr9…` and earlier previews may still name older
+snapshots), hosted cadence (the candidate's signatures fall outside 48 h no
+later than about `2026-10-20T01:00Z`, after which scans on this deployment fail closed
+until the next rebuild and adoption), the two findings, the production plan
+decision and the eleven sign-offs. See
+[the execution record](operations.md#prompt-391--scanner-preview-adoption-2026-10-18).

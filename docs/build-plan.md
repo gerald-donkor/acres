@@ -4235,3 +4235,12 @@ adopted. See
 Remaining: smoke-stage diagnostics, a separately approved probe or rebuild,
 preview adoption/application proof, hosted cadence, retirement/resource
 budget, production plan, Phase 12 exit and all eleven category sign-offs.
+
+## Scanner preview adoption — Prompt 391 (2026-10-18)
+
+Candidate `snap_CARv…` adopted on preview; clean and EICAR uploads proven
+through `dpl_2aajXYcFj2FDoGA9Gbbu5HqyFtBT`. See
+[the hosted record](vercel-deployment.md#scanner-preview-adoption--prompt-391-2026-10-18).
+Open: `.vercelignore` for CLI deploys, the `/app` `dashboardSummary` SSR
+failure, hosted cadence, dependency-aware retirement, production plan,
+Phase 12 exit and all eleven category sign-offs.
