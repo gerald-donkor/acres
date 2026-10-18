@@ -102,8 +102,9 @@
     "ops:dos-test": "node --test scripts/ops/run-dos-resilience-drill.spec.js scripts/ops/launch-target-evidence.spec.js",
     "ops:capacity-alerting-test": "node --test scripts/ops/run-capacity-alerting-drill.spec.js",
     "ops:static-integrity-test": "node --test scripts/ops/run-static-integrity-checks.spec.js",
+    "vercel:deploy-manifest": "node scripts/vercel/check-deploy-manifest.js",
     "vercel:probe": "node scripts/vercel/probe-platform.js",
-    "vercel:probe-test": "node --test scripts/vercel/probe-platform.spec.js scripts/vercel/build-scanner-snapshot.spec.js scripts/vercel/check-vercel-config.spec.js scripts/vercel/rebuild-scanner-cadence.spec.js scripts/vercel/prepare-scanner-handoff.spec.js",
+    "vercel:probe-test": "node --test scripts/vercel/probe-platform.spec.js scripts/vercel/build-scanner-snapshot.spec.js scripts/vercel/check-vercel-config.spec.js scripts/vercel/rebuild-scanner-cadence.spec.js scripts/vercel/prepare-scanner-handoff.spec.js scripts/vercel/check-deploy-manifest.spec.js",
     "vercel:scanner-rebuild": "node scripts/vercel/rebuild-scanner-cadence.js",
     "vercel:scanner-snapshot": "node scripts/vercel/build-scanner-snapshot.js"
   },

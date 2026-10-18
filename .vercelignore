@@ -1,0 +1,30 @@
+# Allowlist: ignore everything at the root, then admit only build inputs.
+# The CLI does not read .gitignore; see docs/vercel-deployment.md.
+/*
+!/client
+!/server
+!/packages
+!/package.json
+!/package-lock.json
+!/vercel.json
+!/.node-version
+
+# Inside admitted directories: secrets, local state and build outputs.
+.env*
+!/client/.env.example
+!/server/.env.example
+*.pem
+*.key
+.npmrc
+*.log
+*.dump
+*.tsbuildinfo
+node_modules
+coverage
+dist
+test-results
+playwright-report
+server/src/generated
+client/next-env.d.ts
+client/out
+client/build
