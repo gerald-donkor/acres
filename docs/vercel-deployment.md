@@ -102,8 +102,12 @@ committed per AGENTS.md §2):
       Prompt 389 classifies provider failures (`provider_error`/`_status`/
       `_code`) and raises the live OIDC floor to 75 min. Its stage C rebuild
       (2026-10-18) built `snap_KtLdaJeG4SaLAwi4mI8G8XzURZat` but failed the
-      smoke stage before any scan result (cause unclassified). Next scanner gate:
-      smoke-stage diagnostics, then a separately approved probe or rebuild.
+      smoke stage before any scan result. Prompt 390 found the likely cause in
+      source: the smoke VM was created with a top-level `snapshotId`, which
+      SDK 3.8.0 does not accept, so it most likely booted the default image.
+      The fix boots the smoke VM from the snapshot `source`, checks source and
+      signatures, and classifies failures as `smoke_failure`. Next scanner
+      gate: one confirmed rebuild (Prompt 390 stage B).
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -2181,3 +2185,32 @@ errors the way Prompt 389 classifies build errors. Then either one
 rebuild. The baseline expires `2026-10-24T14:29:39.778Z`. The candidate's
 signatures pass the 48 h policy no later than about `2026-10-20T01:00Z`; the
 true limit is the `daily.cvd` build time + 48 h, which the receipt does not record.
+
+## Scanner smoke source fix — Prompt 390 (2026-10-18)
+
+Stage A, local only (no cloud calls). Prompt 389's smoke stage created its
+VM with `Sandbox.create({ snapshotId, … })`. In `@vercel/sandbox` 3.8.0 the
+snapshot form is `source: { type: "snapshot", snapshotId }`
+(`dist/sandbox.d.ts` `CreateSandboxParams`); a top-level `snapshotId` is not a
+parameter. The reading from source, not a hosted measurement, is that the SDK
+ignored the key, the VM booted the default image without ClamAV, and a later
+call threw. That fits `untested` + `cleanup: "passed"`. The VM was also
+persistent by default; Prompt 389's post-run listing showed no extra snapshot.
+The spec's fake SDK keyed "builder vs probe" on `options.snapshotId`, which
+hid the defect.
+
+`smokeTestSnapshot` now uses the create shape that the probe and the app
+adapter have proven hosted: `source`, `persistent: false`, `deny-all`,
+`timeout: 120000`, `resources: { vcpus: 1 }`. Its create deadline is 60 s,
+the adapter's `CREATE_TIMEOUT_MS`; the prompt allowed for the adapter's value
+differing from 30 s. In order, it then checks `sourceSnapshotId`, runs the
+probe's signature check against the receipt's hashes (`signatureCheck` gained
+a `dailySha256` override; it and `runChecked` are now exported), and scans
+clean and EICAR. Cleanup is `delete({ deleteOrphanSnapshots: true })` plus a
+read-only post-delete `Snapshot.get` that must report `created`. Receipts gain
+`smoke_test.signatures` (first key) and, on `candidate_smoke_failed` only,
+`smoke_failure` (`step`, `kind`, `provider_error`, `provider_status`,
+`provider_code`); see [managed operations §5.1](../infra/vercel/runbooks/managed-operations.md#51-candidate-preparation-and-snapshot-age).
+Handoff now also requires `signatures: "passed"`. No earlier receipt had it,
+and none had passed smoke. The fake SDK now throws on a top-level `snapshotId`.
+Schema stays v1. See [the record](operations.md#prompt-390--scanner-smoke-source-fix-2026-10-18).

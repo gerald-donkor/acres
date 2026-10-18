@@ -121,7 +121,7 @@ function validateReceipt(r, now = Date.now()) {
     fail("handoff_receipt_invalid");
   if (
     !object(r.smoke_test) ||
-    !["clean_sample", "eicar_sample", "cleanup"].every(
+    !["signatures", "clean_sample", "eicar_sample", "cleanup"].every(
       (k) => r.smoke_test[k] === "passed",
     )
   )

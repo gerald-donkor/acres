@@ -11,18 +11,24 @@ const {
   LIVE_BUILD_OIDC_MIN_REMAINING_MS,
   credentialsFor,
   scanShape,
+  runChecked,
+  signatureCheck,
+  signaturesOk,
   EICAR,
   ADAPTER_SCAN_FLAGS,
   SNAPSHOT_ID,
 } = require("./probe-platform");
 const {
   buildSnapshot,
+  classifyProviderError,
   projectBuildFailure,
   assertOutsideRepo,
   SNAPSHOT_EXPIRATION_MS,
 } = require("./build-scanner-snapshot");
 
 const CONTROL_TIMEOUT_MS = 30_000;
+// Matches the app adapter's CREATE_TIMEOUT_MS.
+const SMOKE_CREATE_TIMEOUT_MS = 60_000;
 const SCAN_DIR = "/tmp/acres-scan";
 const REPO_ROOT = path.resolve(__dirname, "../..");
 const FRESHCLAM_CONF = path.join(
@@ -177,72 +183,176 @@ async function evaluateCadence(config, sdk, options = {}) {
     : { ...unknown, ageHours };
 }
 
+const SMOKE_STEPS = new Set([
+  "smoke-create",
+  "smoke-source",
+  "smoke-signatures",
+  "smoke-write",
+  "smoke-scan-clean",
+  "smoke-scan-eicar",
+  "smoke-cleanup",
+]);
+const SMOKE_KINDS = new Set(["provider_failed", "result_failed"]);
+const NO_PROVIDER_ERROR = Object.freeze({
+  provider_error: null,
+  provider_status: null,
+  provider_code: null,
+});
+const SHA256 = /^[a-f0-9]{64}$/;
+// Ends the primary checks after a recorded failure; never carries data.
+const SMOKE_ABORT = Object.freeze({});
+
 /**
- * Smoke tests a newly built snapshot via clean and EICAR scans without activating it.
+ * Smoke tests a newly built snapshot without activating it: boots it as the
+ * app adapter does, then verifies source, signature hashes, clean and EICAR.
+ * Only the first failing step and a provider-error shape are recorded.
  */
-async function smokeTestSnapshot(config, sdk, snapshotId) {
+async function smokeTestSnapshot(config, sdk, snapshotId, expected = {}) {
   const result = {
+    signatures: "untested",
     clean_sample: "untested",
     eicar_sample: "untested",
     cleanup: "not_requested",
   };
+  const classes = { APIError: sdk.APIError, StreamError: sdk.StreamError };
   let sandbox;
-  let failed = false;
-  try {
-    sandbox = await sdk.Sandbox.create({
-      ...credentialsFor(config),
-      snapshotId,
-      region: config.region,
-      timeout: 120_000,
-      networkPolicy: "deny-all",
-    });
-    await sandbox.writeFiles([
-      {
-        path: `${SCAN_DIR}/clean.csv`,
-        content: Buffer.from("region,value\nsynthetic,1\n"),
-      },
-      { path: `${SCAN_DIR}/eicar.txt`, content: EICAR },
-    ]);
-    const scan = async (file) => {
-      const r = await sandbox.runCommand({
+  let step = "smoke-create";
+  let failure = null;
+  const fail = (kind, provider = NO_PROVIDER_ERROR) => {
+    failure ??= { step, kind, ...provider };
+  };
+  const provider = async (action) => {
+    try {
+      return await action();
+    } catch (error) {
+      fail("provider_failed", classifyProviderError(error, classes));
+      throw SMOKE_ABORT;
+    }
+  };
+  const check = (ok) => {
+    if (ok) return;
+    fail("result_failed");
+    throw SMOKE_ABORT;
+  };
+  const scan = (file) =>
+    provider(() =>
+      runChecked(sandbox, {
         cmd: "clamscan",
         args: [...ADAPTER_SCAN_FLAGS, file],
         timeoutMs: 60_000,
-      });
-      return { exitCode: r.exitCode, shape: scanShape(await r.stdout(), file) };
-    };
-    const clean = await scan(`${SCAN_DIR}/clean.csv`);
-    result.clean_sample =
-      clean.exitCode === 0 && clean.shape === "ok" ? "passed" : "failed";
-    const infected = await scan(`${SCAN_DIR}/eicar.txt`);
-    result.eicar_sample =
-      infected.exitCode === 1 && infected.shape.startsWith("found:")
+      }),
+    );
+  const shape = (r, file) =>
+    typeof r?.stdout === "string" ? scanShape(r.stdout, file) : "other";
+  try {
+    sandbox = await provider(() =>
+      sdk.Sandbox.create({
+        ...credentialsFor(config),
+        source: { type: "snapshot", snapshotId },
+        region: config.region,
+        persistent: false,
+        networkPolicy: "deny-all",
+        timeout: 120_000,
+        resources: { vcpus: 1 },
+        signal: AbortSignal.timeout(SMOKE_CREATE_TIMEOUT_MS),
+      }),
+    );
+    step = "smoke-source";
+    check(sandbox?.sourceSnapshotId === snapshotId);
+    step = "smoke-signatures";
+    if (
+      !SHA256.test(expected.mainSha256 ?? "") ||
+      !SHA256.test(expected.dailySha256 ?? "")
+    ) {
+      result.signatures = "failed";
+      check(false);
+    }
+    const signatures = await provider(() =>
+      runChecked(
+        sandbox,
+        signatureCheck(config, {
+          mainSha256: expected.mainSha256,
+          dailySha256: expected.dailySha256,
+          maxAgeHours: expected.maxAgeHours ?? 48,
+        }),
+      ),
+    );
+    result.signatures =
+      typeof signatures?.stdout === "string" && signaturesOk(signatures)
         ? "passed"
         : "failed";
-    failed =
-      result.clean_sample !== "passed" || result.eicar_sample !== "passed";
-  } catch {
-    failed = true;
-  } finally {
-    if (sandbox) {
-      try {
-        await sandbox.delete({
-          deleteOrphanSnapshots: false,
-          signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
-        });
-        result.cleanup = "passed";
-      } catch {
+    check(result.signatures === "passed");
+    step = "smoke-write";
+    await provider(() =>
+      sandbox.writeFiles([
+        {
+          path: `${SCAN_DIR}/clean.csv`,
+          content: Buffer.from("region,value\nsynthetic,1\n"),
+        },
+        { path: `${SCAN_DIR}/eicar.txt`, content: EICAR },
+      ]),
+    );
+    step = "smoke-scan-clean";
+    const clean = await scan(`${SCAN_DIR}/clean.csv`);
+    result.clean_sample =
+      clean?.exitCode === 0 && shape(clean, `${SCAN_DIR}/clean.csv`) === "ok"
+        ? "passed"
+        : "failed";
+    check(result.clean_sample === "passed");
+    step = "smoke-scan-eicar";
+    const infected = await scan(`${SCAN_DIR}/eicar.txt`);
+    result.eicar_sample =
+      infected?.exitCode === 1 &&
+      shape(infected, `${SCAN_DIR}/eicar.txt`).startsWith("found:")
+        ? "passed"
+        : "failed";
+    check(result.eicar_sample === "passed");
+  } catch (error) {
+    if (error !== SMOKE_ABORT) fail("unknown");
+  }
+  if (sandbox) {
+    step = "smoke-cleanup";
+    try {
+      // Scan VMs use true; `baseSnapshotSurvived` proved it spares the source.
+      await sandbox.delete({
+        deleteOrphanSnapshots: true,
+        signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
+      });
+      // The builder confirmed the candidate; a later loss is what this catches.
+      const stored = await sdk.Snapshot.get({
+        ...credentialsFor(config),
+        snapshotId,
+        signal: AbortSignal.timeout(CONTROL_TIMEOUT_MS),
+      });
+      if (stored?.status === "created") result.cleanup = "passed";
+      else {
         result.cleanup = "failed";
-        failed = true;
+        fail("result_failed");
       }
+    } catch (error) {
+      result.cleanup = "failed";
+      fail("provider_failed", classifyProviderError(error, classes));
     }
   }
-  if (failed) {
+  if (failure) {
     const error = new Error("candidate_smoke_failed");
     error.smokeTest = result;
+    error.smokeFailure = failure;
     throw error;
   }
   return result;
+}
+
+// Allowlisted projection: values are source-owned, never provider text.
+function projectSmokeFailure(error) {
+  const state = error?.smokeFailure;
+  return {
+    step: SMOKE_STEPS.has(state?.step) ? state.step : "unknown",
+    kind: SMOKE_KINDS.has(state?.kind) ? state.kind : "unknown",
+    provider_error: state?.provider_error ?? null,
+    provider_status: state?.provider_status ?? null,
+    provider_code: state?.provider_code ?? null,
+  };
 }
 
 /** Candidate preparation only. Every snapshot is retained, including failed candidates. */
@@ -311,6 +421,11 @@ async function rebuildCadence(config, sdk, options = {}) {
         config,
         sdk,
         summary.snapshotId,
+        {
+          mainSha256: summary.main.sha256,
+          dailySha256: summary.daily.sha256,
+          maxAgeHours: opts.maxAgeHours,
+        },
       );
       if (envPath) {
         stage = "configuration_export";
@@ -332,7 +447,10 @@ async function rebuildCadence(config, sdk, options = {}) {
         error,
         receipt.new_snapshot_id,
       );
-    if (stage === "smoke") receipt.smoke_test = error.smokeTest ?? null;
+    if (stage === "smoke") {
+      receipt.smoke_test = error.smokeTest ?? null;
+      receipt.smoke_failure = projectSmokeFailure(error);
+    }
   }
   if (receiptPath) {
     try {
@@ -414,6 +532,7 @@ module.exports = {
   writeReceipt,
   evaluateCadence,
   smokeTestSnapshot,
+  projectSmokeFailure,
   rebuildCadence,
   main,
 };

@@ -13295,3 +13295,82 @@ applied: the 48 h policy reads the `daily.cvd` build time, so the candidate's
 signature window ends **no later than** about `2026-10-20T01:00Z`. Wording
 fixes were also applied: owner-derived conclusions are framed as readings, and
 "before any scan result" replaces "before any scan".
+
+## Prompt 390 — scanner smoke-source fix (2026-10-18)
+
+Stage A of Prompt 390, local only. Baseline `c8e80cf`.
+
+### Cause found in source
+
+`smokeTestSnapshot` (`scripts/vercel/rebuild-scanner-cadence.js`) created the
+smoke VM with a top-level `snapshotId`. SDK 3.8.0 accepts a snapshot only as
+`source: { type: "snapshot", snapshotId }`. `git log -L` showed the function
+unchanged since `2d5e449`/`2faafcb`, so the smoke stage has never passed live.
+The reading (from source, not a hosted measurement) is that Prompt 389 stage C's
+smoke VM booted the default image, with no ClamAV and no `/var/lib/clamav`. A
+later call then threw, giving `untested` + `cleanup: "passed"`. The VM was also
+persistent by default; no residue resulted (Prompt 389 post-run listing).
+
+### What changed
+
+- Smoke create matches `probe-platform.js` `sandboxRunner` and
+  `vercel-sandbox-scanner.adapter.ts`: snapshot `source`, `persistent: false`,
+  `deny-all`, 120 s session, 1 vCPU. Its create `signal` is 60 s, matching the
+  adapter's `CREATE_TIMEOUT_MS` (the 30 s control deadline differs, and the
+  prompt said to use the adapter's value).
+- Checks, in order, stopping at the first failure: `sourceSnapshotId` equal to
+  the candidate; the probe's signature check against the builder's
+  `main_sha256`/`daily_sha256` and `--max-age-hours`; then the clean and EICAR
+  scans. Cleanup is `delete({ deleteOrphanSnapshots: true })` (no `stop()`;
+  scan VMs use `true`, only the builder `false`), then a read-only
+  `Snapshot.get` of the candidate that must report `created`.
+- `smoke_test.signatures` (first key). `smoke_failure` appears only on
+  `candidate_smoke_failed` receipts: the first failing step (`smoke-create`,
+  `-source`, `-signatures`, `-write`, `-scan-clean`, `-scan-eicar`,
+  `-cleanup`, or `unknown`), `kind` (`provider_failed`, `result_failed` or
+  `unknown`), and the Prompt 389 provider fields via `classifyProviderError`,
+  with SDK classes passed explicitly. It never reads message, stack, body,
+  cause, headers or stdout bodies.
+- `probe-platform.js`: `signatureCheck(config, { dailySha256 })` override;
+  `signatureCheck` and `runChecked` exported. Existing callers unchanged.
+- `prepare-scanner-handoff.js` also requires `smoke_test.signatures:
+  "passed"`. This is stricter: an older success receipt without the key is
+  rejected. No such receipt exists, since none had ever passed smoke.
+- Spec fakes: `Sandbox.create` throws `TypeError("unknown create parameter:
+  snapshotId")` on a top-level `snapshotId`. Probes are classified by
+  `source.type`, return `sourceSnapshotId`, answer the signature check, and
+  log deletes as `probe-delete:<flag>`, so `retained()` still forbids `true`
+  on the builder. New tests: the exact create parameters, the hashes passed to
+  the signature check, a ten-case failure table with real SDK
+  `APIError`/`StreamError` classes, a canary test across receipt, console and
+  `error.stack`, no `smoke_failure` on non-smoke receipts, and the
+  `signatureCheck` override.
+- Regression proof: temporarily reverting the create to a top-level
+  `snapshotId` made `success boots from the snapshot source and handoff
+  accepts it` fail (`ℹ pass 0`, `ℹ fail 1`). The revert was restored from a
+  copy and is not committed.
+
+### Checks (Node `v24.21.0` via `/tmp/acres-node24`; `npm exec -- node --version` → `v24.21.0`)
+
+- `node --test` on the four scanner specs → `tests 320`, `pass 320`, `fail 0`.
+- `npm run vercel:probe-test` → `tests 326`, `pass 326`, `fail 0`.
+- `npm run lint`, `npm run typecheck` → exit 0.
+- `rebuild-scanner-cadence.js --help` → usage, exit 0; `--dry-run` →
+  simulation receipt (`smoke_test: null`, no `smoke_failure`), exit 0.
+- `git diff --check` clean; changed scripts pass `prettier --check`.
+- `npm run build` skipped: no workspace source changed.
+
+### Review
+
+Independent review against §A found no critical or important issues and
+re-ran the specs (316/316 before the follow-up tests). Applied: tests for the
+`unknown` fallbacks (`projectSmokeFailure({})`, an allowlist-rejected state,
+a throwing `sourceSnapshotId` getter → `smoke-source`/`unknown`), for the
+invalid-hash guard (no signature command sent), for a create `TimeoutError`
+(→ `timeout`), and for a `StreamError` whose canary code is dropped. Two
+runbook limits were added: orphan deletion is asynchronous, so the post-delete
+`Snapshot.get` cannot prove a later sweep spared the candidate
+(`baseSnapshotSurvived` remains that evidence); and `signatures: "passed"`
+means "within the cadence `--max-age-hours` window". Not changed:
+`runChecked` calling `stdout()` unguarded. SDK 3.8.0 `CommandFinished` always
+provides it, and the helper is shared with the hosted-proven probe.

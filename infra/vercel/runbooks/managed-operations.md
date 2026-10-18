@@ -179,8 +179,9 @@ fails closed as `scanner_unavailable` when scanning cannot proceed.
 
 Live preparation builds without `--replace`, smoke-tests clean/EICAR samples and
 optionally creates a new candidate env file. All previous and candidate snapshots
-are retained on success and failure. Builder/probe sandbox cleanup uses
-`deleteOrphanSnapshots: false`; a cleanup failure cannot certify preparation.
+are retained on success and failure. Builder cleanup uses
+`deleteOrphanSnapshots: false`; the smoke VM, like every scan VM, uses `true`
+(see Prompt 390 below). A cleanup failure cannot certify preparation.
 `--skip-prune` is a deprecated no-op. The standalone builder's `--replace` API
 still deletes snapshots and must not be used for this lifecycle.
 
@@ -242,8 +243,47 @@ gives exact snapshot bytes to cross-check Snapshot Storage. `env pull` writes
 `[SENSITIVE]` placeholders for sensitive variables; the producer needs only
 `VERCEL_OIDC_TOKEN`. A `candidate_smoke_failed` receipt with both samples
 `untested` and `cleanup: "passed"` means the smoke sandbox existed and the
-failure came before any scan result. The smoke step does not yet classify
-that error. See [the record](../../../docs/operations.md#stage-c--the-single-confirmed-rebuild-2026-10-18).
+failure came before any scan result. See [the record](../../../docs/operations.md#stage-c--the-single-confirmed-rebuild-2026-10-18).
+
+Prompt 390 corrects the smoke stage. Through Prompt 389 it created its VM with
+a top-level `snapshotId`, which SDK 3.8.0 does not accept as a create parameter
+(the snapshot source is `source: { type: "snapshot", snapshotId }`). The
+reading, not a hosted measurement, is that it booted the default image; no
+receipt has ever passed smoke. The smoke now boots exactly as the app adapter
+does: snapshot `source`, `persistent: false`, `deny-all`, 120 s session,
+1 vCPU, 60 s create deadline. In order it requires `sourceSnapshotId` to equal
+the candidate, then the adapter's signature check against the receipt's
+`main_sha256`/`daily_sha256` and `--max-age-hours`, then the clean and EICAR
+scans. It stops at the first failure. Cleanup is `delete({
+deleteOrphanSnapshots: true })` (no `stop()`), then a read-only `Snapshot.get`
+of the candidate that must report `created`.
+
+`smoke_test` is now `signatures`, `clean_sample`, `eicar_sample` (each
+`untested`, `passed` or `failed`) and `cleanup` (`not_requested`, `passed` or
+`failed`). A `candidate_smoke_failed` receipt also carries `smoke_failure`:
+
+- `step`: the first failing step, one of `smoke-create`, `smoke-source`,
+  `smoke-signatures`, `smoke-write`, `smoke-scan-clean`, `smoke-scan-eicar`,
+  `smoke-cleanup`, or `unknown`;
+- `kind`: `provider_failed` (the SDK call threw), `result_failed` (it returned,
+  but with the wrong exit code, output shape, boot source, signature result or
+  post-delete status), or `unknown`;
+- `provider_error`, `provider_status`, `provider_code`: as in `build_failure`,
+  set only for `provider_failed`, otherwise `null`.
+
+A cleanup failure after a passing primary reports `smoke-cleanup`. After a
+primary failure it shows only as `cleanup: "failed"`, and `step` keeps the
+primary step. Reading guide: `smoke-source` means the VM booted from the wrong
+source; `result_failed` at `smoke-scan-*` means the candidate booted but
+scanned wrongly. Two limits: `deleteOrphanSnapshots: true` deletes orphans
+asynchronously (SDK `delete` docs), so the immediate `Snapshot.get` proves the
+candidate exists right after delete, not that a later orphan sweep spared it.
+That evidence remains the probe's `baseSnapshotSurvived` gate. And
+`signatures: "passed"` uses the cadence `--max-age-hours` (default 48) as the
+`daily.cvd` age bound, so it means "within the cadence window", nothing
+stricter. These fields read the failure's shape. They never certify
+cause, success or cleanup. Success, skip, simulation, build-failure and
+export-failure receipts carry no `smoke_failure`. See [the record](../../../docs/operations.md#prompt-390--scanner-smoke-source-fix-2026-10-18).
 
 ### 5.2 Workflow and handoff
 
@@ -295,8 +335,10 @@ ambiguous candidates must be reconciled manually, never automatically deleted.
 New preparation receipts include `schema_version: 1` and the actual preview
 team/project/region. Simulation uses `target: null`. Legacy receipts without
 version/target are rejected; prepare a new candidate with this producer rather
-than asserting a legacy target. A successful live receipt, all three passing
-smoke/cleanup statuses and the exact Acres preview target are required.
+than asserting a legacy target. A successful live receipt, all four passing
+`smoke_test` statuses (`signatures`, `clean_sample`, `eicar_sample`, `cleanup`)
+and the exact Acres preview target are required. Since Prompt 390, a receipt
+without `signatures` is rejected; none had ever passed smoke.
 
 After preparation, create a fresh local bundle (no credentials or SDK required):
 

@@ -32,6 +32,8 @@ function fakeSdk({
   failEicar = false,
   cleanShape = "ok",
   eicarShape = "found:Eicar-Test-Signature",
+  sourceMismatch = false,
+  failSignatures = false,
 } = {}) {
   const events = [];
   const creates = [];
@@ -41,15 +43,23 @@ function fakeSdk({
   const sdk = {
     Sandbox: {
       async create(options) {
+        // SDK 3.8.0 has no top-level snapshotId; the old shape must never pass.
+        if (Object.hasOwn(options, "snapshotId"))
+          throw new TypeError("unknown create parameter: snapshotId");
         creates.push(options);
-        const isBuilder = !options.snapshotId;
-        const targetSnapshotId = options.snapshotId;
+        const isBuilder = options.source?.type !== "snapshot";
+        const targetSnapshotId = options.source?.snapshotId;
         events.push(
           `create:${isBuilder ? "builder" : `probe:${targetSnapshotId}`}`,
         );
 
         return {
           name: isBuilder ? "sbx-builder" : "sbx-probe",
+          sourceSnapshotId: isBuilder
+            ? undefined
+            : sourceMismatch
+              ? "snap_other"
+              : targetSnapshotId,
           async runCommand(cmd) {
             events.push(`run:${cmd.cmd}:${cmd.args?.[0] ?? ""}`);
             if (isBuilder) {
@@ -118,6 +128,14 @@ function fakeSdk({
               }
             }
 
+            if (cmd.cmd === "node") {
+              events.push("smoke:signatures");
+              return {
+                exitCode: failSignatures ? 2 : 0,
+                stdout: async () => (failSignatures ? "" : "signatures-ok\n"),
+              };
+            }
+
             return { exitCode: 0, stdout: async () => "acres-step-ok\n" };
           },
           async writeFiles(files) {
@@ -143,7 +161,10 @@ function fakeSdk({
             events.push("stop");
           },
           async delete(opts) {
-            events.push(`delete:${opts?.deleteOrphanSnapshots ?? false}`);
+            // Smoke VMs delete with true; `retained` forbids true on the builder.
+            events.push(
+              `${isBuilder ? "delete" : "probe-delete"}:${opts?.deleteOrphanSnapshots ?? false}`,
+            );
             if (failDelete) throw new Error("delete failure");
           },
         };
@@ -731,7 +752,11 @@ test("live export creates exactly three variables, mode 0600, and retains both s
     assert.equal(fs.statSync(env).mode & 0o777, 0o600);
     assert.equal(r.configuration_export, "exported");
     assert.equal(r.activation_status, "not_performed");
-    assert.equal(fake.events.filter((e) => e === "delete:false").length, 2);
+    assert.equal(fake.events.filter((e) => e === "delete:false").length, 1);
+    assert.equal(
+      fake.events.filter((e) => e === "probe-delete:true").length,
+      1,
+    );
     retained(fake);
   }));
 
@@ -793,9 +818,9 @@ test("probe cleanup failure fails preparation", async () => {
   const create = fake.sdk.Sandbox.create;
   fake.sdk.Sandbox.create = async (params) => {
     const sandbox = await create(params);
-    if (params.snapshotId)
+    if (params.source?.type === "snapshot")
       sandbox.delete = async (opts) => {
-        assert.equal(opts.deleteOrphanSnapshots, false);
+        assert.equal(opts.deleteOrphanSnapshots, true);
         throw new Error("private-provider-canary");
       };
     return sandbox;
@@ -1062,7 +1087,7 @@ test("cleanup failure retains accurate passing scan evidence", async () => {
   const create = fake.sdk.Sandbox.create;
   fake.sdk.Sandbox.create = async (params) => {
     const sandbox = await create(params);
-    if (params.snapshotId)
+    if (params.source?.type === "snapshot")
       sandbox.delete = async () => {
         throw new Error("cleanup-canary");
       };
@@ -1072,6 +1097,7 @@ test("cleanup failure retains accurate passing scan evidence", async () => {
     rebuildCadence(config, fake.sdk, { force: true }),
     (err) => {
       assert.deepEqual(err.receipt.smoke_test, {
+        signatures: "passed",
         clean_sample: "passed",
         eicar_sample: "passed",
         cleanup: "failed",
@@ -1377,7 +1403,7 @@ for (const scenario of [
       fake.sdk.Sandbox.create = async (params) => {
         if (scenario.create) throw providerFailure();
         const builder = await create(params);
-        if (params.snapshotId) return builder;
+        if (params.source?.type === "snapshot") return builder;
         if (scenario.command)
           builder.runCommand = async () => {
             if (scenario.command === "reject") throw providerFailure();
@@ -1615,4 +1641,457 @@ test("live mode needs 75 minutes of OIDC lifetime; dry-run needs none", async ()
     console.log = log;
   }
   assert.equal(JSON.parse(lines.at(-1)).execution_mode, "simulation");
+});
+
+// Prompt 390: the smoke boots the candidate as the app adapter does and
+// records only the first failing step and a provider-error shape.
+describe("Candidate smoke source and diagnostics", () => {
+  const { APIError, StreamError } = require("@vercel/sandbox");
+  const { validateReceipt, TARGET } = require("./prepare-scanner-handoff");
+  const CANARY = "credential-canary https://private.invalid/key";
+  const CANARY_PATTERN = /credential-canary|private\.invalid|session-canary/;
+  const apiError = (status, code) =>
+    new APIError(
+      { status, statusText: CANARY, headers: { authorization: CANARY } },
+      {
+        message: CANARY,
+        text: CANARY,
+        json: { error: { code, message: CANARY } },
+      },
+    );
+  const isProbe = (params) => params.source?.type === "snapshot";
+  const UNTESTED = {
+    signatures: "untested",
+    clean_sample: "untested",
+    eicar_sample: "untested",
+    cleanup: "passed",
+  };
+  const failure = (step, kind, provider = [null, null, null]) => ({
+    step,
+    kind,
+    provider_error: provider[0],
+    provider_status: provider[1],
+    provider_code: provider[2],
+  });
+
+  function smokeFake({ fakeOptions = {}, create, sandbox, afterDelete } = {}) {
+    const fake = fakeSdk({
+      storedSnapshots: new Map([
+        ["snap_old", { snapshotId: "snap_old", status: "created" }],
+      ]),
+      ...fakeOptions,
+    });
+    Object.assign(fake.sdk, { APIError, StreamError });
+    const original = fake.sdk.Sandbox.create;
+    fake.sdk.Sandbox.create = async (params) => {
+      if (isProbe(params) && create) throw create();
+      const created = await original(params);
+      if (isProbe(params)) sandbox?.(created);
+      return created;
+    };
+    if (afterDelete) {
+      const get = fake.sdk.Snapshot.get;
+      fake.sdk.Snapshot.get = async (params) =>
+        fake.events.some((e) => e.startsWith("probe-delete:"))
+          ? afterDelete(params)
+          : get(params);
+    }
+    return fake;
+  }
+  const probeDeleteThrows = (created) => {
+    created.delete = async (opts) => {
+      assert.equal(opts.deleteOrphanSnapshots, true);
+      throw new Error(CANARY);
+    };
+  };
+
+  test("success boots from the snapshot source and handoff accepts it", async () => {
+    const fake = smokeFake();
+    const receipt = await rebuildCadence(
+      { ...config, teamId: TARGET.team_id, projectId: TARGET.project_id },
+      fake.sdk,
+      { force: true, currentSnapshotId: "snap_old" },
+    );
+    assert.deepEqual(Object.keys(receipt.smoke_test), [
+      "signatures",
+      "clean_sample",
+      "eicar_sample",
+      "cleanup",
+    ]);
+    assert.ok(Object.values(receipt.smoke_test).every((v) => v === "passed"));
+    assert.equal(Object.hasOwn(receipt, "smoke_failure"), false);
+    const probe = fake.creates.filter(isProbe);
+    assert.equal(probe.length, 1);
+    const { teamId, projectId, token, signal, ...shape } = probe[0];
+    assert.ok(signal instanceof AbortSignal);
+    assert.deepEqual(shape, {
+      source: { type: "snapshot", snapshotId: "snap_new" },
+      region: "iad1",
+      persistent: false,
+      networkPolicy: "deny-all",
+      timeout: 120000,
+      resources: { vcpus: 1 },
+    });
+    assert.ok(fake.events.includes("probe-delete:true"));
+    assert.ok(
+      fake.events.indexOf("smoke:signatures") <
+        fake.events.indexOf("smoke:clean"),
+    );
+    assert.equal(
+      fake.events.at(-1),
+      "get:snap_new",
+      "post-delete confirmation",
+    );
+    assert.equal(
+      validateReceipt(receipt, Date.now()).candidate_snapshot_id,
+      "snap_new",
+    );
+    retained(fake);
+  });
+
+  test("the signature check receives the builder's exported hashes", async () => {
+    const fake = smokeFake();
+    const commands = [];
+    const original = fake.sdk.Sandbox.create;
+    fake.sdk.Sandbox.create = async (params) => {
+      const created = await original(params);
+      if (isProbe(params)) {
+        const run = created.runCommand;
+        created.runCommand = async (cmd) => {
+          commands.push(cmd);
+          return run(cmd);
+        };
+      }
+      return created;
+    };
+    await rebuildCadence(config, fake.sdk, { force: true, maxAgeHours: 24 });
+    const check = commands.find((c) => c.cmd === "node");
+    assert.deepEqual(check.args.slice(2), [
+      "d".repeat(64),
+      "e".repeat(64),
+      "24",
+    ]);
+  });
+
+  for (const scenario of [
+    {
+      name: "create APIError 429",
+      create: () => apiError(429, "rate_limited"),
+      smoke: { ...UNTESTED, cleanup: "not_requested" },
+      failure: failure("smoke-create", "provider_failed", [
+        "api_error",
+        429,
+        "rate_limited",
+      ]),
+    },
+    {
+      name: "source mismatch",
+      fakeOptions: { sourceMismatch: true },
+      smoke: UNTESTED,
+      failure: failure("smoke-source", "result_failed"),
+    },
+    {
+      name: "signature check without signatures-ok",
+      fakeOptions: { failSignatures: true },
+      smoke: { ...UNTESTED, signatures: "failed" },
+      failure: failure("smoke-signatures", "result_failed"),
+    },
+    {
+      name: "writeFiles StreamError",
+      sandbox: (created) => {
+        created.writeFiles = async () => {
+          throw new StreamError("sandbox_stopped", CANARY, "session-canary");
+        };
+      },
+      smoke: { ...UNTESTED, signatures: "passed" },
+      failure: failure("smoke-write", "provider_failed", [
+        "stream_error",
+        null,
+        "sandbox_stopped",
+      ]),
+    },
+    {
+      name: "clean scan transport rejection",
+      sandbox: (created) => {
+        const run = created.runCommand;
+        created.runCommand = async (cmd) => {
+          if (cmd.cmd === "clamscan" && cmd.args.at(-1).endsWith("clean.csv"))
+            throw new TypeError("fetch failed");
+          return run(cmd);
+        };
+      },
+      smoke: { ...UNTESTED, signatures: "passed" },
+      failure: failure("smoke-scan-clean", "provider_failed", [
+        "transport",
+        null,
+        null,
+      ]),
+    },
+    {
+      name: "clean scan exit 2",
+      fakeOptions: { failClean: true },
+      smoke: { ...UNTESTED, signatures: "passed", clean_sample: "failed" },
+      failure: failure("smoke-scan-clean", "result_failed"),
+    },
+    {
+      name: "EICAR scan reports OK",
+      fakeOptions: { failEicar: true },
+      smoke: {
+        signatures: "passed",
+        clean_sample: "passed",
+        eicar_sample: "failed",
+        cleanup: "passed",
+      },
+      failure: failure("smoke-scan-eicar", "result_failed"),
+    },
+    {
+      name: "delete throws after a passing primary",
+      sandbox: probeDeleteThrows,
+      smoke: {
+        signatures: "passed",
+        clean_sample: "passed",
+        eicar_sample: "passed",
+        cleanup: "failed",
+      },
+      failure: failure("smoke-cleanup", "provider_failed", [
+        "other",
+        null,
+        null,
+      ]),
+    },
+    {
+      name: "post-delete candidate status deleted",
+      afterDelete: async ({ snapshotId }) => ({
+        snapshotId,
+        status: "deleted",
+      }),
+      smoke: {
+        signatures: "passed",
+        clean_sample: "passed",
+        eicar_sample: "passed",
+        cleanup: "failed",
+      },
+      failure: failure("smoke-cleanup", "result_failed"),
+    },
+    {
+      name: "EICAR failure then delete throws keeps the primary step",
+      fakeOptions: { failEicar: true },
+      sandbox: probeDeleteThrows,
+      smoke: {
+        signatures: "passed",
+        clean_sample: "passed",
+        eicar_sample: "failed",
+        cleanup: "failed",
+      },
+      failure: failure("smoke-scan-eicar", "result_failed"),
+    },
+  ]) {
+    test(`smoke failure: ${scenario.name}`, () =>
+      temporary(async (dir) => {
+        const fake = smokeFake(scenario);
+        const output = path.join(dir, "receipt.json");
+        let thrown;
+        await assert.rejects(
+          rebuildCadence(
+            { ...config, teamId: TARGET.team_id, projectId: TARGET.project_id },
+            fake.sdk,
+            { force: true, currentSnapshotId: "snap_old", output },
+          ),
+          (error) => {
+            thrown = error;
+            return error.message === "candidate_smoke_failed";
+          },
+        );
+        const receipt = JSON.parse(fs.readFileSync(output, "utf8"));
+        assert.deepEqual(receipt, thrown.receipt);
+        assert.equal(receipt.error, "candidate_smoke_failed");
+        assert.deepEqual(receipt.smoke_failure, scenario.failure);
+        assert.deepEqual(
+          Object.keys(receipt.smoke_failure),
+          Object.keys(scenario.failure),
+        );
+        assert.deepEqual(receipt.smoke_test, scenario.smoke);
+        assert.equal(receipt.new_snapshot_id, "snap_new");
+        assert.equal(receipt.previous_snapshot_id, "snap_old");
+        assert.equal(Object.hasOwn(receipt, "build_failure"), false);
+        assert.doesNotMatch(JSON.stringify(receipt), CANARY_PATTERN);
+        assert.doesNotMatch(String(thrown.stack), CANARY_PATTERN);
+        assert.throws(
+          () => validateReceipt(receipt, Date.now()),
+          /handoff_receipt_invalid/,
+        );
+        retained(fake);
+      }));
+  }
+
+  test("provider and scan-output canaries never reach the receipt or console", async () => {
+    const { main } = require("./rebuild-scanner-cadence");
+    const env = {
+      ACRES_VERCEL_PROBE: "isolated-synthetic-preview",
+      VERCEL_ENV: "preview",
+      VERCEL_TEAM_ID: "team-test",
+      VERCEL_PROJECT_ID: "prj-test",
+      ACRES_VERCEL_PROBE_REGION: "iad1",
+      VERCEL_TOKEN: "test-token",
+    };
+    const scanCanary = (created) => {
+      const run = created.runCommand;
+      created.runCommand = async (cmd) => {
+        if (cmd.cmd === "clamscan" && cmd.args.at(-1).endsWith("eicar.txt"))
+          return { exitCode: 1, stdout: async () => `${CANARY} FOUND?\n` };
+        return run(cmd);
+      };
+    };
+    for (const options of [
+      { create: () => apiError(429, "rate_limited") },
+      { sandbox: scanCanary },
+    ]) {
+      const fake = smokeFake(options);
+      const lines = [];
+      const { log, error: err } = console;
+      console.log = (...a) => lines.push(a.join(" "));
+      console.error = (...a) => lines.push(a.join(" "));
+      let thrown;
+      try {
+        await main(["--force"], env, fake.sdk).catch((e) => {
+          thrown = e;
+        });
+      } finally {
+        console.log = log;
+        console.error = err;
+      }
+      assert.equal(thrown.message, "candidate_smoke_failed");
+      const surface = [
+        lines.join("\n"),
+        JSON.stringify(thrown.receipt),
+        String(thrown.stack),
+      ].join("\n");
+      assert.doesNotMatch(surface, CANARY_PATTERN);
+      assert.match(
+        thrown.receipt.smoke_failure.step,
+        /^smoke-(create|scan-eicar)$/,
+      );
+    }
+  });
+
+  test("unclassified throws and missing state fall back to unknown", async () => {
+    const { projectSmokeFailure } = require("./rebuild-scanner-cadence");
+    assert.deepEqual(projectSmokeFailure({}), failure("unknown", "unknown"));
+    assert.deepEqual(
+      projectSmokeFailure({ smokeFailure: { step: CANARY, kind: CANARY } }),
+      failure("unknown", "unknown"),
+    );
+    // A throw outside a provider call keeps the current step, kind unknown.
+    const fake = smokeFake({
+      sandbox: (created) =>
+        Object.defineProperty(created, "sourceSnapshotId", {
+          get() {
+            throw new Error(CANARY);
+          },
+        }),
+    });
+    await assert.rejects(
+      rebuildCadence(config, fake.sdk, { force: true }),
+      (error) => {
+        assert.deepEqual(
+          error.receipt.smoke_failure,
+          failure("smoke-source", "unknown"),
+        );
+        assert.equal(error.receipt.smoke_test.cleanup, "passed");
+        assert.doesNotMatch(JSON.stringify(error.receipt), CANARY_PATTERN);
+        return true;
+      },
+    );
+  });
+
+  test("invalid expected hashes fail signatures without running the check", async () => {
+    const { smokeTestSnapshot } = require("./rebuild-scanner-cadence");
+    for (const expected of [
+      {},
+      { mainSha256: "d".repeat(64), dailySha256: "E".repeat(64) },
+    ]) {
+      const fake = smokeFake();
+      await assert.rejects(
+        smokeTestSnapshot(config, fake.sdk, "snap_old", expected),
+        (error) => {
+          assert.deepEqual(
+            error.smokeFailure,
+            failure("smoke-signatures", "result_failed"),
+          );
+          assert.equal(error.smokeTest.signatures, "failed");
+          assert.equal(error.smokeTest.cleanup, "passed");
+          return true;
+        },
+      );
+      assert.equal(fake.events.includes("smoke:signatures"), false);
+    }
+  });
+
+  for (const [name, thrown, provider] of [
+    [
+      "create timeout",
+      () => new DOMException(CANARY, "TimeoutError"),
+      ["timeout", null, null],
+    ],
+    [
+      "stream error with an unsafe code",
+      () => new StreamError(CANARY, CANARY, "session-canary"),
+      ["stream_error", null, null],
+    ],
+  ])
+    test(`smoke create classification: ${name}`, async () => {
+      const fake = smokeFake({ create: thrown });
+      await assert.rejects(
+        rebuildCadence(config, fake.sdk, { force: true }),
+        (error) => {
+          assert.deepEqual(
+            error.receipt.smoke_failure,
+            failure("smoke-create", "provider_failed", provider),
+          );
+          assert.doesNotMatch(JSON.stringify(error.receipt), CANARY_PATTERN);
+          return true;
+        },
+      );
+    });
+
+  test("non-smoke receipts carry no smoke_failure", () =>
+    temporary(async (dir) => {
+      const fake = fakeSdk();
+      const receipts = [
+        await rebuildCadence(config, fake.sdk, { force: true }),
+        await rebuildCadence(config, fake.sdk, {
+          currentSnapshotId: "snap_new",
+        }),
+        await rebuildCadence({}, undefined, { dryRun: true }),
+      ];
+      const failing = fakeSdk({ failSnapshot: true });
+      await rebuildCadence(config, failing.sdk, { force: true }).catch((e) =>
+        receipts.push(e.receipt),
+      );
+      const env = path.join(dir, "taken.env");
+      const exporter = fakeSdk();
+      // An env destination created during cloud work fails the export step.
+      const original = exporter.sdk.Snapshot.get;
+      exporter.sdk.Snapshot.get = async (params) => {
+        if (!fs.existsSync(env))
+          fs.writeFileSync(env, "TAKEN=1\n", { mode: 0o600 });
+        return original(params);
+      };
+      await rebuildCadence(config, exporter.sdk, {
+        force: true,
+        writeEnv: env,
+      }).catch((e) => receipts.push(e.receipt));
+      assert.deepEqual(
+        receipts.map((r) => r.error ?? r.status),
+        [
+          "success",
+          "skipped",
+          "success",
+          "candidate_build_failed",
+          "candidate_configuration_export_failed",
+        ],
+      );
+      for (const receipt of receipts)
+        assert.equal(Object.hasOwn(receipt, "smoke_failure"), false);
+    }));
 });

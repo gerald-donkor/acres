@@ -9,6 +9,8 @@ const {
   SANDBOX_BUDGET,
   readBounded,
   credentialsFor,
+  signatureCheck,
+  SIGNATURE_CHECK,
 } = require("./probe-platform");
 
 const base = {
@@ -1041,4 +1043,31 @@ test("blob-browser fails a reject case whose write CORS hid from the page", asyn
   assert.equal(result.cases.contentTypeEnforced.passed, false);
   assert.equal(result.gatePassed, false);
   assert.equal(fake.store.size, 0);
+});
+
+test("signatureCheck accepts a daily hash override without changing defaults", () => {
+  const config = {
+    mainSha256: "b".repeat(64),
+    dailySha256: "c".repeat(64),
+    maxAgeHours: 24,
+  };
+  const args = (overrides) => signatureCheck(config, overrides).args;
+  assert.deepEqual(args(), [
+    "-e",
+    SIGNATURE_CHECK,
+    "b".repeat(64),
+    "c".repeat(64),
+    "24",
+  ]);
+  assert.deepEqual(
+    args({ mainSha256: "d".repeat(64), dailySha256: "e".repeat(64) }).slice(2),
+    ["d".repeat(64), "e".repeat(64), "24"],
+  );
+  assert.deepEqual(args({ maxAgeHours: 48, dir: "/x" }).slice(2), [
+    "b".repeat(64),
+    "c".repeat(64),
+    "48",
+    "/x",
+  ]);
+  assert.equal(signatureCheck(config).timeoutMs, 30_000);
 });

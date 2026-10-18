@@ -33,6 +33,7 @@ function receipt() {
     main_sha256: "d".repeat(64),
     daily_sha256: "e".repeat(64),
     smoke_test: {
+      signatures: "passed",
       clean_sample: "passed",
       eicar_sample: "passed",
       cleanup: "passed",
@@ -136,7 +137,9 @@ const invalid = [
   ["equal ID", (r) => (r.previous_snapshot_id = r.new_snapshot_id)],
   ["invalid timestamp", (r) => (r.timestamp = "SECRET_CANARY")],
   ["future", (r) => (r.timestamp = "2099-01-01")],
-  ...["clean_sample", "eicar_sample", "cleanup"].map((k) => [
+  // `signatures` is required since Prompt 390; no earlier receipt passed smoke.
+  ["smoke signatures missing", (r) => delete r.smoke_test.signatures],
+  ...["signatures", "clean_sample", "eicar_sample", "cleanup"].map((k) => [
     `smoke ${k}`,
     (r) => (r.smoke_test[k] = "failed"),
   ]),
