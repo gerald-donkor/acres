@@ -18,7 +18,8 @@ outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
 managed outbox dispatch, Prompt 377 = shared managed API throttling, Prompt
 393 = named dashboard GraphQL operation, Prompt 394 = scanner signature
 refresh, Prompt 395 = scanner signature refresh 2, Prompt 396 = snapshot
-retirement tier 1, Prompt 397 = fresh preview deployment); each
+retirement tier 1, Prompt 397 = fresh preview deployment, Prompt 398 =
+preview image routing repair); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -2833,7 +2834,9 @@ work remain open. See [the execution record](operations.md#prompt-397--fresh-ver
 
 ## Preview image routing — Prompt 398 (2026-10-19)
 
-Local repair prepared against `58a4d39`; hosted acceptance pending. Prompt
+**Hosted image delivery restored; browser visual acceptance blocked.**
+Repair against `58a4d39`, deployed source
+`35895ec95e6d9ff893e085ee69e9bece9da5b8dd`. Prompt
 397's page/API smoke omitted image URLs: its Ready status did not establish
 working landing images. Fresh authenticated requests reproduce a 404 HTML
 `/404` response for `/_next/image` at width 1080, quality 100, while the
@@ -2892,3 +2895,57 @@ creating an in-app browser returns `Browser is not available: iab`.
 Browser visual acceptance remains blocked unless a supported browser becomes
 available. Storage accounting, scanner refresh/cadence and production
 approvals remain open.
+
+### Hosted acceptance — Prompt 398
+
+One corrected preview, from clean `main` after independent review and
+`deploy manifest ok: 656 files` (unchanged count; only `vercel.json` changed
+inside the upload scope):
+[`acres-jxqqbw7zh-dgsloxx417s-projects.vercel.app`](https://acres-jxqqbw7zh-dgsloxx417s-projects.vercel.app),
+ID `dpl_4jhnxUyNBL5zsULdPCayKtHY35kM`. API metadata binds the source SHA
+above to the fixed team/project; created `2026-10-19T13:23:27.211Z`, Ready
+`13:26:03.849Z`. Build log reports Deployment completed at
+`13:26:04.219Z`, `iad1`, basic 2 cores / 8192 MB, client Next 16.3.8,
+API `src/main.ts`, and jobs `src/vercel/jobs.function.ts`. Hosted builder
+CLI was 64.3.1; invoking local CLI was 64.5.0. Inspect reports target
+`preview`; API/deploy JSON uses `null`, with no aliases. Vercel
+Authentication was preserved; probes used authenticated CLI access.
+
+**38 HTTP probes passed**, including 29 fully decoded image responses:
+
+- Home/login/register: 200 HTML. Anonymous `/app`: 200 with streamed login
+  redirect, no error alert; this is not authenticated dashboard proof.
+  API CSRF: 200 JSON, `ok: true`, expected field names, values not printed.
+- Both actual landing CSS URLs: 200 `text/css`. Representative webpack
+  script: 200 `application/javascript`; font: 200 `font/woff2`.
+- Every landing raster asset across the existing 375/800/1280 picture
+  branches is covered: 20 distinct source files (two hero devices, twelve
+  photo variants, six logos). Fifteen direct responses returned 200
+  WebP/PNG and exactly matched tracked source bytes. Five optimized source
+  paths returned images, covering desktop hero plus four mobile photos.
+- All seven optimized requests returned 200 JPEG with curl's default
+  Accept header, then 200 WebP with a browser-style Accept header. All 29
+  direct/optimized responses were fully decoded through Sharp raw output;
+  this checks actual pixel decoding, not only signatures/metadata.
+
+| optimized hero request | old preview                     | corrected preview, default / browser Accept | decoded dimensions |
+| ---------------------- | ------------------------------- | ------------------------------------------- | ------------------ |
+| `w=1080&q=100`         | 404 HTML                        | 200 JPEG / WebP                             | 1080 × 769         |
+| `w=1080&q=75`          | 404 HTML (preparation evidence) | 200 JPEG / WebP                             | 1080 × 769         |
+| `w=750&q=100`          | not probed                      | 200 JPEG / WebP                             | 750 × 534          |
+
+The three WebP hero responses retain alpha. At requested width 1080, mobile
+photo outputs stay at their smaller source widths: cylinders 933, the other
+three 1029; heights match source aspect ratios within rounding. These are
+observed no-upscale results, not a blanket guarantee about every image type.
+No CSS, image sources, sizes, crops, typography or motion changed.
+
+**Browser limitation remains.** No supported browser was connected, and
+creating an in-app browser failed. No screenshots, browser `naturalWidth`,
+viewport source-selection execution, scrolling, network/console observation
+or visual comparison is claimed. HTTP coverage exercises all referenced
+branches; it does not establish browser layout or hydration acceptance.
+Open the exact preview URL and authenticate with Vercel if prompted to
+inspect it at 375, 800 and 1280. Storage accounting, scanner refresh/cadence,
+production launch gates and eleven sign-offs remain open. No production,
+domain/alias, environment write, scanner refresh, account/upload or push occurred.

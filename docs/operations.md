@@ -14032,6 +14032,47 @@ independently reran the focused tests: no Critical, Important or actionable
 Minor findings; ready for the authorized preview after clean commit and
 manifest gate. Feedback was checked against actual output; no fix was needed.
 
-Hosted deployment and byte-decoding acceptance are pending. Supported browser
+Hosted deployment and byte-decoding results are recorded below. Supported browser
 inventory is empty and in-app browser creation returned
 `Browser is not available: iab`; browser visual acceptance is blocked.
+
+### Hosted acceptance and final record — Prompt 398
+
+Reviewed fix committed as `35895ec`; clean `main` dry-run returned
+`deploy manifest ok: 656 files`. Exactly one preview deploy completed:
+`dpl_4jhnxUyNBL5zsULdPCayKtHY35kM`,
+[corrected preview](https://acres-jxqqbw7zh-dgsloxx417s-projects.vercel.app).
+Source SHA, fixed target, basic machine, Ready time and service builds are
+recorded in [the hosted record](vercel-deployment.md#hosted-acceptance--prompt-398).
+The provider builder was CLI 64.3.1, while local commands used 64.5.0.
+
+Actual acceptance output from restricted scratch scripts:
+
+```text
+HTTP asset and anonymous route smoke passed
+Browser Accept negotiation: all 7 optimized requests return WebP
+All 29 image responses fully decoded; dimensions verified
+15 direct assets exactly match tracked source bytes
+```
+
+All 38 requests returned 200 with expected content types. Home/login/register,
+anonymous streamed login redirect, CSRF bridge, both CSS files, representative
+JS/font, and all 20 landing source assets across responsive branches are
+covered. Optimizer probes cover hero qualities 75/100 at 1080, hero width 750,
+and the four mobile photographs; both default curl and browser-style Accept
+headers were tested. Hero WebP alpha is retained. No actual browser viewport,
+scroll/lazy loading, DOM `naturalWidth`, console/network or screenshot proof
+is available; that acceptance remains blocked by absent supported browsers.
+No deep-readiness or logged-in application journey was rerun.
+
+All responses, decoded-dimension summaries, build output/logs and identity
+metadata are restricted evidence in `/tmp/acres-preview-398/`. Storage
+accounting, hosted scanner cadence and production approvals remain open.
+No second deployment, production action, alias, provider environment write, migration,
+new account/upload, scanner refresh/deletion, paid selection or push occurred.
+
+Final independent evidence review found no Critical, Important or Minor
+issues and approved the record for commit. The reviewer verified deployment
+identity/timing, all request/decode/source counts, direct-asset byte equality,
+hero WebP alpha and record links. Final new-section formatting, secret scan
+(`secret/default scan passed`) and `git diff --check` passed.

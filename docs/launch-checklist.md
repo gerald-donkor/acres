@@ -3386,3 +3386,11 @@ Preview `dpl_BrTkKoGs8Ahyd3q1DQGEhSPCgFYE` is Ready with passing public-page,
 anonymous login-redirect and API-bridge smoke checks. No launch category is
 approved; deep readiness and authenticated journeys were not rerun.
 See [the execution record](operations.md#prompt-397--fresh-vercel-preview-2026-10-19).
+
+## Prompt 398 — preview image delivery repaired (2026-10-19)
+
+Corrected preview `dpl_4jhnxUyNBL5zsULdPCayKtHY35kM` is Ready; 38 HTTP
+probes and 29 image decodes pass, including responsive source branches and
+WebP negotiation. Browser visual acceptance remains blocked; no launch
+category is approved. See [the hosted record](vercel-deployment.md#hosted-acceptance--prompt-398).
+Storage accounting and production sign-offs remain open.

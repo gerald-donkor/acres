@@ -618,3 +618,13 @@ rg -n "(^|[^A-Za-z])Area([^A-Za-z]|$)" app components
 ```
 
 No matches. Exit 1 from `rg`, as expected when no matches are found.
+
+## Preview image delivery — Prompt 398 (2026-10-19)
+
+The Vercel Services preview previously returned HTML 404 for Next optimizer
+URLs while direct images loaded. Root deployment image metadata and a rewrite
+to Vercel's native optimizer repair delivery; marketing components, crops,
+sizes, responsive sources and styling are unchanged. Hosted checks cover all
+20 source assets and fully decode direct/optimized variants, including WebP
+with preserved hero alpha. Browser visual acceptance remains blocked by
+unavailable supported browsers. See [the hosted record](vercel-deployment.md#hosted-acceptance--prompt-398).

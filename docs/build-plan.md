@@ -4279,3 +4279,11 @@ The committed application was deployed once to the existing Vercel preview
 project; hosted public-page, login-redirect and API-bridge smoke checks passed.
 See [the hosted record](vercel-deployment.md#fresh-preview-deployment--prompt-397-2026-10-19).
 Storage accounting, scanner refresh/cadence and production exit gates remain open.
+
+## Preview image routing — Prompt 398 (2026-10-19)
+
+Deployment-root image configuration and a native optimizer rewrite restore
+optimized images on one corrected preview. Hosted MIME/decoding/dimension
+checks pass; browser visual acceptance is blocked by unavailable tooling.
+See [the hosted record](vercel-deployment.md#hosted-acceptance--prompt-398).
+Storage accounting, scanner cadence and production exit gates remain open.
