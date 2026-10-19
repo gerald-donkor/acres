@@ -18,7 +18,7 @@ outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
 managed outbox dispatch, Prompt 377 = shared managed API throttling, Prompt
 393 = named dashboard GraphQL operation, Prompt 394 = scanner signature
 refresh, Prompt 395 = scanner signature refresh 2, Prompt 396 = snapshot
-retirement tier 1); each
+retirement tier 1, Prompt 397 = fresh preview deployment); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -2775,3 +2775,58 @@ Remaining: the next refresh before about `2026-10-21T09:02Z`, tier 2
 the owner's decision on the nine leaky previews, the production plan
 decision and the eleven sign-offs. See
 [the execution record](operations.md#prompt-396--scanner-snapshot-retirement-2026-10-19).
+
+## Fresh preview deployment — Prompt 397 (2026-10-19)
+
+**Ready and smoke-checked.** One preview deployment from clean `main`,
+source `004d406167fc4aa17381929c7cbbbf60cfe7e381`:
+[`acres-qfhmdmej2-dgsloxx417s-projects.vercel.app`](https://acres-qfhmdmej2-dgsloxx417s-projects.vercel.app),
+ID `dpl_BrTkKoGs8Ahyd3q1DQGEhSPCgFYE`. Existing team/project and `iad1`
+unchanged; Node 24.21.0 locally, Vercel CLI 64.5.0. Created
+`2026-10-19T11:42:08.948Z`; build log says Deployment completed at
+`11:45:30.384Z`, and subsequent inspect reports `READY` and target `preview`.
+The deploy command's JSON represented the target as `null`; neither command
+used a production target. The build machine is `basic`, 2 cores / 8192 MB,
+plan default. Vercel Authentication remains enabled.
+
+- **Prerequisite record.** Prompt 396's retirement evidence was reviewed and
+  committed as `0629202`. Storage accounting remains unresolved: the early
+  after-reading was unchanged, and the later owner reading is outstanding.
+  No retirement, configuration write or scanner refresh was repeated.
+- **Access/configuration.** `whoami` returned `dgsloxx417`; project inspect
+  matched `prj_q9ApajZWDgdYZetnm5s5oakEjrUD` and its recorded owner. A fresh
+  preview env pull into `/tmp/acres-preview-397/preview.env` was used only
+  for inspection. Six sensitive values were unavailable as plaintext;
+  they were not needed or written back. Active snapshot matched
+  `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`, status `created`, region `iad1`,
+  expiry `2026-10-27T09:09:29.002Z`; provider and 48-hour policy matched.
+  Freshness uses Prompt 395's historical upper bound, about
+  `2026-10-21T09:02Z`, not a new scan proof.
+- **Upload gate.** `deploy --dry --target=preview` followed by
+  `npm run vercel:deploy-manifest -- --manifest <run>/dry.json` returned
+  `deploy manifest ok: 656 files`, equal to the prior recorded count.
+  No ignored credentials or outputs were admitted. Exactly one
+  `deploy --target=preview --scope dgsloxx417s-projects` completed.
+- **Services.** Hosted build log verifies the client Next build, API
+  `src/main.ts`, and jobs `src/vercel/jobs.function.ts` entrypoints.
+- **Hosted smoke (authenticated Vercel CLI, anonymous Acres session).**
+  `/`, `/login`, `/register` each returned HTTP 200.
+  `/api/v1/auth/csrf` returned HTTP 200 with `ok: true` and the expected
+  `csrfToken`/`headerName` data fields; token contents were not printed.
+  `/app` returned HTTP 200 with a streamed `NEXT_REDIRECT` to
+  `/login?returnTo=/app` (307 redirect instruction and meta refresh), no
+  `role="alert"` or HTTP error fallback marker. This matches the route's
+  unauthenticated behavior; it is not a logged-in dashboard proof.
+- **Health limitation.** API `/health` and `/health/ready` are version-neutral
+  paths excluded from the global prefix. Public requests rewrite to the
+  client, whose bridge serves only `/api/v1/*`; there is no public health
+  bridge. Readiness/database/storage checks were not claimed. The CSRF GET
+  verifies the existing client-to-API bridge. Prompt 395 retains the prior
+  clean/EICAR upload proof; no accounts, uploads or queue probes were added.
+
+Restricted response/build evidence is in `/tmp/acres-preview-397/` (0700;
+credential/response files 0600). Open the preview URL and authenticate with
+Vercel if prompted, then use the existing Acres login or register page.
+Production, domains, plan, environment values and deployment protection were
+not changed; nothing was pushed. Production approvals and scanner refresh
+work remain open. See [the execution record](operations.md#prompt-397--fresh-vercel-preview-2026-10-19).

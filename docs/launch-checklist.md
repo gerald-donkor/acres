@@ -3379,3 +3379,10 @@ were never configured, were deleted after a dependency-checked plan. The
 active snapshot, its rollback and one adopted predecessor remain. Storage accounting remains unresolved; the later dashboard reading is outstanding.
 No category is approved. See
 [the execution record](operations.md#prompt-396--scanner-snapshot-retirement-2026-10-19).
+
+## Prompt 397 — fresh preview verified (2026-10-19)
+
+Preview `dpl_BrTkKoGs8Ahyd3q1DQGEhSPCgFYE` is Ready with passing public-page,
+anonymous login-redirect and API-bridge smoke checks. No launch category is
+approved; deep readiness and authenticated journeys were not rerun.
+See [the execution record](operations.md#prompt-397--fresh-vercel-preview-2026-10-19).

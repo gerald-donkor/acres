@@ -4272,3 +4272,10 @@ snapshots remain. See
 [the hosted record](vercel-deployment.md#scanner-snapshot-retirement--prompt-396-2026-10-19).
 Open: the next refresh, tier 2 retirement, a hosted cadence, the production
 plan, the Phase 12 exit and all eleven category sign-offs.
+
+## Fresh preview deployment — Prompt 397 (2026-10-19)
+
+The committed application was deployed once to the existing Vercel preview
+project; hosted public-page, login-redirect and API-bridge smoke checks passed.
+See [the hosted record](vercel-deployment.md#fresh-preview-deployment--prompt-397-2026-10-19).
+Storage accounting, scanner refresh/cadence and production exit gates remain open.

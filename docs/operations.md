@@ -13918,3 +13918,69 @@ The hosted results and readings are in
   returns `404 costs_not_found`, and the Chrome extension was not connected.
   Readings are owner-reported.
 - Retirement recurs with every refresh; tier 2 waits for its windows.
+
+## Prompt 397 — fresh Vercel preview (2026-10-19)
+
+Approved `prompts/397-vercel-preview-deployment.md`; baseline `4aa24ca`.
+Reviewed the prior retirement record and exact saved plan/retire receipts;
+committed it as `0629202`, with storage accounting acceptance still open.
+The pre-deployment reviewer found no Critical, Important or Minor issue in
+that record or the preview prompt. Committed the reviewed prompt as
+`004d406`; that clean `main` SHA is the deployed source.
+
+### Checks run for this deployment
+
+Node `v24.21.0` from mise first on PATH; cached Vercel CLI 64.5.0:
+
+- `npm run lint` → exit 0 (all three workspace ESLint commands).
+- `npm run typecheck` → exit 0 (shared/client/server; Prisma Client 7.9.1 generated).
+- `npm run build` → exit 0; Next 16.3.8 compiled, generated routes and the
+  final server `prisma generate && nest build` completed.
+- `npm run vercel:probe-test` → `tests 371`, `suites 6`, `pass 371`, `fail 0`.
+- `npm run ops:scan-secrets` → `secret/default scan passed`.
+- `npx prettier --check` on prompts 396 and 397 →
+  `All matched files use Prettier code style!`.
+- New Prompt 396 documentation sections passed Prettier API checks;
+  baseline full-file checks at `4aa24ca` failed in all four owning docs,
+  so unrelated historical formatting was preserved.
+- `git diff --check` and staged diff checks → no output, exit 0.
+- Upload checker → `deploy manifest ok: 656 files`.
+
+Initial sandbox runs were not passing checks: Vercel fetches failed and
+Node subprocesses returned `EPERM`, causing the tooling tests and Next's
+TypeScript config subprocess to fail. Authorized execution outside that
+sandbox resolved those restrictions. The first unrestricted test run used
+umask 077, which changed 0640 fixture modes to 0600; rerunning with normal
+umask 022 passed all 371 tests without source changes. Restricted evidence
+files remained inside the 0700 directory. No test or check was weakened.
+Git staging/commit also required execution outside the read-only `.git`
+sandbox mount. These escalations were approved; no automatic-review
+rejection occurred.
+
+### Hosted execution and evidence
+
+`whoami`, project inspection and read-only active snapshot inspection passed.
+A fresh preview env pull was stored only under `/tmp/acres-preview-397/`;
+sensitive unavailable values were placeholders and were never written back.
+Read-only `Snapshot.get` verified the expected retained scanner and policy;
+no build/scan/delete call was made. The temporary inspection script's first
+attempt had a local relative-import error; its corrected run passed before
+deployment.
+
+One preview deployment completed:
+`dpl_BrTkKoGs8Ahyd3q1DQGEhSPCgFYE`,
+[preview](https://acres-qfhmdmej2-dgsloxx417s-projects.vercel.app).
+Hosted build logs show `iad1`, basic 2-core/8-GB machine, client, API and
+jobs builds, and Deployment completed at `11:45:30.384Z`. Post-build inspect
+reports `READY` / `preview`; deploy output used `target: null`.
+
+Through `vercel curl --deployment <id>`, home/login/register and API CSRF
+returned 200. Anonymous `/app` returned streamed HTTP 200 with the intended
+307 login redirect instruction and meta refresh, with no error alert.
+Bodies, headers and logs are stored in the restricted run directory;
+CSRF token/cookies were not printed. Public health/readiness routes are
+not exposed by the current bridge; no deep-readiness or authenticated
+application journey is claimed. No production, env write, migration,
+account creation, upload, snapshot mutation, paid-machine selection or push.
+The final read-only review compared the record with deployment/build and
+response evidence: no Critical, Important or Minor findings; ready to commit.
