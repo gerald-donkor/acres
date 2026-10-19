@@ -890,3 +890,36 @@ stronger than a computed-style read:
 The 3–5 px excess in the two proportional rows is the trailing glyph's
 right sidebearing, which an advance width includes and an ink bounding box does
 not. The monospace row confirms judgement #1 of §9 directly.
+
+## 12. Photographic landing roles — Prompt 399 (2026-10-19)
+
+Approved redesign values below are **design judgments**, not measurements from
+the original comps. They extend the existing `@theme`; the global hero roles,
+brand colours, fonts, button geometry, body/UI type and unrelated surfaces retain
+their existing values. The scoped landing composition is authorized in AGENTS.md §0.
+
+| Token                                                                 | Value            | Use                                                      |
+| --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------- |
+| `--text-landing-hero`                                                 | 4rem / 64px      | Public landing title below md                            |
+| `--text-landing-hero-md`                                              | 6rem / 96px      | Public landing title from md                             |
+| `--text-landing-hero-lg`                                              | 8rem / 128px     | Public landing title from lg                             |
+| Each hero role’s `--line-height`, `--letter-spacing`, `--font-weight` | .95, -.04em, 400 | Crimson Text, normal weight                              |
+| `--spacing-landing-photo-md`                                          | 22.5rem / 360px  | Shared hero photo height from md                         |
+| `--spacing-landing-photo-lg`                                          | 27.5rem / 440px  | Shared hero photo height from lg                         |
+| `--aspect-editorial`                                                  | 16 / 10          | Mobile primary hero photo and mobile/tablet detail photo |
+| `--aspect-editorial-portrait`                                         | 4 / 5            | Desktop detail photo                                     |
+
+All new text, spacing and aspect names are registered in `client/lib/utils.ts`.
+A direct merge probe returned `text-landing-hero text-ink`,
+`h-landing-photo-lg` and `aspect-editorial-portrait`, confirming colour/type
+coexistence and size/ratio overrides. Existing default width tokens provide
+readable copy lengths (`max-w-xl`, `max-w-2xl`, `max-w-3xl`, `max-w-5xl`).
+The existing `aspect-video` provides the second mobile photo ratio. The 2:1
+hero track ratio, 20px gap, 40/60/64px top insets, 40/48/64px image gaps,
+12px caption gap and 120px section rhythm follow the approved prompt.
+
+The Tailwind snapshot remains uninitialized and its skill directory is read-only
+in this environment. Execution used the skill’s limited engineering/gotchas
+fallback, the installed package’s `theme.css`/merge source, and a live official
+[theme reference](https://tailwindcss.com/docs/theme) fetched this session.
+No full local docs-snapshot initialization or freshness is claimed.

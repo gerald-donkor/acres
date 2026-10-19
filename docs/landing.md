@@ -1,5 +1,8 @@
 # Acres — Landing Page
 
+**Current public landing:** the photographic redesign in the Prompt 399 record
+at the end of this file supersedes the original composition documented below.
+
 Built to `prompts/05-landing-page.md`. This file records the `/` implementation
 against `client/public/assets/ui/landing-pages/Desktop.png`,
 `client/public/assets/ui/landing-pages/Tablet.png`, `client/public/assets/ui/landing-pages/Mobile.png`,
@@ -628,3 +631,205 @@ sizes, responsive sources and styling are unchanged. Hosted checks cover all
 20 source assets and fully decode direct/optimized variants, including WebP
 with preserved hero alpha. Browser visual acceptance remains blocked by
 unavailable supported browsers. See [the hosted record](vercel-deployment.md#hosted-acceptance--prompt-398).
+
+## Photographic redesign — Prompt 399 (2026-10-19)
+
+The current `/` page is `client/app/(marketing)/page.tsx`. This approved redesign
+supersedes the original composition and its historical fidelity findings above;
+those sections remain a record of the original build. The original references
+continue to define the retained brand primitives, as the bounded exception in
+AGENTS.md §0 records. Baseline: `3c4f99a`.
+
+### What changed and why
+
+“See the bigger picture.” and paired real aerial photographs replace the device
+over sage. The dominant residential street grid and smaller agricultural view
+connect regional analysis to places; a third photograph shows a highway within
+its wider waterfront landscape. Typography, natural photography and space carry
+the design. No additional palette, font, runtime dependency or client boundary
+was introduced. The scoped token decisions are in `docs/design-system.md` §12.
+
+A capability strip replaces the unverified trusted marks. Product-specific
+benefits replace office-management/localization promises. The decorative
+mountain, cylinders and stones, competitor rankings, AI claims and attributed
+customer testimonial are removed from this page. Their old reference assets are
+retained. Three evidence-focused detail rows explain validation, comparison and
+published report evidence. The actual ordered workflow is import → explore →
+publish, with all steps visible vertically on mobile. The closing CTA describes
+creating an account, with no unimplemented scheduling action.
+
+Copy was checked against `docs/ingestion.md`, `docs/analytics.md`,
+`docs/dashboards.md`, `docs/reports.md` and their current product journey record.
+All account CTAs lead to `/register`; the secondary hero action reaches `#how-to`.
+The established `#benefits`, `#specifications`, `#how-to`, `#contact` anchors and
+header/footer are preserved. The page contains no live dataset or customer
+claims. All three photos have meaningful alt text and visible credits.
+
+### Photo provenance and rendering
+
+[The asset manifest](../client/public/assets/ui/landing/editorial/SOURCES.md)
+records the individual publisher pages, photographers, direct download URLs,
+current licence, access date, measured source/local dimensions, conversions and
+actual bytes. The three original photo pages and Unsplash’s licence were fetched
+and inspected this session; each selected photo explicitly uses the free
+Unsplash License, permitting this commercial locally hosted use. Selected files
+were inspected before layout work; no generated imagery or search thumbnail
+was used. Local assets total 1,027,144 bytes (458390 / 301724 / 267030).
+
+All photo boxes use reserved ratios/heights, `object-cover` and centered focal
+positions. The street junction, agricultural road intersection and central
+highway remain meaningful at each crop. Captions stay on white and outside
+visibility-hiding media wrappers. Only the likely hero LCP photo is eager with
+high fetch priority. Supporting photos are lazy. The existing permitted quality
+100 is retained; deployment/optimizer settings are untouched.
+
+Browser inspection caught underresolution in tall cropped hero boxes when
+`sizes` only described the CSS width. Final hints account for `object-cover`’s
+source aspect: city needs at least 640px source width at md and 787px at lg;
+fields need 531px / 648px. On mobile the city requests box width × 10/9, while
+the field’s landscape box is width-limited. This avoids magnifying undersized
+candidates. Final DPR 1 browser selections at 800: city 640 / field 640; at 1280:
+city 828 / field 750. These are source-pixel requests, not altered layout widths.
+
+Direct assets and `/_next/image?...&w=828&q=100` returned HTTP 200 and decoded
+for all three images. Direct dimensions matched the manifest; optimized responses
+were 828×466, 828×562 and 828×1105. The explicit request had no WebP Accept
+header and returned JPEG, so this is a decoding check, not a WebP-format claim.
+Browser-selected images all completed and decoded without errors.
+
+### Browser measurements and acceptance
+
+Production `next start` final preview: `http://localhost:3200/`. Chrome via the
+Playwright CLI, after font load and image decoding, with fresh contexts per
+width. Hero and full-page captures are local ignored artifacts in
+`output/playwright/399/`; final `metrics.json` is beside them. All three full
+pages and their hero crops were visually inspected.
+
+| Width | Container / gutter | Hero type       | Hero photo boxes       | Detail photo | Benefit columns | Workflow columns | Page height |
+| ----: | ------------------ | --------------- | ---------------------- | ------------ | --------------- | ---------------- | ----------: |
+|   375 | 343 / 16           | 64px / 60.8px   | 343×214.38, 343×192.94 | 343×214.38   | 1               | 1                |        5285 |
+|   800 | 720 / 40           | 96px / 91.2px   | 466.66×360, 233.33×360 | 720×450      | 2               | 3                |        4301 |
+|  1280 | 1200 / 40          | 128px / 121.6px | 786.66×440, 393.34×440 | 568×710      | 4               | 3                |        3957 |
+
+The inter-column photo/benefit gap is 20px. Photo radius remains 24px; action
+height remains 48px. The 800px workflow has ~226.67px columns and remains readable,
+so the approved three-column option is retained. 320, 390, 1024, 1440 also have no
+horizontal overflow, no clipped heading, complete photos and no hidden text.
+At320 the hero wraps naturally to three lines; at 375/800 it uses two, and at 1280
+one. Overall page length intentionally changes; the old full-page pixel diff is
+not this redesign’s acceptance test.
+
+Normal-motion checks confirmed settled hero visibility and every revealed item,
+with no errors, warnings, hydration failures or unused-preload warning. Existing
+`LandingMotion` choreography/cleanup code is unchanged: heading beat one, the two
+photo wrappers together on beat two, seven later reveal groups and one generic
+media reveal. Actions stay outside autoAlpha targets. Static benefit articles
+have no hover-lift hook. No node is both hero and generic media.
+
+Keyboard-only verification: skip link is first, Enter focuses `main-content`,
+then Tab reaches hero account action, workflow action, closing account action
+and footer links. Each shows a 2px solid focus indicator. Desktop anchors reach
+all four sections; condensed navigation appears after scrolling the full header
+away and hides at the top. Mobile links reach all four targets and close the
+menu; Escape closes it; the closed 78px header stays at top 0 when scrolled.
+The account action navigates to `/register`; no account was created.
+
+Reduced motion exposes all content without reveal transforms. With JavaScript
+disabled at 375 there are zero hidden headings/paragraphs/actions, no overflow,
+and all three page links remain available; the secondary link reaches `#how-to`.
+Computed faces remain Crimson Text / DM Sans / Roboto Mono. A 640×450 CSS viewport
+at DPR 2 verifies the reflow equivalent of a 1280px window at 200% zoom, including
+all actions and an unclipped title; browser-toolbar zoom itself was not driven.
+
+Fresh [Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md)
+were fetched and applied to the changed page. No unresolved finding in scope:
+semantic sections and ordered list, heading hierarchy, alt/captions, readable
+contrast, fragment margins, visible focus, reduced motion, dimensions, reserved
+media boxes and static fallback. Approved sentence-case product copy takes
+precedence over the generic guideline’s title-case suggestion.
+
+### Checks — actual output and limits
+
+Node 24.21.0 was selected per-command without changing global tools. Firecrawl
+was invoked through its installed executable with Node 24; photo/source research
+required network escalation. The Tailwind snapshot remains unavailable/read-only;
+limited skill references, installed sources and the fresh official theme page
+were used, as the token appendix records.
+
+`npm run lint` — initial run and final sequential run exited 0:
+
+```text
+> acres@0.1.0 lint
+> npm run lint --workspace=@acres/client && npm run lint --workspace=@acres/shared && npm run lint --workspace=@acres/server
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+```
+
+An intermediate concurrent run overlapped `prisma generate` and reported
+`✖ 1916 problems (1794 errors, 122 warnings)` for unresolved backend types.
+Rerunning sequentially after build/generation completed exited 0. No server code
+was changed. A direct root ESLint call also correctly rejected the absent root
+config; the workspace/owning-directory commands above are the checks of record.
+
+`npm run typecheck` — exit 0:
+
+```text
+> @acres/shared@0.1.0 build
+> tsc -p tsconfig.json
+> @acres/shared@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+> @acres/client@0.1.0 typecheck
+> tsc --noEmit
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 829ms
+```
+
+`npm run build` — final run exit 0:
+
+```text
+> @acres/shared@0.1.0 build
+> tsc -p tsconfig.json
+> @acres/client@0.1.0 build
+> next build --webpack
+▲ Next.js 16.3.8 (webpack)
+✓ Running next.config.ts took 29ms
+✓ Compiled successfully in 5.5s
+```
+
+The client generated all 23 pages, including static `/`, and the server completed
+`prisma generate && nest build`. The first sandboxed attempt reported
+`Error: Could not parse output from TypeScript's --showConfig.` A direct probe
+confirmed its child stdout was empty despite exit 0; the complete build outside
+the sandbox passed. This was a tooling boundary, not a TypeScript code failure.
+
+Changed TSX/CSS/TS formatting used the already installed Prettier with
+`--no-semi`, matching these files’ convention:
+
+```text
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+New Markdown files and the two appended documentation sections were formatted
+and pass Prettier. Full-file checks also flag existing formatting in AGENTS.md,
+this historical record and the design-system record; the same warnings reproduce
+on their untouched HEAD versions, so unrelated formatting was retained.
+
+Targeted client ESLint exited 0 with no output. `git diff --check` exited 0 with
+no output. No new test suite was added for this static marketing replacement;
+real-browser acceptance covers the meaningful integrations. Backend E2E was not
+run because no backend behavior changed.
+
+To preview locally: run `npm run dev:client`, then open
+`http://localhost:3000/` (or the port Next prints).
+
+Independent review used `requesting-code-review`, followed by the
+`receiving-code-review` evaluation. The reviewer inspected the uncommitted diff,
+asset manifest, screenshots, browser evidence and successful checks against
+prompt 399, with baseline/current HEAD both `3c4f99a`. Verdict: **Approved. No
+Critical, Important, or Minor findings.** No corrective code change was needed.

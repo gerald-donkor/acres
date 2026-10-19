@@ -2,397 +2,228 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { Button } from "@/components/acres/button"
-import { Container } from "@/components/acres/container"
 import { Eyebrow } from "@/components/acres/eyebrow"
-import { Icon, type IconName } from "@/components/acres/icon"
 import { LandingMotion } from "@/components/acres/landing-motion"
-import { Rule } from "@/components/acres/rule"
 import { Section } from "@/components/acres/section"
 import { cn } from "@/lib/utils"
 
-const trustedMarks = [
-  { src: "/assets/ui/landing/trusted-mark-01.png", width: 181, height: 44 },
-  { src: "/assets/ui/landing/trusted-mark-02.png", width: 114, height: 22 },
-  { src: "/assets/ui/landing/trusted-mark-03.png", width: 50, height: 44 },
-  { src: "/assets/ui/landing/trusted-mark-04.png", width: 218, height: 24 },
-  { src: "/assets/ui/landing/trusted-mark-05.png", width: 114, height: 20 },
-  { src: "/assets/ui/landing/trusted-mark-06.png", width: 106, height: 38 },
-] as const
+type ContentItem = { title: string; body: string }
 
-const benefits: {
-  title: string
-  body: string
-  icon: IconName
-  iconClassName?: string
-}[] = [
+const benefits: readonly ContentItem[] = [
   {
-    title: "Amplify Insights",
-    body: "Unlock data-driven decisions with comprehensive analytics, revealing key opportunities for strategic regional growth.",
-    icon: "cable",
-    iconClassName: "-rotate-45 -scale-x-100",
+    title: "Bring your data together",
+    body: "Import CSV, XLSX and GeoJSON files. Map your measures, time periods and regions into a consistent dataset.",
   },
   {
-    title: "Control Your Global Presence",
-    body: "Manage and track satellite offices, ensuring consistent performance and streamlined operations everywhere.",
-    icon: "public",
+    title: "Compare regions",
+    body: "Explore metrics across places and periods. Keep units, definitions and data quality in view as you compare.",
   },
   {
-    title: "Remove Language Barriers",
-    body: "Adapt to diverse markets with built-in localization for clear communication and enhanced user experience.",
-    icon: "record_voice_over",
+    title: "Keep the source in sight",
+    body: "Follow a result back to its observations and dataset version. Understand the evidence behind the number.",
   },
   {
-    title: "Visualise Growth",
-    body: "Generate precise, visually compelling reports that illustrate your growth trajectories across all regions.",
-    icon: "show_chart",
+    title: "Share a clearer story",
+    body: "Build reports around saved evidence. Publish a reviewed revision and export your findings as CSV or PDF.",
   },
 ]
 
-const bigPictureRows = [
+const details: readonly ContentItem[] = [
+  {
+    title: "Start with a sound source",
+    body: "Review validation issues and map your fields before publishing a dataset version for analysis.",
+  },
+  {
+    title: "Compare with context",
+    body: "Filter by region, metric and period. Save a dashboard view to return to the same selection with your team.",
+  },
+  {
+    title: "Make the evidence last",
+    body: "Published report revisions preserve their evidence, keeping the source behind your findings in reach.",
+  },
+]
+
+const steps: readonly (ContentItem & { marker: string })[] = [
   {
     marker: "01",
-    text: "Spot Trends in Seconds: No more digging through numbers.",
+    title: "Import your data",
+    body: "Upload your source files, review validation results, and map the fields and regions that give your data meaning.",
   },
   {
     marker: "02",
-    text: "Get Everyone on the Same Page: Share easy-to-understand reports with your team.",
+    title: "Explore your regions",
+    body: "Compare metrics across places and periods. Save the views that help your team understand what is changing.",
   },
   {
     marker: "03",
-    text: "Make Presentations Pop: Interactive maps and dashboards keep your audience engaged.",
-  },
-  {
-    marker: "04",
-    text: "Your Global Snapshot: Get a quick, clear overview of your entire operation.",
+    title: "Publish your findings",
+    body: "Turn evidence into a report, send it through review, and publish a revision your team can return to.",
   },
 ]
 
-const comparisonRows = [
-  ["Ultra-fast browsing", "Fast browsing", "Moderate speeds"],
-  ["Advanced AI insights", "Basic AI recommendations", "No AI assistance"],
-  ["Seamless integration", "Restricts customization", "Steep learning curve"],
-  ["Advanced AI insights", "Basic AI insights", "No AI assistance"],
-  ["Ultra-fast browsing", "Fast browsing", "Moderate speeds"],
-  ["Full UTF-8 support", "Potential display errors", "Partial UTF-8 support"],
-] as const
+const photoRoot = "/assets/ui/landing/editorial"
+const headingClass =
+  "font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
+const captionClass =
+  "mt-3 font-mono text-label leading-relaxed text-ink-muted lg:text-label-lg"
 
-const comparisonStatus = [
-  ["check", "check", "close"],
-  ["check", "check", "close"],
-  ["check", "check", "close"],
-  ["check", "close", "close"],
-  ["check", "check", "close"],
-  ["check", "close", "close"],
-] as const
-
-const steps = [
-  {
-    marker: "01",
-    title: "Get Started",
-    body: "With our intuitive setup, you're up and running in minutes.",
-  },
-  {
-    marker: "02",
-    title: "Customize and Configure",
-    body: "Adapt Acres to your specific requirements and business goals.",
-  },
-  {
-    marker: "03",
-    title: "Grow Your Business",
-    body: "Make informed decisions to exceed your goals and expand confidently.",
-  },
-]
-
-const focusClass =
-  "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring rounded-sm"
-
-export default function Home() {
+export default function HomePage() {
   return (
     <LandingMotion>
-      <section className="pt-10 md:pt-15 lg:pt-16">
-        <Container className="text-center">
+      <Section
+        align="center"
+        aria-labelledby="hero-heading"
+        className="pt-10 md:pt-15 lg:pt-16"
+      >
+        <div data-motion-hero-heading>
+          <Eyebrow>Regional intelligence</Eyebrow>
           <h1
-            data-motion-hero-heading
-            className="font-serif text-hero text-ink text-balance md:text-hero-md lg:text-hero-lg"
+            id="hero-heading"
+            className="mx-auto mt-6 max-w-5xl font-serif text-landing-hero text-ink text-balance md:text-landing-hero-md lg:text-landing-hero-lg"
           >
-            Browse everything.
+            See the bigger picture.
           </h1>
-          {/* The comp draws a constant-height sage band with the device
-              overhanging its top edge and clipped at its bottom, so this wrapper
-              IS the device box: overhang + band tall. The band is a layer behind
-              it, never a padded parent — padding would grow the band with the
-              image and would swallow the overhang. */}
-          <div
-            data-motion-hero-media
-            className="relative mt-hero-gap-sm md:mt-hero-gap-md lg:mt-hero-gap-lg"
+          <p className="mx-auto mt-7 max-w-xl text-body text-ink-muted text-pretty">
+            Turn regional data into clear comparisons, traceable reports, and
+            better-informed decisions.
+          </p>
+        </div>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <CreateAccount />
+          <Button
+            render={<Link href="#how-to" />}
+            nativeButton={false}
+            variant="secondary"
           >
-            <div
-              aria-hidden
-              className="absolute inset-x-0 bottom-0 h-hero-band rounded-media bg-sage"
-            />
-            {/* `sizes` below describes `container − 2·wing`, which tracks the
-                viewport rather than the breakpoint anchor: 106 = the 2×16
-                gutter plus the 2×37 wing, 124 = 2×40 plus 2×22, and 374 =
-                2×40 plus 2×147 against the 1200 cap. */}
-            <div className="relative px-hero-wing-sm md:px-hero-wing-md lg:px-hero-wing-lg">
-              <picture className="block h-hero-device-sm overflow-hidden md:h-hero-device-md lg:h-hero-device-lg">
-                <source
-                  media="(max-width: 767px)"
-                  srcSet="/assets/ui/landing/report-device-mobile.webp"
-                />
-                <Image
-                  src="/assets/ui/landing/report-device-desktop.webp"
-                  alt="Acres regional analytics report interface with an efficiency trend chart."
-                  width={1810}
-                  height={1288}
-                  quality={100}
-                  fetchPriority="high"
-                  sizes="(max-width: 767px) calc(100vw - 106px), (max-width: 1023px) calc(100vw - 124px), min(calc(100vw - 374px), 906px)"
-                  className="h-full w-full object-cover object-top"
-                />
-              </picture>
-            </div>
-          </div>
-        </Container>
-      </section>
+            See how it works
+          </Button>
+        </div>
 
-      <section aria-labelledby="trusted-heading" className="pt-12 md:pt-14">
-        <Container>
-          <div
-            data-motion-group="trusted"
-            data-motion-pace="tight"
-            className="flex flex-col gap-10 md:gap-12 lg:flex-row lg:items-center lg:gap-16"
-          >
-            <h2
-              id="trusted-heading"
-              data-motion-item
-              className="text-body text-ink-muted scroll-mt-section"
-            >
-              Trusted by:
-            </h2>
-            <ul className="grid flex-1 grid-cols-2 items-center gap-x-12 gap-y-10 md:grid-cols-3 lg:grid-cols-6 lg:gap-x-12">
-              {trustedMarks.map((mark) => (
-                <li
-                  key={mark.src}
-                  data-motion-item
-                  className="flex justify-center lg:justify-start"
-                >
-                  <Image
-                    src={mark.src}
-                    alt=""
-                    width={mark.width}
-                    height={mark.height}
-                    unoptimized
-                    className="h-auto max-h-11 w-auto opacity-100"
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Container>
-      </section>
+        {/* Captions stay outside the visibility-hiding media entrance. */}
+        <div className="mt-10 grid gap-7 text-left md:mt-12 md:grid-cols-[2fr_1fr] md:gap-5 lg:mt-16">
+          <figure className="min-w-0">
+            <div data-motion-hero-media>
+              <Photo
+                name="melbourne-neighborhood.webp"
+                alt="A grid of residential streets, rooftops and gardens seen from directly above."
+                sizes="(max-width: 767px) calc((100vw - 32px) * 10 / 9), (max-width: 1023px) 640px, 787px"
+                hero
+                className="aspect-editorial md:aspect-auto md:h-landing-photo-md lg:h-landing-photo-lg"
+              />
+            </div>
+            <figcaption className={captionClass}>
+              Melbourne, Australia · Photo by Tom Rumble / Unsplash
+            </figcaption>
+          </figure>
+          <figure className="min-w-0">
+            <div data-motion-hero-media>
+              <Photo
+                name="ladenburg-fields.webp"
+                alt="Cultivated fields divided by intersecting farm roads, with rows of crops and scattered hay bales."
+                sizes="(max-width: 767px) calc(100vw - 32px), (max-width: 1023px) 531px, 648px"
+                className="aspect-video md:aspect-auto md:h-landing-photo-md lg:h-landing-photo-lg"
+              />
+            </div>
+            <figcaption className={captionClass}>
+              Ladenburg, Germany · Photo by Bernd Dittrich / Unsplash
+            </figcaption>
+          </figure>
+        </div>
+
+        <ul
+          aria-label="Acres capabilities"
+          className="mt-10 grid gap-5 border-y border-rule py-6 font-mono text-label text-brand md:grid-cols-3 md:gap-8 lg:text-label-lg"
+        >
+          <li>CSV, XLSX &amp; GeoJSON</li>
+          <li>Regional comparisons</li>
+          <li>Traceable reports</li>
+        </ul>
+      </Section>
 
       <Section
         id="benefits"
         aria-labelledby="benefits-heading"
         className="scroll-mt-section"
       >
-        <div data-motion-group="benefits-intro" data-motion-pace="tight">
-          <Eyebrow data-motion-item>Benefits</Eyebrow>
-          <div className="mt-5 max-w-[42rem]">
-            <h2
-              id="benefits-heading"
-              data-motion-item
-              className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
-            >
-              We’ve cracked the code.
+        <div data-motion-group="benefits-heading" data-motion-pace="tight">
+          <Eyebrow data-motion-item>From data to decisions</Eyebrow>
+          <div className="mt-6 grid gap-7 lg:grid-cols-[2fr_1fr] lg:items-end lg:gap-16">
+            <h2 id="benefits-heading" data-motion-item className={headingClass}>
+              Know what matters. See where it happens.
             </h2>
             <p
               data-motion-item
-              className="mt-6 max-w-[26rem] text-body text-ink-muted"
+              className="max-w-xl text-body text-ink-muted text-pretty"
             >
-              <span translate="no">Acres</span> provides real insights, without
-              the data overload.
+              Your organization’s data tells a story about the places you work.
+              Bring it into focus with regional analysis your team can follow.
             </p>
           </div>
         </div>
-
         <div
           data-motion-group="benefits"
-          className="mt-20 grid gap-x-5 gap-y-14 md:grid-cols-2 lg:grid-cols-4"
+          className="mt-12 grid gap-x-5 gap-y-10 md:grid-cols-2 lg:mt-16 lg:grid-cols-4"
         >
-          {benefits.map((item) => (
+          {benefits.map((benefit) => (
             <article
-              key={item.title}
+              key={benefit.title}
               data-motion-item
-              data-motion-card
-              className="border-t border-rule pt-7"
+              className="border-t border-rule pt-6"
             >
-              <Icon
-                name={item.icon}
-                className={cn("text-ink", item.iconClassName)}
-              />
-              <h3 className="mt-10 font-serif text-h3 text-ink">{item.title}</h3>
-              <p className="mt-5 text-body text-ink-muted">{item.body}</p>
+              <h3 className="font-serif text-h3 text-ink">{benefit.title}</h3>
+              <p className="mt-4 text-body text-ink-muted">{benefit.body}</p>
             </article>
           ))}
         </div>
       </Section>
 
-      <MediaBand alt="Layered mountain ridges in shifting green, blue, and rose light." />
-
-      <Section aria-labelledby="big-picture-heading">
-        <div className="grid gap-16 lg:grid-cols-[0.95fr_1.05fr] lg:items-end">
-          <div data-motion-group="big-picture" data-motion-pace="tight">
-            <h2
-              id="big-picture-heading"
-              data-motion-item
-              className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
-            >
-              See the Big Picture
-            </h2>
-            <p
-              data-motion-item
-              className="mt-7 max-w-[32rem] text-body text-ink-muted"
-            >
-              <span translate="no">Acres</span> turns your data into clear,
-              vibrant visuals that show you exactly what’s happening in each
-              region.
-            </p>
-            <div
-              data-motion-group="big-picture-rows"
-              className="mt-14 flex flex-col gap-6"
-            >
-              {bigPictureRows.map((row) => (
+      <Section
+        id="specifications"
+        aria-labelledby="detail-heading"
+        className="scroll-mt-section"
+      >
+        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+          <figure className="min-w-0">
+            <div data-motion-media>
+              <Photo
+                name="espoo-road.webp"
+                alt="A highway connects wooded shores across water, with settlements in the distance."
+                sizes="(max-width: 767px) calc(100vw - 32px), (max-width: 1023px) calc(100vw - 80px), (max-width: 1279px) calc((100vw - 144px) / 2), 568px"
+                className="aspect-editorial lg:aspect-editorial-portrait"
+              />
+            </div>
+            <figcaption className={captionClass}>
+              Espoo, Finland · Photo by Julius Jansson / Unsplash
+            </figcaption>
+          </figure>
+          <div>
+            <div data-motion-group="detail-heading" data-motion-pace="tight">
+              <Eyebrow data-motion-item>A clearer perspective</Eyebrow>
+              <h2
+                id="detail-heading"
+                data-motion-item
+                className={cn(headingClass, "mt-6")}
+              >
+                The detail behind every decision.
+              </h2>
+            </div>
+            <div data-motion-group="details" className="mt-10">
+              {details.map((detail) => (
                 <div
-                  key={row.marker}
+                  key={detail.title}
                   data-motion-item
-                  className="grid grid-cols-[2.5rem_1fr] gap-5 border-t border-rule pt-5"
+                  className="border-t border-rule py-6 last:pb-0"
                 >
-                  <span className="font-mono text-label text-brand lg:text-label-lg">
-                    {row.marker}
-                  </span>
-                  <p className="text-body text-ink">{row.text}</p>
+                  <h3 className="font-serif text-h3 text-ink">
+                    {detail.title}
+                  </h3>
+                  <p className="mt-3 max-w-xl text-body text-ink-muted">
+                    {detail.body}
+                  </p>
                 </div>
               ))}
             </div>
-            <Button
-              render={<Link href="#specifications" />}
-              nativeButton={false}
-              variant="secondary"
-              data-motion-item
-              className="mt-12"
-            >
-              Discover More
-            </Button>
           </div>
-          {/* Mobile.png insets this photograph inside the container rather than
-              bleeding it to the gutters; tablet and desktop are full column. */}
-          <div data-motion-media className="px-media-inset-sm md:px-0">
-            <picture className="block aspect-[311/385] w-full overflow-hidden rounded-media md:aspect-[720/744] lg:aspect-[590/711]">
-              <source
-                media="(min-width: 1024px)"
-                srcSet="/assets/ui/landing/cylinders-desktop.webp"
-              />
-              <source
-                media="(min-width: 768px)"
-                srcSet="/assets/ui/landing/cylinders-tablet.webp"
-              />
-              <Image
-                src="/assets/ui/landing/cylinders-mobile.webp"
-                alt="Neutral stone cylinders arranged as a quiet geometric landscape."
-                width={1770}
-                height={2133}
-                quality={100}
-                sizes="(max-width: 767px) calc(100vw - 62px), (max-width: 1023px) calc(100vw - 80px), 600px"
-                className="h-full w-full object-cover"
-              />
-            </picture>
-          </div>
-        </div>
-      </Section>
-
-      <Section
-        id="specifications"
-        align="center"
-        aria-labelledby="specs-heading"
-        className="scroll-mt-section"
-        data-motion-group="specs"
-        data-motion-pace="tight"
-      >
-        <Rule weight="strong" className="mb-section" />
-        <Eyebrow data-motion-item>Specs</Eyebrow>
-        <h2
-          id="specs-heading"
-          data-motion-item
-          className="mt-5 font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
-        >
-          Why Choose <span translate="no">Acres</span>?
-        </h2>
-        <p
-          data-motion-item
-          className="mx-auto mt-7 max-w-[46rem] text-body text-ink-muted"
-        >
-          You need a solution that keeps up. That’s why we developed{" "}
-          <span translate="no">Acres</span>. A developer-friendly approach to
-          streamline your business.
-        </p>
-        <Button
-          render={<Link href="#contact" />}
-          nativeButton={false}
-          variant="secondary"
-          data-motion-item
-          className="mt-12"
-        >
-          Discover More
-        </Button>
-        <ComparisonTable />
-      </Section>
-
-      <Section aria-labelledby="testimonial-heading">
-        <div className="grid gap-14 lg:grid-cols-[592fr_538fr] lg:items-center lg:gap-x-quote-gap">
-          <picture
-            data-motion-media
-            className="block aspect-square w-full overflow-hidden rounded-media lg:aspect-[590/670]"
-          >
-            <source
-              media="(min-width: 1024px)"
-              srcSet="/assets/ui/landing/stones-desktop.webp"
-            />
-            <source
-              media="(min-width: 768px)"
-              srcSet="/assets/ui/landing/stones-tablet.webp"
-            />
-            <Image
-              src="/assets/ui/landing/stones-mobile.webp"
-              alt="Balancing stones beside water with a pale sky."
-              width={1770}
-              height={2009}
-              quality={100}
-              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 100vw, 600px"
-              className="h-full w-full object-cover"
-            />
-          </picture>
-          <figure data-motion-group="testimonial" data-motion-pace="tight">
-            <h2 id="testimonial-heading" className="sr-only">
-              Customer Testimonial
-            </h2>
-            <blockquote
-              data-motion-item
-              className="font-serif text-quote text-ink text-balance"
-            >
-              “I was skeptical, but <span translate="no">Acres</span> has
-              completely transformed the way I manage my business. The data
-              visualizations are so clear and intuitive, and the platform is so
-              easy to use. I can’t imagine running my company without it.”
-            </blockquote>
-            <figcaption data-motion-item className="mt-10">
-              <p className="text-ui text-ink">John Smith</p>
-              <p className="mt-2 font-mono text-label text-brand lg:text-label-lg">
-                Head of Data
-              </p>
-            </figcaption>
-          </figure>
         </div>
       </Section>
 
@@ -401,86 +232,39 @@ export default function Home() {
         aria-labelledby="how-to-heading"
         className="scroll-mt-section"
       >
-        <div>
-          <div
-            data-motion-group="how-to"
-            data-motion-pace="tight"
-            className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between"
+        <div data-motion-group="workflow-heading" data-motion-pace="tight">
+          <Eyebrow data-motion-item>How it works</Eyebrow>
+          <h2
+            id="how-to-heading"
+            data-motion-item
+            className={cn(headingClass, "mt-6 max-w-3xl")}
           >
-            <h2
-              id="how-to-heading"
-              data-motion-item
-              className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
-            >
-              Map Your Success
-            </h2>
-            <Button
-              render={<Link href="#contact" />}
-              nativeButton={false}
-              variant="secondary"
-              data-motion-item
-              className="w-fit"
-            >
-              Discover More
-            </Button>
-          </div>
-
-          <div
-            className={cn(
-              "mt-22 overflow-x-auto overscroll-x-contain pb-4 md:mt-20 lg:mt-19",
-              focusClass
-            )}
-            role="region"
-            tabIndex={0}
-            aria-label="Three-step Acres setup sequence"
-          >
-            <ol
-              data-motion-group="steps"
-              className="grid min-w-[45rem] grid-cols-3 gap-5 md:min-w-0"
-            >
-              {steps.map((step) => (
-                <li
-                  key={step.marker}
-                  data-motion-item
-                  className="border-t border-rule pt-15"
-                >
-                  <span className="text-stat text-ink-faint md:text-stat-md">
-                    {step.marker}
-                  </span>
-                  <h3 className="mt-15 font-serif text-h3 text-ink">
-                    {step.title}
-                  </h3>
-                  <p className="mt-5 max-w-[18rem] text-body text-ink-muted">
-                    {step.body}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </div>
+            From your first dataset to your next decision.
+          </h2>
         </div>
-
-        <picture
-          data-motion-media
-          className="mt-26 block aspect-[343/600] w-full overflow-hidden rounded-media md:mt-30 md:aspect-[720/664] lg:aspect-[1200/664]"
+        <ol
+          data-motion-group="steps"
+          className="mt-12 grid gap-10 md:grid-cols-3 md:gap-5 lg:mt-16"
         >
-          <source
-            media="(min-width: 1024px)"
-            srcSet="/assets/ui/landing/aerial-desktop.webp"
-          />
-          <source
-            media="(min-width: 768px)"
-            srcSet="/assets/ui/landing/aerial-tablet.webp"
-          />
-          <Image
-            src="/assets/ui/landing/aerial-mobile.webp"
-            alt="Green aerial landscape with a pale path crossing open terrain."
-            width={3600}
-            height={1993}
-            quality={100}
-            sizes="(max-width: 767px) 100vw, (max-width: 1023px) 100vw, 1200px"
-            className="h-full w-full object-cover"
-          />
-        </picture>
+          {steps.map((step) => (
+            <li
+              key={step.marker}
+              data-motion-item
+              className="border-t border-rule pt-8"
+            >
+              <span
+                aria-hidden="true"
+                className="text-stat text-ink-faint md:text-stat-md"
+              >
+                {step.marker}
+              </span>
+              <h3 className="mt-8 font-serif text-h3 text-ink">{step.title}</h3>
+              <p className="mt-4 max-w-sm text-body text-ink-muted lg:pr-10">
+                {step.body}
+              </p>
+            </li>
+          ))}
+        </ol>
       </Section>
 
       <Section
@@ -489,143 +273,67 @@ export default function Home() {
         aria-labelledby="contact-heading"
         className="scroll-mt-section"
       >
-        <div
-          data-motion-group="contact"
-          data-motion-pace="tight"
-          className="mx-auto max-w-[44rem]"
-        >
-          <h2
-            id="contact-heading"
-            data-motion-item
-            className="font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
-          >
-            Connect with us
-          </h2>
-          <p
-            data-motion-item
-            className="mx-auto mt-7 max-w-[34rem] text-body text-ink-muted"
-          >
-            Schedule a quick call to learn how{" "}
-            <span translate="no">Acres</span> can turn your regional data into a
-            powerful advantage.
-          </p>
-          <Button
-            render={<Link href="/register" />}
-            nativeButton={false}
-            variant="primary"
-            data-motion-item
-            className="mt-12"
-          >
-            Create Account
-          </Button>
+        <div className="border-t border-rule pt-section">
+          <div data-motion-group="contact" data-motion-pace="tight">
+            <Eyebrow data-motion-item>See what’s possible</Eyebrow>
+            <h2
+              id="contact-heading"
+              data-motion-item
+              className={cn(headingClass, "mx-auto mt-6 max-w-2xl")}
+            >
+              Put your regions in perspective.
+            </h2>
+            <p
+              data-motion-item
+              className="mx-auto mt-7 max-w-xl text-body text-ink-muted text-pretty"
+            >
+              Give your team a shared place to turn regional data into findings
+              they can use.
+            </p>
+          </div>
+          <div className="mt-10">
+            <CreateAccount />
+          </div>
         </div>
       </Section>
     </LandingMotion>
   )
 }
 
-function MediaBand({
-  alt,
-}: {
-  alt: string
-}) {
+function CreateAccount() {
   return (
-    <Section aria-label={alt}>
-      <picture
-        data-motion-media
-        className="block aspect-[343/600] w-full overflow-hidden rounded-media md:aspect-[720/600] lg:aspect-[1200/620]"
-      >
-        <source
-          media="(min-width: 1024px)"
-          srcSet="/assets/ui/landing/mountain-desktop.webp"
-        />
-        <source
-          media="(min-width: 768px)"
-          srcSet="/assets/ui/landing/mountain-tablet.webp"
-        />
-        <Image
-          src="/assets/ui/landing/mountain-mobile.webp"
-          alt={alt}
-          width={3600}
-          height={1860}
-          quality={100}
-          sizes="(max-width: 767px) 100vw, (max-width: 1023px) 100vw, 1200px"
-          className="h-full w-full object-cover"
-        />
-      </picture>
-    </Section>
+    <Button render={<Link href="/register" />} nativeButton={false}>
+      Create Account
+    </Button>
   )
 }
 
-function ComparisonTable() {
+function Photo({
+  name,
+  alt,
+  sizes,
+  className,
+  hero = false,
+}: {
+  name: string
+  alt: string
+  sizes: string
+  className: string
+  hero?: boolean
+}) {
   return (
-    <div
-      className={cn(
-        "mt-20 overflow-x-auto overscroll-x-contain pb-4 text-left",
-        focusClass
-      )}
-      role="region"
-      tabIndex={0}
-      aria-label="Comparison of Acres, WebSurge, and HyperView"
-    >
-      <table
-        data-motion-group="comparison"
-        className="w-full min-w-[45rem] border-separate border-spacing-0 font-mono text-label text-ink lg:text-label-lg"
-      >
-        <caption className="sr-only">
-          Product comparison across browsing, AI, integration, and UTF-8 support.
-        </caption>
-        <thead>
-          <tr data-motion-item>
-            {["Acres", "WebSurge", "HyperView"].map((column, index) => (
-              <th
-                key={column}
-                scope="col"
-                className={cn(
-                  "border-y border-rule bg-canvas px-7 py-10 text-center font-sans text-title text-ink",
-                  index === 0 && "rounded-t-card border-x shadow-card",
-                  index > 0 && "border-r"
-                )}
-              >
-                <span translate="no">{column}</span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {comparisonRows.map((row, rowIndex) => (
-            <tr key={row.join("-")} data-motion-item>
-              {row.map((cell, columnIndex) => {
-                const status = comparisonStatus[rowIndex][columnIndex]
-                return (
-                  <td
-                    key={`${cell}-${columnIndex}`}
-                    className={cn(
-                      "border-b border-rule bg-canvas px-7 py-8 align-middle",
-                      columnIndex === 0 && "border-x shadow-card",
-                      columnIndex > 0 && "border-r",
-                      rowIndex === comparisonRows.length - 1 &&
-                        columnIndex === 0 &&
-                        "rounded-b-card"
-                    )}
-                  >
-                    <span className="flex min-w-0 items-center gap-4">
-                      <Icon
-                        name={status}
-                        className={cn(
-                          "size-4",
-                          status === "check" ? "text-brand" : "text-ink-muted"
-                        )}
-                      />
-                      <span className="min-w-0 text-pretty">{cell}</span>
-                    </span>
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className={cn("relative overflow-hidden rounded-media", className)}>
+      {/* Hero sizes include the pixels needed to cover the tall cropped box. */}
+      <Image
+        src={`${photoRoot}/${name}`}
+        alt={alt}
+        fill
+        quality={100}
+        sizes={sizes}
+        loading={hero ? "eager" : "lazy"}
+        fetchPriority={hero ? "high" : undefined}
+        className="object-cover object-center"
+      />
     </div>
   )
 }

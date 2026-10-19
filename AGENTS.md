@@ -83,6 +83,13 @@ for checking code and git history to determine what is actually built.
 
 # 0. The reference material
 
+**Public landing redesign exception — 2026-10-19:** Approved prompt 399
+(`prompts/399-premium-photographic-landing-redesign.md`) supplies the direction
+for `/`'s new composition, copy and sourced photography. The original references
+remain authoritative for retained brand primitives and all unrelated surfaces.
+This bounded exception permits the documented landing changes, not a new product
+identity.
+
 **These four files are the only source of *static* design truth in this
 repository** — palette, type, layout, radii, the end states of every surface.
 Everything in `docs/design-system.md` is measured from them; nothing is

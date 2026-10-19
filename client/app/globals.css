@@ -7,9 +7,9 @@
 /* ---------------------------------------------------------------------------
    Acres design tokens.
 
-   Every value here is measured from the references in AGENTS.md §0 and recorded,
-   with the crop that produced it, in docs/design-system.md. This block and that
-   file are one change: a value in one and not the other is a defect.
+   Retained brand values are measured from the references in AGENTS.md §0.
+   Prompt 399's landing-specific values are approved design judgments. Both are
+   recorded in docs/design-system.md. This block and that file are one change.
 
    Colours are hex because they were measured as sRGB pixels; putting a lossy
    OKLCH conversion between the measurement and the token buys nothing and makes
@@ -38,9 +38,9 @@
   --font-weight-ui: 600;
 
   /* -- type scale (docs/design-system.md §2.3) --------------------------------
-     Mobile-first. The two serif display roles are the only ones that scale, so
-     they carry -md and -lg companions; everything else is one value at every
-     breakpoint, which is what the comps measure. */
+     Mobile-first. Serif display roles carry -md and -lg companions; the stat
+     marker and monospace label also have their measured breakpoint variants.
+     Prompt 399's landing hero roles are scoped design judgments. */
 
   --text-hero: 4.75rem; /* 76px @ 375 */
   --text-hero--line-height: 0.85;
@@ -54,6 +54,25 @@
   --text-hero-lg--line-height: 0.8;
   --text-hero-lg--letter-spacing: -0.05em;
   --text-hero-lg--font-weight: 400;
+
+  /* Public landing redesign — judgments, not original-comp measurements. */
+  --text-landing-hero: 4rem;
+  --text-landing-hero--line-height: 0.95;
+  --text-landing-hero--letter-spacing: -0.04em;
+  --text-landing-hero--font-weight: 400;
+  --text-landing-hero-md: 6rem;
+  --text-landing-hero-md--line-height: 0.95;
+  --text-landing-hero-md--letter-spacing: -0.04em;
+  --text-landing-hero-md--font-weight: 400;
+  --text-landing-hero-lg: 8rem;
+  --text-landing-hero-lg--line-height: 0.95;
+  --text-landing-hero-lg--letter-spacing: -0.04em;
+  --text-landing-hero-lg--font-weight: 400;
+
+  --spacing-landing-photo-md: 22.5rem; /* 360px */
+  --spacing-landing-photo-lg: 27.5rem; /* 440px */
+  --aspect-editorial: 16 / 10;
+  --aspect-editorial-portrait: 4 / 5;
 
   --text-h2: 3.125rem; /* 50px @ 375 */
   --text-h2--line-height: 0.95;
