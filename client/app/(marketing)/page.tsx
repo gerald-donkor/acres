@@ -4,59 +4,30 @@ import { Button } from "@/components/acres/button"
 import { Eyebrow } from "@/components/acres/eyebrow"
 import { LandingMotion } from "@/components/acres/landing-motion"
 import {
-  ComparisonPreview,
-  ExplorePreview,
-  ImportPreview,
-  LineagePreview,
-  MappingPreview,
-  PublicationPreview,
+  GeographicContextPhoto,
   RegionalComparisonPlate,
   ReportEvidencePlate,
-  SourceContextPlate,
 } from "@/components/acres/landing-product-visuals"
 import { Section } from "@/components/acres/section"
 import { cn } from "@/lib/utils"
 
 type ContentItem = { title: string; body: string }
-const benefitPreviews = [
-  MappingPreview,
-  ComparisonPreview,
-  LineagePreview,
-  PublicationPreview,
-]
-const workflowPreviews = [ImportPreview, ExplorePreview, PublicationPreview]
-
 const benefits: readonly ContentItem[] = [
   {
     title: "Bring your data together",
-    body: "Import CSV, XLSX and GeoJSON files. Map your measures, time periods and regions into a consistent dataset.",
+    body: "Import CSV, XLSX and GeoJSON into a consistent dataset.",
   },
   {
     title: "Compare regions",
-    body: "Explore metrics across places and periods. Keep units, definitions and data quality in view as you compare.",
+    body: "See how places and periods compare, with units in view.",
   },
   {
     title: "Keep the source in sight",
-    body: "Follow a result back to its observations and dataset version. Understand the evidence behind the number.",
+    body: "Trace a finding to its observations and dataset version.",
   },
   {
     title: "Share a clearer story",
-    body: "Build reports around saved evidence. Publish a reviewed revision and export your findings as CSV or PDF.",
-  },
-]
-
-const details: readonly ContentItem[] = [
-  {
-    title: "Start with a sound source",
-    body: "Review validation issues and map your fields before publishing a dataset version for analysis.",
-  },
-  {
-    title: "Compare with context",
-    body: "Filter by region, metric and period. Save a dashboard view to return to the same selection with your team.",
-  },
-  {
-    title: "Make the evidence last",
-    body: "Published report revisions preserve their evidence, keeping the source behind your findings in reach.",
+    body: "Publish reviewed reports and export findings as CSV or PDF.",
   },
 ]
 
@@ -64,17 +35,17 @@ const steps: readonly (ContentItem & { marker: string })[] = [
   {
     marker: "01",
     title: "Import your data",
-    body: "Upload your source files, review validation results, and map the fields and regions that give your data meaning.",
+    body: "Upload a file and map its fields and regions.",
   },
   {
     marker: "02",
     title: "Explore your regions",
-    body: "Compare metrics across places and periods. Save the views that help your team understand what is changing.",
+    body: "Compare metrics and save a view for your team.",
   },
   {
     marker: "03",
     title: "Publish your findings",
-    body: "Turn evidence into a report, send it through review, and publish a revision your team can return to.",
+    body: "Review the evidence and publish a report revision.",
   },
 ]
 
@@ -87,7 +58,7 @@ export default function HomePage() {
       <Section
         align="center"
         aria-labelledby="hero-heading"
-        className="pt-10 md:pt-15 lg:pt-16"
+        className="pt-16 md:pt-20 lg:pt-24"
       >
         <div data-motion-hero-heading>
           <Eyebrow>Regional intelligence</Eyebrow>
@@ -98,8 +69,7 @@ export default function HomePage() {
             See the bigger picture.
           </h1>
           <p className="mx-auto mt-7 max-w-xl text-body text-ink-muted text-pretty">
-            Turn regional data into clear comparisons, traceable reports, and
-            better-informed decisions.
+            Compare regional data. Share findings you can trace.
           </p>
         </div>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -113,23 +83,14 @@ export default function HomePage() {
           </Button>
         </div>
 
-        <div className="mt-10 grid items-stretch gap-7 text-left md:mt-12 md:gap-5 lg:mt-16 lg:grid-cols-[2fr_1fr]">
+        <div className="mt-16 grid items-center gap-12 text-left md:mt-20 md:grid-cols-[2fr_1fr] lg:mt-24 lg:gap-16">
           <div data-motion-hero-media className="min-w-0">
             <RegionalComparisonPlate />
           </div>
           <div data-motion-hero-media className="min-w-0">
-            <SourceContextPlate />
+            <GeographicContextPhoto />
           </div>
         </div>
-
-        <ul
-          aria-label="Acres capabilities"
-          className="mt-10 grid gap-5 border-y border-rule py-6 font-mono text-label text-brand md:grid-cols-3 md:gap-8 lg:text-label-lg"
-        >
-          <li>CSV, XLSX &amp; GeoJSON</li>
-          <li>Regional comparisons</li>
-          <li>Traceable reports</li>
-        </ul>
       </Section>
 
       <Section
@@ -138,38 +99,29 @@ export default function HomePage() {
         className="scroll-mt-section"
       >
         <div data-motion-group="benefits-heading" data-motion-pace="tight">
-          <Eyebrow data-motion-item>From data to decisions</Eyebrow>
-          <div className="mt-6 grid gap-7 lg:grid-cols-[2fr_1fr] lg:items-end lg:gap-16">
-            <h2 id="benefits-heading" data-motion-item className={headingClass}>
-              Know what matters. See where it happens.
-            </h2>
-            <p
-              data-motion-item
-              className="max-w-xl text-body text-ink-muted text-pretty"
-            >
-              Your organization’s data tells a story about the places you work.
-              Bring it into focus with regional analysis your team can follow.
-            </p>
-          </div>
+          <Eyebrow data-motion-item>Benefits</Eyebrow>
+          <h2
+            id="benefits-heading"
+            data-motion-item
+            className={cn(headingClass, "mt-6")}
+          >
+            Regional data, made clear.
+          </h2>
         </div>
         <div
           data-motion-group="benefits"
-          className="mt-12 grid gap-x-5 gap-y-10 md:grid-cols-2 lg:mt-16 lg:grid-cols-4"
+          className="mt-16 grid gap-x-5 gap-y-12 md:mt-20 md:grid-cols-2 lg:grid-cols-4"
         >
-          {benefits.map((benefit, index) => {
-            const Preview = benefitPreviews[index]
-            return (
-              <article
-                key={benefit.title}
-                data-motion-item
-                className="border-t border-rule pt-6 lg:[&>figure]:min-h-66"
-              >
-                <Preview />
-                <h3 className="font-serif text-h3 text-ink">{benefit.title}</h3>
-                <p className="mt-4 text-body text-ink-muted">{benefit.body}</p>
-              </article>
-            )
-          })}
+          {benefits.map((benefit) => (
+            <article
+              key={benefit.title}
+              data-motion-item
+              className="border-t border-rule pt-8"
+            >
+              <h3 className="font-serif text-h3 text-ink">{benefit.title}</h3>
+              <p className="mt-4 text-body text-ink-muted">{benefit.body}</p>
+            </article>
+          ))}
         </div>
       </Section>
 
@@ -178,36 +130,26 @@ export default function HomePage() {
         aria-labelledby="detail-heading"
         className="scroll-mt-section"
       >
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+        <div className="grid items-center gap-12 md:gap-16 lg:grid-cols-2 lg:gap-20">
           <div data-motion-media className="min-w-0">
             <ReportEvidencePlate />
           </div>
           <div>
             <div data-motion-group="detail-heading" data-motion-pace="tight">
-              <Eyebrow data-motion-item>A clearer perspective</Eyebrow>
+              <Eyebrow data-motion-item>Reports</Eyebrow>
               <h2
                 id="detail-heading"
                 data-motion-item
                 className={cn(headingClass, "mt-6")}
               >
-                The detail behind every decision.
+                Evidence you can return to.
               </h2>
-            </div>
-            <div data-motion-group="details" className="mt-10">
-              {details.map((detail) => (
-                <div
-                  key={detail.title}
-                  data-motion-item
-                  className="border-t border-rule py-6 last:pb-0"
-                >
-                  <h3 className="font-serif text-h3 text-ink">
-                    {detail.title}
-                  </h3>
-                  <p className="mt-3 max-w-xl text-body text-ink-muted">
-                    {detail.body}
-                  </p>
-                </div>
-              ))}
+              <p
+                data-motion-item
+                className="mt-7 max-w-xl text-body text-ink-muted text-pretty"
+              >
+                Published revisions preserve the evidence behind your findings.
+              </p>
             </div>
           </div>
         </div>
@@ -225,39 +167,31 @@ export default function HomePage() {
             data-motion-item
             className={cn(headingClass, "mt-6 max-w-3xl")}
           >
-            From your first dataset to your next decision.
+            From file to finding.
           </h2>
         </div>
         <ol
           data-motion-group="steps"
-          className="mt-12 grid gap-10 md:grid-cols-3 md:gap-5 lg:mt-16"
+          className="mt-16 grid gap-16 md:mt-20 md:grid-cols-3 md:gap-5"
         >
-          {steps.map((step, index) => {
-            const Preview = workflowPreviews[index]
-            return (
-              <li
-                key={step.marker}
-                data-motion-item
-                className="border-t border-rule pt-8"
+          {steps.map((step) => (
+            <li
+              key={step.marker}
+              data-motion-item
+              className="border-t border-rule pt-8"
+            >
+              <span
+                aria-hidden="true"
+                className="block text-stat text-ink-faint md:text-stat-md"
               >
-                <span
-                  aria-hidden="true"
-                  className="text-stat text-ink-faint md:text-stat-md"
-                >
-                  {step.marker}
-                </span>
-                <div className="mt-8 md:[&>figure]:min-h-84">
-                  <Preview />
-                </div>
-                <h3 className="mt-8 font-serif text-h3 text-ink">
-                  {step.title}
-                </h3>
-                <p className="mt-4 max-w-sm text-body text-ink-muted lg:pr-10">
-                  {step.body}
-                </p>
-              </li>
-            )
-          })}
+                {step.marker}
+              </span>
+              <h3 className="mt-8 font-serif text-h3 text-ink">{step.title}</h3>
+              <p className="mt-4 max-w-sm text-body text-ink-muted lg:pr-10">
+                {step.body}
+              </p>
+            </li>
+          ))}
         </ol>
       </Section>
 
@@ -269,21 +203,13 @@ export default function HomePage() {
       >
         <div className="border-t border-rule pt-section">
           <div data-motion-group="contact" data-motion-pace="tight">
-            <Eyebrow data-motion-item>See what’s possible</Eyebrow>
             <h2
               id="contact-heading"
               data-motion-item
-              className={cn(headingClass, "mx-auto mt-6 max-w-2xl")}
+              className={cn(headingClass, "mx-auto max-w-2xl")}
             >
               Put your regions in perspective.
             </h2>
-            <p
-              data-motion-item
-              className="mx-auto mt-7 max-w-xl text-body text-ink-muted text-pretty"
-            >
-              Give your team a shared place to turn regional data into findings
-              they can use.
-            </p>
           </div>
           <div className="mt-10">
             <CreateAccount />

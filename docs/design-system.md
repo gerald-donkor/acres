@@ -957,3 +957,43 @@ Execution used the skill's limited gotchas/engineering fallback, installed
 `tailwindcss/theme.css` and production-generated utility behavior. Browser
 measurements confirm the named/default values; no snapshot initialization or
 new global type role is claimed.
+
+## 14. Simplified landing composition — Prompt 402 (2026-10-19)
+
+The approved refinement supersedes §13's preview minimums, mapping card and
+compact composition. It uses existing tokens only; `globals.css`, merge
+registration, shared `Section`/`Container`, fonts, palette, radii and motion are
+unchanged. Values below are approved **design judgments**, subsequently checked
+in the production browser, rather than measurements from the original comps.
+
+| Relationship                                              | 375px          | 800px          | 1280px             |
+| --------------------------------------------------------- | -------------- | -------------- | ------------------ |
+| Hero top inset / actions to visuals                       | 64 / 64px      | 80 / 80px      | 96 / 96px          |
+| Comparison/photo arrangement and gap                      | Stacked, 48px  | 2:1, 48px      | 2:1, 64px          |
+| Comparison inset / region-group gap                       | 32 / 32px      | 40 / 32px      | 48 / 32px          |
+| Benefits heading to articles                              | 64px           | 80px           | 80px               |
+| Benefits columns / horizontal gap / row gap               | 1 / — / 48px   | 2 / 20 / 48px  | 4 / 20px / —       |
+| Article rule to heading / heading to body                 | 32 / 16px      | 32 / 16px      | 32 / 16px          |
+| Report to adjacent explanation                            | Stacked, 48px  | Stacked, 64px  | Equal tracks, 80px |
+| Report sage-frame / white-sheet inset                     | 24 / 32px      | 32 / 40px      | 32 / 40px          |
+| Workflow heading to list                                  | 64px           | 80px           | 80px               |
+| Workflow columns / gap                                    | 1 / 64px       | 3 / 20px       | 3 / 20px           |
+| Step rule to marker / marker to heading / heading to body | 32 / 32 / 16px | 32 / 32 / 16px | 32 / 32 / 16px     |
+
+The default `--spacing: .25rem` supplies these values. Existing
+`--spacing-section` retains 120px top padding on subsequent sections and the
+closing section's internal top rule. The hero keeps its scoped 64/96/128px
+serif roles; native illustration text retains existing `text-quote`, body and
+monospace roles. No smaller type or fixed-height text is used to reduce density.
+
+The photo is vertically centered beside the comparison from `md`; its reserved
+`aspect-video` remains 16:9. Report columns start at `lg`; inspection at 1024px
+shows readable wrapping, so no custom breakpoint was needed. All panels have
+natural height. Workflow markers are block elements so their line boxes give
+an actual 32px gap before each heading. Full measurements and verification are
+in the Prompt 402 record in `docs/landing.md`.
+
+The Tailwind snapshot is still absent in its read-only skill location. The
+approved limited gotchas/engineering fallback, installed `theme.css`, generated
+utilities and browser measurements verify this change; no snapshot refresh or
+licence acceptance is claimed.

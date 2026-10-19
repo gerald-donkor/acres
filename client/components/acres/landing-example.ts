@@ -7,11 +7,6 @@ export const landingExample = {
   version: "v1",
   report: "Regional canopy comparison",
   revision: 1,
-  fields: [
-    { column: "region", role: "Region" },
-    { column: "year", role: "Period" },
-    { column: "canopy_pct", role: "Metric" },
-  ],
   observations: [
     { region: "Greater Accra", year: 2024, value: 18 },
     { region: "Greater Accra", year: 2025, value: 24 },

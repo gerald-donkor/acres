@@ -1,8 +1,9 @@
 # Acres — Landing Page
 
-**Current public landing:** the product-led hybrid visuals in the Prompt 401
-record at the end of this file supersede Prompt 399’s photographic composition.
-Prompt 400’s removal of visible photo credits remains in effect.
+**Current public landing:** the simplified product-led hybrid composition in the
+Prompt 402 record at the end of this file refines Prompt 401 and supersedes
+Prompt 399’s photographic composition. Prompt 400’s removal of visible photo
+credits remains in effect.
 
 Built to `prompts/05-landing-page.md`. This file records the `/` implementation
 against `client/public/assets/ui/landing-pages/Desktop.png`,
@@ -1138,3 +1139,182 @@ Preview: open `http://localhost:3202/` while the verified production server is
 running. For development run `npm run dev:client`, then open
 `http://localhost:3000/` or the port Next prints. Rollback is reverting the scoped
 commit; the retired photo assets remain available. No push or deployment was run.
+
+## Simplified content and spacing — Prompt 402 (2026-10-19)
+
+Approved `prompts/402-simplify-landing-content-and-spacing.md` refines the
+product-led hybrid direction to reduce repetition. Only the public landing,
+its local static illustration/example modules and owning documentation change.
+The hero retains one comparison and a smaller context photo; four open benefit
+articles and three workflow steps replace the miniature previews. One report
+excerpt sits beside one short explanation. Repeated introductions, mapping
+card, capability strip and closing prose are removed. Shared chrome, anchors,
+actions, motion, palette, typography and licensing remain unchanged.
+
+### Content, integrity and references
+
+The native comparison retains Greater Accra 18%/24%, Ashanti 35%/41% and Northern
+54%/58% for 2024/2025. Bar lengths share a zero-based 0–100% scale; the rendered
+widths differ from their source percentages by less than 0.01 percentage point.
+Outline/fill plus the period legend distinguish series beyond colour. Exact
+values remain native text; screen-reader-only year labels associate each compact
+pair with its periods, and the figure's `aria-describedby` names
+`regional-canopy-example.csv · v1`.
+
+The report is explicitly a published example, revision 1, with the Greater Accra
+excerpt, 2024: 18% → 2025: 24%, **+6 percentage points**, and the same source v1.
+The full filename is visible here once. Both numeric figures have the local
+“Illustrative data · invented values” disclosure;
+the photo carries no numbers or caption. The unused field-mapping metadata was
+removed after checking usages; observations and the derivation are unchanged.
+
+Execution re-opened the original desktop benefits crop `1280×630+0+1120` and the
+Prompt 402 baseline captures, and read the owning landing, design-system,
+component, motion, automation, product, build-plan and skill records. Installed
+Next server-component, page and Image guidance verified the retained server
+boundary and updated `sizes`. The current source manifest remains accurate,
+so its existing licence/provenance record did not need editing.
+
+### Measured composition and browser evidence
+
+Fresh production contexts on `http://localhost:3203/`, with fonts ready and
+photo decoded, measured **213 visible words** in `main` at every checked width,
+using `innerText.trim().split(/\s+/)`: down from 640, **66.7% fewer**. There are
+exactly **two numeric figures, two concise disclosures, one photo, zero preview
+figures and no capability strip**. Content is identical across breakpoints.
+
+| Width | Container / gutter | Comparison      | Context photo   | Report frame | Page height, before → after |
+| ----: | ------------------ | --------------- | --------------- | ------------ | --------------------------: |
+|   375 | 343 / 16px         | 343×570.34px    | 343×192.94px    | 343×510.69px |               8534 → 4982px |
+|   800 | 720 / 40px         | 448×586.34px    | 224×126px       | 720×445.53px |               5972 → 3797px |
+|  1280 | 1200 / 40px        | 757.33×603.55px | 378.66×212.98px | 560×447.94px |               4676 → 3490px |
+
+| Width | Hero height | Benefits height | Report section height | Workflow height |
+| ----: | ----------: | --------------: | --------------------: | --------------: |
+|   375 |   1248.06px |        910.56px |              880.88px |       1006.97px |
+|   800 |   1094.91px |        559.77px |              765.11px |        511.17px |
+|  1280 |   1084.53px |        407.98px |              567.94px |        498.98px |
+
+All spacing relationships in the approved table were checked against live boxes
+and computed styles; `docs/design-system.md` §14 records the values. Hero tracks
+are 448/224px at 800 and 757.33/378.66px at 1280. Benefits remain 1/2/4 columns;
+workflow remains 1/3/3, with approximately 226.67px columns at 800. Report columns
+are 560/560px at 1280 and 432/432px at 1024. No custom breakpoint was needed.
+
+320/390/640/1024/1440 checks show no page overflow or clipped visible text;
+page heights are 5286/4935/4657/3696/3490px. The report's 176px text width at
+320 allows filename, metric and revision text to wrap naturally. A separate
+640×450 CSS viewport at DPR2 verifies the reflow equivalent of a 1280px window
+at 200%; browser-toolbar zoom itself was not driven.
+
+Reduced-motion full-page captures at 375/800/1280 and native hero, benefit,
+report and workflow crops were visually opened. 320 and 1024 report captures
+were also opened. Final crops come from full-page images to avoid a sticky
+header overlay introduced by element-screenshot scrolling. Ignored evidence is
+in `output/playwright/402/`, including `metrics.json` and the browser outputs.
+
+Normal-motion traversal at 375/800/1280 settles every reveal target visible,
+with zero duplicate hooks or browser console/page errors. JavaScript-disabled
+375px retains both figures and all three main actions, with no hidden content
+or overflow. `LandingMotion` and the shared motion module remain unchanged.
+
+Skip link → `main-content` → account action passes; focus indicators measure
+3px on the skip link and 2px on the action. The hero `#how-to`, all four nav
+anchors at 375/800/1280, mobile menu open/close/Escape, and both main `/register`
+actions pass. No account was created. Initial harness errors were corrected:
+the existing Base UI CTA uses an anchor with button role, so the check targets
+its `href`; anchor results await the URL update rather than sampling too early.
+Neither correction required application changes.
+
+The local photo returns `200 image/webp 223752`; the selected optimized
+1920px/quality100 response in the DPR2 reflow context returns
+`200 image/jpeg 846021` with the probe's default Accept header. Browser images
+decode. The reserved ratio, meaningful alt, one-photo count and absence of
+retired paths/visible credits are retained. `sizes` now follows the 2:1 tracks,
+48/64px gaps, gutters and 1200px container cap.
+
+Fresh [Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md)
+were fetched and applied to the changed UI. No unresolved findings: native
+figures/lists/headings, quantitative alternatives, contrast, focus, touch
+geometry, reflow and static/reduced-motion visibility were checked. Approved
+sentence-case copy takes precedence over generic title-case guidance. The
+Firecrawl shim had no selected Node version, so the fresh source was retrieved
+with the available web tool. No product dependency or global tooling changed.
+
+### Checks, review and preview
+
+Node 24.21.0 was selected per command. Root `npm run typecheck` exited 0:
+
+```text
+> @acres/shared@0.1.0 build
+> tsc -p tsconfig.json
+> @acres/shared@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+> @acres/client@0.1.0 typecheck
+> tsc --noEmit
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 454ms
+```
+
+The first sandbox build exited 1 with the documented tooling failure:
+
+```text
+Error: Could not parse output from TypeScript's --showConfig.
+```
+
+The final root `npm run build`, outside that boundary, exited 0 after the
+workflow marker spacing correction:
+
+```text
+▲ Next.js 16.3.8 (webpack)
+✓ Compiled successfully in 4.1s
+  Finished TypeScript in 3.8s ...
+✓ Generating static pages using 7 workers (23/23) in 1575ms
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 1.11s
+```
+
+Root `npm run lint`, sequentially after the final build, exited 0:
+
+```text
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+```
+
+Installed Prettier checked changed TS/TSX with `--no-semi`, the prompt and the
+new Markdown records separately from historical formatting, exit 0:
+
+```text
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+`git diff --check` exits 0 with no output. The direct example assertion prints:
+
+```text
+6 observations; 3 comparisons; changes +6/+6/+4 percentage points: pass
+```
+
+The one-off Node import emits the existing module-type auto-detection warning;
+no package-type change is needed. No new static-layout test suite or backend
+E2E run was warranted by this scope. The unavailable Tailwind snapshot used the
+approved limited skill fallback and installed/generated CSS evidence.
+
+Independent `requesting-code-review` inspected the complete approved prompt,
+uncommitted diff against baseline/current HEAD `2685bbb`, source, motion
+ownership, screenshots and actual browser/check evidence. Verdict: **Ready to
+proceed with documentation and local commit; no Critical, Important or Minor
+findings.** `receiving-code-review` verified the documentation recommendation;
+the current-state pointer and the spacing record are updated here. No code fix
+or architectural re-review was required.
+
+Preview: open `http://localhost:3203/` while this task's production server is
+running. For development, run `npm run dev:client` and open
+`http://localhost:3000/` or the printed port. Rollback is a scoped revert of the
+implementation commit. No push or deployment is included.

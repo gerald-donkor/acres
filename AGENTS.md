@@ -91,7 +91,9 @@ This bounded exception permits the documented landing changes, not a new product
 identity. Approved prompt 401
 (`prompts/401-product-led-hybrid-landing-imagery.md`) supersedes prompt 399’s
 photography-dominant direction for `/` with product-led hybrid visuals, retaining
-the brand primitives and prompt 400’s removal of visible photo credits.
+the brand primitives and prompt 400’s removal of visible photo credits. Approved
+prompt 402 (`prompts/402-simplify-landing-content-and-spacing.md`) refines 401
+with shorter copy, fewer illustrations and more space between retained content.
 
 **These four files are the only source of *static* design truth in this
 repository** — palette, type, layout, radii, the end states of every surface.
