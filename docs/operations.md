@@ -13719,3 +13719,117 @@ Minor findings accepted:
 The reviewer could not check the pre-flight `pass 226` and the UTC window
 against its evidence; both come from captured output. No re-review: the
 changes were wording and placement in documentation.
+
+## Prompt 395 — scanner signature refresh 2 (2026-10-19)
+
+Baseline `45a392a`, clean `main` except the approved prompt. Node
+`v24.21.0` directly and inside `npm run` (the `/tmp/acres-node24` launcher
+was reinstalled); cached Vercel CLI 64.5.0, `whoami` → `dgsloxx417`, team
+`hobby`; `project inspect` → `prj_q9ApajZWDgdYZetnm5s5oakEjrUD`;
+`@vercel/sandbox` 3.8.0. UTC window `08:54:52Z`–`09:11:03Z`.
+
+The first approval arrived at `2026-10-18T16:30Z`, before the prompt's
+earliest useful start (`2026-10-19T04:00Z`). Execution stopped at the window
+gate with nothing spent and resumed on the next approval at
+`2026-10-19T08:54Z`.
+
+### Inputs and custody
+
+Run directory `~/.config/acres/vercel-preview/prompt395-20261019T085943Z/`
+(0700, files 0600, `adopt.sh`/`restore.sh` 0700):
+
+- the private pulls `preview-before.env` and `preview-after.env`, each into
+  a fresh file;
+- `previous-scanner.env` and `previous-scanner-scopes.json`;
+- `receipt.json`, `candidate.env` and `handoff/`;
+- probe output;
+- `adopt.sh` and `restore.sh` (the restore script was not run);
+- `writes.log`, dry-run manifest, deployment output and inspection;
+- `acceptance.json`, `accept/` and `sql-correlation.txt`;
+- the `Snapshot.get`/`Sandbox.list` snapshots `inspect-*.json`.
+
+Earlier `prompt3xx-*` directories were read, never rewritten.
+
+The preview OIDC token had expired (`03:57Z`), so the one authorized
+`env pull` refreshed `preview.env`. It went into a new file that then
+replaced the old one, so the stale development-only lines Prompt 394 found
+are gone.
+
+### Sequence and sanitized outputs
+
+1. Pre-flight: `--help` exit 0, `--dry-run` exit 0 with
+   `execution_mode: "simulation"`, the three scanner specs `pass 226`,
+   `fail 0`.
+2. One cadence rebuild (`09:00:37–09:01:46Z`), exit 0:
+   `status: "success"`, candidate `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`,
+   `daily_sha256` `7cb49401…` ≠ the active `489f6083…` (full values
+   compared privately), so the freshness gate passed. `main_sha256` was
+   unchanged. Handoff: receipt
+   `eec8c15f4f2b128080710a70755ad63c2b669a833d1123fbdff40179e4fd35b3`, and
+   `runtime.env`
+   `af1ba4f233112f9f9694a1671d8bbe17f2f7fce6ee2f389c474d371747f2580a`, both
+   equal to `handoff.json`. `Snapshot.get`: `created`, expiry
+   `2026-10-27T09:01:22.926Z`. `Sandbox.list`: none.
+3. `probe-platform.js scanner` with `candidate.env` and max age 48: exit 0,
+   `gatePassed: true`, `signaturesVerified: true`, clean 13.8 s, EICAR
+   13.9 s, `sandboxCreations: 1`, `cleanupSucceeded: true`.
+4. The owner ran `adopt.sh`: three `rc=0` (`09:04:17–09:04:22Z` by the
+   records' `updatedAt`). The fresh private re-pull equals the bundle.
+   Changed keys: `SCANNER_DAILY_SHA256` and `SCANNER_SANDBOX_SNAPSHOT_ID`.
+5. `vercel deploy --dry --target=preview` and `vercel:deploy-manifest` →
+   `deploy manifest ok: 656 files`. Then
+   `vercel deploy --target=preview --scope dgsloxx417s-projects` from the
+   working tree (`09:05:28–09:07:47Z`): exit 0,
+   `dpl_AtJLkmoy3gWJVDSzkAUk5t8ujYPJ`, Ready in 2.2 min.
+6. Acceptance through `vercel curl --deployment`. The results are in
+   [the hosted record](vercel-deployment.md#scanner-signature-refresh--prompt-395-2026-10-19).
+   RLS-scoped read-only SQL (`acres_app` direct URL, `BEGIN READ ONLY`,
+   transaction-local `acres.organization_id`, `ROLLBACK`) confirmed the
+   upload, outbox and `DurableJob` states and zero EICAR dataset versions.
+7. Post-run `Snapshot.get`: candidate expiry `2026-10-27T09:09:29.002Z`,
+   `snap_ngIw…` unchanged at `2026-10-26T16:14:25.251Z`. `Snapshot.list`:
+   six. `Sandbox.list`: none.
+
+No recovery action was needed.
+
+### Checks (Node 24.21.0, sequential)
+
+- `node scripts/vercel/check-vercel-config.js` → `vercel.json configuration valid`, exit 0
+- `npm run vercel:probe-test` → `tests 337`, `pass 337`, `fail 0`, exit 0
+- `npm run ops:check` → every suite `fail 0`, exit 0
+- `npm run lint` → exit 0; `npm run build` → exit 0; `npm run typecheck` → exit 0
+- `npm run ops:scan-secrets` → `secret/default scan passed`, exit 0
+- `git diff --check` → exit 0
+
+Local checks do not stand in for the hosted proof above.
+
+### Review
+
+Stage 1 found no Critical issues. It checked the recorded IDs, digests,
+timestamps, durations, derived bounds, anchors and the absence of secrets
+against the sanitized evidence. Two Important findings, both accepted:
+
+- this subsection was missing;
+- "Prompt 394's file changed after about 17 h" overclaimed; it now says a
+  different file was being served about 17 h later.
+
+Minor findings accepted: the hosted record now scopes "the only
+warning/error record" to Vercel's log level, the window check time is now
+`08:55Z`, and the ops-suite count was dropped. Two were rejected: adding
+"Vercel Authentication" to the deployment bullet (not observed in this
+run), and indenting the prompt's `<run>/handoff` continuation line (that is
+Prettier's output, and the prompt must pass Prettier).
+
+The reviewer could not check the deployment URL, the CLI version and
+`whoami`, the empty rebuild stderr or the full private hash comparison
+against its evidence. All of them come from captured output. No re-review:
+the changes were wording in documentation.
+
+### Notes
+
+- The bound is now no later than about `2026-10-21T09:02Z`. A different
+  `daily.cvd` was being served about 17 h after Prompt 394's fetch; when it
+  changed is not recorded. The refresh cadence stays roughly every two days
+  while the 48 h policy holds.
+- `infra/vercel/runbooks/managed-operations.md` §5.5 was not changed: this
+  run found no procedure gap.

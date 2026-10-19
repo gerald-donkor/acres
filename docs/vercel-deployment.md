@@ -17,7 +17,7 @@ scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
 outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
 managed outbox dispatch, Prompt 377 = shared managed API throttling, Prompt
 393 = named dashboard GraphQL operation, Prompt 394 = scanner signature
-refresh); each
+refresh, Prompt 395 = scanner signature refresh 2); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -129,18 +129,24 @@ committed per AGENTS.md §2):
       (2026-10-18) rebuilt with **fresh** signatures (`daily` `489f6083…`,
       not `f9cb69a8…`), adopted `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` on
       preview and proved clean and EICAR uploads through
-      `dpl_A5H3fnpSx59XyfKqmKJQLywVf85j`. Its signatures leave the 48 h
-      window no later than about **2026-10-20T16:01Z** (rebuild end + 48 h;
+      `dpl_A5H3fnpSx59XyfKqmKJQLywVf85j`. Prompt 395 (2026-10-19) rebuilt
+      with **fresh** signatures again (`daily` `7cb49401…`, not
+      `489f6083…`), adopted `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` on preview
+      and proved clean and EICAR uploads through
+      `dpl_AtJLkmoy3gWJVDSzkAUk5t8ujYPJ`. Its signatures leave the 48 h
+      window no later than about **2026-10-21T09:02Z** (rebuild end + 48 h;
       the `daily.cvd` build time is not recorded, so the bound may be
-      earlier; plan the refresh before about 15:59Z). The local
-      `preview.env` keeps stale development-only lines
-      (`BLOB_READ_WRITE_TOKEN`, `NEON_OWNER_*`); compare against a fresh
-      pull. Until a hosted cadence exists, a manual refresh is needed
-      about every two days. Next (own prompts): the next refresh before that
-      bound (compare `daily_sha256` first, see Prompt 394), the
-      dependency-aware retirement of superseded snapshots (five retained);
-      the owner's decision on deleting the nine preview deployments that
-      stored `.env` files (see Prompt 392) is pending.
+      earlier; plan the refresh before about 09:00Z, with stage 2 started
+      by about 06:00Z). A rebuild before about 2026-10-19T21:00Z risks
+      fetching the same `daily.cvd` (a judgement, as in Prompt 395).
+      `env pull` into an existing file keeps stale lines; pull into a
+      fresh file and replace. Until a hosted cadence exists, a manual
+      refresh is needed about every two days. Next (own prompts): the next
+      refresh before that bound (compare `daily_sha256` first, see Prompt
+      394), the dependency-aware retirement of superseded snapshots (six
+      retained; `snap_Feg5…` expires 2026-10-24T14:29:39Z); the owner's
+      decision on deleting the nine preview deployments that stored `.env`
+      files (see Prompt 392) is pending.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
@@ -2574,3 +2580,97 @@ of the four superseded snapshots (`snap_Feg5…` expires
 `2026-10-24T14:29:39Z`), the owner's decision on the nine leaky previews,
 the production plan decision and the eleven sign-offs. See
 [the execution record](operations.md#prompt-394--scanner-signature-refresh-2026-10-18).
+
+## Scanner signature refresh — Prompt 395 (2026-10-19)
+
+Status: **fresh candidate adopted on preview; deployed upload → scan
+proven.** Source `45a392a` on `main` (working-tree deploy after the Prompt
+392 gate). Window check at `2026-10-19T08:55Z`, inside the prompt's
+`04:00Z`–`12:59Z` window and about 31 h before the Prompt 394 bound
+(~`2026-10-20T16:01Z`).
+
+- **Target, read-only.** As fixed above. `Snapshot.get`: `snap_Feg5…`,
+  `snap_rz0cs…`, `snap_KtLd…`, `snap_CARv…` and the active `snap_ngIw…`
+  all `created`; `Sandbox.list` empty. The five `SCANNER_*` records are
+  preview-only (`encrypted`) with no git branch override, and the active
+  ID was `snap_ngIw…`.
+- **Rebuild, one invocation** (`09:00:37–09:01:46Z`, exit 0, empty
+  stderr). `rebuild-scanner-cadence.js --force` with
+  `--current-snapshot-id snap_ngIw…` under `env -i`: `status: "success"`,
+  `execution_mode: "live"`, all four smoke checks `passed`,
+  `prune_status: "retained"`, `activation_status: "not_performed"`.
+  Candidate
+  `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` (`created`, `iad1`, 461,123,163
+  bytes), main `0b2182d2…` (unchanged), daily `7cb49401…`.
+- **Freshness gate: passed.** The daily hash differs from `snap_ngIw…`'s
+  `489f6083…`, so a different (presumably newer) `daily.cvd` was fetched,
+  about 17 h after Prompt 394's.
+- **Bundle.** Receipt `eec8c15f…79e4fd35b3` and `runtime.env`
+  `af1ba4f2…47f2580a` matched `handoff.json`. `runtime.env` held the three
+  names, with valid patterns, equal to the receipt.
+- **Seam probe, one run** (`09:02:16–09:03:24Z`, exit 0): `gatePassed`,
+  `signaturesVerified` under 48 h, clean accepted, EICAR rejected,
+  `deny-all`, `persistent: false`, `baseSnapshotSurvived`, one creation,
+  cleanup succeeded.
+- **Adoption** (`09:04:17–09:04:22Z`). The owner ran the prepared
+  `adopt.sh` (stdin, names and exit codes only): three `rc=0`. A fresh
+  private re-pull matched all three to the bundle. Of the keys present in
+  both pulls (the OIDC token excluded), only `SCANNER_SANDBOX_SNAPSHOT_ID`
+  and `SCANNER_DAILY_SHA256` changed; no key appeared or disappeared;
+  provider `vercel-sandbox` and max age `48` were unchanged.
+- **Deployment.** `dpl_AtJLkmoy3gWJVDSzkAUk5t8ujYPJ`
+  (`https://acres-nlxfu7g96-dgsloxx417s-projects.vercel.app`), after
+  `deploy manifest ok: 656 files`. Created `09:05:30Z`, Ready `09:07:45Z`,
+  git meta `45a392a`, `target: null` in the API record (the CLI `inspect`
+  JSON prints `"preview"`, as it did for Prompt 394), no aliases, `iad1`,
+  basic build machine (2 cores, 8 GB). The build log shows the `client`
+  Next build and the `api` (`src/main.ts`) and `jobs`
+  (`src/vercel/jobs.function.ts`) entrypoints.
+- **Acceptance** (`09:08:30–09:10:17Z`), through
+  `vercel curl --deployment` with a cookie jar. Fresh synthetic account and
+  organization, selected through the `acres_active_organization` cookie.
+  - `/app`: 200, `id="dashboard-title"`, no `role="alert"` (the hard gate).
+  - Clean CSV: private Blob PUT 200, complete 200, `accepted` 15 s after
+    completion. DB: `scanStatus=clean`, outbox `dispatched` (1 attempt),
+    `DurableJob` `succeeded` (1 attempt).
+  - EICAR CSV (probe fixture, real checksum): `rejected`/`infected`.
+    `DurableJob` `failed`/`infected` (1 attempt), download 404, no dataset
+    version. This deployment's `jobs` logs carry the `JobProcessorService`
+    "Upload rejected by malware scan … infected/Eicar-Test-Signature" line
+    at `09:09:42Z`. The only record at Vercel log level
+    warning/error/fatal is the known `pg` SSL-mode warning.
+  - Anonymous GET of both Blob objects: 403. A second synthetic
+    organization got 404 for both uploads, with its own and a forged
+    organization header. The RLS-scoped read saw only this organization's
+    two uploads.
+- **Scanner identity (inference).** The writes finished before the
+  deployment was created. The adapter rejects a VM whose
+  `sourceSnapshotId` or signature hashes differ from its configuration
+  before a clean verdict. `snap_KBaj…`'s expiry moved from
+  `2026-10-27T09:02:18Z` (set by the seam probe) to `2026-10-27T09:09:29Z`,
+  eight days after the scan VM boots. In the same window `snap_ngIw…`
+  stayed at `2026-10-26T16:14:25Z`. This rests on the expiry-on-use
+  behaviour, not a provider attestation. `Sandbox.list` was empty after the
+  run.
+- **Owned artifacts** (custody only): two accounts, two organizations, two
+  uploads and their Blob objects, under
+  `~/.config/acres/vercel-preview/prompt395-20261019T085943Z/`. Nothing was
+  deleted and no snapshot was retired. Six snapshots are retained (about
+  2.8 GB).
+
+**New bound.** The fetch happened inside the `09:00:37–09:01:46Z` rebuild,
+so these signatures fail the 48 h policy no later than about
+`2026-10-21T09:02Z`; plan the next refresh before about `09:00Z`, with stage
+2 started by about `06:00Z`. The `daily.cvd` build time is not in the
+receipt, so the bound may be earlier. A rebuild before about
+`2026-10-19T21:00Z` risks fetching the same file (a judgement). Restoring
+`snap_ngIw…` (values in custody `previous-scanner.env`) would restore
+identity only, since its signatures fail closed after about
+`2026-10-20T16:01Z`.
+
+Remaining: the next refresh before the new bound, a hosted cadence (until it
+exists, a manual refresh about every two days), dependency-aware retirement
+of the five superseded snapshots (`snap_Feg5…` expires
+`2026-10-24T14:29:39Z`), the owner's decision on the nine leaky previews,
+the production plan decision and the eleven sign-offs. See
+[the execution record](operations.md#prompt-395--scanner-signature-refresh-2-2026-10-19).

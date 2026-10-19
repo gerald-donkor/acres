@@ -4254,3 +4254,12 @@ Open: a hosted cadence (a manual refresh about every two days until it
 exists), dependency-aware retirement, the production plan, the Phase 12 exit
 and all eleven category sign-offs. The 391 entry's `.vercelignore` and
 `/app` items were closed by Prompts 392 and 393.
+
+## Scanner signature refresh 2 — Prompt 395 (2026-10-19)
+
+A fresh candidate, `snap_KBaj…`, was adopted on preview, and clean and
+EICAR uploads were proven through `dpl_AtJLkmoy3gWJVDSzkAUk5t8ujYPJ`. See
+[the hosted record](vercel-deployment.md#scanner-signature-refresh--prompt-395-2026-10-19).
+Open: a hosted cadence (a manual refresh about every two days until it
+exists), dependency-aware retirement, the production plan, the Phase 12 exit
+and all eleven category sign-offs.

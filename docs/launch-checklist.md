@@ -3364,3 +3364,10 @@ A fresh candidate was adopted and the deployed upload → scan proof passed
 on `dpl_A5H3…`. The new 48 h bound is no later than about
 2026-10-20T16:01Z. No category is approved. See
 [the execution record](operations.md#prompt-394--scanner-signature-refresh-2026-10-18).
+
+## Prompt 395 — scanner signatures refreshed on preview again (2026-10-19)
+
+A fresh candidate was adopted and the deployed upload → scan proof passed
+on `dpl_AtJL…`. The new 48 h bound is no later than about
+2026-10-21T09:02Z. No category is approved. See
+[the execution record](operations.md#prompt-395--scanner-signature-refresh-2-2026-10-19).
