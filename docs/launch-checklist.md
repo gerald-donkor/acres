@@ -3371,3 +3371,11 @@ A fresh candidate was adopted and the deployed upload → scan proof passed
 on `dpl_AtJL…`. The new 48 h bound is no later than about
 2026-10-21T09:02Z. No category is approved. See
 [the execution record](operations.md#prompt-395--scanner-signature-refresh-2-2026-10-19).
+
+## Prompt 396 — superseded scanner snapshots retired on preview (2026-10-19)
+
+Three superseded snapshots whose dependents already failed closed, or that
+were never configured, were deleted after a dependency-checked plan. The
+active snapshot, its rollback and one adopted predecessor remain. Storage accounting remains unresolved; the later dashboard reading is outstanding.
+No category is approved. See
+[the execution record](operations.md#prompt-396--scanner-snapshot-retirement-2026-10-19).

@@ -13833,3 +13833,88 @@ the changes were wording in documentation.
   while the 48 h policy holds.
 - `infra/vercel/runbooks/managed-operations.md` §5.5 was not changed: this
   run found no procedure gap.
+
+## Prompt 396 — scanner snapshot retirement (2026-10-19)
+
+Baseline `eadc35d`, clean `main` except the approved prompt. Node
+`v24.21.0` from the mise install (`~/.local/share/mise/installs/node/24.21.0`
+first on `PATH`; the `/tmp/acres-node24` launcher was gone), cached Vercel CLI
+64.5.0, `@vercel/sandbox` 3.8.0.
+
+### Tooling and review
+
+`scripts/vercel/retire-scanner-snapshots.js` and its spec, the
+`vercel:scanner-retire` script, the spec added to `vercel:probe-test`, a
+README paragraph and the runbook §5.5 step 4 procedure. `.vercelignore` is
+an allowlist and keeps `scripts/` out of deploy uploads; unchanged.
+
+Stage 1 review found no path to a delete under a refusal, no delete outside
+`--retire` and no token leak, and raised one Critical and four Important
+findings, all verified against the installed SDK and accepted:
+
+- **Critical.** `Snapshot.get`/`delete` are team-scoped (`/v2/sandboxes/snapshots/<id>`,
+  no project parameter), so a mis-copied ID from another project could be
+  deleted. Added the `not_in_project` refusal (every present ID must be in
+  the project's `Snapshot.list`).
+- The SDK transport retries 5xx/429, DELETE included, so a delete can land
+  and still throw. One re-read now records `deleted_after_error`; the run
+  still stops.
+- The runbook stated the retirement in the past tense before the live run;
+  reworded to "targets" and the CARv/ngIw tier 2 named.
+- Stopped persistent sandboxes carry `currentSnapshotId`; added the
+  `sandbox_dependency` refusal.
+- Spec gaps: a re-get error after a delete (must be `unconfirmed`), and
+  `lookup_failed` from each listing.
+
+Minor findings taken: `active_malformed` (an env value failing the ID
+pattern never reaches the receipt), `unlisted_snapshots: null` when the
+listing failed, and a `warnings` array (`keep_changed`,
+`after_list_failed`) that forces exit 1. Not taken: a separate
+`status_after` field (`deleted_after_error` covers the case that changes the
+operator's action) and guarding `iso()` before any delete (schema-bound,
+pre-delete). The follow-up review found no remaining Critical or Important
+issue. The tooling was committed as `4aa24ca` before the live run.
+
+### Checks (Node 24.21.0)
+
+- `node --test scripts/vercel/retire-scanner-snapshots.spec.js` → `tests 34`, `pass 34`, `fail 0`
+- `npm run vercel:probe-test` → `tests 371`, `pass 371`, `fail 0`
+- `npm run lint` → exit 0; `npm run typecheck` → exit 0
+- `npx prettier --check` on the new files, `package.json` and the README →
+  `All matched files use Prettier code style!`. The runbook fails the same
+  check at `eadc35d` because of an existing table; this prompt's lines pass
+  and the table was not reformatted.
+- `npm run ops:scan-secrets` → `secret/default scan passed`
+- `git diff --check` → clean
+
+`npm run build` was skipped: no workspace source changed. `npm run
+ops:check` was not run; it touches nothing changed here.
+
+### Live sequence
+
+1. Access, one fresh preview pull into
+   `~/.config/acres/vercel-preview/prompt396-20261019T104349Z/preview.env`;
+   preview active ID matched `snap_KBaj…`; root `scanner.env` named
+   `snap_Feg5…` (stale custody file), raised with the owner, who chose to
+   proceed.
+2. Deployment listing (MCP `list_deployments`, 19 deployments) for the
+   dependency table.
+3. Plan (`plan.json`, exit 0, `planned`, no refusals, six snapshots).
+4. Owner reading before.
+5. One `--confirm` (`retire.json`, exit 0, `retired`, three `deleted`).
+6. Owner after-reading at 11:32:27 UTC remained 2.39 GB / 15 GB.
+   The later reading no earlier than 12:03 UTC is outstanding; accounting
+   acceptance remains open.
+
+No recovery action was needed. The run directory holds `preview.env`,
+`plan.json` and `retire.json`; earlier run directories were not modified.
+The hosted results and readings are in
+[the hosted record](vercel-deployment.md#scanner-snapshot-retirement--prompt-396-2026-10-19).
+
+### Notes
+
+- The dashboard could not be read programmatically: `vercel usage` reports
+  billing data unavailable on this Hobby team, `GET /v1/billing/charges`
+  returns `404 costs_not_found`, and the Chrome extension was not connected.
+  Readings are owner-reported.
+- Retirement recurs with every refresh; tier 2 waits for its windows.

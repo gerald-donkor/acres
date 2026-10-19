@@ -17,7 +17,8 @@ scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
 outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
 managed outbox dispatch, Prompt 377 = shared managed API throttling, Prompt
 393 = named dashboard GraphQL operation, Prompt 394 = scanner signature
-refresh, Prompt 395 = scanner signature refresh 2); each
+refresh, Prompt 395 = scanner signature refresh 2, Prompt 396 = snapshot
+retirement tier 1); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
@@ -141,17 +142,24 @@ committed per AGENTS.md §2):
       fetching the same `daily.cvd` (a judgement, as in Prompt 395).
       `env pull` into an existing file keeps stale lines; pull into a
       fresh file and replace. Until a hosted cadence exists, a manual
-      refresh is needed about every two days. Next (own prompts): the next
-      refresh before that bound (compare `daily_sha256` first, see Prompt
-      394), the dependency-aware retirement of superseded snapshots (six
-      retained; `snap_Feg5…` expires 2026-10-24T14:29:39Z); the owner's
-      decision on deleting the nine preview deployments that stored `.env`
-      files (see Prompt 392) is pending.
+      refresh is needed about every two days. Prompt 396 (2026-10-19) added
+      `npm run vercel:scanner-retire` and retired tier 1 (`snap_Feg5…`,
+      `snap_rz0cs…`, `snap_KtLd…`); three are retained: `snap_KBaj…`
+      (active), `snap_ngIw…` (rollback) and `snap_CARv…`. Storage accounting remains unresolved after an unchanged early dashboard reading. The
+      custody root `scanner.env` still names the deleted `snap_Feg5…`; the
+      active values are in `prompt395-20261019T085943Z/candidate.env`. Next
+      (own prompts): the next refresh before that bound (compare
+      `daily_sha256` first, see Prompt 394), then tier 2 (`snap_CARv…`,
+      `snap_ngIw…`) once their windows close, most naturally with that
+      refresh; the owner's decision on deleting the nine preview deployments
+      that stored `.env` files (see Prompt 392) is pending.
 - [x] **First preview deployment** — Services/route config (`vercel.json`), only the
       `acres_app` pooled URL as a **sensitive** `DATABASE_URL`, out-of-band
       migration `20261016000000_shared_throttling` applied to Neon preview DB,
       `BLOB_STORE_ID` set with `STORAGE_PROVIDER=vercel-blob` and OIDC,
-      `SCANNER_PROVIDER=vercel-sandbox` with snapshot `snap_d2y7r2n9`,
+      `SCANNER_PROVIDER=vercel-sandbox` with a snapshot recorded as
+      `snap_d2y7r2n9` (unverified: no such snapshot was ever listed; Prompt
+      396 found the baseline configured until Prompt 391 was `snap_Feg5…`),
       `QUEUE_PROVIDER=vercel` with topic `acres-jobs`, and internal binding
       `ACRES_API_ORIGIN`. Verified live across all five hosted gates A–E on
       deployment `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`
@@ -1800,7 +1808,9 @@ acceptance proof across Gates A–E.
   * `BLOB_STORE_ID`: `store_g2fmCH5CW7TJbkN3`
   * `STORAGE_PROVIDER`: `vercel-blob` (OIDC authentication, S3 variables unset)
   * `QUEUE_PROVIDER`: `vercel` (topic `acres-jobs`)
-  * `SCANNER_PROVIDER`: `vercel-sandbox` (`SCANNER_SANDBOX_SNAPSHOT_ID=snap_d2y7r2n9`,
+  * `SCANNER_PROVIDER`: `vercel-sandbox` (`SCANNER_SANDBOX_SNAPSHOT_ID` recorded as
+    `snap_d2y7r2n9`, an unverified ID that matches no listed snapshot; the
+    baseline in use until Prompt 391 was `snap_Feg5…` (Prompt 396),
     `SCANNER_MAX_SIGNATURE_AGE_HOURS=48`)
   * `SESSION_SECRET`, `CSRF_SECRET`, `CRON_SECRET`: sensitive credentials
   * `AI_ENABLED`: `false`
@@ -1837,7 +1847,8 @@ acceptance proof across Gates A–E.
    - Vercel Queues pushes CloudEvent to service `jobs`.
    - `queue-consumer.middleware.ts` intercepts delivery and invokes
      `LeasedJobExecutorService`.
-   - Vercel Sandbox ClamAV scan (`snap_d2y7r2n9`) executes in microVM and verifies
+   - Vercel Sandbox ClamAV scan (recorded as `snap_d2y7r2n9`, unverified; the
+     configured baseline was `snap_Feg5…`, Prompt 396) executes in microVM and verifies
      upload clean.
    - Neon PostgreSQL verification: `Upload` row transitions to `state: accepted`,
      `scanStatus: clean`, `scanResult: clean`, `acceptedAt: 2026-10-16T14:29:52.909Z`,
@@ -2674,3 +2685,93 @@ of the five superseded snapshots (`snap_Feg5…` expires
 `2026-10-24T14:29:39Z`), the owner's decision on the nine leaky previews,
 the production plan decision and the eleven sign-offs. See
 [the execution record](operations.md#prompt-395--scanner-signature-refresh-2-2026-10-19).
+
+## Scanner snapshot retirement — Prompt 396 (2026-10-19)
+
+Status: **tier 1 retired on preview.** Source `4aa24ca` on `main` (the
+reviewed retire CLI, committed before any live step). Cached CLI 64.5.0,
+`whoami` → `dgsloxx417`, team `team_zE3mp7nrEZ6a7cxRavwUMYC4`, linked
+project `acres` (`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`), `@vercel/sandbox`
+3.8.0, Node 24.21.0.
+
+- **Tooling.** `npm run vercel:scanner-retire` plans by default and deletes
+  only the listed `--retire` IDs with `--confirm`; see
+  [infra/vercel/README.md](../infra/vercel/README.md) and runbook §5.5.
+  Snapshot `get` and `delete` are team-scoped (no project parameter in SDK
+  3.8.0), so every ID must also appear in the project's `Snapshot.list`.
+- **Access** (`10:43Z`). One `env pull --environment=preview` into a new
+  run directory, `~/.config/acres/vercel-preview/prompt396-20261019T104349Z/`
+  (0700, files 0600). OIDC claims bound to the fixed project and team.
+  `SCANNER_SANDBOX_SNAPSHOT_ID` matched `snap_KBaj…`.
+- **Custody mismatch (owner decision).** The custody root `scanner.env`
+  still named `snap_Feg5…`: it was written by Prompt 373 and never updated,
+  because Prompts 390–395 wrote their env files into per-run directories.
+  Prompt 395's `candidate.env` and `handoff/runtime.env` both name
+  `snap_KBaj…`, as does the fresh pull. The prompt's stop-on-mismatch rule
+  was raised with the owner, who chose to proceed. The file was left as is;
+  anything sourcing it now targets a deleted snapshot and fails closed.
+- **Dependencies** (inferred from write-before-create ordering against the
+  recorded adoption times; deployment metadata names variables, not
+  values):
+
+  | snapshot                            | configured                                      | deployments created meanwhile                                    | decision                              |
+  | ----------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------- |
+  | `snap_Feg5m9jpsGpejVjjh6ZAlzrMJIkA` | until Prompt 391, `2026-10-18T13:56Z`           | `dpl_Hr9V…` and the other 2026-10-15/16 deployments              | retired; signature window long closed |
+  | `snap_rz0cs8Nnw1RObI3ZDS5WRKDSUR2y` | never (Prompt 386 failed candidate)             | none                                                             | retired                               |
+  | `snap_KtLdaJeG4SaLAwi4mI8G8XzURZat` | never (Prompt 389 failed smoke)                 | none                                                             | retired                               |
+  | `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` | `13:56Z`–`16:09:20Z` 2026-10-18                 | `dpl_2aaj…` (14:00Z), `dpl_7JR8…` (15:00Z), `dpl_1S2x…` (15:27Z) | kept (tier 2)                         |
+  | `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` | `16:09:20Z` 2026-10-18 – `09:04:22Z` 2026-10-19 | `dpl_A5H3…` (16:10Z)                                             | kept (rollback)                       |
+  | `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` | since `09:04:22Z`                               | `dpl_AtJL…` (09:05:30Z)                                          | kept (active)                         |
+
+  `dpl_7JR8…` (Prompt 392) was missing from the prompt's table; it is a
+  `snap_CARv…` dependent and does not change tier 1.
+
+- **Plan run** (`10:49:51–10:49:56Z`, exit 0): `result: "planned"`, no
+  refusals, `active_sandboxes: 0`, every keep `created`, no `parent_id`,
+  `unlisted_snapshots: []`. Six snapshots, 2,766,290,741 bytes. No
+  snapshot `snap_d2y7r2n9` exists; the three lines that named it (the "First
+  preview deployment" bullet and the Prompt 378 record) now say the ID is
+  unverified and the baseline was `snap_Feg5…`.
+- **Confirm run, once** (`11:02:28–11:02:37Z`, exit 0):
+  `result: "retired"`, no warnings. In order, each confirmed by a re-read:
+
+  | snapshot      | bytes       | outcome   |
+  | ------------- | ----------- | --------- |
+  | `snap_Feg5…`  | 460,912,577 | `deleted` |
+  | `snap_rz0cs…` | 460,964,313 | `deleted` |
+  | `snap_KtLd…`  | 461,123,700 | `deleted` |
+
+  After: three snapshots, 1,383,290,151 bytes. The keeps stayed `created`
+  with unchanged expiries: `snap_KBaj…` `2026-10-27T09:09:29Z`,
+  `snap_ngIw…` `2026-10-26T16:14:25Z`, `snap_CARv…` `2026-10-26T14:08:18Z`
+  (moved from the recorded `01:44:56Z` by a later use).
+
+- **Effect.** Deployments pinned to `snap_Feg5…` now fail closed with
+  `scanner_unavailable` instead of a signature-age failure; they already
+  failed closed. No upload that would be marked `clean` is affected.
+  Deletion cannot be undone; a later need takes the normal rebuild → adopt
+  → deploy path.
+
+**Snapshot Storage (owner-reported, Usage → Sandbox).**
+
+The supplied before screenshot (`screenshot-2026-10-19_11-01-56.png`)
+showed **2.39 GB / 15 GB**. The after screenshot
+(`screenshot-2026-10-19_11-32-27.png`) still showed **2.39 GB / 15 GB**
+and “Updated just now”, about 30 minutes after retirement. Times come from
+owner-supplied filenames (Accra/UTC), not dashboard timestamps; the reporting
+period selector is not visible. The 11:28:49 snapshot-inventory screenshot
+also shows all three expected targets Deleted and all three keeps Created.
+
+**Accounting remains unresolved.** The early unchanged reading does not
+distinguish cumulative accounting from dashboard lag or another accounting
+method. Prompt 396's later owner reading, no earlier than **12:03 UTC**, is
+still outstanding; its accounting acceptance is not complete. The provider
+listing verifies the stored-byte reduction, not recovered billing allowance.
+This open experiment does not prevent a separately approved preview deploy.
+
+Remaining: the next refresh before about `2026-10-21T09:02Z`, tier 2
+(`snap_CARv…` after about `2026-10-20T01:00Z`, `snap_ngIw…` after about
+`2026-10-20T16:01Z` and once a newer rollback exists), a hosted cadence,
+the owner's decision on the nine leaky previews, the production plan
+decision and the eleven sign-offs. See
+[the execution record](operations.md#prompt-396--scanner-snapshot-retirement-2026-10-19).

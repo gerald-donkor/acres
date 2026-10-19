@@ -4263,3 +4263,12 @@ EICAR uploads were proven through `dpl_AtJLkmoy3gWJVDSzkAUk5t8ujYPJ`. See
 Open: a hosted cadence (a manual refresh about every two days until it
 exists), dependency-aware retirement, the production plan, the Phase 12 exit
 and all eleven category sign-offs.
+
+## Scanner snapshot retirement — Prompt 396 (2026-10-19)
+
+A guarded retire CLI (`npm run vercel:scanner-retire`) was added, and tier 1
+(`snap_Feg5…`, `snap_rz0cs…`, `snap_KtLd…`) was retired on preview; three
+snapshots remain. See
+[the hosted record](vercel-deployment.md#scanner-snapshot-retirement--prompt-396-2026-10-19).
+Open: the next refresh, tier 2 retirement, a hosted cadence, the production
+plan, the Phase 12 exit and all eleven category sign-offs.
