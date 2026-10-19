@@ -71,10 +71,33 @@
       }
     },
     {
+      "source": "/_next/image",
+      "destination": "/_vercel/image"
+    },
+    {
       "source": "/(.*)",
       "destination": {
         "service": "client"
       }
     }
-  ]
+  ],
+  "images": {
+    "domains": [],
+    "sizes": [
+      640, 750, 828, 1080, 1200, 1920, 2048, 3840, 32, 48, 64, 96, 128, 256, 384
+    ],
+    "qualities": [75, 100],
+    "remotePatterns": [],
+    "localPatterns": [
+      {
+        "pathname": "^/assets/ui/landing/.*$",
+        "search": ""
+      }
+    ],
+    "minimumCacheTTL": 14400,
+    "formats": ["image/webp"],
+    "dangerouslyAllowSVG": false,
+    "contentSecurityPolicy": "script-src 'none'; frame-src 'none'; sandbox;",
+    "contentDispositionType": "attachment"
+  }
 }

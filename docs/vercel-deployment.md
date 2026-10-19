@@ -2830,3 +2830,65 @@ Vercel if prompted, then use the existing Acres login or register page.
 Production, domains, plan, environment values and deployment protection were
 not changed; nothing was pushed. Production approvals and scanner refresh
 work remain open. See [the execution record](operations.md#prompt-397--fresh-vercel-preview-2026-10-19).
+
+## Preview image routing — Prompt 398 (2026-10-19)
+
+Local repair prepared against `58a4d39`; hosted acceptance pending. Prompt
+397's page/API smoke omitted image URLs: its Ready status did not establish
+working landing images. Fresh authenticated requests reproduce a 404 HTML
+`/404` response for `/_next/image` at width 1080, quality 100, while the
+hero source and logo return 200 with image MIME types. The other landing
+stylesheet, a representative webpack script and a font return 200 with
+`text/css`, `application/javascript` and `font/woff2` respectively.
+
+**Cause and supported repair.** Cached CLI 64.5.0's build implementation
+filters service builders out of `topLevelBuildResults`, merges root image
+metadata only from those results plus `localConfig.images`, and writes
+service image metadata separately. Existing local `.vercel/output/config.json`
+has no `images`; `services/client/config.json` has the expected Next image
+settings. The public catch-all already selects `client`; the optimizer has
+no root configuration, and both `/_next/image` and `/_vercel/image` return
+HTML 404 on the old preview. This establishes a missing deployment-root
+optimizer configuration, rather than missing source assets or a quality
+allowlist rejection. It does not establish the provider's internal service
+optimizer implementation.
+
+Root `vercel.json` now declares the documented `images` configuration and
+rewrites `/_next/image` to the documented native `/_vercel/image` endpoint
+before the client catch-all. It mirrors the installed Next widths, qualities
+75/100, WebP format, cache TTL and SVG/CSP/disposition defaults. Optimization
+is restricted to `/assets/ui/landing/` source paths without source queries;
+remote domains/patterns remain empty. No Next component, crop, CSS, font,
+responsive source or motion changed. Cron routing, private API binding and
+queue settings are preserved.
+
+The configuration validator requires root optimizer metadata and route
+precedence. Regression coverage invokes the installed Next loader using
+`client/next.config.ts`, verifies every emitted width/quality/source can
+reach the root optimizer, and rejects missing metadata, widened remote
+sources and shadowed optimizer routing.
+
+Contracts checked this session:
+[static images configuration](https://vercel.com/docs/project-configuration/vercel-json#images),
+[Build Output images API](https://vercel.com/docs/build-output-api/configuration#images),
+[Services routing](https://vercel.com/docs/services/routing), installed Next
+image guide and installed CLI/builder source. Firecrawl remained unavailable
+because its mise shim had no selected version; official web sources were
+used without installing or reconfiguring tools.
+
+**Repeatable hosted smoke.** Use `vercel curl <path> --deployment <exact-id>
+--scope dgsloxx417s-projects -- --silent --show-error --dump-header
+<private-headers> --output <private-body>`. Check status, MIME and decodable
+bytes, including hero `w=1080&q=75`, `w=1080&q=100`, another valid width,
+and each art-directed hero/photo source at 375/800/1280. Fetch every CSS URL
+from the actual landing HTML and representative JS/font assets. Browser
+acceptance additionally requires scrolling all three viewport sizes and
+checking each image's `complete` and `naturalWidth`, network/console errors
+and screenshots. HTML 200 and deployment Ready alone are insufficient.
+
+Restricted diagnostic/check evidence: `/tmp/acres-preview-398/` (0700;
+response/env/check files 0600). The supported browser inventory is empty;
+creating an in-app browser returns `Browser is not available: iab`.
+Browser visual acceptance remains blocked unless a supported browser becomes
+available. Storage accounting, scanner refresh/cadence and production
+approvals remain open.

@@ -18,6 +18,46 @@ function checkVercelConfig(config) {
     errors.push('vercel.json must declare a valid $schema');
   }
 
+  // Service-local image metadata is not merged into the deployment root.
+  // The root optimizer must allow the widths/qualities emitted by Next Image.
+  const images = config.images;
+  if (!images || typeof images !== 'object' || Array.isArray(images)) {
+    errors.push('vercel.json must define root images configuration');
+  } else {
+    if (
+      !Array.isArray(images.sizes) ||
+      images.sizes.length === 0 ||
+      images.sizes.some((size) => !Number.isInteger(size) || size <= 0)
+    ) {
+      errors.push('images.sizes must contain positive integer widths');
+    }
+    if (
+      !Array.isArray(images.qualities) ||
+      images.qualities.length !== 2 ||
+      ![75, 100].every((quality) => images.qualities.includes(quality))
+    ) {
+      errors.push('images.qualities must allow exactly 75 and 100');
+    }
+    if (
+      !Array.isArray(images.domains) ||
+      images.domains.length !== 0 ||
+      !Array.isArray(images.remotePatterns) ||
+      images.remotePatterns.length !== 0
+    ) {
+      errors.push('images must deny remote domains and patterns');
+    }
+    if (
+      !Array.isArray(images.localPatterns) ||
+      images.localPatterns.length !== 1 ||
+      images.localPatterns[0]?.pathname !== '^/assets/ui/landing/.*$' ||
+      images.localPatterns[0]?.search !== ''
+    ) {
+      errors.push(
+        'images.localPatterns must restrict optimization to landing assets without source queries',
+      );
+    }
+  }
+
   const services = config.services;
   if (!services || typeof services !== 'object' || Array.isArray(services)) {
     errors.push('vercel.json must define a services object');
@@ -195,6 +235,18 @@ function checkVercelConfig(config) {
   } else {
     const cronRewriteIndex = config.rewrites.findIndex((r) => r.source === '/cron/dispatch');
     const clientRewriteIndex = config.rewrites.findIndex((r) => r.source === '/(.*)');
+
+    const imageRewriteIndex = config.rewrites.findIndex((r) => r.source === '/_next/image');
+
+    if (
+      imageRewriteIndex === -1 ||
+      config.rewrites[imageRewriteIndex].destination !== '/_vercel/image'
+    ) {
+      errors.push('vercel.json must rewrite /_next/image to the root /_vercel/image optimizer');
+    } else if (clientRewriteIndex !== -1 && imageRewriteIndex > clientRewriteIndex) {
+      errors.push('vercel.json image rewrite must precede the client catch-all');
+    }
+
 
     if (cronRewriteIndex === -1) {
       errors.push('vercel.json rewrites must declare rewrite for "/cron/dispatch"');

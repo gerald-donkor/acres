@@ -74,3 +74,76 @@ test('rewrites route /cron/dispatch to api before /(.*) to client', () => {
   const errors = checkVercelConfig(cfg);
   assert.ok(errors.some((e) => e.includes('must precede')));
 });
+
+test('root optimizer accepts the real Next loader widths, qualities and source query', async () => {
+  const { default: nextConfig } = await import('../../client/next.config.ts');
+  const { imageConfigDefault } = require('next/dist/shared/lib/image-config');
+  const { getImgProps } = require('next/dist/shared/lib/get-img-props');
+  const { default: defaultLoader } = require('next/dist/shared/lib/image-loader');
+  const cfg = readVercelJson();
+  const imageConfig = { ...imageConfigDefault, ...nextConfig.images };
+  assert.deepEqual(
+    new Set(cfg.images.sizes),
+    new Set([...imageConfig.deviceSizes, ...imageConfig.imageSizes]),
+  );
+  assert.deepEqual(cfg.images.qualities, imageConfig.qualities);
+  for (const quality of imageConfig.qualities) {
+    const source = '/assets/ui/landing/report-device-desktop.webp';
+    const { props } = getImgProps(
+      {
+        src: source,
+        width: 1810,
+        height: 1288,
+        sizes: '100vw',
+        quality,
+        alt: '',
+      },
+      { imgConf: imageConfig, defaultLoader },
+    );
+    for (const candidate of props.srcSet.split(', ')) {
+      const request = new URL(candidate.split(' ')[0], 'https://preview.invalid');
+      const route = cfg.rewrites.find((r) => r.source === request.pathname || r.source === '/(.*)');
+      // A service catch-all sends this URL to the Next 404. It must reach
+      // the deployment-level native optimizer, with its query untouched.
+      assert.equal(route.destination, '/_vercel/image');
+      const optimized = new URL(route.destination + request.search, request.origin);
+      assert.equal(optimized.searchParams.get('url'), source);
+      assert.ok(cfg.images.sizes.includes(Number(optimized.searchParams.get('w'))));
+      assert.ok(cfg.images.qualities.includes(Number(optimized.searchParams.get('q'))));
+      assert.match(source, new RegExp(cfg.images.localPatterns[0].pathname));
+    }
+  }
+});
+
+test('rejects missing root metadata, widened remote sources and shadowed optimizer routing', () => {
+  for (const mutate of [
+    (c) => {
+      delete c.images;
+    },
+    (c) => {
+      c.images.sizes = [];
+    },
+    (c) => {
+      c.images.qualities = [75];
+    },
+    (c) => {
+      c.images.remotePatterns = [{ hostname: 'example.com' }];
+    },
+    (c) => {
+      c.images.localPatterns = [];
+    },
+    (c) => {
+      c.rewrites = c.rewrites.filter((r) => r.source !== '/_next/image');
+    },
+    (c) => {
+      c.rewrites.push(c.rewrites.splice(1, 1)[0]);
+    },
+    (c) => {
+      c.rewrites[1].destination = { service: 'client' };
+    },
+  ]) {
+    const cfg = readVercelJson();
+    mutate(cfg);
+    assert.ok(checkVercelConfig(cfg).length > 0);
+  }
+});

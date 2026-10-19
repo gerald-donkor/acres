@@ -13984,3 +13984,54 @@ application journey is claimed. No production, env write, migration,
 account creation, upload, snapshot mutation, paid-machine selection or push.
 The final read-only review compared the record with deployment/build and
 response evidence: no Critical, Important or Minor findings; ready to commit.
+
+## Prompt 398 — preview image routing repair (2026-10-19)
+
+Approved `prompts/398-vercel-preview-image-routing.md`; baseline `58a4d39`
+on `main`. Prompt 397's smoke omitted images. Its optimizer returns HTML
+404 despite healthy source images and representative CSS/script/font assets.
+The repair explicitly configures the deployment-root native optimizer and
+rewrites the existing Next image path to it before service selection. See
+[the delivery record](vercel-deployment.md#preview-image-routing--prompt-398-2026-10-19).
+
+### Local gates and review
+
+Node `v24.21.0`, cached Vercel CLI 64.5.0, normal test umask 022:
+
+- `npm run vercel:probe-test` → `tests 373`, `suites 6`, `pass 373`, `fail 0`.
+- Focused configuration regression → `tests 8`, `pass 8`, `fail 0`.
+- `npm run lint` → exit 0, all three workspace ESLint commands.
+- `npm run typecheck` → exit 0, shared/client/server; Prisma Client 7.9.1 generated.
+- `npm run build` → exit 0; `Compiled successfully in 3.4s`,
+  `Finished TypeScript in 2.2s`, `Generating static pages using 7 workers (23/23) in 1051ms`;
+  server `prisma generate && nest build` completed.
+- Cached CLI `build --target=preview --scope dgsloxx417s-projects --output <private-dir>`
+  → `status: "ok"`, `Build completed successfully.` Root output image
+  metadata exactly matches `vercel.json`; generated route is
+  `^/_next/image$` → `/_vercel/image`, `check: true`; services are client/api/jobs.
+- `npm run ops:scan-secrets` → `secret/default scan passed`.
+- Prettier for `vercel.json` and the prompt →
+  `All matched files use Prettier code style!`. Added JS blocks and deployment
+  record section pass separate formatter checks. Both JS full files already
+  fail formatting at baseline; unrelated historical formatting is preserved.
+- `git diff --check` → no output, exit 0.
+
+The initial sandbox CLI lookup reported no deployment; the scoped request
+with permitted network access reproduced the 404. Sandboxed Node test output
+reported only the enclosing file; it is not counted as the 373-test pass.
+Unrestricted Node 24 execution provides the detailed test totals above.
+Fresh env inspection used a new 0600 `/tmp/acres-preview-398/preview.env`
+inside a 0700 directory, without printing values or writing provider config.
+Read-only scanner inspection matched `snap_KBaj…`, created/iad1, expiry
+`2026-10-27T09:09:29.002Z`, provider and 48-hour policy. Signature freshness
+uses the historical upper bound about `2026-10-21T09:02Z`; no new scan ran.
+
+The required independent reviewer inspected the working diff against
+`58a4d39`, generated output, installed CLI code and official contracts, and
+independently reran the focused tests: no Critical, Important or actionable
+Minor findings; ready for the authorized preview after clean commit and
+manifest gate. Feedback was checked against actual output; no fix was needed.
+
+Hosted deployment and byte-decoding acceptance are pending. Supported browser
+inventory is empty and in-app browser creation returned
+`Browser is not available: iab`; browser visual acceptance is blocked.
