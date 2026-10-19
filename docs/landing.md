@@ -1,7 +1,8 @@
 # Acres — Landing Page
 
-**Current public landing:** the photographic redesign in the Prompt 399 record
-at the end of this file supersedes the original composition documented below.
+**Current public landing:** the product-led hybrid visuals in the Prompt 401
+record at the end of this file supersede Prompt 399’s photographic composition.
+Prompt 400’s removal of visible photo credits remains in effect.
 
 Built to `prompts/05-landing-page.md`. This file records the `/` implementation
 against `client/public/assets/ui/landing-pages/Desktop.png`,
@@ -940,3 +941,200 @@ The `receiving-code-review` evaluation found no corrective changes necessary:
 Preview: run `npm run dev:client`, then open `http://localhost:3000/` (or the
 actual port Next prints). The verified production preview is running at
 `http://localhost:3201/`. Reverting this scoped commit restores the captions.
+
+## Product-led hybrid landing visuals — Prompt 401 (2026-10-19)
+
+Implemented from `prompts/401-product-led-hybrid-landing-imagery.md` against
+baseline `9fe074d`. The landing page now demonstrates a single regional-data
+journey through original, native HTML product illustrations. A smaller real
+Prampram photograph supplies geographic context. The bounded exception in
+AGENTS.md §0 supersedes Prompt 399's photography-dominant composition and retains
+Prompt 400's removal of visible photographer/location captions. Product copy,
+section anchors, account actions, shared chrome and `LandingMotion` are retained.
+
+### Research and visual-to-message map
+
+Preparation researched [Datawrapper](https://www.datawrapper.de/),
+[Felt](https://felt.com/), [CARTO](https://carto.com/) and
+[Metabase reporting](https://www.metabase.com/features/analytics-dashboards).
+The prompt records the source-specific lessons and boundaries. Execution
+re-inspected the retained research, current screenshots, original brand comp,
+product/ingestion/dashboard/report records and installed Next Image/Server
+Component/page guidance. Publisher metadata, photo licence and Web Interface
+Guidelines were freshly fetched through Firecrawl. These sources inform the
+relationship between a promise and its output; no third-party interface or
+unsupported GIS/AI/collaboration capability is depicted.
+
+| Visual              | Message supported                                                                                                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hero comparison     | This visual shows three regions with two labeled periods on one 0–100% scale, which supports the promise of clear regional comparisons.                                                                       |
+| Hero source/context | This visual shows real regional context alongside field mapping and one labeled source row, which supports turning source data into consistent meaning. The photograph is explicitly not the figures' source. |
+| Benefit mapping     | This visual shows `region`, `year` and `canopy_pct` mapped to Region, Period and Metric, which supports bringing data together.                                                                               |
+| Benefit comparison  | This visual shows Greater Accra's two period values with outlined/filled bars, which supports comparing places and periods with context.                                                                      |
+| Benefit lineage     | This visual shows source file → version → observation, which supports following a result back to its source.                                                                                                  |
+| Benefit publication | This visual shows a published example revision, evidence value and CSV/PDF output, which supports sharing a clearer story.                                                                                    |
+| Detail evidence     | This visual shows a conservative claim, all six supporting percentages, percentage-point differences and source/version, which supports the detail behind a decision.                                         |
+| Workflow import     | This visual shows one of six source rows and its field roles, which supports the import/mapping step.                                                                                                         |
+| Workflow explore    | This visual shows the same region's two period values and derived change, which supports the exploration step.                                                                                                |
+| Workflow publish    | This visual shows the same report/revision and preserved observation, which supports publishing findings from evidence.                                                                                       |
+
+The capability strip and closing action remain concise typography. All plates
+are conceptual illustrations rather than exact authenticated-screen captures.
+There are no fake controls, browser frames, certification badges or geographic
+measurement pins.
+
+### Illustrative data and provenance
+
+`client/components/acres/landing-example.ts` is a typed, read-only marketing
+example. All illustrations derive their values, periods, mapping roles,
+source/version and report identity from this module. The six invented
+observations are Greater Accra 18%/24%, Ashanti 35%/41%, Northern 54%/58% for
+2024/2025; changes are **+6/+6/+4 percentage points**. No national average or
+forecast is calculated. These are not Ghana statistics, customer outcomes,
+satellite estimates or measurements from the photo. Each independently viewed
+plate/preview says “Illustrative data” and “Invented figures for this example.”
+
+The main comparison exposes all exact values in a native list; the report uses
+a definition list. Decorative bars are hidden from assistive technology and
+computed from the same values. Period labels plus outlines/filled bars identify
+series beyond colour. The module is not a backend fixture or API data source.
+
+The sole current photo is `prampram-context.webp`: 1400×786, **223752 bytes**,
+encoded without enlargement from the 352299-byte publisher rendition. The
+Artboard's publisher page identifies Prampram, Ghana and the free Unsplash
+License; source/author/licence and the exact ImageMagick command are recorded
+in `client/public/assets/ui/landing/editorial/SOURCES.md`. The old three assets
+remain there for history and are absent from the landing DOM. Direct photo
+response: `200 image/webp 223752`; optimizer probe at 640px/quality100:
+`200 image/jpeg 230217` (probe's default Accept header). Browser images decode.
+
+### Composition and measured browser geometry
+
+White canvas, palette, three font families, 48px actions, 24px major-media
+corners, 14px small cards, shared gutters/container and 120px section rhythm are
+retained. The native plates reflow; report/source text is never rasterized,
+cropped or covered with `object-fit`. Only the context photograph uses cover.
+The photo's 16:9 box and responsive `sizes` reserve the correct space. It has
+no forced preload/high priority.
+
+These layout choices are **design judgments**, not original-comp measurements:
+comparison first at 375 and 800; context photo/mapping stacked at 375 and split
+into equal tracks with 20px gap at 800; hero 2:1 tracks at 1280. The detail plate
+uses natural height and becomes two-column with copy from `lg`. Benefit previews
+have a 256px minimum (264px at `lg`); workflow previews have a 336px minimum from
+`md` so three-column headings align. Existing spacing/type/shape tokens suffice;
+no new global tokens, dependency, client module or animation was added.
+
+Fresh Chrome contexts through the installed Playwright CLI inspected the final
+production build at `http://localhost:3202/`, after fonts and photo decode.
+Reduced-motion full-page captures at 375/800/1280 and their chart/report/workflow
+crops were visually opened. Additional interpolation captures supplement the
+DOM geometry checks. Local evidence is ignored in `output/playwright/401/`.
+
+| Width | Container / gutter | Comparison    | Context photo | Detail plate | Benefits / workflow columns | Page height |
+| ----: | ------------------ | ------------- | ------------- | ------------ | --------------------------- | ----------: |
+|   375 | 343 / 16           | 343×628.91    | 343×192.94    | 343×767.23   | 1 / 1                       |        8534 |
+|   800 | 720 / 40           | 720×588.53    | 350×196.88    | 720×662.69   | 2 / 3                       |        5972 |
+|  1280 | 1200 / 40          | 786.66×606.94 | 393.34×221.25 | 568×688.50   | 4 / 3                       |        4676 |
+
+320/390/1024/1440 checks report no horizontal overflow or clipped plate content.
+Their measured page heights are 8986/8486/4882/4676. At 800 the ~226.67px workflow
+columns remain readable, so three columns are retained. A 640×450 CSS viewport
+at DPR2 checks the reflow equivalent of a 1280px window at 200% zoom; no overflow
+or inaccessible content was found. Browser-toolbar zoom itself was not driven.
+
+All six rendered bar widths match the source percentages within raster rounding
+(<0.1 percentage point). All ten plates/previews have local example disclosures;
+there is one decoded meaningful-alt photo and no retired paths. Browser console
+warnings/errors and page errors: zero. Normal-motion traversal confirms all
+hero/media/group targets settle visible, with zero duplicate target hooks.
+Reduced motion and JavaScript-disabled 375px expose the complete three-plate
+story and actions without overflow or hidden text. `LandingMotion` is unchanged;
+reserved photo dimensions and static native content keep trigger geometry stable.
+
+Keyboard checks confirm skip link → `main-content` → account action with a
+2px solid focus indicator. All four section anchors, secondary `#how-to` action,
+`/register` navigation, mobile-menu links/close behavior and Escape pass. No
+account was created. An initial browser harness used the wrong menu label
+“Open menu”; correcting it to the existing “Open navigation menu” produced the
+successful final run. No application fix was required for that harness error.
+
+Fresh [Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md)
+were applied to the changed surface: no unresolved findings. Native semantics,
+text alternatives, non-colour series identification, contrast, focus, reflow,
+reserved photo dimensions and motion/static fallbacks were checked. Dark text
+on pale green avoids the muted-grey contrast issue. Approved sentence-case
+headings take precedence over the generic title-case suggestion.
+
+### Actual checks, review and preview
+
+Node 24.21.0 was selected per command. Final root `npm run typecheck` exited 0:
+
+```text
+> @acres/shared@0.1.0 build
+> tsc -p tsconfig.json
+> @acres/shared@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+> @acres/client@0.1.0 typecheck
+> tsc --noEmit
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 313ms
+```
+
+Root `npm run build` first reproduced the documented sandbox failure:
+`Error: Could not parse output from TypeScript's --showConfig.` The final full
+build outside that boundary exited 0:
+
+```text
+▲ Next.js 16.3.8 (webpack)
+✓ Compiled successfully in 4.4s
+  Finished TypeScript in 2.8s ...
+✓ Generating static pages using 7 workers (23/23) in 966ms
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 432ms
+```
+
+Root `npm run lint`, sequentially after build, exited 0:
+
+```text
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+```
+
+Changed TSX/TS (`--no-semi`), prompt and source manifest formatting passed:
+
+```text
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+The new Markdown records are checked separately to preserve historical
+formatting. `git diff --check` exits 0 without output. A direct Node assertion
+of the example module prints:
+`6 observations; 3 comparisons; changes +6/+6/+4 percentage points: pass`.
+Node emitted a module-type auto-detection warning for this one-off import; no
+package-type change is warranted. No generic test suite was added for static
+illustrations, and backend E2E was not run because backend behavior is unchanged.
+The Tailwind snapshot remains unavailable in its read-only skill location;
+limited skill references plus installed sources were used, not an initialized
+snapshot. The npx Playwright wrapper failed package resolution with `EAI_AGAIN`;
+verification used the already installed CLI executable instead.
+
+Independent `requesting-code-review` dispatched a read-only reviewer against
+baseline/current HEAD `9fe074d`, the approved prompt, uncommitted tracked/new
+files, source manifest, screenshots and actual check/browser evidence. Verdict:
+**Ready; no Critical, Important or Minor findings.** `receiving-code-review`
+verified the sole documentation recommendation: the opening current-state
+pointer now names Prompt 401. Generated CLI artifacts remain outside the commit.
+No corrective implementation change or architectural re-review was needed.
+
+Preview: open `http://localhost:3202/` while the verified production server is
+running. For development run `npm run dev:client`, then open
+`http://localhost:3000/` or the port Next prints. Rollback is reverting the scoped
+commit; the retired photo assets remain available. No push or deployment was run.

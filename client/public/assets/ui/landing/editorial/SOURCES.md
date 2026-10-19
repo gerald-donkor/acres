@@ -1,5 +1,30 @@
 # Landing photography
 
+## Current contextual photograph — Prompt 401
+
+The current `/` uses only `prampram-context.webp`. The three Prompt 399 assets
+below are retained for history and are unused by the landing page. Visible
+photographer/location captions remain removed under Prompt 400.
+
+- Photographer: [The Artboard](https://unsplash.com/@theartboardgh).
+- Publisher: [Prampram inner township, Ghana](https://unsplash.com/photos/an-aerial-view-of-a-city-with-lots-of-houses-VouIExnbUzc).
+- Publisher metadata and [Unsplash License](https://unsplash.com/license)
+  rechecked 2026-10-19. The page identifies this as a free-license photo.
+- Download: `https://images.unsplash.com/photo-1636783187647-cc97111bffdc?fm=jpg&q=85&w=1400&fit=max`.
+- Measured rendition: 1400 × 786, 352299 bytes; decoded and visually inspected.
+- Local WebP: 1400 × 786, **223752 bytes**. No enlargement, colour filter,
+  sharpening or generative modification. ImageMagick processing:
+  `magick prampram-download.jpg -strip -quality 80 prampram-context.webp`.
+
+The photograph supplies geographic context alongside explicitly invented canopy
+figures. It is not their measurement source. The wide 16:9 reserved box keeps
+houses, roads and green land legible with a near-native centered crop at all
+widths. `next/image` serves a local path, permitted quality 100 and responsive
+`sizes`; it uses default lazy loading without preload or forced high priority.
+The native comparison and heading carry the hero.
+
+## Retired photographic composition — Prompt 399
+
 Selected and source/licence pages accessed 2026-10-19 for approved prompt 399.
 All three individual photo pages explicitly identify the free Unsplash License;
 none is an Unsplash+ asset. The [publisher’s licence](https://unsplash.com/license)
@@ -34,11 +59,11 @@ filter, generative modification or sharpening was applied.
 | Fields | 1800 × 1222         | 1200 × 815       |       301724 | `-resize 1200x -strip -quality 78` |
 | Road   | 2200 × 2936         | 1440 × 1922      |       267030 | `-resize 1440x -strip -quality 80` |
 
-All boxes use `object-fit: cover; object-position: center` deliberately: the
+The retired composition used `object-fit: cover; object-position: center` deliberately: the
 central junction anchors the street grid, the farm-road intersection remains
 visible in the narrow field crop, and the highway remains central in both the
 wide and portrait road crops.
-The page reserves each image box and serves local paths through `next/image`,
+That composition reserved each image box and served local paths through `next/image`,
 with the existing permitted quality 100 to avoid unnecessary second-generation
 loss; only the first hero photo is eager/high priority. Other photos are lazy.
 The source-file budgets (roughly 500KB hero, 350KB supporting) are met.

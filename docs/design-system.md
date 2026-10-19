@@ -923,3 +923,37 @@ in this environment. Execution used the skill’s limited engineering/gotchas
 fallback, the installed package’s `theme.css`/merge source, and a live official
 [theme reference](https://tailwindcss.com/docs/theme) fetched this session.
 No full local docs-snapshot initialization or freshness is claimed.
+
+
+## 13. Product-led hybrid visual roles — Prompt 401 (2026-10-19)
+
+The approved landing illustrations reuse existing tokens; no new token or merge
+registration is needed. These are composition judgments, not original-comp
+measurements. `docs/landing.md` records the built responsive geometry.
+
+- `--color-brand-soft` is the comparison surface; `--color-sage` frames the
+  evidence sheet. Dark ink and brand text preserve readable contrast. Muted
+  grey is used only on white surfaces, never as body text on pale green.
+- Crimson Text `text-quote` names the two major plates; `text-h3` names the
+  small report. Body/UI roles remain unchanged. Roboto Mono `text-label` and
+  `text-label-lg` identify illustrative data, fields, units, periods, values
+  and source versions; numerical text uses tabular figures.
+- `rounded-media` / `rounded-card` retain the 24px / 14px hierarchy. The context
+  photo uses the installed `--aspect-video` (16:9) with a reserved box.
+- The inherited `--spacing: .25rem` scale supplies plate insets, 20px gaps,
+  12px bar height, 256px preview minimum, 264px desktop-benefit minimum and
+  336px workflow minimum from `md`. Workflow content stays natural height below
+  `md`; minimums align the headings when articles share a row.
+- Existing `--spacing-landing-photo-lg` is reused as a 440px minimum on the
+  desktop comparison. Content/context determine its actual 606.94px height.
+  The old 360px photo height and editorial ratios remain available for history;
+  the current landing does not constrain report text to them.
+- The 2:1 hero ratio from `lg`, equal source/context columns at `md`, 1200px
+  shared container and 120px section rhythm reuse the established vocabulary.
+  Bar widths are data percentages on a 0–100% scale, not design geometry tokens.
+
+The Tailwind snapshot remains unavailable in its read-only skill location.
+Execution used the skill's limited gotchas/engineering fallback, installed
+`tailwindcss/theme.css` and production-generated utility behavior. Browser
+measurements confirm the named/default values; no snapshot initialization or
+new global type role is claimed.

@@ -1,13 +1,30 @@
-import Image from "next/image"
 import Link from "next/link"
 
 import { Button } from "@/components/acres/button"
 import { Eyebrow } from "@/components/acres/eyebrow"
 import { LandingMotion } from "@/components/acres/landing-motion"
+import {
+  ComparisonPreview,
+  ExplorePreview,
+  ImportPreview,
+  LineagePreview,
+  MappingPreview,
+  PublicationPreview,
+  RegionalComparisonPlate,
+  ReportEvidencePlate,
+  SourceContextPlate,
+} from "@/components/acres/landing-product-visuals"
 import { Section } from "@/components/acres/section"
 import { cn } from "@/lib/utils"
 
 type ContentItem = { title: string; body: string }
+const benefitPreviews = [
+  MappingPreview,
+  ComparisonPreview,
+  LineagePreview,
+  PublicationPreview,
+]
+const workflowPreviews = [ImportPreview, ExplorePreview, PublicationPreview]
 
 const benefits: readonly ContentItem[] = [
   {
@@ -61,7 +78,6 @@ const steps: readonly (ContentItem & { marker: string })[] = [
   },
 ]
 
-const photoRoot = "/assets/ui/landing/editorial"
 const headingClass =
   "font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
 
@@ -97,28 +113,13 @@ export default function HomePage() {
           </Button>
         </div>
 
-        <div className="mt-10 grid gap-7 text-left md:mt-12 md:grid-cols-[2fr_1fr] md:gap-5 lg:mt-16">
-          <figure className="min-w-0">
-            <div data-motion-hero-media>
-              <Photo
-                name="melbourne-neighborhood.webp"
-                alt="A grid of residential streets, rooftops and gardens seen from directly above."
-                sizes="(max-width: 767px) calc((100vw - 32px) * 10 / 9), (max-width: 1023px) 640px, 787px"
-                hero
-                className="aspect-editorial md:aspect-auto md:h-landing-photo-md lg:h-landing-photo-lg"
-              />
-            </div>
-          </figure>
-          <figure className="min-w-0">
-            <div data-motion-hero-media>
-              <Photo
-                name="ladenburg-fields.webp"
-                alt="Cultivated fields divided by intersecting farm roads, with rows of crops and scattered hay bales."
-                sizes="(max-width: 767px) calc(100vw - 32px), (max-width: 1023px) 531px, 648px"
-                className="aspect-video md:aspect-auto md:h-landing-photo-md lg:h-landing-photo-lg"
-              />
-            </div>
-          </figure>
+        <div className="mt-10 grid items-stretch gap-7 text-left md:mt-12 md:gap-5 lg:mt-16 lg:grid-cols-[2fr_1fr]">
+          <div data-motion-hero-media className="min-w-0">
+            <RegionalComparisonPlate />
+          </div>
+          <div data-motion-hero-media className="min-w-0">
+            <SourceContextPlate />
+          </div>
         </div>
 
         <ul
@@ -155,16 +156,20 @@ export default function HomePage() {
           data-motion-group="benefits"
           className="mt-12 grid gap-x-5 gap-y-10 md:grid-cols-2 lg:mt-16 lg:grid-cols-4"
         >
-          {benefits.map((benefit) => (
-            <article
-              key={benefit.title}
-              data-motion-item
-              className="border-t border-rule pt-6"
-            >
-              <h3 className="font-serif text-h3 text-ink">{benefit.title}</h3>
-              <p className="mt-4 text-body text-ink-muted">{benefit.body}</p>
-            </article>
-          ))}
+          {benefits.map((benefit, index) => {
+            const Preview = benefitPreviews[index]
+            return (
+              <article
+                key={benefit.title}
+                data-motion-item
+                className="border-t border-rule pt-6 lg:[&>figure]:min-h-66"
+              >
+                <Preview />
+                <h3 className="font-serif text-h3 text-ink">{benefit.title}</h3>
+                <p className="mt-4 text-body text-ink-muted">{benefit.body}</p>
+              </article>
+            )
+          })}
         </div>
       </Section>
 
@@ -174,16 +179,9 @@ export default function HomePage() {
         className="scroll-mt-section"
       >
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-          <figure className="min-w-0">
-            <div data-motion-media>
-              <Photo
-                name="espoo-road.webp"
-                alt="A highway connects wooded shores across water, with settlements in the distance."
-                sizes="(max-width: 767px) calc(100vw - 32px), (max-width: 1023px) calc(100vw - 80px), (max-width: 1279px) calc((100vw - 144px) / 2), 568px"
-                className="aspect-editorial lg:aspect-editorial-portrait"
-              />
-            </div>
-          </figure>
+          <div data-motion-media className="min-w-0">
+            <ReportEvidencePlate />
+          </div>
           <div>
             <div data-motion-group="detail-heading" data-motion-pace="tight">
               <Eyebrow data-motion-item>A clearer perspective</Eyebrow>
@@ -234,24 +232,32 @@ export default function HomePage() {
           data-motion-group="steps"
           className="mt-12 grid gap-10 md:grid-cols-3 md:gap-5 lg:mt-16"
         >
-          {steps.map((step) => (
-            <li
-              key={step.marker}
-              data-motion-item
-              className="border-t border-rule pt-8"
-            >
-              <span
-                aria-hidden="true"
-                className="text-stat text-ink-faint md:text-stat-md"
+          {steps.map((step, index) => {
+            const Preview = workflowPreviews[index]
+            return (
+              <li
+                key={step.marker}
+                data-motion-item
+                className="border-t border-rule pt-8"
               >
-                {step.marker}
-              </span>
-              <h3 className="mt-8 font-serif text-h3 text-ink">{step.title}</h3>
-              <p className="mt-4 max-w-sm text-body text-ink-muted lg:pr-10">
-                {step.body}
-              </p>
-            </li>
-          ))}
+                <span
+                  aria-hidden="true"
+                  className="text-stat text-ink-faint md:text-stat-md"
+                >
+                  {step.marker}
+                </span>
+                <div className="mt-8 md:[&>figure]:min-h-84">
+                  <Preview />
+                </div>
+                <h3 className="mt-8 font-serif text-h3 text-ink">
+                  {step.title}
+                </h3>
+                <p className="mt-4 max-w-sm text-body text-ink-muted lg:pr-10">
+                  {step.body}
+                </p>
+              </li>
+            )
+          })}
         </ol>
       </Section>
 
@@ -293,35 +299,5 @@ function CreateAccount() {
     <Button render={<Link href="/register" />} nativeButton={false}>
       Create Account
     </Button>
-  )
-}
-
-function Photo({
-  name,
-  alt,
-  sizes,
-  className,
-  hero = false,
-}: {
-  name: string
-  alt: string
-  sizes: string
-  className: string
-  hero?: boolean
-}) {
-  return (
-    <div className={cn("relative overflow-hidden rounded-media", className)}>
-      {/* Hero sizes include the pixels needed to cover the tall cropped box. */}
-      <Image
-        src={`${photoRoot}/${name}`}
-        alt={alt}
-        fill
-        quality={100}
-        sizes={sizes}
-        loading={hero ? "eager" : "lazy"}
-        fetchPriority={hero ? "high" : undefined}
-        className="object-cover object-center"
-      />
-    </div>
   )
 }

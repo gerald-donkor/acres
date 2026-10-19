@@ -88,7 +88,10 @@ for checking code and git history to determine what is actually built.
 for `/`'s new composition, copy and sourced photography. The original references
 remain authoritative for retained brand primitives and all unrelated surfaces.
 This bounded exception permits the documented landing changes, not a new product
-identity.
+identity. Approved prompt 401
+(`prompts/401-product-led-hybrid-landing-imagery.md`) supersedes prompt 399’s
+photography-dominant direction for `/` with product-led hybrid visuals, retaining
+the brand primitives and prompt 400’s removal of visible photo credits.
 
 **These four files are the only source of *static* design truth in this
 repository** — palette, type, layout, radii, the end states of every surface.
