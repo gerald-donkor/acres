@@ -418,6 +418,32 @@ Those doubles do not establish a hosted candidate or activation authority.
    rollback dependencies can use them. No fixed safe retirement interval has
    been established. Retirement requires account-bound inspection, dependency
    review and an explicit bounded cleanup/resource-budget plan outside this CLI.
+   **Procedure (Prompt 396)**, with `npm run vercel:scanner-retire`:
+   - List each retained snapshot's dependents: the configuration history
+     (which deployments were created while it was configured), the live
+     deployments that still pin it, and the documented rollback.
+   - Retire only snapshots whose dependents already fail closed (their
+     signature window has closed) or that were never configured. A
+     deployment pinned to a deleted snapshot still fails closed; its error
+     code becomes `scanner_unavailable`.
+   - Run once without `--confirm` (the plan), naming every retained snapshot
+     with `--keep` and each target with `--retire`. Proceed only on
+     `planned` with no refusals, no active sandboxes and an empty
+     `unlisted_snapshots`. An unaccounted snapshot means the dependency
+     list is incomplete; stop.
+   - Read the dashboard Snapshot Storage figure, then run the same command
+     once with `--confirm`. Never edit the lists between plan and confirm,
+     and never retry a failed, unconfirmed or `deleted_after_error` delete
+     (the SDK transport may already have retried it); remaining targets
+     carry to a later run.
+   - Read the figure again afterwards. Deletion cannot be undone; the only
+     remedy for a later need is the normal rebuild → adopt → deploy path.
+
+   Prompt 396 targets tier 1: the pre-391 baseline `snap_Feg5…` and the
+   never-adopted candidates `snap_rz0cs…` and `snap_KtLd…`. Tier 2,
+   `snap_CARv…` (its dependents can still scan) and `snap_ngIw…` (the
+   rollback), waits until their signature windows close. The outcome is in
+   [the record](../../../docs/vercel-deployment.md).
 
 Prompt 386's authorized preview attempt (2026-10-17) stopped before step 2:
 the cadence producer returned `candidate_build_failed` after confirming a

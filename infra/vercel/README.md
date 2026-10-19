@@ -233,3 +233,23 @@ retry into a new directory. No SDK or network operation occurs. The workflow
 remains unchanged and does not persist this bundle. See [the handoff and later
 activation procedure](runbooks/managed-operations.md#54-offline-runtime-configuration-handoff),
 including separate previous-configuration retention for rollback.
+
+## Snapshot retirement — Prompt 396
+
+`npm run vercel:scanner-retire -- --keep <snap_id>… --retire <snap_id>…`
+(same opt-in, target and region as the snapshot build) plans by default and
+deletes only with `--confirm`. It never chooses targets: the operator names
+every retained snapshot with `--keep` and at most five targets with
+`--retire`. The active snapshot is read from `SCANNER_SANDBOX_SNAPSHOT_ID` or
+`ACRES_SCANNER_SNAPSHOT_ID`; at least one must be set, both must agree if both
+are, and it must be a `--keep`. It refuses, with no delete, on an unhealthy
+keep, an ID missing from the project's snapshot listing (get and delete are
+team-scoped), a snapshot derived from a target, a sandbox whose current
+snapshot is a target, any active sandbox, a target in another region or any
+failed lookup. Deletes run in order, each confirmed by a re-read. The first
+failure stops the run; the tool never retries, though the SDK transport may
+retry a 5xx, so a delete that lands and then errors is recorded as
+`deleted_after_error`. `--output` takes a new outside-repo file (0600). The
+one-line JSON receipt reports `unlisted_snapshots`, created bytes before and
+after, and the keeps' after-state. See
+[managed operations §5.5](runbooks/managed-operations.md#55-manual-activation-verification-and-retirement).
