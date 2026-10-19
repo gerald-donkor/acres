@@ -833,3 +833,110 @@ Independent review used `requesting-code-review`, followed by the
 asset manifest, screenshots, browser evidence and successful checks against
 prompt 399, with baseline/current HEAD both `3c4f99a`. Verdict: **Approved. No
 Critical, Important, or Minor findings.** No corrective code change was needed.
+
+## Remove visible photo captions — Prompt 400 (2026-10-19)
+
+The user requested removal of the photo caption shown in their screenshot.
+All three matching location/photographer lines are removed from
+`client/app/(marketing)/page.tsx`, along with the unused shared caption class
+and obsolete caption comment. This supersedes Prompt 399's visible-caption
+decision above. The historical record remains unchanged.
+
+The figures, media wrappers, image sources, meaningful alt text, reserved boxes,
+responsive `sizes`, loading/priority, quality, centered crops and motion hooks
+are unchanged. Removing caption children also removes their 12px top margins;
+no replacement spacer or hidden caption was added. Source/photographer/licence
+provenance remains in the photography `SOURCES.md` manifest, whose prose now
+reflects the caption-free UI. No assets, tokens, shared styles or dependencies
+changed. Baseline/current review HEAD: `96dce6f`.
+
+### Browser acceptance
+
+Chrome through the Playwright CLI inspected production `http://localhost:3201/`
+after fonts loaded and all three photos decoded, with a fresh reduced-motion
+context at each width. Full-page screenshots were visually inspected; local
+ignored evidence is in `output/playwright/400/` (`browser-results.txt`,
+`full-{375,800,1280}.png`, `detail-motion-1280.png`).
+
+| Width | Hero photo boxes              | Detail photo | Page height |
+| ----: | ----------------------------- | ------------ | ----------: |
+|   375 | 343×214.375, 343×192.9375     | 343×214.375  |        5160 |
+|   800 | 466.65625×360, 233.328125×360 | 720×450      |        4223 |
+|  1280 | 786.65625×440, 393.34375×440  | 568×710      |        3875 |
+
+Image boxes match the recorded Prompt 399 geometry; each remains `cover` with
+`50% 50%` position. Every width has zero `main figcaption` elements, no visible
+“Photo by” or “Unsplash” text, three decoded meaningful-alt photos, no horizontal
+overflow and no page errors. A normal-motion check at 1280 confirmed both hero
+media entrances and the detail entrance settle visible; the secondary hero
+action reaches `#how-to`, and the account action navigates to `/register`.
+No account was created.
+
+Fresh [Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md)
+were fetched through Firecrawl and applied to the changed page: no findings.
+Meaningful image descriptions remain available through alt text; section
+semantics, headings, focus behavior and action markup are unchanged.
+
+### Checks and review
+
+Node 24.21.0 was selected per command. Root `npm run typecheck` exited 0:
+
+```text
+> @acres/shared@0.1.0 build
+> tsc -p tsconfig.json
+> @acres/shared@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+> @acres/client@0.1.0 typecheck
+> tsc --noEmit
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 365ms
+```
+
+Root `npm run build` initially reproduced the documented sandbox failure:
+`Error: Could not parse output from TypeScript's --showConfig.` Rerunning the
+complete command outside that boundary exited 0:
+
+```text
+▲ Next.js 16.3.8 (webpack)
+✓ Compiled successfully in 3.8s
+  Finished TypeScript in 2.6s ...
+✓ Generating static pages using 7 workers (23/23) in 1038ms
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 364ms
+```
+
+Root `npm run lint`, run after build, exited 0:
+
+```text
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+```
+
+Prettier (`--no-semi` for TSX) checked the changed page, prompt and source
+manifest; the appended record was checked separately to preserve historical
+formatting. Output:
+
+```text
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+`git diff --check` exited 0 with no output. Diff review confirmed the code change
+only deletes caption-related markup. No new test suite was added for this
+reversible static deletion; backend E2E was not run because backend behavior
+is unchanged.
+
+Independent `requesting-code-review` review inspected the uncommitted diff,
+approved prompt and browser evidence against baseline/current HEAD `96dce6f`.
+The `receiving-code-review` evaluation found no corrective changes necessary:
+**Ready; no Critical, Important or Minor findings.**
+
+Preview: run `npm run dev:client`, then open `http://localhost:3000/` (or the
+actual port Next prints). The verified production preview is running at
+`http://localhost:3201/`. Reverting this scoped commit restores the captions.

@@ -4,7 +4,8 @@ Selected and source/licence pages accessed 2026-10-19 for approved prompt 399.
 All three individual photo pages explicitly identify the free Unsplash License;
 none is an Unsplash+ asset. The [publisher’s licence](https://unsplash.com/license)
 permits downloading, modification, local distribution and commercial website use
-without mandatory attribution. Credits are nevertheless displayed with each photo.
+without mandatory attribution. Credits are retained in this manifest; visible
+photo captions were removed at the user's request in prompt 400.
 These are editorial illustrations of regional context, not Acres customers,
 properties for sale, product screenshots or live datasets.
 
@@ -36,7 +37,7 @@ filter, generative modification or sharpening was applied.
 All boxes use `object-fit: cover; object-position: center` deliberately: the
 central junction anchors the street grid, the farm-road intersection remains
 visible in the narrow field crop, and the highway remains central in both the
-wide and portrait road crops. Captions remain on white outside image wrappers.
+wide and portrait road crops.
 The page reserves each image box and serves local paths through `next/image`,
 with the existing permitted quality 100 to avoid unnecessary second-generation
 loss; only the first hero photo is eager/high priority. Other photos are lazy.

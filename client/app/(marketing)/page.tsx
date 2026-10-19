@@ -64,8 +64,6 @@ const steps: readonly (ContentItem & { marker: string })[] = [
 const photoRoot = "/assets/ui/landing/editorial"
 const headingClass =
   "font-serif text-h2 text-ink text-balance md:text-h2-md lg:text-h2-lg"
-const captionClass =
-  "mt-3 font-mono text-label leading-relaxed text-ink-muted lg:text-label-lg"
 
 export default function HomePage() {
   return (
@@ -99,7 +97,6 @@ export default function HomePage() {
           </Button>
         </div>
 
-        {/* Captions stay outside the visibility-hiding media entrance. */}
         <div className="mt-10 grid gap-7 text-left md:mt-12 md:grid-cols-[2fr_1fr] md:gap-5 lg:mt-16">
           <figure className="min-w-0">
             <div data-motion-hero-media>
@@ -111,9 +108,6 @@ export default function HomePage() {
                 className="aspect-editorial md:aspect-auto md:h-landing-photo-md lg:h-landing-photo-lg"
               />
             </div>
-            <figcaption className={captionClass}>
-              Melbourne, Australia · Photo by Tom Rumble / Unsplash
-            </figcaption>
           </figure>
           <figure className="min-w-0">
             <div data-motion-hero-media>
@@ -124,9 +118,6 @@ export default function HomePage() {
                 className="aspect-video md:aspect-auto md:h-landing-photo-md lg:h-landing-photo-lg"
               />
             </div>
-            <figcaption className={captionClass}>
-              Ladenburg, Germany · Photo by Bernd Dittrich / Unsplash
-            </figcaption>
           </figure>
         </div>
 
@@ -192,9 +183,6 @@ export default function HomePage() {
                 className="aspect-editorial lg:aspect-editorial-portrait"
               />
             </div>
-            <figcaption className={captionClass}>
-              Espoo, Finland · Photo by Julius Jansson / Unsplash
-            </figcaption>
           </figure>
           <div>
             <div data-motion-group="detail-heading" data-motion-pace="tight">
