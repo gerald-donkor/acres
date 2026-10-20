@@ -15201,7 +15201,6 @@ Commands ran sequentially under Node 24.21.0:
 - `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
 - `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
 - `git diff --check`: exit 0.
-
 To inspect, read this record and examine project preview settings via `vercel env ls preview`.
 The local tooling verification command is `npm run vercel:probe-test`.
 
@@ -15311,5 +15310,131 @@ Commands ran sequentially under Node 24.21.0:
 - `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
 - `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
 - `git diff --check`: exit 0.
-
 To inspect, examine `retire.json` in custody or run `scripts/vercel/retire-scanner-snapshots.js` in plan mode.
+
+## Prompt 410 — managed production activation plan and operator intake (2026-10-20)
+
+**Result: managed production activation procedure formalized; operator intake audited (fail-closed, 0 approved, 11 unresolved, 61 blockers).**
+Following Prompt 408's guarded preview adoption of ClamAV snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`
+and Prompt 409's Tier 2 snapshot retirement establishing the steady-state 2-snapshot
+baseline (`snap_8OP5…` active, `snap_KBaj…` rollback), this prompt formalizes the
+production activation procedure and conducts the formal operator intake audit specifically
+for the `vercel-managed-production` target.
+
+### Source, starting baseline, and bounds
+
+- Starting repository commit: `1ef1aa81cad163d869161dc59966539111edc818` on `main`.
+- Untracked files before execution: only `prompts/410-managed-production-activation-plan.md`.
+- No live production deployment, DNS/alias mutation, secret modification, external cloud write, or git push occurred.
+- Action boundary: repository-visible readiness preflight and architectural intake audit only.
+
+### Context and dependency-safety review
+
+The historical activation plan (Prompt 367) and intake (Prompt 368) were authored
+strictly for `single-host-compose-caddy` with container images, local mounts, and Caddyfile checksums.
+While Prompts 380–382 established the managed handoff template (`infra/launch/operator-handoff.vercel.example.md`),
+managed readiness template (`infra/launch/readiness.vercel.example.json`),
+branched drill runner (`scripts/ops/run-launch-drills.sh --target-architecture vercel-managed-production`),
+and four managed verifiers (`verify-managed-ingress.js`, `verify-managed-volume-encryption.js`,
+`verify-managed-secret-rotation.js`, `verify-managed-restore-drill.js`), the repository had not yet established
+the formal **Managed Production Activation Plan and Operator Intake** for `vercel-managed-production`.
+
+### Seven-stage managed production activation sequence
+
+1. **Stage 1 — Pinned Source, Release Provenance, and Repository Preflights**:
+   - Pinned 40-character Git commit on `main`.
+   - Verification of zero uncommitted drift, clean `git diff --check`, passed lint, sequential typecheck,
+     production build (`23/23` pages), and secret scan (`npm run ops:scan-secrets`).
+   - Vercel CLI/API deployment provenance tracking linking the deployment directly to the commit SHA.
+
+2. **Stage 2 — Out-of-Band Neon Database Migration**:
+   - Out-of-band migration execution via `prisma migrate deploy` using the direct Neon migrator URL
+     (`DATABASE_MIGRATOR_URL`), isolated from runtime application compute.
+   - Verification of zero destructive migrations; backward-compatible schema expansion ensuring
+     rollback safety for existing deployments.
+   - Verification that runtime application compute uses only restricted pooled credentials (`acres_app` role
+     via Neon connection pooler) with forced RLS and zero schema alteration privileges.
+
+3. **Stage 3 — Production Secrets & Environment Variables Materialization**:
+   - Verification of twelve distinct indirect secret references configured across Vercel Project Environment
+     Variables (Production scope) and Neon project settings:
+     `SESSION_SECRET`, `CSRF_SECRET`, `CRON_SECRET`, `DATABASE_MIGRATOR_URL`, `DATABASE_URL`,
+     `BLOB_READ_WRITE_TOKEN`, `SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_MAIN_SHA256`, `SCANNER_DAILY_SHA256`,
+     `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `ALERT_WEBHOOK_URL`.
+   - Explicit confirmation of `AI_DRAFT_ENABLED=false` and zero Gemini API keys provisioned.
+   - Verification of 90-day secret rotation runbook reference and least-privilege scoping.
+
+4. **Stage 4 — Production Build, Deployment, and Edge Routing**:
+   - Triggering immutable production deployment via Vercel CLI / Git integration.
+   - Capturing immutable deployment ID (`dpl_*`) and deployment URL.
+   - Production custom domain assignment at Vercel Edge with automatic managed TLS and HSTS approval.
+
+5. **Stage 5 — Managed Launch Drill Execution & Verifier Receipts**:
+   - Execution of unified launch drills in live mode:
+     `scripts/ops/run-launch-drills.sh --target-architecture vercel-managed-production`
+   - Gathering authentic receipts across the drill stages:
+     - Stage 1: Static template integrity and secret scan.
+     - Stage 2: Supply chain SBOM and SAST scan.
+     - Stage 3: Managed ingress, security headers, and rollback preflight (`verify-managed-ingress.js`).
+     - Stage 4: Managed volume encryption, Neon AWS KMS AES-256, and Firecracker sandbox isolation (`verify-managed-volume-encryption.js`).
+     - Stage 5: Managed secret rotation cadence (90 days) and indirect reference verification (`verify-managed-secret-rotation.js`).
+     - Stage 6: Capacity target (100 rps), latency target (p95 < 500ms), and Prometheus/alerting webhook verification.
+     - Stage 7: Managed disaster recovery, Neon 7-day WAL PITR window, and Blob durability verification (`verify-managed-restore-drill.js`).
+   - Assembling unified launch dossier via `scripts/ops/assemble-launch-dossier.js`.
+
+6. **Stage 6 — Storage Parity Reconciliation and Live Post-Deployment Journeys**:
+   - Running live storage reconciliation against production Blob store:
+     `node scripts/ops/reconcile-storage-objects.js --provider vercel-blob`
+   - Executing live smoke journeys: authentication, organization creation, dataset creation, private Blob upload,
+     fail-closed Sandbox scanning, analytics aggregation, report generation, and CSV export.
+
+7. **Stage 7 — Operator Sign-Off Dossier & Prompt 201 Determination**:
+   - Compiling authentic receipts into the operator's private readiness record outside git.
+   - Validation via `node scripts/ops/check-launch-readiness.js <operator-readiness.json>`.
+   - Recording explicit, dated sign-offs across all 11 categories from named human authorities.
+   - Formal go/no-go release determination.
+
+### Operator target and authority intake audit
+
+The top-level managed readiness preflight executed:
+
+```bash
+scripts/ops/launch-readiness.sh --target-architecture vercel-managed-production infra/launch/readiness.vercel.example.json
+```
+
+**Preflight result:** exit 1 (fail-closed as intended).
+Summary:
+- Total Required Categories: 11
+- Approved Categories: 0
+- Unresolved / Blocked: 11
+- Total Blockers Detected: 61
+
+**Intake Disposition: blocked intake.** All 11 required categories remain unresolved in the template record,
+pending real operator inputs, live service provisioning, authentic drill receipts, and human sign-offs:
+
+| Category | Managed Property / Requirement | Current Status | Operator Input Needed |
+| --- | --- | --- | --- |
+| 1. Production Domain & Edge TLS | Custom production domain, Vercel Edge TLS, HSTS policy approval | Unresolved (placeholder) | Production domain name, TLS contact email, HSTS policy confirmation |
+| 2. SMTP Delivery | Resend integration, verified sender domain, DKIM/SPF alignment | Unresolved (placeholder) | Resend verified sender domain, from-address, delivery & bounce runbook ref |
+| 3. Secrets Management | Vercel Project Production Env + Neon role secrets, 90-day rotation | Unresolved (placeholder) | Secret injection approval, masking policy confirmation, compromise runbook ref |
+| 4. Secret References | 12 distinct indirect secret names in production scope | Unresolved (placeholder) | Exact opaque secret store references for all 12 variables (no values!) |
+| 5. SLOs & Alerting | Availability ≥99.9%, p95 < 500ms, capacity ≥100 rps, webhook alerts | Unresolved (placeholder) | Named alert recipient, escalation runbook reference, adopted SLO targets |
+| 6. Backup & Disaster Recovery | Neon WAL streaming PITR (7-day window, RPO ≤1h, RTO ≤4h), Blob durability | Unresolved (placeholder) | Backup destination identifier, Blob store durability attestation, DR plan ref |
+| 7. Data Retention Policy | Account, audit, and report retention enforcement | Unresolved (placeholder) | Signed retention policies (legal/compliance approved) for accounts, audit, reports |
+| 8. Volume Encryption | Neon AWS KMS AES-256 storage, Blob at-rest encryption, Firecracker RAM | Unresolved (placeholder) | Encryption mechanism approval, key custody & recovery owner identity |
+| 9. GraphQL Introspection | Production introspection policy (disabled or justified) | Unresolved (placeholder) | Introspection disablement confirmation or approved security justification |
+| 10. Deployment & Rollback | Immutable deployment pair (`dpl_*`), instant rollback authority | Unresolved (placeholder) | Deployment approver, rollback authority, previous deployment ID for instant rollback |
+| 11. No-AI Posture | API & worker `ai_draft_enabled: false`, absent Gemini key | Unresolved (placeholder) | Product & security sign-off affirming zero AI in production and unpaid provider exclusion |
+
+### Repository verification and inspection
+
+Commands ran sequentially under Node 24.21.0:
+
+- `node scripts/vercel/check-vercel-config.js`: exit 0, `vercel.json configuration valid`.
+- `npm run ops:managed-drills-test`: exit 0, 28 pass, 0 fail across 4 managed verifier test specifications.
+- `scripts/ops/launch-readiness.sh --target-architecture vercel-managed-production infra/launch/readiness.vercel.example.json`: exit 1 (fail-closed, 61 blockers).
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- `npm run lint`: exit 0 across client/shared/server.
+- `npm run typecheck`: exit 0 across all workspaces.
+- `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
+- `git diff --check`: exit 0.

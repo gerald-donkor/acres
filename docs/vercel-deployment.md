@@ -47,9 +47,10 @@ before that bound for the next refresh (planning judgment).
 
 The next gates are hosted scheduled cadence / workflow source publication
 (requiring a standalone uppercase `P` to push reviewed commits to upstream),
-storage accounting resolution, production activation plan, Phase 12 exit, and the eleven sign-offs.
-See [the guarded adoption record](#guarded-scanner-preview-adoption--prompt-408-2026-10-20)
-and [the tier 2 retirement record](#scanner-snapshot-retirement-tier-2--prompt-409-2026-10-20).
+storage accounting resolution, operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the guarded adoption record](#guarded-scanner-preview-adoption--prompt-408-2026-10-20),
+[the tier 2 retirement record](#scanner-snapshot-retirement-tier-2--prompt-409-2026-10-20),
+and [the managed activation plan record](#managed-production-activation-plan-and-operator-intake--prompt-410-2026-10-20).
 
 **Fixed target.** Team `dgsloxx417's projects`
 (`team_zE3mp7nrEZ6a7cxRavwUMYC4`), project `acres`
@@ -3307,4 +3308,34 @@ uppercase `P`), production activation plan, Phase 12 exit, and the eleven sign-o
 
 See [the operations record](operations.md#prompt-409--scanner-snapshot-retirement-tier-2-2026-10-20).
 Custody: `prompt409-20261020T175241Z/` under `~/.config/acres/vercel-preview/`.
+No push or production action occurred.
+
+## Managed production activation plan and operator intake — Prompt 410 (2026-10-20)
+
+At baseline `1ef1aa8`, one authorized bounded operations continuation established
+the formal Managed Production Activation Plan and Operator Intake for `vercel-managed-production`,
+resolving the activation framework gap left from the historical Compose target (Prompt 367/368).
+
+Execution summary:
+
+1. **Activation sequence definition**: Formulated the 7-stage live activation pipeline
+   covering pinned source provenance, out-of-band Neon migrator execution (`DATABASE_MIGRATOR_URL`),
+   production secret materialization (12 indirect names, zero Gemini key, `AI_DRAFT_ENABLED=false`),
+   immutable Vercel production deployment and Edge custom domain/TLS/HSTS routing,
+   managed launch drills (`run-launch-drills.sh --target-architecture vercel-managed-production`),
+   storage parity reconciliation (`reconcile-storage-objects.js --provider vercel-blob`),
+   and final sign-off compilation under Prompt 201.
+2. **Readiness preflight and operator intake audit**:
+   `scripts/ops/launch-readiness.sh --target-architecture vercel-managed-production infra/launch/readiness.vercel.example.json`
+   exited 1 (fail-closed as intended), detecting 0 approved categories, 11 unresolved categories,
+   and 61 total blockers. The formal operator intake questionnaire was documented across all 11 categories.
+3. **Repository checks**: Config check (`node scripts/vercel/check-vercel-config.js`),
+   managed drill verifier tests (`npm run ops:managed-drills-test`, 28/28 passed), secret scan, lint,
+   typecheck, build (`23/23` pages), and git diff check passed with exit 0.
+
+**Managed production activation framework is established.** Remaining launch gates:
+hosted scheduled cadence source publication (requires standalone uppercase `P`),
+operator-supplied production credentials/certificates, live launch drill execution, and the eleven sign-offs.
+
+See [the operations record](operations.md#prompt-410--managed-production-activation-plan-and-operator-intake-2026-10-20).
 No push or production action occurred.

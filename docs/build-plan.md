@@ -4434,3 +4434,29 @@ hosted scheduled cadence / workflow source publication (requires standalone
 uppercase `P`), production activation plan, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-409--scanner-snapshot-retirement-tier-2-2026-10-20)
 and [the deployment record](vercel-deployment.md#scanner-snapshot-retirement-tier-2--prompt-409-2026-10-20).
+
+## Phase 12 managed production activation plan and operator intake — Prompt 410 (2026-10-20)
+
+Establishes the formal Managed Production Activation Plan and Operator Intake
+specifically for `vercel-managed-production`, resolving the activation framework gap
+left from the historical Compose target (Prompt 367/368).
+
+The 7-stage live activation sequence defines pinned source provenance, out-of-band Neon
+migrator execution (`DATABASE_MIGRATOR_URL`), production secret materialization
+(12 indirect names, zero Gemini key, `AI_DRAFT_ENABLED=false`), immutable Vercel production
+deployment and Edge custom domain/TLS/HSTS routing, managed launch drills
+(`run-launch-drills.sh --target-architecture vercel-managed-production`),
+storage parity reconciliation (`reconcile-storage-objects.js --provider vercel-blob`),
+and final sign-off compilation under Prompt 201.
+
+Preflight execution of `scripts/ops/launch-readiness.sh --target-architecture vercel-managed-production infra/launch/readiness.vercel.example.json`
+exited 1 (fail-closed as intended), detecting 0 approved categories, 11 unresolved categories,
+and 61 total blockers. The formal operator intake questionnaire was documented across all 11 categories.
+Offline checks confirmed `vercel.json` validity (`node scripts/vercel/check-vercel-config.js`)
+and passed all 28 managed verifier tests (`npm run ops:managed-drills-test`).
+
+Managed production activation framework is established. Next gates:
+hosted scheduled cadence / workflow source publication (requires standalone uppercase `P`),
+operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-410--managed-production-activation-plan-and-operator-intake-2026-10-20)
+and [the deployment record](vercel-deployment.md#managed-production-activation-plan-and-operator-intake--prompt-410-2026-10-20).
