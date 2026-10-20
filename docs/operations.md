@@ -14845,3 +14845,194 @@ The reviewer independently ran `tests 26`, `pass 26`, `fail 0`, syntax and
 `git diff --check`, with no private credential reads or cloud actions. This
 approves the local partial record for commit, not hosted isolation, adoption or
 launch.
+
+## Prompt 407 — retained preview isolation accepted, adoption stopped (2026-10-20)
+
+**Result: retained application acceptance completed; project scanner adoption
+stopped before any configuration write.** Prompt 406 supplies the historical
+clean/EICAR scan evidence; this continuation supplies the missing authenticated
+isolation proof against the same deployment and exact artifacts. A later local
+adoption-helper assertion failed before PATCH dispatch. No live rerun followed.
+
+### Target, custody and verifier preparation
+
+Local `main` began at `a39fd1bd3092228c9ac80bdf8e72e6a6dc72e408`, with only
+approved Prompt 407 untracked. Installed Node 24.21.0 and Vercel CLI 64.5.0
+were reused; no dependency installation, CLI upgrade or login was performed. Fixed team/project
+matched the approved preview target. Fresh preflight completed at
+`08:00:30.814Z`: active Hobby, no block/feature block, retained deployment
+`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4` Ready in `iad1`, source
+`9744d812e08de5313f1191e1fb609c513409d26a`. The retained URL is
+[the immutable preview](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app).
+All five preview-only scanner settings matched Prompt 395's restored values;
+original candidate receipt/runtime digests, hashes and smoke fields matched.
+Four live snapshots were retained, with zero sandboxes. No new scanner allowance
+was requested or inferred; this continuation submits no scan. Storage accounting
+remains unresolved, and Hobby metadata is not a fresh usage reading.
+
+New custody is `~/.config/acres/vercel-preview/prompt407-20261020T080019Z/`,
+directory 0700, data 0600, executable verifiers 0700. Designated Prompt 405/406
+records were read without overwriting them. A continuation-only verifier has
+no upload-initiation, PUT or completion path, independent cookie jars, fresh
+CSRF, a 48-request cap, exact route allowlist, one dispatch per mutation and a
+stop journal. Imports/offline tests make no network calls or credential reads.
+
+Initial offline validation found a test regex incorrectly matching a selected
+`organizationId` column as though it were a WHERE predicate; it was corrected
+before live use. The sandboxed Node test subprocess failed at file level; direct
+execution passed. Pre-live read-only review found a real missing linkage anchor:
+current object IDs needed comparison with original unique object keys. All three
+keys are now checked through each upload's object FK. Stored-object and infected
+dead-letter IDs, first recovered under A, are frozen for subsequent exact-ID
+queries; no historical dead-letter ID is fabricated. A suspected PUT/GET issue
+was withdrawn after verifying that `clean-put.json` stores the Blob PUT response,
+whose `.url` is the unsigned private GET URL, rather than the signed PUT contract.
+The revised verifier passed unrestricted `tests 41`, `pass 41`, `fail 0` and
+syntax checks before the one live continuation.
+
+### Actual application and database proof
+
+The run was `08:07:33.394–08:08:55.876Z`. A's retained session/account/org were
+reused; zero logins. `/app` returned 200 with `id="dashboard-title"` and no
+`role="alert"`. Existing clean and EICAR status reads returned their expected
+terminal states. There were **20 app requests/responses**, including exactly two
+POSTs: one synthetic B registration and one B organization creation. B's session,
+own organization GET/list and own organization/membership SQL controls passed;
+B differed from A and had no A membership. No invitation, recovery or mail ran.
+
+Read-only SQL used the designated preview `acres_app` connection. Inspection
+verified non-superuser/NOBYPASSRLS, non-ownership and enabled/forced RLS on all
+five tested tables. Transactions set and verified local account/organization,
+empty invitation hash and empty worker access, with bounded timeouts. Queries
+were parameterized; no owner/migrator role, worker context, schema or row mutation
+was used. The existing `pg` SSL-mode forward-compatibility warning appeared;
+TLS verification was not weakened.
+
+| Exact retained evidence | A positive rows | B rows | Restored A rows |
+| ----------------------- | --------------: | -----: | --------------: |
+| Upload                  |               3 |      0 |               3 |
+| StoredObject            |               3 |      0 |               3 |
+| OutboxEvent             |               2 |      0 |               2 |
+| DurableJob              |               2 |      0 |               2 |
+| JobDeadLetter           |               1 |      0 |               1 |
+
+A saw the original pending row and both terminal uploads/objects, linked through
+original object keys. Clean remained accepted/clean with a succeeded job;
+EICAR remained rejected/infected with a failed/infected job and infected dead
+letter. Both jobs/outbox events had attempt 1; events were dispatched. Additional
+upload-ID correlation found exactly the retained jobs/events and none for the
+original pending upload. Exact-source-upload dataset versions remained zero.
+
+B executed the **same exact-ID SQL and parameters** as A, with only tenant
+context changed. No B-organization WHERE clause, membership join or nonexistent
+ID manufactured empty results. DatasetVersion was also empty, but its already
+empty A result is no positive RLS proof. Global null-organization rows were not
+tested. The same checked-out client then ran fresh A transactions successfully;
+physical pooled-backend reuse is not claimed.
+
+For each clean/EICAR upload, B's own organization status read, forged A header
+status read and B download read returned 404 / `NOT_FOUND`: six denials total,
+with no data/capability. This separates membership enforcement from direct RLS
+org-scoping. A's EICAR download also returned 404 / `NOT_FOUND`. The unsigned
+clean object's credential-free, redirect-denying GET returned 403. It used the
+retained response URL with exact store/key checks, not a signed capability.
+
+At `08:09:50.008Z`, postflight verified zero sandboxes and unchanged complete
+metadata for the same four live snapshots, including unchanged candidate
+last-use. No new VM, scan, upload, PUT, completion, retry, Cron kick, ingestion,
+publication, scanner rebuild, seam probe, deployment, alias or deletion occurred. These reads
+supply no new signature-age validation or scanner lifecycle. Candidate binding
+remains an inference from the original verified writes-before-deployment,
+hash/source enforcement, historical clean scan and prior use metadata; resolved
+scanner values are not attested by deployment metadata.
+
+### Adoption stop and read-only reconciliation
+
+Before adoption, review found the installed CLI's config updater can internally
+retry PATCHes. A separate native HTTPS transport was prepared: one request/end,
+no retry/redirect, fixed target/record/scope, value through child stdin and the
+existing authenticated CLI credential read through its installed config reader.
+The credential reader was never reached live. Recovery was tightened to require
+response-proven record ID/key/target/updatedAt; unresolved intent blocks recovery
+rather than proving ownership. Offline tests passed `tests 50`, `pass 50`,
+`fail 0`, including network/500/429 single-send cases. These were source/offline
+safeguards, not provider-write evidence.
+
+The guarded adoption pass began at `08:10:18.459Z` and stopped during its initial
+read-only configuration comparison. The agent-authored helper assumed CLI
+`env ls preview --json` records contain `id`. They actually expose key, type,
+visibility, target, configurationId and timestamps, with readable values for
+some records; **record ID is omitted**. Matching `undefined` IDs selected the
+first unrelated record and triggered an incorrect timestamp comparison.
+Source review had missed that CLI-output schema mismatch. It was a verifier
+defect, not demonstrated concurrent provider modification.
+
+**Zero mutation intents, PATCH subprocesses, config writes or recovery writes.**
+No adoption retry, repaired live run or second application continuation followed.
+Read-only final inspection at `08:12:38.773Z` compared records by actual key/scope
+fields, and separately checked raw project API records, which do contain IDs.
+It verified unchanged full readable values/key set, CLI scopes/timestamps and raw
+provider IDs/scopes/metadata. Volatile OIDC was excluded; redacted sensitive
+plaintext equality remains unproved. Project settings still point to
+`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`, while the immutable preview retains
+`snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` by the qualified inference above.
+
+A separately retained offline v3 revision binds CLI records to exactly one raw
+provider record by full key/scope identity and checks matching metadata before
+using its explicit ID. Regression fixtures omit CLI IDs as observed, reject
+missing/duplicate raw records and scope/metadata differences, and disallow PATCH
+construction without a verified ID. Syntax passed; direct offline suite:
+`tests 56`, `pass 56`, `fail 0`. **Offline v3 was not executed live.** Failed
+source and all earlier receipts remain preserved. Final review must distinguish
+that correction from the stopped adoption.
+
+The next gate is separately authorized bounded adoption using the verified raw
+ID source, fresh target/configuration and useful-window checks. Do not repeat
+uploads or isolation proof. The project's old upper bound remains no later than
+about `2026-10-21T09:02Z`, possibly earlier. Candidate producer interval
+`2026-10-20T06:33:39.250–06:35:09.451Z` still yields only an upper bound no later
+than `2026-10-22T06:35:09.451Z`, possibly earlier without its CVD timestamp.
+Reserve roughly two hours before that bound (planning judgment); historical scan
+success and retained reads do not establish present freshness or reset age.
+Hosted cadence/source publication, storage accounting, retirement, production
+plan/evidence and eleven sign-offs remain open.
+
+Custody contains preflight/raw target and configuration reads, immutable-source
+identity, all verifier revisions/offline outputs, request configs/bodies/journal,
+A/B controls, frozen manifest/SQL bundle, role/policy checks, scoped correlations,
+postflight inventory, pre-write adoption failure and final read-only comparison.
+The safe reviewer export contains counts/statuses and no credentials or bearer
+URLs. This is restricted local evidence, not a signed production dossier.
+
+### Repository verification and inspection
+
+Commands ran sequentially under Node 24.21.0 after the live attempt:
+
+- `node scripts/vercel/check-vercel-config.js`: exit 0,
+  `vercel.json configuration valid`.
+- `npm run vercel:probe-test`: restricted exit 1, file-level `tests 8`,
+  `pass 4`, `fail 4`. The unchanged offline suite outside the sandbox exited 0:
+  `tests 443`, `suites 6`, `pass 443`, `fail 0`.
+- `npm run lint`: exit 0 across client/shared/server, no diagnostics.
+- `npm run typecheck`: exit 0 across all workspaces,
+  `Generated Prisma Client (7.9.1)`, no diagnostics.
+- `npm run build`: restricted exit 1,
+  `Error: Could not parse output from TypeScript's --showConfig.` The unchanged
+  local build outside the sandbox exited 0: Next 16.3.8,
+  `Compiled successfully`, `Generating static pages using 7 workers (23/23)`,
+  shared and Nest builds, `Generated Prisma Client (7.9.1)`. No deploy followed.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- Installed Prettier on Prompt 407 and new operations/deployment/build-plan/resume
+  passages: exit 0, `All matched files use Prettier code style!`. Historical
+  whole-file formatting was preserved.
+- `git diff --check`: exit 0, no output.
+
+Logs are `/tmp/acres407-{probe-restricted,probe,lint,typecheck,build-restricted,build,secret-scan}.log`;
+private syntax/offline outputs and the stopped adoption remain in custody.
+No aggregate ops check, online audit, full DB/browser suite or launch drill ran.
+The real hosted scope is the retained-artifact continuation above; local tests
+supply no missing adoption proof.
+
+To inspect, read this passage and open the retained immutable preview. The local
+non-cloud tooling command is `npm run vercel:probe-test`; no server startup is
+required. Do not execute preserved live helpers to inspect results.

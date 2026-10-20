@@ -540,6 +540,14 @@ procedure:
    `infected` dead-letter reason. That expected rejection does not require a
    retry. See [Prompt 406's partial acceptance record](../../../docs/operations.md#prompt-406--retained-preview-partial-acceptance-2026-10-20).
 
+   For retained-artifact isolation, first require A to see the exact rows and
+   validate their original object keys/job links. Under an independently proven
+   B session, check own-org and forged-org HTTP denials. Run the same parameterized
+   exact-ID SQL under transaction-local B context, without a B-organization WHERE
+   filter or join that would itself remove A's rows; then recheck A visibility.
+   Empty tables without an A positive control do not prove RLS isolation. See
+   [Prompt 407](../../../docs/operations.md#prompt-407--retained-preview-isolation-accepted-adoption-stopped-2026-10-20).
+
 Deployment metadata names the scanner variables but not their values;
 identity remains an inference from write-before-create ordering, the
 adapter's source and hash checks, and the snapshot's expiry moving at scan

@@ -4368,3 +4368,20 @@ actions. Complete acceptance, guarded adoption, hosted cadence and Phase 12 exit
 remain open. The next gate is bounded isolation proof on the existing artifacts.
 See [the partial execution record](operations.md#prompt-406--retained-preview-partial-acceptance-2026-10-20)
 and [current project versus retained deployment state](vercel-deployment.md#retained-preview-partial-acceptance--prompt-406-2026-10-20).
+
+## Phase 12 retained isolation proof and adoption stop — Prompt 407 (2026-10-20)
+
+Completes retained application acceptance using Prompt 406's scan artifacts:
+A/B positive controls, six HTTP denials and identical exact-ID SQL under B
+returning zero across five RLS tables, then restored A visibility. Twenty app
+requests created one B account/org, with no new upload, PUT, scan or deployment.
+Original pending and terminal rows, job/event attempts and snapshots stayed intact.
+
+Project adoption stopped before any write because a private helper assumed IDs
+in CLI env JSON. Final read-only checks proved unchanged values/scopes/raw IDs;
+a corrected raw-ID binding revision passed 56 offline tests without live rerun.
+Project remains on Prompt 395; retained deployment remains on Prompt 405's
+candidate. Next gate: separately bounded guarded adoption with fresh target,
+record-ID and useful-window checks. Hosted cadence and Phase 12 exit remain open.
+See [the execution record](operations.md#prompt-407--retained-preview-isolation-accepted-adoption-stopped-2026-10-20)
+and [current configuration versus retained preview](vercel-deployment.md#retained-preview-isolation-accepted-adoption-stopped--prompt-407-2026-10-20).

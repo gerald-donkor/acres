@@ -23,20 +23,26 @@ preview image routing repair); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
-**Current manual scanner gate — Prompt 406 (2026-10-20).** This supersedes the
-older next-refresh instructions below. Project preview configuration still
-points to Prompt 395's `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`; its historical
-signature upper bound remains no later than about `2026-10-21T09:02Z`, possibly
-earlier. Retained immutable deployment `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`
-uses Prompt 405's candidate by inference from verified writes before creation.
-Prompt 406 proved clean and EICAR outcomes there, but a verifier assertion
-stopped before tenant isolation; no adoption occurred. The next gate is separately
-bounded isolation proof on the existing artifacts, then guarded project adoption
-on complete acceptance. No new scan, builder, probe or deploy is needed for those
-reads. Candidate freshness is bounded only by its original producer interval:
-no later than `2026-10-22T06:35:09.451Z`, possibly earlier without a CVD timestamp.
-Reserve roughly two hours before that bound (planning judgment); acceptance and
-snapshot last-use do not extend it. See [the current partial record](#retained-preview-partial-acceptance--prompt-406-2026-10-20).
+**Current manual scanner gate — Prompt 407 (2026-10-20).** This supersedes the
+older next-refresh instructions below. Retained application acceptance is now
+complete: Prompt 406's clean/EICAR scan evidence plus Prompt 407's positive A/B
+controls, six HTTP denials and independent exact-ID RLS proof. **Project adoption
+stopped before any write** on an agent-authored helper assumption: CLI `env ls
+--json` omits environment record IDs. A separate corrected revision passed
+offline tests and was not executed live. The next gate is a separately bounded
+guarded adoption using verified raw provider record IDs, with fresh target,
+value/scope/metadata and useful-window checks; do not repeat uploads or isolation.
+
+Project settings still point to Prompt 395's
+`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`, historical signature upper bound no later
+than about `2026-10-21T09:02Z`, possibly earlier. Immutable deployment
+`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4` retains Prompt 405's candidate by inference
+from verified writes before creation, hashes and historical scan/use evidence.
+Candidate expiry is bounded only by its original producer interval: no later
+than `2026-10-22T06:35:09.451Z`, possibly earlier without its CVD timestamp.
+Reserve roughly two hours before that bound (planning judgment). These retained
+reads re-attest no present-time signature freshness and extend no window.
+See [the acceptance and pre-write adoption stop](#retained-preview-isolation-accepted-adoption-stopped--prompt-407-2026-10-20).
 
 **Fixed target.** Team `dgsloxx417's projects`
 (`team_zE3mp7nrEZ6a7cxRavwUMYC4`), project `acres`
@@ -3158,3 +3164,60 @@ activation and all eleven sign-offs remain open.
 See [the exact actions, failed assertion and checks](operations.md#prompt-406--retained-preview-partial-acceptance-2026-10-20).
 Private custody: `prompt406-20261020T070600Z/` under the approved parent. No push
 or production action occurred.
+
+## Retained preview isolation accepted, adoption stopped — Prompt 407 (2026-10-20)
+
+At local baseline `a39fd1b`, one authorized continuation completed missing
+isolation proof for retained deployment
+[`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app),
+source `9744d812e08de5313f1191e1fb609c513409d26a`, `iad1`. Fresh preflight
+confirmed fixed ownership, active Hobby/no blocks, candidate handoff/hash
+consistency and four retained snapshots with no sandboxes.
+
+At `08:07:33.394–08:08:55.876Z`, A's retained session and three uploads were
+reused; exactly one synthetic B account/organization was created. Twenty app
+requests included two POSTs, with zero logins, uploads, PUTs or completions.
+Dashboard/session/org controls passed. For clean and EICAR, B's own-org status,
+forged A-header status and own-org download reads all returned 404 / `NOT_FOUND`
+without data/capabilities: six denials. B's independent session and own-org
+HTTP/SQL controls passed; it had no A membership.
+
+A positive controls verified three uploads/objects, two dispatched events,
+two terminal jobs and the infected dead letter against retained keys/links.
+The same exact-ID SQL/parameters returned zero under transaction-local B
+context across all five tables, then A visibility was restored. The designated
+`acres_app` role was non-owner/non-superuser/NOBYPASSRLS with enabled/forced RLS;
+no worker context or direct data writes. Original pending state, clean
+accepted/succeeded and EICAR rejected/failed/infected remained intact, attempts
+1 and no linked dataset versions. Clean unsigned GET was 403, A's EICAR download 404. Inventory at `08:09:50.008Z` had zero sandboxes and unchanged snapshot
+metadata. No scanner compute, rebuild, probe, deployment or deletion occurred.
+
+**Retained application acceptance is complete; project adoption is incomplete.**
+A guarded adoption helper stopped before its first mutation intent because it
+assumed CLI env JSON contained record IDs. It does not: undefined-ID matching
+made an unrelated timestamp comparison fail. Source review missed that schema
+assumption. No PATCH, recovery write or retry followed. Read-only final
+inspection at `08:12:38.773Z` verified unchanged key-scoped CLI metadata, raw
+provider record IDs/scopes/metadata and readable values/full key set. OIDC was
+excluded, and redacted sensitive plaintext equality remains unproved.
+
+The separately corrected offline helper binds CLI rows to verified raw API
+record IDs by full scope, retains a single-send native HTTPS mutation transport,
+and requires response/metadata ownership for conditional recovery. Fifty-six
+offline tests passed; it was not executed live. Actual adoption needs a new
+bounded continuation with fresh checks; no repeat upload/isolation is needed.
+
+Project preview still uses Prompt 395's
+`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`, with historical signature upper bound no
+later than about `2026-10-21T09:02Z`, possibly earlier. Immutable preview retains
+Prompt 405's `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` by the qualified historical
+binding inference. Its producer-interval upper bound remains no later than
+`2026-10-22T06:35:09.451Z`, possibly earlier without a CVD timestamp; reserve
+roughly two hours (judgment). Retained reads re-attest no present-time freshness.
+No functional rollback or new release is claimed. Hosted cadence/source
+publication, billing accounting, retirement, production plan and eleven sign-offs
+remain open.
+
+See [the full execution, failure and verification record](operations.md#prompt-407--retained-preview-isolation-accepted-adoption-stopped-2026-10-20).
+Custody: `prompt407-20261020T080019Z/` beneath the approved private parent.
+No push, production action or launch approval occurred.
