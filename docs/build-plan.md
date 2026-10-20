@@ -4385,3 +4385,28 @@ candidate. Next gate: separately bounded guarded adoption with fresh target,
 record-ID and useful-window checks. Hosted cadence and Phase 12 exit remain open.
 See [the execution record](operations.md#prompt-407--retained-preview-isolation-accepted-adoption-stopped-2026-10-20)
 and [current configuration versus retained preview](vercel-deployment.md#retained-preview-isolation-accepted-adoption-stopped--prompt-407-2026-10-20).
+
+## Phase 12 guarded scanner preview adoption — Prompt 408 (2026-10-20)
+
+Completes guarded adoption of candidate snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`
+and its digests into Vercel project preview settings, reconciling project
+configuration with retained accepted deployment
+[`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app).
+Preflight verified active Hobby status, zero blocks, readiness of deployment,
+four live snapshots retained, and ~38h remaining in the useful window.
+
+The adoption helper bound CLI preview records to verified raw provider API
+record IDs by full key/scope identity (`bindCLI`) and executed single-send
+native HTTPS PATCH requests: `SCANNER_SANDBOX_SNAPSHOT_ID` and `SCANNER_DAILY_SHA256`
+were updated successfully (`rc=0`), while `SCANNER_MAIN_SHA256` was skipped as
+already matching candidate. Post-adoption audit verified all three candidate
+scanner variables, preserved preview scopes, unchanged non-scanner variable
+values/metadata, zero remaining sandboxes, and four retained snapshots.
+
+Project preview configuration now matches the candidate. Historical signature
+upper bound is updated to no later than `2026-10-22T06:35:09.451Z`, possibly
+earlier absent CVD timestamp. Next gates: hosted scheduled cadence / workflow
+source publication (requires standalone uppercase `P`), storage accounting,
+production plan, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-408--guarded-scanner-preview-adoption-2026-10-20)
+and [the deployment record](vercel-deployment.md#guarded-scanner-preview-adoption--prompt-408-2026-10-20).

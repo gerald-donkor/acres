@@ -15036,3 +15036,98 @@ supply no missing adoption proof.
 To inspect, read this passage and open the retained immutable preview. The local
 non-cloud tooling command is `npm run vercel:probe-test`; no server startup is
 required. Do not execute preserved live helpers to inspect results.
+
+## Prompt 408 — guarded scanner preview adoption (2026-10-20)
+
+At baseline `b23bc46`, one authorized bounded continuation executed guarded
+adoption of verified candidate snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`
+into Vercel project preview configuration (`team_zE3mp7nrEZ6a7cxRavwUMYC4`,
+`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`, environment `preview`, `iad1`), reconciling
+project settings with retained accepted deployment
+[`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app).
+Zero uploads, PUTs, completions, scans, isolation tests, rebuilds, seam probes,
+deployments, promotions or git pushes occurred.
+
+### Preflight, window check and offline verification
+
+At `16:31:07.942Z`, preflight verified:
+- Team status: billing plan `hobby`, status `active`, no account blocks or soft blocks.
+- Project: `prj_q9ApajZWDgdYZetnm5s5oakEjrUD` under account `team_zE3mp7nrEZ6a7cxRavwUMYC4`.
+- Retained deployment: `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`, `Ready`, source `9744d812e08de5313f1191e1fb609c513409d26a`, `iad1`.
+- Candidate snapshot: `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`, created in `iad1`, 461,124,249 bytes. Producer interval: `2026-10-20T06:33:39.250Z–06:35:09.451Z`. Latest possible expiry upper bound: `2026-10-22T06:35:09.451Z`. Remaining useful window at preflight: 38.07 hours (exceeding the ~2-hour safety threshold).
+- Snapshot inventory: zero sandboxes, four live snapshots (`snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`, `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`, `snap_ngIwnQplocPoUR0A6cewfCGrFAbX`, `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN`), all status `created` in `iad1`.
+- Predecessor project settings matched Prompt 395 (`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`).
+- Handoff integrity: candidate receipt, runtime.env and manifest digests matched Prompt 405 custody.
+- OIDC token valid through `2026-10-21T04:31:03.000Z`.
+
+Offline test suites passed before live execution:
+- `acres408-spec.cjs`: 26/26 tests passed (`tests 26, pass 26, fail 0`).
+- Prompt 407 offline v3 suite: 56/56 tests passed (`tests 56, pass 56, fail 0`).
+
+### Guarded adoption execution and post-write audit
+
+The adoption helper bound CLI preview records to verified raw provider API record
+IDs by full key/scope identity (`bindCLI`) and executed single-send native HTTPS
+PATCH requests via `acres408-patch.cjs` with stdin-fed values and no internal retries:
+
+1. `SCANNER_SANDBOX_SNAPSHOT_ID`:
+   - Intent recorded at `16:34:38.274Z`.
+   - Single PATCH sent to raw record `J4z4L1KWK9ghtUxw` (`preview` scope).
+   - Receipt recorded at `16:34:39.446Z` (`updatedAt: 1792514079205`).
+   - `SCANNER_SANDBOX_SNAPSHOT_ID rc=0`.
+   - Post-write inspection confirmed value `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`, updatedAt updated, other variables unchanged.
+
+2. `SCANNER_MAIN_SHA256`:
+   - Evaluated by `decision()`. Current project value already matched candidate value `0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365`.
+   - Logged `SCANNER_MAIN_SHA256 skip (already matches target)`; zero mutation sent.
+
+3. `SCANNER_DAILY_SHA256`:
+   - Intent recorded at `16:35:01.208Z`.
+   - Single PATCH sent to raw record `lkEeMy3WJOGlUivs` (`preview` scope).
+   - Receipt recorded at `16:35:02.368Z` (`updatedAt: 1792514102128`).
+   - `SCANNER_DAILY_SHA256 rc=0`.
+   - Post-write inspection confirmed value `94fead17812734280917fbc623828c1462943762c96895736468ffffc0068eb3`, updatedAt updated, other variables unchanged.
+
+Post-adoption audit at `16:35:15.237Z` (`inspect('after')`):
+- All three scanner variables match candidate values:
+  - `SCANNER_SANDBOX_SNAPSHOT_ID`: `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`
+  - `SCANNER_MAIN_SHA256`: `0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365`
+  - `SCANNER_DAILY_SHA256`: `94fead17812734280917fbc623828c1462943762c96895736468ffffc0068eb3`
+  - `SCANNER_PROVIDER`: `vercel-sandbox`
+  - `SCANNER_MAX_SIGNATURE_AGE_HOURS`: `48`
+- All preview scopes preserved (`["preview"]`, no gitBranch, no customEnvironmentIds).
+- Non-scanner variable key set, values and updatedAt metadata unchanged (volatile OIDC changed as expected).
+- Redacted sensitive values: plaintext unproved, record metadata verified unchanged.
+- Zero conditional recovery writes were required.
+
+Postflight inventory at `16:35:28.102Z`:
+- SDK inventory verified 0 sandboxes and the same 4 live snapshots retained with unchanged metadata.
+
+### Outcome and configuration reconciliation
+
+**Guarded scanner preview adoption is complete.** Project preview environment
+variables now match the validated candidate snapshot and hashes retained by
+deployment `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`.
+
+The project preview configuration's historical signature upper bound is now
+updated to the candidate's upper bound: no later than `2026-10-22T06:35:09.451Z`,
+possibly earlier without its CVD build timestamp. Reserve roughly two hours
+before that bound for the next refresh (planning judgment).
+
+Custody directory is `prompt408-20261020T162817Z/` under `~/.config/acres/vercel-preview/`,
+containing preflight, pull/scope outputs, raw API responses, journals, offline
+spec outputs, patch logs, postflight inventory and verification receipts.
+
+### Repository verification and inspection
+
+Commands ran sequentially under Node 24.21.0:
+- `node scripts/vercel/check-vercel-config.js`: exit 0, `vercel.json configuration valid`.
+- `npm run vercel:probe-test`: exit 0, `tests 443, suites 6, pass 443, fail 0`.
+- `npm run lint`: exit 0 across client/shared/server.
+- `npm run typecheck`: exit 0 across all workspaces, Prisma Client 7.9.1 generated.
+- `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- `git diff --check`: exit 0.
+
+To inspect, read this record and examine project preview settings via `vercel env ls preview`.
+The local tooling verification command is `npm run vercel:probe-test`.

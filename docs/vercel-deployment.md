@@ -23,26 +23,24 @@ preview image routing repair); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
-**Current manual scanner gate — Prompt 407 (2026-10-20).** This supersedes the
-older next-refresh instructions below. Retained application acceptance is now
-complete: Prompt 406's clean/EICAR scan evidence plus Prompt 407's positive A/B
-controls, six HTTP denials and independent exact-ID RLS proof. **Project adoption
-stopped before any write** on an agent-authored helper assumption: CLI `env ls
---json` omits environment record IDs. A separate corrected revision passed
-offline tests and was not executed live. The next gate is a separately bounded
-guarded adoption using verified raw provider record IDs, with fresh target,
-value/scope/metadata and useful-window checks; do not repeat uploads or isolation.
+**Current manual scanner gate — Prompt 408 (2026-10-20).** This supersedes the
+older next-refresh instructions below. Retained application acceptance and
+project-level preview adoption are now complete. Prompt 408 executed guarded
+adoption of candidate snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` and its
+digests into Vercel project preview settings using verified raw provider API
+record IDs, single-send HTTPS PATCH transport, and post-write verification.
+Project preview configuration is now reconciled with retained accepted
+deployment `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`.
 
-Project settings still point to Prompt 395's
-`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`, historical signature upper bound no later
-than about `2026-10-21T09:02Z`, possibly earlier. Immutable deployment
-`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4` retains Prompt 405's candidate by inference
-from verified writes before creation, hashes and historical scan/use evidence.
-Candidate expiry is bounded only by its original producer interval: no later
-than `2026-10-22T06:35:09.451Z`, possibly earlier without its CVD timestamp.
-Reserve roughly two hours before that bound (planning judgment). These retained
-reads re-attest no present-time signature freshness and extend no window.
-See [the acceptance and pre-write adoption stop](#retained-preview-isolation-accepted-adoption-stopped--prompt-407-2026-10-20).
+The project preview configuration's historical signature upper bound is now
+updated to the candidate's bound: no later than `2026-10-22T06:35:09.451Z`,
+possibly earlier absent its CVD build timestamp. Reserve roughly two hours
+before that bound for the next refresh (planning judgment).
+
+The next gates are hosted scheduled cadence / workflow source publication
+(requiring a standalone uppercase `P` to push reviewed commits to upstream),
+storage accounting, production plan, Phase 12 exit, and the eleven sign-offs.
+See [the guarded adoption record](#guarded-scanner-preview-adoption--prompt-408-2026-10-20).
 
 **Fixed target.** Team `dgsloxx417's projects`
 (`team_zE3mp7nrEZ6a7cxRavwUMYC4`), project `acres`
@@ -3221,3 +3219,51 @@ remain open.
 See [the full execution, failure and verification record](operations.md#prompt-407--retained-preview-isolation-accepted-adoption-stopped-2026-10-20).
 Custody: `prompt407-20261020T080019Z/` beneath the approved private parent.
 No push, production action or launch approval occurred.
+
+## Guarded scanner preview adoption — Prompt 408 (2026-10-20)
+
+At baseline `b23bc46`, one authorized bounded continuation completed guarded
+adoption of candidate snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` into Vercel
+project preview configuration (`team_zE3mp7nrEZ6a7cxRavwUMYC4`,
+`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`, `preview`, `iad1`), reconciling project
+settings with the validated retained deployment
+[`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app).
+Zero uploads, PUTs, completions, scans, isolation tests, rebuilds, seam probes,
+deployments, promotions or git pushes occurred.
+
+Preflight verified active Hobby status, zero blocks, readiness of deployment
+`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`, candidate presence, zero sandboxes, and
+four live snapshots retained. Candidate producer interval
+`2026-10-20T06:33:39.250Z–06:35:09.451Z` established an upper expiry bound no
+later than `2026-10-22T06:35:09.451Z`; with ~38 hours remaining, the useful
+window requirement (>2h) was satisfied. Predecessor project configuration
+matched Prompt 395 (`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`).
+
+The adoption helper bound CLI preview records to verified raw provider API
+record IDs by full key/scope identity (`bindCLI`) and executed single-send
+native HTTPS PATCH requests:
+- `SCANNER_SANDBOX_SNAPSHOT_ID` updated to `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` (record `J4z4L1KWK9ghtUxw`, `rc=0`).
+- `SCANNER_MAIN_SHA256` evaluated via `decision()`; skipped without mutation as already matching candidate value `0b2182d2...`.
+- `SCANNER_DAILY_SHA256` updated to `94fead17812734280917fbc623828c1462943762c96895736468ffffc0068eb3` (record `lkEeMy3WJOGlUivs`, `rc=0`).
+
+Post-adoption audit confirmed all three scanner variables match candidate
+values, preview scopes are preserved (`["preview"]`, no gitBranch), and
+non-scanner keys, values and modification timestamps are unchanged (volatile
+OIDC token changed as expected). Redacted sensitive values remain unproved for
+plaintext equality; unchanged record metadata supplies the check. Postflight
+inventory confirmed zero sandboxes and unchanged snapshot metadata across all
+four live snapshots.
+
+**Project configuration and retained preview deployment are now reconciled.**
+The project preview configuration's historical signature upper bound is updated
+to the candidate's bound: no later than `2026-10-22T06:35:09.451Z`, possibly
+earlier absent its CVD timestamp. Reserve roughly two hours before that bound
+for future refresh (planning judgment).
+
+Next gates: hosted cadence / workflow source publication (requires standalone
+uppercase `P`), storage accounting, production activation plan, Phase 12 exit,
+and the eleven sign-offs.
+
+See [the complete operations record](operations.md#prompt-408--guarded-scanner-preview-adoption-2026-10-20).
+Custody: `prompt408-20261020T162817Z/` under `~/.config/acres/vercel-preview/`.
+No push or production action occurred.
