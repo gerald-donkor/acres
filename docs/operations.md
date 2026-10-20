@@ -100,54 +100,54 @@ These are two process-local pool snapshots, not PostgreSQL-wide connection count
 
 ## Artifacts
 
-| file | purpose |
-| --- | --- |
-| `infra/caddy/Caddyfile.example` | Same-origin Caddy routing, baseline security headers, request-size and timeout placeholders, and an explicit HSTS approval gate |
-| `infra/compose/docker-compose.production.example.yml` | Inert single-host Compose reference for Caddy, Next, API, worker, Postgres/PostGIS, Valkey, Garage, ClamAV, and optional observability |
-| `infra/docker/client.Dockerfile.example` and `infra/docker/client.Dockerfile.example.dockerignore` | Example Node 24 production image for the Next client, with a Dockerfile-specific context ignore because the root `.dockerignore` intentionally excludes client source for the server image |
-| `infra/env/production.env.example` and `infra/env/garage.production.env.example` | Production environment inventory with `__REQUIRED_*__` sentinels for operator-provided values and every Compose interpolation variable; Garage admin/metrics secrets stay service-scoped |
-| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml` | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `AcresWorkerDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`, `DatabaseConnectionPoolSaturation`) |
-| `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json` | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, scheduled job health, and API process pool state |
-| `server/src/metrics/*` | `MetricsModule`, `MetricsService`, `MetricsController`, `MetricsMiddleware`, and `route-normalizer` |
-| `server/src/jobs/retention-maintenance.job.ts` | Cron-driven retention maintenance for expired uploads, idempotency records, and authentication/recovery tokens |
-| `client/e2e/helpers.ts` | Shared Playwright test helpers and deterministic mock fixture generators |
-| `client/e2e/product-journeys.spec.ts` | Full product journey E2E suite (auth, dashboards, saved views, reports, revisions, exports, downloads) |
-| `client/e2e/multi-tenant-isolation.spec.ts` | Multi-tenant browser isolation suite (independent contexts, cross-tenant report blocking, org switching) |
-| `client/e2e/accessibility-responsive.spec.ts` | WCAG 2.2 Level AA accessibility audit, responsive overflow at 375/800/1280px, touch targets, and telemetry check |
-| `scripts/ops/backup-postgres.sh` & `.spec.js` | Structured PostgreSQL `pg_dump` backup script with POSIX CLI argument validation, directory targeting, `--dry-run`, tool prerequisite verification, credential fallbacks, and comprehensive contract test suite |
-| `scripts/ops/restore-postgres.sh` & `.spec.js` | Structured PostgreSQL restore script with POSIX CLI argument validation, directory targeting, named/positional file support, clean mode toggle, `--dry-run`, tool prerequisite verification, credential fallbacks, and comprehensive contract test suite |
-| `scripts/ops/run-restore-drill.sh` & `.spec.js` | Automated disaster recovery restore drill runner with POSIX CLI argument validation, directory targeting, tool prerequisite checks, isolated database restore, schema/migration parity, and comprehensive contract test suite |
-| `scripts/ops/reconcile-storage-objects.js` | Object storage reconciliation utility comparing PostgreSQL stored objects against bucket keys, detecting leaks, missing objects, and mismatches |
-| `scripts/ops/verify-caddy-routing.js` | Pure Node.js Caddyfile parser and route evaluator validating same-origin ingress dispatching, proxy headers, S3 SigV4 preservation, and security headers |
-| `scripts/ops/verify-caddy-routing.spec.js` | Unit test suite (10/10 tests) asserting Caddy routing rules, SigV4 host preservation, security headers, timeouts, and HSTS gate invariants |
-| `scripts/ops/run-deployment-drill.sh` | Configuration preflight/rehearsal: Caddy/Compose checks, migration heuristic, optional health observations and simulation evidence |
-| `scripts/ops/audit-dependencies.sh` & `.spec.js` | Production dependency security audit script with POSIX CLI argument validation, configurable audit level, directory targeting, and comprehensive contract test suite |
-| `scripts/ops/generate-sbom.js` & `.spec.js` | Deterministic CycloneDX v1.5 JSON SBOM generator and license compliance validator (purls, hashes, permissive allowlist, copyleft rejection) |
-| `scripts/ops/run-sast-scan.js` & `.spec.js` | Pure Node.js static application security testing (SAST) engine evaluating SAST-01 through SAST-08 across source trees with triage policy enforcement |
-| `infra/security/sast-triage.json` & `.schema.json` | Actionable SAST triage policy registry with schema, rationale, approved owners, and fail-closed expiration gating |
-| `scripts/ops/verify-container-security.js` & `.spec.js` | Static multi-stage build validator verifying non-root `USER node`, pinned `node:24-alpine`, bounded healthchecks, direct exec CMD, and Compose network/credential isolation |
-| `scripts/ops/verify-alert-rules.js` & `.spec.js` | Prometheus alert rule validator and time-series simulation engine verifying 9 golden signal and threat alerts (`AcresApiDown`, `AcresWorkerDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`, `DatabaseConnectionPoolSaturation`) |
-| `scripts/ops/verify-capacity-load.js` & `.spec.js` | Pure Node.js performance, capacity, and latency evaluation engine evaluating Category 5 SLOs (availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS) |
-| `scripts/ops/run-dos-resilience-drill.sh` | Automated multi-layer DoS resilience and rate limiting drill runner asserting edge bounds, in-process throttles, GraphQL resource caps, upload bounds, and constant-time bcrypt |
-| `scripts/ops/run-capacity-alerting-drill.sh` | Automated top-level drill orchestrator executing alert simulation, capacity evaluation, and DoS resilience checks with unified JSON evidence emission |
-| `scripts/ops/check-production-templates.sh` | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, readiness schema, and env placeholder checks |
-| `scripts/ops/scan-secrets.sh` | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names |
-| `scripts/ops/check-docker-runtime.sh` & `.spec.js` | Static server Dockerfile check for Node 24 Alpine, non-root runtime, healthcheck, direct Node startup, with POSIX CLI argument validation and unit/contract suite |
-| `infra/launch/readiness.example.json` | Inert, structured launch-readiness decision template covering all 11 operator categories with explicit placeholders |
-| `infra/launch/readiness.schema.json` | Draft 7 structural/editor contract for the readiness record; does not attest production readiness |
-| `scripts/ops/check-launch-readiness.js` | Deterministic fail-closed launch readiness validator enforcing approval status, secret source references, recovery drills, and no-AI posture |
-| `scripts/ops/check-launch-readiness.spec.js` | Unit and contract test suite covering all 11 readiness categories, evidence validators, and CLI runner |
-| `scripts/ops/launch-readiness.sh` | Aggregates operational checks and runs the fail-closed launch readiness validator |
-| `scripts/ops/launch-readiness.spec.js` | Subprocess unit and contract test specification covering CLI argument parsing, fail-closed preflights, and drill execution |
-| `.github/workflows/ci.yml` | Pinned GitHub Actions (full 40-char commit SHAs) running `npm run ops:check` and verification suite |
-| `infra/launch/operator-handoff.vercel.example.md` | Managed operator intake package and sign-off template for `vercel-managed-production` |
-| `scripts/ops/verify-managed-ingress.js` & `.spec.js` | Vercel multi-service routing and deployment rollback verification for managed production |
-| `scripts/ops/verify-managed-volume-encryption.js` & `.spec.js` | Managed Neon KMS AES-256 volume encryption and serverless compute isolation verification |
-| `scripts/ops/verify-managed-secret-rotation.js` & `.spec.js` | Managed zero-downtime secret rotation and indirect reference verification |
-| `scripts/ops/verify-managed-restore-drill.js` & `.spec.js` | Managed disaster recovery restore and Neon PITR branch recovery verification |
-| `scripts/vercel/rebuild-scanner-cadence.js` & `.spec.js` | Automated zero-downtime ClamAV scanner snapshot rebuild orchestrator with smoke verification |
-| `.github/workflows/scanner-snapshot-rebuild.yml` | Scheduled and manual GitHub Actions workflow for automated ClamAV scanner rebuild cadence |
-| `scripts/db/bootstrap-production-roles.sh` | Production Postgres bootstrap for `acres_migrator`, `acres_app`, and `acres`; deliberately omits local `acres_test` database |
+| file                                                                                               | purpose                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `infra/caddy/Caddyfile.example`                                                                    | Same-origin Caddy routing, baseline security headers, request-size and timeout placeholders, and an explicit HSTS approval gate                                                                                                                                                                                                |
+| `infra/compose/docker-compose.production.example.yml`                                              | Inert single-host Compose reference for Caddy, Next, API, worker, Postgres/PostGIS, Valkey, Garage, ClamAV, and optional observability                                                                                                                                                                                         |
+| `infra/docker/client.Dockerfile.example` and `infra/docker/client.Dockerfile.example.dockerignore` | Example Node 24 production image for the Next client, with a Dockerfile-specific context ignore because the root `.dockerignore` intentionally excludes client source for the server image                                                                                                                                     |
+| `infra/env/production.env.example` and `infra/env/garage.production.env.example`                   | Production environment inventory with `__REQUIRED_*__` sentinels for operator-provided values and every Compose interpolation variable; Garage admin/metrics secrets stay service-scoped                                                                                                                                       |
+| `infra/prometheus/prometheus.yml` and `infra/prometheus/alerts.yml`                                | Prometheus scrape configuration for `prometheus` and `acres-api`, plus alert rules (`AcresApiDown`, `AcresWorkerDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`, `DatabaseConnectionPoolSaturation`)                            |
+| `infra/grafana/provisioning/**` and `infra/grafana/dashboards/acres-operations.json`               | Operational Grafana dashboard with RED service metrics, queue depth, outbox lag, scheduled job health, and API process pool state                                                                                                                                                                                              |
+| `server/src/metrics/*`                                                                             | `MetricsModule`, `MetricsService`, `MetricsController`, `MetricsMiddleware`, and `route-normalizer`                                                                                                                                                                                                                            |
+| `server/src/jobs/retention-maintenance.job.ts`                                                     | Cron-driven retention maintenance for expired uploads, idempotency records, and authentication/recovery tokens                                                                                                                                                                                                                 |
+| `client/e2e/helpers.ts`                                                                            | Shared Playwright test helpers and deterministic mock fixture generators                                                                                                                                                                                                                                                       |
+| `client/e2e/product-journeys.spec.ts`                                                              | Full product journey E2E suite (auth, dashboards, saved views, reports, revisions, exports, downloads)                                                                                                                                                                                                                         |
+| `client/e2e/multi-tenant-isolation.spec.ts`                                                        | Multi-tenant browser isolation suite (independent contexts, cross-tenant report blocking, org switching)                                                                                                                                                                                                                       |
+| `client/e2e/accessibility-responsive.spec.ts`                                                      | WCAG 2.2 Level AA accessibility audit, responsive overflow at 375/800/1280px, touch targets, and telemetry check                                                                                                                                                                                                               |
+| `scripts/ops/backup-postgres.sh` & `.spec.js`                                                      | Structured PostgreSQL `pg_dump` backup script with POSIX CLI argument validation, directory targeting, `--dry-run`, tool prerequisite verification, credential fallbacks, and comprehensive contract test suite                                                                                                                |
+| `scripts/ops/restore-postgres.sh` & `.spec.js`                                                     | Structured PostgreSQL restore script with POSIX CLI argument validation, directory targeting, named/positional file support, clean mode toggle, `--dry-run`, tool prerequisite verification, credential fallbacks, and comprehensive contract test suite                                                                       |
+| `scripts/ops/run-restore-drill.sh` & `.spec.js`                                                    | Automated disaster recovery restore drill runner with POSIX CLI argument validation, directory targeting, tool prerequisite checks, isolated database restore, schema/migration parity, and comprehensive contract test suite                                                                                                  |
+| `scripts/ops/reconcile-storage-objects.js`                                                         | Object storage reconciliation utility comparing PostgreSQL stored objects against bucket keys, detecting leaks, missing objects, and mismatches                                                                                                                                                                                |
+| `scripts/ops/verify-caddy-routing.js`                                                              | Pure Node.js Caddyfile parser and route evaluator validating same-origin ingress dispatching, proxy headers, S3 SigV4 preservation, and security headers                                                                                                                                                                       |
+| `scripts/ops/verify-caddy-routing.spec.js`                                                         | Unit test suite (10/10 tests) asserting Caddy routing rules, SigV4 host preservation, security headers, timeouts, and HSTS gate invariants                                                                                                                                                                                     |
+| `scripts/ops/run-deployment-drill.sh`                                                              | Configuration preflight/rehearsal: Caddy/Compose checks, migration heuristic, optional health observations and simulation evidence                                                                                                                                                                                             |
+| `scripts/ops/audit-dependencies.sh` & `.spec.js`                                                   | Production dependency security audit script with POSIX CLI argument validation, configurable audit level, directory targeting, and comprehensive contract test suite                                                                                                                                                           |
+| `scripts/ops/generate-sbom.js` & `.spec.js`                                                        | Deterministic CycloneDX v1.5 JSON SBOM generator and license compliance validator (purls, hashes, permissive allowlist, copyleft rejection)                                                                                                                                                                                    |
+| `scripts/ops/run-sast-scan.js` & `.spec.js`                                                        | Pure Node.js static application security testing (SAST) engine evaluating SAST-01 through SAST-08 across source trees with triage policy enforcement                                                                                                                                                                           |
+| `infra/security/sast-triage.json` & `.schema.json`                                                 | Actionable SAST triage policy registry with schema, rationale, approved owners, and fail-closed expiration gating                                                                                                                                                                                                              |
+| `scripts/ops/verify-container-security.js` & `.spec.js`                                            | Static multi-stage build validator verifying non-root `USER node`, pinned `node:24-alpine`, bounded healthchecks, direct exec CMD, and Compose network/credential isolation                                                                                                                                                    |
+| `scripts/ops/verify-alert-rules.js` & `.spec.js`                                                   | Prometheus alert rule validator and time-series simulation engine verifying 9 golden signal and threat alerts (`AcresApiDown`, `AcresWorkerDown`, `HighHttp5xxRate`, `P95LatencyThresholdExceeded`, `High429Rate`, `QueueDeadLettersDetected`, `OutboxDeliveryLag`, `HighHttpConcurrency`, `DatabaseConnectionPoolSaturation`) |
+| `scripts/ops/verify-capacity-load.js` & `.spec.js`                                                 | Pure Node.js performance, capacity, and latency evaluation engine evaluating Category 5 SLOs (availability >= 99.9%, p95 latency <= 500ms, throughput >= 100 RPS)                                                                                                                                                              |
+| `scripts/ops/run-dos-resilience-drill.sh`                                                          | Automated multi-layer DoS resilience and rate limiting drill runner asserting edge bounds, in-process throttles, GraphQL resource caps, upload bounds, and constant-time bcrypt                                                                                                                                                |
+| `scripts/ops/run-capacity-alerting-drill.sh`                                                       | Automated top-level drill orchestrator executing alert simulation, capacity evaluation, and DoS resilience checks with unified JSON evidence emission                                                                                                                                                                          |
+| `scripts/ops/check-production-templates.sh`                                                        | Static template existence, YAML/JSON parse, private-port, encrypted-mount, scheduler, Prometheus alert rules, Grafana dashboard queries, HSTS, readiness schema, and env placeholder checks                                                                                                                                    |
+| `scripts/ops/scan-secrets.sh`                                                                      | Tracked-file scan for known local passwords, `change-me` placeholders, launch sentinels outside approved docs/examples, and secret-looking `NEXT_PUBLIC_*` names                                                                                                                                                               |
+| `scripts/ops/check-docker-runtime.sh` & `.spec.js`                                                 | Static server Dockerfile check for Node 24 Alpine, non-root runtime, healthcheck, direct Node startup, with POSIX CLI argument validation and unit/contract suite                                                                                                                                                              |
+| `infra/launch/readiness.example.json`                                                              | Inert, structured launch-readiness decision template covering all 11 operator categories with explicit placeholders                                                                                                                                                                                                            |
+| `infra/launch/readiness.schema.json`                                                               | Draft 7 structural/editor contract for the readiness record; does not attest production readiness                                                                                                                                                                                                                              |
+| `scripts/ops/check-launch-readiness.js`                                                            | Deterministic fail-closed launch readiness validator enforcing approval status, secret source references, recovery drills, and no-AI posture                                                                                                                                                                                   |
+| `scripts/ops/check-launch-readiness.spec.js`                                                       | Unit and contract test suite covering all 11 readiness categories, evidence validators, and CLI runner                                                                                                                                                                                                                         |
+| `scripts/ops/launch-readiness.sh`                                                                  | Aggregates operational checks and runs the fail-closed launch readiness validator                                                                                                                                                                                                                                              |
+| `scripts/ops/launch-readiness.spec.js`                                                             | Subprocess unit and contract test specification covering CLI argument parsing, fail-closed preflights, and drill execution                                                                                                                                                                                                     |
+| `.github/workflows/ci.yml`                                                                         | Pinned GitHub Actions (full 40-char commit SHAs) running `npm run ops:check` and verification suite                                                                                                                                                                                                                            |
+| `infra/launch/operator-handoff.vercel.example.md`                                                  | Managed operator intake package and sign-off template for `vercel-managed-production`                                                                                                                                                                                                                                          |
+| `scripts/ops/verify-managed-ingress.js` & `.spec.js`                                               | Vercel multi-service routing and deployment rollback verification for managed production                                                                                                                                                                                                                                       |
+| `scripts/ops/verify-managed-volume-encryption.js` & `.spec.js`                                     | Managed Neon KMS AES-256 volume encryption and serverless compute isolation verification                                                                                                                                                                                                                                       |
+| `scripts/ops/verify-managed-secret-rotation.js` & `.spec.js`                                       | Managed zero-downtime secret rotation and indirect reference verification                                                                                                                                                                                                                                                      |
+| `scripts/ops/verify-managed-restore-drill.js` & `.spec.js`                                         | Managed disaster recovery restore and Neon PITR branch recovery verification                                                                                                                                                                                                                                                   |
+| `scripts/vercel/rebuild-scanner-cadence.js` & `.spec.js`                                           | Automated zero-downtime ClamAV scanner snapshot rebuild orchestrator with smoke verification                                                                                                                                                                                                                                   |
+| `.github/workflows/scanner-snapshot-rebuild.yml`                                                   | Scheduled and manual GitHub Actions workflow for automated ClamAV scanner rebuild cadence                                                                                                                                                                                                                                      |
+| `scripts/db/bootstrap-production-roles.sh`                                                         | Production Postgres bootstrap for `acres_migrator`, `acres_app`, and `acres`; deliberately omits local `acres_test` database                                                                                                                                                                                                   |
 
 Root scripts:
 
@@ -404,25 +404,25 @@ PostgreSQL and Garage coverage, freshness, and restore under actual load.
    - Asserts table and applied migration parity (`_prisma_migrations`), PostGIS presence, zero unvalidated foreign keys, and record count parity (`Account`, `Organization`, `StoredObject`, `Dataset`, `Region`);
    - Measures elapsed milliseconds against the Recovery Time Objective (default 300s). A miss exits nonzero;
    - Removes the database and archive created by this invocation, unless `--keep-drill-db` or `--keep-backup` explicitly retains them. Before deletion, it confirms the target's database OID and owner OID still match those recorded after creation. It publishes JSON success evidence atomically only after required cleanup succeeds (`backups/restore-drill-evidence-<timestamp>-<pid>.json` by default).
-   A cleanup failure returns nonzero, leaves the archive for investigation when database removal is uncertain, and names the target. An interruption also attempts owned-resource cleanup. A blocked database drop does not terminate sessions or retry against an arbitrary target; the operator must investigate it manually. The identity check and `DROP DATABASE` are separate PostgreSQL commands, so the operator must isolate the drill from privileged processes that could replace the target between those commands. An existing evidence destination is rejected rather than overwritten. `--dry-run` checks authentication and target absence without dumping or creating a database.
-   The isolated command suite is `npm run ops:restore-drill-test`; its PostgreSQL commands are stubbed, and `ops:check` includes it. This test does not establish a successful live restore.
-   Approved Category 6 records must reference at least one concrete child JSON
-   report in `evidence`; prose, a dossier alone, and `restore_drill_completed: true`
-   do not establish this gate. The validator accepts a report at the runner's
-   default name or a custom path when its content has a valid basic UTC
-   `drill_timestamp` (`YYYYMMDDTHHMMSSZ`), exact `status: "success"`, and true
-   `rto_compliant`, `record_parity_verified`, `postgis_verified`, and
-   `foreign_keys_verified` flags. Source/restored table and migration counts
-   must be equal nonnegative integers, `backup_bytes` a positive integer, and
-   `duration_ms` a finite nonnegative number. Missing, malformed, failed, or
-   future-dated reports block approval, including when another report passes.
-   `restore_drill_date` must be a real UTC `YYYY-MM-DD` date or an ISO UTC
-   timestamp (`YYYY-MM-DDTHH:mm:ssZ`) whose date matches the latest valid
-   referenced report; future dates and timezone offsets are rejected. No
-   maximum report age is inferred. This validates the operator record against
-   a self-reported artifact; archive origin, scheduled completion, off-host
-   encryption and transfer, Garage coverage, freshness, and representative
-   load remain operator obligations.
+     A cleanup failure returns nonzero, leaves the archive for investigation when database removal is uncertain, and names the target. An interruption also attempts owned-resource cleanup. A blocked database drop does not terminate sessions or retry against an arbitrary target; the operator must investigate it manually. The identity check and `DROP DATABASE` are separate PostgreSQL commands, so the operator must isolate the drill from privileged processes that could replace the target between those commands. An existing evidence destination is rejected rather than overwritten. `--dry-run` checks authentication and target absence without dumping or creating a database.
+     The isolated command suite is `npm run ops:restore-drill-test`; its PostgreSQL commands are stubbed, and `ops:check` includes it. This test does not establish a successful live restore.
+     Approved Category 6 records must reference at least one concrete child JSON
+     report in `evidence`; prose, a dossier alone, and `restore_drill_completed: true`
+     do not establish this gate. The validator accepts a report at the runner's
+     default name or a custom path when its content has a valid basic UTC
+     `drill_timestamp` (`YYYYMMDDTHHMMSSZ`), exact `status: "success"`, and true
+     `rto_compliant`, `record_parity_verified`, `postgis_verified`, and
+     `foreign_keys_verified` flags. Source/restored table and migration counts
+     must be equal nonnegative integers, `backup_bytes` a positive integer, and
+     `duration_ms` a finite nonnegative number. Missing, malformed, failed, or
+     future-dated reports block approval, including when another report passes.
+     `restore_drill_date` must be a real UTC `YYYY-MM-DD` date or an ISO UTC
+     timestamp (`YYYY-MM-DDTHH:mm:ssZ`) whose date matches the latest valid
+     referenced report; future dates and timezone offsets are rejected. No
+     maximum report age is inferred. This validates the operator record against
+     a self-reported artifact; archive origin, scheduled completion, off-host
+     encryption and transfer, Garage coverage, freshness, and representative
+     load remain operator obligations.
 3. **PostgreSQL & Object Storage Reconciliation**:
    Execute `npm run ops:reconcile-storage` (or `scripts/ops/reconcile-storage-objects.js [options]`). Compares active database records (`StoredObject`, `Upload`, `ExportArtifact`) against bucket storage (Garage / S3):
    - Detects orphaned objects present in storage but absent from database metadata (storage leaks);
@@ -431,18 +431,18 @@ PostgreSQL and Garage coverage, freshness, and restore under actual load.
      alone do not attest SHA-256 content integrity;
    - Excludes pending uploads, soft-deleted objects, and quarantined objects within the retention window;
    - Fails closed with exit code 1 if missing objects or corruption/checksum mismatches are found.
-   Approved Category 6 records must also reference a concrete reconciliation
-   child JSON report in `evidence`. A custom path qualifies by report content;
-   a declaration, prose, filename alone, or unified dossier does not. The
-   validator requires the producer's real, nonfuture ISO UTC `timestamp`, all
-   eight nonnegative safe-integer summary counts, all four result arrays, and
-   count/array agreement. Missing and mismatched counts and arrays must be
-   empty, `summary.exitCode` must be 0, and `summary.status` must be `clean`
-   with no orphans or `warning` with orphans. Every referenced child report,
-   including wildcard matches, must pass. A warning's orphan list remains for
-   operator review. This checks the supplied report's consistency; the
-   operator must verify live PostgreSQL/Garage scope, backup coverage,
-   freshness, zero-object results, and representative restore load.
+     Approved Category 6 records must also reference a concrete reconciliation
+     child JSON report in `evidence`. A custom path qualifies by report content;
+     a declaration, prose, filename alone, or unified dossier does not. The
+     validator requires the producer's real, nonfuture ISO UTC `timestamp`, all
+     eight nonnegative safe-integer summary counts, all four result arrays, and
+     count/array agreement. Missing and mismatched counts and arrays must be
+     empty, `summary.exitCode` must be 0, and `summary.status` must be `clean`
+     with no orphans or `warning` with orphans. Every referenced child report,
+     including wildcard matches, must pass. A warning's orphan list remains for
+     operator review. This checks the supplied report's consistency; the
+     operator must verify live PostgreSQL/Garage scope, backup coverage,
+     freshness, zero-object results, and representative restore load.
 
 ### Data Retention & Cleanup
 
@@ -451,6 +451,7 @@ Each purge reclaims at most `RETENTION_PURGE_BATCH_LIMIT` (500) rows per purge
 path per hourly tick — 500 tokens plus 500 invitations on the tokens tick —
 oldest `expiresAt` first via bounded id-scoped writes, so backlogs drain
 across ticks (prompt 79 generalizes the prompt-70 exports bound to all purges).
+
 - `sessions.purge-expired`: cleans expired session tokens.
 - `uploads.purge-expired`: cleans uncompleted uploads and pending quarantine objects older than configured TTL.
 - `idempotency.purge-expired`: cleans idempotency records past retention window.
@@ -467,10 +468,10 @@ across ticks (prompt 79 generalizes the prompt-70 exports bound to all purges).
   `expiresAt <= now` with the same `NOT_FOUND` before any presigned URL is
   minted, so the tick remains byte reclamation only). Unexpectedly shared stored objects are skipped with a
   warning rather than orphaned.
-All runs are logged to the `JobRun` audit table. `JobRunsService.finish()`
-accepts only the five `` `purged ${number} …` `` count templates plus the five
-fixed failure literals (compile-time guard; runtime values unchanged; raw
-error text stays server-log-only).
+  All runs are logged to the `JobRun` audit table. `JobRunsService.finish()`
+  accepts only the five `` `purged ${number} …` `` count templates plus the five
+  fixed failure literals (compile-time guard; runtime values unchanged; raw
+  error text stays server-log-only).
 
 ### Volume Encryption, Key Separation & Recovery Inspection Runbook
 
@@ -636,6 +637,7 @@ Phase 11A's assistive drafting preview is implemented in the application codebas
 ## Phase 12E Verification & Full E2E Baseline
 
 Implemented in Prompt 61:
+
 1. **Server-Side Test Harness Bridge (`ENABLE_TEST_HARNESS`)**:
    - `client/lib/api/test-harness-store.ts`: Session-isolated in-memory mock store for SSR Server Components.
    - `client/app/api/test-harness/mock/route.ts`: Test harness route handler strictly guarded by `process.env.ENABLE_TEST_HARNESS === "true"`, returning 404 in production builds.
@@ -661,6 +663,7 @@ operator child receipts (`execution_mode: "live"`) are required when Category 6 
 is approved.
 
 Implemented in Prompt 62:
+
 1. **Automated Disaster Recovery Restore Drill Runner (`scripts/ops/run-restore-drill.sh`)**:
    - Executes automated end-to-end backup, archive validation, target database recreation, restore, and parity verification against an isolated target database (`acres_restore_drill`).
    - Verifies table counts (46 tables in `public` schema), applied migration counts (17 migrations), PostGIS spatial extension presence, foreign key integrity, and record invariants (`Account`, `Organization`, `Dataset`).
@@ -696,6 +699,7 @@ periods do not prove requests/jobs drained. Optional successful health/database
 observations do not elevate the runner's simulation receipts to live evidence.
 
 Implemented in Prompt 63:
+
 1. **Production Caddy Configuration & Same-Origin Routing Verification Engine (`scripts/ops/verify-caddy-routing.js` & `.spec.js`)**:
    - Pure Node.js Caddyfile parser and route evaluation engine.
    - Evaluates route dispatching: `@api path /api/* /graphql /health /health/ready` -> `api:3001` with `X-Forwarded-Host` and `X-Forwarded-Proto` proxy headers.
@@ -727,6 +731,7 @@ rotation, SMTP/Grafana verification or zero-downtime guarantee is established.
 Opaque Acres sessions are not proven signed by the generalized HMAC example.
 
 Implemented in Prompt 64:
+
 1. **Production Volume Encryption & Key Separation Engine (`scripts/ops/verify-volume-encryption.js` & `.spec.js`)**:
    - Deterministic Node.js validator evaluating stateful volume encryption, key separation, and recovery governance (TM-21).
    - Validates all 9 stateful container mounts across `infra/compose/docker-compose.production.example.yml` and `infra/env/production.env.example`:
@@ -760,6 +765,7 @@ Implemented in Prompt 64:
 ## Phase 12I Supply-Chain Security, Deterministic SAST & Container Build Hardening
 
 Implemented in Prompt 65:
+
 1. **Deterministic Software Bill of Materials (SBOM) Generator & License Validator (`scripts/ops/generate-sbom.js` & `.spec.js`)**:
    - Generates CycloneDX v1.5 JSON Software Bill of Materials covering all production dependencies across root, server, client, and shared workspaces (TM-18).
    - Computes package URLs (`purl`), version strings, SHA-512 integrity hashes, and license expressions.
@@ -781,10 +787,12 @@ Implemented in Prompt 65:
      - Fail-closed expiration gating: any expired suppression is treated as an active blocking finding.
    - Unit test suite (`run-sast-scan.spec.js`): 11/11 unit tests passing in 150ms.
 3. **Container Security & Multi-Stage Build Hardening Validator (`scripts/ops/verify-container-security.js` & `.spec.js`)**:
+
 - Statically evaluates `server/Dockerfile`, `infra/docker/client.Dockerfile.example`, and `infra/compose/docker-compose.production.example.yml`.
-   - Validates Node 24 Alpine pinned base, multi-stage separation (`deps`, `build`, `prod-deps`, `runtime`), `USER node` non-root runtime enforcement, bounded healthchecks (`--interval=30s --timeout=5s`), direct exec JSON array CMD for POSIX signal propagation, and layer hygiene (zero inclusion of `.env`, `*.pem`, `*.key`).
-   - Validates Compose network isolation (`networks.private.internal: true`), datastore network binding (`postgres`, `valkey`, `garage`, `clamav`, `prometheus` isolated to private network), mandatory `${VAR:?msg}` credential injection syntax, and service healthchecks.
-   - Unit test suite (`verify-container-security.spec.js`): 8/8 unit tests passing in 80ms.
+  - Validates Node 24 Alpine pinned base, multi-stage separation (`deps`, `build`, `prod-deps`, `runtime`), `USER node` non-root runtime enforcement, bounded healthchecks (`--interval=30s --timeout=5s`), direct exec JSON array CMD for POSIX signal propagation, and layer hygiene (zero inclusion of `.env`, `*.pem`, `*.key`).
+  - Validates Compose network isolation (`networks.private.internal: true`), datastore network binding (`postgres`, `valkey`, `garage`, `clamav`, `prometheus` isolated to private network), mandatory `${VAR:?msg}` credential injection syntax, and service healthchecks.
+  - Unit test suite (`verify-container-security.spec.js`): 8/8 unit tests passing in 80ms.
+
 4. **Operations & CI Integration**:
    - Root package scripts: `npm run ops:sbom`, `npm run ops:sbom-test`, `npm run ops:sast`, `npm run ops:sast-test`, `npm run ops:container-test`, `npm run ops:container-security`.
    - Integrated `ops:sbom-test`, `ops:sast-test`, `ops:container-test`, `ops:sast`, and `ops:container-security` into `npm run ops:check`.
@@ -793,6 +801,7 @@ Implemented in Prompt 65:
 ## Phase 12J Capacity, Load Resilience & Alert Simulation Drill
 
 Implemented in Prompt 66:
+
 1. **Performance, Capacity, and Latency Evaluation Engine (`scripts/ops/verify-capacity-load.js` & `.spec.js`)**:
    - Pure Node.js statistical performance benchmark evaluation engine (TM-20, Category 5 SLOs).
    - Evaluates performance against Category 5 SLO requirements (`infra/launch/readiness.example.json`):
@@ -1714,7 +1723,6 @@ Verification on 2026-09-28: focused template preflight tests passed 57/57;
 `npm run build`, and `git diff --check` passed. The checked-in launch readiness
 example remains unresolved and fails closed.
 
-
 ## Prompt 232 — DoS evidence boundary hardening (2026-09-29)
 
 The DoS runner now validates CLI/environment origins before side effects and
@@ -1796,7 +1804,6 @@ npm run ops:dos-test
 npm run ops:capacity-alerting-test
 bash scripts/ops/run-dos-resilience-drill.sh --dry-run --evidence-file /tmp/acres-dos-offline.json
 ```
-
 
 ## Prompt 233 — invocation-owned launch evidence (2026-09-29)
 
@@ -2267,6 +2274,7 @@ production recovery sign-off. `run-launch-drills.sh` documents Stage 7 explicitl
 reconciliation rehearsal.
 
 Category 6 (`backup_and_disaster_recovery`) in `scripts/ops/check-launch-readiness.js`:
+
 - Unified launch evidence dossiers are excluded from candidate evaluation.
 - Every referenced child report must pass strict structural validation. Legacy unclassified receipts without
   `execution_mode` fail closed; valid simulation may accompany live evidence, but failed simulations or live
@@ -2288,6 +2296,7 @@ Category 6 (`backup_and_disaster_recovery`) in `scripts/ops/check-launch-readine
   standard ISO 8601 UTC timestamps; storage reconciliation reports strictly enforce ISO 8601 UTC format.
 
 Verification and review (2026-10-01):
+
 - `npm run ops:restore-drill-test`: 28 passed, 0 failed.
 - `npm run ops:reconcile-test`: 10 passed, 0 failed.
 - `npm run ops:launch-drill-test`: 59 passed, 0 failed.
@@ -2311,6 +2320,7 @@ and S3 SigV4 Host header preservation; it disclaims live public DNS resolution, 
 certificate chain validation, and live HTTPS response header measurements.
 
 `scripts/ops/check-launch-readiness.js`:
+
 - `validateCaddyRoutingReport(report, now, approvedDomain, context)` supports both simulation and live modes:
   - Simulation mode (`execution_mode: "simulation"`) requires `drill_type: "caddy_routing_and_tls_verification"`,
     `status: "success"`, `valid: true`, empty `errors` array, `securityHeadersVerified: true`,
@@ -2341,10 +2351,12 @@ certificate chain validation, and live HTTPS response header measurements.
   - Retains useful Category 1 domain syntax, email validation, and boolean field blockers.
 
 `scripts/ops/assemble-launch-dossier.js`:
+
 - In `caddyPassed`, enforces `caddyEvidence.execution_mode === "simulation"`.
 - Summarizes Stage 3 in the launch evidence dossier as routing preflight verification rather than live domain/TLS sign-off.
 
 Verification and review (2026-10-01):
+
 - `node --test scripts/ops/verify-caddy-routing.spec.js`: 18 passed, 0 failed.
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 598 passed, 0 failed.
 - `npm run ops:launch-drill-test`: 59 passed, 0 failed.
@@ -2359,6 +2371,7 @@ Verification and review (2026-10-01):
 ## Prompt 240 — separate SMTP delivery preflight from live evidence (2026-10-01)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - `validateSmtpDeliveryReport(report, now, approved, context)` supports both simulation and live modes:
   - Requires `drill_type === "smtp_delivery_verification"`, `status === "success"`, empty `errors` array,
     matching provider, host, port, tls_mode, and from_address against the approved readiness record, valid
@@ -2385,6 +2398,7 @@ Verification and review (2026-10-01):
   - Retains useful Category 2 field, port, email, and TLS mode syntax blockers.
 
 Verification and review (2026-10-01):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
 - `npm run ops:readiness-test`: 599 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2397,6 +2411,7 @@ Verification and review (2026-10-01):
 ## Prompt 241 — separate secret-reference preflight from live evidence (2026-10-01)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - `validateSecretReferencePolicyReport(report, now, approved, context)` supports both simulation and live modes:
   - Requires `drill_type === "secret_reference_policy_verification"`, `status === "success"`, empty `errors` array,
     matching 12 distinct indirect secret sources against the approved readiness record, valid nonfuture ISO UTC timestamp,
@@ -2422,6 +2437,7 @@ Verification and review (2026-10-01):
   - Retains useful Category 4 field syntax and placeholder blockers.
 
 Verification and review (2026-10-01):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
 - `npm run ops:readiness-test`: 599 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2434,6 +2450,7 @@ Verification and review (2026-10-01):
 ## Prompt 242 — separate data-retention preflight from live evidence (2026-10-01)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - `validateDataRetentionPolicyReport(report, now, approved, context)` supports both simulation and live modes:
   - Requires `drill_type === "data_retention_policy_verification"`, `status === "success"`, empty `errors` array,
     `scheduled_cleanup_verified === true`, valid nonfuture ISO UTC timestamp, and zero placeholder or secret markers.
@@ -2459,6 +2476,7 @@ Verification and review (2026-10-01):
   - Retains useful Category 7 field, format, and window syntax blockers.
 
 Verification and review (2026-10-01):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
 - `npm run ops:readiness-test`: 599 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2471,6 +2489,7 @@ Verification and review (2026-10-01):
 ## Prompt 243 — separate GraphQL introspection preflight from live evidence (2026-10-01)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - `validateGraphqlIntrospectionReport(report, now, approved, context)` supports both simulation and live modes:
   - Requires `drill_type === "graphql_introspection_probe"`, `status === "success"`, empty `errors` array,
     valid endpoint (`/graphql` or absolute HTTP/HTTPS URL ending in `/graphql`), boolean `production_introspection_enabled`,
@@ -2501,6 +2520,7 @@ Verification and review (2026-10-01):
   - Retains useful Category 9 boolean and justification blockers.
 
 Verification and review (2026-10-01):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
 - `npm run ops:readiness-test`: 599 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2513,6 +2533,7 @@ Verification and review (2026-10-01):
 ## Prompt 244 — separate optional AI posture preflight from live evidence (2026-10-01)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - `validateNoAiPostureReport(report, now, approved, context)` supports both simulation and live modes:
   - Requires `drill_type === "no_ai_production_posture_verification"`, `status === "success"`, empty `errors` array,
     `unpaid_provider_excluded === true`, valid nonfuture ISO UTC timestamp, and zero placeholder or secret markers.
@@ -2545,6 +2566,7 @@ Verification and review (2026-10-01):
   - Retains useful Category 11 boolean, inventory, journey, and phase11 status blockers.
 
 Verification and review (2026-10-01):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 599 passed, 0 failed.
 - `npm run ops:readiness-test`: 599 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2557,6 +2579,7 @@ Verification and review (2026-10-01):
 ## Prompt 245 — separate capacity alerting preflight from live evidence (2026-10-01)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - `validateCapacityAlertingReport(report, now, context)` supports both simulation and live modes:
   - Supports explicit `execution_mode: "simulation" | "live"` alongside backward-compatible `mode: "synthetic" | "live"`.
   - Classifies synthetic distributions and simulated DoS layers as simulation preflight (`execution_mode: "simulation"` or `mode: "synthetic"`).
@@ -2582,6 +2605,7 @@ Verification and review (2026-10-01):
   - Guards live field emission (`environment: "production"` and operator references) with `if (targetUrl && !dryRun)`.
 
 Verification and review (2026-10-01):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 603 passed, 0 failed.
 - `node --test scripts/ops/run-capacity-alerting-drill.spec.js`: 17 passed, 0 failed.
 - `npm run ops:readiness-test`: 603 passed, 0 failed.
@@ -2595,6 +2619,7 @@ Verification and review (2026-10-01):
 ## Prompt 246 — unify launch drill dossier simulation contracts (2026-10-01)
 
 `scripts/ops/assemble-launch-dossier.js` and `scripts/ops/run-launch-drills.sh`:
+
 - Enforces `execution_mode: "simulation"` on child receipts across Stage 3 (`ingress_deployment`),
   Stage 5 (`secret_rotation`), and synthetic Stage 6 (`capacity_alerting`), matching the contracts
   enforced on Caddy (Stage 3), volume encryption (Stage 4), and disaster recovery (Stage 7).
@@ -2607,6 +2632,7 @@ Verification and review (2026-10-01):
   `reconciliationPreflight: "simulation"` on baselines and summaries.
 
 `scripts/ops/check-launch-readiness.js`:
+
 - Added `validSecretDossier(report, file)` helper validating `overall_status === 'PASSED'`,
   verified `secretRotationBaseline`, verified `supplyChainBaseline` (if present), and unbreached summary flags.
 - Added `validDeploymentDossier(report, file)` helper validating `overall_status === 'PASSED'`,
@@ -2621,6 +2647,7 @@ Verification and review (2026-10-01):
 - Both functions exported in `module.exports`.
 
 Verification and review (2026-10-01):
+
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 607 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2633,6 +2660,7 @@ Verification and review (2026-10-01):
 ## Prompt 247 — enforce policy and posture evidence candidate contracts (2026-10-02)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - Closes the evidence candidate evaluation gap across the four non-drill policy and posture categories:
   - `secret_references` (`isSecretReferencePolicyCandidate`)
   - `data_retention_policy` (`isDataRetentionPolicyCandidate`)
@@ -2649,6 +2677,7 @@ Verification and review (2026-10-01):
 - When referenced standalone, produces both the child requirement blocker and the invalid/failed report blocker.
 
 Verification and review (2026-10-02):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 607 passed, 0 failed.
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2661,6 +2690,7 @@ Verification and review (2026-10-02):
 ## Prompt 248 — unify drill dossier and candidate contracts for volume, recovery, and TLS (2026-10-02)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - Unifies dossier recognition, candidate filtering, and safe fall-through semantics across Category 8 (`volume_encryption`), Category 6 (`backup_and_disaster_recovery`), and Category 1 (`production_domain_tls`):
   - Hardened `validVolumeDossier(report, file)` to reject child report files (`volume-encryption*`), non-object/array reports, and unverified baseline contracts.
   - Hardened `validRecoveryDossier(report, file)` to reject child report files (`restore-drill*`, `reconcil*`), non-object/array reports, and unverified baseline contracts.
@@ -2677,6 +2707,7 @@ Verification and review (2026-10-02):
 - Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive contract tests validating dossier acceptance alongside live operator receipts, rejection of failing/disguised dossiers, and child filename rejection.
 
 Verification and review (2026-10-02):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 611 passed, 0 failed.
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2689,6 +2720,7 @@ Verification and review (2026-10-02):
 ## Prompt 249 — unify capacity, deployment, and supply chain contracts (2026-10-02)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - Unifies dossier recognition, candidate filtering, and supply chain evidence handling across Category 5 (`slo_and_alerting`), Category 10 (`deployment_and_rollback`), and Category 3 (`secrets_management`):
   - Hardened `validCapacityDossier(report, file)` to accept `file`, reject child report files (`capacity-alerting*`), non-object/array reports, and validate `databaseTelemetryBaseline` with `status: "verified"` (matching `scripts/ops/assemble-launch-dossier.js`).
   - Added summary checks to `validCapacityDossier` ensuring unbreached flags (`capacityAlerting !== 'failed'`, `capacityPreflight !== 'failed'`, `sloCompliance !== 'failed'`, `sloCompliance !== 'capacity_alerts_failed'`, `capacitySloCompliance !== 'failed'`, `databaseBaselineCompliance !== 'failed'`, `alertVerification !== 'failed'`, `dosResilience !== 'failed'`).
@@ -2700,6 +2732,7 @@ Verification and review (2026-10-02):
 - Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive contract tests validating `validCapacityDossier` acceptance alongside live operator receipts, rejection of failing/disguised dossiers, and child filename rejection.
 
 Verification and review (2026-10-02):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 613 passed, 0 failed.
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2712,6 +2745,7 @@ Verification and review (2026-10-02):
 ## Prompt 250 — consolidate readiness evidence boundaries and eliminate legacy dead code (2026-10-02)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - Unifies evidence boundary checks and removes legacy dead code across all 11 launch checklist categories:
   - In `checkEvidenceFile`, replaced the hardcoded 11-category list with canonical `REQUIRED_SECTIONS.includes(category)`.
   - In `checkEvidenceFileContents`, eliminated 524 lines of unreachable dead code (generic status/overall_status checks, failed_stages, generic stage loops, and legacy drill fragments) shadowed by Prompts 235–249's category-specific candidate and dossier validators.
@@ -2720,6 +2754,7 @@ Verification and review (2026-10-02):
 - Extended `scripts/ops/check-launch-readiness.spec.js` with tests asserting canonical `REQUIRED_SECTIONS` evidence boundary alignment and fail-closed rejection of unrecognized categories.
 
 Verification and review (2026-10-02):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 614 passed, 0 failed.
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2732,6 +2767,7 @@ Verification and review (2026-10-02):
 ## Prompt 251 — export and test supply chain and static evidence contracts (2026-10-02)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - Relocates misplaced Caddy routing helpers (`validCaddyDossier` and `validCaddyStaticEvidence`) from the disaster recovery section down to the Caddy routing section, restoring architectural locality and contiguous disaster recovery validation logic.
 - Exports internal evidence helpers `validCaddyStaticEvidence`, `isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`, and `validateSupplyChainEvidence` in `module.exports`.
 - Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive unit and contract test suites:
@@ -2740,6 +2776,7 @@ Verification and review (2026-10-02):
   - `validateSupplyChainEvidence` contract testing: tests rejection of non-object/array reports, failed status/overall_status, non-zero summary exitCode, missing scan components, failed/unhealthy SAST findings, non-compliant SBOM packages, and non-compliant container security findings, alongside full acceptance of passing supply chain evidence.
 
 Verification and review (2026-10-02):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 617 passed, 0 failed.
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
 - `npm run ops:readiness-schema-test`: 8 passed, 0 failed.
@@ -2752,6 +2789,7 @@ Verification and review (2026-10-02):
 ## Prompt 256 — modularize and test readiness CLI argument parsing, summary formatting, and execution runner (2026-10-03)
 
 `scripts/ops/check-launch-readiness.js`:
+
 - Decomposed the remaining command-line interface, human-readable summary formatting, end-to-end execution runner, and main entrypoint:
   - Extracted `parseCliArguments(args, cwd)`: parses command-line arguments, rejects invalid flags (e.g. `--help`, `--dry-run`), rejects excessive positional arguments, and resolves target readiness file relative to `cwd` (defaulting to `infra/launch/readiness.example.json`).
   - Extracted `formatReadinessSummary({ categoryBlockers, totalApproved, totalSections, targetPath, cwd })`: encapsulates rendering the human-readable report banner, per-category blocker listings, statistics summary table (total required, approved, unresolved, total blockers), and fail-closed vs. passing result notice.
@@ -2765,6 +2803,7 @@ Verification and review (2026-10-02):
   - `main`: tests programmatic CLI entrypoint execution, usage errors on invalid arguments, fail-closed exit code on example records, and passing exit code on approved records.
 
 Verification and review (2026-10-03):
+
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 649 passed, 0 failed.
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
 - `npm run ops:templates` and `npm run ops:templates-test`: 57 passed, 0 failed.
@@ -2775,6 +2814,7 @@ Verification and review (2026-10-03):
 ## Prompt 257 — harden and test launch readiness shell orchestrator (2026-10-03)
 
 `scripts/ops/launch-readiness.sh`:
+
 - Hardened command-line interface and argument parsing:
   - Enforced single positional argument validation: rejects multiple positional arguments (e.g. `scripts/ops/launch-readiness.sh file1.json file2.json`) with exit code 1 and error `Error: Too many arguments; expected single readiness JSON path` followed by usage instructions.
   - Maintained `--help` / `-h` usage flag handling (exit 0) and fail-closed rejection of unknown options (e.g. `--dry-run`, exit 1).
@@ -2783,6 +2823,7 @@ Verification and review (2026-10-03):
   - Propagated execution exit code from `check-launch-readiness.js`.
 
 `scripts/ops/launch-readiness.spec.js`:
+
 - Created comprehensive unit and contract test specification using Node.js built-in test runner (`node:test` and `node:child_process`):
   - CLI usage & flags: tests `--help`, `-h`, unknown flag rejection, unknown `--dry-run` rejection, single-dash unknown flag rejection, and excessive positional argument rejection.
   - Fail-closed preflight pipeline: verifies immediate execution halt when any preflight script fails (`check-production-templates.sh`, `scan-secrets.sh`, `check-docker-runtime.sh`, or `check-launch-readiness.spec.js`).
@@ -2791,14 +2832,17 @@ Verification and review (2026-10-03):
   - Real repository execution: verifies fail-closed execution against `infra/launch/readiness.example.json` returning exit code 1 with 70 unresolved blockers detected.
 
 `scripts/ops/check-production-templates.sh`:
+
 - Added `require_file scripts/ops/check-launch-readiness.spec.js`.
 - Added `require_file scripts/ops/launch-readiness.spec.js`.
 
 `package.json`:
+
 - Added `"ops:launch-readiness-test": "node --test scripts/ops/launch-readiness.spec.js"`.
 - Integrated `npm run ops:launch-readiness-test` into `"ops:check"`.
 
 Verification and review (2026-10-03):
+
 - `node --test scripts/ops/launch-readiness.spec.js`: 23 passed, 0 failed.
 - `node --test scripts/ops/check-launch-readiness.spec.js`: 649 passed, 0 failed.
 - `node --test scripts/ops/run-launch-drills.spec.js scripts/ops/assemble-launch-dossier.spec.js`: 68 passed, 0 failed.
@@ -2810,6 +2854,7 @@ Verification and review (2026-10-03):
 ## Prompt 258 — modularize and test production template checks (2026-10-03)
 
 `scripts/ops/check-production-templates.js`:
+
 - Extracted and modularized the 580-line inline Node.js validation block from `scripts/ops/check-production-templates.sh` into discrete, exported validator functions and orchestrator:
   - `mountDetails(entry)`: parses string (`ro`/`rw`, modes) and object (`volume`/`bind`) mount definitions into `{ source, target, persistent, writable }`.
   - `assertPostgres18Mount(composeDocument, filePath)`: enforces that `postgis/postgis:18-*` services mount persistent writable storage at `/var/lib/postgresql` and strictly rejects mounts at `/var/lib/postgresql/data`.
@@ -2825,6 +2870,7 @@ Verification and review (2026-10-03):
   - `main(argv, io)`: CLI entrypoint executing `checkProductionTemplates()` and terminating with code 0 on success or 1 on failure.
 
 `scripts/ops/check-production-templates.spec.js`:
+
 - Created comprehensive unit and contract test specification with 37 tests using Node.js test runner (`node:test`):
   - `mountDetails`: string syntax (`ro`, `rw`, modes), object syntax (`type: 'volume'|'bind'`, `read_only`), invalid/empty formats.
   - `assertPostgres18Mount`: passing mounts at `/var/lib/postgresql`, rejection of missing mounts, non-persistent/read-only mounts, and forbidden mounts at `/var/lib/postgresql/data`.
@@ -2840,13 +2886,16 @@ Verification and review (2026-10-03):
   - `main`: exit code and error reporting verification on valid and invalid CLI invocations.
 
 `scripts/ops/check-production-templates.sh`:
+
 - Replaced the inline heredoc (`node <<'NODE' ... NODE`) with `node scripts/ops/check-production-templates.js || fail 'production template validation failed'`.
 - Added `require_file scripts/ops/check-production-templates.js` and `require_file scripts/ops/check-production-templates.spec.js`.
 
 `package.json`:
+
 - Updated `"ops:templates-test"` to include `scripts/ops/check-production-templates.spec.js`.
 
 Verification and review (2026-10-03):
+
 - `npm run ops:templates-test`: 94 passed, 0 failed (37 template checks, 42 garage metrics, 9 proxy environment, 6 application environment, 5 smtp keys).
 - `npm run ops:templates`: passed.
 - `node --test scripts/ops/launch-readiness.spec.js`: 23 passed, 0 failed.
@@ -2952,6 +3001,7 @@ rollback is a normal revert of the local commit.
 ## Prompt 260 — harden and test production template shell runner (2026-10-04)
 
 `scripts/ops/check-production-templates.sh`:
+
 - Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
   - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>`, and `--cwd=<path>`.
   - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
@@ -2968,41 +3018,44 @@ rollback is a normal revert of the local commit.
   - Passes explicit target paths to downstream verifiers (`verify-caddy-routing.js`, `verify-volume-encryption.js`) and runs context-dependent verifiers in `(cd "$RESOLVED_CWD" && node "$SCRIPT_DIR/...")`.
 
 `scripts/ops/check-production-templates-shell.spec.js`:
+
 - Created dedicated unit and contract test specification with 34 tests using Node.js test runner (`node:test`):
   - CLI flag and argument validation (16 tests): `--help`, `-h`, unknown options (`--invalid`, `-x`), unexpected positionals, missing/empty/whitespace `--cwd`, repeated `--cwd`, non-existent directory, and explicit targeting (`--cwd <path>` and `--cwd=<path>`).
   - Fail-closed step ordering and assertions (14 tests): missing template file, missing shell spec file, `check-production-templates.js` failure, leaked secret in `production.env.example`, missing `__REQUIRED_` placeholder sentinels, missing `Strict-Transport-Security` in `Caddyfile.example`, downstream verifier failures (`verify-caddy-routing.js`, `verify-volume-encryption.js`, `verify-alert-rules.js`, `verify-capacity-load.js`), and full successful execution sequence.
   - Real repository execution (4 tests): direct invocation without args, invocation with `--cwd .`, invocation with `--cwd=<ROOT>`, and execution from an external working directory with `--cwd <ROOT>`.
 
 `package.json`:
+
 - Added `"ops:templates-shell-test": "node --test scripts/ops/check-production-templates-shell.spec.js"`.
 - Updated `"ops:templates-test"` to include `scripts/ops/check-production-templates-shell.spec.js`.
 - Updated `"ops:check"` to include `npm run ops:templates-shell-test`.
 
 Verification on 2026-10-04 (actual output excerpts; no live drill or deployment):
 
-| command | exit | output / result |
-| --- | --- | --- |
-| `sh -n scripts/ops/check-production-templates.sh` | 0 | syntax valid, no output |
-| `node --test scripts/ops/check-production-templates-shell.spec.js` | 0 | `tests 34`, `pass 34`, `fail 0` |
-| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
-| `npm run ops:templates` | 0 | `ops template check passed` |
-| `(cd server && ../scripts/ops/check-production-templates.sh --cwd ..)` | 0 | `ops template check passed` |
-| `scripts/ops/check-production-templates.sh --help` | 0 | `Usage: scripts/ops/check-production-templates.sh [--cwd <path> \| --cwd=<path>]` |
-| `scripts/ops/check-production-templates.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
-| `npm run ops:launch-readiness-test` | 0 | `tests 23`, `pass 23`, `fail 0` |
-| `npm run ops:readiness-test` | 0 | `tests 649`, `pass 649`, `fail 0` |
-| `npm run ops:launch-drill-test` | 0 | `tests 68`, `pass 68`, `fail 0` |
-| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
-| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
-| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
-| Prettier on changed JS/JSON with `server/.prettierrc` | 0 | `All matched files use Prettier code style!` |
-| `git diff --check` | 0 | clean, no whitespace errors |
+| command                                                                | exit | output / result                                                                   |
+| ---------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------- |
+| `sh -n scripts/ops/check-production-templates.sh`                      | 0    | syntax valid, no output                                                           |
+| `node --test scripts/ops/check-production-templates-shell.spec.js`     | 0    | `tests 34`, `pass 34`, `fail 0`                                                   |
+| `npm run ops:templates-test`                                           | 0    | `tests 324`, `pass 324`, `fail 0`                                                 |
+| `npm run ops:templates`                                                | 0    | `ops template check passed`                                                       |
+| `(cd server && ../scripts/ops/check-production-templates.sh --cwd ..)` | 0    | `ops template check passed`                                                       |
+| `scripts/ops/check-production-templates.sh --help`                     | 0    | `Usage: scripts/ops/check-production-templates.sh [--cwd <path> \| --cwd=<path>]` |
+| `scripts/ops/check-production-templates.sh --invalid`                  | 1    | `Error: Unknown option "--invalid"`, exit 1                                       |
+| `npm run ops:launch-readiness-test`                                    | 0    | `tests 23`, `pass 23`, `fail 0`                                                   |
+| `npm run ops:readiness-test`                                           | 0    | `tests 649`, `pass 649`, `fail 0`                                                 |
+| `npm run ops:launch-drill-test`                                        | 0    | `tests 68`, `pass 68`, `fail 0`                                                   |
+| `npm run lint`                                                         | 0    | client, shared, server ESLint completed with 0 diagnostics                        |
+| `npm run typecheck`                                                    | 0    | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)`       |
+| `npm run build`                                                        | 0    | client next build (22/22 static pages) and server nest build completed            |
+| Prettier on changed JS/JSON with `server/.prettierrc`                  | 0    | `All matched files use Prettier code style!`                                      |
+| `git diff --check`                                                     | 0    | clean, no whitespace errors                                                       |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:templates-shell-test` or `npm run ops:templates`; rollback is a normal revert of the local commit.
 
 ## Prompt 261 — harden and test docker runtime check (2026-10-04)
 
 `scripts/ops/check-docker-runtime.sh`:
+
 - Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
   - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>`, `--cwd=<path>`, `--dockerfile <path>`, and `--dockerfile=<path>`.
   - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
@@ -3024,6 +3077,7 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - Outputs `docker runtime check passed\n` on success, exit 0.
 
 `scripts/ops/check-docker-runtime.spec.js`:
+
 - Created dedicated unit and contract test specification with 45 tests using Node.js test runner (`node:test` and `node:assert/strict`):
   - CLI argument validation (24 tests): `--help`, `-h`, unknown options (`--invalid-flag`, `-x`), unexpected positionals, missing/empty/whitespace `--cwd`, repeated `--cwd`, non-existent directory, missing/empty/whitespace `--dockerfile`, repeated `--dockerfile`, non-existent Dockerfile.
   - Fail-closed Dockerfile assertions (7 tests): valid Dockerfile passes, missing Node 24 Alpine stage fails, missing non-root USER node fails, completely missing USER fails, missing HEALTHCHECK fails, indirect npm startup CMD fails, different node entrypoint CMD fails.
@@ -3031,41 +3085,44 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - Real repository execution (4 tests): direct invocation without args, invocation with explicit `--cwd .`, invocation with explicit `--dockerfile server/Dockerfile`, and execution from `server/` subdirectory with `--cwd ..`.
 
 `package.json`:
+
 - Added `"ops:docker-runtime-test": "node --test scripts/ops/check-docker-runtime.spec.js"`.
 - Updated `"ops:check"` to include `npm run ops:docker-runtime-test`.
 
 `scripts/ops/check-production-templates.sh` & `check-production-templates-shell.spec.js`:
+
 - Added `require_file scripts/ops/check-docker-runtime.sh`.
 - Added `require_file scripts/ops/check-docker-runtime.spec.js`.
 - Updated `REQUIRED_FILES` in `check-production-templates-shell.spec.js`.
 
 Verification on 2026-10-04 (actual output excerpts; no live drill or deployment):
 
-| command | exit | output / result |
-| --- | --- | --- |
-| `sh -n scripts/ops/check-docker-runtime.sh` | 0 | syntax valid, no output |
-| `node -c scripts/ops/check-docker-runtime.spec.js` | 0 | syntax valid, no output |
-| `node --test scripts/ops/check-docker-runtime.spec.js` | 0 | `tests 45`, `pass 45`, `fail 0` |
-| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
-| `npm run ops:docker-runtime` | 0 | `docker runtime check passed` |
-| `(cd server && ../scripts/ops/check-docker-runtime.sh --cwd ..)` | 0 | `docker runtime check passed` |
-| `scripts/ops/check-docker-runtime.sh --help` | 0 | `Usage: scripts/ops/check-docker-runtime.sh [--cwd <path> \| --cwd=<path>] [--dockerfile <path> \| --dockerfile=<path>]` |
-| `scripts/ops/check-docker-runtime.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
-| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
-| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
-| `npm run ops:templates` | 0 | `ops template check passed` |
-| `node --test scripts/ops/launch-readiness.spec.js scripts/ops/run-static-integrity-checks.spec.js scripts/ops/run-deployment-drill.spec.js` | 0 | `tests 45`, `pass 45`, `fail 0` |
-| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
-| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
-| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
-| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
-| `git diff --check` | 0 | clean, no whitespace errors |
+| command                                                                                                                                     | exit | output / result                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------ |
+| `sh -n scripts/ops/check-docker-runtime.sh`                                                                                                 | 0    | syntax valid, no output                                                                                                  |
+| `node -c scripts/ops/check-docker-runtime.spec.js`                                                                                          | 0    | syntax valid, no output                                                                                                  |
+| `node --test scripts/ops/check-docker-runtime.spec.js`                                                                                      | 0    | `tests 45`, `pass 45`, `fail 0`                                                                                          |
+| `npm run ops:docker-runtime-test`                                                                                                           | 0    | `tests 45`, `pass 45`, `fail 0`                                                                                          |
+| `npm run ops:docker-runtime`                                                                                                                | 0    | `docker runtime check passed`                                                                                            |
+| `(cd server && ../scripts/ops/check-docker-runtime.sh --cwd ..)`                                                                            | 0    | `docker runtime check passed`                                                                                            |
+| `scripts/ops/check-docker-runtime.sh --help`                                                                                                | 0    | `Usage: scripts/ops/check-docker-runtime.sh [--cwd <path> \| --cwd=<path>] [--dockerfile <path> \| --dockerfile=<path>]` |
+| `scripts/ops/check-docker-runtime.sh --invalid`                                                                                             | 1    | `Error: Unknown option "--invalid"`, exit 1                                                                              |
+| `npm run ops:templates-shell-test`                                                                                                          | 0    | `tests 34`, `pass 34`, `fail 0`                                                                                          |
+| `npm run ops:templates-test`                                                                                                                | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                        |
+| `npm run ops:templates`                                                                                                                     | 0    | `ops template check passed`                                                                                              |
+| `node --test scripts/ops/launch-readiness.spec.js scripts/ops/run-static-integrity-checks.spec.js scripts/ops/run-deployment-drill.spec.js` | 0    | `tests 45`, `pass 45`, `fail 0`                                                                                          |
+| `npm run lint`                                                                                                                              | 0    | client, shared, server ESLint completed with 0 diagnostics                                                               |
+| `npm run typecheck`                                                                                                                         | 0    | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)`                                              |
+| `npm run build`                                                                                                                             | 0    | client next build (22/22 static pages) and server nest build completed                                                   |
+| Prettier on changed JS/JSON                                                                                                                 | 0    | `All matched files use Prettier code style!`                                                                             |
+| `git diff --check`                                                                                                                          | 0    | clean, no whitespace errors                                                                                              |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:docker-runtime-test` or `npm run ops:docker-runtime`; rollback is a normal revert of the local commit.
 
 ## Prompt 262 — harden and test scan secrets (2026-10-04)
 
 `scripts/ops/scan-secrets.sh`:
+
 - Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
   - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>`, and `--cwd=<path>`.
   - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
@@ -3086,6 +3143,7 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - Outputs `secret/default scan passed\n` on success, exit 0.
 
 `scripts/ops/scan-secrets.spec.js`:
+
 - Created dedicated unit and contract test specification with 42 tests using Node.js test runner (`node:test` and `node:assert/strict`):
   - CLI argument validation (14 tests): `--help`, `-h`, unknown options (`--invalid-flag`, `-x`), unexpected positionals, missing/empty/whitespace `--cwd`, repeated `--cwd`, non-existent directory.
   - Git repository validation (1 test): fails closed with clean error when target directory is not a git repo.
@@ -3095,43 +3153,46 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - Real repository execution (3 tests): direct invocation without args, invocation with explicit `--cwd .`, and invocation from `server/` subdirectory with `--cwd ..`.
 
 `package.json`:
+
 - Added `"ops:scan-secrets-test": "node --test scripts/ops/scan-secrets.spec.js"`.
 - Updated `"ops:check"` to include `npm run ops:scan-secrets-test`.
 
 `scripts/ops/check-production-templates.sh` & `check-production-templates-shell.spec.js`:
+
 - Added `require_file scripts/ops/scan-secrets.sh`.
 - Added `require_file scripts/ops/scan-secrets.spec.js`.
 - Updated `REQUIRED_FILES` in `check-production-templates-shell.spec.js`.
 
 Verification on 2026-10-04 (actual output excerpts; no live drill or deployment):
 
-| command | exit | output / result |
-| --- | --- | --- |
-| `sh -n scripts/ops/scan-secrets.sh` | 0 | syntax valid, no output |
-| `node -c scripts/ops/scan-secrets.spec.js` | 0 | syntax valid, no output |
-| `node --test scripts/ops/scan-secrets.spec.js` | 0 | `tests 42`, `pass 42`, `fail 0` |
-| `npm run ops:scan-secrets-test` | 0 | `tests 42`, `pass 42`, `fail 0` |
-| `npm run ops:scan-secrets` | 0 | `secret/default scan passed` |
-| `(cd server && ../scripts/ops/scan-secrets.sh --cwd ..)` | 0 | `secret/default scan passed` |
-| `scripts/ops/scan-secrets.sh --help` | 0 | `Usage: scripts/ops/scan-secrets.sh [--cwd <path> \| --cwd=<path>]` |
-| `scripts/ops/scan-secrets.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
-| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
-| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
-| `npm run ops:templates` | 0 | `ops template check passed` |
-| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
-| `npm run ops:docker-runtime` | 0 | `docker runtime check passed` |
-| `node --test scripts/ops/launch-readiness.spec.js scripts/ops/run-static-integrity-checks.spec.js scripts/ops/run-deployment-drill.spec.js` | 0 | `tests 45`, `pass 45`, `fail 0` |
-| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
-| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
-| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
-| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
-| `git diff --check` | 0 | clean, no whitespace errors |
+| command                                                                                                                                     | exit | output / result                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------- |
+| `sh -n scripts/ops/scan-secrets.sh`                                                                                                         | 0    | syntax valid, no output                                                     |
+| `node -c scripts/ops/scan-secrets.spec.js`                                                                                                  | 0    | syntax valid, no output                                                     |
+| `node --test scripts/ops/scan-secrets.spec.js`                                                                                              | 0    | `tests 42`, `pass 42`, `fail 0`                                             |
+| `npm run ops:scan-secrets-test`                                                                                                             | 0    | `tests 42`, `pass 42`, `fail 0`                                             |
+| `npm run ops:scan-secrets`                                                                                                                  | 0    | `secret/default scan passed`                                                |
+| `(cd server && ../scripts/ops/scan-secrets.sh --cwd ..)`                                                                                    | 0    | `secret/default scan passed`                                                |
+| `scripts/ops/scan-secrets.sh --help`                                                                                                        | 0    | `Usage: scripts/ops/scan-secrets.sh [--cwd <path> \| --cwd=<path>]`         |
+| `scripts/ops/scan-secrets.sh --invalid`                                                                                                     | 1    | `Error: Unknown option "--invalid"`, exit 1                                 |
+| `npm run ops:templates-shell-test`                                                                                                          | 0    | `tests 34`, `pass 34`, `fail 0`                                             |
+| `npm run ops:templates-test`                                                                                                                | 0    | `tests 324`, `pass 324`, `fail 0`                                           |
+| `npm run ops:templates`                                                                                                                     | 0    | `ops template check passed`                                                 |
+| `npm run ops:docker-runtime-test`                                                                                                           | 0    | `tests 45`, `pass 45`, `fail 0`                                             |
+| `npm run ops:docker-runtime`                                                                                                                | 0    | `docker runtime check passed`                                               |
+| `node --test scripts/ops/launch-readiness.spec.js scripts/ops/run-static-integrity-checks.spec.js scripts/ops/run-deployment-drill.spec.js` | 0    | `tests 45`, `pass 45`, `fail 0`                                             |
+| `npm run lint`                                                                                                                              | 0    | client, shared, server ESLint completed with 0 diagnostics                  |
+| `npm run typecheck`                                                                                                                         | 0    | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
+| `npm run build`                                                                                                                             | 0    | client next build (22/22 static pages) and server nest build completed      |
+| Prettier on changed JS/JSON                                                                                                                 | 0    | `All matched files use Prettier code style!`                                |
+| `git diff --check`                                                                                                                          | 0    | clean, no whitespace errors                                                 |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:scan-secrets-test` or `npm run ops:scan-secrets`; rollback is a normal revert of the local commit.
 
 ## Prompt 263 — harden and test audit dependencies (2026-10-04)
 
 `scripts/ops/audit-dependencies.sh`:
+
 - Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
   - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>` / `--cwd=<path>`, `--audit-level <level>` / `--audit-level=<level>` (default: `critical`), and `--omit <type>` / `--omit=<type>` (default: `dev`).
   - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
@@ -3145,6 +3206,7 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - Emits success message on zero vulnerabilities: `Production dependency security audit passed (0 <level> vulnerabilities)`.
 
 `scripts/ops/audit-dependencies.spec.js`:
+
 - Established comprehensive 51-test unit and contract test suite using Node.js test runner (`node:test` and `node:assert/strict`):
   - 34 CLI argument parsing tests: `--help`, `-h`, unknown long/short options, unexpected positional arguments, missing/empty/whitespace/repeated/invalid values for `--cwd`, `--audit-level`, and `--omit`.
   - 2 prerequisite validation tests: missing `package.json`, missing `package-lock.json`.
@@ -3153,36 +3215,38 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - 4 directory targeting & integration tests: execution from subdirectory with repo targeting, subdirectory `--cwd ..` execution, paths containing spaces, and invalid flag handling.
 
 Integration and prerequisite wiring:
+
 - `package.json`: added `"ops:audit-test": "node --test scripts/ops/audit-dependencies.spec.js"` and wired into `"ops:check"`.
 - `scripts/ops/check-production-templates.sh`: added `require_file scripts/ops/audit-dependencies.sh` and `require_file scripts/ops/audit-dependencies.spec.js`.
 - `scripts/ops/check-production-templates-shell.spec.js`: added both files to `REQUIRED_FILES` list.
 
-| command | exit | output / result |
-| --- | --- | --- |
-| `sh -n scripts/ops/audit-dependencies.sh` | 0 | syntax valid, no output |
-| `node -c scripts/ops/audit-dependencies.spec.js` | 0 | syntax valid, no output |
-| `node --test scripts/ops/audit-dependencies.spec.js` | 0 | `tests 51`, `pass 51`, `fail 0` |
-| `npm run ops:audit-test` | 0 | `tests 51`, `pass 51`, `fail 0` |
-| `scripts/ops/audit-dependencies.sh --help` | 0 | `Usage: scripts/ops/audit-dependencies.sh [--cwd <path> \| --cwd=<path>] [--audit-level <level> \| --audit-level=<level>] [--omit <type> \| --omit=<type>]` |
-| `scripts/ops/audit-dependencies.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
-| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
-| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
-| `npm run ops:templates` | 0 | `ops template check passed` |
-| `npm run ops:scan-secrets-test` | 0 | `tests 42`, `pass 42`, `fail 0` |
-| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
-| `npm run ops:launch-readiness-test` | 0 | `tests 23`, `pass 23`, `fail 0` |
-| `npm run ops:launch-drill-test` | 0 | `tests 68`, `pass 68`, `fail 0` |
-| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
-| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
-| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
-| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
-| `git diff --check` | 0 | clean, no whitespace errors |
+| command                                              | exit | output / result                                                                                                                                             |
+| ---------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sh -n scripts/ops/audit-dependencies.sh`            | 0    | syntax valid, no output                                                                                                                                     |
+| `node -c scripts/ops/audit-dependencies.spec.js`     | 0    | syntax valid, no output                                                                                                                                     |
+| `node --test scripts/ops/audit-dependencies.spec.js` | 0    | `tests 51`, `pass 51`, `fail 0`                                                                                                                             |
+| `npm run ops:audit-test`                             | 0    | `tests 51`, `pass 51`, `fail 0`                                                                                                                             |
+| `scripts/ops/audit-dependencies.sh --help`           | 0    | `Usage: scripts/ops/audit-dependencies.sh [--cwd <path> \| --cwd=<path>] [--audit-level <level> \| --audit-level=<level>] [--omit <type> \| --omit=<type>]` |
+| `scripts/ops/audit-dependencies.sh --invalid`        | 1    | `Error: Unknown option "--invalid"`, exit 1                                                                                                                 |
+| `npm run ops:templates-shell-test`                   | 0    | `tests 34`, `pass 34`, `fail 0`                                                                                                                             |
+| `npm run ops:templates-test`                         | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                                           |
+| `npm run ops:templates`                              | 0    | `ops template check passed`                                                                                                                                 |
+| `npm run ops:scan-secrets-test`                      | 0    | `tests 42`, `pass 42`, `fail 0`                                                                                                                             |
+| `npm run ops:docker-runtime-test`                    | 0    | `tests 45`, `pass 45`, `fail 0`                                                                                                                             |
+| `npm run ops:launch-readiness-test`                  | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                                             |
+| `npm run ops:launch-drill-test`                      | 0    | `tests 68`, `pass 68`, `fail 0`                                                                                                                             |
+| `npm run lint`                                       | 0    | client, shared, server ESLint completed with 0 diagnostics                                                                                                  |
+| `npm run typecheck`                                  | 0    | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)`                                                                                 |
+| `npm run build`                                      | 0    | client next build (22/22 static pages) and server nest build completed                                                                                      |
+| Prettier on changed JS/JSON                          | 0    | `All matched files use Prettier code style!`                                                                                                                |
+| `git diff --check`                                   | 0    | clean, no whitespace errors                                                                                                                                 |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:audit-test`; rollback is a normal revert of the local commit.
 
 ## Prompt 264 — harden and test postgres backup (2026-10-04)
 
 `scripts/ops/backup-postgres.sh`:
+
 - Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
   - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>` / `--cwd=<path>`, `--backup-dir <dir>` / `--backup-dir=<dir>` (default: `$BACKUP_DIR` or `backups`), `--host <host>` / `--host=<host>` (default: `$PGHOST` or `localhost`), `--port <port>` / `--port=<port>` (default: `$PGPORT` or `5432`), `--user <user>` / `--user=<user>` (default: `$PGUSER` or `$POSTGRES_USER` or `postgres`), `--dbname <db>` / `--dbname=<db>` (default: `$PGDATABASE` or `$POSTGRES_DB` or `acres`), `--output-file <file>` / `--output-file=<file>`, and `--dry-run`.
   - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
@@ -3197,6 +3261,7 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - Execution verification: executes `pg_dump --format=custom --no-owner --no-privileges --file=...`, asserts generated archive file is present and non-empty (`[ -s <file> ]`), cleans up corrupt/empty files on failure, and outputs formatted file byte size.
 
 `scripts/ops/backup-postgres.spec.js`:
+
 - Established comprehensive 53-test unit and contract test suite using Node.js test runner (`node:test` and `node:assert/strict`):
   - 34 CLI argument parsing tests: `--help`, `-h`, unknown long/short options, unexpected positional arguments, missing/empty/whitespace/repeated/invalid values for all CLI options.
   - 7 prerequisite and credential validation tests: missing `pg_dump` in PATH, missing all password env vars, fallback across all four credential environment variables, invalid `PGPORT` env var.
@@ -3205,37 +3270,39 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - 3 directory targeting tests: relative `--output-file` with `--cwd`, absolute `--output-file`, and relative `--backup-dir`.
 
 Integration and prerequisite wiring:
+
 - `package.json`: added `"ops:backup-test": "node --test scripts/ops/backup-postgres.spec.js"` and wired into `"ops:check"`.
 - `scripts/ops/check-production-templates.sh`: added `require_file scripts/ops/backup-postgres.sh` and `require_file scripts/ops/backup-postgres.spec.js`.
 - `scripts/ops/check-production-templates-shell.spec.js`: added both files to `REQUIRED_FILES` list.
 
-| command | exit | output / result |
-| --- | --- | --- |
-| `sh -n scripts/ops/backup-postgres.sh` | 0 | syntax valid, no output |
-| `node -c scripts/ops/backup-postgres.spec.js` | 0 | syntax valid, no output |
-| `node --test scripts/ops/backup-postgres.spec.js` | 0 | `tests 53`, `pass 53`, `fail 0` |
-| `npm run ops:backup-test` | 0 | `tests 53`, `pass 53`, `fail 0` |
-| `scripts/ops/backup-postgres.sh --help` | 0 | `Usage: scripts/ops/backup-postgres.sh [--cwd <path> \| --cwd=<path>] [--backup-dir <dir> \| --backup-dir=<dir>] [--host <host> \| --host=<host>] [--port <port> \| --port=<port>] [--user <user> \| --user=<user>] [--dbname <db> \| --dbname=<db>] [--output-file <file> \| --output-file=<file>] [--dry-run]` |
-| `scripts/ops/backup-postgres.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
-| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
-| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
-| `npm run ops:templates` | 0 | `ops template check passed` |
-| `npm run ops:audit-test` | 0 | `tests 51`, `pass 51`, `fail 0` |
-| `npm run ops:scan-secrets-test` | 0 | `tests 42`, `pass 42`, `fail 0` |
-| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
-| `npm run ops:launch-readiness-test` | 0 | `tests 23`, `pass 23`, `fail 0` |
-| `npm run ops:launch-drill-test` | 0 | `tests 68`, `pass 68`, `fail 0` |
-| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
-| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
-| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
-| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
-| `git diff --check` | 0 | clean, no whitespace errors |
+| command                                           | exit | output / result                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sh -n scripts/ops/backup-postgres.sh`            | 0    | syntax valid, no output                                                                                                                                                                                                                                                                                          |
+| `node -c scripts/ops/backup-postgres.spec.js`     | 0    | syntax valid, no output                                                                                                                                                                                                                                                                                          |
+| `node --test scripts/ops/backup-postgres.spec.js` | 0    | `tests 53`, `pass 53`, `fail 0`                                                                                                                                                                                                                                                                                  |
+| `npm run ops:backup-test`                         | 0    | `tests 53`, `pass 53`, `fail 0`                                                                                                                                                                                                                                                                                  |
+| `scripts/ops/backup-postgres.sh --help`           | 0    | `Usage: scripts/ops/backup-postgres.sh [--cwd <path> \| --cwd=<path>] [--backup-dir <dir> \| --backup-dir=<dir>] [--host <host> \| --host=<host>] [--port <port> \| --port=<port>] [--user <user> \| --user=<user>] [--dbname <db> \| --dbname=<db>] [--output-file <file> \| --output-file=<file>] [--dry-run]` |
+| `scripts/ops/backup-postgres.sh --invalid`        | 1    | `Error: Unknown option "--invalid"`, exit 1                                                                                                                                                                                                                                                                      |
+| `npm run ops:templates-shell-test`                | 0    | `tests 34`, `pass 34`, `fail 0`                                                                                                                                                                                                                                                                                  |
+| `npm run ops:templates-test`                      | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                                                                                                                                                                                                |
+| `npm run ops:templates`                           | 0    | `ops template check passed`                                                                                                                                                                                                                                                                                      |
+| `npm run ops:audit-test`                          | 0    | `tests 51`, `pass 51`, `fail 0`                                                                                                                                                                                                                                                                                  |
+| `npm run ops:scan-secrets-test`                   | 0    | `tests 42`, `pass 42`, `fail 0`                                                                                                                                                                                                                                                                                  |
+| `npm run ops:docker-runtime-test`                 | 0    | `tests 45`, `pass 45`, `fail 0`                                                                                                                                                                                                                                                                                  |
+| `npm run ops:launch-readiness-test`               | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                                                                                                                                                                                                  |
+| `npm run ops:launch-drill-test`                   | 0    | `tests 68`, `pass 68`, `fail 0`                                                                                                                                                                                                                                                                                  |
+| `npm run lint`                                    | 0    | client, shared, server ESLint completed with 0 diagnostics                                                                                                                                                                                                                                                       |
+| `npm run typecheck`                               | 0    | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)`                                                                                                                                                                                                                                      |
+| `npm run build`                                   | 0    | client next build (22/22 static pages) and server nest build completed                                                                                                                                                                                                                                           |
+| Prettier on changed JS/JSON                       | 0    | `All matched files use Prettier code style!`                                                                                                                                                                                                                                                                     |
+| `git diff --check`                                | 0    | clean, no whitespace errors                                                                                                                                                                                                                                                                                      |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:backup-test`; rollback is a normal revert of the local commit.
 
 ## Prompt 265 — harden and test postgres restore (2026-10-04)
 
 `scripts/ops/restore-postgres.sh`:
+
 - Hardened CLI argument parsing with POSIX `/bin/sh` compliance:
   - Supported options: `--help`, `-h` (exit 0 with usage), `--cwd <path>` / `--cwd=<path>`, `--host <host>` / `--host=<host>` (default: `$PGHOST` or `localhost`), `--port <port>` / `--port=<port>` (default: `$PGPORT` or `5432`), `--user <user>` / `--user=<user>` (default: `$PGUSER` or `$POSTGRES_USER` or `postgres`), `--dbname <db>` / `--dbname=<db>` (default: `$PGDATABASE` or `$POSTGRES_DB` or `acres`), `--file <file>` / `--file=<file>` / `--input-file <file>` / `--input-file=<file>`, positional `<backup-file>` (fully backward-compatible with `run-restore-drill.sh`), `--clean` (default: enabled), `--no-clean` (omits `--clean --if-exists`), and `--dry-run`.
   - Rejects unknown options (`Error: Unknown option "<opt>"` with usage to stderr, exit 1).
@@ -3261,6 +3328,7 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - Verifies restored public schema table count using `psql`, asserts numeric count validity, and outputs verified table count upon success.
 
 `scripts/ops/restore-postgres.spec.js`:
+
 - Established comprehensive 80-test unit and contract test suite using Node.js test runner (`node:test` and `node:assert/strict`):
   - 43 CLI argument parsing tests: `--help`, `-h`, unknown long/short options, repeated/missing/empty/whitespace option arguments, invalid/out-of-range ports, multi-digit port overflow, conflicting clean/no-clean flags, repeated file flags, clashing positional arguments, and extra arguments.
   - 4 backup file validation tests: missing backup file argument, non-existent file, directory target, empty backup file.
@@ -3270,34 +3338,35 @@ Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repai
   - 4 directory targeting tests: relative `--file` with `--cwd`, relative positional argument with `--cwd`, `--input-file` and `--file=` syntax, and custom database connection parameters.
 
 Integration and prerequisite wiring:
+
 - `package.json`: added `"ops:restore-test": "node --test scripts/ops/restore-postgres.spec.js"` and wired into `"ops:check"`.
 - `scripts/ops/check-production-templates.sh`: added `require_file scripts/ops/restore-postgres.sh` and `require_file scripts/ops/restore-postgres.spec.js`.
 - `scripts/ops/check-production-templates-shell.spec.js`: added both files to `REQUIRED_FILES` list.
 - `scripts/ops/run-restore-drill.sh`: verified 100% backward-compatible execution (`npm run ops:restore-drill-test` passed 28/28 tests).
 
-| command | exit | output / result |
-| --- | --- | --- |
-| `sh -n scripts/ops/restore-postgres.sh` | 0 | syntax valid, no output |
-| `node -c scripts/ops/restore-postgres.spec.js` | 0 | syntax valid, no output |
-| `node --test scripts/ops/restore-postgres.spec.js` | 0 | `tests 80`, `pass 80`, `fail 0` |
-| `npm run ops:restore-test` | 0 | `tests 80`, `pass 80`, `fail 0` |
-| `scripts/ops/restore-postgres.sh --help` | 0 | `Usage: scripts/ops/restore-postgres.sh [<backup-file>] [--file <file> \| --file=<file>] [--input-file <file> \| --input-file=<file>] [--cwd <path> \| --cwd=<path>] [--host <host> \| --host=<host>] [--port <port> \| --port=<port>] [--user <user> \| --user=<user>] [--dbname <db> \| --dbname=<db>] [--clean \| --no-clean] [--dry-run]` |
-| `scripts/ops/restore-postgres.sh --invalid` | 1 | `Error: Unknown option "--invalid"`, exit 1 |
-| `npm run ops:restore-drill-test` | 0 | `tests 28`, `pass 28`, `fail 0` |
-| `npm run ops:backup-test` | 0 | `tests 53`, `pass 53`, `fail 0` |
-| `npm run ops:templates-shell-test` | 0 | `tests 34`, `pass 34`, `fail 0` |
-| `npm run ops:templates-test` | 0 | `tests 324`, `pass 324`, `fail 0` |
-| `npm run ops:templates` | 0 | `ops template check passed` |
-| `npm run ops:audit-test` | 0 | `tests 51`, `pass 51`, `fail 0` |
-| `npm run ops:scan-secrets-test` | 0 | `tests 42`, `pass 42`, `fail 0` |
-| `npm run ops:docker-runtime-test` | 0 | `tests 45`, `pass 45`, `fail 0` |
-| `npm run ops:launch-readiness-test` | 0 | `tests 23`, `pass 23`, `fail 0` |
-| `npm run ops:launch-drill-test` | 0 | `tests 68`, `pass 68`, `fail 0` |
-| `npm run lint` | 0 | client, shared, server ESLint completed with 0 diagnostics |
-| `npm run typecheck` | 0 | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)` |
-| `npm run build` | 0 | client next build (22/22 static pages) and server nest build completed |
-| Prettier on changed JS/JSON | 0 | `All matched files use Prettier code style!` |
-| `git diff --check` | 0 | clean, no whitespace errors |
+| command                                            | exit | output / result                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sh -n scripts/ops/restore-postgres.sh`            | 0    | syntax valid, no output                                                                                                                                                                                                                                                                                                                       |
+| `node -c scripts/ops/restore-postgres.spec.js`     | 0    | syntax valid, no output                                                                                                                                                                                                                                                                                                                       |
+| `node --test scripts/ops/restore-postgres.spec.js` | 0    | `tests 80`, `pass 80`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run ops:restore-test`                         | 0    | `tests 80`, `pass 80`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `scripts/ops/restore-postgres.sh --help`           | 0    | `Usage: scripts/ops/restore-postgres.sh [<backup-file>] [--file <file> \| --file=<file>] [--input-file <file> \| --input-file=<file>] [--cwd <path> \| --cwd=<path>] [--host <host> \| --host=<host>] [--port <port> \| --port=<port>] [--user <user> \| --user=<user>] [--dbname <db> \| --dbname=<db>] [--clean \| --no-clean] [--dry-run]` |
+| `scripts/ops/restore-postgres.sh --invalid`        | 1    | `Error: Unknown option "--invalid"`, exit 1                                                                                                                                                                                                                                                                                                   |
+| `npm run ops:restore-drill-test`                   | 0    | `tests 28`, `pass 28`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run ops:backup-test`                          | 0    | `tests 53`, `pass 53`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run ops:templates-shell-test`                 | 0    | `tests 34`, `pass 34`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run ops:templates-test`                       | 0    | `tests 324`, `pass 324`, `fail 0`                                                                                                                                                                                                                                                                                                             |
+| `npm run ops:templates`                            | 0    | `ops template check passed`                                                                                                                                                                                                                                                                                                                   |
+| `npm run ops:audit-test`                           | 0    | `tests 51`, `pass 51`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run ops:scan-secrets-test`                    | 0    | `tests 42`, `pass 42`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run ops:docker-runtime-test`                  | 0    | `tests 45`, `pass 45`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run ops:launch-readiness-test`                | 0    | `tests 23`, `pass 23`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run ops:launch-drill-test`                    | 0    | `tests 68`, `pass 68`, `fail 0`                                                                                                                                                                                                                                                                                                               |
+| `npm run lint`                                     | 0    | client, shared, server ESLint completed with 0 diagnostics                                                                                                                                                                                                                                                                                    |
+| `npm run typecheck`                                | 0    | shared, client, server typechecks passed; `Generated Prisma Client (7.9.1)`                                                                                                                                                                                                                                                                   |
+| `npm run build`                                    | 0    | client next build (22/22 static pages) and server nest build completed                                                                                                                                                                                                                                                                        |
+| Prettier on changed JS/JSON                        | 0    | `All matched files use Prettier code style!`                                                                                                                                                                                                                                                                                                  |
+| `git diff --check`                                 | 0    | clean, no whitespace errors                                                                                                                                                                                                                                                                                                                   |
 
 Phase 12 production exit/sign-off and prompt 201 remain open. Inspect this repair with `npm run ops:restore-test`; rollback is a normal revert of the local commit.
 
@@ -3596,7 +3665,6 @@ Phase 12 and prompt 201 remain open pending authentic live evidence, dependency
 security gates and operator sign-off. These commands inspect help or isolated
 contracts; do not run a default or targeted rehearsal against real services to
 demonstrate this patch.
-
 
 ## Prompt 269 — DoS resilience drill runner hardening (2026-10-07)
 
@@ -4935,35 +5003,35 @@ lockfile supplied the paths; several packages have additional parents. The
 `deepmerge-ts` path is read from `prisma`/`@prisma/config` lockfile dependencies
 because `npm explain deepmerge-ts` returned no dependent for that node.
 
-| severity | audited package | representative dependency path |
-| --- | --- | --- |
-| critical | `proxy-addr` | server → `@nestjs/platform-express` → `express` → `proxy-addr`; also server → `@as-integrations/express5` → `express` → `proxy-addr` |
-| high | `@apollo/server` | server → `@apollo/server` |
-| high | `@graphql-tools/schema` | server → `@apollo/server` → `@graphql-tools/schema` |
-| high | `@graphql-tools/merge` | server → `@apollo/server` → `@graphql-tools/schema` → `@graphql-tools/merge` |
-| high | `@graphql-tools/utils` | server → `@nestjs/graphql` → `@graphql-tools/utils` |
-| high | `@modelcontextprotocol/sdk` | client → `shadcn` → `@modelcontextprotocol/sdk`; also server → `@google/genai` → `@modelcontextprotocol/sdk` |
-| high | `@nestjs/apollo` | server → `@nestjs/apollo` |
-| high | `@nestjs/graphql` | server → `@nestjs/graphql` |
-| high | `@nestjs/platform-express` | server → `@nestjs/platform-express` |
-| high | `@prisma/config` | server → `prisma` → `@prisma/config` |
-| high | `@ts-morph/common` | client → `shadcn` → `ts-morph` → `@ts-morph/common`; also server → `@nestjs/graphql` → `ts-morph` → `@ts-morph/common` |
-| high | `brace-expansion` | client → `shadcn` → `ts-morph` → `@ts-morph/common` → `minimatch` → `brace-expansion` |
-| high | `braces` | client → `shadcn` → `fast-glob` → `micromatch` → `braces` |
-| high | `deepmerge-ts` | server → `prisma` → `@prisma/config` → `deepmerge-ts` |
-| high | `fast-glob` | client → `shadcn` → `fast-glob`; also server → `@nestjs/graphql` → `ts-morph` → `@ts-morph/common` → `fast-glob` |
-| high | `fast-uri` | client → `shadcn` → `@modelcontextprotocol/sdk` → `ajv` → `fast-uri` |
-| high | `js-yaml` | server → `@nestjs/swagger` → `js-yaml` |
-| high | `micromatch` | client → `shadcn` → `fast-glob` → `micromatch` |
-| high | `multer` | server → `@nestjs/platform-express` → `multer` |
-| high | `mysql2` | server → `prisma` → `mysql2` |
-| high | `nodemailer` | server → `nodemailer` |
-| high | `prisma` | server → `prisma` |
-| high | `shadcn` | client → `shadcn` |
-| high | `sharp` | client → `next` → `sharp` |
-| high | `source-map-js` | client → `next` → `postcss` → `source-map-js` |
-| high | `ts-morph` | client → `shadcn` → `ts-morph`; also server → `@nestjs/graphql` → `ts-morph` |
-| high | `undici` | client → `shadcn` → `undici` |
+| severity | audited package             | representative dependency path                                                                                                       |
+| -------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| critical | `proxy-addr`                | server → `@nestjs/platform-express` → `express` → `proxy-addr`; also server → `@as-integrations/express5` → `express` → `proxy-addr` |
+| high     | `@apollo/server`            | server → `@apollo/server`                                                                                                            |
+| high     | `@graphql-tools/schema`     | server → `@apollo/server` → `@graphql-tools/schema`                                                                                  |
+| high     | `@graphql-tools/merge`      | server → `@apollo/server` → `@graphql-tools/schema` → `@graphql-tools/merge`                                                         |
+| high     | `@graphql-tools/utils`      | server → `@nestjs/graphql` → `@graphql-tools/utils`                                                                                  |
+| high     | `@modelcontextprotocol/sdk` | client → `shadcn` → `@modelcontextprotocol/sdk`; also server → `@google/genai` → `@modelcontextprotocol/sdk`                         |
+| high     | `@nestjs/apollo`            | server → `@nestjs/apollo`                                                                                                            |
+| high     | `@nestjs/graphql`           | server → `@nestjs/graphql`                                                                                                           |
+| high     | `@nestjs/platform-express`  | server → `@nestjs/platform-express`                                                                                                  |
+| high     | `@prisma/config`            | server → `prisma` → `@prisma/config`                                                                                                 |
+| high     | `@ts-morph/common`          | client → `shadcn` → `ts-morph` → `@ts-morph/common`; also server → `@nestjs/graphql` → `ts-morph` → `@ts-morph/common`               |
+| high     | `brace-expansion`           | client → `shadcn` → `ts-morph` → `@ts-morph/common` → `minimatch` → `brace-expansion`                                                |
+| high     | `braces`                    | client → `shadcn` → `fast-glob` → `micromatch` → `braces`                                                                            |
+| high     | `deepmerge-ts`              | server → `prisma` → `@prisma/config` → `deepmerge-ts`                                                                                |
+| high     | `fast-glob`                 | client → `shadcn` → `fast-glob`; also server → `@nestjs/graphql` → `ts-morph` → `@ts-morph/common` → `fast-glob`                     |
+| high     | `fast-uri`                  | client → `shadcn` → `@modelcontextprotocol/sdk` → `ajv` → `fast-uri`                                                                 |
+| high     | `js-yaml`                   | server → `@nestjs/swagger` → `js-yaml`                                                                                               |
+| high     | `micromatch`                | client → `shadcn` → `fast-glob` → `micromatch`                                                                                       |
+| high     | `multer`                    | server → `@nestjs/platform-express` → `multer`                                                                                       |
+| high     | `mysql2`                    | server → `prisma` → `mysql2`                                                                                                         |
+| high     | `nodemailer`                | server → `nodemailer`                                                                                                                |
+| high     | `prisma`                    | server → `prisma`                                                                                                                    |
+| high     | `shadcn`                    | client → `shadcn`                                                                                                                    |
+| high     | `sharp`                     | client → `next` → `sharp`                                                                                                            |
+| high     | `source-map-js`             | client → `next` → `postcss` → `source-map-js`                                                                                        |
+| high     | `ts-morph`                  | client → `shadcn` → `ts-morph`; also server → `@nestjs/graphql` → `ts-morph`                                                         |
+| high     | `undici`                    | client → `shadcn` → `undici`                                                                                                         |
 
 Verification: `npm ci` exited 0 from the updated lockfile; `npm ls next
 eslint-config-next --depth=0` showed both at 16.3.8. `npm run ops:audit-test`
@@ -5536,6 +5604,7 @@ entire historical operations record was restored byte-for-byte from HEAD.
 
 The root lockfile updates `source-map-js` to **1.2.2** across its single lockfile
 node, satisfying all three parents under their declared `^1.2.1` range:
+
 - root `postcss@8.5.26` (direct dependency of `shadcn@4.18.0` and `@tailwindcss/postcss@4.3.3`)
 - `@tailwindcss/node@4.3.3` (dependency of `@tailwindcss/postcss@4.3.3`)
 - `next/node_modules/postcss@8.5.23` (nested dependency of `next@16.3.8`)
@@ -5563,8 +5632,8 @@ declarations, and zero runtime dependencies.
 
 Registry and lockfile SHA-512 integrity matched:
 
-| Release | Integrity |
-| ------- | --------- |
+| Release | Integrity                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------- |
 | 1.2.2   | `sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==` |
 
 `npm update source-map-js --package-lock-only --ignore-scripts --no-audit --no-fund`
@@ -5581,6 +5650,7 @@ nested Next PostCSS, and `@tailwindcss/node` all resolve to root `1.2.2`.
 
 Disposable offline fixtures in restricted `/tmp/acres-286` exercised real CommonJS APIs
 and real caller integration:
+
 1. Basic map generation, source content embedding, and original/generated position lookup.
 2. Indexed-to-flat map conversion via `eachMapping` and `SourceNode` round-trip.
 3. Negative offset validation: rejection of 20 malformed offset types (`-1`, `1.5`, `NaN`,
@@ -5605,18 +5675,18 @@ next/node_modules/postcss 8.5.23: CSS transform and previous-map composition pas
 Tailwind Node 4.3.3 actual toSourceMap: encoded mapping, content, inline and external comment passed
 ```
 
-| Command | Actual result |
-| ------- | ------------- |
-| `npm ls source-map-js --all` | exit 0; single deduped root 1.2.2 |
-| `npm explain source-map-js` | exit 0; resolved by root PostCSS, Tailwind Node, and Next PostCSS |
-| `npm run ops:audit-test` | exit 0; `ℹ tests 51`, `ℹ pass 51`, `ℹ fail 0` |
-| `npm audit --omit=dev --audit-level=critical` | exit 0; 0 critical vulnerabilities |
-| `npm run ops:audit` | exit 0; `Production dependency security audit passed (0 critical vulnerabilities)` |
-| `npm run ops:check` | exit 0 through final launch/dossier suite: `ℹ tests 182`, `ℹ pass 182`, `ℹ fail 0` |
-| `npm run lint` | exit 0 across all three workspaces |
-| `npm run typecheck` | exit 0 across all three workspaces |
-| `npm run build` | exit 0; `✓ Generating static pages using 7 workers (22/22) in 1261ms`, then successful server build |
-| `git diff --check` | exit 0; clean whitespace |
+| Command                                       | Actual result                                                                                       |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `npm ls source-map-js --all`                  | exit 0; single deduped root 1.2.2                                                                   |
+| `npm explain source-map-js`                   | exit 0; resolved by root PostCSS, Tailwind Node, and Next PostCSS                                   |
+| `npm run ops:audit-test`                      | exit 0; `ℹ tests 51`, `ℹ pass 51`, `ℹ fail 0`                                                       |
+| `npm audit --omit=dev --audit-level=critical` | exit 0; 0 critical vulnerabilities                                                                  |
+| `npm run ops:audit`                           | exit 0; `Production dependency security audit passed (0 critical vulnerabilities)`                  |
+| `npm run ops:check`                           | exit 0 through final launch/dossier suite: `ℹ tests 182`, `ℹ pass 182`, `ℹ fail 0`                  |
+| `npm run lint`                                | exit 0 across all three workspaces                                                                  |
+| `npm run typecheck`                           | exit 0 across all three workspaces                                                                  |
+| `npm run build`                               | exit 0; `✓ Generating static pages using 7 workers (22/22) in 1261ms`, then successful server build |
+| `git diff --check`                            | exit 0; clean whitespace                                                                            |
 
 ### Complete audit comparison and remaining limits
 
@@ -6611,17 +6681,17 @@ Final fixture output:
 PASS: one-node lock scope; registry metadata; Prisma caller; CJS/ESM; record/array/undefined/Map/Set/custom/into semantics; prototype safety; eight bounded recursive cases; actual Prisma config normalization and error handling
 ```
 
-| check | exit | actual output/result |
-| --- | --- | --- |
-| Clean install/hash | 0 | `added 1478 packages in 24s`; `package-lock.json: OK` |
-| Caller tree and semantic/config fixtures | 0 | Valid 8.0.2 resolution and PASS above |
-| `npm run prisma:validate --workspace=@acres/server` | 0 | `The schema at prisma/schema.prisma is valid` |
-| `npm run contracts:check` | 0 | `Generated Prisma Client (7.9.1)`; contract drift check completes |
-| `npm run lint` | 0 | All three workspace ESLint commands complete without diagnostics |
-| `npm run typecheck` | 0 | All three workspace checks complete without diagnostics |
-| Permitted `npm run build` | 0 | `Compiled successfully in 3.4s`; pages `22/22`; Nest build completes |
-| Selected Prettier | 0 | `All matched files use Prettier code style!` |
-| `git diff --check` | 0 | No whitespace diagnostics |
+| check                                               | exit | actual output/result                                                 |
+| --------------------------------------------------- | ---- | -------------------------------------------------------------------- |
+| Clean install/hash                                  | 0    | `added 1478 packages in 24s`; `package-lock.json: OK`                |
+| Caller tree and semantic/config fixtures            | 0    | Valid 8.0.2 resolution and PASS above                                |
+| `npm run prisma:validate --workspace=@acres/server` | 0    | `The schema at prisma/schema.prisma is valid`                        |
+| `npm run contracts:check`                           | 0    | `Generated Prisma Client (7.9.1)`; contract drift check completes    |
+| `npm run lint`                                      | 0    | All three workspace ESLint commands complete without diagnostics     |
+| `npm run typecheck`                                 | 0    | All three workspace checks complete without diagnostics              |
+| Permitted `npm run build`                           | 0    | `Compiled successfully in 3.4s`; pages `22/22`; Nest build completes |
+| Selected Prettier                                   | 0    | `All matched files use Prettier code style!`                         |
+| `git diff --check`                                  | 0    | No whitespace diagnostics                                            |
 
 All **32 independent offline operations stages** passed, covering **26 suite
 invocations / 2857 tests / zero failures**, ending launch/dossier **182/182**.
@@ -6802,15 +6872,15 @@ PASS: one-node lock scope; registry integrity; deduplicated callers; basic routi
 
 ### Checks and limits
 
-| check                             | exit | actual output/result                                                       |
-| --------------------------------- | ---- | -------------------------------------------------------------------------- |
-| Clean install/hash                | 0    | `added 1478 packages in 29s`; `package-lock.json: OK`                      |
-| Caller tree and real fixtures     | 0    | Valid 4.13.13 caller tree and PASS above                                   |
-| `npm run lint`                    | 0    | Three workspace ESLint commands complete without diagnostics               |
-| `npm run typecheck`               | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
-| `npm run build`                   | 0    | `Compiled successfully in 2.7s`; static pages `22/22`; Nest build complete |
-| Selected Prettier                 | 0    | `All matched files use Prettier code style!`                               |
-| `git diff --check`                | 0    | No whitespace diagnostics                                                  |
+| check                         | exit | actual output/result                                                       |
+| ----------------------------- | ---- | -------------------------------------------------------------------------- |
+| Clean install/hash            | 0    | `added 1478 packages in 29s`; `package-lock.json: OK`                      |
+| Caller tree and real fixtures | 0    | Valid 4.13.13 caller tree and PASS above                                   |
+| `npm run lint`                | 0    | Three workspace ESLint commands complete without diagnostics               |
+| `npm run typecheck`           | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
+| `npm run build`               | 0    | `Compiled successfully in 2.7s`; static pages `22/22`; Nest build complete |
+| Selected Prettier             | 0    | `All matched files use Prettier code style!`                               |
+| `git diff --check`            | 0    | No whitespace diagnostics                                                  |
 
 All **32 independent offline operations stages** passed: **26 suite
 invocations / 2857 tests / zero failures**, including audit-wrapper **51/51**
@@ -6882,16 +6952,16 @@ PASS: lock deduplication; registry integrity; deduplicated callers; mergeDeep pr
 
 ### Checks and limits
 
-| check                             | exit | actual output/result                                                       |
-| --------------------------------- | ---- | -------------------------------------------------------------------------- |
-| Clean install/hash                | 0    | `added 1477 packages in 45s`; `package-lock.json: OK`                      |
-| Caller tree and real fixtures     | 0    | Valid 12.0.3 caller tree and PASS above                                    |
-| `npm run contracts:check`         | 0    | Generated Prisma Client (7.9.1); contracts verified without drift          |
-| `npm run lint`                    | 0    | Three workspace ESLint commands complete without diagnostics               |
-| `npm run typecheck`               | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
-| `npm run build`                   | 0    | `Compiled successfully in 3.5s`; static pages `22/22`; Nest build complete |
-| Selected Prettier                 | 0    | `All matched files use Prettier code style!`                               |
-| `git diff --check`                | 0    | No whitespace diagnostics                                                  |
+| check                         | exit | actual output/result                                                       |
+| ----------------------------- | ---- | -------------------------------------------------------------------------- |
+| Clean install/hash            | 0    | `added 1477 packages in 45s`; `package-lock.json: OK`                      |
+| Caller tree and real fixtures | 0    | Valid 12.0.3 caller tree and PASS above                                    |
+| `npm run contracts:check`     | 0    | Generated Prisma Client (7.9.1); contracts verified without drift          |
+| `npm run lint`                | 0    | Three workspace ESLint commands complete without diagnostics               |
+| `npm run typecheck`           | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
+| `npm run build`               | 0    | `Compiled successfully in 3.5s`; static pages `22/22`; Nest build complete |
+| Selected Prettier             | 0    | `All matched files use Prettier code style!`                               |
+| `git diff --check`            | 0    | No whitespace diagnostics                                                  |
 
 All **32 independent offline operations stages** passed: **26 suite
 invocations / 2857 tests / zero failures**, including audit-wrapper **51/51**
@@ -6959,15 +7029,15 @@ PASS: lock deduplication; registry integrity; ts-jest resolution; AST type confu
 
 ### Checks and limits
 
-| check                             | exit | actual output/result                                                       |
-| --------------------------------- | ---- | -------------------------------------------------------------------------- |
-| Clean install/hash                | 0    | `added 1477 packages in 38s`                                               |
-| Caller tree and real fixtures     | 0    | Valid 4.7.10 caller tree and PASS above                                    |
-| `npm run contracts:check`         | 0    | Generated Prisma Client (7.9.1); contracts verified without drift          |
-| `npm run lint`                    | 0    | Three workspace ESLint commands complete without diagnostics               |
-| `npm run typecheck`               | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
-| `npm run build`                   | 0    | `Compiled successfully in 2.7s`; static pages `22/22`; Nest build complete |
-| `git diff --check`                | 0    | No whitespace diagnostics                                                  |
+| check                         | exit | actual output/result                                                       |
+| ----------------------------- | ---- | -------------------------------------------------------------------------- |
+| Clean install/hash            | 0    | `added 1477 packages in 38s`                                               |
+| Caller tree and real fixtures | 0    | Valid 4.7.10 caller tree and PASS above                                    |
+| `npm run contracts:check`     | 0    | Generated Prisma Client (7.9.1); contracts verified without drift          |
+| `npm run lint`                | 0    | Three workspace ESLint commands complete without diagnostics               |
+| `npm run typecheck`           | 0    | Three workspace checks complete; `Generated Prisma Client (7.9.1)`         |
+| `npm run build`               | 0    | `Compiled successfully in 2.7s`; static pages `22/22`; Nest build complete |
+| `git diff --check`            | 0    | No whitespace diagnostics                                                  |
 
 All **32 independent offline operations stages** passed: **26 suite
 invocations / 2857 tests / zero failures**, including audit-wrapper **51/51**
@@ -7235,7 +7305,6 @@ Safe inspection from the repository root:
 npm run ops:reconcile-test
 npm run ops:check
 ```
-
 
 ## Prompt 306 — close storage receipt publication races (2026-10-11)
 
@@ -8578,11 +8647,13 @@ to be reported as missing from storage (false positive data loss / exit code 1) 
 masking unreferenced orphan files.
 
 `listBucketObjects` now validates:
+
 ```javascript
 // Terminal pages have no remaining keys; any provider next continuation token is contradictory.
 if (!response.IsTruncated && response.NextContinuationToken !== undefined)
   throw invalidListing();
 ```
+
 On terminal pages (`IsTruncated: false`), any defined `NextContinuationToken`
 (`response.NextContinuationToken !== undefined`) rejects immediately. Valid token
 strings, arbitrary strings, empty strings `''`, whitespace `'   '`, `null`, numbers,
@@ -8756,8 +8827,7 @@ exited 0. Permitted root lint/typecheck/build exited 0 across all three
 workspaces, including shared TypeScript and Prisma Client 7.9.1 / Nest builds.
 Readiness retained expected exit 1: `Approved Categories: 0`, `Unresolved /
 Blocked: 11`, `Total Blockers Detected: 70`. The permitted process mode avoided
-the known sandbox child-test/Next --showConfig limitations documented in Prompt
-321. Online ops:audit remains omitted under the recorded metadata-disclosure
+the known sandbox child-test/Next --showConfig limitations documented in Prompt 321. Online ops:audit remains omitted under the recorded metadata-disclosure
 restriction; no aggregate ops:check pass or fresh vulnerability count is claimed.
 
 Safe local inspection from the repository root:
@@ -8907,16 +8977,16 @@ All 928 existing cases and 41 new regressions pass. Direct red output was
 
 Actual verification commands and representative output:
 
-| command | exit | actual output / result |
-| --- | --- | --- |
-| `npm run ops:reconcile-test` | 0 | `ℹ tests 969`, `ℹ pass 969`, `ℹ fail 0` |
-| source/spec `node -c` | 0 | no output |
-| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| changed-region Prettier | 0 | `{"specFormatting":true,"guardFormatting":true}` |
-| `npm run lint` | 0 | `> eslint`, `> eslint "src/**/*.ts"`, `> eslint "{src,test}/**/*.ts"` |
-| `npm run typecheck` | 0 | `> tsc --noEmit`, `> prisma generate && tsc -p tsconfig.json --noEmit`; generated Prisma Client 7.9.1 in 733ms |
-| permitted `npm run build` | 0 | `✓ Compiled successfully in 7.7s`; `✓ Generating static pages using 7 workers (22/22) in 1332ms`; `> prisma generate && nest build` |
-| `git diff --check` | 0 | no output |
+| command                      | exit | actual output / result                                                                                                              |
+| ---------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run ops:reconcile-test` | 0    | `ℹ tests 969`, `ℹ pass 969`, `ℹ fail 0`                                                                                             |
+| source/spec `node -c`        | 0    | no output                                                                                                                           |
+| CLI `--help`                 | 0    | `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                    |
+| changed-region Prettier      | 0    | `{"specFormatting":true,"guardFormatting":true}`                                                                                    |
+| `npm run lint`               | 0    | `> eslint`, `> eslint "src/**/*.ts"`, `> eslint "{src,test}/**/*.ts"`                                                               |
+| `npm run typecheck`          | 0    | `> tsc --noEmit`, `> prisma generate && tsc -p tsconfig.json --noEmit`; generated Prisma Client 7.9.1 in 733ms                      |
+| permitted `npm run build`    | 0    | `✓ Compiled successfully in 7.7s`; `✓ Generating static pages using 7 workers (22/22) in 1332ms`; `> prisma generate && nest build` |
+| `git diff --check`           | 0    | no output                                                                                                                           |
 
 The same permitted child-process mode that resolved Prompt 323's recorded
 sandbox runner/build limitations was used without altering assertions or code
@@ -8988,15 +9058,15 @@ All 969 previous cases plus 34 regressions pass. Actual direct red output:
 
 Actual verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| `npm run ops:reconcile-test` (permitted processes) | 0 | `tests 1003`, `pass 1003`, `fail 0` |
-| source/spec `node -c`, CLI `--help` | 0 | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| changed-region Prettier | 0 | `{"specFormatting":true,"guardFormatting":true}` |
-| `npm run lint` | 0 | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"` |
-| `npm run typecheck` | 0 | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1 |
-| permitted `npm run build` | 0 | `✓ Compiled successfully in 5.1s`; `✓ Generating static pages using 7 workers (22/22) in 976ms`; `prisma generate && nest build` |
-| `git diff --check` | 0 | silent |
+| command/check                                      | exit | output/result                                                                                                                    |
+| -------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run ops:reconcile-test` (permitted processes) | 0    | `tests 1003`, `pass 1003`, `fail 0`                                                                                              |
+| source/spec `node -c`, CLI `--help`                | 0    | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                  |
+| changed-region Prettier                            | 0    | `{"specFormatting":true,"guardFormatting":true}`                                                                                 |
+| `npm run lint`                                     | 0    | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`                                                                  |
+| `npm run typecheck`                                | 0    | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1                                          |
+| permitted `npm run build`                          | 0    | `✓ Compiled successfully in 5.1s`; `✓ Generating static pages using 7 workers (22/22) in 976ms`; `prisma generate && nest build` |
+| `git diff --check`                                 | 0    | silent                                                                                                                           |
 
 The restricted npm test initially reported only one worker-wrapper result;
 that output was not treated as individual-suite evidence. Direct and permitted
@@ -9065,15 +9135,15 @@ All 1003 previous tests plus 20 regressions pass. Actual direct red output:
 
 Actual checks:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| permitted `npm run ops:reconcile-test` | 0 | `tests 1023`, `pass 1023`, `fail 0` |
-| source/spec `node -c`, CLI `--help` | 0 | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| changed-region Prettier | 0 | `{"specFormatting":true,"guardFormatting":true}` |
-| `npm run lint` | 0 | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"` |
-| `npm run typecheck` | 0 | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1 |
-| permitted `npm run build` | 0 | `✓ Compiled successfully in 10.4s`; `✓ Generating static pages using 7 workers (22/22) in 1742ms`; `prisma generate && nest build` |
-| `git diff --check` | 0 | silent |
+| command/check                          | exit | output/result                                                                                                                      |
+| -------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| permitted `npm run ops:reconcile-test` | 0    | `tests 1023`, `pass 1023`, `fail 0`                                                                                                |
+| source/spec `node -c`, CLI `--help`    | 0    | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                    |
+| changed-region Prettier                | 0    | `{"specFormatting":true,"guardFormatting":true}`                                                                                   |
+| `npm run lint`                         | 0    | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`                                                                    |
+| `npm run typecheck`                    | 0    | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1                                            |
+| permitted `npm run build`              | 0    | `✓ Compiled successfully in 10.4s`; `✓ Generating static pages using 7 workers (22/22) in 1742ms`; `prisma generate && nest build` |
+| `git diff --check`                     | 0    | silent                                                                                                                             |
 
 Normal permitted worker processes were used for npm tests/build and offline
 operations under the previously established sandbox limits, without changing
@@ -9163,15 +9233,15 @@ green and permitted npm focused verification returned:
 
 Actual verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| permitted `npm run ops:reconcile-test` | 0 | `tests 1060`, `pass 1060`, `fail 0`, `skipped 0` |
-| source/spec `node -c`; CLI `--help` | 0 | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| changed-region Prettier | 0 | `{"guardFormatting":true,"specFormatting":true}`; guard width accounts for its existing indentation |
-| `npm run lint` | 0 | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"` |
-| `npm run typecheck` | 0 | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1 |
-| permitted `npm run build` | 0 | `✓ Compiled successfully in 2.4s`; `✓ Generating static pages using 7 workers (22/22) in 702ms`; `prisma generate && nest build` |
-| `git diff --check` | 0 | silent |
+| command/check                          | exit | output/result                                                                                                                    |
+| -------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- |
+| permitted `npm run ops:reconcile-test` | 0    | `tests 1060`, `pass 1060`, `fail 0`, `skipped 0`                                                                                 |
+| source/spec `node -c`; CLI `--help`    | 0    | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                  |
+| changed-region Prettier                | 0    | `{"guardFormatting":true,"specFormatting":true}`; guard width accounts for its existing indentation                              |
+| `npm run lint`                         | 0    | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`                                                                  |
+| `npm run typecheck`                    | 0    | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1                                          |
+| permitted `npm run build`              | 0    | `✓ Compiled successfully in 2.4s`; `✓ Generating static pages using 7 workers (22/22) in 702ms`; `prisma generate && nest build` |
+| `git diff --check`                     | 0    | silent                                                                                                                           |
 
 The restricted npm test reported only a single worker-wrapper result, not
 individual-suite evidence. Restricted build failed with `Could not parse
@@ -9268,15 +9338,15 @@ npm focused runs returned:
 
 Actual verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| permitted `node --test scripts/ops/reconcile-storage-objects.spec.js` and `npm run ops:reconcile-test` | 0 | `tests 1132`, `pass 1132`, `fail 0`, `skipped 0` |
-| source/spec `node -c`; CLI `--help` | 0 | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| changed-region Prettier | 0 | `{"specFormatting":true}` and `{"guardFormatting":true}`; guard width accounts for existing indentation |
-| `npm run lint` | 0 | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"` |
-| `npm run typecheck` | 0 | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1 |
-| permitted `npm run build` | 0 | `✓ Compiled successfully in 2.5s`; `✓ Generating static pages using 7 workers (22/22) in 574ms`; `prisma generate && nest build` |
-| `git diff --check` | 0 | silent |
+| command/check                                                                                          | exit | output/result                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------ | ---- | -------------------------------------------------------------------------------------------------------------------------------- |
+| permitted `node --test scripts/ops/reconcile-storage-objects.spec.js` and `npm run ops:reconcile-test` | 0    | `tests 1132`, `pass 1132`, `fail 0`, `skipped 0`                                                                                 |
+| source/spec `node -c`; CLI `--help`                                                                    | 0    | syntax silent; `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                  |
+| changed-region Prettier                                                                                | 0    | `{"specFormatting":true}` and `{"guardFormatting":true}`; guard width accounts for existing indentation                          |
+| `npm run lint`                                                                                         | 0    | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`                                                                  |
+| `npm run typecheck`                                                                                    | 0    | `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; Prisma Client 7.9.1                                          |
+| permitted `npm run build`                                                                              | 0    | `✓ Compiled successfully in 2.5s`; `✓ Generating static pages using 7 workers (22/22) in 574ms`; `prisma generate && nest build` |
+| `git diff --check`                                                                                     | 0    | silent                                                                                                                           |
 
 The restricted Node test initially reported only a single failing worker wrapper;
 that result was not counted as individual-suite evidence. Restricted build
@@ -9378,15 +9448,15 @@ Direct and npm focused green runs returned:
 
 Actual repository verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| permitted direct spec and npm run ops:reconcile-test | 0 | tests 1186, pass 1186, fail 0, skipped 0 |
-| source/spec node -c and CLI --help | 0 | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| changed-region installed Prettier | 0 | {"specFormatting":true}, {"guardFormatting":true} |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| permitted npm run build | 0 | Compiled successfully in 6.0s; Generating static pages using 7 workers (22/22) in 1596ms; prisma generate && nest build |
-| git diff --check | 0 | silent |
+| command/check                                        | exit | output/result                                                                                                           |
+| ---------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| permitted direct spec and npm run ops:reconcile-test | 0    | tests 1186, pass 1186, fail 0, skipped 0                                                                                |
+| source/spec node -c and CLI --help                   | 0    | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options]                                           |
+| changed-region installed Prettier                    | 0    | {"specFormatting":true}, {"guardFormatting":true}                                                                       |
+| npm run lint                                         | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| npm run typecheck                                    | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                     |
+| permitted npm run build                              | 0    | Compiled successfully in 6.0s; Generating static pages using 7 workers (22/22) in 1596ms; prisma generate && nest build |
+| git diff --check                                     | 0    | silent                                                                                                                  |
 
 The restricted test attempt returned only one failing worker wrapper, not an
 individual-suite result. Restricted build failed with Could not parse output
@@ -9484,15 +9554,15 @@ Direct and npm focused green output:
 
 Actual repository verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| permitted direct spec and npm run ops:reconcile-test | 0 | tests 1299, pass 1299, fail 0, skipped 0 |
-| source/spec node -c and CLI --help | 0 | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| changed-region installed Prettier | 0 | {"specFormatting":true}, {"guardFormatting":true} (source guard dedented for comparison) |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| permitted npm run build | 0 | Compiled successfully in 3.5s; Generating static pages using 7 workers (22/22) in 1323ms; prisma generate && nest build |
-| git diff --check | 0 | silent |
+| command/check                                        | exit | output/result                                                                                                           |
+| ---------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| permitted direct spec and npm run ops:reconcile-test | 0    | tests 1299, pass 1299, fail 0, skipped 0                                                                                |
+| source/spec node -c and CLI --help                   | 0    | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options]                                           |
+| changed-region installed Prettier                    | 0    | {"specFormatting":true}, {"guardFormatting":true} (source guard dedented for comparison)                                |
+| npm run lint                                         | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| npm run typecheck                                    | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                     |
+| permitted npm run build                              | 0    | Compiled successfully in 3.5s; Generating static pages using 7 workers (22/22) in 1323ms; prisma generate && nest build |
+| git diff --check                                     | 0    | silent                                                                                                                  |
 
 Restricted direct tests reported one failing worker wrapper rather than suite
 results. Restricted build failed with Could not parse output from TypeScript's
@@ -9594,15 +9664,15 @@ Actual permitted direct and npm focused green output:
 
 Actual repository verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| permitted direct spec and npm run ops:reconcile-test | 0 | tests 1401, pass 1401, fail 0, skipped 0 |
-| source/spec node -c and CLI --help | 0 | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| changed-region installed Prettier | 0 | {"specFormatting":true}; {"guardFormatting":true} (guard dedented for comparison) |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| final sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| permitted npm run build | 0 | Compiled successfully in 3.4s; Generating static pages using 7 workers (22/22) in 929ms; prisma generate && nest build |
-| git diff --check | 0 | silent |
+| command/check                                        | exit | output/result                                                                                                          |
+| ---------------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| permitted direct spec and npm run ops:reconcile-test | 0    | tests 1401, pass 1401, fail 0, skipped 0                                                                               |
+| source/spec node -c and CLI --help                   | 0    | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options]                                          |
+| changed-region installed Prettier                    | 0    | {"specFormatting":true}; {"guardFormatting":true} (guard dedented for comparison)                                      |
+| npm run lint                                         | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                             |
+| final sequential npm run typecheck                   | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                    |
+| permitted npm run build                              | 0    | Compiled successfully in 3.4s; Generating static pages using 7 workers (22/22) in 929ms; prisma generate && nest build |
+| git diff --check                                     | 0    | silent                                                                                                                 |
 
 The restricted direct test attempt reported one failed worker wrapper rather
 than suite results. The restricted build failed with Could not parse output
@@ -9706,15 +9776,15 @@ Actual permitted focused green output (exit 0):
 
 Actual repository verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| direct spec and npm run ops:reconcile-test | 0 | tests 1501, pass 1501, fail 0, skipped 0 |
-| source/spec node -c and CLI --help | 0 | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier on changed regions | 0 | specFormatting: true; guardFormatting: true; columnsFormatting: true |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| npm run typecheck, sequentially after build | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| permitted npm run build | 0 | Compiled successfully in 3.5s; Generating static pages using 7 workers (22/22) in 1124ms; prisma generate && nest build |
-| git diff --check | 0 | silent |
+| command/check                               | exit | output/result                                                                                                           |
+| ------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| direct spec and npm run ops:reconcile-test  | 0    | tests 1501, pass 1501, fail 0, skipped 0                                                                                |
+| source/spec node -c and CLI --help          | 0    | syntax silent; Usage: node scripts/ops/reconcile-storage-objects.js [options]                                           |
+| installed Prettier on changed regions       | 0    | specFormatting: true; guardFormatting: true; columnsFormatting: true                                                    |
+| npm run lint                                | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| npm run typecheck, sequentially after build | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                     |
+| permitted npm run build                     | 0    | Compiled successfully in 3.5s; Generating static pages using 7 workers (22/22) in 1124ms; prisma generate && nest build |
+| git diff --check                            | 0    | silent                                                                                                                  |
 
 The restricted red test attempt reported one failed worker wrapper rather than
 suite totals. The restricted build failed with Could not parse output from
@@ -9824,15 +9894,15 @@ The initial restricted red invocation reported only a failed worker wrapper;
 permitted execution supplied the complete totals above. No assertions were
 weakened. Actual repository verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier on changed regions | 0 | specFormatting: true; guardFormatting: true |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| npm run build | 0 | Compiled successfully in 5.4s; Generating static pages using 7 workers (22/22) in 1239ms; prisma generate && nest build |
-| npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| git diff --check | 0 | silent |
+| command/check                         | exit | output/result                                                                                                           |
+| ------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                   | 0    | silent                                                                                                                  |
+| CLI --help                            | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                          |
+| installed Prettier on changed regions | 0    | specFormatting: true; guardFormatting: true                                                                             |
+| npm run lint                          | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| npm run build                         | 0    | Compiled successfully in 5.4s; Generating static pages using 7 workers (22/22) in 1239ms; prisma generate && nest build |
+| npm run typecheck                     | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                     |
+| git diff --check                      | 0    | silent                                                                                                                  |
 
 An initial isolated formatting probe used incorrectly indented wrapper text and
 reported guardFormatting: false; comparison of the actual guard with installed
@@ -9932,15 +10002,15 @@ npm run ops:reconcile-test executions both returned exit 0:
 
 Actual repository verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier on added spec/changed guard | 0 | specFormatting: true; guardFormatting: true |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| permitted npm run build | 0 | Compiled successfully in 4.5s; Generating static pages using 7 workers (22/22) in 1544ms; prisma generate && nest build |
-| npm run typecheck after build | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| git diff --check | 0 | silent |
+| command/check                                  | exit | output/result                                                                                                           |
+| ---------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                            | 0    | silent                                                                                                                  |
+| CLI --help                                     | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                          |
+| installed Prettier on added spec/changed guard | 0    | specFormatting: true; guardFormatting: true                                                                             |
+| npm run lint                                   | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| permitted npm run build                        | 0    | Compiled successfully in 4.5s; Generating static pages using 7 workers (22/22) in 1544ms; prisma generate && nest build |
+| npm run typecheck after build                  | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                     |
+| git diff --check                               | 0    | silent                                                                                                                  |
 
 All 33 independent offline stages resolved from package.json ops:check passed:
 **27 suite invocations / 4551 tests / 4551 passed / zero failures or skipped**.
@@ -10037,16 +10107,16 @@ npm run ops:reconcile-test both returned exit 0:
 
 Actual repository verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier on added spec, changed guard and helper | 0 | addedSpecFormatting: true; guardFormatting: true; helperFormatting: true |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| initial restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
-| permitted npm run build | 0 | Compiled successfully in 3.9s; Generating static pages using 7 workers (22/22) in 923ms; prisma generate && nest build |
-| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| git diff --check | 0 | silent |
+| command/check                                              | exit | output/result                                                                                                          |
+| ---------------------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                                        | 0    | silent                                                                                                                 |
+| CLI --help                                                 | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                         |
+| installed Prettier on added spec, changed guard and helper | 0    | addedSpecFormatting: true; guardFormatting: true; helperFormatting: true                                               |
+| npm run lint                                               | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                             |
+| initial restricted npm run build                           | 1    | Error: Could not parse output from TypeScript's --showConfig.                                                          |
+| permitted npm run build                                    | 0    | Compiled successfully in 3.9s; Generating static pages using 7 workers (22/22) in 923ms; prisma generate && nest build |
+| sequential npm run typecheck                               | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                    |
+| git diff --check                                           | 0    | silent                                                                                                                 |
 
 All 33 independent offline stages resolved from package.json ops:check passed:
 **27 suite invocations / 4603 tests / 4603 passed / zero failures or skipped**.
@@ -10099,7 +10169,6 @@ npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
 
-
 ## Prompt 336 — database inventory text types (2026-10-12)
 
 Continued Phase 12K after committed Prompt 335 on clean main at
@@ -10148,16 +10217,16 @@ npm run ops:reconcile-test both returned exit 0:
 
 Actual repository verification:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier on new spec and adapter function | 0 | addedSpecFormatting: true; guardFormatting: true |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| initial restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
-| permitted npm run build | 0 | Compiled successfully in 3.3s; Generating static pages using 7 workers (22/22) in 1219ms; prisma generate && nest build |
-| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| git diff --check | 0 | silent |
+| command/check                                       | exit | output/result                                                                                                           |
+| --------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                                 | 0    | silent                                                                                                                  |
+| CLI --help                                          | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                          |
+| installed Prettier on new spec and adapter function | 0    | addedSpecFormatting: true; guardFormatting: true                                                                        |
+| npm run lint                                        | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| initial restricted npm run build                    | 1    | Error: Could not parse output from TypeScript's --showConfig.                                                           |
+| permitted npm run build                             | 0    | Compiled successfully in 3.3s; Generating static pages using 7 workers (22/22) in 1219ms; prisma generate && nest build |
+| sequential npm run typecheck                        | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                     |
+| git diff --check                                    | 0    | silent                                                                                                                  |
 
 All 33 independent offline stages resolved from package.json ops:check passed:
 **27 suite invocations / 4658 tests / 4658 passed / zero failures or skipped**.
@@ -10206,7 +10275,6 @@ Safe local inspection from the repository root:
 npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
-
 
 ## Prompt 337 — Database inventory projected row fields (2026-10-12)
 
@@ -10262,16 +10330,16 @@ node --test and final npm run ops:reconcile-test returned exit 0:
 
 Actual verification results:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier on new tests/adapter function | 0 | guardFormatting: true; addedSpecFormatting: true |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
-| permitted npm run build | 0 | Compiled successfully in 3.9s; Generating static pages using 7 workers (22/22) in 1170ms; prisma generate && nest build |
-| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| git diff --check | 0 | silent |
+| command/check                                    | exit | output/result                                                                                                           |
+| ------------------------------------------------ | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                              | 0    | silent                                                                                                                  |
+| CLI --help                                       | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                          |
+| installed Prettier on new tests/adapter function | 0    | guardFormatting: true; addedSpecFormatting: true                                                                        |
+| npm run lint                                     | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| restricted npm run build                         | 1    | Error: Could not parse output from TypeScript's --showConfig.                                                           |
+| permitted npm run build                          | 0    | Compiled successfully in 3.9s; Generating static pages using 7 workers (22/22) in 1170ms; prisma generate && nest build |
+| sequential npm run typecheck                     | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                     |
+| git diff --check                                 | 0    | silent                                                                                                                  |
 
 All 33 independent offline stages resolved from package.json ops:check passed:
 **27 suite invocations / 4695 tests / 4695 passed / zero failures or skipped**.
@@ -10375,16 +10443,16 @@ ops:reconcile-test returned exit 0:
 
 Actual checks:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier, changed function/new tests | 0 | both regions: true |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
-| permitted npm run build | 0 | Compiled successfully in 5.6s; Generating static pages using 7 workers (22/22) in 1411ms; prisma generate && nest build |
-| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| git diff --check | 0 | silent |
+| command/check                                  | exit | output/result                                                                                                           |
+| ---------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                            | 0    | silent                                                                                                                  |
+| CLI --help                                     | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                          |
+| installed Prettier, changed function/new tests | 0    | both regions: true                                                                                                      |
+| npm run lint                                   | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| restricted npm run build                       | 1    | Error: Could not parse output from TypeScript's --showConfig.                                                           |
+| permitted npm run build                        | 0    | Compiled successfully in 5.6s; Generating static pages using 7 workers (22/22) in 1411ms; prisma generate && nest build |
+| sequential npm run typecheck                   | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                     |
+| git diff --check                               | 0    | silent                                                                                                                  |
 
 All 33 independent offline stages resolved from package.json ops:check passed:
 **27 suite invocations / 4789 tests / 4789 passed / zero failures or skipped**.
@@ -10465,15 +10533,15 @@ After the compact row-copy implementation, direct `node --test` and final format
 
 Actual checks:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier, changed function/new tests | 0 | formatted changed regions |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| npm run build | 0 | Compiled successfully in 2.8s; Generating static pages using 7 workers (22/22) in 784ms; prisma generate && nest build |
-| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1 |
-| git diff --check | 0 | silent |
+| command/check                                  | exit | output/result                                                                                                          |
+| ---------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                            | 0    | silent                                                                                                                 |
+| CLI --help                                     | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                         |
+| installed Prettier, changed function/new tests | 0    | formatted changed regions                                                                                              |
+| npm run lint                                   | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                             |
+| npm run build                                  | 0    | Compiled successfully in 2.8s; Generating static pages using 7 workers (22/22) in 784ms; prisma generate && nest build |
+| sequential npm run typecheck                   | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Prisma Client 7.9.1                                    |
+| git diff --check                               | 0    | silent                                                                                                                 |
 
 All 33 independent offline stages resolved from package.json ops:check passed:
 **27 suite invocations / 4820 tests / 4820 passed / zero failures or skipped**.
@@ -10536,16 +10604,16 @@ The first green attempt found the incompatible legacy adapter fixture (1873 pass
 
 Actual checks:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier changed source function/new test region | 0 | {"sourceFunction":true,"newTestRegion":true} |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
-| permitted npm run build | 0 | Compiled successfully in 3.6s; Generating static pages using 7 workers (22/22) in 1499ms; prisma generate && nest build |
-| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1) |
-| git diff --check | 0 | silent |
+| command/check                                              | exit | output/result                                                                                                           |
+| ---------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                                        | 0    | silent                                                                                                                  |
+| CLI --help                                                 | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                          |
+| installed Prettier changed source function/new test region | 0    | {"sourceFunction":true,"newTestRegion":true}                                                                            |
+| npm run lint                                               | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| restricted npm run build                                   | 1    | Error: Could not parse output from TypeScript's --showConfig.                                                           |
+| permitted npm run build                                    | 0    | Compiled successfully in 3.6s; Generating static pages using 7 workers (22/22) in 1499ms; prisma generate && nest build |
+| sequential npm run typecheck                               | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1)                         |
+| git diff --check                                           | 0    | silent                                                                                                                  |
 
 Every independent offline stage resolved from package.json ops:check passed: **33 stages / 27 suite invocations / 4855 tests / 4855 passed / zero failures or skipped**. Every stage exit and suite count was inspected. This includes templates, secret/default scan, Docker runtime, offline SBOM license verification, SAST and container security checks. Final dossier suite:
 
@@ -10606,16 +10674,16 @@ Initial green returned 1920 passed and 4 failed: the legacy truncated-digest acq
 
 Actual checks:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier changed source function/new test region | 0 | {"newTestRegion":true,"sourceFunction":true} |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
-| permitted npm run build | 0 | Compiled successfully in 5.2s; Generating static pages using 7 workers (22/22) in 1275ms; prisma generate && nest build |
-| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1) |
-| git diff --check | 0 | silent |
+| command/check                                              | exit | output/result                                                                                                           |
+| ---------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                                        | 0    | silent                                                                                                                  |
+| CLI --help                                                 | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                          |
+| installed Prettier changed source function/new test region | 0    | {"newTestRegion":true,"sourceFunction":true}                                                                            |
+| npm run lint                                               | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| restricted npm run build                                   | 1    | Error: Could not parse output from TypeScript's --showConfig.                                                           |
+| permitted npm run build                                    | 0    | Compiled successfully in 5.2s; Generating static pages using 7 workers (22/22) in 1275ms; prisma generate && nest build |
+| sequential npm run typecheck                               | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1)                         |
+| git diff --check                                           | 0    | silent                                                                                                                  |
 
 A first typecheck overlapped the tail of the server build; the recorded typecheck above was repeated after confirmed build completion. Formatting was limited to changed test regions.
 
@@ -10676,16 +10744,16 @@ The first finally fix passed all 1943 cases. The added real immediate-exit regre
 
 Actual checks:
 
-| command/check | exit | output/result |
-| --- | --- | --- |
-| source/spec node -c | 0 | silent |
-| CLI --help | 0 | Usage: node scripts/ops/reconcile-storage-objects.js [options] |
-| installed Prettier new test region | 0 | {"newTestRegion":true} |
-| npm run lint | 0 | eslint; eslint "src/**/*.ts"; eslint "{src,test}/**/*.ts" |
-| restricted npm run build | 1 | Error: Could not parse output from TypeScript's --showConfig. |
-| permitted npm run build | 0 | Compiled successfully in 6.8s; Generating static pages using 7 workers (22/22) in 1275ms; prisma generate && nest build |
-| sequential npm run typecheck | 0 | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1) |
-| git diff --check | 0 | silent |
+| command/check                      | exit | output/result                                                                                                           |
+| ---------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| source/spec node -c                | 0    | silent                                                                                                                  |
+| CLI --help                         | 0    | Usage: node scripts/ops/reconcile-storage-objects.js [options]                                                          |
+| installed Prettier new test region | 0    | {"newTestRegion":true}                                                                                                  |
+| npm run lint                       | 0    | eslint; eslint "src/**/\*.ts"; eslint "{src,test}/**/*.ts"                                                              |
+| restricted npm run build           | 1    | Error: Could not parse output from TypeScript's --showConfig.                                                           |
+| permitted npm run build            | 0    | Compiled successfully in 6.8s; Generating static pages using 7 workers (22/22) in 1275ms; prisma generate && nest build |
+| sequential npm run typecheck       | 0    | tsc --noEmit; prisma generate && tsc -p tsconfig.json --noEmit; Generated Prisma Client (7.9.1)                         |
+| git diff --check                   | 0    | silent                                                                                                                  |
 
 Independent read-only review inspected the complete source/test diff, prompt, runner and installed SDK declaration. It found no Critical, Important or Minor issues and assessed the change ready to merge after records. Its restricted direct execution passed **1943/1944**, with only the subprocess regression blocked by `spawnSync node EPERM`; its restricted node test-runner invocation reported a file-level failure. Coordinator permitted runs supply the full passing counts. Review feedback was evaluated against finally placement, client ownership, synchronous SDK teardown, immediate exit ordering and primary outcome preservation; no fixes or follow-up review were needed.
 
@@ -10716,7 +10784,6 @@ npm run ops:reconcile-test
 node scripts/ops/reconcile-storage-objects.js --help
 ```
 
-
 ## Prompt 343 — Reconciliation failed database connection cleanup (2026-10-13)
 
 Continued Phase 12K after committed Prompt 342 (`80cd784f53bfcaa8cb662bbcf960d0db5dea1377`). Code inspection found main's connection-failure branch returned or exited without ending its runner-created PostgreSQL client. The installed `node_modules/pg/lib/client.js` defines Promise-returning `end()` with never-connected/already-ended handling and failed-stream destruction. This verifies the API contract; no leaked live socket measurement is claimed.
@@ -10727,19 +10794,19 @@ Added **14 offline behavioral cases** using actual pg Client construction with r
 
 Actual verification:
 
-| Command | Exit | Real output / observation |
-| --- | --- | --- |
-| restricted focused `node --test --test-name-pattern='main failed database cleanup' scripts/ops/reconcile-storage-objects.spec.js` | 1 | file-level `tests 1 / pass 0 / fail 1`, `test failed`; not behavioral evidence |
-| permitted focused regression, before source fix | 1 | `tests 14 / pass 6 / fail 8 / skipped 0`; missing end calls, premature settlement and empty child stdout reproduced the gap |
-| permitted `npm run ops:reconcile-test`, after fix | 0 | `tests 1958 / pass 1958 / fail 0 / cancelled 0 / skipped 0` |
-| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
-| permitted `npm run build` | 0 | `Compiled successfully in 11.4s`; `Finished TypeScript in 9.3s`; `Generating static pages using 7 workers (22/22) in 2.8s`; Prisma Client `7.9.1` generated, `nest build` completed |
-| subsequent sequential `npm run typecheck` | 0 | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
-| `node -c` source and spec | 0 each | silent |
-| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| installed Prettier check of appended test region | 0 | `Added test region format check: true` |
-| `git diff --check` | 0 | silent |
+| Command                                                                                                                           | Exit   | Real output / observation                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| restricted focused `node --test --test-name-pattern='main failed database cleanup' scripts/ops/reconcile-storage-objects.spec.js` | 1      | file-level `tests 1 / pass 0 / fail 1`, `test failed`; not behavioral evidence                                                                                                      |
+| permitted focused regression, before source fix                                                                                   | 1      | `tests 14 / pass 6 / fail 8 / skipped 0`; missing end calls, premature settlement and empty child stdout reproduced the gap                                                         |
+| permitted `npm run ops:reconcile-test`, after fix                                                                                 | 0      | `tests 1958 / pass 1958 / fail 0 / cancelled 0 / skipped 0`                                                                                                                         |
+| `npm run lint`                                                                                                                    | 0      | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics                                                                                |
+| restricted `npm run build`                                                                                                        | 1      | `Error: Could not parse output from TypeScript's --showConfig.`                                                                                                                     |
+| permitted `npm run build`                                                                                                         | 0      | `Compiled successfully in 11.4s`; `Finished TypeScript in 9.3s`; `Generating static pages using 7 workers (22/22) in 2.8s`; Prisma Client `7.9.1` generated, `nest build` completed |
+| subsequent sequential `npm run typecheck`                                                                                         | 0      | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics                                            |
+| `node -c` source and spec                                                                                                         | 0 each | silent                                                                                                                                                                              |
+| CLI `--help`                                                                                                                      | 0      | `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                                                                    |
+| installed Prettier check of appended test region                                                                                  | 0      | `Added test region format check: true`                                                                                                                                              |
+| `git diff --check`                                                                                                                | 0      | silent                                                                                                                                                                              |
 
 Independent read-only review inspected the full diff, prompt, surrounding lifecycle paths, installed driver and verification logs; it found no Critical, Important or Minor issues and assessed the implementation ready to merge after records and final offline checks. Feedback was evaluated against ownership, await ordering, primary-error preservation and test isolation; no corrections or follow-up review were needed. The reviewer's restricted focused test failed at the file wrapper with `test failed`; it did not independently reproduce behavioral totals. Coordinator permitted runs above provide the behavioral results.
 
@@ -10793,16 +10860,16 @@ All ten failures concerned synchronous cleanup exceptions: six matrix outcomes a
 
 Actual self-verification:
 
-| Command | Exit | Real output / observation |
-| --- | --- | --- |
-| source/spec `node -c` | 0 each | silent |
-| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| installed Prettier added-region check | 0 | `Added test region format check: true` |
-| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
-| permitted `npm run build` | 0 | `Compiled successfully in 6.3s`; `Finished TypeScript in 6.0s`; `Generating static pages using 7 workers (22/22) in 1899ms`; Prisma Client `7.9.1` generated and `nest build` completed |
-| subsequent sequential `npm run typecheck` | 0 | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
-| `git diff --check` | 0 | silent |
+| Command                                   | Exit   | Real output / observation                                                                                                                                                               |
+| ----------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source/spec `node -c`                     | 0 each | silent                                                                                                                                                                                  |
+| CLI `--help`                              | 0      | `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                                                                        |
+| installed Prettier added-region check     | 0      | `Added test region format check: true`                                                                                                                                                  |
+| `npm run lint`                            | 0      | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics                                                                                    |
+| restricted `npm run build`                | 1      | `Error: Could not parse output from TypeScript's --showConfig.`                                                                                                                         |
+| permitted `npm run build`                 | 0      | `Compiled successfully in 6.3s`; `Finished TypeScript in 6.0s`; `Generating static pages using 7 workers (22/22) in 1899ms`; Prisma Client `7.9.1` generated and `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0      | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics                                                |
+| `git diff --check`                        | 0      | silent                                                                                                                                                                                  |
 
 Independent read-only review found no Critical, Important or Minor issues and no implementation deviations, assessing the change ready after remaining offline checks and documentation. Feedback was evaluated against all four guarded-await paths, ownership, single end attempts, primary-error preservation, S3 finally and tests; no changes or re-review were needed. The reviewer inspected the coordinator green log but its own restricted focused test failed at the file wrapper (`tests 1`, `test failed`), supplying no independent behavioral totals.
 
@@ -10865,16 +10932,16 @@ The two bypass cases passed before the fix; nine setup-failure cases reproduced 
 
 Actual self-verification:
 
-| Command | Exit | Real output / observation |
-| --- | --- | --- |
-| source/spec `node -c` | 0 each | silent |
-| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| installed Prettier appended-region check | 0 | `Added test region format check: true` |
-| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
-| permitted `npm run build` | 0 | `Compiled successfully in 9.2s`; `Finished TypeScript in 6.6s`; `Generating static pages using 7 workers (22/22) in 1658ms`; Prisma Client `7.9.1` generated and server `nest build` completed |
-| subsequent sequential `npm run typecheck` | 0 | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
-| `git diff --check` | 0 | silent |
+| Command                                   | Exit   | Real output / observation                                                                                                                                                                      |
+| ----------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source/spec `node -c`                     | 0 each | silent                                                                                                                                                                                         |
+| CLI `--help`                              | 0      | `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                                                                               |
+| installed Prettier appended-region check  | 0      | `Added test region format check: true`                                                                                                                                                         |
+| `npm run lint`                            | 0      | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics                                                                                           |
+| restricted `npm run build`                | 1      | `Error: Could not parse output from TypeScript's --showConfig.`                                                                                                                                |
+| permitted `npm run build`                 | 0      | `Compiled successfully in 9.2s`; `Finished TypeScript in 6.6s`; `Generating static pages using 7 workers (22/22) in 1658ms`; Prisma Client `7.9.1` generated and server `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0      | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics                                                       |
+| `git diff --check`                        | 0      | silent                                                                                                                                                                                         |
 
 Independent read-only review inspected the complete source/test diff, prompt, surrounding lifecycle, installed driver contracts and coordinator verification logs. It reported no Critical, Important or Minor issues and no plan deviations, assessing the work ready after remaining records and verification. Its review of the coordinator green log confirmed the reported 1999/1999; it did not rerun tests. Feedback was evaluated against the actual try/finally placement, existence/ownership guard, awaited end, fixed errors, bypasses and receipt suppression; no fixes or re-review were necessary.
 
@@ -10928,16 +10995,16 @@ The bypass and password cases passed before the fix; both setup failures and imm
 
 Actual self-verification:
 
-| Command | Exit | Real output / observation |
-| --- | --- | --- |
-| source/spec `node -c` | 0 each | silent |
-| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| installed Prettier appended-region check | 0 | `Added test region format check: true` |
-| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
-| permitted `npm run build` | 0 | `Compiled successfully in 3.1s`; `Finished TypeScript in 3.3s`; `Generating static pages using 7 workers (22/22) in 719ms`; Prisma Client `7.9.1` generated and server `nest build` completed |
-| subsequent sequential `npm run typecheck` | 0 | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
-| `git diff --check` | 0 | silent |
+| Command                                   | Exit   | Real output / observation                                                                                                                                                                     |
+| ----------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source/spec `node -c`                     | 0 each | silent                                                                                                                                                                                        |
+| CLI `--help`                              | 0      | `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                                                                              |
+| installed Prettier appended-region check  | 0      | `Added test region format check: true`                                                                                                                                                        |
+| `npm run lint`                            | 0      | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics                                                                                          |
+| restricted `npm run build`                | 1      | `Error: Could not parse output from TypeScript's --showConfig.`                                                                                                                               |
+| permitted `npm run build`                 | 0      | `Compiled successfully in 3.1s`; `Finished TypeScript in 3.3s`; `Generating static pages using 7 workers (22/22) in 719ms`; Prisma Client `7.9.1` generated and server `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0      | shared `tsc -p tsconfig.json --noEmit`, client `tsc --noEmit`, server `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics                                                      |
+| `git diff --check`                        | 0      | silent                                                                                                                                                                                        |
 
 Independent read-only review inspected the full source/test diff, prompt, surrounding lifecycle, installed pg implementation and actual verification logs. It found no Critical, Important or Minor issues or material plan deviations, and assessed the work ready after completion records. Feedback was evaluated against the try boundary, existence/ownership cleanup guard, unchanged failure cleanup, private diagnostics and bypasses; no fixes or re-review were necessary. Its own restricted focused run failed at the file wrapper (`1 failed`), so it did not independently reproduce behavioral totals. The reviewer confirmed the coordinator's green log and the 30 offline stages recorded at review time. Its initial turn failed before work due model capacity; the same review task succeeded on retry.
 
@@ -11012,16 +11079,16 @@ Actual `npm run ops:reconcile-test` output after the fix (exit 0):
 ℹ skipped 0
 ```
 
-| Check | Exit | Actual output / observation |
-| --- | --- | --- |
-| source/spec `node -c` | 0 each | silent |
-| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| appended-region Prettier | 0 | `Added test region format check: true` |
-| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
-| permitted `npm run build` | 0 | `Compiled successfully in 2.4s`; `Finished TypeScript in 1903ms`; `Generating static pages using 7 workers (22/22) in 847ms`; generated Prisma Client `7.9.1` and completed `nest build` |
-| subsequent sequential `npm run typecheck` | 0 | shared/client/server `tsc` checks and Prisma generation completed without diagnostics |
-| `git diff --check` | 0 | silent |
+| Check                                     | Exit   | Actual output / observation                                                                                                                                                              |
+| ----------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source/spec `node -c`                     | 0 each | silent                                                                                                                                                                                   |
+| CLI `--help`                              | 0      | `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                                                                         |
+| appended-region Prettier                  | 0      | `Added test region format check: true`                                                                                                                                                   |
+| `npm run lint`                            | 0      | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics                                                                                     |
+| restricted `npm run build`                | 1      | `Error: Could not parse output from TypeScript's --showConfig.`                                                                                                                          |
+| permitted `npm run build`                 | 0      | `Compiled successfully in 2.4s`; `Finished TypeScript in 1903ms`; `Generating static pages using 7 workers (22/22) in 847ms`; generated Prisma Client `7.9.1` and completed `nest build` |
+| subsequent sequential `npm run typecheck` | 0      | shared/client/server `tsc` checks and Prisma generation completed without diagnostics                                                                                                    |
+| `git diff --check`                        | 0      | silent                                                                                                                                                                                   |
 
 The initial restricted test invocation failed at the file wrapper (`pass 0 /
 fail 1`) and provided no behavioral evidence. Permitted offline test runs
@@ -11099,16 +11166,16 @@ After implementation, focused tests passed 14/14; actual
 ℹ duration_ms 1630.016503
 ```
 
-| Check | Exit | Actual output / observation |
-| --- | --- | --- |
-| source/spec `node -c` | 0 each | silent |
-| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| appended tests / new helper Prettier | 0 | added-region checks both `true` |
-| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
-| permitted `npm run build` | 0 | `Compiled successfully in 2.3s`; `Finished TypeScript in 2.0s`; `Generating static pages using 7 workers (22/22) in 625ms`; Prisma Client `7.9.1` generation and `nest build` completed |
-| subsequent sequential `npm run typecheck` | 0 | shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `283ms`; no diagnostics |
-| `git diff --check` | 0 | silent |
+| Check                                     | Exit   | Actual output / observation                                                                                                                                                             |
+| ----------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source/spec `node -c`                     | 0 each | silent                                                                                                                                                                                  |
+| CLI `--help`                              | 0      | `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                                                                        |
+| appended tests / new helper Prettier      | 0      | added-region checks both `true`                                                                                                                                                         |
+| `npm run lint`                            | 0      | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics                                                                                    |
+| restricted `npm run build`                | 1      | `Error: Could not parse output from TypeScript's --showConfig.`                                                                                                                         |
+| permitted `npm run build`                 | 0      | `Compiled successfully in 2.3s`; `Finished TypeScript in 2.0s`; `Generating static pages using 7 workers (22/22) in 625ms`; Prisma Client `7.9.1` generation and `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0      | shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `283ms`; no diagnostics                                                                                           |
+| `git diff --check`                        | 0      | silent                                                                                                                                                                                  |
 
 The first restricted test invocation reported only `pass 0 / fail 1` at the
 file wrapper and supplied no behavioral evidence. Permitted subprocess runs
@@ -11185,16 +11252,16 @@ exit 0:
 ℹ duration_ms 1310.545994
 ```
 
-| Check | Exit | Actual output / observation |
-| --- | --- | --- |
-| source/spec `node -c` | 0 each | silent |
-| CLI `--help` | 0 | `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| added tests Prettier | 0 | `added-region Prettier check: true` |
-| `npm run lint` | 0 | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| restricted `npm run build` | 1 | `Error: Could not parse output from TypeScript's --showConfig.` |
-| permitted `npm run build` | 0 | `Compiled successfully in 2.6s`; `Finished TypeScript in 2.5s`; `Generating static pages using 7 workers (22/22) in 753ms`; Prisma Client `7.9.1` generated in `395ms`, `nest build` completed |
-| subsequent sequential `npm run typecheck` | 0 | shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `343ms`; no diagnostics |
-| `git diff --check` | 0 | silent |
+| Check                                     | Exit   | Actual output / observation                                                                                                                                                                    |
+| ----------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source/spec `node -c`                     | 0 each | silent                                                                                                                                                                                         |
+| CLI `--help`                              | 0      | `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                                                                               |
+| added tests Prettier                      | 0      | `added-region Prettier check: true`                                                                                                                                                            |
+| `npm run lint`                            | 0      | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics                                                                                           |
+| restricted `npm run build`                | 1      | `Error: Could not parse output from TypeScript's --showConfig.`                                                                                                                                |
+| permitted `npm run build`                 | 0      | `Compiled successfully in 2.6s`; `Finished TypeScript in 2.5s`; `Generating static pages using 7 workers (22/22) in 753ms`; Prisma Client `7.9.1` generated in `395ms`, `nest build` completed |
+| subsequent sequential `npm run typecheck` | 0      | shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `343ms`; no diagnostics                                                                                                  |
+| `git diff --check`                        | 0      | silent                                                                                                                                                                                         |
 
 Restricted isolated full-suite invocation yielded only file-wrapper
 `pass 0 / fail 1`, without behavioral totals; approved subprocess execution
@@ -11269,16 +11336,16 @@ After the one-line production change, focused output was `tests 31`, `pass 31`,
 ℹ duration_ms 4001.750503
 ```
 
-| Check | Result / actual output |
-| --- | --- |
-| source/spec `node -c` | exit 0 each, silent |
-| CLI `--help` | exit 0; `Usage: node scripts/ops/reconcile-storage-objects.js [options]` |
-| appended tests Prettier | `added-region Prettier check: true` |
-| `npm run lint` | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| restricted build | `Error: Could not parse output from TypeScript's --showConfig.` |
-| permitted `npm run build` | exit 0; `Compiled successfully in 9.8s`; `Finished TypeScript in 5.7s`; `Generating static pages using 7 workers (22/22) in 1898ms`; Prisma Client `7.9.1` generated in `527ms`; `nest build` completed |
-| subsequent sequential `npm run typecheck` | exit 0; shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `398ms`; no diagnostics |
-| `git diff --check` | exit 0, silent |
+| Check                                     | Result / actual output                                                                                                                                                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source/spec `node -c`                     | exit 0 each, silent                                                                                                                                                                                     |
+| CLI `--help`                              | exit 0; `Usage: node scripts/ops/reconcile-storage-objects.js [options]`                                                                                                                                |
+| appended tests Prettier                   | `added-region Prettier check: true`                                                                                                                                                                     |
+| `npm run lint`                            | client `eslint`, shared `eslint "src/**/*.ts"`, server `eslint "{src,test}/**/*.ts"`; no diagnostics                                                                                                    |
+| restricted build                          | `Error: Could not parse output from TypeScript's --showConfig.`                                                                                                                                         |
+| permitted `npm run build`                 | exit 0; `Compiled successfully in 9.8s`; `Finished TypeScript in 5.7s`; `Generating static pages using 7 workers (22/22) in 1898ms`; Prisma Client `7.9.1` generated in `527ms`; `nest build` completed |
+| subsequent sequential `npm run typecheck` | exit 0; shared/client/server `tsc` checks; Prisma Client `7.9.1` generated in `398ms`; no diagnostics                                                                                                   |
+| `git diff --check`                        | exit 0, silent                                                                                                                                                                                          |
 
 Restricted full-suite execution reported only the file wrapper (`pass 0`,
 `fail 1`), without behavioral totals. Permitted subprocess execution supplied
@@ -11936,7 +12003,6 @@ restores prior documentation. To inspect the result, open
 `docs/project-status.md`; reproduce the repository-visible gate with
 `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`.
 
-
 ## Prompt 362 — Release verification refresh and triage (2026-10-13)
 
 Continued Phase 12 release hardening following Prompt 361. Executes item 3 of
@@ -12187,6 +12253,7 @@ records with the V1 Release Candidate baseline at commit `dd36684` on `main`.
 ### Category 1–11 candidate intake alignment
 
 Appends authoritative candidate intake assessments across all 11 categories in §3:
+
 1. **Category 1 (`production_domain_tls`)**: Caddy production routing and security headers verifier (`verify-caddy-routing.js`) passes 18/18 routes; reverse proxy, timeouts, security headers, and S3 SigV4 Host preservation verified; Next.js 16.3.8 compiles 23/23 routes cleanly. Unresolved (4 blockers: domain, tls_contact_email placeholders, section status, evidence array).
 2. **Category 2 (`smtp_delivery`)**: Template keys verified (`check-smtp-template-keys.js`); end-to-end invitation and recovery email pipelines verified in Prompts 58 and 361. Unresolved (8 blockers).
 3. **Category 3 (`secrets_management`)**: Secret scanning zero leaks (`scan-secrets.sh`); 7 credential classes and redaction audit verified in Prompts 230 and 363; dry-run rotation drill passing; SBOM (702 packages, 0 license violations) passing. Unresolved (5 blockers).
@@ -12314,7 +12381,6 @@ or minor findings and assessed the change ready to commit. Review evaluation
 confirmed the reported scope and links; no implementation fix was required.
 The reviewer independently checked the diff, not the build/test executions.
 
-
 ## Prompt 369 (originally 370) — Operator handoff package (2026-10-14)
 
 Baseline: `6a06864b1a8f4628c881cb385d95fe6d7d5041b8` on `main`.
@@ -12412,7 +12478,6 @@ private copy in an approved restricted store, supply its missing facts, and
 arrange scoped independent inspection under the launch checklist; the eleven-category
 launch exit remains open.
 
-
 ## Prompt sequence reorganization (2026-10-15)
 
 The user explicitly requested removal of the unused intake prompt and
@@ -12465,6 +12530,7 @@ Phase 12 remain open.
 
 Extended operations tooling and launch readiness verification for the `vercel-managed-production`
 target (`STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID=store_g2fmCH5CW7TJbkN3`):
+
 - Storage reconciliation (`scripts/ops/reconcile-storage-objects.js`) supports `--provider vercel-blob`
   via `@vercel/blob` `list()` with cursor pagination, detecting missing, orphan, and size mismatches with
   sanitized audit receipts.
@@ -12482,6 +12548,7 @@ target (`STORAGE_PROVIDER=vercel-blob`, `BLOB_STORE_ID=store_g2fmCH5CW7TJbkN3`):
 Operational handoff templates and the unified launch drill runner are reconciled to support
 the `vercel-managed-production` profile with full audit parity and zero Docker daemon / Caddyfile
 prerequisites:
+
 - Managed operator handoff template (`infra/launch/operator-handoff.vercel.example.md`) models complete
   intake for all 11 categories with zero literal secrets.
 - Managed child verifiers (`verify-managed-ingress.js`, `verify-managed-volume-encryption.js`,
@@ -12495,6 +12562,7 @@ prerequisites:
 
 Reconciled top-level launch readiness orchestration and static integrity verification for the
 `vercel-managed-production` target:
+
 - Secret scanner (`scripts/ops/scan-secrets.sh`) allowlists `scripts/ops/verify-managed-secret-rotation.js`,
   passing `ops:scan-secrets` and `ops:scan-secrets-test` (42/42 tests pass).
 - Static integrity verification (`scripts/ops/run-static-integrity-checks.js`) accepts `--target-architecture`
@@ -12519,6 +12587,7 @@ Reconciled top-level launch readiness orchestration and static integrity verific
 > 383, not proof of activation, zero downtime, hosted cadence or launch approval.
 
 Resolved the production launch blocker regarding ClamAV signature rebuild cadence by implementing an automated, zero-downtime snapshot rebuild orchestrator, unit test suite, and scheduled GitHub Actions workflow:
+
 - Automated rebuild orchestrator (`scripts/vercel/rebuild-scanner-cadence.js`):
   Evaluates snapshot signature age against `--max-age-hours` (default: 48h, max: 168h); builds a fresh snapshot without `--replace`; verifies the new snapshot with clean and EICAR scans in an isolated probe sandbox; writes updated environment variables (`--write-env`) outside repo (0600 mode); prunes superseded snapshot only after new snapshot passes smoke tests; supports `--dry-run` simulation mode without credentials.
 - Unit and contract test specification (`scripts/vercel/rebuild-scanner-cadence.spec.js`):
@@ -13334,10 +13403,10 @@ persistent by default; no residue resulted (Prompt 389 post-run listing).
 - `probe-platform.js`: `signatureCheck(config, { dailySha256 })` override;
   `signatureCheck` and `runChecked` exported. Existing callers unchanged.
 - `prepare-scanner-handoff.js` also requires `smoke_test.signatures:
-  "passed"`. This is stricter: an older success receipt without the key is
+"passed"`. This is stricter: an older success receipt without the key is
   rejected. No such receipt exists, since none had ever passed smoke.
 - Spec fakes: `Sandbox.create` throws `TypeError("unknown create parameter:
-  snapshotId")` on a top-level `snapshotId`. Probes are classified by
+snapshotId")` on a top-level `snapshotId`. Probes are classified by
   `source.type`, return `sourceSnapshotId`, answer the signature check, and
   log deletes as `probe-delete:<flag>`, so `retained()` still forbids `true`
   on the builder. New tests: the exact create parameters, the hashes passed to
@@ -13347,7 +13416,7 @@ persistent by default; no residue resulted (Prompt 389 post-run listing).
   `signatureCheck` override.
 - Regression proof: temporarily reverting the create to a top-level
   `snapshotId` made `success boots from the snapshot source and handoff
-  accepts it` fail (`ℹ pass 0`, `ℹ fail 1`). The revert was restored from a
+accepts it` fail (`ℹ pass 0`, `ℹ fail 1`). The revert was restored from a
   copy and is not committed.
 
 ### Checks (Node `v24.21.0` via `/tmp/acres-node24`; `npm exec -- node --version` → `v24.21.0`)
@@ -13559,7 +13628,7 @@ directly and inside `npm run`; cached Vercel CLI 64.5.0; project inspect →
 - `npm run lint` → exit 0; `npm run typecheck` → exit 0; `npm run build` →
   exit 0
 - dry run + `vercel:deploy-manifest` with secrets on disk → `deploy manifest
-  ok: 654 files`; negative controls and the dirty-scope failure as recorded
+ok: 654 files`; negative controls and the dirty-scope failure as recorded
   in the hosted record
 
 ### Review
@@ -13583,7 +13652,6 @@ earlier deployments found nine previews storing `.env`, `server/.env` and
 `backups/`; deletion and rotation are pending owner decisions (see
 [the hosted record](vercel-deployment.md#deploy-upload-allowlist--prompt-392-2026-10-18)).
 
-
 ## Prompt 393 — dashboard summary operation name (2026-10-18)
 
 Baseline `324b1b3`; implementation commit `23f6378`. Node `v24.21.0`;
@@ -13594,7 +13662,7 @@ cached Vercel CLI 64.5.0.
 - `npm run lint` → exit 0; `npm run typecheck` → exit 0; `npm run build` →
   exit 0
 - `playwright test tests/graphql-operations.spec.ts tests/audit-history.spec.ts
-  tests/api-helpers.spec.ts` → `17 passed`
+tests/api-helpers.spec.ts` → `17 passed`
 - SSR behaviour check (API `NODE_ENV=test`, `next dev`, register →
   organization → `/app`): before the fix "Request Failed" and no
   `dashboard-title`; after it no alert and `id="dashboard-title"` present
@@ -15051,6 +15119,7 @@ deployments, promotions or git pushes occurred.
 ### Preflight, window check and offline verification
 
 At `16:31:07.942Z`, preflight verified:
+
 - Team status: billing plan `hobby`, status `active`, no account blocks or soft blocks.
 - Project: `prj_q9ApajZWDgdYZetnm5s5oakEjrUD` under account `team_zE3mp7nrEZ6a7cxRavwUMYC4`.
 - Retained deployment: `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`, `Ready`, source `9744d812e08de5313f1191e1fb609c513409d26a`, `iad1`.
@@ -15061,6 +15130,7 @@ At `16:31:07.942Z`, preflight verified:
 - OIDC token valid through `2026-10-21T04:31:03.000Z`.
 
 Offline test suites passed before live execution:
+
 - `acres408-spec.cjs`: 26/26 tests passed (`tests 26, pass 26, fail 0`).
 - Prompt 407 offline v3 suite: 56/56 tests passed (`tests 56, pass 56, fail 0`).
 
@@ -15089,6 +15159,7 @@ PATCH requests via `acres408-patch.cjs` with stdin-fed values and no internal re
    - Post-write inspection confirmed value `94fead17812734280917fbc623828c1462943762c96895736468ffffc0068eb3`, updatedAt updated, other variables unchanged.
 
 Post-adoption audit at `16:35:15.237Z` (`inspect('after')`):
+
 - All three scanner variables match candidate values:
   - `SCANNER_SANDBOX_SNAPSHOT_ID`: `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`
   - `SCANNER_MAIN_SHA256`: `0b2182d229f46981ec8f535382222f7c9dfdd656b250ad47988b910a8d302365`
@@ -15101,6 +15172,7 @@ Post-adoption audit at `16:35:15.237Z` (`inspect('after')`):
 - Zero conditional recovery writes were required.
 
 Postflight inventory at `16:35:28.102Z`:
+
 - SDK inventory verified 0 sandboxes and the same 4 live snapshots retained with unchanged metadata.
 
 ### Outcome and configuration reconciliation
@@ -15121,6 +15193,7 @@ spec outputs, patch logs, postflight inventory and verification receipts.
 ### Repository verification and inspection
 
 Commands ran sequentially under Node 24.21.0:
+
 - `node scripts/vercel/check-vercel-config.js`: exit 0, `vercel.json configuration valid`.
 - `npm run vercel:probe-test`: exit 0, `tests 443, suites 6, pass 443, fail 0`.
 - `npm run lint`: exit 0 across client/shared/server.
@@ -15131,3 +15204,112 @@ Commands ran sequentially under Node 24.21.0:
 
 To inspect, read this record and examine project preview settings via `vercel env ls preview`.
 The local tooling verification command is `npm run vercel:probe-test`.
+
+## Prompt 409 — scanner snapshot retirement tier 2 (2026-10-20)
+
+**Result: Tier 2 retirement complete; two snapshots deleted cleanly.** One
+authorized bounded operations continuation retired superseded snapshots
+`snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` and `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` from
+the fixed preview target (`team_zE3mp7nrEZ6a7cxRavwUMYC4`,
+`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`, `iad1`), reducing live project snapshots
+from four to two (`snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` active,
+`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` rollback) and reclaiming 922,166,988 bytes
+(~922 MB) of Snapshot Storage. Zero sandboxes, deployments, environment variable
+writes or git pushes occurred.
+
+### Context and dependency-safety review
+
+Prompt 396 defined two tiers of scanner snapshot retirement:
+
+- Tier 1 retired three obsolete snapshots with no valid dependents (`snap_Feg5…`, `snap_rz0c…`, `snap_KtLd…`).
+- Tier 2 targeted `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` (Prompt 391) and `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` (Prompt 394).
+
+Retirement conditions verified:
+
+1. `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` signature window expired no later than `2026-10-20T01:00Z` (~16.9h prior).
+2. `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` signature window expired no later than `2026-10-20T16:01Z` (~1.9h prior).
+3. Both snapshots' dependents already fail closed on signature age or `scanner_unavailable`.
+4. Prompt 408 adopted `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` into project preview settings, making `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` the documented rollback snapshot. `snap_ngIw…` was therefore superseded as rollback.
+
+### Preflight and plan run
+
+Preflight at `17:52:54Z` verified:
+
+- Active sandboxes: `0`.
+- Snapshot inventory: 4 created snapshots (`snap_8OP5…`, `snap_KBaj…`, `snap_ngIw…`, `snap_CARv…`) and 3 previously deleted snapshots (`snap_KtLd…`, `snap_rz0c…`, `snap_Feg5…`).
+- Active preview environment snapshot ID: `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`.
+
+Plan execution at `17:53:32.187Z`:
+
+```bash
+npm run vercel:scanner-retire -- \
+  --keep snap_8OP5G2tCUvxtRdoGFMCu5se58f3N \
+  --keep snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf \
+  --retire snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN \
+  --retire snap_ngIwnQplocPoUR0A6cewfCGrFAbX \
+  --output ~/.config/acres/vercel-preview/prompt409-20261020T175241Z/plan.json
+```
+
+- Exit 0, `result: "planned"`, `refusals: []`, `active_sandboxes: 0`, `unlisted_snapshots: []`.
+- `retire`: 2 entries (`outcome: "planned"`).
+- `keep`: 2 entries (`status: "created"`).
+- `storage.before`: `{"created_count": 4, "created_bytes": 1844414400}`.
+
+### Confirmed retirement execution and postflight audit
+
+Confirmed execution at `17:54:32.008Z`:
+
+```bash
+npm run vercel:scanner-retire -- \
+  --keep snap_8OP5G2tCUvxtRdoGFMCu5se58f3N \
+  --keep snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf \
+  --retire snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN \
+  --retire snap_ngIwnQplocPoUR0A6cewfCGrFAbX \
+  --confirm \
+  --output ~/.config/acres/vercel-preview/prompt409-20261020T175241Z/retire.json
+```
+
+- Exit 0, `result: "retired"`, `refusals: []`, `warnings: []`.
+- Both retired snapshots deleted:
+  - `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN`: `outcome: "deleted"`, size 461,065,087 bytes.
+  - `snap_ngIwnQplocPoUR0A6cewfCGrFAbX`: `outcome: "deleted"`, size 461,101,901 bytes.
+- Both kept snapshots preserved with unmodified expiry:
+  - `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`: `created`, expires `2026-10-28T07:10:08.692Z`.
+  - `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`: `created`, expires `2026-10-27T09:09:29.002Z`.
+- Storage transition:
+  - `storage.before`: `{"created_count": 4, "created_bytes": 1844414400}` (~1.84 GB).
+  - `storage.after`: `{"created_count": 2, "created_bytes": 922247412}` (~0.92 GB).
+  - Net reduction: exactly 2 snapshots, 922,166,988 bytes reclaimed.
+
+Postflight audit at `17:54:50Z`:
+
+- Active sandboxes: `0`.
+- Live snapshots: exactly 2 (`snap_8OP5…` and `snap_KBaj…`).
+- Deleted snapshots: 5 (both tier 1 and tier 2 targets).
+
+### Storage accounting observations
+
+The Vercel dashboard Snapshot Storage reading is owner-monitored. Following
+Tier 1 retirement in Prompt 396, dashboard readings remained unchanged (2.39 GB / 15 GB),
+leaving open whether Snapshot Storage reflects point-in-time active stored bytes or
+cumulative byte-hours across billing periods. Postflight provider listing confirms
+a live reduction of 922 MB; dashboard reflection remains subject to billing lag or
+cumulative accounting semantics.
+
+Custody directory is `prompt409-20261020T175241Z/` under `~/.config/acres/vercel-preview/`,
+containing preflight inventory, `preview.env`, `plan.json`, `retire.json`, and
+`postflight.json`.
+
+### Repository verification and inspection
+
+Commands ran sequentially under Node 24.21.0:
+
+- `node --test scripts/vercel/retire-scanner-snapshots.spec.js`: exit 0, 34 pass, 0 fail.
+- `npm run vercel:probe-test`: exit 0, 443 pass, 0 fail across 6 suites.
+- `npm run lint`: exit 0 across client/shared/server.
+- `npm run typecheck`: exit 0 across all workspaces.
+- `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- `git diff --check`: exit 0.
+
+To inspect, examine `retire.json` in custody or run `scripts/vercel/retire-scanner-snapshots.js` in plan mode.

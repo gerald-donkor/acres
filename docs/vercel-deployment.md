@@ -19,28 +19,37 @@ managed outbox dispatch, Prompt 377 = shared managed API throttling, Prompt
 393 = named dashboard GraphQL operation, Prompt 394 = scanner signature
 refresh, Prompt 395 = scanner signature refresh 2, Prompt 396 = snapshot
 retirement tier 1, Prompt 397 = fresh preview deployment, Prompt 398 =
-preview image routing repair); each
+preview image routing repair, Prompt 409 = scanner snapshot retirement tier 2); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
+**Current snapshot retention — Prompt 409 (2026-10-20).** Tier 2 scanner
+snapshot retirement is complete. Exactly two live snapshots are retained in
+project preview: `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` (active) and
+`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` (rollback). Superseded snapshots
+`snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` and `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` were
+deleted cleanly, reducing created snapshot storage from ~1.84 GB to ~922 MB
+(922,166,988 bytes reclaimed). Active sandboxes remain zero.
+
 **Current manual scanner gate — Prompt 408 (2026-10-20).** This supersedes the
 older next-refresh instructions below. Retained application acceptance and
-project-level preview adoption are now complete. Prompt 408 executed guarded
+project-level preview adoption are complete. Prompt 408 executed guarded
 adoption of candidate snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` and its
 digests into Vercel project preview settings using verified raw provider API
 record IDs, single-send HTTPS PATCH transport, and post-write verification.
 Project preview configuration is now reconciled with retained accepted
 deployment `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`.
 
-The project preview configuration's historical signature upper bound is now
+The project preview configuration's historical signature upper bound is
 updated to the candidate's bound: no later than `2026-10-22T06:35:09.451Z`,
 possibly earlier absent its CVD build timestamp. Reserve roughly two hours
 before that bound for the next refresh (planning judgment).
 
 The next gates are hosted scheduled cadence / workflow source publication
 (requiring a standalone uppercase `P` to push reviewed commits to upstream),
-storage accounting, production plan, Phase 12 exit, and the eleven sign-offs.
-See [the guarded adoption record](#guarded-scanner-preview-adoption--prompt-408-2026-10-20).
+storage accounting resolution, production activation plan, Phase 12 exit, and the eleven sign-offs.
+See [the guarded adoption record](#guarded-scanner-preview-adoption--prompt-408-2026-10-20)
+and [the tier 2 retirement record](#scanner-snapshot-retirement-tier-2--prompt-409-2026-10-20).
 
 **Fixed target.** Team `dgsloxx417's projects`
 (`team_zE3mp7nrEZ6a7cxRavwUMYC4`), project `acres`
@@ -1569,6 +1578,7 @@ endpoint for scheduled sweeps:
    - Verifies Cron HTTP handler authorization and status table.
 
 All verification gates passed under Node 24:
+
 - `build:server`: passed
 - `test --workspace=@acres/server -- --runInBand`: 139 suites, 2141 tests passed
 - `test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000`: 11 suites, 238 tests passed
@@ -1581,7 +1591,6 @@ All verification gates passed under Node 24:
 - `git diff --check`: passed (clean)
 
 No `crons` entry was added to `vercel.json`; no code was deployed or pushed.
-
 
 ## Shared managed API throttling — Prompt 377 (2026-10-16)
 
@@ -1653,24 +1662,24 @@ All final checks below exited **0** under Node **v24.21.0**, using
 outputs are excerpted verbatim. No full `ops:check` or hosted acceptance is
 claimed from these targeted checks.
 
-| Command | Actual output excerpt |
-| --- | --- |
-| Prettier `--check` on the ten changed/new TypeScript files | `All matched files use Prettier code style!` |
-| `npm run build:server` | `Generated Prisma Client (7.9.1)`; `prisma generate && nest build` completes |
-| `npm run test --workspace=@acres/server -- --runInBand` | `Test Suites: 140 passed, 140 total`; `Tests:       2150 passed, 2150 total`; `Snapshots:   1 passed, 1 total` |
-| `npm run db:up` | `Container acres-postgres-1 Running` |
-| `DATABASE_MIGRATION_URL=postgresql://acres_migrator:<local-password>@localhost:5432/acres_test npm run prisma:migrate:deploy --workspace=@acres/server` | `Applying migration` for `20261016000000_shared_throttling`; `All migrations have been successfully applied.` |
-| `env -u DATABASE_URL npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000` | `Test Suites: 12 passed, 12 total`; `Tests:       248 passed, 248 total` |
-| Same E2E command with trailing `shared-throttling` | `Test Suites: 1 passed, 1 total`; `Tests:       10 passed, 10 total` |
-| `npm run contracts:check` | `prisma generate && nest build && node dist/contracts/generate-contracts.js --check` completes with no drift diagnostics |
-| `npm run lint` | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`; no diagnostics |
-| `npm run build` | `Compiled successfully in 4.3s`; `Generating static pages using 7 workers (23/23) in 1285ms`; shared and Nest builds complete |
-| `npm run typecheck` | `tsc -p tsconfig.json --noEmit`, `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics |
-| `npm run vercel:probe-test` | `tests 2`, `pass 2`, `fail 0` (file-level results in this sandbox, not hosted probes) |
-| `npm run ops:templates-test` | `tests 451`, `pass 451`, `fail 0` |
-| `npm run ops:scan-secrets` | `secret/default scan passed` |
-| `npm run ops:scan-secrets-test` | `tests 1`, `pass 1`, `fail 0` (file-level result) |
-| `git diff --check` | no output |
+| Command                                                                                                                                                 | Actual output excerpt                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Prettier `--check` on the ten changed/new TypeScript files                                                                                              | `All matched files use Prettier code style!`                                                                                  |
+| `npm run build:server`                                                                                                                                  | `Generated Prisma Client (7.9.1)`; `prisma generate && nest build` completes                                                  |
+| `npm run test --workspace=@acres/server -- --runInBand`                                                                                                 | `Test Suites: 140 passed, 140 total`; `Tests:       2150 passed, 2150 total`; `Snapshots:   1 passed, 1 total`                |
+| `npm run db:up`                                                                                                                                         | `Container acres-postgres-1 Running`                                                                                          |
+| `DATABASE_MIGRATION_URL=postgresql://acres_migrator:<local-password>@localhost:5432/acres_test npm run prisma:migrate:deploy --workspace=@acres/server` | `Applying migration` for `20261016000000_shared_throttling`; `All migrations have been successfully applied.`                 |
+| `env -u DATABASE_URL npm run test:e2e --workspace=@acres/server -- --runInBand --testTimeout=30000`                                                     | `Test Suites: 12 passed, 12 total`; `Tests:       248 passed, 248 total`                                                      |
+| Same E2E command with trailing `shared-throttling`                                                                                                      | `Test Suites: 1 passed, 1 total`; `Tests:       10 passed, 10 total`                                                          |
+| `npm run contracts:check`                                                                                                                               | `prisma generate && nest build && node dist/contracts/generate-contracts.js --check` completes with no drift diagnostics      |
+| `npm run lint`                                                                                                                                          | `eslint`, `eslint "src/**/*.ts"`, `eslint "{src,test}/**/*.ts"`; no diagnostics                                               |
+| `npm run build`                                                                                                                                         | `Compiled successfully in 4.3s`; `Generating static pages using 7 workers (23/23) in 1285ms`; shared and Nest builds complete |
+| `npm run typecheck`                                                                                                                                     | `tsc -p tsconfig.json --noEmit`, `tsc --noEmit`, `prisma generate && tsc -p tsconfig.json --noEmit`; no diagnostics           |
+| `npm run vercel:probe-test`                                                                                                                             | `tests 2`, `pass 2`, `fail 0` (file-level results in this sandbox, not hosted probes)                                         |
+| `npm run ops:templates-test`                                                                                                                            | `tests 451`, `pass 451`, `fail 0`                                                                                             |
+| `npm run ops:scan-secrets`                                                                                                                              | `secret/default scan passed`                                                                                                  |
+| `npm run ops:scan-secrets-test`                                                                                                                         | `tests 1`, `pass 1`, `fail 0` (file-level result)                                                                             |
+| `git diff --check`                                                                                                                                      | no output                                                                                                                     |
 
 The ten focused real-database cases establish two independent connections
 sharing one budget (20 concurrent calls admit exactly five), adapter-visible
@@ -1747,7 +1756,6 @@ preserves abuse budgets at the cost of availability while storage is unavailable
 Operator deployment must explicitly apply the migration before exposing managed
 API traffic; it was applied only to local `acres_test` in this execution.
 
-
 ## Services routing and first preview deployment — Prompt 378 (2026-10-16)
 
 First application preview deployment of Acres (Next.js client + NestJS API
@@ -1759,37 +1767,37 @@ acceptance proof across Gates A–E.
 
 1. **Services configuration:**
    - `services.client`:
-     * `root: "client"`
-     * `framework: "nextjs"`
-     * `bindings`: declares service binding to `api`, exposing generated private
+     - `root: "client"`
+     - `framework: "nextjs"`
+     - `bindings`: declares service binding to `api`, exposing generated private
        URL as `ACRES_API_ORIGIN`.
    - `services.api`:
-     * `root: "server"`
-     * `src/main.ts`: Nest API function, explicit region `iad1`, `maxDuration: 30`.
+     - `root: "server"`
+     - `src/main.ts`: Nest API function, explicit region `iad1`, `maxDuration: 30`.
        Contains no queue triggers, remaining a pure HTTP service reachable via
        private binding from `client` or via protected Cron rewrites.
-     * `src/vercel/dispatch.function.ts`: protected Cron sweep function, explicit
+     - `src/vercel/dispatch.function.ts`: protected Cron sweep function, explicit
        region `iad1`, `maxDuration: 60`.
-     * `src/vercel/jobs.function.ts`: queue consumer function, explicit region
+     - `src/vercel/jobs.function.ts`: queue consumer function, explicit region
        `iad1`, `maxDuration: 60`, `experimentalTriggers: [{ type: "queue/v2beta", topic: "acres-jobs", retryAfterSeconds: 5 }]`,
        omitting `maxDeliveries`.
    - `services.jobs`:
-     * `root: "server"`
-     * `entrypoint: "src/vercel/jobs.function.ts"`
-     * Configures the dedicated background queue runner with the matching
+     - `root: "server"`
+     - `entrypoint: "src/vercel/jobs.function.ts"`
+     - Configures the dedicated background queue runner with the matching
        `src/vercel/jobs.function.ts` function configuration (region `iad1`,
        `maxDuration: 60`, `experimentalTriggers` for `acres-jobs`, no `maxDeliveries`).
 
 2. **Rewrites and Crons:**
    - Rewrites:
-     * `{ "source": "/cron/dispatch", "destination": { "service": "api", "path": "/src/vercel/dispatch.function.ts" } }`
-     * `{ "source": "/(.*)", "destination": { "service": "client" } }`
-     All public traffic enters Next.js, which proxies `/api/v1/*` to `ACRES_API_ORIGIN`
-     and handles Server Component data fetching over the private binding. The
-     `api` service is unreachable directly from the public internet except via
-     the protected `/cron/dispatch` route.
+     - `{ "source": "/cron/dispatch", "destination": { "service": "api", "path": "/src/vercel/dispatch.function.ts" } }`
+     - `{ "source": "/(.*)", "destination": { "service": "client" } }`
+       All public traffic enters Next.js, which proxies `/api/v1/*` to `ACRES_API_ORIGIN`
+       and handles Server Component data fetching over the private binding. The
+       `api` service is unreachable directly from the public internet except via
+       the protected `/cron/dispatch` route.
    - Crons:
-     * `[{ "path": "/cron/dispatch", "schedule": "0 0 * * *" }]`. On Vercel
+     - `[{ "path": "/cron/dispatch", "schedule": "0 0 * * *" }]`. On Vercel
        Hobby, Crons run on production deployments only; preview testing exercises
        the endpoint via authenticated HTTP requests.
 
@@ -1824,16 +1832,16 @@ acceptance proof across Gates A–E.
   preview database via direct `acres_migrator` URL. Role privileges and RLS
   verified via `scripts/vercel/neon-verify.sh`.
 - **Sensitive environment variables:**
-  * `DATABASE_URL`: Neon pooled `acres_app` connection URL
-  * `BLOB_STORE_ID`: `store_g2fmCH5CW7TJbkN3`
-  * `STORAGE_PROVIDER`: `vercel-blob` (OIDC authentication, S3 variables unset)
-  * `QUEUE_PROVIDER`: `vercel` (topic `acres-jobs`)
-  * `SCANNER_PROVIDER`: `vercel-sandbox` (`SCANNER_SANDBOX_SNAPSHOT_ID` recorded as
+  - `DATABASE_URL`: Neon pooled `acres_app` connection URL
+  - `BLOB_STORE_ID`: `store_g2fmCH5CW7TJbkN3`
+  - `STORAGE_PROVIDER`: `vercel-blob` (OIDC authentication, S3 variables unset)
+  - `QUEUE_PROVIDER`: `vercel` (topic `acres-jobs`)
+  - `SCANNER_PROVIDER`: `vercel-sandbox` (`SCANNER_SANDBOX_SNAPSHOT_ID` recorded as
     `snap_d2y7r2n9`, an unverified ID that matches no listed snapshot; the
     baseline in use until Prompt 391 was `snap_Feg5…` (Prompt 396),
     `SCANNER_MAX_SIGNATURE_AGE_HOURS=48`)
-  * `SESSION_SECRET`, `CSRF_SECRET`, `CRON_SECRET`: sensitive credentials
-  * `AI_ENABLED`: `false`
+  - `SESSION_SECRET`, `CSRF_SECRET`, `CRON_SECRET`: sensitive credentials
+  - `AI_ENABLED`: `false`
 
 ### Hosted acceptance gates (A–E) verified evidence
 
@@ -2197,10 +2205,10 @@ Prompt 388's receipt could not say why `Sandbox.create` failed, because every
 exception at a `provider_failed` step projected identically. Stage A of
 Prompt 389 adds three allowlisted fields to `build_failure`:
 
-| field             | values                                                                      |
-| ----------------- | --------------------------------------------------------------------------- |
-| `provider_error`  | `api_error`, `stream_error`, `timeout`, `transport`, `other`; else `null`   |
-| `provider_status` | `api_error` only: integer 100–599 from `response.status`, else `null`        |
+| field             | values                                                                                                               |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `provider_error`  | `api_error`, `stream_error`, `timeout`, `transport`, `other`; else `null`                                            |
+| `provider_status` | `api_error` only: integer 100–599 from `response.status`, else `null`                                                |
 | `provider_code`   | `error.code` from an API error body, or a stream error's `code`, if it matches `^[a-z][a-z0-9_]{0,59}$`; else `null` |
 
 Classification happens when `buildStep` wraps a raw error at a
@@ -2376,7 +2384,7 @@ inference above.
 
 Findings (finding 1 resolved by Prompt 392; finding 2 resolved by Prompt 393):
 
-1. **Deploy uploads gitignored files.** *Resolved by Prompt 392:*
+1. **Deploy uploads gitignored files.** _Resolved by Prompt 392:_
    `.vercelignore` allowlist plus `vercel:deploy-manifest`, proven on
    `dpl_7JR8wLUt14fPRdD7SHPmy6gM4QTC`; old deployments inventoried there. There is no `.vercelignore`, and a
    working-tree `vercel deploy --dry` lists `.env`, `backups/`, `ref/` and
@@ -2390,8 +2398,8 @@ Findings (finding 1 resolved by Prompt 392; finding 2 resolved by Prompt 393):
    organization listing work, then `dashboardSummary` GraphQL fails and the
    page renders `AppError` (request ID `db4e1e74-9af1-483c-9685-cec384d681b3`).
    Runtime logs for that window returned no records, so the cause is unknown.
-   Prompt 378's Gate C did not require an active organization. *Resolved by
-   Prompt 393:* the client sent `dashboardSummary` without an operation name,
+   Prompt 378's Gate C did not require an active organization. _Resolved by
+   Prompt 393:_ the client sent `dashboardSummary` without an operation name,
    which the API rejects outside development (see
    [Prompt 393](#dashboard-summary-operation-name--prompt-393-2026-10-18)).
 
@@ -2460,7 +2468,7 @@ uploaded `/.env`, `server/.env`, `backups/`, `ref/`, build outputs and more
   `out-of-scope file in upload: .env.example`. The two anchored entries
   replace it.
 - **`scripts/vercel/check-deploy-manifest.js`** (`npm run
-  vercel:deploy-manifest -- --manifest <dry.json> [--cwd <dir>]`). Reads a
+vercel:deploy-manifest -- --manifest <dry.json> [--cwd <dir>]`). Reads a
   `vercel deploy --dry` manifest (never runs the CLI) and requires the upload
   to equal the git-tracked files in that scope exactly. It also requires a
   clean scope (`git status --porcelain`), so the upload is HEAD's content and
@@ -2477,11 +2485,11 @@ uploaded `/.env`, `server/.env`, `backups/`, `ref/`, build outputs and more
   `ignoredCount 37` (ignored list includes `.env`, `.env.example`,
   `backups`, `server/.env`, `server/dist`, `server/coverage`,
   `server/src/generated`, `packages/shared/dist`) → `deploy manifest ok: 654
-  files`, equal to `git ls-files` over the scope. Negative controls:
+files`, equal to `git ls-files` over the scope. Negative controls:
   `client/.env.check-392` was ignored (check exit 0); `client/untracked-392.txt`
   failed with `untracked or ignored file in upload` (exit 1). Before commit,
   the check failed on the modified `package.json` (`uncommitted change in
-  deploy scope`), as designed.
+deploy scope`), as designed.
 - **Deployment.** `dpl_7JR8wLUt14fPRdD7SHPmy6gM4QTC`
   (`https://acres-fuq15llmn-dgsloxx417s-projects.vercel.app`), deployed from
   the **working tree** after the check passed on `feb6d9e`. Created
@@ -2501,17 +2509,17 @@ uploaded `/.env`, `server/.env`, `backups/`, `ref/`, build outputs and more
 earlier `acres` deployments (one page), stored source read through
 `/v6/deployments/<id>/files`:
 
-| deployment | created (UTC) | target | `src/.env` | `src/server/.env` | `src/backups/` files |
-| --- | --- | --- | --- | --- | --- |
-| `dpl_6L5ZspwDq331ophkaxojsDZDaKPP` (ERROR) | 2026-10-16 12:44 | preview | yes | yes | 92 |
-| `dpl_3giXPYQmYVsxWg5De5U5aZrCaNwZ` | 2026-10-16 12:45 | preview | yes | yes | 92 |
-| `dpl_4MguFfnKXsb4QHU3ayvKf4RdCRQK` | 2026-10-16 12:51 | preview | yes | yes | 92 |
-| `dpl_9k1JSzXmroDuaJs1MnnTVcDe6kH1` | 2026-10-16 13:13 | preview | yes | yes | 92 |
-| `dpl_DHaBK6oVM7YmKZEafMVCdYFqK4fp` | 2026-10-16 13:18 | preview | yes | yes | 92 |
-| `dpl_DjXH5qAkKYFEkBY8NaBFGzqS9NuU` | 2026-10-16 13:26 | preview | yes | yes | 92 |
-| `dpl_Bf9WCk6n117FjRQsvh5NDaZDVro8` | 2026-10-16 13:51 | preview | yes | yes | 92 |
-| `dpl_71bAS64vss2XjM817FXATvhZDj5s` | 2026-10-16 14:17 | preview | yes | yes | 92 |
-| `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b` | 2026-10-16 14:25 | preview | yes | yes | 92 |
+| deployment                                 | created (UTC)    | target  | `src/.env` | `src/server/.env` | `src/backups/` files |
+| ------------------------------------------ | ---------------- | ------- | ---------- | ----------------- | -------------------- |
+| `dpl_6L5ZspwDq331ophkaxojsDZDaKPP` (ERROR) | 2026-10-16 12:44 | preview | yes        | yes               | 92                   |
+| `dpl_3giXPYQmYVsxWg5De5U5aZrCaNwZ`         | 2026-10-16 12:45 | preview | yes        | yes               | 92                   |
+| `dpl_4MguFfnKXsb4QHU3ayvKf4RdCRQK`         | 2026-10-16 12:51 | preview | yes        | yes               | 92                   |
+| `dpl_9k1JSzXmroDuaJs1MnnTVcDe6kH1`         | 2026-10-16 13:13 | preview | yes        | yes               | 92                   |
+| `dpl_DHaBK6oVM7YmKZEafMVCdYFqK4fp`         | 2026-10-16 13:18 | preview | yes        | yes               | 92                   |
+| `dpl_DjXH5qAkKYFEkBY8NaBFGzqS9NuU`         | 2026-10-16 13:26 | preview | yes        | yes               | 92                   |
+| `dpl_Bf9WCk6n117FjRQsvh5NDaZDVro8`         | 2026-10-16 13:51 | preview | yes        | yes               | 92                   |
+| `dpl_71bAS64vss2XjM817FXATvhZDj5s`         | 2026-10-16 14:17 | preview | yes        | yes               | 92                   |
+| `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`         | 2026-10-16 14:25 | preview | yes        | yes               | 92                   |
 
 Clean: the two production deployments (`dpl_J1QE…`, `dpl_9v14…`, the
 seven-file queue probe) and previews `dpl_2tbY…`, `dpl_9PEv…` (seven files
@@ -3242,6 +3250,7 @@ matched Prompt 395 (`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`).
 The adoption helper bound CLI preview records to verified raw provider API
 record IDs by full key/scope identity (`bindCLI`) and executed single-send
 native HTTPS PATCH requests:
+
 - `SCANNER_SANDBOX_SNAPSHOT_ID` updated to `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` (record `J4z4L1KWK9ghtUxw`, `rc=0`).
 - `SCANNER_MAIN_SHA256` evaluated via `decision()`; skipped without mutation as already matching candidate value `0b2182d2...`.
 - `SCANNER_DAILY_SHA256` updated to `94fead17812734280917fbc623828c1462943762c96895736468ffffc0068eb3` (record `lkEeMy3WJOGlUivs`, `rc=0`).
@@ -3266,4 +3275,36 @@ and the eleven sign-offs.
 
 See [the complete operations record](operations.md#prompt-408--guarded-scanner-preview-adoption-2026-10-20).
 Custody: `prompt408-20261020T162817Z/` under `~/.config/acres/vercel-preview/`.
+No push or production action occurred.
+
+## Scanner snapshot retirement (tier 2) — Prompt 409 (2026-10-20)
+
+At baseline `435d397`, one authorized bounded operations continuation executed
+Tier 2 scanner snapshot retirement against the fixed preview target
+(`team_zE3mp7nrEZ6a7cxRavwUMYC4`, `prj_q9ApajZWDgdYZetnm5s5oakEjrUD`, `iad1`),
+deleting expired superseded snapshots `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` and
+`snap_ngIwnQplocPoUR0A6cewfCGrFAbX`.
+
+Retirement conditions and safety assertions:
+
+- **`snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN`**: Prompt 391 snapshot (size 461,065,087 bytes). Signature window closed no later than `2026-10-20T01:00Z`. Dependents already fail closed on signature age.
+- **`snap_ngIwnQplocPoUR0A6cewfCGrFAbX`**: Prompt 394 snapshot (size 461,101,901 bytes). Signature window closed no later than `2026-10-20T16:01Z`. Superseded as rollback by Prompt 395's `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` following Prompt 408's adoption of `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`.
+
+Execution summary:
+
+1. **Preflight inventory** (`17:52:54Z`): Verified zero running/pending sandboxes and exactly four live `created` snapshots.
+2. **Planning run** (`17:53:32Z`): `npm run vercel:scanner-retire` without `--confirm` verified zero refusals, zero active sandboxes, zero unlisted snapshots, and planned deletion of the two target snapshots while keeping `snap_8OP5…` and `snap_KBaj…`.
+3. **Confirmed deletion** (`17:54:32Z`): `npm run vercel:scanner-retire --confirm` executed single deletions without internal retries. Both target snapshots were successfully deleted (`outcome: "deleted"`, exit code 0).
+4. **Postflight audit** (`17:54:50Z`): Verified exactly two live snapshots in project inventory (`snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` active, `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` rollback) with unchanged expiry timestamps, zero active sandboxes, and five total deleted snapshots.
+5. **Storage reduction**: Live created snapshot count decreased from 4 to 2; created bytes decreased from 1,844,414,400 bytes (~1.84 GB) to 922,247,412 bytes (~0.92 GB), reclaiming 922,166,988 bytes.
+
+**Steady-state retention baseline is established.** The project preview configuration
+retains exactly the active candidate snapshot and its predecessor rollback snapshot.
+Storage accounting reflection on the Hobby plan dashboard remains owner-monitored.
+
+Next gates: hosted cadence / workflow source publication (requires standalone
+uppercase `P`), production activation plan, Phase 12 exit, and the eleven sign-offs.
+
+See [the operations record](operations.md#prompt-409--scanner-snapshot-retirement-tier-2-2026-10-20).
+Custody: `prompt409-20261020T175241Z/` under `~/.config/acres/vercel-preview/`.
 No push or production action occurred.

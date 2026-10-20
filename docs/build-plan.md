@@ -1543,6 +1543,7 @@ requiring `"live"` on target-bound runs). Emitted dossiers now declare root
 and summary blocks.
 
 In `scripts/ops/check-launch-readiness.js`:
+
 - Added `validSecretDossier(report, file)` helper checking `overall_status === 'PASSED'`,
   verified `secretRotationBaseline`, verified `supplyChainBaseline` (if present), and
   unbreached summary flags.
@@ -1565,6 +1566,7 @@ Drill rehearsal remains simulation preflight; operator sign-off remains open.
 **Prompt 247 Phase 12K enforce policy and posture evidence candidate contracts (2026-10-02):**
 Closed the evidence candidate evaluation gap across the four non-drill policy and posture categories
 in `scripts/ops/check-launch-readiness.js`:
+
 - `secret_references` (`isSecretReferencePolicyCandidate`)
 - `data_retention_policy` (`isDataRetentionPolicyCandidate`)
 - `graphql_introspection` (`isGraphqlIntrospectionCandidate`)
@@ -1572,6 +1574,7 @@ in `scripts/ops/check-launch-readiness.js`:
 
 In `checkEvidenceFileContents` (`scripts/ops/check-launch-readiness.js`), each of these four categories
 now explicitly evaluates candidate eligibility, matching the pattern established for `smtp_delivery`:
+
 - If an evidence file is not a candidate (e.g. non-object, array, disguised dossier with `stages` or
   `dossier_version`), `checkEvidenceFileContents` immediately fails closed with the category-specific
   invalid/failed blocker (`'A referenced secret-reference policy report is invalid or failed'`,
@@ -1593,6 +1596,7 @@ Operator sign-off remains open.
 **Prompt 248 Phase 12K unify drill dossier and candidate contracts for volume, recovery, and TLS (2026-10-02):**
 Unified dossier recognition, candidate filtering, and safe fall-through semantics in `scripts/ops/check-launch-readiness.js`
 across Category 8 (`volume_encryption`), Category 6 (`backup_and_disaster_recovery`), and Category 1 (`production_domain_tls`):
+
 - Hardened `validVolumeDossier(report, file)` to reject child report files (`volume-encryption*`), non-object/array reports,
   and unverified baseline contracts.
 - Hardened `validRecoveryDossier(report, file)` to reject child report files (`restore-drill*`, `reconcil*`), non-object/array
@@ -1616,6 +1620,7 @@ closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remai
 **Prompt 249 Phase 12K unify capacity, deployment, and supply chain dossier and candidate contracts (2026-10-02):**
 Unified dossier recognition, candidate filtering, and supply chain evidence handling in `scripts/ops/check-launch-readiness.js`
 across Category 5 (`slo_and_alerting`), Category 10 (`deployment_and_rollback`), and Category 3 (`secrets_management`):
+
 - Hardened `validCapacityDossier(report, file)` to accept `file`, reject child report files (`capacity-alerting*`),
   non-object/array reports, evaluate `databaseTelemetryBaseline` with `status: "verified"` (aligning with
   `scripts/ops/assemble-launch-dossier.js`), and check unbreached summary fields (`capacityAlerting`, `capacityPreflight`,
@@ -1638,6 +1643,7 @@ closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remai
 
 **Prompt 250 Phase 12K consolidate readiness evidence boundaries and eliminate legacy dead code (2026-10-02):**
 Consolidated evidence validation boundary contracts and eliminated over 520 lines of legacy unreachable dead code in `scripts/ops/check-launch-readiness.js`:
+
 - In `checkEvidenceFile`, replaced duplicate hardcoded array literal with canonical `REQUIRED_SECTIONS.includes(category)`.
 - In `checkEvidenceFileContents`, verified that all 11 checklist categories (`volume_encryption`, `backup_and_disaster_recovery`, `production_domain_tls`, `smtp_delivery`, `slo_and_alerting`, `secrets_management`, `deployment_and_rollback`, `secret_references`, `data_retention_policy`, `graphql_introspection`, and `optional_ai_posture`) cleanly terminate with `continue;`.
 - Removed lines 2543–3067 of dead code (shadowed generic status/overall_status checks, failed_stages, stages iteration, and old drill/dossier check fragments superseded by Prompts 235–249).
@@ -1652,6 +1658,7 @@ closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remai
 
 **Prompt 251 Phase 12K export and test supply chain and static evidence contracts (2026-10-02):**
 Relocated misplaced Caddy routing helpers, exported internal evidence validation helpers, and added dedicated contract tests in `scripts/ops/check-launch-readiness.js`:
+
 - Relocated `validCaddyDossier` and `validCaddyStaticEvidence` from the disaster recovery section down to the Caddy routing section (directly preceding `isSmtpDeliveryCandidate`), consolidating Caddy helpers together and restoring disaster recovery helper contiguity.
 - Exported `validCaddyStaticEvidence`, `isSastEvidence`, `isSbomEvidence`, `isContainerSecurityEvidence`, and `validateSupplyChainEvidence` in `module.exports`.
 - Extended `scripts/ops/check-launch-readiness.spec.js` with comprehensive contract and unit test suites:
@@ -1666,6 +1673,7 @@ closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remai
 
 **Prompt 252 Phase 12K unify deployment evidence contracts and export validation helpers (2026-10-02):**
 Unified deployment release provenance evidence evaluation, defaulted base directory resolution, exported validation helpers, and added dedicated contract tests in `scripts/ops/check-launch-readiness.js`:
+
 - In `expandEvidenceGlob` and `checkEvidenceFileContents`, defaulted `baseDirs` to `[process.cwd()]`, ensuring robust standalone execution and testability without requiring explicit directory context.
 - Hardened Category 10 (`deployment_and_rollback`) evidence evaluation in `checkEvidenceFileContents`: candidate child drills defer to approval validation, recognized launch dossiers are validated via `validDeploymentDossier`, and local JSON release provenance receipts are strictly validated (requiring string `status === 'success'`, non-failing `overall_status`, `success !== false`, and zero errors across array and singular error fields), failing closed with `'A referenced deployment drill report is invalid or failed'` if any failure condition is present.
 - Exported core validation helpers in `module.exports`: `validDeploymentRelease`, `parseDeploymentDrillTimestamp`, `validRecoveryReference`, `validVolumeReference`, and `validDomainTlsReference`.
@@ -1682,6 +1690,7 @@ closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remai
 
 **Prompt 253 Phase 12K export and test evidence glob, timestamp, and reference validation helpers (2026-10-02):**
 Exported all remaining internal evidence helpers and constants, added defensive parameter guards, and established comprehensive unit and contract test coverage in `scripts/ops/check-launch-readiness.js`:
+
 - In `expandEvidenceGlob`, added defensive check `if (typeof ref !== 'string' || ref.length === 0) return [];` preventing `TypeError` on non-string inputs.
 - In `parseUtcDate`, added defensive check `if (typeof value !== 'string') return null;` ensuring type safety for non-string values.
 - Exported all internal helper functions and constants in `module.exports`: `isEvidenceFileReference`, `expandEvidenceGlob`, `parseUtcDate`, `parseRestoreTimestamp`, `parseSecretRotationTimestamp`, `parseSmtpTimestamp`, `validVolumePath`, `validVolumePaths`, `validVolumeSection`, `isRotationReference`, `validSmtpText`, `validSmtpEmail`, `validSmtpSecretReference`, `isValidGraphqlEndpoint`, `hasExactKeys`, `DEPLOYMENT_OBSERVATIONS`, and `NO_AI_JOURNEYS`.
@@ -1700,6 +1709,7 @@ closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remai
 
 **Prompt 254 Phase 12K modularize and test category readiness section validators (2026-10-03):**
 Decomposed the ~770-line inline category-validation block inside `validateReadiness()` into 4 discrete format helpers and 11 dedicated, exported category section validators with 100% behavioral parity:
+
 - Extracted format helpers in `scripts/ops/check-launch-readiness.js`: `isValidFqdn`, `isValidTlsContactEmail`, `isValidReleaseCommitSha`, and `isValidImageRegistryPath`.
 - Extracted 11 category section validators: `validateProductionDomainTlsSection`, `validateSmtpDeliverySection`, `validateSecretsManagementSection`, `validateSecretReferencesSection`, `validateSloAndAlertingSection`, `validateBackupAndDisasterRecoverySection`, `validateDataRetentionPolicySection`, `validateVolumeEncryptionSection`, `validateGraphqlIntrospectionSection`, `validateDeploymentAndRollbackSection`, and `validateOptionalAiPostureSection`.
 - Refactored `validateReadiness()` to cleanly delegate to these 11 modular section validators, preserving exact blocker messages, error arrays, and fail-closed evaluation behavior.
@@ -1719,6 +1729,7 @@ closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remai
 
 **Prompt 255 Phase 12K modularize and test readiness structure, placeholder scanning, and evidence collection (2026-10-03):**
 Decomposed the remaining document-level validation, placeholder scanning, section structural checking, category evidence file routing, and per-category evidence evaluation in `scripts/ops/check-launch-readiness.js`:
+
 - Extracted `validateEvidenceFileCategory(category, file, parsed, ref, addBlocker)` from `checkEvidenceFileContents`, delegating category-specific candidate, dossier, supply-chain, and report rules while preserving exact blocker messages and fail-closed category boundaries.
 - Extracted `validateReadinessDocument(record, addBlocker)` verifying document root object and top-level `sections` object with array-rejection guards.
 - Extracted `scanDocumentPlaceholdersAndSecrets(record, addBlocker)` encapsulating document-wide placeholder and dev password detection with category-specific blocker routing.
@@ -1740,6 +1751,7 @@ closed (0 approved categories, 11 blocked, 70 blockers). Operator sign-off remai
 
 **Prompt 256 Phase 12K modularize and test readiness CLI argument parsing, summary formatting, and execution runner (2026-10-03):**
 Decomposed the remaining command-line interface, human-readable summary formatting, end-to-end execution runner, and main entrypoint in `scripts/ops/check-launch-readiness.js`:
+
 - Extracted `parseCliArguments(args, cwd)`: parses command-line arguments, rejects invalid flags (e.g. `--help`, `--dry-run`), rejects excessive positional arguments, and resolves target readiness file relative to `cwd` (defaulting to `infra/launch/readiness.example.json`).
 - Extracted `formatReadinessSummary({ categoryBlockers, totalApproved, totalSections, targetPath, cwd })`: encapsulates rendering the human-readable report banner, per-category blocker listings, statistics summary table (total required, approved, unresolved, total blockers), and fail-closed vs. passing result notice.
 - Extracted `runReadinessCheck(targetPath, options, io)`: orchestrates defensive target path resolution and string validation, asserts file existence, parses JSON contents, delegates to `validateReadiness()`, renders the summary via `formatReadinessSummary()`, dispatches lines to configurable `io` logging/error callbacks, and returns a structured result object `{ success, exitCode, targetPath, relativePath, totalApproved, totalSections, totalBlockersCount, categoryBlockers, summary, error }`.
@@ -1758,6 +1770,7 @@ Operator sign-off remains open.
 
 **Prompt 257 Phase 12K harden and test launch readiness shell orchestrator (2026-10-03):**
 Hardened command-line interface and argument parsing in `scripts/ops/launch-readiness.sh`, established comprehensive unit and contract test coverage in `scripts/ops/launch-readiness.spec.js`, added template requirements in `scripts/ops/check-production-templates.sh`, and wired root scripts:
+
 - In `scripts/ops/launch-readiness.sh`:
   - Added single positional argument validation via `CUSTOM_FILE_SPECIFIED`, rejecting multiple positional arguments with exit code 1 and error message `Error: Too many arguments; expected single readiness JSON path` followed by usage instructions.
   - Retained `--help` / `-h` handling (exit 0) and fail-closed rejection of unknown options (e.g. `--dry-run`, exit 1).
@@ -1780,6 +1793,7 @@ Operator sign-off remains open.
 
 **Prompt 258 Phase 12K modularize and test production template checks (2026-10-03):**
 Modularized the 580-line inline Node.js verification script currently embedded in `scripts/ops/check-production-templates.sh` into a standalone, exported module `scripts/ops/check-production-templates.js`, established comprehensive unit and contract test coverage in `scripts/ops/check-production-templates.spec.js`, wired the test into `npm run ops:templates-test`, and updated template checks and documentation:
+
 - Created `scripts/ops/check-production-templates.js`:
   - Extracted and exported discrete template verification functions: `mountDetails`, `assertPostgres18Mount`, `validateRequiredServices`, `validateComposeSecurityAndTopology`, `validateComposeEnvironmentInterpolation`, `validateWorkerAndExporterScrape`, `validateServiceHealthAndSupervision`, `validatePrometheusAlertsAndDashboard`, `validateReadinessTargets`, and `validateDrillScriptIntegrations`.
   - Implemented high-level `checkProductionTemplates(options, io)` orchestrator resolving repository files relative to `options.cwd`, and CLI entrypoint `main(argv, io)`.
@@ -2557,7 +2571,6 @@ actual outputs, sandbox/fixture limits and normal-revert rollback. Other
 advisories, prompt 201, operator sign-offs and Phase 12 exit remain open;
 no push, deployment, other-platform execution or live acceptance occurred.
 
-
 **Prompt 293 — selector parser security release (2026-10-09):** targeted
 npm-generated lock-only repair **7.1.5 → 7.1.6** updates one
 postcss-selector-parser node within unchanged shadcn 4.18.0's `^7.1.0` range.
@@ -2778,7 +2791,6 @@ invocations / 2914 tests / zero failures**, final launch/dossier **182/182**), l
 and diff checks passed cleanly. Independent two-stage code review approved. Category 6 disaster recovery verification
 hardened; live disaster recovery rehearsals and Phase 12 exit remain open.
 
-
 **Prompt 306 — close storage receipt publication races (2026-10-11):**
 Storage reconciliation now publishes with exclusive hard links only; unsupported
 links fail closed, closing prompt 305's check-then-rename overwrite race.
@@ -2853,8 +2865,7 @@ All 192 prior tests plus 89 regressions pass (**281/281**); lint/typecheck,
 permitted production build (**22/22** pages), changed-region formatting, syntax
 and diff checks pass. Independent read-only review found no issues and
 reproduced **281/281**. Planning fixtures, actual outputs, sandbox limitations,
-compatibility and ordinary revert rollback are in `docs/operations.md` Prompt
-309. Readiness remains **0 approved / 11 blocked / 70 blockers**. No live
+compatibility and ordinary revert rollback are in `docs/operations.md` Prompt 309. Readiness remains **0 approved / 11 blocked / 70 blockers**. No live
 services, deployment or push occurred. Online audit remains omitted; no full
 aggregate `ops:check` pass or fresh vulnerability count is claimed. Prompt 201,
 Category 6 live approval and Phase 12 exit remain open.
@@ -3099,7 +3110,6 @@ aggregate `ops:check` pass or fresh inventory is claimed. No live services,
 deployment or push occurred. Prompt 201, Category 6 live approval and Phase 12 exit
 remain open.
 
-
 **Prompt 321 — validate storage listing prefix echoes (2026-10-12):**
 Continued Phase 12K after committed Prompt 320. Defined prefix echoes now must
 be primitive strings equal to the effective request prefix before entries or
@@ -3115,7 +3125,6 @@ Full probes, actual outputs, sandbox limits and ordinary revert rollback are in
 70 blockers**. Online audit remains omitted; no aggregate ops:check or fresh
 inventory claim, live operation, deployment or push occurred. Prompt 201,
 Category 6 live approval and Phase 12 exit stay open.
-
 
 **Prompt 322 — validate storage listing maximum key counts (2026-10-12):**
 Continued Phase 12K after committed Prompt 321. Supplied MaxKeys must be
@@ -3360,7 +3369,6 @@ Consistency cannot authenticate responses, prove complete inventories, verify
 bytes or establish atomic snapshots/live recovery. Prompt 201, Category 6 live
 approval and Phase 12 exit remain open. No live services, deployment or push.
 
-
 **Prompt 336 — database inventory text types (2026-10-12):**
 Continued Phase 12K after committed Prompt 335. Defined dataTypeID for the six
 native text columns (id, organizationId, bucket, objectKey, checksumAlgorithm,
@@ -3381,7 +3389,6 @@ omitted; no aggregate ops:check pass or fresh vulnerability inventory is claimed
 Consistency cannot authenticate responses, prove completeness, verify bytes or
 establish atomic snapshots/live recovery. Prompt 201, Category 6 live approval
 and Phase 12 exit remain open. No live services, deployment or push occurred.
-
 
 **Prompt 337 — database inventory projected row fields (2026-10-12):**
 Continued Phase 12K after committed Prompt 336. With supplied descriptors,
@@ -3441,7 +3448,6 @@ cannot prove authenticity, completeness, bytes or atomic recovery. Prompt 201,
 Category 6 live approval and Phase 12 exit remain open. No live services,
 operator approval, SQL/schema/migrations, deployment or push occurred.
 
-
 **Prompt 341 — database inventory SHA-256 digest length (2026-10-13):**
 Continued Phase 12K after committed Prompt 340. Database acquisition rejects
 supplied non-null checksumHex unless it is a full 64-character hexadecimal
@@ -3478,7 +3484,6 @@ fresh audit claim. Cleanup cannot prove evidence authenticity, completeness,
 bytes or atomic/live recovery. Prompt 201, Category 6 live approval and Phase 12
 exit remain open. No live services, operator approval, SQL/schema changes,
 deployment or push occurred.
-
 
 **Prompt 343 — reconciliation failed database connection cleanup (2026-10-13):**
 Continued Phase 12K after committed Prompt 342. The runner makes one awaited
@@ -3628,7 +3633,6 @@ rollback are in [operations.md](operations.md) Prompt 352. Readiness stays
 and Phase 12 exit remain open. No live services, deployment or push; unrelated
 ops suites/online audit not rerun; no aggregate ops:check pass claimed.
 
-
 **Prompt 353 — reconciliation runner argument shape (2026-10-13):**
 Continued Phase 12K after committed Prompt 352. The exported runner rejects
 non-array argv before slicing or cwd/dependency access, using the existing
@@ -3671,7 +3675,6 @@ sandbox limits, compatibility and ordinary-revert rollback are in
 11 blocked / 70 blockers**. Prompt 201, Category 6 live approval and Phase 12
 exit remain open. No live services, operator approval, deployment or push;
 unrelated ops suites/online audit not rerun; no aggregate ops:check claim.
-
 
 **Prompt 356 — reconciliation database port validation (2026-10-13):**
 Continued Phase 12K after committed Prompt 355. Owned PostgreSQL setup now
@@ -3880,7 +3883,6 @@ Next.js production build (23/23 routes), and full operations preflight (`ops:che
 stages) verified. `docs/operations.md` records verification details. Prompt 201 and Phase 12
 operator sign-offs remain open. No deploy or push.
 
-
 **Prompts 367–368 — production activation plan and blocked intake (2026-10-14):**
 Commit `1102363` prepares the activation procedure; it does not deploy production.
 Commit `6a06864` records the missing target, release identities, named authorities
@@ -3906,7 +3908,6 @@ provisioning, hosted integration proof, preview deployment or production promoti
 have been recorded as implemented at this baseline. The ordered Phase 12 amendment
 above defines the next work. Existing application completion evidence remains
 historical; it does not prove the selected managed profile is ready to launch.
-
 
 **Build-plan synchronization verification — 2026-10-15:** `git diff --check`
 exited 0 with no output. The local reference check reported `PASS: new local
@@ -3977,7 +3978,6 @@ passed under Node 24. Required checks and independent review passed; actual outp
 and limitations recorded in `docs/vercel-deployment.md`. No `crons` entry added to
 `vercel.json`; no deploy, push, or cloud invocation.
 
-
 ## Phase 12 managed-target prerequisite — Prompt 377
 
 Shared managed API throttling is implemented and accepted locally with an
@@ -3991,7 +3991,6 @@ Full checks and independent review passed; exact evidence and rollback are in
 was migrated. Services routing, protected function wiring, hosted migration and
 first application-preview ingress/upload/dispatch proofs are next. Prompt 370,
 Phase 12 and eleven launch categories remain open; completion is not increased.
-
 
 ## Phase 12 managed-target deployment — Prompt 378
 
@@ -4010,7 +4009,6 @@ passed with 100% verified evidence on deployment `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R96
 (`https://acres-nedhhjsg3-dgsloxx417s-projects.vercel.app`).
 Exact outputs and proofs recorded in `docs/vercel-deployment.md`. Production
 promotion, paid tiers, and Phase 12 sign-off remain open.
-
 
 ## Phase 12 managed-target operations — Prompt 379
 
@@ -4115,6 +4113,7 @@ signature snapshot rebuild cadence by implementing an automated, zero-downtime r
 unit test suite, and scheduled GitHub Actions workflow:
 
 The new toolchain provides:
+
 1. `scripts/vercel/rebuild-scanner-cadence.js`: orchestrates signature age inspection (`--max-age-hours`,
    default 48h, max 168h), safe snapshot creation without `--replace`, smoke verification of clean
    and EICAR samples in an isolated probe sandbox, fail-closed protection (previous snapshot is NEVER
@@ -4410,3 +4409,28 @@ source publication (requires standalone uppercase `P`), storage accounting,
 production plan, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-408--guarded-scanner-preview-adoption-2026-10-20)
 and [the deployment record](vercel-deployment.md#guarded-scanner-preview-adoption--prompt-408-2026-10-20).
+
+## Phase 12 Tier 2 scanner snapshot retirement — Prompt 409 (2026-10-20)
+
+Completes Tier 2 scanner snapshot retirement against the fixed preview target
+(`team_zE3mp7nrEZ6a7cxRavwUMYC4`, `prj_q9ApajZWDgdYZetnm5s5oakEjrUD`, `iad1`),
+cleanly deleting expired superseded snapshots `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN`
+and `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` whose signature windows had closed.
+Prompt 408's adopted snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` (active) and
+Prompt 395's snapshot `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` (rollback) were
+preserved with unmodified metadata and expiries.
+
+Preflight verified zero running/pending sandboxes and four live snapshots.
+The retirement CLI (`scripts/vercel/retire-scanner-snapshots.js`) executed a
+pre-deletion plan run (`rc=0`, zero refusals, zero unlisted snapshots) followed
+by a confirmed deletion run (`rc=0`, two `deleted` outcomes). Live created
+snapshots decreased from four to two; created snapshot bytes decreased from
+1,844,414,400 bytes (~1.84 GB) to 922,247,412 bytes (~0.92 GB), reclaiming
+922,166,988 bytes. Postflight audit verified zero sandboxes and exactly two
+live snapshots in project inventory.
+
+Steady-state 2-snapshot baseline (active + rollback) is established. Next gates:
+hosted scheduled cadence / workflow source publication (requires standalone
+uppercase `P`), production activation plan, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-409--scanner-snapshot-retirement-tier-2-2026-10-20)
+and [the deployment record](vercel-deployment.md#scanner-snapshot-retirement-tier-2--prompt-409-2026-10-20).

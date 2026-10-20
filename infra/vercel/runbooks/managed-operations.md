@@ -10,17 +10,17 @@ All production secrets are stored in Vercel Project Environment Variables and Ne
 
 ### 1.1 Secret Inventory
 
-| Secret Name | Storage Location | Rotation Cadence | Purpose & Scope |
-| --- | --- | --- | --- |
-| `DATABASE_URL` | Vercel Env (`production`) | 90 days | Neon pooled connection string used by the Next.js runtime (`acres_app` role with RLS). |
-| `DIRECT_URL` | Operator / CI secret store | 90 days | Neon unpooled direct connection string used exclusively for out-of-band migrations (`acres_migrator` role). |
-| `SESSION_SECRET` | Vercel Env (`production`) | 90 days | 32+ character random secret used for encrypted session cookies. |
-| `CSRF_SECRET` | Vercel Env (`production`) | 90 days | 32+ character random secret for CSRF token signature generation and verification. |
-| `CRON_SECRET` | Vercel Env (`production`) | 90 days | Shared secret header (`Authorization: Bearer <CRON_SECRET>`) for authenticating scheduled Vercel Cron invocations. |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Env (`production`) | 90 days | Token for accessing private Vercel Blob store `store_g2fmCH5CW7TJbkN3`. |
-| `BLOB_STORE_ID` | Vercel Env (`production`) | Static (Store ID) | Concrete store identifier (`store_g2fmCH5CW7TJbkN3`). |
-| `SCANNER_SANDBOX_SNAPSHOT_ID` | Vercel Env (`production`) | 48 hours | Active ClamAV CVD microVM snapshot identifier (`snap_...`). |
-| `RESEND_API_KEY` | Vercel Env (`production`) | 90 days | API key for transactional email delivery via Resend. |
+| Secret Name                   | Storage Location           | Rotation Cadence  | Purpose & Scope                                                                                                    |
+| ----------------------------- | -------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                | Vercel Env (`production`)  | 90 days           | Neon pooled connection string used by the Next.js runtime (`acres_app` role with RLS).                             |
+| `DIRECT_URL`                  | Operator / CI secret store | 90 days           | Neon unpooled direct connection string used exclusively for out-of-band migrations (`acres_migrator` role).        |
+| `SESSION_SECRET`              | Vercel Env (`production`)  | 90 days           | 32+ character random secret used for encrypted session cookies.                                                    |
+| `CSRF_SECRET`                 | Vercel Env (`production`)  | 90 days           | 32+ character random secret for CSRF token signature generation and verification.                                  |
+| `CRON_SECRET`                 | Vercel Env (`production`)  | 90 days           | Shared secret header (`Authorization: Bearer <CRON_SECRET>`) for authenticating scheduled Vercel Cron invocations. |
+| `BLOB_READ_WRITE_TOKEN`       | Vercel Env (`production`)  | 90 days           | Token for accessing private Vercel Blob store `store_g2fmCH5CW7TJbkN3`.                                            |
+| `BLOB_STORE_ID`               | Vercel Env (`production`)  | Static (Store ID) | Concrete store identifier (`store_g2fmCH5CW7TJbkN3`).                                                              |
+| `SCANNER_SANDBOX_SNAPSHOT_ID` | Vercel Env (`production`)  | 48 hours          | Active ClamAV CVD microVM snapshot identifier (`snap_...`).                                                        |
+| `RESEND_API_KEY`              | Vercel Env (`production`)  | 90 days           | API key for transactional email delivery via Resend.                                                               |
 
 ### 1.2 Zero-Downtime Secret Rotation Procedure
 
@@ -99,6 +99,7 @@ node scripts/ops/reconcile-storage-objects.js \
 ```
 
 Or using environment variables:
+
 ```bash
 STORAGE_PROVIDER=vercel-blob \
 BLOB_STORE_ID=store_g2fmCH5CW7TJbkN3 \
@@ -480,10 +481,12 @@ Those doubles do not establish a hosted candidate or activation authority.
    - Read the figure again afterwards. Deletion cannot be undone; the only
      remedy for a later need is the normal rebuild → adopt → deploy path.
 
-   Prompt 396 targets tier 1: the pre-391 baseline `snap_Feg5…` and the
-   never-adopted candidates `snap_rz0cs…` and `snap_KtLd…`. Tier 2,
-   `snap_CARv…` (its dependents can still scan) and `snap_ngIw…` (the
-   rollback), waits until their signature windows close. The outcome is in
+   Prompt 396 targeted tier 1: the pre-391 baseline `snap_Feg5…` and the
+   never-adopted candidates `snap_rz0cs…` and `snap_KtLd…`. Prompt 409
+   completed tier 2: `snap_CARv…` and `snap_ngIw…` were cleanly deleted once
+   their signature windows expired and a newer active/rollback baseline was
+   adopted, establishing the steady-state 2-snapshot baseline (`snap_8OP5…`
+   active, `snap_KBaj…` rollback). The outcome is in
    [the record](../../../docs/vercel-deployment.md).
 
 Prompt 386's authorized preview attempt (2026-10-17) stopped before step 2:
