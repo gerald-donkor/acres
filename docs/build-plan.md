@@ -4460,3 +4460,24 @@ hosted scheduled cadence / workflow source publication (requires standalone uppe
 operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-410--managed-production-activation-plan-and-operator-intake-2026-10-20)
 and [the deployment record](vercel-deployment.md#managed-production-activation-plan-and-operator-intake--prompt-410-2026-10-20).
+
+## Phase 12 launch checklist reconciliation — Prompt 411 (2026-10-20)
+
+Reconciles `docs/launch-checklist.md` with the `vercel-managed-production` baseline,
+establishing the dual-topology verification framework mandated by Phase 12 exit gates.
+
+Synchronizes all 11 category contracts in §3 with dual-topology verifier commands,
+evidence requirements, and acceptance criteria for both `single-host-compose-caddy` and
+`vercel-managed-production` (covering Vercel Edge TLS, Resend delivery, 7 managed secret
+reference keys, Neon 7-day WAL PITR window, Blob durability, Neon AWS KMS volume encryption,
+target platform `vercel_serverless`, and immutable `dpl_*` deployment IDs). Incorporates the
+authoritative 61-blocker managed preflight gap register into §6A and updates §7 with the
+dual-profile pre-launch sign-off matrix. Appends operational logs for Prompts 403–411.
+
+Readiness preflight (`npm run ops:launch-readiness:managed`) verified fail-closed (61 blockers,
+0 approved, 11 unresolved). Offline config checks and 28 managed verifier tests passed.
+Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
+operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-411--reconcile-launch-checklist-with-managed-production-baseline-2026-10-20),
+[the deployment record](vercel-deployment.md#launch-checklist-reconciliation--prompt-411-2026-10-20),
+and [the reconciled launch checklist](launch-checklist.md).

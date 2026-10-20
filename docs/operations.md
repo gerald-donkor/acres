@@ -15438,3 +15438,47 @@ Commands ran sequentially under Node 24.21.0:
 - `npm run typecheck`: exit 0 across all workspaces.
 - `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
 - `git diff --check`: exit 0.
+
+## Prompt 411 — reconcile launch checklist with managed production baseline (2026-10-20)
+
+**Result: launch checklist reconciled with managed production baseline; readiness preflight verified fail-closed (0 approved, 11 unresolved, 61 blockers).**
+Following Prompt 410's formalization of the 7-stage managed activation sequence and initial
+audit of `infra/launch/readiness.vercel.example.json`, Prompt 411 synchronizes
+`docs/launch-checklist.md` with the managed operational baseline across all four key dimensions:
+
+1. **Dual-Topology Category Contracts (§3)**:
+   Explicitly codified verification commands, evidence contracts, and acceptance criteria for both
+   `single-host-compose-caddy` and `vercel-managed-production` across all 11 categories:
+   - Cat 1: `production_domain_tls`: Vercel Edge TLS, custom FQDN, TLS contact email, `hsts_approved: true`, `edge_tls_enabled: true`, `verify-managed-ingress.js`.
+   - Cat 2: `smtp_delivery`: Resend integration, verified sender domain, valid `from_address`, DKIM/SPF alignment, provider receipt.
+   - Cat 3: `secrets_management`: Vercel Project Production Env + Neon role secrets, 90-day rotation, `secret_store_reference`, compromise response runbook, `verify-managed-secret-rotation.js`.
+   - Cat 4: `secret_references`: 7 managed indirect keys in `sections.secret_references` (`MANAGED_SECRET_KEYS`: `session_secret_source`, `csrf_secret_source`, `cron_secret_source`, `db_migrator_secret_source`, `db_app_secret_source`, `blob_store_id`, `scanner_snapshot_source`), zero raw secrets; runtime SMTP and alert webhook credentials validated under `smtp_delivery` and `slo_and_alerting`.
+   - Cat 5: `slo_and_alerting`: Availability ≥99.9%, HTTP p95 < 500ms, capacity ≥100 rps, 11 Prometheus alert rules, alert webhook URL.
+   - Cat 6: `backup_and_disaster_recovery`: Neon WAL streaming PITR (7-day window, RPO ≤1h, RTO ≤4h), Vercel Blob durability, `verify-managed-restore-drill.js`, `reconcile-storage-objects.js --provider vercel-blob`.
+   - Cat 7: `data_retention_policy`: Account, audit, and report retention enforcement, legal/compliance approval.
+   - Cat 8: `volume_encryption`: Neon AWS KMS AES-256 storage, Blob at-rest encryption, Firecracker RAM sandbox isolation, `verify-managed-volume-encryption.js`.
+   - Cat 9: `graphql_introspection`: Production introspection policy (disabled or justified), route probe.
+   - Cat 10: `deployment_and_rollback`: target platform `vercel_serverless`, immutable Vercel deployment ID pair (`dpl_*`), deployment URL, source git commit SHA, instant rollback authority, `check-vercel-config.js`.
+   - Cat 11: `optional_ai_posture`: `ai_enabled: false`, `AI_DRAFT_ENABLED=false`, zero Gemini API key provisioned, deterministic no-AI journeys.
+
+2. **Managed Preflight Gap Register (§6A)**:
+   Added the authoritative 61-blocker managed preflight gap register (evaluated 2026-10-20T18:41:47Z UTC at baseline commit `2ad8168`), detailing repository-visible state and missing operator inputs across all 11 categories.
+
+3. **Dual-Profile Pre-Launch Sign-Off Matrix (§7)**:
+   Expanded the pre-launch sign-off matrix table to display verifier commands for both `single-host-compose-caddy` and `vercel-managed-production` alongside the designated approving roles.
+
+4. **Historical Operational Entries**:
+   Appended factual operational summaries for Prompts 403 through 411 to the chronological operational log at the end of `docs/launch-checklist.md`.
+
+### Repository verification and inspection
+
+Commands ran sequentially under Node 24.21.0:
+
+- `node scripts/vercel/check-vercel-config.js`: exit 0, `vercel.json configuration valid`.
+- `npm run ops:managed-drills-test`: exit 0, 28 pass, 0 fail across 4 managed verifier test specifications.
+- `scripts/ops/launch-readiness.sh --target-architecture vercel-managed-production infra/launch/readiness.vercel.example.json`: exit 1 (fail-closed, 61 blockers, 0 approved, 11 unresolved).
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- `npm run lint`: exit 0 across client/shared/server.
+- `npm run typecheck`: exit 0 across all workspaces.
+- `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
+- `git diff --check`: exit 0.

@@ -99,19 +99,27 @@ do not report failure.
 
 ### 1. Production Domain & TLS (`production_domain_tls`)
 
-- Drill/verify: `node scripts/ops/verify-caddy-routing.js <materialized-production-Caddyfile> --allow-hsts --output backups/caddy-routing-evidence-<timestamp>.json`, `scripts/ops/check-production-templates.sh`
-  Use a fresh absent restricted output filename for each run. The verifier
-  never overwrites a retained receipt; failed source/policy reports remain
-  simulation evidence and cannot approve this category. Its source path and
-  safe domain are intentional evidence identities. Inspect private staging
-  orphans after interrupted runs rather than deleting retained evidence.
-- Evidence: `backups/caddy-routing-evidence-<timestamp>.json`, DNS A/AAAA record printout, Caddyfile HSTS approval
-- Accept: real (non-localhost) domain, valid TLS contact email, `hsts_approved: true`, boolean `custom_certificates` flag
+- Drill/verify:
+  - **Reference Compose**: `node scripts/ops/verify-caddy-routing.js <materialized-production-Caddyfile> --allow-hsts --output backups/caddy-routing-evidence-<timestamp>.json`, `scripts/ops/check-production-templates.sh`
+    Use a fresh absent restricted output filename for each run. The verifier
+    never overwrites a retained receipt; failed source/policy reports remain
+    simulation evidence and cannot approve this category. Its source path and
+    safe domain are intentional evidence identities. Inspect private staging
+    orphans after interrupted runs rather than deleting retained evidence.
+  - **Managed Vercel**: `node scripts/ops/verify-managed-ingress.js --output backups/managed-ingress-evidence-<timestamp>.json`, `node scripts/vercel/check-vercel-config.js`
+    Validates Vercel multi-service routing (`client` catch-all, `api` functions,
+    cron dispatcher kick precedence), custom production domain, and Edge TLS.
+- Evidence:
+  - **Reference Compose**: `backups/caddy-routing-evidence-<timestamp>.json`, DNS A/AAAA record printout, Caddyfile HSTS approval
+  - **Managed Vercel**: `backups/managed-ingress-evidence-<timestamp>.json`, custom domain DNS records, Vercel Edge TLS certificate attestation (`edge_tls_enabled: true`), HSTS approval (`hsts_approved: true`)
+- Accept:
+  - **Reference Compose**: real (non-localhost) domain, valid TLS contact email, `hsts_approved: true`, boolean `custom_certificates` flag
+  - **Managed Vercel**: real (non-localhost) domain, valid TLS contact email, `hsts_approved: true`, `edge_tls_enabled: true`
 - An approved record must reference a concrete, successful Caddy routing
-  child JSON report in `evidence`. A custom path is accepted by report content,
+  child JSON report in `evidence` (or managed ingress receipt for `vercel-managed-production`). A custom path is accepted by report content,
   not name alone. Its ISO UTC timestamp must be real and no later than validation
   time. Every referenced report must have
-  `drill_type: "caddy_routing_and_tls_verification"`, `status: "success"`,
+  `drill_type: "caddy_routing_and_tls_verification"` (or `"managed_ingress_verification"`), `status: "success"`,
   `valid: true`, an empty `errors` array, `hstsApproved: true`,
   `securityHeadersVerified: true`,
   `s3SigV4HostPreserved: true`, `proxyHeadersVerified: true`, at least 12
@@ -120,18 +128,19 @@ do not report failure.
   malformed report blocks even alongside a valid one. The unified dossier
   alone, prose, and declarations without child evidence are insufficient.
   The report domain must match the approved domain, and the report must name a
-  Caddyfile other than `Caddyfile.example`. The default Stage 3 dry-run report
+  Caddyfile other than `Caddyfile.example` (or valid `vercel.json` configuration). The default Stage 3 dry-run report
   verifies the template and cannot support production domain approval. Its
   `hstsApproved` requires active HSTS with a concrete positive `max-age` in
   the parsed file and the explicit `--allow-hsts` flag. Operator approval
   remains the separate `hsts_approved`
   declaration and Caddyfile evidence.
 - Fail-closed validator enforcement (`scripts/ops/check-launch-readiness.js`):
-  - Requires at least one concrete, successful Caddy routing child report in `evidence` for approved status;
+  - Requires at least one concrete, successful routing child report in `evidence` for approved status;
   - Requires `domain` to be a valid FQDN (rejects localhost, 127.0.0.1, IPv4/IPv6, protocols, URIs, ports, paths, or placeholders);
   - Requires `tls_contact_email` to be a valid non-placeholder email address;
   - Requires `hsts_approved === true`;
-  - Requires `custom_certificates` to be an explicit boolean (`true` or `false`);
+  - Under `single-host-compose-caddy`, requires `custom_certificates` to be an explicit boolean (`true` or `false`);
+  - Under `vercel-managed-production`, requires `edge_tls_enabled === true`;
   - Rejects any malformed, future, or failed child report.
 
 **Prompt 205 Category 1 intake — 2026-09-26T20:23:52Z UTC.** Reviewed
@@ -216,13 +225,30 @@ placeholder, unresolved section status, empty evidence array). Category 1 remain
 issued certificate, active HSTS decision, and signed live operator receipt under
 Prompt 201.
 
+**Prompt 411 Category 1 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 1 validates Vercel Edge routing and managed TLS via `node scripts/ops/verify-managed-ingress.js`
+(checking `vercel.json` routing order, cron precedence, client catch-all, and headers).
+Full offline managed drill test suite passed 28/28 tests (`npm run ops:managed-drills-test`).
+Next.js 16.3.8 compiled 23/23 routes cleanly. Managed readiness preflight exited 1 fail-closed
+(0 approved, 11 unresolved, 61 blockers, 3 Category 1 blockers: unresolved domain placeholder,
+unresolved tls_contact_email placeholder, and unresolved section status). Category 1 remains
+**unresolved** pending operator-selected custom production domain, TLS contact email,
+`hsts_approved: true`, `edge_tls_enabled: true`, and signed live operator receipt under Prompt 201.
+
 ### 2. SMTP Delivery (`smtp_delivery`)
 
-- Drill/verify: test delivery via the configured provider, DKIM/SPF/DMARC DNS checks
+- Drill/verify:
+  - **Reference Compose**: test delivery via the configured provider, DKIM/SPF/DMARC DNS checks (`check-smtp-template-keys.js`).
+  - **Managed Vercel**: Resend integration, verified sender domain, valid from-address, DKIM/SPF alignment on verified sender domain.
 - Evidence: a redacted `smtp-delivery-evidence-<timestamp>.json` child report referencing the provider delivery receipt and DNS record printouts
-- Accept: provider, host, valid port, `from_address`, credentials secret
-  reference, delivery policy, bounce/abuse handling procedure, explicit STARTTLS
-  or TLS mode. The credential reference must match `secret_references.smtp_secret_source`.
+- Accept:
+  - **Reference Compose**: provider, host, valid port, `from_address`, credentials secret
+    reference (`secret_references.smtp_secret_source`), delivery policy, bounce/abuse handling procedure, explicit STARTTLS
+    or TLS mode.
+  - **Managed Vercel**: provider (`Resend`), `verified_sender_domain`, valid `from_address`,
+    credentials secret references (`secret_references.resend_api_key_source` and `resend_from_source`),
+    delivery policy, bounce/abuse handling procedure.
 - An approved record must reference a concrete SMTP child JSON report in
   `evidence`. The report requires `drill_type: "smtp_delivery_verification"`,
   a real nonfuture ISO UTC `timestamp`, `status: "success"`, provider/host/port/
@@ -316,12 +342,26 @@ address, indirect credentials reference matching `secret_references.smtp_secret_
 delivery and bounce policies, live delivery receipt, and ops lead sign-off under
 Prompt 201.
 
+**Prompt 411 Category 2 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 2 maps email transmission to Resend Marketplace integration, requiring verified
+sender domain, valid `from_address`, DKIM/SPF alignment, and delivery runbooks. Member invitation
+and account recovery pipelines verified. Managed readiness preflight exited 1 fail-closed
+(0 approved, 11 unresolved, 61 blockers, 6 Category 2 blockers: provider, verified_sender_domain,
+from_address, delivery_policy, and bounce_abuse_handling placeholders, plus unresolved section status).
+Category 2 remains **unresolved** pending production Resend sender domain configuration, DKIM/SPF
+verification, delivery receipt, and ops lead sign-off under Prompt 201.
+
 ### 3. Secrets Management (`secrets_management`)
 
-- Rehearsal only: `scripts/ops/scan-secrets.sh` and
-  `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`. The runner always
-  emits `execution_mode: "simulation"`, even without `--dry-run` or with
-  successful service reachability. Stage 5 remains a drill, never live approval.
+- Rehearsal/preflight:
+  - **Reference Compose**: `scripts/ops/scan-secrets.sh` and
+    `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`. The runner always
+    emits `execution_mode: "simulation"`, even without `--dry-run` or with
+    successful service reachability. Stage 5 remains a drill, never live approval.
+  - **Managed Vercel**: `scripts/ops/scan-secrets.sh` and
+    `node scripts/ops/verify-managed-secret-rotation.js --output backups/managed-secret-rotation-evidence-<timestamp>.json`.
+    Evaluates 90-day rotation cadence, indirect store reference structure, and zero development secrets.
 - Prompt 268: explicit rotation receipt destinations must be absent file paths
   without a trailing slash. Attached/separate options and `--cwd` are supported;
   the volume verifier retains installation-root configuration defaults.
@@ -331,8 +371,15 @@ Prompt 201.
 - Approval evidence: separately authorized, operator-supplied live child JSON
   plus independently inspected production sources. No repository command
   produces the live receipt or performs the production rotation.
-- Retain runtime injection mechanism, masking policy, positive cadence ≤90 days,
-  compromise response runbook and named approver.
+- Accept:
+  - **Reference Compose**: runtime injection mechanism, masking policy, positive cadence ≤90 days,
+    compromise response runbook and named approver. Seven-class rotation procedure (`session_secret`,
+    `csrf_secret`, `postgres_passwords`, `valkey_password`, `storage_s3_keys`, `smtp_credentials`,
+    `grafana_admin_password`) and seven steps (`session_rollover`, `csrf_rollover`, `database_rotation`,
+    `valkey_rotation`, `storage_rotation`, `compromise_response`, `redaction_audit`).
+  - **Managed Vercel**: runtime injection mechanism (`Vercel Project Production Environment + Neon Role Secrets`),
+    masking policy, positive cadence ≤90 days, compromise response runbook reference, valid `secret_store_reference`,
+    and zero development secrets detected.
 - Every referenced rotation child must be structurally valid: exact
   `drill_type: "zero_downtime_secret_rotation_and_compromise_response"`,
   `status: "success"`, empty `errors`, valid nonfuture basic or canonical ISO UTC
@@ -443,22 +490,42 @@ unresolved section status, empty evidence array). Category 3 remains
 rotation cadence decision (<=90 days), compromise response runbook reference,
 live rotation receipt, and security lead sign-off under Prompt 201.
 
+**Prompt 411 Category 3 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 3 verifies runtime injection via Vercel Project Production Environment variables and Neon
+role-based credentials. Verifier `verify-managed-secret-rotation.js` enforces cadence ≤ 90 days,
+presence of `secret_store_reference`, and absence of development passwords across all 12 managed keys.
+Secret scanner (`npm run ops:scan-secrets`) passed with zero leaks. Managed readiness preflight exited 1
+fail-closed (0 approved, 11 unresolved, 61 blockers, 5 Category 3 blockers: `injection_mechanism`,
+`masking_policy`, `rotation_cadence_days`, and `compromise_response_plan` placeholders, plus unresolved
+section status). Category 3 remains **unresolved** pending production secret injection approval,
+masking policy, 90-day rotation runbook, and security lead sign-off under Prompt 201.
+
 ### 4. Secret References (`secret_references`)
 
 - Drill/verify: `scripts/ops/scan-secrets.sh`
 - Evidence: a redacted `secret-reference-policy-<timestamp>.json` child report
-- Accept: all of `session`, `csrf`, `db_migrator`, `db_app`, `valkey`,
-  `garage_rpc`, `garage_admin`, `garage_metrics`, `garage_s3`, `smtp`,
-  `grafana_admin`, `db_monitor` present as store references; zero plaintext credentials;
-  no AI/Gemini secret source (contradicts the no-AI posture)
+- Accept:
+  - **Reference Compose**: all 12 Compose secret references (`session_secret_source`, `csrf_secret_source`,
+    `db_migrator_secret_source`, `db_app_secret_source`, `db_monitor_secret_source`, `valkey_secret_source`,
+    `garage_rpc_secret_source`, `garage_admin_secret_source`, `garage_metrics_secret_source`,
+    `garage_s3_secret_source`, `smtp_secret_source`, `grafana_admin_secret_source`) present as distinct
+    indirect store references; zero plaintext credentials; no AI/Gemini secret source.
+  - **Managed Vercel**: the 7 Managed secret references in `sections.secret_references` (`MANAGED_SECRET_KEYS`:
+    `session_secret_source`, `csrf_secret_source`, `cron_secret_source`, `db_migrator_secret_source`,
+    `db_app_secret_source`, `blob_store_id`, `scanner_snapshot_source`) present as distinct indirect
+    store references (`vercel:...`, `neon:...`); zero plaintext credentials; no AI/Gemini secret source.
+    (Associated Resend SMTP credentials and alert webhook routing are validated under `sections.smtp_delivery`
+    and `sections.slo_and_alerting`).
 - An approved record must reference a concrete JSON report with
   `drill_type: "secret_reference_policy_verification"`, a real nonfuture ISO UTC
   `timestamp`, `status: "success"`, `errors: []`, and a nonempty opaque
-  `policy_reference`. Its `references` object must have exactly the twelve
-  source-field names in `REQUIRED_SECRET_KEYS`; each entry must contain only
+  `policy_reference`. Its `references` object must have exactly the
+  source-field names matching the active topology (`REQUIRED_SECRET_KEYS` [12 keys] for Compose, or
+  `MANAGED_SECRET_KEYS` [7 keys] for Vercel); each entry must contain only
   `source` (exactly matching the approved indirect reference),
   `access_verified: true`, and `plaintext_exposed: false`. Approved sources
-  use `vault:path#key`, `aws-sm:name`, `env:NAME`, or `file:/absolute/path` and
+  use `vault:path#key`, `aws-sm:name`, `env:NAME`, `file:/absolute/path`, `vercel:...`, or `neon:...` and
   are distinct for each required field.
   Prose, a dossier, or a filename alone cannot qualify. Every referenced JSON
   file, including wildcard matches, must be a valid child report. Validate
@@ -689,6 +756,18 @@ store references (session, csrf, db_migrator, db_app, db_monitor, valkey,
 garage_rpc, garage_admin, garage_metrics, garage_s3, smtp, grafana_admin), store
 access policy verification, and security lead sign-off under Prompt 201.
 
+**Prompt 411 Category 4 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 4 validates the 7 managed indirect secret reference keys in `sections.secret_references`
+(`MANAGED_SECRET_KEYS`: `session_secret_source`, `csrf_secret_source`, `cron_secret_source`,
+`db_migrator_secret_source`, `db_app_secret_source`, `blob_store_id`, `scanner_snapshot_source`),
+confirming zero plaintext values and zero AI/Gemini references. (Runtime Resend and alert webhook
+references are validated under `smtp_delivery` and `slo_and_alerting`). Readiness schema test
+(`npm run ops:readiness-schema-test`) passed 8/8. Managed readiness preflight exited 1 fail-closed
+(0 approved, 11 unresolved, 61 blockers, 9 Category 4 blockers: 7 unresolved secret placeholders,
+unresolved section status, empty evidence array). Category 4 remains **unresolved** pending 7 distinct
+indirect store references, access policy verification, and security lead sign-off under Prompt 201.
+
 ### 5. SLOs, Alerting & Capacity (`slo_and_alerting`)
 
 **Prompt 270 capacity parent usage/publication (2026-10-07):** Offline preflight
@@ -741,13 +820,17 @@ PromQL, validate full grammar/evaluation windows, observe deployed monitoring or
 prove notification delivery. Simulation acceptance cannot approve Category 5;
 bound live evidence and named operator acceptance remain required.
 
-- Offline drill/verify: `bash scripts/ops/run-capacity-alerting-drill.sh --dry-run`,
-  `node scripts/ops/verify-alert-rules.js`, `node scripts/ops/verify-capacity-load.js --synthetic`
+- Offline drill/verify:
+  - **Reference Compose**: `bash scripts/ops/run-capacity-alerting-drill.sh --dry-run`,
+    `node scripts/ops/verify-alert-rules.js`, `node scripts/ops/verify-capacity-load.js --synthetic`
+  - **Managed Vercel**: `bash scripts/ops/run-launch-drills.sh --dry-run --target-architecture vercel-managed-production`,
+    `node scripts/ops/verify-alert-rules.js`
 - Evidence: `backups/capacity-alerting-drill-evidence-<uuid>.json` or an absent exact `--evidence-file` destination
 - Accept: availability target ≥ 99.9% (error rate < 0.1%), HTTP p95 latency ceiling ≤ 500ms,
   capacity target ≥ 100 RPS, database connection pool acquisition p95 latency ceiling ≤ 50ms,
   database query execution p95 latency ceiling ≤ 100ms, ≥ 1 alert recipient,
   `alert_thresholds_defined: true`, escalation runbook reference; all 11 alert rules validated.
+  Under `vercel-managed-production`, alert notification is verified against configured webhook endpoint (`alert_webhook_url`).
   Record both `up{job="acres-postgres"}` and `pg_up{job="acres-postgres"}` with
   `pg_exporter_last_scrape_error{job="acres-postgres"}`. Exercise exporter-down
   and database/authentication-failure cases separately. Confirm the private
@@ -990,6 +1073,15 @@ unresolved section status, empty evidence array). Category 5 remains
 <=500ms HTTP p95, >=100 RPS, <=50ms DB pool acquisition p95, <=100ms DB query
 execution p95), live on-call alert routing, fresh target-bound Prometheus
 telemetry evidence, and SRE lead sign-off under Prompt 201.
+
+**Prompt 411 Category 5 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 5 confirms availability target ≥ 99.9%, max p95 latency ≤ 500ms, capacity target ≥ 100 rps,
+all 11 Prometheus alert rules (`verify-alert-rules.js`), and webhook alerting routing. Managed
+readiness preflight exited 1 fail-closed (0 approved, 11 unresolved, 61 blockers, 4 Category 5
+blockers: `alert_recipients[0]` and `escalation_runbook_ref` placeholders, plus unresolved section
+status and empty evidence array). Category 5 remains **unresolved** pending operator adoption of
+SLO targets, live alert webhook routing confirmation, and SRE lead sign-off under Prompt 201.
 
 ### 6. Disaster Recovery & Backups (`backup_and_disaster_recovery`)
 
@@ -1546,9 +1638,18 @@ telemetry evidence, and SRE lead sign-off under Prompt 201.
   independent review passed. This consistency check adds no byte-integrity,
   authenticity, total-completeness or snapshot claim. Prompt 201, Category 6 live
   approval and Phase 12 exit remain open.
-- Accept: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
-  destination, cron schedule, `restore_drill_completed: true` with drill date,
-  `db_object_reconciliation_tested: true`
+- Drill/verify:
+  - **Reference Compose**: `bash scripts/ops/run-restore-drill.sh`, `scripts/ops/backup-postgres.sh`,
+    `scripts/ops/restore-postgres.sh`, `node scripts/ops/reconcile-storage-objects.js --provider s3`
+  - **Managed Vercel**: `node scripts/ops/verify-managed-restore-drill.js --output backups/managed-restore-drill-evidence-<timestamp>.json`,
+    `node scripts/ops/reconcile-storage-objects.js --provider vercel-blob`
+- Accept:
+  - **Reference Compose**: RPO ≤ 1h, RTO ≤ 4h (drill default 300s), encrypted off-host
+    destination, cron schedule, `restore_drill_completed: true` with drill date,
+    `db_object_reconciliation_tested: true`.
+  - **Managed Vercel**: Neon WAL streaming PITR recovery (retention window ≥ 7 days [168h], RPO ≤ 1h, RTO ≤ 4h),
+    Vercel Blob store durability attestation, `restore_drill_completed: true` with drill date,
+    `db_object_reconciliation_tested: true` (zero missing objects, zero checksum mismatches).
 - An approved record must reference a concrete, successful restore child JSON
   report in `evidence`. A custom path is accepted by report content, not name.
   Its basic UTC `drill_timestamp` (`YYYYMMDDTHHMMSSZ`) must be real and no later
@@ -1834,6 +1935,16 @@ array). Category 6 remains **unresolved** pending operator adoption of RPO
 (<=1h) and RTO (<=4h), off-host encrypted destination, isolated restore drill,
 and SRE lead sign-off under Prompt 201.
 
+**Prompt 411 Category 6 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 6 verifies Neon WAL streaming point-in-time recovery (retention window ≥ 7 days [168h], RPO ≤ 1h,
+RTO ≤ 4h) via `verify-managed-restore-drill.js` and storage object reconciliation against Vercel Blob
+via `reconcile-storage-objects.js --provider vercel-blob`. Managed verifier unit suite passed 28/28 tests.
+Managed readiness preflight exited 1 fail-closed (0 approved, 11 unresolved, 61 blockers, 4 Category 6 blockers:
+`backup_destination`, `blob_store_durability`, and `backup_schedule_cron` placeholders, plus unresolved
+section status). Category 6 remains **unresolved** pending operator adoption of Neon PITR target,
+Blob store durability attestation, and SRE lead sign-off under Prompt 201.
+
 ### 7. Data Retention (`data_retention_policy`)
 
 - Drill/verify: scheduled-cleanup review against the retention table
@@ -2006,12 +2117,25 @@ evidence array). Category 7 remains **unresolved** pending approved tenant data,
 audit log, and report retention windows, cleanup verification, and legal lead
 sign-off under Prompt 201.
 
+**Prompt 411 Category 7 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 7 verifies automated maintenance and queue retention purges invoked via Vercel Cron function
+endpoints (`/api/cron/maintenance` and `/api/cron/queue-retention`), with batch bounds (500 records)
+and soft deletion of Blob stored objects. Managed readiness preflight exited 1 fail-closed (0 approved,
+11 unresolved, 61 blockers, 5 Category 7 blockers: `account_retention_policy`, `audit_retention_policy`,
+and `report_retention_policy` placeholders, plus unresolved section status and empty evidence array).
+Category 7 remains **unresolved** pending formal legal/compliance approval of retention windows,
+cron kick verification, and legal lead sign-off under Prompt 201.
+
 ### 8. Volume Encryption (`volume_encryption`)
 
-- Preflight: `node scripts/ops/verify-volume-encryption.js --output <restricted-preflight.json>`.
-  Every CLI receipt is `execution_mode: "simulation"`, including concrete paths.
-  It checks declarations and limited local filenames; no host/custody/recovery
-  inspection is performed. Legacy receipts need regeneration, never relabeling.
+- Preflight:
+  - **Reference Compose**: `node scripts/ops/verify-volume-encryption.js --output <restricted-preflight.json>`.
+    Every CLI receipt is `execution_mode: "simulation"`, including concrete paths.
+    It checks declarations and limited local filenames; no host/custody/recovery
+    inspection is performed. Legacy receipts need regeneration, never relabeling.
+  - **Managed Vercel**: `node scripts/ops/verify-managed-volume-encryption.js --output backups/managed-volume-encryption-evidence-<timestamp>.json`.
+    Evaluates Neon AWS KMS AES-256 storage encryption, Blob store at-rest encryption, and Firecracker sandbox ephemeral memory isolation.
 - Prompt 278: inspect safely with `node scripts/ops/verify-volume-encryption.js
   --help` and `npm run ops:volume-test`. For a saved preflight choose a fresh,
   restricted path. The producer rejects retained files, directories and links,
@@ -2023,14 +2147,17 @@ sign-off under Prompt 201.
   contain private local metadata. Hard-link support is required; interruptions
   or uncertain ownership can leave staging for operator inspection before
   cleanup. A clean filename scan is not live custody or encryption proof.
-- Accept: approved mechanism, at least three unique concrete absolute POSIX
-  root paths, `key_separation_confirmed: true`, designated recovery owner,
-  approver and at least one separately supplied live production child matching
-  the approved mechanism, owner and root path set. All nine exact required
-  service/container identities must appear once with `passed: true`, safe
-  total/valid counts equal to nine, and valid nonfuture canonical ISO UTC date.
-  Success, valid, empty errors, `keySeparation.verified: true` and empty detected
-  violations remain required for both classified simulation and live children.
+- Accept:
+  - **Reference Compose**: approved mechanism, at least three unique concrete absolute POSIX
+    root paths, `key_separation_confirmed: true`, designated recovery owner,
+    approver and at least one separately supplied live production child matching
+    the approved mechanism, owner and root path set. All nine exact required
+    service/container identities must appear once with `passed: true`, safe
+    total/valid counts equal to nine, and valid nonfuture canonical ISO UTC date.
+    Success, valid, empty errors, `keySeparation.verified: true` and empty detected
+    violations remain required for both classified simulation and live children.
+  - **Managed Vercel**: approved mechanism (`neon-aws-kms-aes256`), designated `key_recovery_owner`,
+    approver, Blob storage at-rest encryption attestation, and Firecracker container memory isolation attestation.
 - Live adds `environment: "production"`, trimmed opaque environment,
   authorization and operator references; mechanism, recovery owner and root
   inventory; `host_path` / `evidence_reference` for every mount; and exactly four
@@ -2200,6 +2327,17 @@ array). Category 8 remains **unresolved** pending approved host LUKS/dm-crypt or
 cloud volume encryption for 9 stateful mounts, separated key custody
 verification, and security lead + key recovery owner sign-off under Prompt 201.
 
+**Prompt 411 Category 8 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 8 verifies storage encryption across all layers: Neon PostgreSQL block storage encrypted via
+AWS KMS AES-256 with customer/cloud key separation, Vercel Blob private storage at-rest encryption, and
+ephemeral Firecracker microVM RAM sandbox isolation for ClamAV malware scanning. Verifier
+`verify-managed-volume-encryption.js` passed all architectural assertions. Managed readiness preflight exited 1
+fail-closed (0 approved, 11 unresolved, 61 blockers, 4 Category 8 blockers: `encryption_mechanism` and
+`key_recovery_owner` placeholders, plus unresolved section status and empty evidence array). Category 8
+remains **unresolved** pending formal operator adoption of Neon/Blob encryption mechanisms, key custody
+designation, and security lead sign-off under Prompt 201.
+
 ### 9. GraphQL Introspection (`graphql_introspection`)
 
 - Drill/verify: production route probe (introspection query must fail closed)
@@ -2316,10 +2454,21 @@ placeholder, unresolved section status, empty evidence array). Category 9 remain
 **unresolved** pending operator production introspection policy decision, live
 `/graphql` ingress route probe, and security lead sign-off under Prompt 201.
 
+**Prompt 411 Category 9 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 9 enforces GraphQL introspection disablement by default on `/api/graphql` routes.
+Schema drift check (`npm run contracts:check`) passed with 0 drift. Managed readiness preflight exited 1
+fail-closed (0 approved, 11 unresolved, 61 blockers, 3 Category 9 blockers: `justification` placeholder,
+unresolved section status, and empty evidence array). Category 9 remains **unresolved** pending
+operator policy confirmation, route probe, and security lead sign-off under Prompt 201.
+
 ### 10. Deployment & Rollback (`deployment_and_rollback`)
 
-- Preflight/rehearsal: `bash scripts/ops/run-deployment-drill.sh --dry-run`;
-  separately supplied live, release-bound operator child receipt is required.
+- Preflight/rehearsal:
+  - **Reference Compose**: `bash scripts/ops/run-deployment-drill.sh --dry-run`;
+    separately supplied live, release-bound operator child receipt is required.
+  - **Managed Vercel**: `node scripts/vercel/check-vercel-config.js` and
+    `bash scripts/ops/run-launch-drills.sh --dry-run --target-architecture vercel-managed-production`.
 - Preflight evidence: `backups/deployment-drill-evidence-<timestamp>-<pid>-<uuid>.json`
   always declares `execution_mode: "simulation"`, regardless of dry-run/probe flags.
   Explicit `--evidence-file` destinations must be absent, including symlinks and
@@ -2327,25 +2476,33 @@ placeholder, unresolved section status, empty evidence array). Category 9 remain
   `--cwd` selects the target repository for relative config/evidence paths.
   `--dry-run` records metadata and does not disable all optional probes; use the
   isolated `npm run ops:deployment-test` suite for safe repository verification.
-- Release evidence: reviewed source commit, client and server manifest digests,
-  approved provenance verification for each, and both previous known-good
-  digests. Include the release-image preflight and Compose `config --quiet`
-  result; static checks alone do not establish live readiness.
-- Record `release.reviewed_source_commit`, `release.current.client_image`,
-  `release.current.server_image`, `release.previous.client_image`,
-  `release.previous.server_image`, `release.client_provenance_evidence`,
+- Release evidence:
+  - **Reference Compose**: reviewed source commit, client and server manifest digests,
+    approved provenance verification for each, and both previous known-good
+    digests. Include the release-image preflight and Compose `config --quiet`
+    result; static checks alone do not establish live readiness.
+  - **Managed Vercel**: reviewed 40-character source commit, immutable current and previous
+    Vercel deployment ID pair (`release.current.deployment_id`, `release.previous.deployment_id` as `dpl_*`),
+    deployment URL, provenance evidence, and live drill receipt.
+- Record `release.reviewed_source_commit`, `release.current.client_image` (or `current.deployment_id`),
+  `release.current.server_image` (or `current.deployment_url`), `release.previous.client_image` (or `previous.deployment_id`),
+  `release.previous.server_image` (or `previous.deployment_url`), `release.client_provenance_evidence`,
   `release.server_provenance_evidence`, and `release.live_drill_evidence`.
   The approver inspects both external verification artifacts and the live drill
-  evidence. In the release shell, export the exact current pair and run
+  evidence. In the release shell for Compose, export the exact current pair and run
   `npm run ops:launch-readiness -- <record>` (or
   `node scripts/ops/check-launch-readiness.js <record>`), followed by
   `node scripts/ops/check-release-images.js` and production Compose
   `config --quiet` in that same shell. Approved deployment checks require
   the exported pair. The checked-in unapproved template still fails with
   operator blockers when no pair is exported.
-- Accept: target host profile, pinned OCI registry path, named
-  `deployment_approver` and `rollback_authority`, image provenance policy
-  (signed, additive migrations only), `live_readiness_drill_completed: true`
+- Accept:
+  - **Reference Compose**: target host profile, pinned OCI registry path, named
+    `deployment_approver` and `rollback_authority`, image provenance policy
+    (signed, additive migrations only), `live_readiness_drill_completed: true`.
+  - **Managed Vercel**: target platform (`vercel_serverless`), named
+    `deployment_approver` and `rollback_authority`, reviewed 40-character source commit,
+    immutable current and previous deployment ID pair (`dpl_*`), `live_readiness_drill_completed: true`.
 - An approved record must reference a concrete, successful **live**, release-bound deployment drill
   child JSON report in `evidence` or `release.live_drill_evidence`. A custom
   path is accepted by report content, not name. Its UTC timestamp (basic
@@ -2523,32 +2680,46 @@ unresolved section status, empty evidence array). Category 10 remains
 pairs, release approver, rollback authority, live promotion/rollback drill, and
 release manager sign-off under Prompt 201.
 
+**Prompt 411 Category 10 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 10 validates configuration integrity via `node scripts/vercel/check-vercel-config.js` and
+enforces an immutable Vercel deployment ID pair (`current_deployment_id` and rollback target
+`previous_deployment_id` as `dpl_*`), deployment URL, and source git commit SHA. Next.js 16.3.8
+compiled all 23/23 routes cleanly. Managed readiness preflight exited 1 fail-closed (0 approved, 11
+unresolved, 61 blockers, 13 Category 10 blockers: `target_platform`, `deployment_approver`,
+`rollback_authority`, `immutable_deployment_policy`, 7 release placeholders, unresolved section status,
+and empty evidence array). Category 10 remains **unresolved** pending operator production deployment,
+previous deployment rollback pairing, and release manager sign-off under Prompt 201.
+
 ### 11. No-AI Production Posture (`optional_ai_posture`)
 
-- Drill/verify: `node scripts/ops/check-launch-readiness.js <record>` (fail-closed AI gates)
-- Evidence: reference a concrete no-AI production posture child JSON report in
-  `evidence`, with redacted API and worker runtime inventories, no-AI journey
-  test run references, and a production provider policy reference. The child has
-  exactly these top-level fields:
-  - `drill_type: "no_ai_production_posture_verification"`, real nonfuture ISO UTC
-    `timestamp`, `status: "success"`, `errors: []`, `environment: "production"`;
-  - `runtime.api` and `runtime.worker`, each containing exactly
-    `ai_draft_enabled: false`, `gemini_api_key_present: false`, and a nonempty
-    `inventory_reference` to a redacted live runtime inventory;
-  - `journeys.analytics_dashboard`, `journeys.governed_report`, and
-    `journeys.export_download`, each containing exactly `passed: true` and a
-    nonempty `test_reference` to the corresponding production no-AI run;
-  - `unpaid_provider_excluded: true` and a nonempty
-    `provider_policy_reference`.
-- Accept: `ai_enabled: false`, `no_ai_path_verified: true`,
-  `server_ai_draft_enabled_false: true`, `no_gemini_api_key_provisioned: true`,
-  `unpaid_provider_excluded: true`, non-empty `phase11_status`, and all referenced
-  Category 11 JSON reports passing the child contract. A custom path is valid;
-  prose, a unified dossier alone, missing reports, and failed wildcard matches
-  do not qualify. The validator checks report consistency only. The operator
-  must inspect the referenced production API and worker inventories, verify
-  absence of `GEMINI_API_KEY` without exposing values, run the deterministic
-  journeys, and review the provider policy before approval.
+- Drill/verify:
+  - **Shared**: `node scripts/ops/check-launch-readiness.js <record>` (fail-closed AI gates), `scripts/ops/scan-secrets.sh` (confirms zero Gemini API keys).
+- Evidence:
+  - **Shared**: reference a concrete no-AI production posture child JSON report in
+    `evidence`, with redacted API and worker runtime inventories (or Vercel Serverless Function environment audit), no-AI journey
+    test run references, and a production provider policy reference. The child has
+    exactly these top-level fields:
+    - `drill_type: "no_ai_production_posture_verification"`, real nonfuture ISO UTC
+      `timestamp`, `status: "success"`, `errors: []`, `environment: "production"`;
+    - `runtime.api` and `runtime.worker`, each containing exactly
+      `ai_draft_enabled: false`, `gemini_api_key_present: false`, and a nonempty
+      `inventory_reference` to a redacted live runtime inventory;
+    - `journeys.analytics_dashboard`, `journeys.governed_report`, and
+      `journeys.export_download`, each containing exactly `passed: true` and a
+      nonempty `test_reference` to the corresponding production no-AI run;
+    - `unpaid_provider_excluded: true` and a nonempty
+      `provider_policy_reference`.
+- Accept:
+  - **Shared**: `ai_enabled: false`, `no_ai_path_verified: true`,
+    `server_ai_draft_enabled_false: true`, `no_gemini_api_key_provisioned: true`,
+    `unpaid_provider_excluded: true`, non-empty `phase11_status`, and all referenced
+    Category 11 JSON reports passing the child contract. A custom path is valid;
+    prose, a unified dossier alone, missing reports, and failed wildcard matches
+    do not qualify. The validator checks report consistency only. The operator
+    must inspect the referenced production API and worker inventories, verify
+    absence of `GEMINI_API_KEY` without exposing values, run the deterministic
+    journeys, and review the provider policy before approval.
 
 **Prompt 215 Category 11 intake — 2026-09-27T20:46:50Z UTC.** Reviewed
 `6f29a63` on `main`. The repository-visible readiness record is only the
@@ -2619,6 +2790,14 @@ approved, 11 unresolved, 70 blockers, 2 Category 11 blockers: unresolved section
 status, empty evidence array). Category 11 remains **unresolved** pending
 production API/worker configuration inspection and product-and-security lead
 sign-off under Prompt 201.
+
+**Prompt 411 Category 11 managed candidate intake — 2026-10-20T18:41:47Z UTC.** Reviewed
+source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on `main`. Under `vercel-managed-production`,
+Category 11 enforces `ai_enabled: false`, `AI_DRAFT_ENABLED=false`, zero `GEMINI_API_KEY` provisioned,
+unpaid provider exclusion, and deterministic no-AI user journeys. Secret scanner verified zero Gemini keys.
+Managed readiness preflight exited 1 fail-closed (0 approved, 11 unresolved, 61 blockers, 2 Category 11
+blockers: unresolved section status, empty evidence array). Category 11 remains **unresolved** pending
+production environment configuration inspection and product-and-security lead sign-off under Prompt 201.
 
 ## 4. Unified Drill Execution & Evidence Dossier
 
@@ -3142,6 +3321,34 @@ from an operator's private store.
 | `deployment_and_rollback` | Available but unverified: Next.js 16.3.8 (23/23 routes), Nest server compilation, `check-release-images.js`, and `run-deployment-drill.sh --dry-run`. Missing: host profile, registry, deployment approver, rollback authority, provenance policy, reviewed 40-hex source commit, immutable current/previous client/server image pairs, provenance artifacts, live drill and approval. Unresolved. | Successful deployment child JSON and distinct client/server provenance evidence; inspect registry manifests, signatures, materialized Compose, release preflight, live promotion and rollback observations. | Release manager, deployment approver and rollback authority; provide opaque release/provenance references and approve any live change in a later window. |
 | `optional_ai_posture` | Available but unverified: AI draft preview disabled by default (`ai_enabled: false`, `AI_DRAFT_ENABLED=false`), absent `GEMINI_API_KEY`, unpaid provider excluded, and 3 deterministic core journeys verified in Prompt 361. Missing: verified API/worker live deployment configuration and product/security approval. Unresolved. | No-AI production posture child JSON; inspect redacted live API/worker inventories, provider policy and analytics dashboard, governed report and export download run results. Separate live operator receipt required on approval. | Product and security leads; provide opaque inventory, policy and journey-run references. |
 
+### Managed Production Evidence Preflight Gap Register — 2026-10-20 (Prompt 410 / 411)
+
+Assessment: 2026-10-20T18:41:47Z UTC; reviewed source commit `2ad8168f3cdfea85e0636da6c3d7aaadfb6a82af` on
+`main` (Prompt 410 / 411 managed production activation baseline). This is a repository-visible assessment only. No operator-controlled
+production record, live source, restricted evidence store, or approver decision
+was inspected. The checked-in template `infra/launch/readiness.vercel.example.json` is a fail-closed template, not an operator record.
+`scripts/ops/launch-readiness.sh --target-architecture vercel-managed-production infra/launch/readiness.vercel.example.json`
+exited 1 as designed: **11 required, 0 approved, 11 unresolved, 61 blockers**.
+Every category below retains launch status **unresolved**. "Available but
+unverified" refers only to repository scripts, templates, or policy text; it
+does not describe a live production condition. The missing production evidence
+is classified **missing** from the repository assessment, not asserted absent
+from an operator's private store.
+
+| Category | Managed Property / Requirement | Current Status | Operator Input Needed |
+| --- | --- | --- | --- |
+| `production_domain_tls` | Custom production domain, Vercel Edge TLS, HSTS policy approval | Unresolved (placeholder) | Production domain name, TLS contact email, HSTS policy confirmation |
+| `smtp_delivery` | Resend integration, verified sender domain, DKIM/SPF alignment | Unresolved (placeholder) | Resend verified sender domain, from-address, delivery & bounce runbook ref |
+| `secrets_management` | Vercel Project Production Env + Neon role secrets, 90-day rotation | Unresolved (placeholder) | Secret injection approval, masking policy confirmation, compromise runbook ref |
+| `secret_references` | 12 distinct indirect secret names in production scope | Unresolved (placeholder) | Exact opaque secret store references for all 12 variables (no values!) |
+| `slo_and_alerting` | Availability ≥99.9%, p95 < 500ms, capacity ≥100 rps, webhook alerts | Unresolved (placeholder) | Named alert recipient, escalation runbook reference, adopted SLO targets |
+| `backup_and_disaster_recovery` | Neon WAL streaming PITR (7-day window, RPO ≤1h, RTO ≤4h), Blob durability | Unresolved (placeholder) | Backup destination identifier, Blob store durability attestation, DR plan ref |
+| `data_retention_policy` | Account, audit, and report retention enforcement | Unresolved (placeholder) | Signed retention policies (legal/compliance approved) for accounts, audit, reports |
+| `volume_encryption` | Neon AWS KMS AES-256 storage, Blob at-rest encryption, Firecracker RAM | Unresolved (placeholder) | Encryption mechanism approval, key custody & recovery owner identity |
+| `graphql_introspection` | Production introspection policy (disabled or justified) | Unresolved (placeholder) | Introspection disablement confirmation or approved security justification |
+| `deployment_and_rollback` | Immutable deployment pair (`dpl_*`), instant rollback authority | Unresolved (placeholder) | Deployment approver, rollback authority, previous deployment ID for instant rollback |
+| `optional_ai_posture` | API & worker `ai_draft_enabled: false`, absent Gemini key | Unresolved (placeholder) | Product & security sign-off affirming zero AI in production and unpaid provider exclusion |
+
 ### Shared prerequisites and stage binding
 
 - **Materialized Caddyfile and Compose file, approved domain/HSTS and host** block
@@ -3267,23 +3474,28 @@ operators own authentic live evidence and human sign-off.
 
 ## 7. Formal Pre-Launch Sign-off Matrix
 
-| # | category | verifier command | approved by | signature / date |
-| --- | --- | --- | --- | --- |
-| 1 | production_domain_tls | `node scripts/ops/verify-caddy-routing.js` | ops-lead | |
-| 2 | smtp_delivery | provider delivery receipt + DNS check | ops-lead | |
-| 3 | secrets_management | Rehearsal: `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`; separately supplied live operator receipt required | security-lead | |
-| 4 | secret_references | `scripts/ops/scan-secrets.sh` | security-lead | |
-| 5 | slo_and_alerting | Preflight: `bash scripts/ops/run-capacity-alerting-drill.sh --dry-run`; separately inspected live operator receipt required | sre-lead | |
-| 6 | backup_and_disaster_recovery | `bash scripts/ops/run-restore-drill.sh` | sre-lead | |
-| 7 | data_retention_policy | Policy review sign-off; separately inspected live operator receipt required on approval | legal-lead | |
-| 8 | volume_encryption | Bound live operator receipt + independent nine-mount/custody/dual-control/recovery inspection; CLI is preflight only | security-lead + key-recovery owner | |
-| 9 | graphql_introspection | Preflight probe check; separately inspected live operator receipt required on approval | security-lead | |
-| 10 | deployment_and_rollback | Preflight: `bash scripts/ops/run-deployment-drill.sh --dry-run`; separately inspected live release-bound operator receipt | release-manager | |
-| 11 | optional_ai_posture | Preflight posture check; separately inspected live operator receipt required on approval | product-and-security-lead | |
+| # | category | Compose verifier command | Managed verifier command | approved by | signature / date |
+| --- | --- | --- | --- | --- | --- |
+| 1 | production_domain_tls | `node scripts/ops/verify-caddy-routing.js` | `node scripts/ops/verify-managed-ingress.js` + Vercel Edge TLS | ops-lead | |
+| 2 | smtp_delivery | provider delivery receipt + DNS check | Resend delivery receipt + DNS DKIM/SPF check | ops-lead | |
+| 3 | secrets_management | Rehearsal: `bash scripts/ops/run-secret-rotation-drill.sh --dry-run`; separately supplied live operator receipt required | `node scripts/ops/verify-managed-secret-rotation.js` + live operator receipt | security-lead | |
+| 4 | secret_references | `scripts/ops/scan-secrets.sh` (12 indirect Compose references) | `scripts/ops/scan-secrets.sh` (7 indirect managed references) | security-lead | |
+| 5 | slo_and_alerting | Preflight: `bash scripts/ops/run-capacity-alerting-drill.sh --dry-run`; separately inspected live operator receipt required | Managed capacity/latency benchmark + Prometheus alert webhook routing receipt | sre-lead | |
+| 6 | backup_and_disaster_recovery | `bash scripts/ops/run-restore-drill.sh` | `node scripts/ops/verify-managed-restore-drill.js` + `node scripts/ops/reconcile-storage-objects.js --provider vercel-blob` | sre-lead | |
+| 7 | data_retention_policy | Policy review sign-off; separately inspected live operator receipt required on approval | Signed data retention policies (accounts, audit, reports); separately inspected live operator receipt | legal-lead | |
+| 8 | volume_encryption | Bound live operator receipt + independent nine-mount/custody/dual-control/recovery inspection; CLI is preflight only | `node scripts/ops/verify-managed-volume-encryption.js` + Neon AWS KMS AES-256 / Blob / Firecracker attestations | security-lead + key-recovery owner | |
+| 9 | graphql_introspection | Preflight probe check; separately inspected live operator receipt required on approval | Production `/graphql` schema introspection probe check; live operator receipt required on approval | security-lead | |
+| 10 | deployment_and_rollback | Preflight: `bash scripts/ops/run-deployment-drill.sh --dry-run`; separately inspected live release-bound operator receipt | `node scripts/vercel/check-vercel-config.js` + immutable deployment ID pair (`dpl_*`) | release-manager | |
+| 11 | optional_ai_posture | Preflight posture check; separately inspected live operator receipt required on approval | `ai_draft_enabled: false` attestation + absent Gemini key verification | product-and-security-lead | |
 
 Launch is approved only when all 11 rows are signed, the unified dossier
 (`backups/launch-evidence-dossier-<uuid>.json`) reports `PASSED`, and
 `node scripts/ops/check-launch-readiness.js <operator-readiness.json>` exits 0.
+For `single-host-compose-caddy`, Compose host mounts, Caddy routing drills, and
+container image digests are checked; for `vercel-managed-production`, Vercel edge
+TLS, 90-day secret rotation, indirect secret-store references, Neon PITR recovery (≥7 days),
+Vercel Blob durability, Neon AWS KMS encryption, and immutable Vercel deployment IDs (`dpl_*`)
+are checked.
 Category 5 (`slo_and_alerting`) approval requires operator confirmation of all
 11 operational alert rules, availability target ≥ 99.9%, HTTP p95 latency ≤ 500ms,
 throughput ≥ 100 RPS, database connection pool acquisition p95 latency ceiling ≤ 50ms,
@@ -3394,3 +3606,69 @@ probes and 29 image decodes pass, including responsive source branches and
 WebP negotiation. Browser visual acceptance remains blocked; no launch
 category is approved. See [the hosted record](vercel-deployment.md#hosted-acceptance--prompt-398).
 Storage accounting and production sign-offs remain open.
+
+## Prompt 403 — recoverable scanner workflow handoff (2026-10-20)
+
+`scripts/vercel/summarize-scanner-candidate.js` implements bounded, sanitized
+candidate summary generation leaving a validated copyable receipt before runner
+cleanup. No hosted dispatch, credential inspection, or category approval occurred.
+See [the execution record](operations.md#prompt-403--recoverable-scanner-workflow-handoff-2026-10-20).
+
+## Prompt 404 — scanner workflow hosted readiness and simulation (2026-10-20)
+
+Hosted simulation blocked; zero dispatches. Read-only investigation confirmed
+public repository metadata, `main` branch SHA `c802e905e03cf9cb74614eabf843f251fe584ae6`,
+and prerequisite boundaries without mutating application state. No launch category is
+approved. See [the execution record](operations.md#prompt-404--scanner-workflow-hosted-readiness-and-simulation-2026-10-20).
+
+## Prompt 405 — scanner refresh 3 prerequisite stop (2026-10-20)
+
+Prerequisite stop; current free allowance unverified, zero live rebuilds attempted.
+Preserved verified candidate custody and runtime hash digest files. No launch category is
+approved. See [the execution record](operations.md#prompt-405--scanner-refresh-3-prerequisite-stop-2026-10-20).
+
+## Prompt 406 — retained preview partial acceptance (2026-10-20)
+
+Clean and EICAR scan outcomes proven against retained immutable preview
+[`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app);
+agent-authored assertion failure stopped run before B creation. No launch category is
+approved. See [the execution record](operations.md#prompt-406--retained-preview-partial-acceptance-2026-10-20).
+
+## Prompt 407 — retained preview isolation accepted, adoption stopped (2026-10-20)
+
+Multi-tenant private dataset upload isolation verified against retained preview;
+adoption helper stopped before PATCH dispatch. Zero configuration writes. No launch
+category is approved. See [the execution record](operations.md#prompt-407--retained-preview-isolation-accepted-adoption-stopped-2026-10-20).
+
+## Prompt 408 — guarded scanner preview adoption (2026-10-20)
+
+Verified candidate snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` adopted into Vercel
+project preview configuration via single-send PATCH requests, reconciling project
+settings with retained preview deployment `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`.
+Historical signature upper bound updated to `2026-10-22T06:35:09Z`. No launch category
+is approved. See [the execution record](operations.md#prompt-408--guarded-scanner-preview-adoption-2026-10-20).
+
+## Prompt 409 — scanner snapshot retirement tier 2 (2026-10-20)
+
+Superseded snapshots `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` and `snap_ngIwnQplocPoUR0A6cewfCGrFAbX`
+retired cleanly from preview project, reclaiming ~922 MB and securing the steady-state
+2-snapshot baseline (`snap_8OP5…` active, `snap_KBaj…` rollback). No launch category is
+approved. See [the execution record](operations.md#prompt-409--scanner-snapshot-retirement-tier-2-2026-10-20).
+
+## Prompt 410 — managed production activation plan and operator intake (2026-10-20)
+
+Formal 7-stage managed production activation plan codified for `vercel-managed-production`.
+Intake audit against `infra/launch/readiness.vercel.example.json` verified fail-closed
+readiness preflight exiting 1 (0 approved, 11 unresolved, 61 blockers). All 11 launch
+categories remain unresolved pending operator inputs and authentic live receipts.
+See [the execution record](operations.md#prompt-410--managed-production-activation-plan-and-operator-intake-2026-10-20).
+
+## Prompt 411 — reconcile launch checklist with managed production baseline (2026-10-20)
+
+`docs/launch-checklist.md` reconciled across all 11 categories in §3 with dual-topology
+verifier commands, evidence requirements, and acceptance criteria for `single-host-compose-caddy`
+and `vercel-managed-production`. Section 6A updated with the authoritative 61-blocker managed
+preflight gap register. Section 7 sign-off matrix expanded to dual-profile verifier structure.
+Historical operational log updated through Prompt 411. Launch readiness preflight remains
+fail-closed exiting 1 (0 approved, 11 unresolved, 61 blockers). No category is approved.
+See [the execution record](operations.md#prompt-411--reconcile-launch-checklist-with-managed-production-baseline-2026-10-20).

@@ -3339,3 +3339,27 @@ operator-supplied production credentials/certificates, live launch drill executi
 
 See [the operations record](operations.md#prompt-410--managed-production-activation-plan-and-operator-intake-2026-10-20).
 No push or production action occurred.
+
+## Launch checklist reconciliation — Prompt 411 (2026-10-20)
+
+At baseline `2ad8168`, one authorized bounded operations continuation reconciled
+`docs/launch-checklist.md` with the `vercel-managed-production` baseline, synchronizing
+all 11 category contracts in §3 with dual-topology verifier commands, evidence contracts,
+and acceptance criteria.
+
+Execution summary:
+
+1. **Dual-topology category contracts**: Formally codified managed contracts alongside
+   Compose contracts in §3 (Vercel Edge TLS, Resend delivery, 7 managed secret reference keys,
+   Neon 7-day WAL PITR window, Blob durability, Neon AWS KMS volume encryption, target platform
+   `vercel_serverless`, and immutable `dpl_*` deployment IDs).
+2. **Preflight gap register & sign-off matrix**: Incorporated the authoritative 61-blocker
+   managed preflight gap register into §6A and updated §7 with a dual-profile pre-launch
+   sign-off matrix covering both Compose and Managed verifiers.
+3. **Repository checks**: Config check (`node scripts/vercel/check-vercel-config.js`),
+   managed drill tests (`npm run ops:managed-drills-test`, 28/28 passed), fail-closed
+   readiness preflight (`npm run ops:launch-readiness:managed`, 61 blockers, exit 1),
+   secret scan, lint, typecheck, build (`23/23` pages), and git diff check passed cleanly.
+
+See [the operations record](operations.md#prompt-411--reconcile-launch-checklist-with-managed-production-baseline-2026-10-20)
+and [the reconciled launch checklist](launch-checklist.md). No push or production action occurred.
