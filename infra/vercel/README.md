@@ -204,7 +204,9 @@ per-run filenames, then preserve restricted configuration for manual handoff.
 Scheduled/default manual workflow runs simulate; only explicit manual
 `prepare_candidate: true` runs live against the documented Acres preview target
 in iad1. `force` alone cannot enable live execution. The sanitized summary retains
-candidate ID/hashes before local cleanup, but does not persist runtime adoption.
+candidate evidence before local cleanup. Prompt 403 adds a validated, copyable
+sanitized v1 receipt for eligible live success; simulation/skipped/failed runs
+retain diagnostics only. It does not persist runtime adoption.
 See [managed operations §5](runbooks/managed-operations.md#5-clamav-scanner-sandbox-snapshot-rebuild)
 for separate activation, application verification and retirement requirements.
 The standalone builder's destructive `--replace` warning above still applies.
@@ -219,20 +221,46 @@ outside-repo directory>` under an existing writable parent on Linux with procfs.
 Use operator-selected durable restricted storage; `/tmp` is an inspection fixture.
 The new directory is 0700 and its `runtime.env` and `handoff.json` are 0600.
 Only successful live v1 cadence receipts bound to the fixed Acres preview
-team/project/iad1 target with passing clean/EICAR/cleanup are accepted. Simulation
+team/project/iad1 target with passing signatures/clean/EICAR/cleanup are accepted. Simulation
 has a null target. Legacy receipts are rejected without an override.
 
 Probe/builder `ACRES_SCANNER_*` exports remain unchanged. The runtime bundle uses
 exactly `SCANNER_SANDBOX_SNAPSHOT_ID`, `SCANNER_MAIN_SHA256` and
 `SCANNER_DAILY_SHA256`; it adds no credentials, provider or freshness defaults.
-The allowlisted manifest binds original receipt and runtime bytes by SHA-256.
+The allowlisted manifest binds supplied receipt and runtime bytes by SHA-256.
 It is consistency evidence from operator input, not authentication, provider
 attestation or deployed identity. All activation/verification/retirement statuses
 remain `not_performed`. Failed output is retained as incomplete for inspection;
 retry into a new directory. No SDK or network operation occurs. The workflow
-remains unchanged and does not persist this bundle. See [the handoff and later
+does not persist this bundle. See [the handoff and later
 activation procedure](runbooks/managed-operations.md#54-offline-runtime-configuration-handoff),
 including separate previous-configuration retention for rollback.
+
+## Recovering workflow receipts — Prompt 403
+
+`node scripts/vercel/summarize-scanner-candidate.js --help` describes the offline
+summary interface (`--receipt <file> --summary <file>`). It reads at most 64 KiB
+through the existing regular-file/no-symlink reader and never reads env files or
+loads a provider SDK. Original success validation precedes allowlisted projection;
+the final projection is validated again. Unknown fields and private provider text
+are excluded. Missing evidence is explicit; unsafe or invalid evidence and write
+failures exit nonzero. Cleanup still runs after summary failure.
+
+After reviewing a trusted successful workflow run and source, copy only the JSON
+labelled **Sanitized candidate receipt for offline handoff** unchanged into a
+new 0600 file under a durable 0700 restricted directory outside the checkout.
+Run `node scripts/vercel/prepare-scanner-handoff.js --receipt <file> --output-dir
+<new private directory>` there. The output directory must be new and outside the
+checkout. The manifest's receipt digest binds the copied projection's bytes, not
+the deleted runner receipt. This is reconstructed, unsigned consistency evidence,
+not provider-state, CVD freshness, adoption or launch attestation.
+
+Workflow summary retention/access does not replace operator-selected restricted
+custody. The workflow does not create/adopt a runtime bundle; scheduled runs still
+simulate and manual live preparation remains opt-in. Hosted cadence, configuration
+setup, dispatch and deployment authorization remain separate gates. A passing
+handoff does not authorize deployment. The [runbook recovery steps](runbooks/managed-operations.md#54-offline-runtime-configuration-handoff)
+retain independent adoption, application verification and retirement stages.
 
 ## Snapshot retirement — Prompt 396
 

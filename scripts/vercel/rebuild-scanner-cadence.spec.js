@@ -999,6 +999,16 @@ test("workflow credentials are live-step-only and defaults remain simulation", (
   assert.match(workflow, /chmod 700/);
   assert.match(workflow, /contents: read/);
   assert.match(workflow, /cancel-in-progress: false/);
+  for (const name of [
+    "Generate sanitized candidate handoff summary",
+    "Clean up temporary files",
+  ]) {
+    assert.match(
+      workflow.split(`      - name: ${name}\n`)[1],
+      /^        if: always\(\)/,
+    );
+  }
+  assert.doesNotMatch(workflow, /upload-artifact/);
   assert.doesNotMatch(
     workflow,
     /cat .*receipt|--replace|--prune|vercel env|gh variable|vercel deploy|environment: production/,
@@ -1228,12 +1238,35 @@ test("new live preparation receipt flows through offline handoff subprocess", ()
     assert.deepEqual(receipt.target, TARGET);
     assert.equal(receipt.configuration_export, "not_performed");
     const before = [...fake.events];
+    // Recover only the projected JSON that survives the workflow summary.
+    const summaryResult = spawnSync(
+      "bash",
+      [
+        "-e",
+        "-c",
+        workflowScript("Generate sanitized candidate handoff summary"),
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          PATH: process.env.PATH,
+          SCANNER_TASK_DIR: dir,
+          GITHUB_STEP_SUMMARY: path.join(dir, "summary.md"),
+        },
+      },
+    );
+    assert.equal(summaryResult.status, 0, summaryResult.stderr);
+    const markdown = fs.readFileSync(path.join(dir, "summary.md"), "utf8");
+    const projected = markdown.match(/```json\n([\s\S]*?)\n```/);
+    assert.ok(projected);
+    const copied = path.join(dir, "copied.json");
+    fs.writeFileSync(copied, projected[1] + "\n", { mode: 0o600 });
     const result = spawnSync(
       process.execPath,
       [
         path.join(__dirname, "prepare-scanner-handoff.js"),
         "--receipt",
-        output,
+        copied,
         "--output-dir",
         path.join(dir, "bundle"),
       ],

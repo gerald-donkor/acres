@@ -14076,3 +14076,123 @@ issues and approved the record for commit. The reviewer verified deployment
 identity/timing, all request/decode/source counts, direct-asset byte equality,
 hero WebP alpha and record links. Final new-section formatting, secret scan
 (`secret/default scan passed`) and `git diff --check` passed.
+
+## Prompt 403 — recoverable scanner workflow handoff (2026-10-20)
+
+Baseline/current review HEAD: `c802e905e03cf9cb74614eabf843f251fe584ae6`
+on `main`; only the approved Prompt 403 was initially untracked. This local
+implementation makes a successful manual candidate workflow leave a validated,
+copyable sanitized receipt before runner cleanup. No hosted workflow dispatch,
+credential inspection, provider call, environment adoption, deployment, retirement,
+push or launch approval occurred.
+
+### Implementation and evidence boundary
+
+`scripts/vercel/summarize-scanner-candidate.js` is an offline CommonJS CLI with
+`--help`, `--receipt <file>` and `--summary <file>`. It reuses the existing
+consumer's bounded 64 KiB regular-file/no-symlink receipt reader and validation;
+no consumer acceptance rule or dependency changed. For a claimed live success,
+the original object must pass validation before unknown fields are discarded.
+The helper reconstructs the exact allowlisted schema-v1 target, normalized time,
+previous/candidate IDs, hashes, four passing smoke checks and action statuses,
+then revalidates the projection before appending its JSON to the step summary.
+Explicit failure/activation contradictions remain ineligible.
+
+Simulation/skipped/failed outcomes publish narrow diagnostic fields and an
+explicit no-handoff notice; a confirmed failed-candidate ID remains available
+for reconciliation. Missing evidence gets a fixed unavailable notice. Unsafe,
+malformed or ineligible success input and summary-write failures return nonzero
+with fixed diagnostics. Invalid raw receipt/provider text, nested unknown keys,
+credentials, URLs, paths, Markdown fences and injected newlines are suppressed.
+The workflow guards absent task directories without constructing a root receipt
+path; even this branch sanitizes summary-write errors. Summary and cleanup keep
+`if: always()`, so earlier failure remains failure and runner files are cleaned
+after summary failure.
+
+Schedule/default manual runs still simulate; only explicit manual
+`prepare_candidate: true` permits live preparation. Live-step-only credentials,
+fixed preview team/project/iad1 guards, pinned actions, Node 24, read-only contents
+permission and non-cancelling concurrency remain. No artifact upload, provider
+dispatch, automatic adoption, deploy, pruning or retirement was added.
+
+The published block is reconstructed, unsigned consistency evidence. It does
+not attest to provider state, CVD freshness, adoption or launch approval. Its
+retention/access scope is the workflow run's; operator-selected restricted durable
+custody is still required. A later handoff hash binds the copied projection's
+bytes, not the original runner receipt. The runbook retains independent custody,
+adoption, application verification and retirement gates. Hosted cadence, storage
+accounting, production plan, Phase 12 exit and all eleven sign-offs remain open.
+
+### Actual verification
+
+Node and npm's child runtime both reported `v24.21.0` from
+`/home/dgk/.local/share/mise/installs/node/24.21.0/bin/node`. No dependencies
+were installed or updated. Logs are local inspection scratch at
+`/tmp/acres403-*.log`, not durable production evidence.
+
+- `node --check scripts/vercel/summarize-scanner-candidate.js`: exit 0, no output.
+- `node --test scripts/vercel/summarize-scanner-candidate.spec.js`: final exit 0,
+  `tests 70`, `pass 70`, `fail 0`. Synthetic coverage includes receipt extraction
+  through the real handoff consumer, exact runtime names, 0700/0600 output modes,
+  schema/target/mode/time/smoke/ID/hash/contradiction refusals, injection canaries,
+  unsafe filesystem inputs, argument errors, missing evidence, write failures,
+  offline import guards and actual summary/cleanup shell execution.
+- `npm run vercel:probe-test`: final exit 0, `tests 443`, `suites 6`, `pass 443`,
+  `fail 0`. The existing producer-to-handoff subprocess test now passes the
+  producer's receipt through the actual workflow summary before copying its JSON
+  into the handoff CLI. No network or provider credential is used.
+- Initial restricted focused run returned file-level `tests 1`, `pass 0`,
+  `fail 1` with suppressed child output. A no-isolation diagnostic also exposed
+  one incorrect test expectation about an injected open failure; it was corrected
+  to expect the fixed receipt error and a separate append-failure case was added.
+  Normal subprocess-enabled final runs above passed.
+- `node scripts/vercel/summarize-scanner-candidate.js --help`: exit 0, including
+  `Offline sanitized summary only; no activation, deployment verification or retirement.`
+- `npm run lint`: exit 0 across all workspaces, ending with
+  `eslint "{src,test}/**/*.ts"`, no diagnostics.
+- `npm run typecheck`: exit 0 sequentially before build across shared/client/server,
+  ending with `Generated Prisma Client (7.9.1)` and no type diagnostics.
+- Restricted `npm run build` exited 1 with
+  `Error: Could not parse output from TypeScript's --showConfig.`
+  The normal subprocess-enabled rerun exited 0: Next `16.3.8`,
+  `Compiled successfully in 3.1s`, `Generating static pages using 7 workers (23/23)`,
+  then `Generated Prisma Client (7.9.1)` and successful Nest build.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- Installed Prettier checks pass for changed JS/spec/YAML/package/prompt/README
+  and extracted new documentation passages: `All matched files use Prettier code style!`.
+  Full-file checks also ran; the four pre-existing warnings in `docs/operations.md`,
+  `docs/vercel-deployment.md`, `docs/build-plan.md` and the managed operations runbook
+  remain. They were verified before editing; unrelated historical formatting was
+  preserved. This is not a full-file documentation formatting pass.
+- `git diff --check`: exit 0, no output. Complete source, new files and diff were
+  reviewed for credentials, authority expansion and unrelated changes.
+
+No aggregate `ops:check`, online dependency audit, browser/database suite or hosted
+acceptance was run or claimed for this local operations-tooling scope.
+
+### Independent review and local inspection
+
+The read-only reviewer received the approved prompt, base/current SHA above,
+complete diff/new-file scope and actual check logs. It inspected helper, workflow,
+producer, consumer, tests and recovery instructions and returned
+`No Critical, Important, or Minor findings` and ready to commit after the owning
+records. It independently passed `git diff --check`; its restricted test attempt
+reproduced subprocess-output suppression and is not an independent suite pass.
+Receiving-review evaluation checked its conclusions against original-before-
+projection validation, fixed diagnostics, final validation, actual workflow shell
+coverage and retained authority boundaries. No correction or re-review was needed.
+
+Use Node 24.21.0 from the repo root, then run the helper's `--help` and focused
+`node --test` command above, or `npm run vercel:probe-test`, for local inspection.
+For real receipt recovery, review the trusted workflow run/source, copy only its
+eligible JSON block unchanged into a new 0600 file under a durable 0700 restricted
+directory outside the checkout, then run:
+
+```bash
+node scripts/vercel/prepare-scanner-handoff.js \
+  --receipt <file> --output-dir <new-private-directory-outside-checkout>
+```
+
+The output directory must be new under an existing private parent. A passing
+handoff is not deployment authorization. Rollback is a normal local revert;
+there is no schema migration or external state to undo.

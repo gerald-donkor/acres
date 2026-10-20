@@ -4287,3 +4287,22 @@ optimized images on one corrected preview. Hosted MIME/decoding/dimension
 checks pass; browser visual acceptance is blocked by unavailable tooling.
 See [the hosted record](vercel-deployment.md#hosted-acceptance--prompt-398).
 Storage accounting, scanner cadence and production exit gates remain open.
+
+## Recoverable scanner workflow handoff — Prompt 403 (2026-10-20)
+
+Adds the next local scanner prerequisite within Phase 12/Prompt 370: a bounded,
+offline summary helper publishes a validated sanitized live-success receipt that
+round-trips through the existing handoff consumer after runner cleanup. Original
+receipt contradictions cannot be sanitized into success; other outcomes retain
+only diagnostics. Schedule/default manual simulation, opt-in live preparation,
+fixed preview guards, live-step credentials and independent cleanup remain.
+
+Focused 70/70 and probe 443/443 tests, lint/typecheck/build, syntax/help, secret
+scan, changed-source/new-passage formatting and diff checks passed; four existing
+full-document formatting warnings remain. Independent review found no issues.
+See [operations verification](operations.md#prompt-403--recoverable-scanner-workflow-handoff-2026-10-20)
+and [the migration record](vercel-deployment.md#recoverable-scanner-workflow-handoff--prompt-403-2026-10-20).
+The copied JSON is reconstructed unsigned consistency evidence requiring trusted
+run/source review and restricted operator custody. No hosted operation or launch
+approval ran. Hosted cadence, storage accounting, production plan, Phase 12 exit
+and all eleven sign-offs remain open.

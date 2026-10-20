@@ -80,30 +80,16 @@ jobs:
       - name: Generate sanitized candidate handoff summary
         if: always()
         run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
-          if (!process.env.SCANNER_TASK_DIR) process.exit(0);
-          const file = path.join(process.env.SCANNER_TASK_DIR, 'receipt.json');
-          if (!fs.existsSync(file)) process.exit(0);
-          const r = JSON.parse(fs.readFileSync(file, 'utf8'));
-          const safe = {};
-          for (const [key, pattern] of Object.entries({
-            execution_mode: /^(simulation|live)$/,
-            status: /^(success|failed|skipped)$/,
-            new_snapshot_id: /^snap_[A-Za-z0-9]+$/,
-            main_sha256: /^[a-f0-9]{64}$/,
-            daily_sha256: /^[a-f0-9]{64}$/,
-            activation_status: /^not_performed$/,
-            configuration_export: /^(exported|not_performed)$/,
-            error: /^candidate_(build|smoke|configuration_export|receipt)_failed$/,
-          })) {
-            if (typeof r[key] === 'string' && pattern.test(r[key])) safe[key] = r[key];
-          }
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
-            '### Scanner candidate only — manual activation pending\n```json\n' +
-            JSON.stringify(safe, null, 2) + '\n```\n');
-          NODE
+          if [ -z "$SCANNER_TASK_DIR" ]; then
+            if ! { printf '### Scanner candidate — no handoff available\n\nReceipt evidence is unavailable.\n' >> "$GITHUB_STEP_SUMMARY"; } 2>/dev/null; then
+              echo "summary_write_failed" >&2
+              exit 1
+            fi
+          else
+            node scripts/vercel/summarize-scanner-candidate.js \
+              --receipt "$SCANNER_TASK_DIR/receipt.json" \
+              --summary "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Clean up temporary files
         if: always()
         run: |

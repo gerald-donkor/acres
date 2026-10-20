@@ -296,10 +296,30 @@ explicit opt-in, preview environment, configured region `iad1`, team
 Pinned actions, Node 24 and non-cancelling concurrency remain in place.
 
 Each run creates a unique 0700 temporary directory and new 0600 outputs. The
-allowlisted summary preserves candidate ID/hashes, execution mode and status
-before local files are deleted. It is handoff information, not a deployment
-receipt or signed launch evidence. The workflow does not persist runtime env
-configuration or update the configured current snapshot ID for the next run.
+summary helper (`scripts/vercel/summarize-scanner-candidate.js`, Prompt 403)
+validates the original live-success receipt, reconstructs only allowlisted v1
+fields, then validates that projection again before publishing a copyable JSON
+block. It includes the exact preview target, normalized preparation timestamp,
+previous/candidate IDs, hashes and all four passing smoke checks required by the
+offline handoff CLI. Unknown fields never reach the summary. Explicit failure or
+activation markers cannot be removed to turn a contradictory success into an
+eligible receipt.
+
+Simulation, skipped and failed preparation publish diagnostic fields only, with
+an explicit no-handoff notice. A confirmed failed-candidate ID remains visible
+for manual reconciliation. Missing evidence produces a fixed unavailable notice;
+malformed, unsafe or ineligible success evidence and summary-write errors fail
+visibly with fixed errors. Summary and cleanup both use `always()`, so runner
+receipt/configuration cleanup still runs after a summary failure. Earlier failed
+steps remain failures.
+
+The JSON is reconstructed, unsigned consistency evidence. It does not attest to
+provider state, CVD freshness, adoption or launch approval. The summary is durable
+only within the workflow run's retention/access scope; restricted operator custody
+is still required. The workflow does not create a handoff bundle, persist runtime
+env configuration, update the configured current snapshot, upload an artifact,
+automatically adopt/deploy, or retire snapshots. Hosted dispatch, secret setup and
+scheduled live execution remain separate work; schedules still simulate.
 
 ### 5.3 Local inspection and manual preparation
 
@@ -340,7 +360,23 @@ than asserting a legacy target. A successful live receipt, all four passing
 and the exact Acres preview target are required. Since Prompt 390, a receipt
 without `signatures` is rejected; none had ever passed smoke.
 
-After preparation, create a fresh local bundle (no credentials or SDK required):
+For a successful trusted workflow run, recover the receipt before its retention
+expires:
+
+1. Review the workflow run's provenance, source commit and preparation outcome.
+2. Create a new 0600 receipt file under an operator-selected 0700 restricted,
+   durable directory outside the checkout. Copy only the JSON from the block
+   labelled **Sanitized candidate receipt for offline handoff**, unchanged.
+   Never copy diagnostic output or reinterpret a failed/simulated run as success.
+3. Use that file as `--receipt` below, choosing a separate new private output
+   directory. For a local preparation, keep using the original receipt file.
+
+A passing handoff is not deployment authorization. The manifest hashes the bytes
+of the supplied file: for workflow recovery, those are the copied sanitized
+projection's bytes, not a digest of the original deleted runner receipt.
+
+After preparation or recovery, create a fresh local bundle (no credentials or
+SDK required):
 
 ```bash
 node scripts/vercel/prepare-scanner-handoff.js --help
@@ -378,8 +414,13 @@ certify success. If local filesystem interference makes cleanup inaccessible,
 treat all retained output as incomplete regardless of filenames. Preserve
 pre-existing data. Resolve the failure and choose a new directory for a retry.
 Temporary `/tmp` bundles are test/inspection fixtures, not durable storage.
-The CI workflow still only retains an allowlisted summary and deletes temporary
-files; it does not call this CLI or persist/adopt runtime configuration.
+The CI workflow retains only the sanitized summary and deletes temporary files;
+it does not call this CLI or persist/adopt runtime configuration. To inspect the
+summary helper locally without credentials, run
+`node scripts/vercel/summarize-scanner-candidate.js --help` and
+`node --test scripts/vercel/summarize-scanner-candidate.spec.js`. These tests
+round-trip synthetic workflow evidence through handoff after runner cleanup;
+they do not establish hosted workflow execution.
 
 Credential-free local fixture inspection (not durable operator evidence):
 

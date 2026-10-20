@@ -2949,3 +2949,38 @@ Open the exact preview URL and authenticate with Vercel if prompted to
 inspect it at 375, 800 and 1280. Storage accounting, scanner refresh/cadence,
 production launch gates and eleven sign-offs remain open. No production,
 domain/alias, environment write, scanner refresh, account/upload or push occurred.
+
+## Recoverable scanner workflow handoff — Prompt 403 (2026-10-20)
+
+Local receipt recovery is implemented. The workflow now invokes an offline summary
+helper that validates original live-success evidence, reconstructs only the
+allowlisted v1 fields and revalidates before publishing a copyable JSON block.
+The existing handoff consumer accepts that block after runner receipt/configuration
+cleanup. Simulation/skipped/failed runs publish diagnostics only; unsafe or
+ineligible success evidence fails visibly. Original consumer acceptance and all
+workflow authority boundaries are unchanged; schedules still simulate.
+
+After reviewing trusted run/source provenance, copy only **Sanitized candidate
+receipt for offline handoff** JSON unchanged into a new 0600 file under a durable
+0700 restricted directory outside the checkout, then use the existing
+`prepare-scanner-handoff.js --receipt <file> --output-dir <new private directory>`.
+The output directory must also be new and outside the checkout. The published
+receipt is reconstructed, unsigned consistency evidence, not provider state, CVD
+freshness, adoption or launch approval. Its later manifest digest binds the copied
+projection's bytes, not the deleted runner receipt. Workflow run retention/access
+is not restricted durable operator custody. A passing handoff is not deployment
+authorization; the [runbook recovery procedure](../infra/vercel/runbooks/managed-operations.md#54-offline-runtime-configuration-handoff)
+retains separate adoption, application verification and retirement.
+
+Actual Node 24.21.0 checks: focused `tests 70`, `pass 70`, `fail 0`; full
+`vercel:probe-test` `tests 443`, `pass 443`, `fail 0`; lint, sequential typecheck,
+normal subprocess-enabled production build, helper syntax/help, secret scan,
+changed-source/new-passage formatting and diff checks passed. Four full-document
+Prettier warnings predate this change and remain; full-file formatting is not
+claimed. Independent review found no Critical, Important or Minor issues.
+See [the full verification record](operations.md#prompt-403--recoverable-scanner-workflow-handoff-2026-10-20)
+for restricted-run failures, exact outputs and review evaluation.
+
+No hosted dispatch, GitHub secret configuration, live rebuild, provider inspection,
+environment adoption, deployment or retirement ran. Hosted cadence, storage
+accounting, production plan, Phase 12 exit and all eleven sign-offs remain open.
