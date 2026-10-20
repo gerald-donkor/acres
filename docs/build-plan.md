@@ -4337,3 +4337,18 @@ See [the prerequisite evidence and actual checks](operations.md#prompt-405--scan
 and [the resume gate](vercel-deployment.md#scanner-refresh-3-prerequisite-stop--prompt-405-2026-10-20).
 The existing signature upper bound is unchanged; refresh/adoption/application
 proof, storage accounting, hosted cadence and Phase 12 launch exit remain open.
+
+### Prompt 405 continuation — prepared candidate, incomplete application proof
+
+Owner usage evidence plus fresh active-Hobby/no-block metadata cleared the
+allowance gate. One candidate rebuild, seam probe, guarded adoption and preview
+deployment succeeded at source `9744d81`. The dashboard passed; a scratch
+signed-URL host assumption stopped acceptance after one upload initiation,
+before PUT or scanning. No further synthetic requests or retry occurred.
+Guarded restoration returned project settings to Prompt 395; the new immutable
+deployment retains the candidate. Four snapshots remain and no VMs remain.
+
+See [the attempt and conditional recovery](operations.md#continuation--allowance-evidence-candidate-and-preview-06310645-utc)
+and [the retained preview](vercel-deployment.md#prompt-405-continuation--candidate-deployed-acceptance-incomplete).
+Rebuild/probe/deploy budgets are consumed. Application scan acceptance, the old
+configuration's refresh deadline, hosted cadence and Phase 12 exit remain open.

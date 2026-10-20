@@ -14472,3 +14472,176 @@ for local commit as a prerequisite-blocked investigation. Receiving-review
 evaluation checked the source history, allowed file scope, test totals and
 unused action budget against the inspected evidence; no correction was needed.
 The reviewer accessed neither cloud resources nor private custody.
+
+### Continuation — allowance evidence, candidate and preview (06:31–06:45 UTC)
+
+**Result: candidate and preview prepared; application scan acceptance incomplete;
+project-level scanner configuration restored.** This continuation supersedes the
+unused-budget/current-allowance status above, while preserving that earlier stop
+as historical evidence. Source is now committed `main`
+`9744d812e08de5313f1191e1fb609c513409d26a`, whose only changes from the prior
+baseline were the approved prompt and documentation. No application, dependency
+or workflow code changed during this continuation.
+
+The owner supplied two current dashboard crops in response to the target-specific
+allowance request: filenames `screenshot-2026-10-20_06-28-05.png` and
+`screenshot-2026-10-20_06-29-28.png`. These are owner-reported readings; the crops
+do not independently show team identity or the reporting-period selector.
+Storage displayed **2.31 GB / 15 GB**, updated three minutes earlier. The second
+crop showed **45 creations, 14m 6s active CPU, 2.0 GB-hours memory and 40.26 MB
+transfer**. These are comfortably below the current published Hobby allowances
+of 5,000 creations, 5 CPU hours, 420 GB-hours and 20 GB transfer, respectively.
+The pricing table also lists a 15 GB snapshot allowance. Source inspected this
+session: [Vercel Sandbox pricing and quotas](https://vercel.com/docs/sandbox/pricing).
+
+Fresh, target-only `getTeam` / `getProject` API reads at `06:31:13.943Z`
+confirmed the approved IDs, team slug `dgsloxx417s-projects`, current plan
+`hobby`, billing status `active`, `softBlock: null`, `blocked: null` and empty
+`featureBlocks`; the project belongs to that team and uses `iad1` / basic build
+compute. No explicit Sandbox-specific pause field was returned. Together with
+the owner-reported usage, these supported the bounded free-allowance gate; no
+creation call was used as a quota experiment. The historical distinction between
+listed snapshot bytes and dashboard accounting remains unresolved; no reclaimed
+billing allowance or exact accounting formula is claimed.
+
+Fresh configuration/scopes and SDK inventory at `06:33:15.634Z` still matched
+Prompt 395, with the same three created snapshots and no sandboxes. Target OIDC
+claims matched, expiry `2026-10-20T18:32:34Z`, 719 minutes remaining at precheck.
+The stale root `scanner.env` remained unused. The historical upper bound was
+still about 26.5 hours away, exceeding the judgment-based three-hour margin.
+
+#### Candidate, adoption and deployment
+
+- **One producer invocation**, `06:33:39.250–06:35:09.451Z`, exit 0: candidate
+  `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`, created in `iad1`, **461,124,249 bytes**.
+  Signature, clean, EICAR and cleanup smoke fields all `passed`;
+  `activation_status: "not_performed"`, `prune_status: "retained"`.
+- Offline handoff exit 0; receipt digest
+  `f356ba11…34bcf92`, runtime digest `3b402047…e74651a`, recomputed against the
+  original files and matching the manifest. The runtime file held exactly three
+  valid keys equal to the receipt. Main prefix remained `0b2182d2`; daily changed
+  from `7cb49401` to **`94fead17`**, compared privately in full against both the
+  current configuration and Prompt 395. No VMs remained after preparation.
+- **One seam probe**, `06:36:31.721–06:37:41.421Z`, exit 0:
+  `signaturesVerified`, `cleanAccepted`, `eicarRejected`, `baseSnapshotSurvived`,
+  `gatePassed` and `cleanupSucceeded` all true, one creation, non-persistent,
+  `deny-all`. This verifies the candidate at probe time, not application usage.
+- Guarded adoption freshly re-pulled configuration and checked record scopes
+  before stdin updates. All three approved preview keys returned `rc=0` between
+  `06:37:57.503Z` and `06:38:03.533Z`. A new pull matched the candidate, complete
+  key sets and scopes were unchanged, and no non-scanner record modification
+  timestamp changed. Readable values changed only for snapshot ID and daily
+  digest; OIDC changed separately as expected. Sensitive values are returned as
+  redacted placeholders, so their equality was not independently established
+  from plaintext; unchanged record metadata supplies the additional check.
+- Upload allowlist: **`deploy manifest ok: 663 files`**. Seven additions since
+  Prompt 395's 656-file manifest are the two committed landing example/visual
+  modules plus four editorial WebP images and their `SOURCES.md`; no paths were
+  removed. No custody, environment file or uncommitted runtime file was uploaded.
+- **One preview deployment**, CLI exit 0:
+  [`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app).
+  Created `06:39:15.234Z`, Ready `06:41:37.507Z`, `iad1`, no aliases. Raw API git
+  SHA matches `9744d812…409d26a`; API `target: null`, CLI inspect `preview`.
+  Build output confirms Next 16.3.8 / 23 pages and the client, API `src/main.ts`
+  and jobs `src/vercel/jobs.function.ts` entrypoints. No promotion occurred.
+
+#### Acceptance verifier failure and conditional recovery
+
+Six application requests through authenticated `vercel curl --deployment`
+created **one synthetic account, one organization and one initiated clean CSV
+upload**. `/app` passed the hard gate: 200, `id="dashboard-title"`, no
+`role="alert"`. The initiation returned a signed HTTPS PUT endpoint at
+`vercel.com/api/blob/` with the expected upload contract.
+
+The private scratch acceptance script incorrectly required the returned PUT
+host to end in `.private.blob.vercel-storage.com`. It exited 1 with
+`unexpected Blob host` **before PUT**. This was an agent-authored verifier
+assumption, not a demonstrated application or Blob failure. No bytes were
+uploaded, completion requested, polling started, EICAR upload initiated, second
+account/organization created or cross-tenant/anonymous-object check executed.
+No failed scan job exists to replay. The verifier was not patched and rerun:
+Prompt 405's failed-acceptance boundary stopped further synthetic requests.
+
+The prepared conditional restore re-pulled and checked that each scanner value
+still matched this attempt or its captured predecessor. Snapshot ID and daily
+digest were restored (`rc=0`, `06:44:03.551–06:44:06.609Z`); main was already
+equal and remained unchanged. A new pull and scope read verified the captured
+scanner values, complete key set and scopes, with only volatile OIDC differing
+among readable values. No concurrent change was overwritten. Recovery is
+project configuration restoration only: **the new immutable deployment still
+retains its new candidate configuration**. No second deployment was authorized
+or performed, and restoration does not prove a functional rollback.
+Candidate binding here is an inference from verified writes before deployment
+creation: deployment metadata lists all five scanner names, not their resolved
+values, and the application scan did not run. It is not a runtime attestation.
+
+A read-only transaction using the designated preview URL verified
+`current_user=acres_app`, non-superuser/NOBYPASSRLS, set only transaction-local
+account/organization context, and queried this attempt's exact upload ID. Result:
+**one `pending_upload`, `scanStatus: null`, zero matching outbox events and zero
+durable jobs**. The known `pg` SSL-mode forward-compatibility warning appeared;
+TLS verification was not weakened. No migrator/admin connection or schema change
+was used. The account, organization and pending ledger/object-metadata rows are
+retained, with no uploaded Blob object and no cleanup deletion.
+
+Final SDK inventory at `06:44:57.246Z`: **zero sandboxes**, four created snapshots
+in `iad1` (the new candidate and all three preceding retains), **1,844,414,400
+listed bytes**. Only automatic temporary-VM cleanup occurred: one builder, one
+smoke and one seam VM. No application scan VM was created. No retained snapshot
+or deployment was deleted, and no mail, push, GitHub dispatch/configuration write
+or production action occurred. Hosted cadence and retirement remain separate.
+
+The prior **no-later-than-about `2026-10-21T09:02Z`** upper bound for the restored
+project configuration remains unchanged and may be earlier. No new application
+freshness bound is claimed: the candidate passed its independent probe, but
+application scan acceptance was not completed, and its CVD timestamp was not
+retained by the cadence receipt. A later bounded continuation must correct the
+verifier against the actual signed-URL contract and account for the existing
+pending upload/deployment; this prompt's rebuild, probe and deploy budgets are
+consumed. No implicit retry is supplied by this record.
+
+Continuation custody is
+`~/.config/acres/vercel-preview/prompt405-20261020T063209Z/`: owner screenshots,
+target metadata, configuration/scope pulls, preflight, producer receipt, candidate
+and handoff, probe output, guarded adoption/restore scripts and logs, manifest,
+deployment/build metadata, private acceptance files, scoped correlation and
+recovery inventory. The directory is 0700; data files are 0600 and scripts 0700.
+It is restricted local custody, not a signed production evidence store. No
+completion percentage, launch category or Phase 12 exit was approved.
+
+#### Continuation verification
+
+Under Node 24.21.0, preflight help and dry-run each exited 0; simulation reported
+`execution_mode: "simulation"`. Focused builder/cadence/handoff specs exited 0:
+`tests 226`, `suites 6`, `pass 226`, `fail 0`.
+
+Post-attempt checks ran sequentially:
+
+- `node scripts/vercel/check-vercel-config.js`: exit 0,
+  `vercel.json configuration valid`.
+- `npm run vercel:probe-test`: exit 0, `tests 443`, `suites 6`, `pass 443`,
+  `fail 0`.
+- `npm run lint`: exit 0 across all workspaces, no diagnostics.
+- `npm run typecheck`: exit 0 across all workspaces,
+  `Generated Prisma Client (7.9.1)`, no diagnostics.
+- `npm run build`: exit 0 across shared/client/server; successful Next 16.3.8
+  23-page build and Nest build, `Generated Prisma Client (7.9.1)`.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- Installed Prettier on the new passages: exit 0,
+  `All matched files use Prettier code style!`; existing whole-document warnings
+  remain separate from these checked additions.
+- `git diff --check`: exit 0, no output; only the three approved documentation
+  files have appended continuation records.
+
+Logs are `/tmp/acres405-resume-*.log`. These repository checks do not convert the
+scratch acceptance failure into a successful application scan. No aggregate
+operations, online dependency audit or full database/browser suite was run.
+
+Independent read-only continuation review used baseline/current HEAD `9744d81`,
+the complete three-file diff, sanitized hosted observations, safe scratch source
+and local check logs. It returned **Critical: None; Important: None; Minor:
+None**, ready for local commit as a partial operational record. Receiving-review
+evaluation confirmed the six-request/pre-PUT boundary, guarded restoration,
+source/test evidence and qualified freshness/identity claims against the inspected
+files. No correction or re-review was needed. No cloud calls or private custody
+reads were made by the reviewer; application scan acceptance remains incomplete.

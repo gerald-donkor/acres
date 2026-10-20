@@ -3054,3 +3054,46 @@ evidence and fresh state/OIDC checks. The historical signature upper bound remai
 freshness was not measured and no extension is claimed. Hosted cadence,
 retirement, production plan, Phase 12 exit and eleven sign-offs remain open.
 No configuration restoration is required; nothing was pushed.
+
+### Prompt 405 continuation — candidate deployed, acceptance incomplete
+
+The owner subsequently supplied current storage/compute crops (2.31 GB / 15 GB
+storage; 45 creations, 14m 6s CPU, 2.0 GB-hours memory, 40.26 MB transfer).
+Fresh target-specific API reads confirmed active Hobby billing, no team block
+and no feature block. Current official Hobby limits corroborated ample displayed
+headroom. These owner-reported readings cleared the current allowance gate for
+the bounded run; historical storage-accounting semantics remain unresolved.
+
+At source `9744d812e08de5313f1191e1fb609c513409d26a`, one rebuild and one
+candidate probe passed. Candidate **`snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`** has
+daily prefix **`94fead17`**, different from Prompt 395; all smoke, 48-hour-policy
+signature, clean/EICAR and cleanup checks passed. A validated handoff was adopted
+through the three approved preview values and verified before one deployment:
+
+[`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app),
+Ready `2026-10-20T06:41:37.507Z`, `iad1`, git metadata matching the source, no
+aliases. Upload allowlist passed for 663 committed files. `/app` passed its
+200/dashboard/no-alert hard gate.
+
+**Application scan acceptance is incomplete.** The scratch verifier incorrectly
+required a direct private Blob host, rejecting the SDK-produced signed
+`vercel.com/api/blob/` endpoint locally before PUT. One account, one organization
+and one pending upload were created; no object bytes, scan job, EICAR upload or
+isolation check followed. Tenant-scoped read-only correlation confirmed
+`pending_upload`, null scan status and zero outbox/jobs. No retry was performed.
+
+Per Prompt 405, guarded conditional restoration returned the project-level three
+scanner values to Prompt 395's configuration, verified with fresh pulls/scopes.
+**The new immutable deployment retains its new scanner candidate**; restoring
+project variables does not change it. Its candidate binding is inferred from
+verified writes before creation; metadata exposes scanner names rather than
+resolved values, and no application scan attested that binding. All four snapshots and the deployment are
+retained, no temporary VMs remain, and no functional rollback or new freshness
+bound is claimed. The restored configuration's historical bound remains no later
+than about `2026-10-21T09:02Z`, possibly earlier. The single rebuild/probe/deploy
+budgets are consumed; further application proof requires a bounded continuation
+that accounts for the existing pending upload and fixes the verifier contract.
+
+See [the complete continuation and recovery evidence](operations.md#continuation--allowance-evidence-candidate-and-preview-06310645-utc).
+Custody: `prompt405-20261020T063209Z/` under the approved parent. No push,
+promotion, deletion, hosted cadence or launch approval occurred.
