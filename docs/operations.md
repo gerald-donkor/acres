@@ -15531,3 +15531,25 @@ Commands ran sequentially under Node 24.21.0:
 - `npm run typecheck`: exit 0 across all workspaces.
 - `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
 - `git diff --check`: exit 0.
+
+## Prompt 413 — reconcile build-plan managed current state (2026-10-20)
+
+**Result: current-state instructions reconciled. No launch category approved.**
+
+Documentation only. The build plan header, Phase 12 amendment, `AGENTS.md` §5
+numbering exception, and `docs/vercel-deployment.md` resume status still told a
+new session that Prompt 370 was unimplemented, still owned the next sequence,
+was unfinished, or that the next prompt number was the 2026-10-15 allocator
+figure. Those sentences were true on 2026-10-15. Prompt 413 labels them
+historical and points
+at the managed baseline already recorded through Prompt 412
+(`project-status.md`, preview `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`, scanner
+snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`, the 7-stage activation plan, and
+dual-topology checklist reconciliation).
+
+Dated Prompt 370–412 evidence sections were not rewritten. ADR 0001 was not
+changed. No readiness example, workflow, or application file changed. Example
+records still fail closed (Compose 70 blockers, managed 61, as recorded by
+Prompt 412). Production promotion, DNS, production secrets, live drills and
+the eleven sign-offs remain operator-owned. This record does not name the next
+repository engineering unit.

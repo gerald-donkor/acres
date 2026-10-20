@@ -10,11 +10,16 @@ open. This is not a declaration that all phase acceptance criteria pass. See
 [`project-status.md`](project-status.md) for the dated whole-project assessment;
 code, git history and the phase evidence below remain the implementation proof.
 
-**Production-target amendment — 2026-10-15:** the user selected the
+**Production-target amendment — 2026-10-15, superseded as a current
+instruction on 2026-10-20 (Prompt 413):** the user selected the
 Vercel-managed migration in [Prompt 370](../prompts/370-vercel-managed-migration-and-deployment.md).
-It is approved, but runtime migration and deployment have not been implemented.
-Compose+Caddy remains the implemented reference profile. See Phase 12's amendment
-below for the new target, dependency gates and prompt-number mapping.
+On 2026-10-15 that migration and deployment had not been implemented.
+That sentence is historical. Compose+Caddy remains the implemented self-host
+reference profile; the managed profile is now implemented and preview-verified,
+and launch is not approved. Read
+[project-status.md](project-status.md), the Phase 12 current-state subsection
+below, and [vercel-deployment.md](vercel-deployment.md). Do not treat Prompt
+370 as unstarted, and do not allocate prompt 371 from this header.
 
 ## 1. How every phase runs
 
@@ -617,25 +622,55 @@ Status: implemented by `prompts/30-dashboards-optimized-graphql.md`.
 
 The user requested implementation and deployment through Vercel and approved
 [Prompt 370 — Vercel-managed migration and deployment](../prompts/370-vercel-managed-migration-and-deployment.md),
-originally numbered 371. This supersedes Compose+Caddy as the selected future
-production target; it does not assert a changed runtime, completed migration or
-deployed application. The Phase 12 bullets above describe the implemented
+originally numbered 371. On 2026-10-15 this superseded Compose+Caddy as the
+selected future production target and did not assert a changed runtime,
+completed migration or deployed application. That assertion is historical:
+the Prompt 413 current-state subsection below records later preview evidence
+and does not approve production. The Phase 12 bullets above describe the implemented
 self-host reference and its original acceptance tooling. Retain that profile
 and its tests while adding the explicitly selected managed profile.
 
 The managed target uses Vercel application compute/routing, private Blob,
 Queues/Workflows and Cron, with Neon PostgreSQL/PostGIS and Resend provisioned
 through Vercel Marketplace. Marketplace providers remain external processors.
-Per-job Sandbox malware scanning is a candidate requiring proof, not a shipped
-replacement for ClamAV. No separate continuously operated VM/container host is
-selected. This is the bounded exception to the original Phase 12 cloud-selection
+On 2026-10-15, per-job Sandbox malware scanning was a candidate requiring
+proof, not a shipped replacement for ClamAV. Later preview receipts are
+recorded in the current-state subsection; they are not production approval.
+No separate continuously operated VM/container host is selected. This is the bounded exception to the original Phase 12 cloud-selection
 non-goal; it does not authorize unrelated provider or product changes.
 
-The next implementation sequence is owned by approved Prompt 370. Its in-progress
-record is [vercel-deployment.md](vercel-deployment.md); no managed proof or
-deployment is established by local preparation.
+**Historical instruction — 2026-10-15, superseded by the current-state
+subsection below (Prompt 413):** the next implementation sequence was owned by
+approved Prompt 370. Its in-progress record was
+[vercel-deployment.md](vercel-deployment.md); no managed proof or deployment
+was established by local preparation. That paragraph is not the current
+instruction.
 
-The ordered scope remains:
+**Current state — 2026-10-20 (Prompt 413).** This subsection supersedes the
+paragraph above and the six ordered steps below as *instructions*. It does
+not rewrite those steps' historical meaning, and it does not approve Phase 12
+exit or launch. Evidence is cited from existing records, not re-proved here:
+[project-status.md](project-status.md),
+[vercel-deployment.md](vercel-deployment.md), and the Prompt 410–412 records
+at the end of this file. ADR 0001 remains accepted; this note does not change
+it.
+
+| Step | Recorded state on 2026-10-20 | Still open |
+| --- | --- | --- |
+| 1. Topology, account, region, plan | Selected target `vercel-managed-production` (ADR 0001, Prompt 370). Preview team, project `acres`, region `iad1`, and free-tier constraint are recorded in `vercel-deployment.md` (2026-10-15 access inspection). | Operator confirmation of the production account, region and permitted spend is not a repository proof. Do not treat the preview inspection as production approval. |
+| 2. Pooled database/RLS, private Blob, Sandbox scanning, durable jobs | Preview seams are recorded in Prompts 371–378 (first application preview `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`). Later application preview proofs are recorded in Prompts 383–408. `project-status.md` cites retained preview `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4` and scanner snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`. | Preview proof, not production approval. |
+| 3. Provider profiles and invocation-scoped Nest execution | Local adapters and invocation-scoped execution are recorded as implemented in the Prompt 412 status reconciliation (Prompts 370–379). Compose+Caddy is retained. | Production promotion is not this step. |
+| 4. Blob, queue/workflow, Cron, Resend, ingress, throttling, progress | Repository contracts and preview proofs are recorded through Prompt 409. Cron and Resend production behavior are not proven by preview. | Preview proof, not production approval. Production secret provisioning and custom-domain DNS remain operator-owned. |
+| 5. Topology-specific launch evidence and recovery procedures | Local managed readiness, reconciliation, drill runners and the 7-stage activation plan are recorded (Prompts 379–382, 410–411). Example records fail closed: Compose 70 blockers, managed 61 (`project-status.md`, Prompt 412). | Live recovery evidence is operator-owned. Do not edit the examples to pass. Compose checks are not Vercel evidence. |
+| 6. Acceptance, preview, then promotion | Repository and preview acceptance through Prompt 412 are recorded, including Tier 2 snapshot retirement. | Production promotion and the eleven human sign-offs remain operator-owned. Phase 12 exit is not met. |
+
+The next repository-executable engineering unit is not named here. The next
+`i` re-reads this corrected plan and either stops because only operator-owned
+launch work remains, or selects a newly discovered repository defect. Operator
+intake, live drills and the eleven sign-offs are not executable from the
+repository alone.
+
+The ordered scope, as written on 2026-10-15, was:
 
 1. Record the topology decision and confirm the selected Vercel account/project,
    environment, access, region and permitted plan/spend.
@@ -661,8 +696,12 @@ atomic dataset/analytics publication, immutable report evidence and no-AI
 production. A mock or frontend-only deployment does not satisfy the request.
 Unknown account settings, provider capabilities, operator decisions and failed
 proofs remain explicit blockers; code or templates alone approve no category.
-The eleven launch responsibilities and Phase 12 exit remain open until equivalent
-managed evidence is implemented, independently verified and signed.
+On 2026-10-15, the eleven launch responsibilities and Phase 12 exit remained
+open until equivalent managed evidence was implemented, independently verified
+and signed. As of the Prompt 413 current-state subsection, repository and
+preview evidence are recorded and are not launch approval. Those eleven
+responsibilities and Phase 12 exit stay open until operator-owned production
+evidence is independently verified and signed.
 
 **Prompt reorganization:** the user explicitly removed the unused, unexecuted
 `369-verify-operator-production-intake.md`, moved the completed handoff package
@@ -670,7 +709,10 @@ managed evidence is implemented, independently verified and signed.
 Vercel migration 371 → [370](../prompts/370-vercel-managed-migration-and-deployment.md).
 Commit `cedaa3d` records this bounded numbering exception and reference updates.
 The handoff implementation remains commit `aff196a`; renumbering neither reruns
-it nor withdraws migration approval. The next new prompt number is 371.
+it nor withdraws migration approval. On 2026-10-15 the next new prompt
+number was 371. That figure is historical and is not the current allocator.
+Current numbering remains the standing rule: the highest existing number in
+`prompts/` plus one.
 
 ## 14. Sequence gates
 
@@ -4507,3 +4549,32 @@ operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-412--reconcile-project-status-with-managed-production-baseline-2026-10-20),
 [the deployment record](vercel-deployment.md#project-status-reconciliation--prompt-412-2026-10-20),
 and [the reconciled project status](project-status.md).
+
+## Phase 12 build-plan current-state reconciliation — Prompt 413 (2026-10-20)
+
+Documentation only. Reconciles the current-state instructions in this file,
+`AGENTS.md` §5, and `docs/vercel-deployment.md` with the managed baseline already
+recorded through Prompt 412. Planning baseline was `1684763` on `main`.
+
+Superseded as current instructions, and kept as labeled historical text:
+
+- This file's header no longer uses the 2026-10-15 claim that migration and
+  deployment were unimplemented as a current instruction. That claim was true
+  only on that date.
+- The Phase 12 amendment no longer assigns the next sequence to Prompt 370,
+  and no longer treats the absence of managed proof as current. The six ordered
+  steps remain, labeled as the 2026-10-15 scope, with a current-state table
+  that marks preview proof separately from production approval.
+- The 2026-10-15 allocator figure (371) remains only as that date's allocator.
+  Current numbering is the standing highest-plus-one rule, also corrected in
+  `AGENTS.md` §5.
+- `docs/vercel-deployment.md` no longer opens by saying the migration was
+  unfinished. Its sub-prompt index is labeled historical and now includes
+  Prompts 410–412.
+
+No readiness example, workflow, verifier, or application file changed. No launch
+category was approved. Phase 12 exit remains open: production promotion, DNS,
+production secrets, live drills and the eleven sign-offs are operator-owned.
+The next repository engineering unit is not named by this record.
+See [the operations record](operations.md#prompt-413--reconcile-build-plan-managed-current-state-2026-10-20)
+and [the deployment record](vercel-deployment.md#build-plan-current-state-reconciliation--prompt-413-2026-10-20).

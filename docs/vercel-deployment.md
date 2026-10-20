@@ -1,27 +1,49 @@
 # Vercel migration — Prompt 370
 
-Status: implementation in progress. Preview Blob (server SDK and browser
-presigned upload) and Neon database/RLS seams are proven. The Sandbox scanner
-is built from a Sandbox snapshot and its hosted seam is proven (Prompt 373);
-VCR remains unused because it is not free on Hobby. The first Acres application
-preview was deployed in Prompt 378 (see its record below); production activation
-and launch approvals remain open.
-Starting source: `a1350d0` on `main`.
+**Current status — 2026-10-20 (Prompt 413).** Prompt 370 is no longer the
+executing implementation. Managed engineering and preview verification recorded
+through Prompt 412 are the current repository state; production activation and
+the eleven launch approvals remain open. Resume from the Prompt 408–412 records
+below, [project-status.md](project-status.md), and `git log`. Do not treat the
+2026-10-15 in-progress status sentence as current.
+
+On 2026-10-15 this file opened with an in-progress status: preview Blob
+(server SDK and browser presigned upload) and Neon database/RLS seams proven;
+Sandbox scanner built from a snapshot with its hosted seam proven (Prompt 373);
+VCR unused because it is not free on Hobby; first application preview deployed
+in Prompt 378; production activation and launch approvals open. Starting source
+was `a1350d0` on `main`.
 [ADR 0001](adr/0001-vercel-managed-production.md) records the accepted target.
+That status paragraph is historical.
 
 ## Resume here (new session)
 
-Prompt 370 is approved and still executing. Remaining checklist items may be
-split into numbered sub-prompts (Prompt 371 = Blob browser upload, Prompt 372 =
-scanner image, Prompt 373 = scanner snapshot, Prompt 374 = invocation-safe
-outbox, Prompt 375 = queue-retention reconciliation, Prompt 376 = protected
-managed outbox dispatch, Prompt 377 = shared managed API throttling, Prompt
-393 = named dashboard GraphQL operation, Prompt 394 = scanner signature
-refresh, Prompt 395 = scanner signature refresh 2, Prompt 396 = snapshot
-retirement tier 1, Prompt 397 = fresh preview deployment, Prompt 398 =
-preview image routing repair, Prompt 409 = scanner snapshot retirement tier 2); each
-inherits 370's approval limits. A new session resumes from this section and
-`git log`.
+**Historical split — 2026-10-15 through 2026-10-20, not a current remaining-work
+list.** Prompt 370 was approved and, at that date, had not finished. Its
+checklist items were split into numbered sub-prompts. Each inherited 370's
+approval limits. The index is retained so a later session can find those
+records; it is not an instruction to re-run them:
+
+- Prompt 371 = Blob browser upload
+- Prompt 372 = scanner image
+- Prompt 373 = scanner snapshot
+- Prompt 374 = invocation-safe outbox
+- Prompt 375 = queue-retention reconciliation
+- Prompt 376 = protected managed outbox dispatch
+- Prompt 377 = shared managed API throttling
+- Prompt 393 = named dashboard GraphQL operation
+- Prompt 394 = scanner signature refresh
+- Prompt 395 = scanner signature refresh 2
+- Prompt 396 = snapshot retirement tier 1
+- Prompt 397 = fresh preview deployment
+- Prompt 398 = preview image routing repair
+- Prompt 409 = scanner snapshot retirement tier 2
+- Prompt 410 = managed production activation plan and operator intake
+- Prompt 411 = launch checklist reconciliation
+- Prompt 412 = project status reconciliation
+
+A new session resumes from this section and `git log`, then reads the current
+status above rather than treating the historical split as unfinished work.
 
 **Current snapshot retention — Prompt 409 (2026-10-20).** Tier 2 scanner
 snapshot retirement is complete. Exactly two live snapshots are retained in
@@ -3393,3 +3415,19 @@ Execution summary:
 
 See [the operations record](operations.md#prompt-412--reconcile-project-status-with-managed-production-baseline-2026-10-20)
 and [the reconciled project status](project-status.md). No push or production action occurred.
+
+## Build-plan current-state reconciliation — Prompt 413 (2026-10-20)
+
+Documentation only. The opening status and "Resume here" index of this file
+were still written as if Prompt 370 were executing and the sub-prompt list
+ended at Prompt 409. Prompt 413 replaces those two current-instruction
+paragraphs with a 2026-10-20 status, keeps the 2026-10-15 wording inside an
+explicitly historical paragraph, and extends the historical index through
+Prompt 412. The Prompt 409 retention note and Prompt 408 scanner gate in this
+section were not rewritten.
+
+No account was provisioned, no secret rotated, no deployment or drill run, and
+no launch category approved. Production activation and the eleven sign-offs
+remain open. See
+[the build-plan record](build-plan.md#phase-12-build-plan-current-state-reconciliation--prompt-413-2026-10-20)
+and [the operations record](operations.md#prompt-413--reconcile-build-plan-managed-current-state-2026-10-20).

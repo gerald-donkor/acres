@@ -611,8 +611,10 @@ sequence is the project's build history, and a gap or a reused number makes
 renumber the completed handoff package 370 → 369 and the approved Vercel migration
 371 → 370, and update their references. Historical commits retain their original
 identities; the handoff remains executed and the migration approval follows its
-scope. The next new prompt number is 371. This bounded reorganization does not
-permit other renumbering.
+scope. On 2026-10-15 the next new prompt number was 371. That figure is
+historical and is not the current allocator (Prompt 413). Current numbering
+remains the standing rule above: the highest existing number in `prompts/`
+plus one. This bounded reorganization does not permit other renumbering.
 
 **A prompt file must state**, in whatever order the work makes natural:
 
