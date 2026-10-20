@@ -14196,3 +14196,140 @@ node scripts/vercel/prepare-scanner-handoff.js \
 The output directory must be new under an existing private parent. A passing
 handoff is not deployment authorization. Rollback is a normal local revert;
 there is no schema migration or external state to undo.
+
+## Prompt 404 — scanner workflow hosted readiness and simulation (2026-10-20)
+
+**Result: hosted simulation blocked; zero dispatches.** This is a completed
+read-only investigation, not acceptance of the blocked hosted gate. No workflow
+or application code changed. Inspection window: **2026-10-20 01:26:53–01:29:29
+UTC**, using the existing GitHub connector and local source.
+
+### Source and hosted prerequisites
+
+Local `main` started at `b9f382163d3589454971073f15a3d9d622a8f340`, with only
+the approved Prompt 404 untracked. Upstream is `origin/main`; the cached
+comparison returned `0 1`. Parsing the upstream URL without printing its raw
+value resolved `gerald-donkor/acres`. GitHub repository metadata confirmed
+repository ID `1339959046`, visibility `public`, default branch `main`, and
+`archived: false`.
+
+The live [main branch read](https://api.github.com/repos/gerald-donkor/acres/branches/main)
+returned **`c802e905e03cf9cb74614eabf843f251fe584ae6`**, the local reviewed
+commit's direct parent. Prompt 403's implementation commit **`b9f3821` is not
+published on remote main**. The full remote workflow was read at that immutable
+SHA: its summary still uses the old inline projection; the new summary helper
+returned 404 at that SHA. Dispatching this older source would not prove the
+approved receipt-recovery implementation.
+
+SHA-256 digests of inspected UTF-8 source bytes (remote column bound to
+`c802e905…`; local column bound to `b9f3821…`):
+
+| File                                             | Remote SHA-256                                                     | Local SHA-256                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `.github/workflows/scanner-snapshot-rebuild.yml` | `20669aa64bb936b0f836b76c92fe627f52f21ecd136c55c48e004ad333c9682b` | `22b88da0ae3127e18aeebcfd5c0832817b9635ff3332d9e8835b2ec37f90f11e` |
+| `scripts/vercel/rebuild-scanner-cadence.js`      | `30d940eb6fa62554f07959c4a0e4889b14c3274e63bbaad9e3d7beddd3c3a719` | `30d940eb6fa62554f07959c4a0e4889b14c3274e63bbaad9e3d7beddd3c3a719` |
+| `scripts/vercel/prepare-scanner-handoff.js`      | `2aaa266fb3c2acd8f698078d0e18fe1e9f32383814290bae707f0e7c5f6c641c` | `2aaa266fb3c2acd8f698078d0e18fe1e9f32383814290bae707f0e7c5f6c641c` |
+| `scripts/vercel/probe-platform.js`               | `e6932fb20aacdfdd04f256c0ae7d1d266f098671e242119424bb452cd196288f` | `e6932fb20aacdfdd04f256c0ae7d1d266f098671e242119424bb452cd196288f` |
+| `scripts/vercel/build-scanner-snapshot.js`       | `3c73a5167f07d9a883cd06ef3417e45a177633663f6b62dff1461bfd2b96b41b` | `3c73a5167f07d9a883cd06ef3417e45a177633663f6b62dff1461bfd2b96b41b` |
+| `scripts/vercel/summarize-scanner-candidate.js`  | Missing (404)                                                      | `6b1c9387c755385e0a0f9f1e9e0735c176be9df88b4e7c1def64dc018fb5978e` |
+
+This is a comparison of these inspected files, not a complete transitive
+dependency attestation. The source gate already fails.
+
+| Prerequisite                                                                      | State and evidence within the UTC window above                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository identity and read access                                               | Verified by repository, branch and file reads. Authenticated login and repository owner matched; collaborator permission returned `admin`. User permission does not prove the connector's Actions or administration scopes.                                                                                                |
+| Reviewed source on execution ref                                                  | Missing: remote `main` is the reviewed commit's parent; workflow differs and helper is absent.                                                                                                                                                                                                                             |
+| Remote input definitions                                                          | Verified from immutable workflow source: `prepare_candidate` and `force` are optional booleans, both default `false`. Credentials are confined to the live step; no job environment is declared.                                                                                                                           |
+| Workflow registration and enabled state                                           | Inaccessible through available tools. A workflow-list GET was rejected by the connector URL allowlist (`INVALID_ARGUMENT`, HTTP 400); this is not evidence of a disabled or missing workflow. Historical run metadata identifies workflow ID `387667199` and the expected path.                                            |
+| Actions policy, pinned-action/runner restrictions and effective token permissions | Inaccessible. Source pins checkout/setup-node, requests `contents: read` and uses `ubuntu-latest`; effective repository policy and current Actions enabled state were not read.                                                                                                                                            |
+| Workflow concurrency                                                              | Verified idle at inspection: repository run inventory returned all 51 runs (`per_page=100`), including two scanner runs, both completed. Source uses group `scanner-snapshot-rebuild` with `cancel-in-progress: false`. Recheck before any later dispatch.                                                                 |
+| Free execution allowance and spending controls                                    | Inaccessible/unverified. Public visibility was confirmed; it was not treated as sufficient proof of current execution allowance or billing controls. No paid usage was authorized.                                                                                                                                         |
+| Manual dispatch capability                                                        | Unavailable in the exposed connector catalog; its generic fetch tool is GET-only. Existing `gh --help` failed before help/auth inspection with `Failed to install aqua:cli/cli@latest: Read-only file system (os error 30)`. No installation, login or mise configuration was performed.                                   |
+| Live-step secret-name availability                                                | Inaccessible for each of `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`, `VERCEL_TOKEN`. The connector excludes secret endpoints; no secret body or credential store was read. No organization availability is asserted; repository ownership is a user account. Environment-only secrets cannot be presumed available to this job. |
+| Live-step variables                                                               | Inaccessible for `ACRES_VERCEL_PROBE`, `ACRES_VERCEL_PROBE_REGION`, `ACRES_SCANNER_SNAPSHOT_ID`. Expected opt-in/region remain `isolated-synthetic-preview` / `iad1`; no configured value or current snapshot state was verified.                                                                                          |
+
+The run inventory included [scheduled run 39232185663](https://github.com/gerald-donkor/acres/actions/runs/39232185663),
+created `2026-10-19T09:43:20Z`, source
+`45a392ad683e04d08e5979c8ae32165bb127399a`, conclusion `success`, and run
+`39112477943`, created `2026-10-18T08:42:22Z`, source
+`2d5e449352d3cc610c0a3b497542f10d0ad4d821`, conclusion `failure`. Both metadata
+entries name `.github/workflows/scanner-snapshot-rebuild.yml` and event
+`schedule`. Their steps, logs and rendered summaries were not inspected. A
+historical green run is not proof of Prompt 403, its summary bytes, cleanup or
+live preparation. No run is attributed to this investigation.
+
+Live configuration readiness remains unverified separately from simulation
+eligibility. Local producer inspection confirms the existing `VERCEL_TOKEN`
+fallback; no new federation or stored short-lived OIDC token is proposed. The
+future live target remains preview team `team_zE3mp7nrEZ6a7cxRavwUMYC4`, project
+`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`, region `iad1`. Historical adoption of
+`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` in Prompt 395 cannot be compared with an
+unread GitHub variable or promoted to present provider-state evidence.
+
+### Checks, action inventory and next gate
+
+Node was explicitly selected from the installed **24.21.0** directory; both
+`node -p` and `npm exec --offline -- node -p` reported `"version":"v24.21.0"`
+and the same executable. Default PATH initially selected `v26.12.0`; no checks
+were credited to that runtime. No dependencies were installed or updated.
+
+Actual local results:
+
+- `node --test scripts/vercel/rebuild-scanner-cadence.spec.js scripts/vercel/summarize-scanner-candidate.spec.js scripts/vercel/prepare-scanner-handoff.spec.js`:
+  normal subprocess-enabled exit 0, `tests 247`, `suites 6`, `pass 247`, `fail 0`.
+- `npm run vercel:probe-test`: normal subprocess-enabled exit 0, `tests 443`,
+  `suites 6`, `pass 443`, `fail 0`. These remain offline fixtures and shell/CLI
+  tests, not hosted acceptance.
+- Initial restricted runs exited 1 with suppressed child output: focused
+  `tests 3`, `pass 0`, `fail 3`; probe `tests 8`, `pass 4`, `fail 4`, with
+  file-level `'test failed'` diagnostics. No source repair was made; normal
+  subprocess-enabled reruns produced the passing totals above.
+- `npm run lint`: exit 0 across all three workspaces, ending with
+  `eslint "{src,test}/**/*.ts"`, no diagnostics.
+- `npm run typecheck`: exit 0 across shared/client/server before the build;
+  `Generated Prisma Client (7.9.1)`, no type diagnostics.
+- `npm run build`: normal subprocess-enabled exit 0, Next `16.3.8`,
+  `Generating static pages using 7 workers (23/23)`, followed by
+  `Generated Prisma Client (7.9.1)` and successful Nest build.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- Installed Prettier on the approved prompt and extracted new passages:
+  `All matched files use Prettier code style!`. Full-file checks before and
+  after editing both warn on `docs/operations.md`, `docs/vercel-deployment.md`
+  and `docs/build-plan.md` (exit 1); historical formatting was preserved.
+- `git diff --check`: exit 0, no output. No aggregate operations, online audit,
+  database/browser suite or hosted acceptance check was run or claimed.
+
+The investigation made **13 read-only GitHub connector calls**, including the
+rejected workflow-list read and missing-helper read. Hosted action counts:
+**0 dispatches, 0 reruns, 0 cancellations, 0 pushes, 0 GitHub configuration or
+secret writes, 0 Vercel calls**. No credentials were retrieved, refreshed or
+configured. Sanitized metadata, remote workflow source and local check logs
+were retained in a restricted temporary directory outside the checkout; no raw
+run logs or private operational evidence were published.
+
+The next prerequisite is **source publication**, requiring a separate standalone
+uppercase `P` under AGENTS.md; approval of Prompt 404 supplies no push authority.
+After publication, a separately bounded continuation must recheck source,
+workflow availability/policy, access to a dispatch operation, idle concurrency
+and free execution allowance before one explicit `prepare_candidate: false`,
+`force: false` simulation. Inaccessible live metadata is not a claim that those
+settings are absent, and missing live credentials alone would not block a
+credential-free simulation.
+
+No hosted simulation proof, live candidate, success-summary recovery, durable
+operator custody, preview adoption, application scan proof, recurring live
+cadence or retirement gate closed. Prompt 395's refresh deadline remains the
+historical bound **no later than about 2026-10-21T09:02Z**, potentially earlier;
+this investigation neither refreshed the scanner nor extended that bound.
+Storage accounting, the production plan, Phase 12 exit and all eleven sign-offs
+remain open. Inspect this passage and rerun the focused command above under
+Node 24.21.0; no application server is needed. Rollback is a local documentation
+revert, with no provider state to undo.
+
+Independent read-only review used the approved prompt, baseline/current local
+SHA `b9f3821`, complete diff, sanitized inventory, remote/local source digests
+and actual check logs. It returned **Critical: None; Important: None; Minor:
+None**, ready for local commit. Receiving-review evaluation confirmed the source
+parent relationship, append-only scope, exact action counts and distinction
+between inaccessible settings and absent configuration; no fix was required.

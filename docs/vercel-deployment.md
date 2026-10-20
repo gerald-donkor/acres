@@ -2984,3 +2984,38 @@ for restricted-run failures, exact outputs and review evaluation.
 No hosted dispatch, GitHub secret configuration, live rebuild, provider inspection,
 environment adoption, deployment or retirement ran. Hosted cadence, storage
 accounting, production plan, Phase 12 exit and all eleven sign-offs remain open.
+
+## Scanner workflow hosted readiness — Prompt 404 (2026-10-20)
+
+Hosted simulation remains **blocked; zero dispatches**. During
+`2026-10-20 01:26:53–01:29:29 UTC`, the GitHub connector confirmed the public
+repository `gerald-donkor/acres`, default branch `main`, and remote source
+`c802e905e03cf9cb74614eabf843f251fe584ae6`. Local reviewed Prompt 403 commit
+`b9f382163d3589454971073f15a3d9d622a8f340` is that commit's direct child and
+was not on remote main. The immutable remote workflow still has the older inline
+summary; `summarize-scanner-candidate.js` returned 404. No older-source run was
+substituted for the approved receipt-recovery proof.
+
+The next prerequisite is a separate standalone uppercase **`P`** to authorize
+the guarded normal push. This prompt authorized no push. After publication,
+recheck exact remote source and hosted prerequisites in a separately bounded
+continuation: workflow registration/enabled state and effective policy, usable
+dispatch access, idle concurrency, and current free execution allowance. The
+existing connector supports repository/file/run reads but exposes no dispatch
+operation or required settings inventory; its workflow-list GET was rejected.
+`gh --help` failed with a mise read-only-filesystem installation error; no tool
+installation, authentication change or settings write was performed.
+
+All 51 repository runs were enumerated; both scanner entries were completed at
+inspection. Those historical metadata entries establish neither current workflow
+enabled state nor Prompt 403 execution. Live secret-name availability and the
+three allowlisted variable settings remain inaccessible, not known absent.
+Public visibility alone was not used as allowance evidence. No Vercel call or
+present snapshot-state check occurred.
+
+See [the readiness matrix, source digests and actual checks](operations.md#prompt-404--scanner-workflow-hosted-readiness-and-simulation-2026-10-20).
+Live preparation, receipt recovery/custody, adoption/application proof, recurring
+live cadence and retirement remain separate gates. The historical Prompt 395
+refresh bound (no later than about `2026-10-21T09:02Z`, possibly earlier) is
+unchanged. Storage accounting, production plan, Phase 12 exit and eleven sign-offs
+remain open; no completion percentage changes.

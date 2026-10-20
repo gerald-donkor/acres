@@ -4306,3 +4306,20 @@ The copied JSON is reconstructed unsigned consistency evidence requiring trusted
 run/source review and restricted operator custody. No hosted operation or launch
 approval ran. Hosted cadence, storage accounting, production plan, Phase 12 exit
 and all eleven sign-offs remain open.
+
+## Scanner workflow hosted readiness — Prompt 404 (2026-10-20)
+
+The bounded Phase 12/Prompt 370 investigation verified GitHub repository identity
+and remote `main` at `c802e905e03cf9cb74614eabf843f251fe584ae6`, the direct
+parent of reviewed local Prompt 403 commit `b9f3821`. The reviewed workflow/helper
+are not published there. **Zero dispatches**: no older workflow was substituted.
+Source publication requires a separate standalone uppercase `P`; a later bounded
+continuation must recheck workflow availability/policy, dispatch access, idle
+concurrency and free execution allowance. Required settings metadata remains
+inaccessible through the available connector/failed CLI, not known absent.
+
+See [the readiness inventory and verification](operations.md#prompt-404--scanner-workflow-hosted-readiness-and-simulation-2026-10-20)
+and [the next hosted gate](vercel-deployment.md#scanner-workflow-hosted-readiness--prompt-404-2026-10-20).
+This documents blockers; hosted simulation, live scanner cadence, storage
+accounting, production plan, Phase 12 exit and all eleven sign-offs remain open.
+No application/workflow/configuration change, Vercel call or push occurred.
