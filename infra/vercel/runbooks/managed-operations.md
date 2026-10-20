@@ -529,6 +529,17 @@ procedure:
    deployment's logs, and check anonymous Blob reads and cross-organization
    reads fail.
 
+   Validate the returned PUT contract against the installed Blob SDK before
+   sending bytes. SDK 2.8.2 signs `https://vercel.com/api/blob/` with an exact
+   `pathname` query; private GETs use the object's storage host. Preserve the
+   signed PUT URL and returned headers, with no application cookies, CSRF,
+   protection bypass or API token on that transport. Anonymous privacy checks
+   use the unsigned object URL, never a signed capability. Correlate terminal
+   jobs against the processor contract: clean scans record `succeeded`, while
+   infected uploads record `failed` with `lastErrorCode: infected` and an
+   `infected` dead-letter reason. That expected rejection does not require a
+   retry. See [Prompt 406's partial acceptance record](../../../docs/operations.md#prompt-406--retained-preview-partial-acceptance-2026-10-20).
+
 Deployment metadata names the scanner variables but not their values;
 identity remains an inference from write-before-create ordering, the
 adapter's source and hash checks, and the snapshot's expiry moving at scan

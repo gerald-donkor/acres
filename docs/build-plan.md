@@ -4352,3 +4352,19 @@ See [the attempt and conditional recovery](operations.md#continuation--allowance
 and [the retained preview](vercel-deployment.md#prompt-405-continuation--candidate-deployed-acceptance-incomplete).
 Rebuild/probe/deploy budgets are consumed. Application scan acceptance, the old
 configuration's refresh deadline, hosted cadence and Phase 12 exit remain open.
+
+## Phase 12 retained preview partial acceptance — Prompt 406 (2026-10-20)
+
+One bounded continuation proved replacement clean `accepted`/`clean` and EICAR
+`rejected`/`infected` through Prompt 405's retained preview. The old pending
+upload was retained after expiry; exactly two new uploads/PUTs/completions
+occurred. A verifier incorrectly expected EICAR's durable job to succeed and
+stopped before B/isolation. The correct terminal job is `failed`/`infected`;
+a separate corrected verifier passed offline tests without a live rerun.
+
+Read-only privacy, ledger/job, no-publication and cleanup checks passed. Project
+configuration remains Prompt 395; zero adoption, rebuild, probe or deployment
+actions. Complete acceptance, guarded adoption, hosted cadence and Phase 12 exit
+remain open. The next gate is bounded isolation proof on the existing artifacts.
+See [the partial execution record](operations.md#prompt-406--retained-preview-partial-acceptance-2026-10-20)
+and [current project versus retained deployment state](vercel-deployment.md#retained-preview-partial-acceptance--prompt-406-2026-10-20).

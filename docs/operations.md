@@ -14645,3 +14645,203 @@ evaluation confirmed the six-request/pre-PUT boundary, guarded restoration,
 source/test evidence and qualified freshness/identity claims against the inspected
 files. No correction or re-review was needed. No cloud calls or private custody
 reads were made by the reviewer; application scan acceptance remains incomplete.
+
+## Prompt 406 — retained preview partial acceptance (2026-10-20)
+
+**Result: clean and EICAR scan outcomes proven; complete acceptance and project
+adoption remain incomplete.** A second private-verifier assertion stopped the
+single bounded run before B creation or tenant-isolation checks. This is an
+agent-authored verifier defect, not a demonstrated application scan failure.
+No acceptance rerun or configuration write followed.
+
+### Identity, prerequisites and private verifier
+
+Local `main` started at `527c98a0afb55f2063b40dfdc2d7014076091fd6`, with only
+the approved Prompt 406 untracked. The retained immutable preview remained
+[`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app),
+Ready in `iad1`, source `9744d812e08de5313f1191e1fb609c513409d26a`.
+The intervening local commit records Prompt 405 recovery; no runtime change was
+deployed. Fixed team/project IDs matched the approved target.
+
+Fresh API reads at about `07:04Z` confirmed active Hobby billing,
+`softBlock: null`, `blocked: null`, empty `featureBlocks`, project ownership and
+the retained Ready deployment. A new private pull matched Prompt 395's restored
+configuration; all five scanner records were preview-only with no branch
+override, provider `vercel-sandbox`, maximum signature age `48`. The stale root
+`scanner.env` was unused. Receipt/runtime digests and full hashes were recomputed
+against Prompt 405's original handoff; its smoke and seam gates remained valid
+historical evidence. The initial SDK inventory call omitted the required
+explicit token alongside team/project and failed locally; a corrected read used
+the repository's verified `sandboxTarget` / `credentialsFor` helpers. No creation
+was attempted by either read.
+
+The owner-reported `06:28/06:29Z` usage crops were re-inspected: 2.31 GB / 15 GB
+storage, 45 creations, 14m 6s CPU, 2.0 GB-hours memory and 40.26 MB transfer.
+At the `07:08:48.843Z` final preflight they were about 41 minutes old, with three
+known intervening producer/smoke/seam VMs. Together with fresh active/no-block
+metadata and the large displayed margin, these supported the two-scan allowance
+gate as a **judgment**, not a fresh metered reading. The crops do not independently
+show target/period labels. Four live created snapshots totalled 1,844,414,400
+listed bytes, with zero sandboxes; three deleted historical records also appeared
+in SDK pagination. Inventory bytes are not billing accounting, and storage
+accounting remains unresolved.
+
+The private PUT validator was corrected against installed Blob SDK 2.8.2 source:
+PUT uses `https://vercel.com/api/blob/`, while object GET uses the storage URL.
+It checks exact HTTPS origin/path, single matching pathname, expiry, method,
+returned content-type, decoded store/owner/path/operation/size/type constraints
+and the SDK query shape without inventing signature verification. It preserves
+the returned capability intact. PUT transport uses only returned headers and
+bytes, `credentials: omit`, redirect denial and a deadline; application cookies,
+CSRF, Vercel protection bypass and API credentials stay on their separate app
+transport. Offline synthetic cases covered hostile URLs, expiry, credential
+separation, exact single-send behavior, replacement selection and stop-on-failure:
+`tests 23`, `pass 23`, `fail 0`, exit 0. Syntax checks passed before live use.
+
+### Bounded application run and stop
+
+The live run was `07:08:57.724–07:10:30.582Z`. A's retained session, account and
+organization were reused; no login, A replacement or mail occurred. Fresh CSRF
+and organization reads passed. `/app` returned 200 with `id="dashboard-title"`
+and no `role="alert"`.
+
+The original clean upload remained `pending_upload`, null scan status, with no
+Blob object, outbox or job. Its stored signed-PUT expiry was
+`2026-10-20T06:57:45.871Z`; it was retained untouched and never sent. Exact
+original bytes/hash were available, so the single authorized replacement branch
+was selected before any PUT. The run created exactly two new upload rows and
+made two PUTs and two completions: replacement clean plus EICAR. Both PUTs
+returned 200, and no ingestion/publish command was made.
+
+| Gate                          | Observed result                                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Replacement clean             | `accepted` / scan `clean`; object `accepted`; job `succeeded`, attempt 1, no error                                                 |
+| EICAR                         | `rejected` / scan `infected`; object `rejected`; job `failed`, attempt 1, `lastErrorCode: infected`; dead-letter reason `infected` |
+| Outbox                        | One `dispatched` event per submitted upload, each attempt 1                                                                        |
+| Published dataset versions    | Zero for the exact three upload IDs                                                                                                |
+| Unsigned private-object reads | Clean 403 during acceptance; EICAR 403 during final read-only inspection                                                           |
+| EICAR application download    | 404 / `NOT_FOUND`, no data, during final read-only inspection                                                                      |
+| B and tenant isolation        | Not executed; zero new accounts/organizations, no forged-header or B-scoped SQL proof                                              |
+
+After EICAR reached its intended terminal state, the verifier incorrectly
+asserted every durable job must be `succeeded`. It exited 1 on actual `failed`.
+`server/src/worker/job-processor.service.ts` explicitly records non-clean scans
+as failed with a rejection dead letter; the observed ledger is correct. The
+assertion should have distinguished clean success from infected rejection before
+live execution. The original verifier and failure evidence are preserved.
+A separate corrected copy now requires `succeeded` for clean and
+`failed`/`infected` for EICAR. Its offline regressions exited 0: `tests 26`,
+`pass 26`, `fail 0`. **The corrected copy was not executed live.**
+Independent review subsequently found that the unused B correlation queries
+also filtered by B's organization, making zero A rows a vacuous RLS check.
+A separately preserved `acres406-accept-reviewed-v2.cjs` removes those organization
+predicates: exact A IDs are queried under transaction-local B context, with A
+positive-control visibility required earlier by the revised flow. Its syntax
+check passed; neither B context nor the revised queries were executed live.
+
+The stop occurred after 15 successful app requests (four POSTs) and two Blob
+PUTs. No B registration, organization creation, manual job retry, Cron kick,
+second acceptance run, rebuild, seam probe, deploy, alias, push, deletion or
+production action followed. Only permitted read-only correlation and cleanup
+inspection continued. One auxiliary download-read command initially misplaced
+the Vercel `--scope` flag after the curl separator and exited 2 locally before
+HTTP; corrected read-only flag ordering returned the 404 recorded above.
+
+Read-only SQL used the designated preview `acres_app` connection, verified
+non-superuser/NOBYPASSRLS and transaction-local A account/organization context,
+with parameterized exact-ID reads and no worker context. It confirmed the
+original pending row and both terminal rows, two outbox events, two terminal
+jobs, the EICAR dead letter and zero versions. The existing `pg` SSL-mode
+forward-compatibility warning appeared; TLS verification was not weakened.
+
+### Cleanup, configuration and remaining gate
+
+At `07:11:35.394Z`, SDK inventory showed zero sandboxes and the same four live
+snapshots; no snapshot was retired. Candidate
+`snap_8OP5G2tCUvxtRdoGFMCu5se58f3N` moved from last-use `06:36:34.139Z` to
+`07:10:08.692Z`, with expiry extended by the provider. The other three snapshot
+metadata records were unchanged. Both jobs have attempt 1; no automatic
+redelivery is evident in the inspected ledger. Transient VM IDs/creation counts
+were not captured: two application VM lifecycles are inferred from the two jobs
+and adapter source, not a provider creation-count measurement. Clean success
+requires successful cleanup, and the final empty inventory supports no residue.
+
+The deployment-scoped `service:jobs` runtime query exited 0, returned one log
+and no pagination/excluded interval: `07:10:21.621Z`, `iad1`, the exact EICAR
+upload/job/organization and `infected/Eicar-Test-Signature`. No clean log was
+returned; its terminal ledger supplies that proof. Candidate binding remains
+an **inference** from Prompt 405's verified writes before immutable deployment,
+unchanged source/hash checks, successful clean scan and changed candidate use
+metadata. Provider metadata does not attest the resolved scanner env values.
+
+Fresh pull/scopes at `07:12:58.762Z` verified the project still points to Prompt
+395's `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`, with unchanged scanner values, full
+key/scopes and record modification metadata. Volatile OIDC is excluded from
+readable-value comparison; redacted sensitive plaintext equality is unproved.
+**Zero adoption/restoration writes.** The immutable preview retains its candidate;
+project settings govern future deployments. No functional rollback is claimed.
+
+The next prerequisite is a separately bounded tenant-isolation continuation
+against the existing artifacts, followed only on complete acceptance by guarded
+project adoption. No new payload or scan is needed to inspect these retained
+results. The failed run supplies no authority to retry, create B or adopt later.
+The restored project's historical signature upper bound remains no later than
+about `2026-10-21T09:02Z`, possibly earlier. The candidate's producer interval
+`2026-10-20T06:33:39.250–06:35:09.451Z` gives only an upper bound no later than
+`2026-10-22T06:35:09.451Z`, possibly earlier without its CVD timestamp; scans and
+snapshot last-use do not reset signature age. Reserve about two hours before
+that bound for any continuation (planning judgment). Hosted cadence, billing
+accounting, retirement, production plan and eleven sign-offs remain open.
+
+Custody: `~/.config/acres/vercel-preview/prompt406-20261020T070600Z/`, directory
+0700, data 0600 and executable verifier files 0700. It contains target/config
+reads, inventory, preflight/failure history, original and corrected verifier,
+offline outputs, request files and action journal, PUT receipts, acceptance
+failure, exact scoped correlations, deployment job logs and final read-only
+checks. Prompt 405 custody was not overwritten. This is restricted local
+evidence, not a signed production dossier. Prepared scratch adoption code was
+not invoked; no adoption was attempted.
+
+### Repository verification and review
+
+Node 24.21.0 and existing CLI 64.5.0 were used; no dependencies/tools changed.
+Post-attempt commands ran in the prescribed order (the offline suite was also
+retried after the sandbox failure):
+
+- `node scripts/vercel/check-vercel-config.js`: exit 0,
+  `vercel.json configuration valid`.
+- `npm run vercel:probe-test`: restricted run exit 1, file-level `tests 8`,
+  `pass 4`, `fail 4`. A direct manifest spec reproduced its child-CLI assertion
+  failure. The unchanged suite outside the sandbox exited 0: `tests 443`,
+  `suites 6`, `pass 443`, `fail 0`. No cloud action occurs in these tests.
+- `npm run lint`: exit 0 across client/shared/server, no diagnostics.
+- `npm run typecheck`: exit 0 across all workspaces,
+  `Generated Prisma Client (7.9.1)`, no diagnostics.
+- `npm run build`: restricted run exit 1,
+  `Error: Could not parse output from TypeScript's --showConfig.` The unchanged
+  build outside the sandbox exited 0: successful Next 16.3.8 build,
+  `Generating static pages using 7 workers (23/23)`, shared and Nest builds,
+  `Generated Prisma Client (7.9.1)`. No deploy followed.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- Installed Prettier on Prompt 406 and the new documentation passages: exit 0,
+  `All matched files use Prettier code style!`. Whole-file historical formatting
+  is preserved separately from the additions.
+- `git diff --check`: exit 0, no output.
+
+Local logs are `/tmp/acres406-*.log`; private verifier syntax and 23/26-test
+outputs remain in custody. These checks do not supply missing tenant-isolation
+evidence. No aggregate ops check, online audit, full DB/browser suite or launch
+drill was run.
+
+Independent read-only review used baseline/current HEAD `527c98a`, the complete
+working diff, approved prompt, sanitized verifier source and safe evidence/check
+outputs. It found no Critical or Important issue in the tracked partial record,
+and one Important future-verifier issue: the vacuous B organization filter
+described above. Receiving-review evaluation verified that finding against all
+four SQL statements, corrected only a separately retained offline revision and
+left live acceptance stopped. Focused re-review confirmed the exact-ID queries,
+A positive controls and truthful incomplete status; no blocking findings remain.
+The reviewer independently ran `tests 26`, `pass 26`, `fail 0`, syntax and
+`git diff --check`, with no private credential reads or cloud actions. This
+approves the local partial record for commit, not hosted isolation, adoption or
+launch.

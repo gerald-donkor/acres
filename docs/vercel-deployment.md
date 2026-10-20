@@ -23,6 +23,21 @@ preview image routing repair); each
 inherits 370's approval limits. A new session resumes from this section and
 `git log`.
 
+**Current manual scanner gate — Prompt 406 (2026-10-20).** This supersedes the
+older next-refresh instructions below. Project preview configuration still
+points to Prompt 395's `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`; its historical
+signature upper bound remains no later than about `2026-10-21T09:02Z`, possibly
+earlier. Retained immutable deployment `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`
+uses Prompt 405's candidate by inference from verified writes before creation.
+Prompt 406 proved clean and EICAR outcomes there, but a verifier assertion
+stopped before tenant isolation; no adoption occurred. The next gate is separately
+bounded isolation proof on the existing artifacts, then guarded project adoption
+on complete acceptance. No new scan, builder, probe or deploy is needed for those
+reads. Candidate freshness is bounded only by its original producer interval:
+no later than `2026-10-22T06:35:09.451Z`, possibly earlier without a CVD timestamp.
+Reserve roughly two hours before that bound (planning judgment); acceptance and
+snapshot last-use do not extend it. See [the current partial record](#retained-preview-partial-acceptance--prompt-406-2026-10-20).
+
 **Fixed target.** Team `dgsloxx417's projects`
 (`team_zE3mp7nrEZ6a7cxRavwUMYC4`), project `acres`
 (`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`), region `iad1` / `aws-us-east-1`,
@@ -3097,3 +3112,49 @@ that accounts for the existing pending upload and fixes the verifier contract.
 See [the complete continuation and recovery evidence](operations.md#continuation--allowance-evidence-candidate-and-preview-06310645-utc).
 Custody: `prompt405-20261020T063209Z/` under the approved parent. No push,
 promotion, deletion, hosted cadence or launch approval occurred.
+
+## Retained preview partial acceptance — Prompt 406 (2026-10-20)
+
+Fresh active-Hobby/no-block metadata, re-inspected recent owner usage evidence,
+verified restored preview scopes and candidate handoff supported one bounded
+run against the retained
+[preview](https://acres-pbbb1g728-dgsloxx417s-projects.vercel.app), deployment
+`dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`, source
+`9744d812e08de5313f1191e1fb609c513409d26a`. No new deployment, rebuild or seam
+probe occurred. Local execution baseline was `527c98a`.
+
+The corrected PUT contract passed offline validation. A's existing account,
+organization and session were reused. Its original pending signed URL had
+expired, so the row was retained without PUT and one replacement clean upload
+was initiated. Clean reached `accepted` / `clean`; EICAR reached `rejected` /
+`infected`. Each outbox event dispatched once and each job ran once. Clean's
+job is `succeeded`; EICAR's is correctly `failed` with `infected`. The verifier
+incorrectly required success for both and stopped before B creation/isolation.
+A corrected copy passed 26 offline tests and was never rerun live.
+
+Read-only inspection confirmed unsigned clean/EICAR object reads 403, EICAR
+download 404, zero linked dataset versions, original row still pending, zero
+remaining sandboxes and all four snapshots retained. The exact deployment's
+job log corroborates EICAR rejection. Candidate use metadata changed at scan
+time; binding remains an inference rather than resolved-env attestation.
+
+**Complete acceptance/adoption remain incomplete.** No configuration write or
+recovery was needed. Final pull/scopes verified project preview settings still
+match Prompt 395's `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`; the immutable retained
+preview continues to use Prompt 405's candidate
+`snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`. The project's old signature upper bound
+remains no later than about `2026-10-21T09:02Z`, possibly earlier. The
+candidate's original producer interval supplies an upper bound only, no later
+than `2026-10-22T06:35:09.451Z`, possibly earlier absent its CVD timestamp.
+Neither scans, acceptance nor last-use extends that signature window.
+
+Next: separately bounded isolation proof using these existing artifacts, then
+guarded adoption only on complete acceptance. Allow roughly two hours before
+the candidate upper bound (planning judgment); no new scan/PUT is needed for
+the retained isolation reads. No B creation or adoption is implicitly authorized
+by this record. Hosted cadence, storage accounting, retirement, production
+activation and all eleven sign-offs remain open.
+
+See [the exact actions, failed assertion and checks](operations.md#prompt-406--retained-preview-partial-acceptance-2026-10-20).
+Private custody: `prompt406-20261020T070600Z/` under the approved parent. No push
+or production action occurred.
