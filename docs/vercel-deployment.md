@@ -3019,3 +3019,38 @@ live cadence and retirement remain separate gates. The historical Prompt 395
 refresh bound (no later than about `2026-10-21T09:02Z`, possibly earlier) is
 unchanged. Storage accounting, production plan, Phase 12 exit and eleven sign-offs
 remain open; no completion percentage changes.
+
+## Scanner refresh 3 prerequisite stop — Prompt 405 (2026-10-20)
+
+Status: **current free allowance unverified; no rebuild, adoption or deployment
+attempted.** Local source `a405817a22d6fac0d98fe54893235a5f0aa7a394` on
+`main`; Node 24.21.0, cached CLI 64.5.0 and SDK 3.8.0. Fresh read-only
+inspection at approximately `02:02–02:05:46Z` confirms the active preview ID
+`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` and both full hashes match Prompt 395's
+candidate and handoff. All five scanner settings are still encrypted and
+preview-only without branch overrides; provider `vercel-sandbox`, max age `48`.
+The stale root `scanner.env` was not used. One new private preview pull refreshed
+OIDC; target claims and the 75-minute floor passed local precheck.
+
+Project-filtered SDK lists plus exact reads found no sandboxes, the same three
+created snapshots (`snap_KBaj…`, `snap_ngIw…`, `snap_CARv…`) in `iad1`, and
+the tier-1 snapshots still deleted. Created bytes total 1,383,290,151; this is
+inventory evidence only. The CLI usage read exited 1 with billing cost data
+unavailable for October 1–20. No browser or Vercel connector is available in
+this session to inspect current allowance; owner dashboard evidence remains
+pending. The current plan, quota/pause state and Prompt 396 accounting question
+are not resolved by this listing. Prompt 405's allowance gate stopped creation.
+
+Local simulation and focused tests passed (`tests 226`, `pass 226`, `fail 0`);
+the full tooling suite passed (`tests 443`, `pass 443`, `fail 0`). Config,
+lint, typecheck, production build and secret scan passed. See
+[the evidence, exact action counts and verification](operations.md#prompt-405--scanner-refresh-3-prerequisite-stop-2026-10-20).
+Private custody is `prompt405-20261020T020204Z/` under the approved parent;
+no new receipt, candidate bundle, deployment URL or application proof exists.
+
+Resume the unused bounded attempt only after current free allowance/accounting
+evidence and fresh state/OIDC checks. The historical signature upper bound remains
+**no later than about 2026-10-21T09:02Z**, potentially earlier; current scanner
+freshness was not measured and no extension is claimed. Hosted cadence,
+retirement, production plan, Phase 12 exit and eleven sign-offs remain open.
+No configuration restoration is required; nothing was pushed.

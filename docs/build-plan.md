@@ -4323,3 +4323,17 @@ and [the next hosted gate](vercel-deployment.md#scanner-workflow-hosted-readines
 This documents blockers; hosted simulation, live scanner cadence, storage
 accounting, production plan, Phase 12 exit and all eleven sign-offs remain open.
 No application/workflow/configuration change, Vercel call or push occurred.
+
+## Scanner refresh 3 prerequisite stop — Prompt 405 (2026-10-20)
+
+Phase 12 / Prompt 370's next manual refresh stopped before creation: current
+free Sandbox allowance/accounting is unverified. Fresh preview configuration
+matches Prompt 395's active snapshot and hashes; the three retained snapshots
+and zero sandboxes were confirmed. Local simulation, focused 226-test and full
+443-test tooling suites, config, lint, typecheck, build and secret scan passed.
+**Zero live rebuilds, configuration writes, deployments or uploads.**
+
+See [the prerequisite evidence and actual checks](operations.md#prompt-405--scanner-refresh-3-prerequisite-stop-2026-10-20)
+and [the resume gate](vercel-deployment.md#scanner-refresh-3-prerequisite-stop--prompt-405-2026-10-20).
+The existing signature upper bound is unchanged; refresh/adoption/application
+proof, storage accounting, hosted cadence and Phase 12 launch exit remain open.

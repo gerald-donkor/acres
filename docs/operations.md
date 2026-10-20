@@ -14333,3 +14333,142 @@ and actual check logs. It returned **Critical: None; Important: None; Minor:
 None**, ready for local commit. Receiving-review evaluation confirmed the source
 parent relationship, append-only scope, exact action counts and distinction
 between inaccessible settings and absent configuration; no fix was required.
+
+## Prompt 405 — scanner refresh 3 prerequisite stop (2026-10-20)
+
+**Result: current free allowance unverified; no live rebuild attempted.**
+Approved Prompt 405 permits one candidate rebuild, one seam probe and one preview
+deployment after its prerequisite gates. This records the verified prerequisite
+stop, not a completed refresh, adoption or application acceptance. No runtime,
+workflow, dependency or runbook change was made.
+
+### Source, access and inspected state
+
+Local `main` started at `a405817a22d6fac0d98fe54893235a5f0aa7a394`, with only
+the approved Prompt 405 untracked. Its parent `b9f3821` implements Prompt 403;
+`a405817` records Prompt 404's blocked hosted investigation. No intervening
+implementation was inferred from a prompt. No push or remote-source gate was
+required for this local manual preflight.
+
+Initial UTC check: `2026-10-20T02:01:28Z`. Read-only access/state inspection ran
+approximately `02:02–02:05:46Z`; the SDK inventory timestamp is
+`2026-10-20T02:03:50.612Z`. Installed Node **24.21.0** was selected explicitly;
+direct Node and `npm exec --offline -- node` both reported `v24.21.0` and the
+same executable. Cached Vercel CLI **64.5.0** version/help was inspected without
+installation or login; `whoami` returned `dgsloxx417` (exit 0).
+
+One fresh `env pull --environment=preview` for project
+`prj_q9ApajZWDgdYZetnm5s5oakEjrUD`, team `team_zE3mp7nrEZ6a7cxRavwUMYC4`,
+completed with exit 0. The new private file's active scanner ID is
+`snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf`. Its ID and both full hashes match
+Prompt 395's `candidate.env` and `handoff/runtime.env`; main prefix `0b2182d2`,
+daily prefix `7cb49401`. The prior receipt reports success, and recomputed
+receipt/runtime digests match its handoff manifest (`eec8c15f…79e4fd35b3` /
+`af1ba4f2…47f2580a`). The stale custody-root `scanner.env` was not used.
+
+`env ls preview --json` (exit 0) confirms all five scanner variables remain
+encrypted, preview-only, with no branch override. Provider is `vercel-sandbox`;
+maximum signature age remains `48`. Decoded OIDC owner/project claims match
+the fixed target; expiry is `2026-10-20T14:02:34Z`, initially 719 minutes away,
+above the 75-minute producer floor. This local decoding is not cryptographic
+JWT verification.
+
+SDK **3.8.0** project-filtered `Snapshot.list` and `Sandbox.list`, followed by
+three exact `Snapshot.get` calls, found zero sandboxes and the expected retains:
+
+| Snapshot                            | State / region |       Bytes | Expiry (UTC)             |
+| ----------------------------------- | -------------- | ----------: | ------------------------ |
+| `snap_KBajgHVkU9SqHgDSJzNqHs4SFhvf` | created / iad1 | 461,123,163 | 2026-10-27T09:09:29.002Z |
+| `snap_ngIwnQplocPoUR0A6cewfCGrFAbX` | created / iad1 | 461,101,901 | 2026-10-26T16:14:25.251Z |
+| `snap_CARvOfNjBSdUWWMwrkuEQmnZsQxN` | created / iad1 | 461,065,087 | 2026-10-26T14:08:18.638Z |
+
+The listing also reports the three tier-1 IDs as deleted, consistent with
+Prompt 396. Created snapshot bytes total **1,383,290,151**. This verifies
+inventory, not billed usage, quota recovery or current signature freshness.
+No unexplained configuration or inventory change was found.
+
+### Blocking gate and action boundary
+
+`vercel usage --json --scope <selected-team>` exited 1:
+`Error: Billing cost data is unavailable for 2026-10-01 through 2026-10-20.`
+The diagnostic explicitly says this does not mean usage was zero. Computer-use
+inventory returned no apps or browsers, and no Vercel connector is exposed in
+this session. Current plan/allowance and pause state therefore remain
+unverified; no historical Hobby reading or stored-byte total substitutes for
+them. The owner was asked for the selected team's current Usage → Sandbox
+usage/limits, reporting period, update time and warnings, including Snapshot
+Storage. No reading had been supplied at this prerequisite stop. Prompt 396's
+storage-accounting discrepancy remains unresolved.
+
+Prompt 405 explicitly stops before creation on unresolved allowance/accounting.
+Action counts: **0 live producer invocations, 0 builder/smoke/seam VMs,
+0 new snapshots, 0 scanner configuration writes, 0 deployments, 0 synthetic
+accounts/organizations/uploads, 0 database or worker-log reads, 0 deletions,
+0 GitHub dispatches/configuration writes, 0 mail and 0 pushes**. There were
+four provider-facing CLI invocations (identity, one fresh preview pull, variable
+listing and the unavailable usage read) and five explicit SDK reads (two lists,
+three gets); these are top-level counts, not wire-request accounting.
+
+No new candidate receipt, handoff bundle, candidate digest, immutable deployment
+URL or application scan proof exists for this run. No configuration restoration
+is needed because adoption was not reached. The snapshot metadata does not
+prove that the existing scanner currently passes the signature-age check.
+Prompt 395's historical upper bound stays **no later than about
+2026-10-21T09:02Z**, possibly earlier because its CVD build time is unknown.
+At inspection there was about 31 hours to that upper bound; the three-hour
+adoption margin remains a planning judgment, not a freshness measurement.
+
+### Local checks and custody
+
+Actual Node 24.21.0 checks, in the approved order:
+
+- `npm run vercel:scanner-rebuild -- --help`: exit 0, existing CLI usage.
+- `npm run vercel:scanner-rebuild -- --dry-run`: exit 0,
+  `"status":"success"`, `"execution_mode":"simulation"`,
+  `"activation_status":"not_performed"`; no candidate or smoke result.
+- Focused builder/cadence/handoff specs: normal subprocess-enabled exit 0,
+  `tests 226`, `suites 6`, `pass 226`, `fail 0`. The initial restricted run
+  exited 1 with file-level `'test failed'` diagnostics (`tests 3`, `pass 1`,
+  `fail 2`); the normal rerun passed without a source change.
+- `node scripts/vercel/check-vercel-config.js`: exit 0,
+  `vercel.json configuration valid`.
+- `npm run vercel:probe-test`: normal subprocess-enabled exit 0,
+  `tests 443`, `suites 6`, `pass 443`, `fail 0`.
+- `npm run lint`: exit 0 across all three workspaces, no diagnostics.
+- `npm run typecheck`: exit 0 across shared/client/server,
+  `Generated Prisma Client (7.9.1)`, no type diagnostics.
+- `npm run build`: exit 0 across shared/client/server; Next **16.3.8**,
+  `Generating static pages using 7 workers (23/23)` and successful Nest build.
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- Installed Prettier on the approved prompt and extracted new passages: exit 0,
+  `All matched files use Prettier code style!`. Full-document checks before and
+  after editing both exit 1 with the same three warnings (`docs/operations.md`,
+  `docs/vercel-deployment.md`, `docs/build-plan.md`); existing formatting was
+  preserved.
+- `git diff --check`: exit 0, no output; diff review confirms only appended
+  documentation and the approved prompt, with no runtime change.
+
+Private custody:
+`~/.config/acres/vercel-preview/prompt405-20261020T020204Z/` (0700, all files
+0600). It holds source identity, fresh preview configuration, variable listing,
+identity/pull/usage output, snapshot inventory and sanitized `preflight.json`.
+Prior Prompt 395 files were read only. Local check logs use
+`/tmp/acres405-*.log`; neither location is a signed production evidence store.
+No aggregate operations, dependency audit, database/browser suite or hosted
+application acceptance was run or claimed.
+
+Resume requires current target-bound free allowance/accounting evidence and
+fresh source/configuration, inventory, time and OIDC checks before spending the
+still-unused live attempt budget. Do not infer success from the offline tests.
+Hosted cadence, retirement, production plan, Phase 12 exit and eleven sign-offs
+remain open. Inspect this passage and run the focused command in Prompt 405
+under Node 24.21.0; no application server is needed. Documentation rollback is
+a local revert; no scanner/provider mutation needs undoing.
+
+Independent read-only review used the approved prompt, baseline/current HEAD
+`a405817`, complete working diff, sanitized provider facts and actual local
+check logs. It returned **Critical: None; Important: None; Minor: None**, ready
+for local commit as a prerequisite-blocked investigation. Receiving-review
+evaluation checked the source history, allowed file scope, test totals and
+unused action budget against the inspected evidence; no correction was needed.
+The reviewer accessed neither cloud resources nor private custody.
