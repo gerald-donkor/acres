@@ -6,6 +6,7 @@ import {
   Res,
   VERSION_NEUTRAL,
 } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import type {
   Request as ExpressRequest,
@@ -22,6 +23,7 @@ import { ManagedDispatchRunnerService } from './managed-dispatch-runner.service'
  * Delegates to the verified `createDispatchHandler` core for constant-time
  * bearer secret comparison and sanitized reporting.
  */
+@ApiExcludeController()
 @SkipThrottle()
 @Controller({ path: 'cron', version: VERSION_NEUTRAL })
 export class CronDispatchController {

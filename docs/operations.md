@@ -15553,3 +15553,35 @@ records still fail closed (Compose 70 blockers, managed 61, as recorded by
 Prompt 412). Production promotion, DNS, production secrets, live drills and
 the eleven sign-offs remain operator-owned. This record does not name the next
 repository engineering unit.
+
+## Prompt 414 — exclude cron dispatch controller from openapi contract (2026-10-20)
+
+**Result: OpenAPI contract drift resolved; CI `contracts:check` gate passes.**
+
+Resolves a contract drift failure detected by `npm run contracts:check` caused by
+`CronDispatchController` (`/cron/dispatch`) lacking `@ApiExcludeController()`
+from `@nestjs/swagger`. Planning baseline was `6df051e` on `main`.
+
+Execution summary:
+
+1. **Swagger controller exclusion**:
+   Annotated `CronDispatchController` in `server/src/outbox/cron-dispatch.controller.ts`
+   with `@ApiExcludeController()` from `@nestjs/swagger`. This ensures that the
+   private Vercel Cron sweep webhook (`/cron/dispatch`, protected by constant-time
+   `CRON_SECRET` bearer authentication) is excluded from the public versioned REST API
+   OpenAPI documentation in `docs/api/openapi.json`.
+2. **Regression test**:
+   Added a unit test in `server/src/outbox/cron-dispatch.controller.spec.ts` asserting
+   that `'swagger/apiExcludeController'` metadata is defined on `CronDispatchController`.
+3. **Repository verification**:
+   - `npm run contracts:check`: exit 0, zero contract drift detected against `docs/api/`.
+   - `npm run test --workspace=@acres/server -- cron-dispatch.controller.spec.ts`: exit 0, 6/6 tests passing.
+   - `npm run test --workspace=@acres/server`: exit 0, 142/142 suites and 2166/2166 tests passing.
+   - `npm run typecheck`: exit 0 across all workspaces.
+   - `npm run lint`: exit 0 across client/shared/server.
+   - `node scripts/vercel/check-vercel-config.js`: exit 0, `vercel.json configuration valid`.
+   - `git diff --check`: exit 0.
+
+Remaining launch gates: hosted scheduled cadence source publication (requires standalone
+uppercase `P`), operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+No push or production action occurred.

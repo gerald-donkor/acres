@@ -2079,7 +2079,12 @@ The committed generated artifacts are:
 extracts Swagger and `GraphQLSchemaHost`, then writes deterministic JSON/SDL
 and the human route/resolver matrix. `npm run contracts:check` generates to a
 temporary directory and fails if any artifact drifts. `.github/workflows/ci.yml`
-runs the contract check after build and before database setup.
+runs the contract check after build and before database setup. Internal
+infrastructure controllers that are not public REST endpoints (such as
+`CronDispatchController` at `/cron/dispatch`, protected by constant-time
+`CRON_SECRET` bearer authentication) are decorated with `@ApiExcludeController()`
+so Swagger excludes them from `docs/api/openapi.json` without contract drift
+(Prompt 414).
 
 ### GraphQL read surface
 

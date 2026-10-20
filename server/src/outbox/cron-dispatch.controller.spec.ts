@@ -193,4 +193,13 @@ describe('CronDispatchController', () => {
       error: 'dispatch_failed',
     });
   });
+
+  it('is excluded from Swagger/OpenAPI documentation', () => {
+    expect(
+      Reflect.getMetadata(
+        'swagger/apiExcludeController',
+        CronDispatchController,
+      ),
+    ).toEqual([true]);
+  });
 });

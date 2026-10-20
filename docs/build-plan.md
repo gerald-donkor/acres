@@ -4578,3 +4578,26 @@ production secrets, live drills and the eleven sign-offs are operator-owned.
 The next repository engineering unit is not named by this record.
 See [the operations record](operations.md#prompt-413--reconcile-build-plan-managed-current-state-2026-10-20)
 and [the deployment record](vercel-deployment.md#build-plan-current-state-reconciliation--prompt-413-2026-10-20).
+
+## Phase 12 OpenAPI contract drift remediation — Prompt 414 (2026-10-20)
+
+Resolves contract drift detected by `npm run contracts:check` caused by
+`CronDispatchController` (`/cron/dispatch`) lacking `@ApiExcludeController()`
+from `@nestjs/swagger`. Planning baseline was `6df051e` on `main`.
+
+Execution summary:
+
+- Decorated `CronDispatchController` with `@ApiExcludeController()` in
+  `server/src/outbox/cron-dispatch.controller.ts`, isolating the internal
+  Vercel Cron sweep webhook from the public versioned REST API contract.
+- Added regression test in `server/src/outbox/cron-dispatch.controller.spec.ts`
+  verifying that `'swagger/apiExcludeController'` metadata is attached.
+- Verified `npm run contracts:check` completes with exit code 0 and reports
+  zero contract drift.
+- All 142 server test suites passed (2166 tests). Typecheck, lint, and
+  `check-vercel-config.js` passed with zero errors or warnings.
+
+Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
+operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-414--exclude-cron-dispatch-controller-from-openapi-contract-2026-10-20)
+and [the backend record](backend.md#openapi-sdl-and-ci-drift-guard).
