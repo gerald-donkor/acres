@@ -4481,3 +4481,29 @@ operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-411--reconcile-launch-checklist-with-managed-production-baseline-2026-10-20),
 [the deployment record](vercel-deployment.md#launch-checklist-reconciliation--prompt-411-2026-10-20),
 and [the reconciled launch checklist](launch-checklist.md).
+
+## Phase 12 project status reconciliation — Prompt 412 (2026-10-20)
+
+Reconciles `docs/project-status.md` and `docs/operator-handoff.md` with the current
+operational baseline (commit `5b7eab0`, Prompt 411).
+
+Updates the whole-project status assessment date to 2026-10-20, documenting the completion
+of Prompt 370's managed platform engineering milestones across Prompts 370–411 (including
+pooled Neon PostGIS RLS, private Blob storage, invocation-scoped Nest serverless execution,
+Cron dispatch, Resend transport, preview deployment `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`,
+Sandbox ClamAV quarantine scanning, 2-snapshot retirement baseline, 7-stage activation plan,
+and dual-topology checklist reconciliation). Adds Milestones 5–8 to closed engineering
+milestones, expands the built feature inventory, updates the completion estimate to 94%
+(reiterating that engineering completeness does NOT approve launch), and structures
+Section 4 into a dual-topology operator-owned launch requirements comparison across all
+11 categories (`single-host-compose-caddy` with 70 blockers; `vercel-managed-production`
+with 61 blockers). Reconciles `docs/operator-handoff.md` anchor links and consolidated
+operator request for dual-topology coverage.
+
+Offline config checks, 28 managed verifier tests, and dual-topology fail-closed preflights
+(`npm run ops:launch-readiness:managed` 61 blockers, `npm run ops:launch-readiness` 70 blockers) passed.
+Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
+operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-412--reconcile-project-status-with-managed-production-baseline-2026-10-20),
+[the deployment record](vercel-deployment.md#project-status-reconciliation--prompt-412-2026-10-20),
+and [the reconciled project status](project-status.md).

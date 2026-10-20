@@ -3363,3 +3363,33 @@ Execution summary:
 
 See [the operations record](operations.md#prompt-411--reconcile-launch-checklist-with-managed-production-baseline-2026-10-20)
 and [the reconciled launch checklist](launch-checklist.md). No push or production action occurred.
+
+## Project status reconciliation — Prompt 412 (2026-10-20)
+
+At baseline `5b7eab0`, one authorized bounded operations continuation reconciled
+`docs/project-status.md` and `docs/operator-handoff.md` with the current operational baseline,
+updating the whole-project status assessment date to 2026-10-20.
+
+Execution summary:
+
+1. **Managed target amendment & feature inventory**: Formally documented that Prompt 370's
+   managed platform engineering milestones are 100% completed across Prompts 370–411. Expanded
+   the built capabilities table to reflect the Vercel-managed serverless runtime, Neon pooled
+   database adapter, private Blob storage, Firecracker Sandbox ClamAV scanning, 2-snapshot
+   steady-state baseline, and dual-topology operations tooling.
+2. **Closed engineering milestones**: Codified Milestones 5–8 in Section 3, detailing the
+   managed platform architecture (370–379), dual-architecture operations & verifiers (380–382),
+   preview deployment and sandboxed scanning (383–408), and steady-state snapshot retirement,
+   activation plan, and launch checklist reconciliation (409–411).
+3. **Completion estimate & dual-topology operator launch requirements**: Updated the overall
+   completion estimate to 94% (reiterating that engineering completeness does NOT approve launch),
+   and structured Section 4 to contrast operator-owned launch requirements for both
+   `single-host-compose-caddy` (70 blockers) and `vercel-managed-production` (61 blockers) across
+   all 11 categories. Reconciled `docs/operator-handoff.md` with dual-topology references.
+4. **Repository checks**: Config check (`node scripts/vercel/check-vercel-config.js`), managed
+   drill tests (`npm run ops:managed-drills-test`, 28/28 passed), dual-topology fail-closed preflights
+   (`npm run ops:launch-readiness:managed` 61 blockers, `npm run ops:launch-readiness` 70 blockers),
+   secret scan, lint, typecheck, build (`23/23` pages), and git diff check passed cleanly.
+
+See [the operations record](operations.md#prompt-412--reconcile-project-status-with-managed-production-baseline-2026-10-20)
+and [the reconciled project status](project-status.md). No push or production action occurred.

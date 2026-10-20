@@ -15482,3 +15482,52 @@ Commands ran sequentially under Node 24.21.0:
 - `npm run typecheck`: exit 0 across all workspaces.
 - `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
 - `git diff --check`: exit 0.
+
+## Prompt 412 — reconcile project status with managed production baseline (2026-10-20)
+
+**Result: project status and operator handoff reconciled with managed production baseline; dual-topology readiness preflights verified fail-closed (Managed: 61 blockers; Compose: 70 blockers).**
+Following Prompt 411's reconciliation of `docs/launch-checklist.md`, Prompt 412 synchronizes
+`docs/project-status.md` and `docs/operator-handoff.md` with the operational baseline across three key areas:
+
+1. **Whole-Project Status Assessment & Completion Estimate (§1, §2)**:
+   - Updated assessment date to 2026-10-20 and source baseline to `5b7eab0` on `main` (Prompt 411).
+   - Formally documented in the Managed Target Amendment that Prompt 370's platform engineering
+     scope is 100% complete across Prompts 370–411 (including Neon pooled RLS, private Blob storage,
+     serverless Nest invocation, Cron dispatch, Resend transport, preview deployment `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4`,
+     Sandbox ClamAV malware scanning with live EICAR/clean receipts, 2-snapshot baseline, 7-stage
+     activation plan, and dual-topology launch checklist).
+   - Updated the Operations row of the completion estimate from 16 to 19 / 25 points, reflecting
+     100% complete engineering implementation and automated verifier tooling across both Compose and
+     Vercel topologies. Total project completion updated to **94%** (92–96% range), strictly
+     reaffirming that engineering completeness does NOT approve launch, with the remaining 6 points
+     strictly reserved for operator-owned production provisioning, live drills, and the 11 human sign-offs.
+
+2. **Feature Inventory & Closed Engineering Milestones (§3, §4)**:
+   - Expanded the built capabilities table with Vercel serverless runtime adapters, Neon pooled RLS,
+     private Blob storage, Sandbox ClamAV scanning, 2-snapshot retirement, and dual-topology operational tooling.
+   - Codified Milestones 5–8 in Section 3, detailing the managed platform architecture (370–379),
+     dual-architecture operations & verifiers (380–382), preview deployment and sandboxed scanning (383–408),
+     and snapshot retirement, activation plan, and launch checklist reconciliation (409–411).
+
+3. **Dual-Topology Operator-Owned Launch Requirements (§4) & Operator Handoff Alignment**:
+   - Structured Section 4 to contrast operator-owned launch requirements for both supported architectures:
+     - Profile A: `single-host-compose-caddy` (70 unresolved blockers in `infra/launch/readiness.example.json`).
+     - Profile B: `vercel-managed-production` (61 unresolved blockers in `infra/launch/readiness.vercel.example.json`).
+   - Detailed required operator inputs and verifier commands for both topologies across all 11 launch categories.
+   - Reconciled `docs/operator-handoff.md` anchor links to point to both the historical Compose gap register
+     and the managed gap register in `docs/launch-checklist.md`, and updated the consolidated operator request
+     with dual-topology configuration and artifact identifiers.
+
+### Repository verification and inspection
+
+Commands ran sequentially under Node 24.21.0:
+
+- `node scripts/vercel/check-vercel-config.js`: exit 0, `vercel.json configuration valid`.
+- `npm run ops:managed-drills-test`: exit 0, 28 pass, 0 fail across 4 managed verifier test specifications.
+- `scripts/ops/launch-readiness.sh --target-architecture vercel-managed-production infra/launch/readiness.vercel.example.json`: exit 1 (fail-closed, 61 blockers, 0 approved, 11 unresolved).
+- `node scripts/ops/check-launch-readiness.js infra/launch/readiness.example.json`: exit 1 (fail-closed, 70 blockers, 0 approved, 11 unresolved).
+- `npm run ops:scan-secrets`: exit 0, `secret/default scan passed`.
+- `npm run lint`: exit 0 across client/shared/server.
+- `npm run typecheck`: exit 0 across all workspaces.
+- `npm run build`: exit 0 across shared/client/server, Next 16.3.8 static pages generated (23/23).
+- `git diff --check`: exit 0.

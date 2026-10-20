@@ -82,8 +82,10 @@ Source: [Docker Compose secrets](https://docs.docker.com/compose/how-tos/use-sec
 6. Classify facts as missing, supplied/unverified, inspected or inconsistent.
    Record source revision, inspector and UTC timestamp when inspected. Resolve
    environment/source/image mismatches and missing authority before dependent work.
-7. Apply the existing [shared prerequisites and handoff](launch-checklist.md#6a-production-evidence-preflight-gap-register--2026-10-14)
-   and [sign-off matrix](launch-checklist.md#7-formal-pre-launch-sign-off-matrix).
+7. Apply the existing shared prerequisites and handoffs:
+   - For `single-host-compose-caddy`: [Compose gap register](launch-checklist.md#6a-production-evidence-preflight-gap-register--2026-10-14).
+   - For `vercel-managed-production`: [Managed gap register](launch-checklist.md#managed-production-evidence-preflight-gap-register--2026-10-20-prompt-410--411).
+   and the dual-topology [sign-off matrix](launch-checklist.md#7-formal-pre-launch-sign-off-matrix).
    Their category schemas, measurements and policy requirements remain authoritative.
    SLO/RPO/RTO, retention and capacity need accountable adoption and actual evidence;
    this guide creates no alternate thresholds or pre-approved policies.
@@ -96,17 +98,21 @@ Source: [Docker Compose secrets](https://docs.docker.com/compose/how-tos/use-sec
 
 > Operations lead: please coordinate one UTC-dated handoff for the selected Acres
 > production environment and release. Supply its opaque environment ID, approved
-> topology, restricted host/FQDN reference, and materialized Compose/Caddy IDs and
-> revisions. Release manager: supply the reviewed full source SHA, immutable current
-> and previous client/server images and provenance references. Name the release
-> manager, deployment approver, rollback authority, evidence custodian and each of
-> the eleven category suppliers/signers. Custodian: supply restricted evidence-store
-> and readiness-record references, the approved channel, scoped read-only procedure,
-> allowed existing records/fields, and access expiry/revocation. Record any exact
-> action approvals separately with target, action, authority, UTC window and recovery
-> scope; leave absent approvals unauthorized. Keep credentials, private host inventory,
-> tenant data, key material and unredacted reports outside chat and git. References
-> remain supplied/unverified until their authorized sources are independently inspected.
+> topology, restricted host/FQDN reference, and materialized configuration identifiers
+> (for Compose: materialized Compose/Caddy IDs and revisions; for Vercel managed:
+> Vercel Project Production ID, custom production FQDN, immutable Vercel deployment ID
+> pair `dpl_*`, Neon project ID, Blob store ID, and Resend sender domain). Release
+> manager: supply the reviewed full source SHA, immutable current and previous release
+> artifacts (Compose client/server image pairs or immutable Vercel deployment pair)
+> and provenance references. Name the release manager, deployment approver, rollback
+> authority, evidence custodian and each of the eleven category suppliers/signers.
+> Custodian: supply restricted evidence-store and readiness-record references, the
+> approved channel, scoped read-only procedure, allowed existing records/fields, and
+> access expiry/revocation. Record any exact action approvals separately with target,
+> action, authority, UTC window and recovery scope; leave absent approvals unauthorized.
+> Keep credentials, private host inventory, tenant data, key material and unredacted
+> reports outside chat and git. References remain supplied/unverified until their
+> authorized sources are independently inspected.
 
 This request is provided for operator use; creating this guide sends no message.
 
