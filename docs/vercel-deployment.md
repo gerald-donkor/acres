@@ -74,9 +74,15 @@ updated to the candidate's bound: no later than `2026-10-22T06:35:09.451Z`,
 possibly earlier absent its CVD build timestamp. Reserve roughly two hours
 before that bound for the next refresh (planning judgment).
 
-The next gates are hosted scheduled cadence / workflow source publication
-(requiring a standalone uppercase `P` to push reviewed commits to upstream),
-storage accounting resolution, operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+Prompt 421 verified published workflow source on remote `main` at
+`e3bbbacbf96241bdd3f4e07b6e6d66fd3a038995`; the historical source-publication
+blocker has cleared. Hosted simulation is now blocked by the runtime proxy's
+HTTP 403 for `api.github.com`. After network access is available, recheck Actions
+access, enabled state/policy, concurrency and free execution eligibility before
+one bounded simulation. No dispatch or hosted acceptance has occurred.
+See [the current investigation](#hosted-scanner-simulation-after-source-publication--prompt-421-2026-10-21).
+Storage accounting, operator intake, live drills, Phase 12 exit and the eleven
+sign-offs remain open.
 See [the guarded adoption record](#guarded-scanner-preview-adoption--prompt-408-2026-10-20),
 [the tier 2 retirement record](#scanner-snapshot-retirement-tier-2--prompt-409-2026-10-20),
 and [the managed activation plan record](#managed-production-activation-plan-and-operator-intake--prompt-410-2026-10-20).
@@ -3529,3 +3535,30 @@ release not approved; 61 managed blockers).
 Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
 operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-419--reconcile-build-plan-deployment-and-project-status-with-managed-baseline-2026-10-21).
+
+## Hosted scanner simulation after source publication — Prompt 421 (2026-10-21)
+
+Remote `main` and the investigation's local HEAD both resolved to
+`e3bbbacbf96241bdd3f4e07b6e6d66fd3a038995`. Prompt 403 is an ancestor and
+the workflow, producer, summary helper, receipt validator, platform helper and
+snapshot builder are unchanged from that implementation. This clears source
+publication; it proves neither Actions execution nor provider state.
+
+**Hosted simulation remains blocked; zero dispatches.** The installed GitHub CLI
+works, but its repository GET failed with `Forbidden`. An independent HTTPS
+check received `CONNECT tunnel failed, response 403` from the outbound proxy for
+`api.github.com`. Workflow state/policy, dispatch access, concurrency, allowance
+and live-setting metadata are inaccessible, not known absent. No login,
+settings write, workflow dispatch or Vercel request was attempted.
+
+Local checks on Node 24.19.0 passed 247 focused and 443 probe tests with
+test-command-only `umask 0027`; the default `0077` produced four fixture-mode
+assertion failures in each suite. Secret scanning passed. Node 24.21.0 remains
+the repository pin; full build/type/lint validation was not repeated while the
+recorded runtime/download prerequisites remain unresolved. No hosted, provider,
+freshness, cadence or launch acceptance follows from these offline checks.
+
+Next: make `api.github.com` available through environment network settings,
+then repeat the read-only prerequisites before the approved single simulation.
+This task changed no settings and supplied no new credential requirement.
+See [the full source, checks and action inventory](operations.md#prompt-421--hosted-scanner-simulation-after-source-publication-2026-10-21).

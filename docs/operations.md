@@ -15843,3 +15843,163 @@ Execution summary:
 Remaining launch gates: hosted scheduled cadence source publication (requires standalone
 uppercase `P`), operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 No push or production action occurred.
+
+## Prompt 421 — hosted scanner simulation after source publication (2026-10-21)
+
+**Result: source-publication gate cleared; hosted simulation blocked; zero
+dispatches.** The approved investigation completed its independent local work,
+but did not accept the hosted proof. No workflow/application code or external
+configuration changed. API connectivity was denied at `2026-10-21T22:12:50Z`
+(proxy response date); source inspection and final test results were recorded
+through `2026-10-21T22:13:44Z`.
+
+### Source identity and hosted-readiness inventory
+
+The cloud checkout began on `work`, with no upstream, HEAD
+`e3bbbacbf96241bdd3f4e07b6e6d66fd3a038995` and only the approved Prompt 421
+untracked. A fresh `git ls-remote origin refs/heads/main` returned that exact
+SHA through the existing HTTPS Git proxy. `git merge-base --is-ancestor`
+confirmed reviewed Prompt 403 commit `b9f382163d3589454971073f15a3d9d622a8f340`
+is an ancestor. A scoped diff from that implementation to HEAD was empty for
+the six workflow/helper files listed below. No push is needed to make those
+reviewed sources available on the observed remote ref.
+
+SHA-256 digests were computed from `git show <full-HEAD>:<path>` at the verified
+commit. These bind inspected source bytes; they do not attest to installed npm
+artifacts, effective Actions policy or execution:
+
+| File                                             | SHA-256                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| `.github/workflows/scanner-snapshot-rebuild.yml` | `22b88da0ae3127e18aeebcfd5c0832817b9635ff3332d9e8835b2ec37f90f11e` |
+| `scripts/vercel/rebuild-scanner-cadence.js`      | `30d940eb6fa62554f07959c4a0e4889b14c3274e63bbaad9e3d7beddd3c3a719` |
+| `scripts/vercel/summarize-scanner-candidate.js`  | `6b1c9387c755385e0a0f9f1e9e0735c176be9df88b4e7c1def64dc018fb5978e` |
+| `scripts/vercel/prepare-scanner-handoff.js`      | `2aaa266fb3c2acd8f698078d0e18fe1e9f32383814290bae707f0e7c5f6c641c` |
+| `scripts/vercel/probe-platform.js`               | `e6932fb20aacdfdd04f256c0ae7d1d266f098671e242119424bb452cd196288f` |
+| `scripts/vercel/build-scanner-snapshot.js`       | `3c73a5167f07d9a883cd06ef3417e45a177633663f6b62dff1461bfd2b96b41b` |
+| `infra/vercel/scanner/freshclam.conf`            | `5ee9cc9a19ddfcaf33b2977e8e9c97a8a29fcac9aeb72e0c8d312d8c8989ff17` |
+| `package-lock.json`                              | `6946d44d1521618a5ddfdacf6a686059951ef2eae45ef2788c77adc1b1ca5a81` |
+
+No GitHub connector was exposed in this execution's tool catalog. The existing
+CLI's `gh --version`, `gh api --help` and `gh workflow run --help` worked;
+version is `2.46.0`. The read-only request
+`gh api repos/gerald-donkor/acres --jq '{full_name,default_branch,visibility,archived,permissions}'`
+exited 1 with:
+
+```text
+Get "https://api.github.com/repos/gerald-donkor/acres": Forbidden
+```
+
+An independent unauthenticated HTTPS header request to the same destination
+exited 56, receiving an outbound-proxy denial before GitHub authentication:
+
+```text
+curl: (56) CONNECT tunnel failed, response 403
+HTTP/1.1 403 Forbidden
+server: envoy
+```
+
+This establishes a current network blocker, not invalid credentials or missing
+repository permissions. No login, token replacement or duplicate secret request
+was made. Neither request dispatched a workflow.
+
+| Prerequisite                                                     | Current observation                                                                                                                                                                 |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reviewed source on remote `main`                                 | Verified by fresh Git ref equality, ancestor check and scoped source comparison.                                                                                                    |
+| Source mode/input definitions                                    | Reviewed workflow defines optional boolean `prepare_candidate` and `force`, both default false. Schedule/default manual dispatch simulate. Credentials are scoped to the live step. |
+| Workflow registration/enabled state and effective Actions policy | Inaccessible behind the API network denial; not known disabled or absent.                                                                                                           |
+| Dispatch permission and current workflow concurrency             | Inaccessible/unverified. Historical runs do not establish idle concurrency now.                                                                                                     |
+| Current free execution eligibility/allowance                     | Unverified. No paid usage was authorized or inferred from public visibility.                                                                                                        |
+| Live-step secret-name availability                               | Inaccessible for `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`, `VERCEL_TOKEN`; no values read.                                                                                             |
+| Allowlisted live-step variables                                  | Inaccessible for `ACRES_VERCEL_PROBE`, `ACRES_VERCEL_PROBE_REGION`, `ACRES_SCANNER_SNAPSHOT_ID`; no values or provider state inferred.                                              |
+| Hosted run, steps, rendered summary and cleanup                  | Unrun/unverified; no run ID exists for this investigation.                                                                                                                          |
+
+### Actual local verification and limitations
+
+Runtime was **Node 24.19.0**, npm 11.9.0. `.node-version` pins **24.21.0**;
+pin compliance is not claimed. No runtime or dependency installation occurred
+during Prompt 421. Logs under `/tmp/acres421-*` are local diagnostic scratch,
+not durable operator evidence.
+
+Initial focused and probe runs exited 1: focused `tests 247`, `pass 243`,
+`fail 4`; probe `tests 443`, `pass 439`, `fail 4`; both had zero skipped tests.
+All four failures were fixture-mode assertions in
+`scripts/vercel/rebuild-scanner-cadence.spec.js`: expected decimal 416 (`0640`),
+actual 384 (`0600`). The shell's `umask` was `0077`; its mask removes the group
+read bit when fixtures request `0640`. The tests assume that fixture mode can
+be created. The assertions and implementation were left unchanged.
+
+Rerunning with `umask 0027` scoped to each test shell restored the expected
+fixture-creation conditions. Private temporary directories and application
+`0600` output assertions remained enabled. Final commands/results:
+
+```text
+$ umask 0027
+$ node --test scripts/vercel/rebuild-scanner-cadence.spec.js scripts/vercel/summarize-scanner-candidate.spec.js scripts/vercel/prepare-scanner-handoff.spec.js
+tests 247; suites 6; pass 247; fail 0; cancelled 0; skipped 0; todo 0
+
+$ umask 0027
+$ npm run vercel:probe-test
+tests 443; suites 6; pass 443; fail 0; cancelled 0; skipped 0; todo 0
+
+$ npm run ops:scan-secrets
+secret/default scan passed
+```
+
+These are overlapping suites, not 690 unique tests, and remain offline fixtures
+and actual local workflow-shell checks rather than hosted acceptance. No source
+repair was made to obtain the passing outcomes.
+
+Whole-repository lint/typecheck/build and contract checks were not repeated:
+the onboarding run had already identified blocked Prisma checksums at
+`binaries.prisma.sh` and font downloads at `fonts.googleapis.com`, and the Node
+patch pin remains unresolved. Earlier server lint also encountered missing
+generated Prisma types. No new green full-repository validation is claimed.
+No TLS/checksum bypass, mocked fonts or generated-type substitution was used.
+No database/browser, aggregate operations, live-provider or fresh-audit pass is
+claimed for this documentation-only investigation.
+
+Before editing, full-file Prettier reported existing warnings in
+`docs/operations.md` and `docs/build-plan.md`; `docs/vercel-deployment.md` passed.
+The approved prompt, whole deployment document and extracted new operations /
+build-plan passages passed Prettier: `All matched files use Prettier code style!`.
+`git diff --check` exited 0. Existing whole-file warnings were left unchanged;
+no whole-file operations/build-plan formatting pass is claimed.
+
+### Action inventory, next gate and rollback
+
+Exactly zero dispatches, reruns, cancellations, GitHub settings writes, Vercel
+requests, scanner builds, deployments, adoptions, snapshot deletions, external
+messages or pushes occurred. Only the approved prompt and three documentation
+files changed. Existing ignored cloud helpers and local configuration were
+preserved. No production approval or completion-percentage change follows.
+
+The next outside action is to permit **`api.github.com`** through environment
+network settings. No settings write is part of Prompt 421. After a meaningful
+network change, retry the read-only repository/workflow checks with the existing
+authentication. Establish source, enabled state/policy, usable dispatch access,
+idle concurrency and free execution eligibility before the one approved manual
+simulation with explicit false inputs. A new credential requirement is not
+established by this network denial. Run/summary inspection may identify an
+additional required host; report it from actual evidence rather than guessing.
+
+Live preparation/cadence, storage accounting, operator intake, Phase 12 exit
+and all eleven sign-offs remain separate open gates. Inspect this record and
+the matching deployment section; no app server start is needed. Reproduce
+local checks from the repository root with the scoped test commands above.
+Rollback is a normal local documentation revert; no provider state was mutated.
+
+### Independent review and local commit
+
+The read-only reviewer inspected the approved prompt, four-file scope, baseline
+SHA, source objects, actual logs and complete diff. It reported **No Critical,
+Important, or Minor findings** and confirmed source digests/ancestry, unchanged
+workflow helpers, simulation defaults, live-step credential scoping, test
+counts, fixture-mode diagnosis, network denial evidence and documentation links.
+Receiving-review evaluation checked those conclusions against the unchanged
+source and initial/final logs; no corrective change or re-review was required.
+The reviewer made no external calls or repository mutations.
+
+For the required local commit, create `main` at the existing checkout's unchanged
+HEAD; only `work` existed at inspection. Preserve `work`, all unrelated files and
+the lack of an upstream. Commit only the approved prompt and these three
+documentation files with `caveman-commit`; no branch reset or push is needed.

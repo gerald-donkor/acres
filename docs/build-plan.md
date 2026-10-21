@@ -664,6 +664,15 @@ it.
 | 5. Topology-specific launch evidence and recovery procedures | Local managed readiness, reconciliation, drill runners and the 7-stage activation plan are recorded (Prompts 379–382, 410–411). Example records fail closed: Compose 70 blockers, managed 61 (`project-status.md`, Prompt 412). | Live recovery evidence is operator-owned. Do not edit the examples to pass. Compose checks are not Vercel evidence. |
 | 6. Acceptance, preview, then promotion | Repository and preview acceptance through Prompt 412 are recorded, including Tier 2 snapshot retirement. OpenAPI CI contract drift was resolved in Prompt 414, and release documentation baseline reconciliation was completed across Prompts 415–419. | Production promotion and the eleven human sign-offs remain operator-owned. Phase 12 exit is not met. |
 
+**Hosted-workflow continuation — Prompt 421 (2026-10-21):** remote `main`
+now contains the reviewed workflow/helper implementation at
+`e3bbbacbf96241bdd3f4e07b6e6d66fd3a038995`. Source publication has cleared;
+hosted simulation remains unaccepted because the runtime proxy blocks
+`api.github.com` with HTTP 403. No dispatch occurred. The next hosted step is
+network access followed by fresh Actions permission/state, concurrency and
+free-execution checks, not another source-baseline reconciliation. See
+[the investigation](operations.md#prompt-421--hosted-scanner-simulation-after-source-publication-2026-10-21).
+
 The next repository-executable engineering unit is not named here. The next
 `i` re-reads this corrected plan and either stops because only operator-owned
 launch work remains, or selects a newly discovered repository defect. Operator
@@ -4719,3 +4728,21 @@ Execution summary:
 Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
 operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-419--reconcile-build-plan-deployment-and-project-status-with-managed-baseline-2026-10-21).
+
+## Phase 12 hosted scanner simulation investigation — Prompt 421 (2026-10-21)
+
+Continues Prompt 404 after fresh Git evidence cleared its source-publication
+blocker. The reviewed scanner workflow and helpers are published on remote
+`main` at `e3bbbacbf96241bdd3f4e07b6e6d66fd3a038995`. The current cloud
+proxy denies `api.github.com` with HTTP 403, leaving hosted state/policy,
+dispatch access, concurrency and allowance inaccessible. **Zero dispatches;
+hosted simulation remains open.** No workflow/application/configuration change,
+provider call, source push or production action occurred.
+
+Offline focused tests passed 247/247 and probe tests 443/443 after scoping
+`umask 0027` to test commands; secret scanning passed. These ran on Node 24.19.0,
+not the pinned 24.21.0. Full repository checks remain limited by the previously
+recorded runtime and network prerequisites. See
+[the source digests, initial failures and final results](operations.md#prompt-421--hosted-scanner-simulation-after-source-publication-2026-10-21).
+The next hosted gate is network access plus fresh read-only Actions prerequisites;
+live cadence, operator intake, Phase 12 exit and eleven sign-offs remain open.
