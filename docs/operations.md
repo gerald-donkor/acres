@@ -15585,3 +15585,41 @@ Execution summary:
 Remaining launch gates: hosted scheduled cadence source publication (requires standalone
 uppercase `P`), operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 No push or production action occurred.
+
+## Prompt 415 — reconcile launch checklist, project status, and deployment documentation with managed baseline (2026-10-21)
+
+**Result: Release documentation fully synchronized with `HEAD` baseline (`59579ec`, Prompt 414).**
+
+Reconciled `docs/launch-checklist.md`, `docs/project-status.md`, and
+`docs/vercel-deployment.md` with the verified `59579ec` baseline on `main` (Prompt 414).
+Planning baseline was `59579ec` on `main`.
+
+Execution summary:
+
+1. **Launch checklist reconciliation (`docs/launch-checklist.md`)**:
+   Appended dated operational log entries to Section 8 for:
+   - Prompt 412: project status reconciliation with managed production baseline.
+   - Prompt 413: build plan reconciliation with managed current state.
+   - Prompt 414: OpenAPI contract drift remediation on `/cron/dispatch`.
+   - Prompt 415: release documentation managed baseline reconciliation.
+2. **Project status reconciliation (`docs/project-status.md`)**:
+   - Updated source baseline to `59579ec` on `main` (Prompt 414).
+   - Added Milestone 9 ("Documentation baseline reconciliation and OpenAPI CI contract guard (Prompts 412–414)").
+   - Re-verified whole-project completion estimate at 94% (75/75 application points earned,
+     19/25 operations points earned; launch is not approved).
+3. **Deployment record reconciliation (`docs/vercel-deployment.md`)**:
+   - Updated Section 8 sub-prompt index to include Prompts 413, 414, and 415.
+   - Appended execution summaries for Prompts 414 and 415.
+4. **Repository verification**:
+   - `npm run typecheck`: exit 0 across all workspaces.
+   - `npm run lint`: exit 0 across client/shared/server.
+   - `npm run contracts:check`: exit 0, zero contract drift.
+   - `node scripts/vercel/check-vercel-config.js`: exit 0, valid configuration.
+   - `npm run ops:managed-drills-test`: exit 0, 28/28 tests passing.
+   - `npm run ops:check`: exit 0 across all 35 operational and security checks.
+   - `npm run ops:launch-readiness:managed`: exit 1, fail-closed as intended (61 blockers, 0 approved, 11 unresolved).
+   - `npm run ops:launch-readiness`: exit 1, fail-closed as intended (70 blockers, 0 approved, 11 unresolved).
+
+Remaining launch gates: hosted scheduled cadence source publication (requires standalone
+uppercase `P`), operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+No push or production action occurred.

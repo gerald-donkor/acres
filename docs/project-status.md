@@ -1,6 +1,6 @@
 # Acres whole-project status
 
-Assessment date: 2026-10-20. Source baseline: `5b7eab0` on `main` (Prompt 411).
+Assessment date: 2026-10-21. Source baseline: `59579ec` on `main` (Prompt 414).
 This assesses the approved V1 in [product.md](product.md), including
 operational recovery and release acceptance, rather than all conceivable future
 Acres features. It is a repository assessment, not an inspection of a deployed
@@ -10,7 +10,7 @@ production environment or a restricted operator evidence store.
 
 Following the user's selection of the Vercel-managed target in Prompt 370, the
 entire engineering implementation and preview verification of the managed platform
-architecture has been **completed** across Prompts 370–411. This includes:
+architecture has been **completed** across Prompts 370–414. This includes:
 - Pooled Neon PostGIS database connection adapter under forced tenant RLS (`DATABASE_URL`, `DATABASE_MIGRATOR_URL`).
 - Private Vercel Blob object storage with quarantine isolation, pre-signed upload tokens, and authenticated downloads.
 - Invocation-scoped Nest serverless execution adapter with connection pooling and memory caching.
@@ -94,7 +94,7 @@ currently verified. Historical test results remain historical.
 
 ## Closed V1 engineering and acceptance milestones
 
-All eight engineering and acceptance milestones identified for V1 release
+All nine engineering and acceptance milestones identified for V1 release
 readiness have been implemented, verified, reviewed, and committed to `main`:
 
 1. **Administrative history scope (Prompts 358–360)**:
@@ -177,6 +177,14 @@ readiness have been implemented, verified, reviewed, and committed to `main`:
    - Reconciled `docs/launch-checklist.md` (Prompt 411) with dual-topology category contracts (§3),
      authoritative 61-blocker managed preflight gap register (§6A), and dual-profile sign-off matrix (§7).
 
+9. **Documentation baseline reconciliation and OpenAPI CI contract guard (Prompts 412–414)**:
+   - Reconciled `docs/project-status.md` and `docs/operator-handoff.md` (Prompt 412) with the managed
+     operational baseline, establishing the dual-topology comparison (61 vs. 70 blockers).
+   - Reconciled `docs/build-plan.md`, `AGENTS.md` §5, and `docs/vercel-deployment.md` (Prompt 413),
+     retiring outdated claims that migration and deployment were unbuilt.
+   - Resolved OpenAPI contract drift on `/cron/dispatch` (Prompt 414) via `@ApiExcludeController()`,
+     guaranteeing zero drift on CI `npm run contracts:check`.
+
 All engineering capabilities and automated acceptance criteria for V1 are
 closed for both architectures. The remaining work for production launch is operator-owned.
 
@@ -234,7 +242,7 @@ substitute for approved policies.
 
 ## Verification boundary for this assessment
 
-Prompt 412 changes documentation and release governance records only. Code,
+Prompt 415 changes documentation and release governance records only. Code,
 route inventory, schema, CI, verifiers, test suites, and git history were inspected;
 no live production services or private operator evidence were accessed.
 

@@ -3672,3 +3672,44 @@ preflight gap register. Section 7 sign-off matrix expanded to dual-profile verif
 Historical operational log updated through Prompt 411. Launch readiness preflight remains
 fail-closed exiting 1 (0 approved, 11 unresolved, 61 blockers). No category is approved.
 See [the execution record](operations.md#prompt-411--reconcile-launch-checklist-with-managed-production-baseline-2026-10-20).
+
+## Prompt 412 — reconcile project status with managed production baseline (2026-10-20)
+
+`docs/project-status.md` and `docs/operator-handoff.md` reconciled with the
+Prompt 411 baseline. Added closed engineering milestones 5–8, updated the whole-project
+completion estimate to 94% (confirming 100% of V1 application capabilities are built
+and verified while launch is not approved), and structured Section 4 into dual-topology
+requirements (61 managed blockers vs. 70 Compose blockers). Readiness preflight
+remains fail-closed exiting 1. No category is approved.
+See [the execution record](operations.md#prompt-412--reconcile-project-status-with-managed-production-baseline-2026-10-20).
+
+## Prompt 413 — reconcile build plan managed current state (2026-10-20)
+
+`docs/build-plan.md`, `AGENTS.md` §5, and `docs/vercel-deployment.md` reconciled
+with the current-state managed operational baseline. Retired outdated historical claims
+from 2026-10-15 asserting migration was unbuilt. Confirmed all phases 1–12 application
+capabilities are built and that Phase 12 exit remains open pending operator actions.
+Readiness preflight remains fail-closed exiting 1. No category is approved.
+See [the execution record](operations.md#prompt-413--reconcile-build-plan-managed-current-state-2026-10-20).
+
+## Prompt 414 — exclude cron dispatch controller from openapi contract (2026-10-20)
+
+Resolved pre-existing contract drift detected by `npm run contracts:check` caused by
+`CronDispatchController` (`/cron/dispatch`) lacking `@ApiExcludeController()` from
+`@nestjs/swagger`. Decorated controller, added controller regression test in
+`server/src/outbox/cron-dispatch.controller.spec.ts`, and verified zero contract drift
+in `docs/api/openapi.json`. Readiness preflight remains fail-closed exiting 1. No category is approved.
+See [the execution record](operations.md#prompt-414--exclude-cron-dispatch-controller-from-openapi-contract-2026-10-20)
+and [the backend record](backend.md#openapi-sdl-and-ci-drift-guard).
+
+## Prompt 415 — reconcile launch checklist, project status, and deployment documentation with managed baseline (2026-10-21)
+
+Reconciled `docs/launch-checklist.md`, `docs/project-status.md`, and
+`docs/vercel-deployment.md` with the verified `59579ec` baseline on `main` (Prompt 414).
+Appended operational entries for Prompts 412–415 to `docs/launch-checklist.md`.
+Updated `docs/project-status.md` source baseline to `59579ec` and recorded closed
+milestone 9 (Prompts 412–414). Updated `docs/vercel-deployment.md` sub-prompt index.
+Confirmed all repository test suites, verifiers, and offline checks pass cleanly.
+Readiness preflight remains fail-closed exiting 1 (61 managed blockers, 70 Compose blockers).
+No category is approved.
+See [the execution record](operations.md#prompt-415--reconcile-launch-checklist-project-status-and-deployment-documentation-with-managed-baseline-2026-10-21).

@@ -41,6 +41,9 @@ records; it is not an instruction to re-run them:
 - Prompt 410 = managed production activation plan and operator intake
 - Prompt 411 = launch checklist reconciliation
 - Prompt 412 = project status reconciliation
+- Prompt 413 = build-plan current-state reconciliation
+- Prompt 414 = exclude cron dispatch controller from openapi contract
+- Prompt 415 = release documentation managed baseline reconciliation
 
 A new session resumes from this section and `git log`, then reads the current
 status above rather than treating the historical split as unfinished work.
@@ -3431,3 +3434,29 @@ no launch category approved. Production activation and the eleven sign-offs
 remain open. See
 [the build-plan record](build-plan.md#phase-12-build-plan-current-state-reconciliation--prompt-413-2026-10-20)
 and [the operations record](operations.md#prompt-413--reconcile-build-plan-managed-current-state-2026-10-20).
+
+## OpenAPI contract drift remediation — Prompt 414 (2026-10-20)
+
+Resolved pre-existing contract drift detected by `npm run contracts:check` caused by
+`CronDispatchController` (`/cron/dispatch`) lacking `@ApiExcludeController()` from
+`@nestjs/swagger`. Decorated controller in `server/src/outbox/cron-dispatch.controller.ts`,
+added controller regression test in `server/src/outbox/cron-dispatch.controller.spec.ts`,
+and verified zero contract drift in `docs/api/openapi.json`.
+
+No cloud configuration was modified and no launch category was approved.
+See [the build-plan record](build-plan.md#phase-12-openapi-contract-drift-remediation--prompt-414-2026-10-20),
+[the backend record](backend.md#openapi-sdl-and-ci-drift-guard), and
+[the operations record](operations.md#prompt-414--exclude-cron-dispatch-controller-from-openapi-contract-2026-10-20).
+
+## Release documentation managed baseline reconciliation — Prompt 415 (2026-10-21)
+
+Documentation only. Reconciled `docs/launch-checklist.md`, `docs/project-status.md`,
+and this document with the verified `59579ec` baseline on `main` (Prompt 414).
+Appended operational logs for Prompts 412–415 to `docs/launch-checklist.md`.
+Updated `docs/project-status.md` source baseline to `59579ec` and added Milestone 9
+covering Prompts 412–414. Re-affirmed whole-project completion estimate of 94%
+(100% of V1 application capabilities built; release not approved; 61 managed blockers).
+
+Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
+operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-415--reconcile-launch-checklist-project-status-and-deployment-documentation-with-managed-baseline-2026-10-21).
