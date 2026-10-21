@@ -662,7 +662,7 @@ it.
 | 3. Provider profiles and invocation-scoped Nest execution | Local adapters and invocation-scoped execution are recorded as implemented in the Prompt 412 status reconciliation (Prompts 370–379). Compose+Caddy is retained. | Production promotion is not this step. |
 | 4. Blob, queue/workflow, Cron, Resend, ingress, throttling, progress | Repository contracts and preview proofs are recorded through Prompt 409. Cron and Resend production behavior are not proven by preview. | Preview proof, not production approval. Production secret provisioning and custom-domain DNS remain operator-owned. |
 | 5. Topology-specific launch evidence and recovery procedures | Local managed readiness, reconciliation, drill runners and the 7-stage activation plan are recorded (Prompts 379–382, 410–411). Example records fail closed: Compose 70 blockers, managed 61 (`project-status.md`, Prompt 412). | Live recovery evidence is operator-owned. Do not edit the examples to pass. Compose checks are not Vercel evidence. |
-| 6. Acceptance, preview, then promotion | Repository and preview acceptance through Prompt 412 are recorded, including Tier 2 snapshot retirement. OpenAPI CI contract drift was resolved in Prompt 414, and release documentation baseline reconciliation was completed in Prompt 415. | Production promotion and the eleven human sign-offs remain operator-owned. Phase 12 exit is not met. |
+| 6. Acceptance, preview, then promotion | Repository and preview acceptance through Prompt 412 are recorded, including Tier 2 snapshot retirement. OpenAPI CI contract drift was resolved in Prompt 414, and release documentation baseline reconciliation was completed across Prompts 415–416. | Production promotion and the eleven human sign-offs remain operator-owned. Phase 12 exit is not met. |
 
 The next repository-executable engineering unit is not named here. The next
 `i` re-reads this corrected plan and either stops because only operator-owned
@@ -4622,3 +4622,25 @@ Execution summary:
 Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
 operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-415--reconcile-launch-checklist-project-status-and-deployment-documentation-with-managed-baseline-2026-10-21).
+
+## Phase 12 build plan and project status managed baseline reconciliation — Prompt 416 (2026-10-21)
+
+Reconciles `docs/build-plan.md` and `docs/project-status.md` with the Prompt 415 baseline
+(`8e71bb4` on `main`). Planning baseline was `8e71bb4` on `main`.
+
+Execution summary:
+
+- Appended Phase 12 execution summary for Prompt 415 to `docs/build-plan.md`.
+- Updated Section 13 current-state table to reflect that repository and release
+  documentation reconciliation is completed through Prompt 415.
+- Updated `docs/project-status.md` source baseline to `8e71bb4` and expanded Milestone 9
+  to cover Prompts 412–415.
+- Appended Prompt 416 operational log entries to `docs/launch-checklist.md` Section 8
+  and `docs/operations.md`.
+- Verified that all repository test suites, verifiers, and offline checks pass cleanly.
+- Verified that readiness preflight remains fail-closed exiting 1 (61 managed blockers,
+  70 Compose blockers).
+
+Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
+operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-416--reconcile-build-plan-and-project-status-with-managed-baseline-2026-10-21).
