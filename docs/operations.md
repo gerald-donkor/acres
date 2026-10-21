@@ -15798,3 +15798,48 @@ Execution summary:
 Remaining launch gates: hosted scheduled cadence source publication (requires standalone
 uppercase `P`), operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 No push or production action occurred.
+
+## Prompt 420 — reconcile build plan, deployment, and project status with managed baseline (2026-10-21)
+
+**Result: Build plan, deployment documentation, and project status synchronized with Prompt 419 baseline (`2aaf2fd` on `main`).**
+
+Reconciled `docs/build-plan.md`, `docs/vercel-deployment.md`, and
+`docs/project-status.md` with the Prompt 419 baseline (`2aaf2fd` on `main`).
+Planning baseline was `2aaf2fd` on `main`.
+
+Execution summary:
+
+1. **Build plan reconciliation (`docs/build-plan.md`)**:
+   - Appended Phase 12 execution summary for Prompt 419 documenting build plan,
+     deployment, and project status baseline reconciliation.
+   - Updated Section 13 current-state table Step 6 to record that release documentation
+     baseline reconciliation was completed across Prompts 415–419.
+   - Re-affirmed that all 12 phases of application capabilities are 100% complete and verified,
+     while Phase 12 exit remains open (production promotion, DNS, production secrets, live drills,
+     and the eleven human sign-offs remain operator-owned).
+2. **Deployment documentation reconciliation (`docs/vercel-deployment.md`)**:
+   - Updated Section 8 sub-prompt index to include Prompt 419.
+   - Appended execution summary for Prompt 419 aligning deployment documentation with
+     `docs/operations.md` and `docs/launch-checklist.md`.
+3. **Project status reconciliation (`docs/project-status.md`)**:
+   - Updated source baseline to `2aaf2fd` on `main` (Prompt 419).
+   - Expanded Milestone 9 to include Prompt 419 ("Documentation baseline reconciliation and
+     OpenAPI CI contract guard (Prompts 412–419)").
+   - Re-verified whole-project completion estimate at 94% (75/75 application points earned,
+     19/25 operations points earned; launch is not approved).
+   - Re-affirmed the 4 remaining Phase 12 exit gates across both topologies.
+4. **Launch checklist operational log (`docs/launch-checklist.md`)**:
+   - Appended dated operational log entry for Prompt 420 to Section 8.
+5. **Repository verification**:
+   - `npm run typecheck`: exit 0 across all workspaces.
+   - `npm run lint`: exit 0 across client/shared/server.
+   - `npm run contracts:check`: exit 0, zero contract drift.
+   - `node scripts/vercel/check-vercel-config.js`: exit 0, valid configuration.
+   - `npm run ops:managed-drills-test`: exit 0, 28/28 tests passing.
+   - `npm run ops:check`: exit 0 across all 35 operational and security checks.
+   - `npm run ops:launch-readiness:managed`: exit 1, fail-closed as intended (61 blockers, 0 approved, 11 unresolved).
+   - `npm run ops:launch-readiness`: exit 1, fail-closed as intended (70 blockers, 0 approved, 11 unresolved).
+
+Remaining launch gates: hosted scheduled cadence source publication (requires standalone
+uppercase `P`), operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+No push or production action occurred.
