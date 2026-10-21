@@ -45,6 +45,7 @@ records; it is not an instruction to re-run them:
 - Prompt 414 = exclude cron dispatch controller from openapi contract
 - Prompt 415 = release documentation managed baseline reconciliation
 - Prompt 416 = build plan and project status managed baseline reconciliation
+- Prompt 417 = build plan, deployment, and project status managed baseline reconciliation
 
 A new session resumes from this section and `git log`, then reads the current
 status above rather than treating the historical split as unfinished work.
@@ -3475,3 +3476,20 @@ release not approved; 61 managed blockers).
 Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
 operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-416--reconcile-build-plan-and-project-status-with-managed-baseline-2026-10-21).
+
+## Build plan, deployment, and project status managed baseline reconciliation — Prompt 417 (2026-10-21)
+
+Commit `457276b` synchronized `docs/build-plan.md`, `docs/vercel-deployment.md`, and
+`docs/project-status.md` with the Prompt 416 baseline (`24ea567` on `main`),
+aligning deployment documentation with `docs/operations.md` and `docs/launch-checklist.md`.
+All 3 workspaces typechecked and linted cleanly, `check-vercel-config.js` passed,
+all 28 managed drill verifier tests and all 35 operational preflight checks passed,
+and readiness preflight remained fail-closed exiting 1 with 61 managed blockers
+(`infra/launch/readiness.vercel.example.json`). Core application capabilities remain
+100% complete for V1; production launch remains unapproved. Whole-project completion
+estimate remains 94% (75/75 points of V1 application capabilities built;
+release not approved; 61 managed blockers).
+
+Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
+operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-417--reconcile-build-plan-deployment-and-project-status-with-managed-baseline-2026-10-21).
