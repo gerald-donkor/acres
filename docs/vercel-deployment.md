@@ -83,9 +83,16 @@ one bounded simulation. No dispatch or hosted acceptance has occurred.
 See [the current investigation](#hosted-scanner-simulation-after-source-publication--prompt-421-2026-10-21).
 Storage accounting, operator intake, live drills, Phase 12 exit and the eleven
 sign-offs remain open.
+
 See [the guarded adoption record](#guarded-scanner-preview-adoption--prompt-408-2026-10-20),
 [the tier 2 retirement record](#scanner-snapshot-retirement-tier-2--prompt-409-2026-10-20),
 and [the managed activation plan record](#managed-production-activation-plan-and-operator-intake--prompt-410-2026-10-20).
+
+Prompt 422 then ran the one hosted simulation: run `39687952453` on `52a9c941`
+succeeded in simulation mode with the live step skipped. This proves hosted
+execution of the current workflow revision only; summary rendering still needs
+the owner's check, and the snapshot bound above is unchanged. See
+[the dispatch record](operations.md#prompt-422--hosted-scanner-simulation-dispatch-2026-10-21).
 
 **Fixed target.** Team `dgsloxx417's projects`
 (`team_zE3mp7nrEZ6a7cxRavwUMYC4`), project `acres`

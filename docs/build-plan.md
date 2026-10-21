@@ -673,6 +673,12 @@ network access followed by fresh Actions permission/state, concurrency and
 free-execution checks, not another source-baseline reconciliation. See
 [the investigation](operations.md#prompt-421--hosted-scanner-simulation-after-source-publication-2026-10-21).
 
+**Hosted simulation executed — Prompt 422 (2026-10-21):** network access
+cleared and run `39687952453` (`workflow_dispatch`, `52a9c941`) succeeded in
+simulation mode with the live step skipped. This is hosted execution of the
+current workflow revision only, not a live rebuild or acceptance. See
+[the record](operations.md#prompt-422--hosted-scanner-simulation-dispatch-2026-10-21).
+
 The next repository-executable engineering unit is not named here. The next
 `i` re-reads this corrected plan and either stops because only operator-owned
 launch work remains, or selects a newly discovered repository defect. Operator

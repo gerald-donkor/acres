@@ -16003,3 +16003,97 @@ For the required local commit, create `main` at the existing checkout's unchange
 HEAD; only `work` existed at inspection. Preserve `work`, all unrelated files and
 the lack of an upstream. Commit only the approved prompt and these three
 documentation files with `caveman-commit`; no branch reset or push is needed.
+
+## Prompt 422 — hosted scanner simulation dispatch (2026-10-21)
+
+Prompt 422 executed the one credential-free hosted simulation that Prompt 421
+deferred. It proves hosted execution of the **current workflow revision** in
+simulation mode and nothing more: no live rebuild, freshness, adoption,
+live-mode cadence or launch acceptance.
+
+### Source binding and prerequisites (2026-10-21T22:37Z–22:38Z)
+
+Branch `main`, HEAD = remote `main` = `52a9c9410f7044b741c1e032f872171d7367dbf4`
+(re-confirmed immediately before dispatch). Node 24.21.0 for all local checks.
+SHA-256 at that commit: workflow `22b88da0…f90f11e`, `rebuild-scanner-cadence.js`
+`30d940eb…a719`, `summarize-scanner-candidate.js` `6b1c9387…978e`,
+`prepare-scanner-handoff.js` `2aaa266f…641c`.
+
+Verified: `api.github.com` HTTP 200 (Prompt 421 saw a proxy 403); `gh` 2.102.0
+authenticated; repository public, not archived, default branch `main`, token
+admin/push; Actions enabled, `allowed_actions: all`,
+`sha_pinning_required: false`; workflow `387667199` active at
+`.github/workflows/scanner-snapshot-rebuild.yml` with boolean inputs
+`prepare_candidate` and `force`; zero queued or in-progress runs; free execution
+per GitHub's billing page ("GitHub Actions usage is free for self-hosted runners
+and for public repositories that use standard GitHub-hosted runners",
+<https://docs.github.com/en/billing/concepts/product-billing/github-actions>).
+`gh workflow run -f` sends string fields; the workflow compares the input with
+the string `"true"`, so `false` selects simulation.
+
+Informational: `.../actions/secrets` and `.../actions/variables` both returned
+HTTP 200 with `total_count: 0`. No live credentials are configured, which does
+not affect a simulation. No Vercel request was made and nothing is claimed about
+the active snapshot.
+
+### Dispatch and result
+
+Pre-dispatch inventory: 4 runs, all `schedule`. One dispatch at 22:38:30Z:
+`gh workflow run scanner-snapshot-rebuild.yml --ref main -f prepare_candidate=false -f force=false`.
+Run `39687952453`
+(<https://github.com/gerald-donkor/acres/actions/runs/39687952453>),
+`workflow_dispatch`, `headSha` = `52a9c941…`, attempt 1, 22:38:33Z–22:39:25Z,
+conclusion **success**. Steps: Select execution mode success (log:
+`EVENT_NAME: workflow_dispatch`, `PREPARE_CANDIDATE: false`); Simulate candidate
+preparation success; **Prepare retained preview candidate skipped**; Generate
+sanitized candidate handoff summary success; Clean up temporary files success.
+The simulate step printed a receipt with `status: success`,
+`reason: simulation_uninspected`, `execution_mode: simulation`, null snapshot
+IDs and hashes, `activation_status: not_performed`,
+`configuration_export: not_performed`, `prune_status: not_requested`. The run has
+no artifacts. The log was screened before quoting: the only matches were runner
+paths and the checkout's masked `AUTHORIZATION: basic ***` header.
+
+**Summary rendering not independently verified.** The summary step writes to
+`$GITHUB_STEP_SUMMARY`, which the job log does not contain, and no documented
+API for downloading the rendered summary was verified this session. The helper
+source emits `### Scanner candidate — no handoff available` for simulation and
+reserves the `Sanitized candidate receipt` block for non-simulation success, but
+that is source, not observed output. Smallest outside action: the owner opens the
+run page above and confirms the simulation summary text.
+
+### Correction to Prompt 421's evidence
+
+Prompt 421 recorded zero dispatches and no hosted acceptance, which stands. Its
+implication that nothing had run hosted is incomplete: four earlier `schedule`
+runs exist (`39112477943` failure on `2d5e449`, 2026-10-18; `39232185663` success
+on `45a392a`, 10-19; `39399532401` and `39575340917` success on `c802e90`, 10-20
+and 10-21). They ran older workflow revisions, before the mode selector, the
+summary step and the receipt validator arrived, so they do not prove the current
+revision. Run `39687952453` is the first hosted run of it.
+
+### Local checks (Node 24.21.0, `umask 0027` scoped to the test shell)
+
+`node --test` over the cadence, summary and handoff specs: 247 pass, 0 fail.
+`npm run vercel:probe-test`: 443 pass, 0 fail. `npm run ops:scan-secrets`:
+`secret/default scan passed`. `git diff --check` exited 0. No source changed, so
+no lint, typecheck or build was run.
+
+### Action inventory, open gates and rollback
+
+Exactly one dispatch. No rerun, cancellation, settings write, secret or variable
+write, Vercel request, live rebuild, snapshot change, deployment, external
+message or push. The daily schedule stays in simulation mode.
+
+The active preview scanner snapshot's signature window closes no later than
+`2026-10-22T06:35:09.451Z`. A refresh is a live, provider-mutating,
+owner-adopted operation and needs its own prompt and approval; this prompt did
+not touch it.
+
+Smallest outside action per remaining gate: owner confirms the summary text on
+the run page; owner decides on the snapshot refresh before the bound above and
+configures `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`, `VERCEL_TOKEN` and the
+allowlisted variables if live mode is wanted; owner completes operator intake,
+DNS, production secrets, live drills and the eleven sign-offs. Rollback is a
+normal local documentation revert; the run and its logs are not altered and no
+provider state was mutated.
