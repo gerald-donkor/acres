@@ -1,6 +1,6 @@
 # Acres whole-project status
 
-Assessment date: 2026-10-21. Source baseline: `457276b` on `main` (Prompt 417).
+Assessment date: 2026-10-21. Source baseline: `c5406d1` on `main` (Prompt 418).
 This assesses the approved V1 in [product.md](product.md), including
 operational recovery and release acceptance, rather than all conceivable future
 Acres features. It is a repository assessment, not an inspection of a deployed
@@ -10,7 +10,7 @@ production environment or a restricted operator evidence store.
 
 Following the user's selection of the Vercel-managed target in Prompt 370, the
 entire engineering implementation and preview verification of the managed platform
-architecture has been **completed** across Prompts 370–417. This includes:
+architecture has been **completed** across Prompts 370–418. This includes:
 - Pooled Neon PostGIS database connection adapter under forced tenant RLS (`DATABASE_URL`, `DATABASE_MIGRATOR_URL`).
 - Private Vercel Blob object storage with quarantine isolation, pre-signed upload tokens, and authenticated downloads.
 - Invocation-scoped Nest serverless execution adapter with connection pooling and memory caching.
@@ -177,7 +177,7 @@ readiness have been implemented, verified, reviewed, and committed to `main`:
    - Reconciled `docs/launch-checklist.md` (Prompt 411) with dual-topology category contracts (§3),
      authoritative 61-blocker managed preflight gap register (§6A), and dual-profile sign-off matrix (§7).
 
-9. **Documentation baseline reconciliation and OpenAPI CI contract guard (Prompts 412–417)**:
+9. **Documentation baseline reconciliation and OpenAPI CI contract guard (Prompts 412–418)**:
    - Reconciled `docs/project-status.md` and `docs/operator-handoff.md` (Prompt 412) with the managed
      operational baseline, establishing the dual-topology comparison (61 vs. 70 blockers).
    - Reconciled `docs/build-plan.md`, `AGENTS.md` §5, and `docs/vercel-deployment.md` (Prompt 413),
@@ -193,6 +193,9 @@ readiness have been implemented, verified, reviewed, and committed to `main`:
    - Reconciled `docs/build-plan.md`, `docs/vercel-deployment.md`, and `docs/project-status.md`
      (Prompt 417) with the Prompt 416 baseline (`24ea567`), appending Prompt 416's execution
      record, indexing Prompt 416 in deployment documentation, and expanding Milestone 9.
+   - Reconciled `docs/build-plan.md`, `docs/vercel-deployment.md`, and `docs/project-status.md`
+     (Prompt 418) with the Prompt 417 baseline (`457276b`), appending Prompt 417's execution
+     record, indexing Prompt 417 in deployment documentation, and expanding Milestone 9.
 
 All engineering capabilities and automated acceptance criteria for V1 are
 closed for both architectures. The remaining work for production launch is operator-owned.
