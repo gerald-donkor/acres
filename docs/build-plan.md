@@ -646,23 +646,23 @@ approved Prompt 370. Its in-progress record was
 was established by local preparation. That paragraph is not the current
 instruction.
 
-**Current state — 2026-10-20 (Prompt 413).** This subsection supersedes the
+**Current state — 2026-10-21 (Prompts 413–416).** This subsection supersedes the
 paragraph above and the six ordered steps below as *instructions*. It does
 not rewrite those steps' historical meaning, and it does not approve Phase 12
 exit or launch. Evidence is cited from existing records, not re-proved here:
 [project-status.md](project-status.md),
-[vercel-deployment.md](vercel-deployment.md), and the Prompt 410–412 records
+[vercel-deployment.md](vercel-deployment.md), and the Prompt 410–415 records
 at the end of this file. ADR 0001 remains accepted; this note does not change
 it.
 
-| Step | Recorded state on 2026-10-20 | Still open |
+| Step | Recorded state on 2026-10-21 | Still open |
 | --- | --- | --- |
 | 1. Topology, account, region, plan | Selected target `vercel-managed-production` (ADR 0001, Prompt 370). Preview team, project `acres`, region `iad1`, and free-tier constraint are recorded in `vercel-deployment.md` (2026-10-15 access inspection). | Operator confirmation of the production account, region and permitted spend is not a repository proof. Do not treat the preview inspection as production approval. |
 | 2. Pooled database/RLS, private Blob, Sandbox scanning, durable jobs | Preview seams are recorded in Prompts 371–378 (first application preview `dpl_Hr9VwjL5jrA5vmsZfx7Qvi2R966b`). Later application preview proofs are recorded in Prompts 383–408. `project-status.md` cites retained preview `dpl_AGwu9k8gbtQRegTodmHUAL7uxYs4` and scanner snapshot `snap_8OP5G2tCUvxtRdoGFMCu5se58f3N`. | Preview proof, not production approval. |
 | 3. Provider profiles and invocation-scoped Nest execution | Local adapters and invocation-scoped execution are recorded as implemented in the Prompt 412 status reconciliation (Prompts 370–379). Compose+Caddy is retained. | Production promotion is not this step. |
 | 4. Blob, queue/workflow, Cron, Resend, ingress, throttling, progress | Repository contracts and preview proofs are recorded through Prompt 409. Cron and Resend production behavior are not proven by preview. | Preview proof, not production approval. Production secret provisioning and custom-domain DNS remain operator-owned. |
 | 5. Topology-specific launch evidence and recovery procedures | Local managed readiness, reconciliation, drill runners and the 7-stage activation plan are recorded (Prompts 379–382, 410–411). Example records fail closed: Compose 70 blockers, managed 61 (`project-status.md`, Prompt 412). | Live recovery evidence is operator-owned. Do not edit the examples to pass. Compose checks are not Vercel evidence. |
-| 6. Acceptance, preview, then promotion | Repository and preview acceptance through Prompt 412 are recorded, including Tier 2 snapshot retirement. | Production promotion and the eleven human sign-offs remain operator-owned. Phase 12 exit is not met. |
+| 6. Acceptance, preview, then promotion | Repository and preview acceptance through Prompt 412 are recorded, including Tier 2 snapshot retirement. OpenAPI CI contract drift was resolved in Prompt 414, and release documentation baseline reconciliation was completed in Prompt 415. | Production promotion and the eleven human sign-offs remain operator-owned. Phase 12 exit is not met. |
 
 The next repository-executable engineering unit is not named here. The next
 `i` re-reads this corrected plan and either stops because only operator-owned
@@ -4601,3 +4601,24 @@ Next gates: hosted scheduled cadence source publication (requires standalone upp
 operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
 See [the operations record](operations.md#prompt-414--exclude-cron-dispatch-controller-from-openapi-contract-2026-10-20)
 and [the backend record](backend.md#openapi-sdl-and-ci-drift-guard).
+
+## Phase 12 release documentation managed baseline reconciliation — Prompt 415 (2026-10-21)
+
+Reconciles `docs/launch-checklist.md`, `docs/project-status.md`, and
+`docs/vercel-deployment.md` with the verified `59579ec` baseline on `main` (Prompt 414).
+Planning baseline was `59579ec` on `main`.
+
+Execution summary:
+
+- Appended operational entries for Prompts 412–415 to `docs/launch-checklist.md` Section 8.
+- Updated `docs/project-status.md` source baseline to `59579ec` and documented closed
+  Milestone 9 (Prompts 412–414).
+- Updated `docs/vercel-deployment.md` Section 8 sub-prompt index and appended execution records
+  for Prompts 414 and 415.
+- Verified that all repository test suites, verifiers, and offline checks pass cleanly.
+- Verified that readiness preflight remains fail-closed exiting 1 (61 managed blockers,
+  70 Compose blockers).
+
+Next gates: hosted scheduled cadence source publication (requires standalone uppercase `P`),
+operator intake inputs, live drills, Phase 12 exit, and the eleven sign-offs.
+See [the operations record](operations.md#prompt-415--reconcile-launch-checklist-project-status-and-deployment-documentation-with-managed-baseline-2026-10-21).
