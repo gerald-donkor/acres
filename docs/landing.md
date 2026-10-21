@@ -1,9 +1,8 @@
 # Acres — Landing Page
 
-**Current public landing:** the simplified product-led hybrid composition in the
-Prompt 402 record at the end of this file refines Prompt 401 and supersedes
-Prompt 399’s photographic composition. Prompt 400’s removal of visible photo
-credits remains in effect.
+**Current public landing:** the survey-plate composition in the Prompt 423
+record at the end of this file supersedes Prompt 402’s split hero. Prompt 402’s
+copy reduction and Prompt 400’s removal of visible photo credits remain in effect.
 
 Built to `prompts/05-landing-page.md`. This file records the `/` implementation
 against `client/public/assets/ui/landing-pages/Desktop.png`,
@@ -1318,3 +1317,181 @@ Preview: open `http://localhost:3203/` while this task's production server is
 running. For development, run `npm run dev:client` and open
 `http://localhost:3000/` or the printed port. Rollback is a scoped revert of the
 implementation commit. No push or deployment is included.
+
+## Premium survey-plate composition — Prompt 423 (2026-10-21)
+
+Approved `prompts/423-premium-survey-plate-landing.md` makes the comparison
+plate the public landing’s full-width evidence object. The centred thesis,
+existing sentences, five section anchors and three main actions are unchanged.
+The photo follows the plate as context rather than sharing a 2:1 row. Prompt
+402’s content reduction and Prompt 400’s credit removal remain in force.
+No chrome, authenticated route, API, example observation or motion implementation
+changed. The desktop benefits reference crop `1280×630+0+1120` was reopened:
+hairlines and serif feature titles remain, with no card borders or new icons.
+
+### Reference deltas and tokens
+
+These are approved design judgments, not original-comp measurements:
+
+- Hero top inset is 80/96/128px instead of 64/80/96px at 375/800/1280.
+- Comparison and photo both occupy the container, separated by 24/32/40px.
+  The plate inset is 32/40/56px and region-row gaps are 40/40/48px.
+- Benefits gain 80px before articles below `md`, 96px from `md`. Workflow
+  gains the same 80/96px heading-to-list relationship. The report remains
+  stacked at 800 with an 80px gap, and equal-column at `lg` with an 80px gap.
+- The 120px section rhythm, existing palette, three faces, type roles,
+  radii, button states and elevation are unchanged. No sentence was added.
+
+No new token or merge registration is needed. The installed Tailwind 4.3.3
+compiler generates `md:aspect-21/9`; checking only the theme’s named aspect
+variables had initially missed this built-in fraction utility. Review caught
+that distinction, and the implementation uses the existing utility as the
+prompt specifies. `docs/design-system.md` §15 records the ratio judgment. The
+photo retains 16:9 below `md`, quality 100, its existing meaningful alt and
+asset. `sizes` now follows full container width: viewport minus 32px below
+768, viewport minus 80px up to the cap, then 1200px. Default `lg` is 1024;
+no custom breakpoint was added.
+
+### Production-browser evidence
+
+Node 24.21.0, Next production server `http://127.0.0.1:3423/`, Playwright CLI,
+reduced-motion contexts, loaded fonts and decoded photo:
+
+| Width | Container / gutter | Comparison | Photo | Page height |
+| ---: | --- | --- | --- | ---: |
+| 375 | 343 / 16px | 343×586.34px | 343×192.94px | 5022px |
+| 800 | 720 / 40px | 720×602.34px | 720×308.56px | 4218px |
+| 1280 | 1200 / 40px | 1200×651.55px | 1200×514.28px | 4165px |
+
+| Width | Hero height | Benefits height | Report section height | Workflow height |
+| ---: | ---: | ---: | ---: | ---: |
+| 375 | 1256.06px | 926.56px | 880.88px | 1022.97px |
+| 800 | 1467.47px | 575.77px | 781.11px | 527.17px |
+| 1280 | 1726.81px | 423.98px | 567.94px | 514.98px |
+
+All specified spacing relationships were checked against computed styles and
+live boxes. Benefits retain a 1px top hairline and serif titles. Report columns
+are 560/560px at 1280 and remain a single 720px column at 800. There is one
+`h1`, two numeric figures and two illustrative-data disclosures. Native values,
+outline/fill distinction and the programmatic source description are unchanged.
+Bar widths on the plate’s content box round to 18/24/35/41/54/58% at 800 and
+1280. At 375, the 41% bar rounds to 40.99%; at 320, 41% and 58% round to
+40.99% and 57.99%. The difference is no greater than 0.01 percentage point.
+
+320/390/1024/1440 checks have no page-level horizontal overflow or source-text
+overflow. Page heights are 5326/4975/4260/4165px, respectively. The 320 content
+container is 288px, following the existing 16px gutters rather than a fixed
+mobile width. Full-page captures and hero/benefit/report/workflow crops were
+saved under ignored `output/playwright/423/` and visually inspected.
+
+The initial resize-only measurement harness sampled stale breakpoint styles;
+those results were discarded. Reloading after each resize produces matching
+`innerWidth`, `matchMedia` and computed styles. In the reused wide-to-phone
+context Chromium retained a cached 1200-wide image candidate. A separate cold
+375px/DPR1 context selected **384w**, not the desktop candidate, for its 343px
+slot (`encodedBodySize: 67114`). No application workaround was needed.
+
+Normal-motion traversal at 375/800/1280 settles every reveal target visible:
+`hidden: []`, one hero-heading hook, two hero-media hooks, and `errors: []`.
+`LandingMotion` is unchanged. A JavaScript-disabled 375px full-page screenshot
+shows both figures and all three main actions, with the same 5022px page height.
+A scripted DOM-evaluation attempt in that disabled context timed out after
+60 seconds; the successful static full-page capture and opened report/close
+crops supplied the visual proof instead.
+
+Fresh Web Interface Guidelines were fetched and applied to the changed UI.
+No new unresolved finding: meaningful alt, reserved image geometry, native
+figure/list semantics, heading order, tabular data, source wrapping and static/
+reduced-motion visibility are retained. Existing approved copy takes precedence
+over generic title-case guidance. Both button variants retain their existing
+black label on sage hover; `docs/design-system.md` §1.4 records the original
+white-label contrast finding as closed in step 2. No button change was needed.
+The Tailwind snapshot remains uninitialized; installed theme source and the
+skill’s limited gotchas fallback were used, not an invented v3 utility.
+
+### Checks and preview
+
+Root checks ran under Node **v24.21.0**, all exit 0:
+
+```text
+npm run lint
+> @acres/client@0.1.0 lint
+> eslint
+> @acres/shared@0.1.0 lint
+> eslint "src/**/*.ts"
+> @acres/server@0.1.0 lint
+> eslint "{src,test}/**/*.ts"
+
+npm run typecheck
+> @acres/shared@0.1.0 build
+> tsc -p tsconfig.json
+> @acres/shared@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+> @acres/client@0.1.0 typecheck
+> tsc --noEmit
+> @acres/server@0.1.0 typecheck
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 726ms
+
+npm run build
+▲ Next.js 16.3.8 (webpack)
+✓ Compiled successfully in 18.3s
+✓ Finished TypeScript in 3.8s
+✓ Generating static pages using 7 workers (23/23) in 1426ms
+> @acres/server@0.1.0 build
+> prisma generate && nest build
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 500ms
+```
+
+The build printed two retries before compiling successfully. Its Prisma update
+notice did not change dependencies. `git diff --check` exits 0 with no output.
+No server suite, operations drill, deployment or push was run.
+
+To inspect locally, run `npm run dev:client` at the repository root and open
+`http://localhost:3000/` or the port Next prints. For the built client, run
+`npm run start -- --port 3423` and open `http://localhost:3423/`.
+Rollback is a scoped revert of the implementation commit; no data migration or
+asset replacement is involved.
+
+### Review closure and final verification
+
+Independent review against baseline `6ffcb813fe252e3bb57e5cbb9ac687f85fe69914`
+found no Critical or Important issue. Two minor findings were verified with
+`receiving-code-review`: use the installed fraction utility instead of adding
+an unnecessary token, and correct the stale hover-contrast statement. Both
+are resolved above; follow-up review reports no substantive findings. The
+custom-token and merge-map edits were removed, leaving both shared files at
+baseline. No motion or layout-structure rewrite was required.
+
+Final verification after the utility correction, again on Node 24.21.0:
+
+```text
+Checking formatting...
+All matched files use Prettier code style!
+
+npm run build
+✓ Compiled successfully in 17.1s
+✓ Finished TypeScript in 5.7s
+✓ Generating static pages using 7 workers (23/23) in 1736ms
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 438ms
+
+npm run lint
+> eslint
+> eslint "src/**/*.ts"
+> eslint "{src,test}/**/*.ts"
+
+npm run typecheck
+> tsc -p tsconfig.json
+> tsc -p tsconfig.json --noEmit
+> tsc --noEmit
+> prisma generate && tsc -p tsconfig.json --noEmit
+✔ Generated Prisma Client (7.9.1) to ./src/generated/prisma in 655ms
+```
+
+All commands exited 0. The first changed-TSX format check reported one wrapping
+warning; the hero wrapper was formatted and the repeated check passed. The final
+production-browser pass on port 3424 confirms the built-in utility preserves
+343×192.9375 / 720×308.5625 / 1200×514.28125px photo boxes, page heights
+5022/4218/4165px and zero horizontal overflow at 375/800/1280. The same
+16:9/21:9 breakpoint geometry means the earlier opened captures remain accurate.
+Only the source utility changed, not the rendered composition.

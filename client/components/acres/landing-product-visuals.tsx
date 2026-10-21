@@ -39,7 +39,7 @@ export function RegionalComparisonPlate() {
     <figure
       data-landing-plate="comparison"
       aria-describedby="comparison-source"
-      className="min-w-0 rounded-media bg-brand-soft p-8 md:p-10 lg:p-12"
+      className="min-w-0 rounded-media bg-brand-soft p-8 md:p-10 lg:p-14"
     >
       <figcaption>
         <ExampleLabel />
@@ -60,7 +60,7 @@ export function RegionalComparisonPlate() {
           {example.periods[1]}
         </span>
       </div>
-      <ul className="my-8 space-y-8">
+      <ul className="my-8 space-y-10 lg:space-y-12">
         {regionalComparisons.map((row) => (
           <li key={row.region}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-body text-ink">
@@ -97,14 +97,14 @@ export function GeographicContextPhoto() {
   return (
     <div
       data-landing-plate="source"
-      className="relative aspect-video min-w-0 overflow-hidden rounded-media"
+      className="relative aspect-video min-w-0 overflow-hidden rounded-media md:aspect-21/9"
     >
       <Image
         src="/assets/ui/landing/editorial/prampram-context.webp"
         alt="Homes, roads and green land in Prampram, Ghana, seen from above."
         fill
         quality={100}
-        sizes="(max-width: 767px) calc(100vw - 32px), (max-width: 1023px) calc((100vw - 128px) / 3), (max-width: 1279px) calc((100vw - 144px) / 3), 379px"
+        sizes="(max-width: 767px) calc(100vw - 32px), (max-width: 1279px) calc(100vw - 80px), 1200px"
         className="object-cover object-center"
       />
     </div>

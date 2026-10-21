@@ -993,6 +993,44 @@ natural height. Workflow markers are block elements so their line boxes give
 an actual 32px gap before each heading. Full measurements and verification are
 in the Prompt 402 record in `docs/landing.md`.
 
+## 15. Survey-plate landing composition — Prompt 423 (2026-10-21)
+
+Prompt 423 supersedes §14’s 2:1 hero tracks. The comparison plate is full
+container width, and the photograph is a context band under it. These are
+**design judgments**, checked in the production browser, not measurements from
+the original comps. The 120px `--spacing-section` rhythm, palette, type roles,
+radii and the one elevation token are unchanged.
+
+No new token is needed. An installed Tailwind 4.3.3 compiler probe verified
+`md:aspect-21/9` produces `aspect-ratio: 21/9` at the existing `md` breakpoint.
+The full-width context band uses this built-in utility from `md` and retains
+`aspect-video` below it. The ratio is a design judgment, not a comp measurement.
+The default `--spacing: 0.25rem` supplies every distance below. Tailwind’s default `md`
+(768px) and `lg` (1024px) are the utilities the prompt named; there is no custom
+800/1280 breakpoint. `lg` therefore begins the 128px hero inset, the 56px plate
+inset, the 48px region-row gap and the equal report columns at 1024, not 1280.
+
+| Relationship | 375px | 800px | 1280px |
+| --- | --- | --- | --- |
+| Hero top inset | 80px | 96px | 128px |
+| Thesis to actions | 32px | 32px | 40px |
+| Actions to plate | 64px | 80px | 96px |
+| Plate to photo | 24px | 32px | 40px |
+| Plate inset | 32px | 40px | 56px |
+| Region-row gap | 40px | 40px | 48px |
+| Photo ratio | 16:9 | 21:9 | 21:9 |
+| Benefits heading to articles | 80px | 96px | 96px |
+| Report arrangement and gap | Stacked, 48px | Stacked, 80px | Equal tracks, 80px |
+| Workflow heading to list | 80px | 96px | 96px |
+
+The workflow list gap below `md` moves 64 → 80px, one step of the section-interior
+air the prompt asked for; 96px from `md` is the specified increase. Browser
+measurements are in the Prompt 423 record in `docs/landing.md`.
+
+The Tailwind snapshot remains uninitialized and its skill directory is read-only.
+Execution used the skill’s gotchas fallback and the installed
+`node_modules/tailwindcss/theme.css`. No snapshot initialization is claimed.
+
 The Tailwind snapshot is still absent in its read-only skill location. The
 approved limited gotchas/engineering fallback, installed `theme.css`, generated
 utilities and browser measurements verify this change; no snapshot refresh or

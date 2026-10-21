@@ -58,7 +58,7 @@ export default function HomePage() {
       <Section
         align="center"
         aria-labelledby="hero-heading"
-        className="pt-16 md:pt-20 lg:pt-24"
+        className="pt-20 md:pt-24 lg:pt-32"
       >
         <div data-motion-hero-heading>
           <Eyebrow>Regional intelligence</Eyebrow>
@@ -72,7 +72,7 @@ export default function HomePage() {
             Compare regional data. Share findings you can trace.
           </p>
         </div>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <div className="mt-8 flex flex-wrap justify-center gap-3 lg:mt-10">
           <CreateAccount />
           <Button
             render={<Link href="#how-to" />}
@@ -83,11 +83,11 @@ export default function HomePage() {
           </Button>
         </div>
 
-        <div className="mt-16 grid items-center gap-12 text-left md:mt-20 md:grid-cols-[2fr_1fr] lg:mt-24 lg:gap-16">
+        <div className="mt-16 text-left md:mt-20 lg:mt-24">
           <div data-motion-hero-media className="min-w-0">
             <RegionalComparisonPlate />
           </div>
-          <div data-motion-hero-media className="min-w-0">
+          <div data-motion-hero-media className="mt-6 min-w-0 md:mt-8 lg:mt-10">
             <GeographicContextPhoto />
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function HomePage() {
         </div>
         <div
           data-motion-group="benefits"
-          className="mt-16 grid gap-x-5 gap-y-12 md:mt-20 md:grid-cols-2 lg:grid-cols-4"
+          className="mt-20 grid gap-x-5 gap-y-12 md:mt-24 md:grid-cols-2 lg:grid-cols-4"
         >
           {benefits.map((benefit) => (
             <article
@@ -130,7 +130,7 @@ export default function HomePage() {
         aria-labelledby="detail-heading"
         className="scroll-mt-section"
       >
-        <div className="grid items-center gap-12 md:gap-16 lg:grid-cols-2 lg:gap-20">
+        <div className="grid items-center gap-12 md:gap-20 lg:grid-cols-2 lg:gap-20">
           <div data-motion-media className="min-w-0">
             <ReportEvidencePlate />
           </div>
@@ -172,7 +172,7 @@ export default function HomePage() {
         </div>
         <ol
           data-motion-group="steps"
-          className="mt-16 grid gap-16 md:mt-20 md:grid-cols-3 md:gap-5"
+          className="mt-20 grid gap-16 md:mt-24 md:grid-cols-3 md:gap-5"
         >
           {steps.map((step) => (
             <li
